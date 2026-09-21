@@ -1,308 +1,503 @@
 /*
  * ============================================================================
- * Zamani Programming Language
+ * Zamani Universal Computing Language
  * ============================================================================
  *
- * File:
- *     grammar/memory/ownership.g4
+ * FILE
+ * ----
+ * grammar/memory/ownership.g4
  *
- * Grammar role:
- *     Reusable ownership-syntax parser grammar.
+ * STATUS
+ * ------
+ * Production ownership-domain parser component.
  *
- * Architectural status:
- *     Production ownership-domain syntax foundation.
+ * LANGUAGE
+ * --------
+ * Zamani
  *
- * Language:
- *     Zamani
+ * GRAMMAR TECHNOLOGY
+ * ------------------
+ * ANTLR4 parser grammar
  *
- * ANTLR:
- *     ANTLR4 parser grammar
- *
- * Compiler baseline:
- *     Rust 1.97 / Rust 1.97.1
- *     Edition 2021
- *     Safe Rust only
- *     No unsafe implementation permitted.
+ * IMPLEMENTATION BASELINE
+ * -----------------------
+ * Rust 1.97 / Rust 1.97.1
+ * Rust 2021 Edition
+ * Safe Rust only
+ * No unsafe implementation requirement.
  *
  * ============================================================================
  * PURPOSE
  * ============================================================================
  *
- * This file owns ONLY THE SOURCE SYNTAX required to express ownership
- * intent.
+ * This file defines the reusable SOURCE-LEVEL SYNTAX for ownership intent.
  *
- * Ownership semantics are deliberately separated from:
+ * It does not implement ownership semantics.
  *
- *     - type checking;
- *     - borrow checking;
- *     - lifetime checking;
- *     - alias analysis;
- *     - allocation;
- *     - deallocation;
- *     - memory placement;
- *     - physical storage;
- *     - resource discovery;
- *     - scheduling;
- *     - hardware selection;
- *     - runtime execution.
+ * The architectural boundary is:
  *
- * The parser records what the programmer wrote.
+ *     source
+ *       |
+ *       v
+ *     canonical lexer
+ *       |
+ *       v
+ *     parser grammar
+ *       |
+ *       v
+ *     domain-neutral AST
+ *       |
+ *       v
+ *     semantic ownership analysis
+ *       |
+ *       +------------------------------+
+ *       |                              |
+ *       v                              v
+ *     type analysis              lifetime analysis
+ *       |                              |
+ *       +---------------+--------------+
+ *                       |
+ *                       v
+ *                canonical semantic model
+ *                       |
+ *                       v
+ *                  canonical IR
+ *                       |
+ *             +---------+----------+
+ *             |         |          |
+ *             v         v          v
+ *          classical  quantum    hardware
+ *             |         |          |
+ *             +---------+----------+
+ *                       |
+ *                       v
+ *             optimization / lowering
+ *                       |
+ *                       v
+ *                    runtime
  *
- * Semantic analysis determines whether that ownership intent is valid.
+ * Ownership syntax is therefore deliberately independent from:
  *
- * ============================================================================
- * ARCHITECTURAL POSITION
- * ============================================================================
- *
- *     Zamani source
- *          |
- *          v
- *     ZamaniLexer
- *          |
- *          v
- *     Core / Memory parser
- *          |
- *          +----------------------+
- *          |                      |
- *          v                      v
- *      ownership.g4          other memory grammars
- *          |                      |
- *          +----------+-----------+
- *                     |
- *                     v
- *                Frontend AST
- *                     |
- *                     v
- *             semantic analysis
- *                     |
- *          +----------+-----------+
- *          |                      |
- *          v                      v
- *     ownership model       memory/resource model
- *          |                      |
- *          +----------+-----------+
- *                     |
- *                     v
- *              canonical semantic IR
- *                     |
- *          +----------+-----------+
- *          |          |           |
- *          v          v           v
- *       classical   quantum     hardware
- *          IR         IR           IR
- *          |          |           |
- *          +----------+-----------+
- *                     |
- *                     v
- *          optimization / routing /
- *          scheduling / lowering
- *                     |
- *                     v
- *                   runtime
+ *     allocation
+ *     deallocation
+ *     borrowing
+ *     lifetime inference
+ *     memory placement
+ *     physical addresses
+ *     resource discovery
+ *     hardware selection
+ *     scheduling
+ *     routing
+ *     QEC
+ *     ZQN
+ *     HAL
+ *     runtime execution
  *
  * ============================================================================
- * OWNERSHIP
+ * AUTHORITY
  * ============================================================================
  *
- * THIS FILE OWNS:
+ * Normative language specification:
  *
- *   1. Ownership mode syntax.
+ *     grammar/specification/
  *
- *   2. Ownership qualifiers:
+ * Memory-domain architecture:
  *
- *          linear
- *          affine
+ *     grammar/memory/README.md
  *
- *   3. Explicit ownership-policy syntax.
+ * Canonical combined root:
  *
- *   4. Ownership annotations.
+ *     grammar/Zamani.g4
  *
- *   5. Ownership subjects/references used by ownership constructs.
+ * Canonical parser composition:
  *
- *   6. Ownership projections needed to identify source-level places.
+ *     grammar/antlr/ZamaniParser.g4
  *
- *   7. Ownership relation syntax.
+ * Canonical lexer:
  *
- *   8. Ownership transfer intent syntax where the language surface explicitly
- *      represents transfer.
+ *     grammar/antlr/ZamaniLexer.g4
  *
- *   9. Ownership-policy arguments and modifiers.
+ * Frontend implementation:
  *
- *  10. Extensible ownership-domain names.
+ *     src/lexer.rs
+ *     src/parser.rs
+ *     src/frontend/ast/
  *
- * ============================================================================
- * DOES NOT OWN
- * ============================================================================
+ * Canonical quantum semantic boundary:
  *
- * This file does NOT own:
- *
- *   - identifiers in general;
- *   - lexical rules;
- *   - Unicode;
- *   - literals in general;
- *   - general expressions;
- *   - statements;
- *   - declarations;
- *   - type expressions;
- *   - references as types;
- *   - pointer types;
- *   - borrowing;
- *   - lifetimes;
- *   - allocation;
- *   - deallocation;
- *   - memory spaces;
- *   - memory resources;
- *   - memory constraints;
- *   - memory placement;
- *   - physical addresses;
- *   - hardware addresses;
- *   - stack layout;
- *   - heap layout;
- *   - register allocation;
- *   - cache allocation;
- *   - NUMA placement;
- *   - GPU memory;
- *   - accelerator memory;
- *   - distributed-memory placement;
- *   - quantum-resource allocation;
- *   - qubit allocation;
- *   - routing;
- *   - scheduling;
- *   - optimization;
- *   - QEC;
- *   - ZQN;
- *   - resilience;
- *   - runtime execution;
- *   - compiler code generation.
+ *     quantum::ir
  *
  * ============================================================================
- * CANONICAL OWNERSHIP SEMANTICS
+ * FILE OWNERSHIP
  * ============================================================================
  *
- * `linear` and `affine` are semantic ownership qualifiers.
+ * THIS FILE OWNS
+ * --------------
  *
- * This grammar DOES NOT define their complete mathematical/semantic rules.
+ * 1. Ownership modes.
  *
- * The semantic layer determines:
+ * 2. Ownership qualifiers.
  *
- *     - whether a value has linear semantics;
- *     - whether a value has affine semantics;
- *     - whether a use consumes a value;
- *     - whether duplication is legal;
- *     - whether dropping is legal;
- *     - whether moving is legal;
- *     - whether ownership may be transferred;
- *     - whether an ownership constraint is satisfied.
+ * 3. Ownership annotations.
  *
- * The parser merely preserves the source-level declaration.
+ * 4. Ownership policy references.
+ *
+ * 5. Ownership requirements.
+ *
+ * 6. Ownership constraints.
+ *
+ * 7. Ownership preferences.
+ *
+ * 8. Ownership hints.
+ *
+ * 9. Ownership transfer intent syntax.
+ *
+ * 10. Ownership consumption intent syntax.
+ *
+ * 11. Ownership place references where a place bridge is required.
+ *
+ * 12. Open-world ownership-domain names.
+ *
+ * 13. Ownership-domain directive syntax.
+ *
+ * THIS FILE DOES NOT OWN
+ * ----------------------
+ *
+ * It does NOT define:
+ *
+ * - general identifiers;
+ * - general names;
+ * - general paths;
+ * - expressions;
+ * - types;
+ * - reference types;
+ * - pointer types;
+ * - borrow syntax;
+ * - lifetime syntax;
+ * - allocation;
+ * - deallocation;
+ * - memory spaces;
+ * - memory regions;
+ * - memory placement;
+ * - resource discovery;
+ * - hardware topology;
+ * - quantum allocation;
+ * - qubit allocation;
+ * - scheduling;
+ * - routing;
+ * - optimization;
+ * - QEC;
+ * - ZQN;
+ * - HAL;
+ * - runtime behavior.
  *
  * ============================================================================
- * POCO-REAF
+ * CRITICAL ARCHITECTURAL RULE
  * ============================================================================
  *
- * Ownership syntax MUST remain independent of physical machine scale.
+ * Ownership is a SEMANTIC PROPERTY.
  *
- * It therefore MUST NOT encode:
+ * This file preserves ownership intent in syntax.
  *
- *     maximum owners;
- *     maximum values;
- *     maximum regions;
- *     maximum references;
- *     maximum allocations;
- *     maximum memory;
- *     pointer width;
- *     address width;
- *     register count;
- *     stack size;
- *     heap size;
- *     number of cores;
- *     number of threads;
- *     number of devices;
- *     number of qubits;
- *     number of nodes;
- *     topology;
- *     physical addresses.
+ * It must never turn a semantic ownership concept into:
  *
- * Any such limitation belongs to:
+ *     a physical address;
+ *     a machine resource;
+ *     a hardware identifier;
+ *     a register;
+ *     a device;
+ *     a fixed-size storage object;
+ *     a compiler implementation decision.
  *
- *     target capabilities;
- *     resource analysis;
- *     compilation policy;
- *     scheduling;
- *     runtime policy;
- *     hardware discovery.
+ * ============================================================================
+ * POCO-REAF / SCALABILITY
+ * ============================================================================
+ *
+ * Nothing in this grammar imposes a universal limit on:
+ *
+ *     values
+ *     owners
+ *     references
+ *     places
+ *     regions
+ *     lifetimes
+ *     allocations
+ *     objects
+ *     tasks
+ *     processes
+ *     devices
+ *     qubits
+ *     CPUs
+ *     cores
+ *     threads
+ *     nodes
+ *     memory
+ *     storage
+ *
+ * In particular, this file MUST NOT define:
+ *
+ *     MAX_OWNERS
+ *     MAX_BORROWS
+ *     MAX_REFERENCES
+ *     MAX_REGIONS
+ *     MAX_LIFETIMES
+ *     MAX_MEMORY
+ *     MAX_QUBITS
+ *     MAX_CORES
+ *     MAX_THREADS
+ *     MAX_DEVICES
+ *     MAX_NODES
+ *
+ * A numeric literal in a Zamani program remains program data.
+ *
+ * A resource limit is a downstream property of:
+ *
+ *     target capabilities
+ *     resource analysis
+ *     compilation
+ *     scheduling
+ *     deployment
+ *     runtime availability
+ *
+ * ============================================================================
+ * SEMANTIC DISTINCTIONS
+ * ============================================================================
+ *
+ * The language must distinguish:
+ *
+ *     ownership requirement
+ *     ownership constraint
+ *     ownership preference
+ *     ownership hint
+ *
+ * Requirement:
+ *
+ *     mandatory semantic property.
+ *
+ * Constraint:
+ *
+ *     restriction on legal realization.
+ *
+ * Preference:
+ *
+ *     desired but non-mandatory property.
+ *
+ * Hint:
+ *
+ *     optional implementation guidance which must not change semantics.
+ *
+ * This grammar preserves those distinctions.
+ *
+ * ============================================================================
+ * OWNERSHIP MODES
+ * ============================================================================
+ *
+ * `linear` and `affine` are foundational ownership modes.
+ *
+ * Their semantic definitions belong to semantic analysis.
+ *
+ * Conceptually:
+ *
+ *     linear
+ *         a value has consumption-sensitive ownership semantics.
+ *
+ *     affine
+ *         a value may be consumed at most according to its affine rules.
+ *
+ * The grammar does not implement either rule.
+ *
+ * Future ownership systems must not require physical-machine assumptions.
  *
  * ============================================================================
  * LEXER CONTRACT
  * ============================================================================
  *
- * The canonical lexical source is:
+ * This file declares NO lexer rules.
+ *
+ * The canonical lexer remains:
  *
  *     grammar/antlr/ZamaniLexer.g4
  *
- * This grammar does NOT declare lexer rules.
+ * This grammar should consume canonical lexer tokens for:
  *
- * Existing canonical ownership-related tokens include:
+ *     identifiers
+ *     punctuation
+ *     literals
+ *     ownership keywords
  *
- *     LINEAR
- *     AFFINE
- *     MUT
- *     LET
- *     CONST
- *     VAR
- *     VAL
- *     THIS
- *     SELF
- *     IDENTIFIER
+ * where such tokens are formally part of the Zamani lexical specification.
  *
- * Existing punctuation tokens/literals are consumed where appropriate.
- *
- * `owned`, `borrowed`, `move`, `consume`, `copy`, and future ownership-domain
- * vocabulary are intentionally NOT required to become globally reserved
- * keywords merely because this grammar needs to recognize them.
- *
- * Such names can remain ordinary identifiers when represented as extensible
- * ownership-domain operations.
+ * Open-world extension names use IDENTIFIER-based syntax so that adding a
+ * future ownership policy does not require continuously expanding the global
+ * keyword inventory.
  *
  * ============================================================================
- * IMPORTANT ANTLR INTEGRATION RULE
+ * ANTLR COMPOSITION CONTRACT
  * ============================================================================
  *
- * This is a PARSER grammar.
+ * This is a parser grammar.
  *
- * It intentionally does not define:
+ * It intentionally does NOT declare:
  *
  *     grammar Zamani;
  *
- * and it does not define a second program root.
+ * It intentionally does NOT declare a complete program rule.
  *
- * It is intended to be imported/consumed by the memory parser composition
- * layer.
+ * It is consumed by the memory/parser composition hierarchy.
  *
- * The host grammar is responsible for integrating the rules below into:
+ * The canonical integration direction is:
  *
- *     declarations;
- *     expressions;
- *     statements;
- *     memory operations;
- *     annotations.
+ *     ZamaniLexer
+ *          |
+ *          v
+ *     Ownership
+ *          |
+ *          v
+ *     Memory parser composition
+ *          |
+ *          v
+ *     ZamaniParser
+ *          |
+ *          v
+ *     frontend AST
  *
- * The host grammar MUST NOT copy these rules.
+ * This file must not be imported directly by the final root if the repository's
+ * established parser hierarchy already imports memory.g4.
  *
  * ============================================================================
- * OWNERSHIP QUALIFIERS
+ * DEPENDENCY DIRECTION
  * ============================================================================
  *
- * The foundational ownership modes are:
+ * Allowed:
  *
- *     linear
- *     affine
+ *     ownership.g4
+ *          |
+ *          +--> canonical lexer vocabulary
+ *          |
+ *          +--> host parser rules through composition
  *
- * These are the only globally reserved ownership modes currently required by
- * the canonical lexer.
+ * Downstream:
  *
- * Future ownership systems should preferably use the extensible policy form
- * rather than requiring changes to this foundational grammar.
+ *     ownership syntax
+ *          |
+ *          v
+ *     AST
+ *          |
+ *          v
+ *     semantic ownership analysis
+ *          |
+ *          v
+ *     canonical semantic model / IR
+ *
+ * Forbidden:
+ *
+ *     ownership.g4 -> runtime
+ *     ownership.g4 -> hardware
+ *     ownership.g4 -> scheduler
+ *     ownership.g4 -> routing
+ *     ownership.g4 -> QEC
+ *     ownership.g4 -> ZQN
+ *     ownership.g4 -> HAL
+ *
+ * ============================================================================
+ * AST CONTRACT
+ * ============================================================================
+ *
+ * The parser must preserve enough information for the domain-neutral AST to
+ * represent:
+ *
+ *     ownership mode
+ *     ownership qualifier
+ *     ownership policy
+ *     ownership subject
+ *     ownership transfer
+ *     ownership requirement
+ *     ownership constraint
+ *     ownership preference
+ *     ownership hint
+ *     ownership directive
+ *     source span
+ *
+ * The AST MUST NOT require:
+ *
+ *     physical memory address
+ *     hardware identifier
+ *     CPU identifier
+ *     GPU identifier
+ *     QPU identifier
+ *     physical qubit identifier
+ *     device-local resource index
+ *
+ * ============================================================================
+ * SEMANTIC CONTRACT
+ * ============================================================================
+ *
+ * Semantic analysis is responsible for determining:
+ *
+ *     whether ownership is valid;
+ *     whether a value can be moved;
+ *     whether a value can be consumed;
+ *     whether duplication is legal;
+ *     whether dropping is legal;
+ *     whether an ownership transfer is legal;
+ *     whether an ownership requirement is satisfied;
+ *     whether a constraint is satisfiable;
+ *     whether a preference can be honored;
+ *     whether a hint is applicable.
+ *
+ * None of those questions should be answered by this grammar.
+ *
+ * ============================================================================
+ * PLACE CONTRACT
+ * ============================================================================
+ *
+ * Ownership often applies to a SOURCE-LEVEL PLACE.
+ *
+ * A place is not equivalent to an arbitrary expression.
+ *
+ * Examples:
+ *
+ *     value
+ *     object.field
+ *     object.field.other
+ *
+ * Indexing and more complex place expressions remain owned by the canonical
+ * expression/place grammar.
+ *
+ * This file therefore provides a MINIMAL PLACE BRIDGE rather than recreating
+ * the complete expression grammar.
+ *
+ * The host parser may map this bridge directly to its canonical place AST.
+ *
+ * ============================================================================
+ * OPEN-WORLD EXTENSION PRINCIPLE
+ * ============================================================================
+ *
+ * Ownership must remain extensible.
+ *
+ * Examples of possible future semantic namespaces include:
+ *
+ *     ownership::unique
+ *     ownership::shared
+ *     ownership::region
+ *     ownership::capability
+ *     ownership::distributed
+ *     ownership::persistent
+ *     ownership::linear
+ *
+ * This grammar does not need a separate parser rule for each future concept.
+ *
+ * The name is syntax.
+ *
+ * Its meaning belongs to semantic analysis.
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * PARSER GRAMMAR DECLARATION
  * ============================================================================
  */
 
@@ -313,15 +508,17 @@ options {
 }
 
 
-/* ============================================================================
- * OWNERSHIP MODE
- * ========================================================================== */
-
 /*
- * Core ownership modes.
+ * ============================================================================
+ * OWNERSHIP MODE
+ * ============================================================================
  *
- * Semantic meaning is determined by semantic analysis.
+ * Foundational ownership modes.
+ *
+ * These rules intentionally use canonical lexical tokens rather than quoted
+ * strings so that ownership syntax has one lexical authority.
  */
+
 ownershipMode
     : LINEAR
     | AFFINE
@@ -331,110 +528,68 @@ ownershipMode
 /*
  * Optional ownership qualifier.
  *
- * Useful when the host grammar accepts ordinary declarations and permits an
- * ownership modifier to precede them.
+ * The host declaration grammar determines where this qualifier may occur.
  */
+
 ownershipQualifier
     : ownershipMode
     ;
 
 
-/*
- * Zero-or-one ownership qualifier.
- */
 optionalOwnershipQualifier
     : ownershipQualifier?
     ;
 
 
-/* ============================================================================
- * OWNERSHIP ANNOTATION
- * ========================================================================== */
-
 /*
- * Generic ownership annotation.
+ * ============================================================================
+ * OWNERSHIP ANNOTATIONS
+ * ============================================================================
  *
- * Examples:
+ * Annotation punctuation is consumed through the canonical lexer vocabulary.
  *
- *     @ownership(linear)
- *     @ownership(affine)
- *
- * The annotation syntax remains intentionally small.
- *
- * General annotation ownership remains in the core annotation grammar.
- * This rule exists only for semantic ownership payloads.
+ * The annotation name is intentionally represented by IDENTIFIER-based
+ * syntax rather than creating a second annotation system.
  */
+
 ownershipAnnotation
-    : '@'
-      'ownership'
-      '('
-      ownershipMode
-      ')'
+    : AT ownershipAnnotationName
+      LPAREN ownershipAnnotationValue RPAREN
     ;
 
 
-/*
- * Extensible ownership-domain annotation.
- *
- * This allows future ownership policies without requiring every policy to
- * become a lexer keyword.
- *
- * Examples:
- *
- *     @ownership(policy)
- *     @ownership(unique)
- *     @ownership(consuming)
- *
- * Semantic interpretation belongs downstream.
- */
-ownershipNamedAnnotation
-    : '@'
-      'ownership'
-      '('
-      ownershipName
-      ')'
+ownershipAnnotationName
+    : IDENTIFIER
     ;
 
 
-/*
- * Ownership annotation accepted by memory-domain composition.
- */
 ownershipAnnotationValue
     : ownershipMode
-    | ownershipName
+    | ownershipQualifiedName
     ;
 
 
-/* ============================================================================
- * OWNERSHIP NAMES
- * ========================================================================== */
-
 /*
- * Extensible ownership-domain name.
+ * ============================================================================
+ * OPEN-WORLD OWNERSHIP NAMES
+ * ============================================================================
  *
- * This is deliberately identifier-based.
+ * Examples:
  *
- * It prevents the grammar from becoming a closed inventory of ownership
- * technologies or research models.
+ *     unique
+ *     shared
+ *     region::scoped
+ *     capability::restricted
+ *
+ * Qualification depth is not bounded.
  */
+
 ownershipName
     : IDENTIFIER
     ;
 
 
-/*
- * Qualified ownership-domain name.
- *
- * Examples:
- *
- *     linear
- *     affine
- *     experimental::unique
- *     domain::ownership::policy
- *
- * There is no fixed qualification depth.
- */
-qualifiedOwnershipName
+ownershipQualifiedName
     : ownershipName
       (
           DOUBLE_COLON
@@ -443,412 +598,407 @@ qualifiedOwnershipName
     ;
 
 
-/* ============================================================================
- * OWNERSHIP SUBJECT
- * ========================================================================== */
-
 /*
- * A source-level ownership subject.
+ * ============================================================================
+ * OWNERSHIP SUBJECT
+ * ============================================================================
  *
- * The subject is intentionally NOT a general expression.
+ * A subject is the root of an ownership place.
  *
- * General expressions remain owned by expressions.g4.
+ * General expression syntax remains outside this grammar.
  */
+
 ownershipSubject
-    : ownershipIdentifier
+    : IDENTIFIER
     | SELF
     | THIS
     ;
 
 
 /*
- * Identifier used as the root of an ownership place.
- */
-ownershipIdentifier
-    : IDENTIFIER
-    ;
-
-
-/* ============================================================================
+ * ============================================================================
  * OWNERSHIP PLACE
  * ============================================================================
  *
- * Ownership analysis operates over source-level places.
+ * Minimal source-level place bridge.
  *
- * A place can identify:
+ * Field projection belongs here because ownership frequently attaches to
+ * object fields without requiring the ownership grammar to own the complete
+ * expression language.
  *
- *     x
- *     self
- *     this
- *     x.field
- *     self.field
- *     object.field.subfield
- *
- * Indexing is deliberately represented through a restricted projection form
- * rather than redefining the entire expression grammar.
- *
- * The semantic layer resolves whether the resulting place is actually valid.
- * ========================================================================== */
+ * Indexing is deliberately NOT reconstructed here. The canonical expression
+ * and place grammar owns arbitrary indexing syntax.
+ */
 
 ownershipPlace
     : ownershipSubject
-      ownershipProjection*
+      ownershipFieldProjection*
     ;
 
 
-/*
- * Field/member projection.
- */
 ownershipFieldProjection
     : DOT
-      ownershipIdentifier
+      IDENTIFIER
     ;
 
 
 /*
- * Index projection.
+ * ============================================================================
+ * OWNERSHIP QUALIFIED SUBJECT
+ * ============================================================================
  *
- * The index itself is deliberately opaque to this grammar.
+ * A qualified name can be used when the semantic ownership domain refers to a
+ * named resource/value through a namespace.
  *
- * The host expression grammar remains the canonical owner of complete index
- * expressions.
- *
- * The `ownershipIndexExpression` rule provides a syntactic bridge without
- * trying to recreate arithmetic, calls, ranges, or other expressions here.
+ * This is intentionally distinct from ownershipPlace.
  */
-ownershipIndexProjection
-    : LBRACKET
-      ownershipIndexExpression
-      RBRACKET
+
+ownershipQualifiedSubject
+    : ownershipQualifiedName
     ;
 
 
 /*
- * Projection used by an ownership place.
+ * ============================================================================
+ * OWNERSHIP REFERENCE
+ * ============================================================================
+ *
+ * Reusable source-level ownership reference.
+ *
+ * It may be either:
+ *
+ *     a local/source place
+ *
+ * or:
+ *
+ *     a qualified ownership-domain name.
  */
-ownershipProjection
-    : ownershipFieldProjection
-    | ownershipIndexProjection
+
+ownershipReference
+    : ownershipPlace
+    | ownershipQualifiedSubject
     ;
 
 
 /*
- * Opaque ownership index.
+ * ============================================================================
+ * OWNERSHIP DECLARATION QUALIFIER
+ * ============================================================================
  *
- * The host parser/AST layer may replace this syntactic bridge with its
- * canonical expression node.
+ * Declaration grammar remains responsible for the declaration itself.
  *
- * This rule deliberately accepts a qualified source reference rather than
- * creating an alternative expression language.
+ * This rule provides only the reusable ownership prefix.
  */
-ownershipIndexExpression
-    : ownershipSubject
-    | INTEGER
-    ;
 
-
-/* ============================================================================
- * OWNERSHIP DECLARATION QUALIFIERS
- * ========================================================================== */
-
-/*
- * Ownership modifier attached to a declaration by the host grammar.
- *
- * Examples:
- *
- *     linear
- *     affine
- *
- * The declaration itself remains owned by declarations.g4.
- */
 ownershipDeclarationQualifier
     : ownershipQualifier
     ;
 
 
-/*
- * Ownership-qualified binding prefix.
- *
- * This rule is useful to declaration grammar composition.
- *
- * It intentionally does not contain:
- *
- *     variableDeclaration
- *     typeExpression
- *     initializer
- *
- * Those remain owned by their canonical grammars.
- */
 ownershipBindingPrefix
-    : ownershipQualifier
+    : ownershipDeclarationQualifier
     ;
 
 
-/* ============================================================================
- * OWNERSHIP RELATIONS
- * ========================================================================== */
+/*
+ * ============================================================================
+ * OWNERSHIP POLICY
+ * ============================================================================
+ *
+ * Policy names are semantic identifiers.
+ *
+ * They do not select an allocator, device, memory bank, or hardware target.
+ */
+
+ownershipPolicy
+    : ownershipQualifiedName
+    ;
+
+
+ownershipPolicyClause
+    : ownershipPolicyKeyword
+      LPAREN
+      ownershipPolicy
+      RPAREN
+    ;
+
+
+ownershipPolicyKeyword
+    : OWNERSHIP
+    ;
+
 
 /*
- * Explicit ownership relation.
+ * ============================================================================
+ * OWNERSHIP REQUIREMENT
+ * ============================================================================
+ *
+ * Requirement is mandatory semantic intent.
+ */
+
+ownershipRequirement
+    : ownershipRequirementKeyword
+      LPAREN
+      ownershipRequirementValue
+      RPAREN
+    ;
+
+
+ownershipRequirementKeyword
+    : REQUIRES
+    ;
+
+
+ownershipRequirementValue
+    : ownershipMode
+    | ownershipQualifiedName
+    ;
+
+
+/*
+ * ============================================================================
+ * OWNERSHIP CONSTRAINT
+ * ============================================================================
+ *
+ * Constraint restricts legal semantic realization.
+ */
+
+ownershipConstraint
+    : ownershipConstraintKeyword
+      LPAREN
+      ownershipConstraintValue
+      RPAREN
+    ;
+
+
+ownershipConstraintKeyword
+    : CONSTRAINT
+    ;
+
+
+ownershipConstraintValue
+    : ownershipMode
+    | ownershipQualifiedName
+    ;
+
+
+/*
+ * ============================================================================
+ * OWNERSHIP PREFERENCE
+ * ============================================================================
+ *
+ * Preference is non-mandatory.
+ */
+
+ownershipPreference
+    : ownershipPreferenceKeyword
+      LPAREN
+      ownershipPreferenceValue
+      RPAREN
+    ;
+
+
+ownershipPreferenceKeyword
+    : PREFER
+    ;
+
+
+ownershipPreferenceValue
+    : ownershipMode
+    | ownershipQualifiedName
+    ;
+
+
+/*
+ * ============================================================================
+ * OWNERSHIP HINT
+ * ============================================================================
+ *
+ * Hint cannot alter program semantics.
+ */
+
+ownershipHint
+    : ownershipHintKeyword
+      LPAREN
+      ownershipHintValue
+      RPAREN
+    ;
+
+
+ownershipHintKeyword
+    : HINT
+    ;
+
+
+ownershipHintValue
+    : ownershipMode
+    | ownershipQualifiedName
+    ;
+
+
+/*
+ * ============================================================================
+ * OWNERSHIP TRANSFER
+ * ============================================================================
+ *
+ * Transfer is SOURCE INTENT.
+ *
+ * It does not perform a runtime move during parsing.
+ *
+ * The semantic layer determines whether transfer is legal.
+ */
+
+ownershipTransfer
+    : ownershipTransferKeyword
+      LPAREN
+      ownershipReference
+      (
+          COMMA
+          ownershipTransferArgument
+      )*
+      RPAREN
+    ;
+
+
+ownershipTransferKeyword
+    : MOVE
+    | TRANSFER
+    ;
+
+
+ownershipTransferArgument
+    : ownershipReference
+    | ownershipQualifiedName
+    ;
+
+
+/*
+ * ============================================================================
+ * OWNERSHIP CONSUMPTION
+ * ============================================================================
+ *
+ * Consumption intent is separate from general transfer.
+ *
+ * Semantic analysis determines whether consumption is legal.
+ */
+
+ownershipConsume
+    : ownershipConsumeKeyword
+      LPAREN
+      ownershipReference
+      RPAREN
+    ;
+
+
+ownershipConsumeKeyword
+    : CONSUME
+    ;
+
+
+/*
+ * ============================================================================
+ * OWNERSHIP COPY / DUPLICATION INTENT
+ * ============================================================================
+ *
+ * The syntax does not declare that a value is semantically copyable.
+ *
+ * Type and ownership analysis determine whether the operation is legal.
+ */
+
+ownershipCopy
+    : ownershipCopyKeyword
+      LPAREN
+      ownershipReference
+      RPAREN
+    ;
+
+
+ownershipCopyKeyword
+    : COPY
+    ;
+
+
+/*
+ * ============================================================================
+ * OWNERSHIP DROP / RELEASE INTENT
+ * ============================================================================
+ *
+ * Dropping ownership is semantic intent.
+ *
+ * It is not the same as physical memory deallocation.
+ *
+ * Deallocation belongs to allocation/deallocation grammar.
+ */
+
+ownershipDrop
+    : ownershipDropKeyword
+      LPAREN
+      ownershipReference
+      RPAREN
+    ;
+
+
+ownershipDropKeyword
+    : DROP
+    ;
+
+
+/*
+ * ============================================================================
+ * OWNERSHIP RELATION
+ * ============================================================================
+ *
+ * Generic relation syntax.
  *
  * Examples:
  *
  *     ownership(x)
  *     ownership(x, y)
  *
- * The operation is semantic syntax, not runtime execution.
+ * Interpretation remains semantic.
  */
+
 ownershipRelation
-    : 'ownership'
-      '('
-      ownershipPlace
+    : ownershipRelationKeyword
+      LPAREN
+      ownershipReference
       (
           COMMA
-          ownershipPlace
+          ownershipReference
       )*
-      ')'
+      RPAREN
+    ;
+
+
+ownershipRelationKeyword
+    : OWNERSHIP
     ;
 
 
 /*
- * Ownership transfer intent.
+ * ============================================================================
+ * OWNERSHIP DIRECTIVE
+ * ============================================================================
  *
- * This form is intentionally domain-qualified instead of introducing a
- * permanently reserved global `move` keyword.
+ * Generic extensibility point.
+ *
+ * The directive name is open-world.
  *
  * Examples:
  *
- *     ownership::transfer(x)
- *     ownership::consume(x)
- *     ownership::move(x)
+ *     ownership::unique(...)
+ *     ownership::region::scoped(...)
  *
- * The semantic layer determines whether the operation is legal.
+ * The first namespace component is syntactic ownership-domain identity.
  */
-ownershipTransfer
-    : ownershipTransferOperation
-      '('
-      ownershipPlace
-      (
-          COMMA
-          ownershipArgument
-      )*
-      ')'
-    ;
 
-
-/*
- * Transfer operation namespace.
- *
- * The first component remains fixed because this is the ownership-domain
- * grammar.
- *
- * The operation itself remains extensible.
- */
-ownershipTransferOperation
-    : 'ownership'
-      DOUBLE_COLON
-      ownershipName
-    ;
-
-
-/*
- * Additional ownership argument.
- *
- * Ownership operations must not recreate the complete expression grammar.
- *
- * The host parser may attach the canonical expression AST to the argument
- * position after syntactic recognition.
- */
-ownershipArgument
-    : ownershipPlace
-    | ownershipName
-    | INTEGER
-    | STRING
-    ;
-
-
-/* ============================================================================
- * OWNERSHIP POLICY
- * ========================================================================== */
-
-/*
- * Policy declaration.
- *
- * Examples:
- *
- *     ownership::policy(linear)
- *     ownership::policy(affine)
- *     ownership::policy(custom)
- *
- * The policy has no implicit physical-memory meaning.
- */
-ownershipPolicy
-    : 'ownership'
-      DOUBLE_COLON
-      'policy'
-      '('
-      ownershipPolicyValue
-      ')'
-    ;
-
-
-/*
- * Policy value.
- */
-ownershipPolicyValue
-    : ownershipMode
-    | qualifiedOwnershipName
-    ;
-
-
-/*
- * Named ownership policy.
- */
-namedOwnershipPolicy
-    : 'ownership'
-      DOUBLE_COLON
-      'policy'
-      '('
-      qualifiedOwnershipName
-      ')'
-    ;
-
-
-/* ============================================================================
- * OWNERSHIP REQUIREMENTS
- * ========================================================================== */
-
-/*
- * Ownership requirement.
- *
- * This is a source-level semantic requirement.
- *
- * It does NOT mean that a physical allocator must satisfy anything.
- */
-ownershipRequirement
-    : 'ownership'
-      DOUBLE_COLON
-      'requires'
-      '('
-      ownershipRequirementValue
-      ')'
-    ;
-
-
-ownershipRequirementValue
-    : ownershipMode
-    | qualifiedOwnershipName
-    ;
-
-
-/* ============================================================================
- * OWNERSHIP CONSTRAINTS
- * ========================================================================== */
-
-/*
- * Ownership constraint.
- *
- * A constraint restricts legal semantic implementations.
- *
- * It is distinct from:
- *
- *     requirement;
- *     preference;
- *     hint.
- */
-ownershipConstraint
-    : 'ownership'
-      DOUBLE_COLON
-      'constraint'
-      '('
-      ownershipConstraintValue
-      ')'
-    ;
-
-
-ownershipConstraintValue
-    : ownershipMode
-    | qualifiedOwnershipName
-    ;
-
-
-/* ============================================================================
- * OWNERSHIP PREFERENCES
- * ========================================================================== */
-
-/*
- * Ownership preference.
- *
- * Preferences must never be interpreted as mandatory semantic requirements.
- */
-ownershipPreference
-    : 'ownership'
-      DOUBLE_COLON
-      'prefer'
-      '('
-      ownershipPreferenceValue
-      ')'
-    ;
-
-
-ownershipPreferenceValue
-    : ownershipMode
-    | qualifiedOwnershipName
-    ;
-
-
-/* ============================================================================
- * OWNERSHIP HINTS
- * ========================================================================== */
-
-/*
- * Ownership implementation hint.
- *
- * Hints are optional compiler/runtime guidance.
- *
- * They do not alter program semantics by themselves.
- */
-ownershipHint
-    : 'ownership'
-      DOUBLE_COLON
-      'hint'
-      '('
-      ownershipHintValue
-      ')'
-    ;
-
-
-ownershipHintValue
-    : ownershipMode
-    | qualifiedOwnershipName
-    ;
-
-
-/* ============================================================================
- * OWNERSHIP DOMAIN DIRECTIVE
- * ========================================================================== */
-
-/*
- * Generic ownership-domain directive.
- *
- * Examples:
- *
- *     ownership::policy(...)
- *     ownership::requires(...)
- *     ownership::constraint(...)
- *     ownership::prefer(...)
- *     ownership::hint(...)
- *
- * Future directives can be represented through the same extensible domain
- * mechanism without modifying the lexer.
- */
 ownershipDirective
-    : 'ownership'
+    : OWNERSHIP
       DOUBLE_COLON
       ownershipDirectiveName
-      '('
+      LPAREN
       ownershipDirectiveArguments?
-      ')'
+      RPAREN
     ;
 
 
@@ -867,174 +1017,743 @@ ownershipDirectiveArguments
 
 
 ownershipDirectiveArgument
-    : ownershipName
-    | ownershipPlace
-    | INTEGER
-    | STRING
-    ;
-
-
-/* ============================================================================
- * OWNERSHIP USE
- * ========================================================================== */
-
-/*
- * Explicit ownership use.
- *
- * This identifies the source-level subject whose ownership semantics are
- * being queried or constrained.
- */
-ownershipUse
-    : 'ownership'
-      '('
-      ownershipPlace
-      ')'
+    : ownershipReference
+    | ownershipMode
+    | ownershipQualifiedName
     ;
 
 
 /*
- * Ownership-qualified use.
+ * ============================================================================
+ * OWNERSHIP SPECIFIER
+ * ============================================================================
  *
- * Examples:
+ * This is the reusable union consumed by the memory-domain composition layer.
  *
- *     linear x
- *     affine x
- *
- * This is intended for composition with declaration/parameter grammars.
+ * It deliberately contains ownership constructs only.
  */
-ownershipQualifiedUse
-    : ownershipQualifier
-      ownershipPlace
-    ;
 
-
-/* ============================================================================
- * OWNERSHIP ASSERTION
- * ========================================================================== */
-
-/*
- * Ownership assertion.
- *
- * The grammar does not prove the assertion.
- *
- * Semantic analysis must validate it.
- */
-ownershipAssertion
-    : 'ownership'
-      DOUBLE_COLON
-      'assert'
-      '('
-      ownershipAssertionValue
-      ')'
-    ;
-
-
-ownershipAssertionValue
-    : ownershipMode
-    | qualifiedOwnershipName
-    | ownershipPlace
-    ;
-
-
-/* ============================================================================
- * OWNERSHIP CONVERSION / ADAPTATION
- * ========================================================================== */
-
-/*
- * Explicit ownership-domain adaptation.
- *
- * This is intentionally syntactic.
- *
- * Semantic analysis must reject conversions that violate the language's
- * ownership model.
- */
-ownershipAdaptation
-    : 'ownership'
-      DOUBLE_COLON
-      'adapt'
-      '('
-      ownershipPlace
-      COMMA
-      ownershipPolicyValue
-      ')'
-    ;
-
-
-/* ============================================================================
- * OWNERSHIP EXTENSION POINT
- * ========================================================================== */
-
-/*
- * Generic extension point for future ownership models.
- *
- * Examples:
- *
- *     ownership::unique(...)
- *     ownership::persistent(...)
- *     ownership::region(...)
- *     ownership::capability(...)
- *     ownership::distributed(...)
- *
- * The grammar does not assign these names any semantics.
- */
-ownershipExtension
-    : 'ownership'
-      DOUBLE_COLON
-      qualifiedOwnershipName
-      (
-          '('
-          ownershipDirectiveArguments?
-          ')'
-      )?
-    ;
-
-
-/* ============================================================================
- * OWNERSHIP CONSTRUCT
- * ========================================================================== */
-
-/*
- * Complete ownership-domain construct.
- *
- * This is the principal entry rule intended for the memory grammar.
- *
- * It permits the host grammar to integrate ownership without duplicating
- * individual ownership productions.
- */
 ownershipConstruct
-    : ownershipAnnotation
-    | ownershipNamedAnnotation
-    | ownershipRelation
-    | ownershipTransfer
-    | ownershipPolicy
+    : ownershipQualifier
+    | ownershipAnnotation
+    | ownershipPolicyClause
     | ownershipRequirement
     | ownershipConstraint
     | ownershipPreference
     | ownershipHint
-    | ownershipAssertion
-    | ownershipAdaptation
+    | ownershipTransfer
+    | ownershipConsume
+    | ownershipCopy
+    | ownershipDrop
+    | ownershipRelation
     | ownershipDirective
-    | ownershipExtension
     ;
 
 
-/* ============================================================================
- * SEMANTIC BOUNDARY
+/*
+ * ============================================================================
+ * OWNERSHIP METADATA
  * ============================================================================
  *
- * Nothing in this grammar determines:
+ * Metadata remains symbolic.
  *
- *     ownership validity;
- *     borrow validity;
- *     lifetime validity;
- *     alias validity;
- *     allocation legality;
- *     deallocation legality;
- *     memory placement;
- *     resource availability;
- *     hardware capability;
- *     runtime state.
+ * It does not encode implementation limits.
+ */
+
+ownershipMetadata
+    : ownershipQualifiedName
+      (
+          ASSIGN
+          ownershipMetadataValue
+      )?
+    ;
+
+
+ownershipMetadataValue
+    : ownershipMode
+    | ownershipQualifiedName
+    | ownershipReference
+    ;
+
+
+ownershipMetadataList
+    : ownershipMetadata
+      (
+          COMMA
+          ownershipMetadata
+      )*
+      COMMA?
+    ;
+
+
+/*
+ * ============================================================================
+ * OWNERSHIP POLICY DECLARATION
+ * ============================================================================
  *
- * Those belong downstream.
+ * A policy declaration carries source-level policy intent only.
+ *
+ * The host declaration grammar decides where declarations are legal.
+ */
+
+ownershipPolicyDeclaration
+    : ownershipPolicyDeclarationKeyword
+      ownershipQualifiedName
+      (
+          LPAREN
+          ownershipMetadataList?
+          RPAREN
+      )?
+    ;
+
+
+ownershipPolicyDeclarationKeyword
+    : OWNERSHIP
+    ;
+
+
+/*
+ * ============================================================================
+ * OWNERSHIP CAPABILITY REFERENCE
+ * ============================================================================
+ *
+ * This is deliberately a NAME, not a hardware capability implementation.
+ *
+ * Examples:
+ *
+ *     ownership::linear
+ *     ownership::shared
+ *     ownership::distributed
+ *
+ * Capability satisfaction is downstream.
+ */
+
+ownershipCapability
+    : OWNERSHIP
+      DOUBLE_COLON
+      ownershipQualifiedName
+    ;
+
+
+/*
+ * ============================================================================
+ * OWNERSHIP REQUIREMENT LIST
+ * ============================================================================
+ */
+
+ownershipRequirementList
+    : ownershipRequirementValue
+      (
+          COMMA
+          ownershipRequirementValue
+      )*
+      COMMA?
+    ;
+
+
+/*
+ * ============================================================================
+ * OWNERSHIP CONSTRAINT LIST
+ * ============================================================================
+ */
+
+ownershipConstraintList
+    : ownershipConstraintValue
+      (
+          COMMA
+          ownershipConstraintValue
+      )*
+      COMMA?
+    ;
+
+
+/*
+ * ============================================================================
+ * OWNERSHIP PREFERENCE LIST
+ * ============================================================================
+ */
+
+ownershipPreferenceList
+    : ownershipPreferenceValue
+      (
+          COMMA
+          ownershipPreferenceValue
+      )*
+      COMMA?
+    ;
+
+
+/*
+ * ============================================================================
+ * OWNERSHIP HINT LIST
+ * ============================================================================
+ */
+
+ownershipHintList
+    : ownershipHintValue
+      (
+          COMMA
+          ownershipHintValue
+      )*
+      COMMA?
+    ;
+
+
+/*
+ * ============================================================================
+ * COMPOSITION CONTRACT
+ * ============================================================================
+ *
+ * memory.g4
+ * ----------
+ *
+ * memory.g4 is the memory-domain composition boundary.
+ *
+ * It should import/compose Ownership and expose the ownership constructs in
+ * contexts where memory syntax permits ownership metadata.
+ *
+ *
+ * declarations/*
+ * --------------
+ *
+ * Declaration grammars own:
+ *
+ *     variable declarations
+ *     fields
+ *     parameters
+ *     resources
+ *     types
+ *
+ * They may consume:
+ *
+ *     ownershipDeclarationQualifier
+ *     ownershipBindingPrefix
+ *
+ * They remain responsible for the complete declaration syntax.
+ *
+ *
+ * types/*
+ * -------
+ *
+ * Type grammars own:
+ *
+ *     typeExpression
+ *     referenceType
+ *     pointerType
+ *     genericType
+ *     arrayType
+ *     resourceType
+ *
+ * Ownership grammar MUST NOT redefine those types.
+ *
+ *
+ * borrowing.g4
+ * ------------
+ *
+ * Borrowing owns:
+ *
+ *     borrow syntax
+ *     mutable borrow syntax
+ *     borrow-specific lifetime references
+ *
+ * Ownership grammar does not redefine borrow syntax.
+ *
+ *
+ * lifetimes.g4
+ * ------------
+ *
+ * Lifetime grammar owns canonical lifetime syntax where the repository's
+ * language specification establishes it.
+ *
+ * Ownership grammar must not turn lifetime names into machine timers.
+ *
+ *
+ * allocation.g4
+ * -------------
+ *
+ * Allocation owns:
+ *
+ *     allocate
+ *     reserve
+ *     resize
+ *     allocation policies
+ *
+ * Ownership transfer MUST NOT imply allocation.
+ *
+ *
+ * deallocation.g4
+ * ---------------
+ *
+ * Deallocation owns physical/logical storage release intent.
+ *
+ * ownershipDrop is intentionally distinct from deallocation.
+ *
+ *
+ * resources/*
+ * ------------
+ *
+ * Resource requirements and capabilities are target-independent semantic
+ * contracts.
+ *
+ * Ownership grammar may refer to symbolic ownership capabilities but does not
+ * discover or select physical resources.
+ *
+ *
+ * expressions/*
+ * --------------
+ *
+ * The canonical expression grammar owns arbitrary expressions.
+ *
+ * ownership.g4 MUST NOT reproduce:
+ *
+ *     arithmetic
+ *     indexing
+ *     calls
+ *     ranges
+ *     conditionals
+ *     lambdas
+ *     comprehensions
+ *     tensor expressions
+ *     quantum expressions
+ *
+ * Ownership places are intentionally restricted to the source-level bridge
+ * defined above.
+ *
+ * ============================================================================
+ * CROSS-DOMAIN INTEGRATION
+ * ============================================================================
+ *
+ * Ownership syntax is domain-neutral.
+ *
+ * The same ownership model may apply to:
+ *
+ *     classical values
+ *     quantum semantic objects
+ *     hybrid values
+ *     HDL resources
+ *     accelerator buffers
+ *     distributed objects
+ *     tensors
+ *     datasets
+ *     network resources
+ *     security-sensitive objects
+ *     future computational resources
+ *
+ * The grammar must not create separate ownership languages for each domain.
+ *
+ * Domain-specific ownership semantics are downstream semantic concerns.
+ *
+ * ============================================================================
+ * QUANTUM INTEGRATION
+ * ============================================================================
+ *
+ * Ownership syntax must never create a second quantum IR.
+ *
+ * A quantum source construct eventually follows:
+ *
+ *     source
+ *       |
+ *       v
+ *     domain-neutral AST
+ *       |
+ *       v
+ *     semantic analysis
+ *       |
+ *       v
+ *     quantum::ir
+ *       |
+ *       v
+ *     optimization
+ *       |
+ *       v
+ *     routing
+ *       |
+ *       v
+ *     scheduling
+ *       |
+ *       v
+ *     QEC / resilience
+ *       |
+ *       v
+ *     ZQN
+ *       |
+ *       v
+ *     HAL
+ *
+ * Ownership participates in semantic validation; it does not own any of
+ * those downstream stages.
+ *
+ * ============================================================================
+ * HARDWARE / HDL INTEGRATION
+ * ============================================================================
+ *
+ * Ownership cannot identify:
+ *
+ *     CPU 0
+ *     GPU 0
+ *     FPGA 0
+ *     QPU 0
+ *     memory bank 0
+ *     physical qubit 0
+ *     hardware address
+ *
+ * Such information belongs to target realization.
+ *
+ * ============================================================================
+ * RESOURCE / CAPABILITY INTEGRATION
+ * ============================================================================
+ *
+ * Ownership requirements may participate in the resource/capability system,
+ * but the grammar only preserves symbolic intent.
+ *
+ * The distinction is:
+ *
+ *     source ownership requirement
+ *              |
+ *              v
+ *       semantic requirement
+ *              |
+ *              v
+ *       capability/resource analysis
+ *              |
+ *              v
+ *       target realization
+ *
+ * The parser does not determine whether a machine satisfies a requirement.
+ *
+ * ============================================================================
+ * DETERMINISM CONTRACT
+ * ============================================================================
+ *
+ * Parsing must depend only on:
+ *
+ *     source text
+ *     grammar version
+ *     lexer vocabulary
+ *     parser configuration
+ *     explicitly selected dialect configuration
+ *
+ * Parsing must not depend on:
+ *
+ *     hardware availability
+ *     memory capacity
+ *     CPU count
+ *     GPU count
+ *     QPU count
+ *     filesystem state
+ *     network state
+ *     wall-clock time
+ *     randomness
+ *     runtime state
+ *     environment variables
+ *
+ * ============================================================================
+ * DIAGNOSTIC CONTRACT
+ * ============================================================================
+ *
+ * Parser diagnostics should identify structural errors such as:
+ *
+ *     malformed ownership qualifier
+ *     malformed ownership annotation
+ *     malformed ownership policy
+ *     malformed ownership directive
+ *     missing ownership subject
+ *     malformed ownership transfer
+ *     malformed ownership argument
+ *
+ * Semantic diagnostics belong downstream and include:
+ *
+ *     illegal move
+ *     illegal duplication
+ *     illegal drop
+ *     invalid ownership transfer
+ *     unsatisfied ownership requirement
+ *     violated ownership constraint
+ *     unavailable preferred ownership model
+ *
+ * The parser must not convert semantic failures into syntax errors merely
+ * because they require program-wide analysis.
+ *
+ * ============================================================================
+ * SAFETY CONTRACT
+ * ============================================================================
+ *
+ * This grammar contains no embedded target-language actions.
+ *
+ * It performs no:
+ *
+ *     filesystem access
+ *     network access
+ *     hardware access
+ *     environment inspection
+ *     secret access
+ *     allocation
+ *     runtime execution
+ *
+ * Rust integration must remain:
+ *
+ *     Rust 1.97 / 1.97.1
+ *     Edition 2021
+ *     safe Rust
+ *     no unsafe
+ *
+ * ============================================================================
+ * TEST CONTRACT
+ * ============================================================================
+ *
+ * The ownership component requires independent conformance tests.
+ *
+ * --------------------------------------------------------------------------
+ * POSITIVE
+ * --------------------------------------------------------------------------
+ *
+ * Ownership modes:
+ *
+ *     linear
+ *     affine
+ *
+ * Qualifiers:
+ *
+ *     linear
+ *     affine
+ *
+ * Qualified names:
+ *
+ *     unique
+ *     shared
+ *     region::scoped
+ *     capability::restricted
+ *     domain::ownership::policy
+ *
+ * Ownership references:
+ *
+ *     value
+ *     self
+ *     this
+ *     object.field
+ *     object.field.value
+ *
+ * Transfer:
+ *
+ *     move(value)
+ *     transfer(value)
+ *
+ * Consumption:
+ *
+ *     consume(value)
+ *
+ * Copy intent:
+ *
+ *     copy(value)
+ *
+ * Drop intent:
+ *
+ *     drop(value)
+ *
+ * --------------------------------------------------------------------------
+ * NEGATIVE
+ * --------------------------------------------------------------------------
+ *
+ * Must reject malformed structures such as:
+ *
+ *     linear(
+ *     affine(
+ *     ownership::
+ *     ownership:::
+ *     ::ownership
+ *     ownership::policy(
+ *     move(
+ *     consume(
+ *     copy(
+ *     drop(
+ *     object.
+ *     .
+ *
+ * The exact diagnostics are owned by the frontend diagnostic layer.
+ *
+ * --------------------------------------------------------------------------
+ * BOUNDARY
+ * --------------------------------------------------------------------------
+ *
+ * Tests must include:
+ *
+ *     deeply qualified ownership names;
+ *     deeply projected ownership places;
+ *     many ownership metadata entries;
+ *     many ownership directives;
+ *     large programs;
+ *     dynamically sized values;
+ *     symbolic resource quantities;
+ *
+ * No artificial upper bound may be encoded by the grammar.
+ *
+ * --------------------------------------------------------------------------
+ * SCALABILITY
+ * --------------------------------------------------------------------------
+ *
+ * The grammar must remain valid when ownership applies to:
+ *
+ *     tiny values;
+ *     large aggregates;
+ *     tensors;
+ *     distributed objects;
+ *     accelerator buffers;
+ *     quantum-associated semantic objects;
+ *     HDL resources;
+ *     future computational resources.
+ *
+ * Resource realization is downstream.
+ *
+ * --------------------------------------------------------------------------
+ * CROSS-DOMAIN
+ * --------------------------------------------------------------------------
+ *
+ * Ownership syntax must remain usable with:
+ *
+ *     classical
+ *     quantum
+ *     hybrid
+ *     HDL
+ *     hardware
+ *     distributed
+ *     AI
+ *     data
+ *     networking
+ *     security
+ *     future domains
+ *
+ * --------------------------------------------------------------------------
+ * DETERMINISM
+ * --------------------------------------------------------------------------
+ *
+ * Identical source, grammar version, and lexical configuration must yield
+ * identical parse structure.
+ *
+ * --------------------------------------------------------------------------
+ * ROUND-TRIP
+ * --------------------------------------------------------------------------
+ *
+ * A future formatter/printer must preserve:
+ *
+ *     ownership mode
+ *     ownership qualifier
+ *     ownership annotation
+ *     policy
+ *     requirement
+ *     constraint
+ *     preference
+ *     hint
+ *     transfer
+ *     consumption
+ *     copy
+ *     drop
+ *     directive
+ *     source-level ownership reference
+ *
+ * without changing semantic intent.
+ *
+ * ============================================================================
+ * HARD-CODING AUDIT
+ * ============================================================================
+ *
+ * Repository validation must reject ownership grammar additions that introduce
+ * machine-dependent limits, including but not limited to:
+ *
+ *     MAX_OWNERS
+ *     MAX_REFERENCES
+ *     MAX_LIFETIMES
+ *     MAX_REGIONS
+ *     MAX_MEMORY
+ *     MAX_QUBITS
+ *     MAX_CPUS
+ *     MAX_CORES
+ *     MAX_THREADS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_ACCELERATORS
+ *     MAX_QPUS
+ *     MAX_NODES
+ *
+ * The presence of a numeric literal in program syntax is not itself a
+ * violation. The violation occurs when the grammar turns such a value into a
+ * universal implementation limit.
+ *
+ * ============================================================================
+ * COMPLETION CRITERIA
+ * ============================================================================
+ *
+ * ownership.g4 is complete when:
+ *
+ * [ ] It is a valid ANTLR4 parser grammar.
+ *
+ * [ ] It consumes the canonical Zamani lexer vocabulary.
+ *
+ * [ ] It defines no lexer rules.
+ *
+ * [ ] It defines no program root.
+ *
+ * [ ] It does not duplicate the general expression grammar.
+ *
+ * [ ] It does not duplicate the type grammar.
+ *
+ * [ ] It does not duplicate borrow grammar.
+ *
+ * [ ] It does not duplicate lifetime semantics.
+ *
+ * [ ] It does not duplicate allocation/deallocation semantics.
+ *
+ * [ ] Ownership modes are represented independently of physical resources.
+ *
+ * [ ] Ownership policies are open-world.
+ *
+ * [ ] Requirements, constraints, preferences, and hints remain distinct.
+ *
+ * [ ] Ownership transfer is represented as semantic intent.
+ *
+ * [ ] Consumption is distinct from physical deallocation.
+ *
+ * [ ] Copy intent does not imply semantic copyability.
+ *
+ * [ ] Ownership places do not recreate arbitrary expression syntax.
+ *
+ * [ ] No fixed hardware/resource limit exists.
+ *
+ * [ ] No physical address exists in the grammar.
+ *
+ * [ ] No hardware identifier exists in the grammar.
+ *
+ * [ ] No quantum gate or qubit enumeration exists in the grammar.
+ *
+ * [ ] No second quantum IR is introduced.
+ *
+ * [ ] The canonical domain-neutral AST remains the next architectural stage.
+ *
+ * [ ] Semantic ownership checking remains downstream.
+ *
+ * [ ] Resource/capability analysis remains downstream.
+ *
+ * [ ] Compiler lowering remains downstream.
+ *
+ * [ ] Runtime realization remains downstream.
+ *
+ * [ ] Positive tests exist.
+ *
+ * [ ] Negative tests exist.
+ *
+ * [ ] Boundary tests exist.
+ *
+ * [ ] Scalability tests exist.
+ *
+ * [ ] Cross-domain tests exist.
+ *
+ * [ ] Determinism tests exist.
+ *
+ * [ ] Round-trip tests exist.
+ *
+ * [ ] Hard-coding audit passes.
+ *
+ * [ ] Rust integration remains compatible with Rust 1.97 / 1.97.1 and
+ *     requires no unsafe Rust.
+ *
  * ============================================================================
  */
