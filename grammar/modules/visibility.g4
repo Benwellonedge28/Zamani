@@ -1,268 +1,377 @@
 /*
  * ============================================================================
- * Zamani Programming Language
+ * Zamani Universal Computing Language
  * ============================================================================
  *
- * File:
- *     grammar/modules/visibility.g4
+ * FILE
+ * ----
+ * grammar/modules/visibility.g4
  *
- * Role:
- *     Canonical parser component for source-level visibility/access
- *     declarations.
+ * GRAMMAR
+ * -------
+ * Visibility
  *
- * Grammar layer:
- *     Concrete syntax only.
+ * STATUS
+ * ------
+ * CANONICAL / PRODUCTION VISIBILITY PARSER COMPONENT
  *
- * Runtime/compiler baseline:
- *     Rust 1.97 / Rust 1.97.1.
+ * PURPOSE
+ * -------
+ * This file is the single canonical parser owner for source-level visibility
+ * syntax in Zamani.
  *
- * Safety:
- *     This file contains ANTLR grammar only.
- *     It contains no Rust implementation code.
- *     Generated/compiler/runtime code MUST use safe Rust only.
- *     The repository Rust crates MUST enforce unsafe-code prohibition.
+ * It is deliberately domain-neutral and may be consumed by:
+ *
+ *   - modules
+ *   - packages
+ *   - functions
+ *   - declarations
+ *   - types
+ *   - structs
+ *   - records
+ *   - enums
+ *   - classes
+ *   - interfaces
+ *   - traits
+ *   - implementations
+ *   - classical declarations
+ *   - quantum declarations
+ *   - hybrid declarations
+ *   - HDL declarations
+ *   - hardware declarations
+ *   - distributed declarations
+ *   - AI/data declarations
+ *   - networking declarations
+ *   - future Zamani domains
+ *
+ * ARCHITECTURAL RULE
+ * ------------------
+ * Visibility answers only:
+ *
+ *     "What source-level access modifier was written?"
+ *
+ * It does NOT answer:
+ *
+ *     "Who is allowed to access this declaration?"
+ *
+ * Access checking, module resolution, package resolution, inheritance,
+ * export policy, ABI visibility, interoperability, and target realization
+ * belong to semantic/compiler layers downstream.
  *
  * ============================================================================
- * ARCHITECTURAL PURPOSE
+ * AUTHORITY
  * ============================================================================
  *
- * Visibility is a LANGUAGE-LEVEL declaration property.
+ * This file owns:
  *
- * This file provides one canonical syntax vocabulary that can be consumed by:
+ *     visibilityModifier
  *
+ * and the compatibility wrappers explicitly defined below.
+ *
+ * It does NOT own:
+ *
+ *     identifiers
+ *     qualified names
  *     modules
  *     packages
- *     functions
+ *     exports
+ *     imports
  *     declarations
+ *     functions
  *     types
- *     implementations
- *     interfaces
- *     traits
- *     foreign declarations
- *     hardware declarations
- *     quantum declarations
- *     classical declarations
- *     distributed declarations
- *     future language domains
+ *     expressions
+ *     statements
+ *     semantic access checking
+ *     symbol resolution
+ *     package resolution
+ *     dependency resolution
+ *     ABI generation
+ *     IR construction
+ *     quantum::ir
+ *     QEC
+ *     ZQN
+ *     routing
+ *     scheduling
+ *     optimization
+ *     hardware discovery
+ *     resource discovery
+ *     runtime dispatch
  *
- * Visibility syntax is deliberately independent of the computational domain.
- *
- * For example, the same visibility syntax can apply to:
- *
- *     classical::value
- *     quantum::operation
- *     hdl::module
- *     hardware::interface
- *     distributed::service
- *     ai::model
- *
- * without visibility.g4 needing to know what any of those things mean.
+ * No other grammar component should redefine the visibility alternatives.
  *
  * ============================================================================
- * OWNERSHIP
+ * LEXER CONTRACT
  * ============================================================================
  *
- * THIS FILE OWNS:
+ * The repository's current canonical lexical composition uses:
  *
- *   - the canonical visibility modifier;
- *   - the canonical visibility modifier sequence;
- *   - visibility alternatives;
- *   - optional/default visibility syntax where defined by the language;
- *   - the syntactic representation of visibility source spans;
- *   - the syntax-level distinction between explicit and absent visibility.
+ *     grammar/antlr/ZamaniLexer.g4
  *
- * THIS FILE DOES NOT OWN:
+ * and its imported lexical components.
  *
- *   - identifiers;
- *   - lexical tokens;
- *   - declarations;
- *   - modules;
- *   - packages;
- *   - functions;
- *   - types;
- *   - structs;
- *   - enums;
- *   - traits;
- *   - interfaces;
- *   - implementations;
- *   - expressions;
- *   - statements;
- *   - effects;
- *   - capabilities;
- *   - resources;
- *   - hardware;
- *   - quantum semantics;
- *   - classical semantics;
- *   - HDL semantics;
- *   - module resolution;
- *   - package resolution;
- *   - symbol tables;
- *   - name lookup;
- *   - access checking;
- *   - inheritance;
- *   - ABI;
- *   - IR construction;
- *   - quantum::ir;
- *   - QEC;
- *   - ZQN;
- *   - optimization;
- *   - routing;
- *   - scheduling;
- *   - hardware discovery;
- *   - resource discovery;
- *   - runtime dispatch;
- *   - filesystem access;
- *   - network access;
- *   - package registries;
- *   - dependency resolution.
+ * The current keyword vocabulary defines the visibility tokens:
+ *
+ *     PUB
+ *     PUBLIC
+ *     PRIVATE
+ *     PROTECTED
+ *     INTERNAL
+ *
+ * Therefore this parser grammar MUST consume:
+ *
+ *     ZamaniLexer
+ *
+ * and MUST NOT reference an obsolete:
+ *
+ *     ZamaniTokens
+ *
+ * vocabulary.
+ *
+ * This is an intentional correction of the previous version of this file.
  *
  * ============================================================================
- * CRITICAL OWNERSHIP RULE
+ * SOURCE-COMPATIBLE VISIBILITY SPELLINGS
  * ============================================================================
  *
- * Visibility MUST have exactly one canonical grammar owner.
+ * The existing Zamani language surface contains:
  *
- * Other grammar components MUST NOT redefine:
+ *     pub
+ *     public
+ *     private
+ *     protected
+ *     internal
+ *
+ * All five spellings remain accepted.
+ *
+ * `pub` and `public` are intentionally separate lexical spellings.
+ *
+ * Semantic analysis may canonicalize them to the same semantic visibility
+ * value if the language specification defines them as aliases.
+ *
+ * The grammar preserves the source spelling through the selected token.
+ *
+ * ============================================================================
+ * SINGLE OWNERSHIP
+ * ============================================================================
+ *
+ * There is exactly one canonical visibility production:
  *
  *     visibilityModifier
  *
- * or create competing copies such as:
+ * Other grammar components MUST compose this rule.
+ *
+ * They MUST NOT recreate alternatives such as:
  *
  *     moduleVisibility
- *     packageVisibility
  *     functionVisibility
- *     typeVisibility
  *     declarationVisibility
+ *     typeVisibility
+ *     packageVisibility
+ *     quantumVisibility
+ *     hardwareVisibility
  *
- * when those rules merely duplicate the same visibility vocabulary.
+ * merely to repeat:
  *
- * Domain-specific grammar files MAY define a contextual wrapper around the
- * canonical visibility rule when the surrounding declaration requires it.
+ *     PUB
+ *     PUBLIC
+ *     PRIVATE
+ *     PROTECTED
+ *     INTERNAL
  *
- * Such wrappers MUST delegate to:
+ * Context-specific wrapper rules are acceptable only when they delegate to:
  *
  *     visibilityModifier
- *
- * rather than duplicate the alternatives.
- *
- * Example:
- *
- *     functionDeclaration
- *         : visibilityModifier?
- *           K_FN
- *           ...
- *         ;
- *
- * This keeps the visibility vocabulary centralized.
  *
  * ============================================================================
  * SEMANTIC BOUNDARY
  * ============================================================================
  *
- * This grammar answers only:
- *
- *     "What visibility syntax was written?"
- *
- * It does NOT answer:
- *
- *     "Is this declaration actually accessible?"
+ * The grammar establishes syntax only.
  *
  * Semantic analysis determines:
  *
- *   - whether a visibility modifier is legal in its declaration context;
- *   - whether multiple visibility modifiers conflict;
- *   - whether a declaration has a default visibility;
- *   - whether public/private/protected/internal are meaningful for that
- *     declaration kind;
- *   - whether a referenced symbol is accessible;
- *   - whether inheritance affects protected visibility;
- *   - whether module boundaries affect visibility;
- *   - whether package boundaries affect visibility;
- *   - whether an exported declaration is actually public;
- *   - whether a visibility rule conflicts with another language rule;
- *   - whether visibility affects ABI or interoperability;
- *   - whether visibility affects generated artifacts.
+ *     - the declaration's effective visibility;
+ *     - the declaration context in which the modifier is valid;
+ *     - default visibility when the modifier is absent;
+ *     - whether protected visibility is meaningful for the declaration;
+ *     - module-boundary accessibility;
+ *     - package-boundary accessibility;
+ *     - inheritance-related access;
+ *     - export/visibility consistency;
+ *     - import/access consistency;
+ *     - symbol reachability;
+ *     - ABI implications;
+ *     - interoperability implications;
+ *     - generated-artifact visibility.
  *
- * The parser MUST NOT perform any of those checks.
+ * The parser MUST NOT perform those checks.
  *
  * ============================================================================
- * POCO-REAF / HARDWARE INDEPENDENCE
+ * DEFAULT VISIBILITY
  * ============================================================================
  *
- * Visibility has no relationship to physical resources.
+ * Absence of visibility is represented by the consuming grammar simply not
+ * invoking:
  *
- * It MUST NOT encode:
+ *     visibilityModifier
  *
- *     CPU count
- *     core count
- *     thread count
- *     GPU count
- *     FPGA count
- *     ASIC count
- *     QPU count
- *     qubit count
- *     memory capacity
- *     device identifiers
- *     device addresses
- *     topology
- *     network size
- *     cluster size
- *     accelerator count
- *     deployment size
+ * This file deliberately does NOT define the semantic default.
  *
- * Therefore visibility syntax remains identical whether a program executes on:
+ * In particular, this file does not decide:
  *
- *     a tiny embedded system
- *     one CPU
- *     many CPUs
- *     a GPU
- *     an FPGA
- *     an ASIC
- *     a quantum processor
- *     a simulator
- *     a heterogeneous system
- *     a cluster
- *     a supercomputer
- *     a distributed deployment
- *     a future architecture
+ *     absent = private
+ *     absent = public
+ *     absent = internal
  *
- * This is required for:
+ * Such a rule belongs to the language semantic specification and declaration
+ * context.
+ *
+ * ============================================================================
+ * CARDINALITY
+ * ============================================================================
+ *
+ * A visibility-bearing declaration accepts at most one visibility modifier
+ * through this component.
+ *
+ * Consumers should normally use:
+ *
+ *     visibilityModifier?
+ *
+ * NOT:
+ *
+ *     visibilityModifier*
+ *
+ * and MUST NOT silently accept:
+ *
+ *     pub private
+ *     public internal
+ *     protected private
+ *
+ * as a sequence of visibility modifiers.
+ *
+ * If Zamani later introduces compound access policies, that must be a separate
+ * explicitly specified construct. It must not be created accidentally by
+ * changing this rule to accept arbitrary repetition.
+ *
+ * ============================================================================
+ * OPEN-WORLD / FUTURE DOMAIN CONTRACT
+ * ============================================================================
+ *
+ * Visibility is intentionally independent of computational domain.
+ *
+ * A future domain does not require a new visibility grammar.
+ *
+ * Examples:
+ *
+ *     pub classical_function
+ *     pub quantum_operation
+ *     pub hardware_interface
+ *     pub distributed_service
+ *     pub ai_model
+ *     pub network_protocol
+ *     pub future_domain_declaration
+ *
+ * all reuse:
+ *
+ *     visibilityModifier
+ *
+ * This is necessary for the open-world Zamani architecture.
+ *
+ * ============================================================================
+ * POCO-REAF CONTRACT
+ * ============================================================================
+ *
+ * Visibility MUST NOT encode physical realization.
+ *
+ * It MUST NOT contain:
+ *
+ *     CPU counts
+ *     core counts
+ *     thread counts
+ *     GPU counts
+ *     FPGA counts
+ *     ASIC counts
+ *     QPU counts
+ *     qubit counts
+ *     memory capacities
+ *     register widths
+ *     vector widths
+ *     tensor dimensions
+ *     accelerator counts
+ *     node counts
+ *     cluster sizes
+ *     network topology
+ *     physical device IDs
+ *     hardware addresses
+ *     backend identifiers
+ *     vendor identifiers
+ *     deployment sizes
+ *
+ * Visibility therefore has identical source-level syntax whether the program
+ * eventually executes on:
+ *
+ *     - a tiny embedded target;
+ *     - one CPU;
+ *     - many CPUs;
+ *     - a GPU;
+ *     - an FPGA;
+ *     - an ASIC;
+ *     - a QPU;
+ *     - a quantum simulator;
+ *     - a heterogeneous machine;
+ *     - a cluster;
+ *     - an HPC system;
+ *     - a distributed deployment;
+ *     - a cloud environment;
+ *     - a future computational architecture.
+ *
+ * This preserves:
  *
  *     Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
  *
  * ============================================================================
- * SCALABILITY
+ * SCALABILITY CONTRACT
  * ============================================================================
  *
- * No finite language-level limit is encoded for:
+ * This grammar imposes no language-level finite limit on:
  *
- *     - number of declarations;
- *     - number of modules;
- *     - number of packages;
- *     - number of visibility-bearing declarations;
- *     - source-file size;
- *     - module-graph size;
+ *     - declarations;
+ *     - modules;
+ *     - packages;
+ *     - visibility-bearing declarations;
+ *     - module depth;
+ *     - package depth;
+ *     - source size;
  *     - dependency-graph size;
- *     - computational-domain size.
+ *     - computational-domain count.
  *
- * This file MUST NOT contain:
+ * The grammar contains no:
  *
  *     MAX_VISIBILITY
  *     MAX_DECLARATIONS
  *     MAX_MODULES
  *     MAX_PACKAGES
  *     MAX_DEPTH
+ *     MAX_DOMAINS
  *
- * Repetition and source size are bounded only by explicit implementation
- * resource policies.
- *
- * Such operational limits MUST NOT redefine language semantics.
+ * Any implementation resource limits used to protect the compiler from
+ * hostile or exhausted input are operational policies and MUST NOT redefine
+ * the language semantics.
  *
  * ============================================================================
  * DETERMINISM
  * ============================================================================
  *
- * This grammar performs no:
+ * This grammar has no semantic predicates or executable actions.
+ *
+ * Parsing depends only on:
+ *
+ *     - the token stream;
+ *     - the grammar;
+ *     - the imported vocabulary;
+ *     - the parser configuration.
+ *
+ * It performs no:
  *
  *     filesystem I/O
  *     network I/O
@@ -272,212 +381,249 @@
  *     package lookup
  *     registry lookup
  *     hardware discovery
- *     backend discovery
  *     resource discovery
+ *     backend discovery
  *
- * Therefore identical token streams produce identical syntactic structures.
- *
- * ============================================================================
- * LEXER CONTRACT
- * ============================================================================
- *
- * The canonical lexical vocabulary is:
- *
- *     grammar/lexer/tokens.g4
- *
- * Grammar:
- *
- *     ZamaniTokens
- *
- * Required tokens:
- *
- *     K_PUB
- *     K_PUBLIC
- *     K_PRIVATE
- *     K_PROTECTED
- *     K_INTERNAL
- *
- * This file MUST NOT declare lexer rules.
+ * Identical token streams therefore produce equivalent visibility parse
+ * structures under the same grammar/parser configuration.
  *
  * ============================================================================
- * VISIBILITY VOCABULARY
+ * SOURCE SPAN / AST CONTRACT
  * ============================================================================
  *
- * The current canonical lexical vocabulary provides:
+ * This grammar does not construct the AST.
  *
- *     pub
- *     public
- *     private
- *     protected
- *     internal
+ * The frontend AST adapter MUST preserve enough information to represent:
  *
- * This grammar intentionally does not introduce additional visibility
- * keywords.
+ *     - whether visibility was explicitly written;
+ *     - which visibility token was written;
+ *     - its source span;
+ *     - source ordering relative to other declaration modifiers.
  *
- * New visibility concepts require an explicit language-version/specification
- * change before being added to the lexer and this grammar.
+ * Conceptual representation:
  *
- * ============================================================================
- * SYNTACTIC MODEL
- * ============================================================================
- *
- * The canonical visibility syntax is:
- *
- *     visibilityModifier
- *
- * Examples:
- *
- *     pub
- *     public
- *     private
- *     protected
- *     internal
- *
- * A declaration may then consume:
- *
- *     visibilityModifier?
- *
- * when absence means "use the contextual default".
- *
- * This file does NOT define what that default is.
- *
- * ============================================================================
- * ALIASING OF VOCABULARY
- * ============================================================================
- *
- * `pub` and `public` are separate lexical spellings.
- *
- * The parser preserves which spelling was written.
- *
- * Semantic analysis MAY canonicalize both into one semantic visibility
- * representation, but that canonicalization MUST occur outside this grammar.
- *
- * Likewise:
- *
- *     private
- *     protected
- *     internal
- *
- * remain distinct source-level visibility modifiers.
- *
- * ============================================================================
- * AST CONTRACT
- * ============================================================================
- *
- * The frontend AST SHOULD preserve:
- *
- *     VisibilitySyntax {
- *         kind,
+ *     VisibilitySyntax
+ *     {
+ *         spelling,
  *         span
  *     }
  *
- * where `kind` identifies the source spelling/category.
+ * The concrete Rust AST type remains owned by the frontend AST implementation.
  *
- * The exact Rust AST type is owned by the frontend implementation and MUST NOT
- * be defined by this grammar.
- *
- * At minimum, the AST must retain enough information for semantic analysis to
- * distinguish:
- *
- *     pub
- *     public
- *     private
- *     protected
- *     internal
- *     absent
- *
- * when source provenance requires that distinction.
- *
- * If the semantic model intentionally treats `pub` and `public` identically,
- * the semantic layer may canonicalize them after preserving source provenance.
+ * The grammar MUST NOT introduce a competing AST type.
  *
  * ============================================================================
- * SEMANTIC CONTRACT
+ * SEMANTIC LOWERING CONTRACT
  * ============================================================================
  *
- * The semantic layer owns the mapping from source syntax to semantic access
- * policy.
+ * The intended pipeline is:
  *
- * Conceptually:
+ *     source
+ *       |
+ *       v
+ *     ZamaniLexer
+ *       |
+ *       v
+ *     Visibility
+ *       |
+ *       v
+ *     frontend AST
+ *       |
+ *       v
+ *     semantic visibility/access model
+ *       |
+ *       v
+ *     module/package/symbol analysis
+ *       |
+ *       v
+ *     canonical semantic representation
+ *       |
+ *       +--> classical IR
+ *       +--> quantum::ir
+ *       +--> HDL/hardware representation
+ *       +--> distributed representation
+ *       +--> accelerator representation
+ *       |
+ *       v
+ *     optimization / lowering / routing / scheduling
+ *       |
+ *       v
+ *     target realization
  *
- *     VisibilitySyntax
- *             |
- *             v
- *     visibility semantic analysis
- *             |
- *             v
- *     canonical visibility model
+ * Visibility MUST NOT bypass the semantic layer.
  *
- * This grammar MUST NOT create that semantic model.
+ * ============================================================================
+ * QUANTUM INTEGRATION
+ * ============================================================================
+ *
+ * Quantum declarations may consume:
+ *
+ *     visibilityModifier?
+ *
+ * where the relevant declaration grammar permits it.
+ *
+ * Examples include:
+ *
+ *     public quantum declarations
+ *     private quantum abstractions
+ *     internal quantum operations
+ *
+ * This grammar does NOT know about:
+ *
+ *     QubitId
+ *     PhysicalQubitId
+ *     quantum::ir
+ *     gates
+ *     circuits
+ *     QEC
+ *     ZQN
+ *     routing
+ *     scheduling
+ *     calibration
+ *     QPU topology
+ *     backend selection
+ *
+ * Visibility therefore remains independent of quantum-machine scale.
+ *
+ * ============================================================================
+ * HDL / HARDWARE INTEGRATION
+ * ============================================================================
+ *
+ * HDL and hardware declarations may consume:
+ *
+ *     visibilityModifier?
+ *
+ * where their declaration contracts permit it.
+ *
+ * Visibility means source/API access.
+ *
+ * It does NOT mean:
+ *
+ *     allocate a device
+ *     select a device
+ *     expose a physical address
+ *     expose a bus
+ *     expose a memory bank
+ *     select a processor
+ *     select an accelerator
+ *
+ * Hardware realization belongs downstream.
+ *
+ * ============================================================================
+ * RESOURCE / CAPABILITY INTEGRATION
+ * ============================================================================
+ *
+ * Visibility is independent from:
+ *
+ *     requirement
+ *     constraint
+ *     capability
+ *     resource
+ *     preference
+ *     hint
+ *     target
+ *     deployment
+ *
+ * For example:
+ *
+ *     pub fn compute(...) ...
+ *
+ * does not imply any hardware capability.
+ *
+ * Conversely:
+ *
+ *     requires capability("quantum.measurement")
+ *
+ * does not imply any visibility property.
+ *
+ * These are separate language concepts and must remain separately owned.
  *
  * ============================================================================
  * MODULE INTEGRATION
  * ============================================================================
  *
- * `modules/modules.g4` currently contains a local visibility production.
+ * `grammar/modules/modules.g4` is responsible for module declaration syntax.
  *
- * That production MUST be migrated to this canonical rule.
+ * It MUST consume:
  *
- * Before:
+ *     visibilityModifier?
  *
- *     moduleVisibility
- *         : K_PUB
- *         | K_PUBLIC
- *         | K_PRIVATE
- *         | K_PROTECTED
- *         | K_INTERNAL
- *         ;
+ * when module visibility is part of the language specification.
  *
- * After:
+ * It MUST NOT define another list of visibility tokens.
+ *
+ * Example composition:
  *
  *     moduleDeclaration
- *         : visibilityModifier?
- *           K_MODULE
- *           ...
+ *         : moduleAttributes?
+ *           visibilityModifier?
+ *           MODULE
+ *           moduleName
+ *           moduleBody
  *         ;
  *
- * The module grammar then consumes the canonical visibility vocabulary without
- * owning it.
+ * The exact surrounding declaration order remains owned by `Modules`.
  *
  * ============================================================================
  * FUNCTION INTEGRATION
  * ============================================================================
  *
- * `functions/functions.g4` currently contains:
+ * `grammar/functions/functions.g4` owns function declaration syntax.
  *
- *     functionModifier
+ * It MUST consume the canonical visibility rule rather than repeating:
+ *
+ *     PUBLIC
+ *     PUB
+ *     PRIVATE
+ *     PROTECTED
+ *     INTERNAL
+ *
+ * Example:
+ *
+ *     functionSignatureCore
+ *         : attribute*
+ *           visibilityModifier?
+ *           functionSpecificModifier*
+ *           FN
+ *           ...
+ *         ;
+ *
+ * The exact function modifier ordering remains owned by `Functions`.
+ *
+ * ============================================================================
+ * MODIFIER INTEGRATION
+ * ============================================================================
+ *
+ * `grammar/core/modifiers.g4` is a broader modifier grammar.
+ *
+ * It MUST NOT become a second owner of the visibility vocabulary.
+ *
+ * Its canonical visibility branch should delegate to:
+ *
+ *     visibilityModifier
+ *
+ * or the aggregate parser should ensure only one visibility owner is used.
+ *
+ * In particular, the old pattern:
+ *
+ *     visibilityModifier
  *         : K_PUB
  *         | K_PUBLIC
  *         | K_PRIVATE
  *         | K_PROTECTED
  *         | K_INTERNAL
- *         | ...
  *         ;
  *
- * The visibility alternatives MUST be removed from that local ownership.
+ * is invalid for the current repository because those token names do not match
+ * the current lexer vocabulary.
  *
- * Function modifiers should instead compose:
+ * The canonical token names are:
  *
- *     visibilityModifier?
- *
- * alongside function-specific modifiers.
- *
- * The function grammar continues to own:
- *
- *     static
- *     const
- *     async
- *     extern
- *     inline
- *     volatile
- *     final
- *     sealed
- *     partial
- *     virtual
- *     override
- *     abstract
- *
- * only when those are genuinely function-specific.
+ *     PUB
+ *     PUBLIC
+ *     PRIVATE
+ *     PROTECTED
+ *     INTERNAL
  *
  * ============================================================================
  * DECLARATION INTEGRATION
@@ -487,282 +633,90 @@
  *
  *     visibilityModifier?
  *
- * where visibility is valid.
+ * at their declaration boundary where visibility is specified.
  *
- * Examples:
+ * This includes, where permitted by the language specification:
  *
- *     struct
- *     enum
- *     trait
- *     interface
  *     type
+ *     alias
+ *     struct
+ *     record
+ *     enum
+ *     union
+ *     class
+ *     interface
+ *     trait
  *     implementation
  *     constant
  *     variable
+ *     resource
+ *     capability
+ *     domain
  *
- * Each declaration grammar remains responsible for deciding syntactically
- * where the visibility modifier may appear.
+ * The declaration grammar remains responsible for deciding whether visibility
+ * is syntactically allowed at that declaration site.
  *
- * This file remains responsible only for the modifier itself.
+ * This file owns only the vocabulary.
  *
  * ============================================================================
- * PACKAGE INTEGRATION
+ * PACKAGE / NAMESPACE INTEGRATION
  * ============================================================================
  *
- * Package declarations MAY consume:
+ * Package and namespace grammars may consume:
  *
  *     visibilityModifier?
  *
- * if the language specification permits package visibility.
+ * only where the language specification explicitly permits package/namespace
+ * visibility.
  *
- * The package grammar MUST NOT duplicate:
+ * They MUST NOT copy the token alternatives.
  *
- *     K_PUB
- *     K_PUBLIC
- *     K_PRIVATE
- *     K_INTERNAL
+ * Whether `protected` is semantically meaningful for a package or namespace is
+ * a semantic question.
  *
- * as an independent rule.
- *
- * Whether protected visibility is meaningful for packages is a semantic
- * question, not a reason to duplicate grammar vocabulary.
+ * The parser component remains reusable without embedding that policy.
  *
  * ============================================================================
- * EXPORT INTEGRATION
+ * IMPORT / EXPORT INTEGRATION
  * ============================================================================
  *
- * Visibility and export are intentionally separate.
- *
- * For example:
- *
- *     pub fn compute() { ... }
- *
- * and:
- *
- *     export compute;
- *
- * are different source-level concepts.
+ * Visibility and export are different concepts.
  *
  * Visibility answers:
  *
- *     who may access a declaration?
+ *     who can access the declaration?
  *
  * Export answers:
  *
- *     which declarations are intentionally exposed through a module API?
- *
- * `exports.g4` therefore MUST NOT import or duplicate this grammar merely to
- * parse `export`.
- *
- * Semantic analysis may later verify consistency between visibility and export
- * policy.
- *
- * ============================================================================
- * IMPORT INTEGRATION
- * ============================================================================
- *
- * `imports.g4` does not need visibility syntax merely to parse imports.
- *
- * Import resolution may later consult semantic visibility information.
+ *     which declaration is intentionally exposed through an API/module
+ *     boundary?
  *
  * Therefore:
  *
- *     grammar/modules/imports.g4
+ *     export
  *
- * MUST depend semantically on visibility analysis, not make visibility part of
- * its own duplicated grammar.
+ * MUST NOT be made an alias of:
  *
- * ============================================================================
- * QUANTUM INTEGRATION
- * ============================================================================
+ *     public
  *
- * Quantum grammar files may consume:
+ * inside this grammar.
  *
- *     visibilityModifier?
+ * `grammar/modules/exports.g4` owns export syntax.
  *
- * for declarations such as:
+ * `grammar/modules/imports.g4` owns import syntax.
  *
- *     quantum functions
- *     quantum operations
- *     circuit declarations
- *     logical-qubit declarations
- *     quantum abstractions
+ * Semantic analysis may later check consistency between:
  *
- * However this file MUST NOT know:
- *
- *     QubitId
- *     PhysicalQubitId
- *     quantum::ir
- *     QEC
- *     ZQN
- *     device topology
- *     backend
- *     calibration
- *     scheduling
- *
- * Visibility therefore remains independent of quantum-machine scale.
+ *     visibility
+ *     export
+ *     import
+ *     module reachability
  *
  * ============================================================================
- * HDL / HARDWARE INTEGRATION
+ * COMPATIBILITY
  * ============================================================================
  *
- * HDL and hardware grammar components may consume:
- *
- *     visibilityModifier?
- *
- * for declarations whose language specification permits visibility.
- *
- * This does NOT make visibility a hardware-access mechanism.
- *
- * For example:
- *
- *     pub hardware::module
- *
- * describes source-level API visibility.
- *
- * It does NOT mean:
- *
- *     publicly allocate hardware
- *     expose a device
- *     select a physical device
- *     expose an address
- *     expose a bus
- *
- * Those meanings belong to later semantic/target layers.
- *
- * ============================================================================
- * CLASSICAL / DISTRIBUTED / AI / FUTURE DOMAINS
- * ============================================================================
- *
- * No domain-specific visibility syntax is necessary.
- *
- * Future declarations should consume:
- *
- *     visibilityModifier
- *
- * rather than introducing:
- *
- *     quantumVisibility
- *     gpuVisibility
- *     clusterVisibility
- *     aiVisibility
- *     hardwareVisibility
- *
- * unless a genuinely different language semantic is introduced.
- *
- * This keeps the grammar extensible without continuously modifying the
- * visibility vocabulary as new computational domains appear.
- *
- * ============================================================================
- * NO CIRCULAR DEPENDENCIES
- * ============================================================================
- *
- * Dependency direction:
- *
- *     ZamaniTokens
- *          |
- *          v
- *     Visibility
- *          |
- *          +--> modules
- *          +--> declarations
- *          +--> functions
- *          +--> types
- *          +--> quantum
- *          +--> hardware
- *          +--> HDL
- *          +--> future domains
- *
- * Visibility MUST NOT depend on:
- *
- *     AST
- *     semantic analysis
- *     IR
- *     quantum::ir
- *     runtime
- *     hardware
- *     scheduling
- *     routing
- *     optimization
- *
- * ============================================================================
- * ANTLR COMPOSITION
- * ============================================================================
- *
- * This is a parser grammar delegate.
- *
- * Canonical form:
- *
- *     parser grammar Visibility;
- *
- *     options {
- *         tokenVocab = ZamaniTokens;
- *     }
- *
- * Aggregate parser composition should import:
- *
- *     Visibility
- *
- * before or alongside the declaration grammars that consume
- * `visibilityModifier`.
- *
- * This file MUST NOT define lexer rules.
- *
- * ============================================================================
- * MULTI-MODIFIER POLICY
- * ============================================================================
- *
- * This grammar deliberately provides:
- *
- *     visibilityModifier
- *
- * and:
- *
- *     optional visibilityModifier
- *
- * rather than accepting arbitrary repeated visibility modifiers.
- *
- * Therefore:
- *
- *     pub private fn ...
- *
- * MUST NOT be accepted merely because both tokens are individually valid.
- *
- * Such combinations are syntactically invalid at the canonical visibility
- * layer.
- *
- * If the language later requires compound access policies, that should be
- * introduced explicitly as a new language construct rather than accidentally
- * permitting ambiguous modifier combinations.
- *
- * ============================================================================
- * DEFAULT VISIBILITY
- * ============================================================================
- *
- * Absence of a visibility modifier is represented by:
- *
- *     no visibilityModifier
- *
- * This grammar intentionally does not encode:
- *
- *     default = private
- *
- *     default = public
- *
- *     default = internal
- *
- * or any other semantic default.
- *
- * The declaration context and language semantic specification own that rule.
- *
- * This avoids forcing every declaration domain to share an assumption that
- * may later prove incorrect.
- *
- * ============================================================================
- * SOURCE COMPATIBILITY
- * ============================================================================
- *
- * Existing accepted visibility spellings are:
+ * The following source spellings remain accepted:
  *
  *     pub
  *     public
@@ -770,62 +724,126 @@
  *     protected
  *     internal
  *
- * They MUST remain accepted unless the language-version/compatibility policy
- * explicitly changes them.
+ * This replacement changes the parser-vocabulary integration from the stale:
  *
- * Moving the alternatives from module/function-specific grammar files into
- * this canonical grammar is an ownership refactor, not a language-breaking
- * syntax change.
+ *     ZamaniTokens
+ *     K_PUB
+ *     K_PUBLIC
+ *     K_PRIVATE
+ *     K_PROTECTED
+ *     K_INTERNAL
+ *
+ * to the repository's current lexer contract:
+ *
+ *     ZamaniLexer
+ *     PUB
+ *     PUBLIC
+ *     PRIVATE
+ *     PROTECTED
+ *     INTERNAL
+ *
+ * This is an integration correction, not a source-language visibility
+ * breaking change.
+ *
+ * ============================================================================
+ * COMPATIBILITY WRAPPERS
+ * ============================================================================
+ *
+ * The following wrappers are intentionally thin.
+ *
+ * They do NOT introduce new vocabulary.
+ *
+ * They exist only where an existing consumer needs a named visibility boundary.
+ *
+ * `optionalVisibilityModifier` is provided as the canonical optional wrapper.
+ *
+ * It is equivalent structurally to:
+ *
+ *     visibilityModifier?
+ *
+ * but does not establish a semantic default.
+ *
+ * `visibility` is retained as a compatibility entry point for tools or grammar
+ * consumers that previously referred to a generic visibility rule.
+ *
+ * Both wrappers delegate directly to `visibilityModifier`.
+ *
+ * ============================================================================
+ * ERROR BOUNDARY
+ * ============================================================================
+ *
+ * Syntactic errors include cases where a consumer expects:
+ *
+ *     visibilityModifier?
+ *
+ * but receives more than one visibility token before the declaration grammar
+ * can continue.
+ *
+ * Examples:
+ *
+ *     pub private fn ...
+ *     public internal fn ...
+ *     protected private type ...
+ *
+ * The semantic layer, not this grammar, reports context-specific errors such
+ * as:
+ *
+ *     protected is not permitted for this declaration kind
+ *
+ * or:
+ *
+ *     declaration is not reachable from this module
  *
  * ============================================================================
  * SECURITY
  * ============================================================================
  *
- * Visibility syntax contains no executable behavior.
+ * This grammar:
  *
- * Parsing visibility MUST NOT:
+ *     - performs no filesystem access;
+ *     - performs no network access;
+ *     - executes no source code;
+ *     - reads no environment variables;
+ *     - reads no credentials;
+ *     - discovers no hardware;
+ *     - discovers no resources;
+ *     - allocates no devices;
+ *     - performs no package resolution;
+ *     - performs no registry resolution.
  *
- *     access files;
- *     access networks;
- *     execute commands;
- *     inspect environment variables;
- *     access credentials;
- *     resolve packages;
- *     discover hardware;
- *     access devices;
- *     allocate resources.
+ * Generated parser/compiler integration must remain safe Rust.
  *
- * All such operations are outside the grammar.
+ * The Rust implementation MUST NOT require `unsafe`.
  *
  * ============================================================================
- * DIAGNOSTICS
+ * RUST 1.97 / 1.97.1 CONTRACT
  * ============================================================================
  *
- * The grammar should allow ANTLR to report ordinary parser diagnostics for
- * invalid visibility syntax.
+ * This file contains no Rust implementation code.
  *
- * It MUST NOT embed target-specific error messages.
+ * It is therefore independent of Rust memory representation.
  *
- * Examples of syntactic errors include:
+ * Generated Zamani parser/frontend code must remain compatible with:
  *
- *     pub private
- *     public private
- *     protected internal
+ *     Rust 1.97
+ *     Rust 1.97.1
  *
- * when these occur where a declaration expects at most one visibility
- * modifier.
+ * and repository Rust crates should enforce:
  *
- * Semantic diagnostics such as:
+ *     #![deny(unsafe_code)]
  *
- *     protected is not valid for this declaration
+ * or an equivalent workspace-wide unsafe-code prohibition.
  *
- * belong to semantic analysis, not this grammar.
+ * This grammar must never require an unsafe Rust implementation.
  *
  * ============================================================================
  * TEST CONTRACT
  * ============================================================================
  *
- * POSITIVE TESTS
+ * The grammar component itself requires the following conformance classes.
+ *
+ * POSITIVE VISIBILITY TESTS
+ * -------------------------
  *
  *     pub
  *     public
@@ -833,11 +851,8 @@
  *     protected
  *     internal
  *
- * Each must tokenize and parse through:
- *
- *     visibilityModifier
- *
- * POSITIVE DECLARATION INTEGRATION TESTS
+ * INTEGRATION POSITIVE TESTS
+ * --------------------------
  *
  *     pub fn example() {}
  *     public fn example() {}
@@ -845,199 +860,240 @@
  *     protected fn example() {}
  *     internal fn example() {}
  *
- *     pub module example;
- *     private module example;
+ * and equivalent valid declaration forms supplied by the owning declaration
+ * grammars.
  *
- * The exact declaration forms must be tested in their owning declaration
- * grammar as well.
+ * NEGATIVE INTEGRATION TESTS
+ * --------------------------
  *
- * NEGATIVE TESTS
+ * Where a declaration expects at most one visibility:
  *
- *     pub public
- *     public private
- *     private protected
- *     protected internal
- *     internal pub
+ *     pub private fn example() {}
+ *     public internal fn example() {}
+ *     private protected fn example() {}
+ *     protected public fn example() {}
  *
- * when supplied where a single visibility modifier is expected.
- *
- * Also test malformed/incomplete forms:
- *
- *     pub fn
- *     public module
- *
- * through the aggregate parser.
+ * These must not be accepted as two visibility modifiers by this component.
  *
  * SEMANTIC NEGATIVE TESTS
+ * -----------------------
  *
- * These MUST NOT be grammar tests:
+ * These belong outside this grammar:
  *
- *     protected used where declaration context forbids it
- *     inaccessible private symbol referenced externally
- *     conflicting export/visibility policy
- *
- * Those belong to semantic-analysis tests.
+ *     protected used on a declaration that forbids it;
+ *     inaccessible private symbol referenced externally;
+ *     conflicting export/visibility policy;
+ *     visibility violating module/package policy.
  *
  * CROSS-DOMAIN TESTS
+ * ------------------
  *
- * Visibility syntax must work without modification for declarations associated
- * with:
+ * Verify reuse without modification by:
  *
- *     classical
- *     quantum
- *     hybrid
- *     HDL
- *     hardware
- *     distributed
- *     AI
- *     networking
- *     future dialects
+ *     classical declarations
+ *     quantum declarations
+ *     hybrid declarations
+ *     HDL declarations
+ *     hardware declarations
+ *     distributed declarations
+ *     AI/data declarations
+ *     networking declarations
+ *     future dialect declarations
  *
  * SCALABILITY TESTS
+ * -----------------
  *
- * Verify that there is no grammar-level limit associated with:
+ * Verify that visibility syntax remains unchanged as the surrounding program
+ * scales in:
  *
  *     declaration count
  *     module count
  *     package count
+ *     namespace depth
+ *     dependency-graph size
+ *     computational-domain count
  *     source size
- *     computational domain count
+ *
+ * No artificial maximum may be introduced by this grammar.
  *
  * DETERMINISM TESTS
+ * -----------------
  *
- * Parse identical token streams repeatedly and verify identical parse
- * structure.
+ * Repeated parsing of identical token streams must produce equivalent parse
+ * structures.
  *
  * ROUND-TRIP TESTS
+ * ----------------
  *
- * Where the repository has a canonical source printer:
+ * When the repository's canonical source printer is available:
  *
  *     source
- *       ->
- *     lexer
- *       ->
- *     parser
- *       ->
- *     AST
- *       ->
- *     printer
- *       ->
- *     parser
+ *       -> lexer
+ *       -> parser
+ *       -> AST
+ *       -> printer
+ *       -> lexer
+ *       -> parser
  *
- * must preserve the visibility intent.
+ * must preserve visibility intent.
+ *
+ * SOURCE-PROVENANCE TESTS
+ * -----------------------
+ *
+ * The frontend must be able to distinguish source spellings when required:
+ *
+ *     pub
+ *     public
+ *
+ * even if semantic analysis later canonicalizes them to the same semantic
+ * visibility.
  *
  * ============================================================================
  * HARD-CODING AUDIT
  * ============================================================================
  *
- * FORBIDDEN IN THIS FILE:
+ * This file MUST NOT contain:
  *
  *     MAX_VISIBILITY
  *     MAX_DECLARATIONS
  *     MAX_MODULES
  *     MAX_PACKAGES
  *     MAX_DOMAINS
- *     fixed hardware counts
  *     fixed CPU counts
  *     fixed GPU counts
  *     fixed FPGA counts
- *     fixed ASIC counts
+ *     fixed QPU counts
  *     fixed qubit counts
+ *     fixed node counts
+ *     fixed accelerator counts
  *     device IDs
- *     device addresses
+ *     physical addresses
  *     topology assumptions
  *     backend names
  *     vendor names
  *     filesystem paths
- *     registry addresses
+ *     registry endpoints
  *     network endpoints
  *
- * Visibility is entirely independent of machine resources.
+ * The only finite list in this file is the language's currently specified
+ * visibility vocabulary.
  *
- * ============================================================================
- * RUST INTEGRATION
- * ============================================================================
- *
- * This grammar contains no Rust.
- *
- * Generated parser integration must remain compatible with:
- *
- *     Rust 1.97
- *     Rust 1.97.1
- *
- * The compiler/runtime crates MUST enforce:
- *
- *     #![deny(unsafe_code)]
- *
- * and MUST NOT introduce unsafe implementation requirements merely because
- * visibility syntax is parsed.
+ * That finite vocabulary is a language-semantic choice, not a machine-resource
+ * limit.
  *
  * ============================================================================
  * COMPLETION CRITERIA
  * ============================================================================
  *
- * This file is complete only when ALL of the following are true:
+ * This file is complete when:
  *
- *   1. `Visibility` compiles as an ANTLR parser grammar.
+ *     [x] The filename remains grammar/modules/visibility.g4.
+ *     [x] The grammar name remains Visibility.
+ *     [x] The file is a parser grammar.
+ *     [x] The current ZamaniLexer vocabulary is consumed.
+ *     [x] The current token names are used.
+ *     [x] No obsolete ZamaniTokens dependency remains.
+ *     [x] No K_* token names are referenced.
+ *     [x] One canonical visibility production exists.
+ *     [x] All five existing visibility spellings remain accepted.
+ *     [x] `pub` and `public` remain source-distinguishable.
+ *     [x] Absence remains distinct from explicit visibility.
+ *     [x] No semantic default is encoded.
+ *     [x] No arbitrary repeated visibility modifiers are accepted through the
+ *         canonical rule.
+ *     [x] No declaration grammar is duplicated here.
+ *     [x] No module resolution occurs here.
+ *     [x] No package resolution occurs here.
+ *     [x] No export semantics occur here.
+ *     [x] No import semantics occur here.
+ *     [x] No AST is constructed here.
+ *     [x] No semantic model is constructed here.
+ *     [x] No IR is constructed here.
+ *     [x] No quantum-specific IR is constructed here.
+ *     [x] No QEC/ZQN/routing/scheduling logic is present.
+ *     [x] No hardware topology is represented.
+ *     [x] No resource capacity is represented.
+ *     [x] No target/backend is selected.
+ *     [x] No machine-size limit exists.
+ *     [x] No filesystem/network/environment access exists.
+ *     [x] No Rust code exists in the grammar.
+ *     [x] No unsafe Rust is required.
+ *     [x] The component is deterministic.
+ *     [x] The component is domain-neutral.
+ *     [x] The component is reusable by future domains.
+ *     [x] Positive tests are specified.
+ *     [x] Negative tests are specified.
+ *     [x] Boundary tests are specified.
+ *     [x] Scalability tests are specified.
+ *     [x] Determinism tests are specified.
+ *     [x] Round-trip tests are specified.
+ *     [x] Source-provenance requirements are specified.
  *
- *   2. It uses only the canonical `ZamaniTokens` vocabulary.
+ * ============================================================================
+ * INTEGRATION CHECKLIST FOR OTHER FILES
+ * ============================================================================
  *
- *   3. It defines exactly one canonical visibility production.
+ * This file itself is independently complete once the rules below are the
+ * canonical contract.
  *
- *   4. Existing visibility spellings remain source-compatible:
+ * Other files must integrate against it as follows:
  *
- *          pub
- *          public
- *          private
- *          protected
- *          internal
+ *     grammar/modules/modules.g4
+ *         -> visibilityModifier?
  *
- *   5. It accepts one visibility modifier where the consuming declaration
- *      permits visibility.
+ *     grammar/functions/functions.g4
+ *         -> visibilityModifier?
  *
- *   6. It does not accept arbitrary repeated visibility modifiers.
+ *     declaration grammars
+ *         -> visibilityModifier?
  *
- *   7. It does not define declaration-specific duplicate visibility rules.
+ *     grammar/core/modifiers.g4
+ *         -> delegate to visibilityModifier
  *
- *   8. `modules.g4` delegates to it.
+ *     grammar/modules/exports.g4
+ *         -> remain independent
  *
- *   9. `functions.g4` delegates to it.
+ *     grammar/modules/imports.g4
+ *         -> remain independent
  *
- *  10. Declaration/type/trait/interface grammars delegate to it wherever
- *      visibility is permitted.
+ * No downstream file should redefine the five token alternatives.
  *
- *  11. `exports.g4` remains independent because export and visibility are
- *      distinct language concepts.
+ * ============================================================================
+ * FINAL ARCHITECTURAL GUARANTEE
+ * ============================================================================
  *
- *  12. No AST construction occurs in this grammar.
+ * Visibility is a source-level access property.
  *
- *  13. No semantic visibility checking occurs in this grammar.
+ * It is not:
  *
- *  14. No module resolution occurs in this grammar.
+ *     a hardware property;
+ *     a resource property;
+ *     a deployment property;
+ *     a backend property;
+ *     a quantum property;
+ *     an HDL property;
+ *     a scheduling property;
+ *     a routing property.
  *
- *  15. No package resolution occurs in this grammar.
+ * Therefore the same visibility syntax can survive the complete Zamani
+ * compilation path:
  *
- *  16. No filesystem or network access occurs in this grammar.
+ *     source
+ *       -> lexer
+ *       -> parser
+ *       -> AST
+ *       -> semantic analysis
+ *       -> canonical semantic model
+ *       -> IR
+ *       -> optimization
+ *       -> routing
+ *       -> scheduling
+ *       -> resilience / QEC / ZQN where applicable
+ *       -> HAL
+ *       -> target
  *
- *  17. No hardware discovery occurs in this grammar.
- *
- *  18. No quantum backend or resource knowledge occurs in this grammar.
- *
- *  19. No machine-size limit is encoded.
- *
- *  20. No hard-coded computational-domain list is required.
- *
- *  21. New future computational domains can reuse the same visibility
- *      production without changing this file.
- *
- *  22. Parser behavior is deterministic.
- *
- *  23. Positive, negative, boundary, integration, determinism, and
- *      round-trip tests pass.
- *
- *  24. Rust 1.97/1.97.1 integration remains safe-Rust-only.
- *
- *  25. No downstream file needs to redefine the visibility vocabulary.
+ * without changing merely because the available machine grows from tiny to
+ * arbitrarily large or changes computational architecture.
  *
  * ============================================================================
  */
@@ -1045,45 +1101,69 @@
 parser grammar Visibility;
 
 options {
-    tokenVocab = ZamaniTokens;
+    tokenVocab = ZamaniLexer;
 }
 
 
 /*
  * ============================================================================
- * 1. CANONICAL VISIBILITY MODIFIER
+ * CANONICAL VISIBILITY PRODUCTION
  * ============================================================================
  *
  * Exactly one source-level visibility modifier.
  *
- * The semantic meaning is resolved downstream.
+ * IMPORTANT:
+ *
+ * These token names are the names actually exported by the repository's
+ * canonical Zamani lexer vocabulary:
+ *
+ *     PUB
+ *     PUBLIC
+ *     PRIVATE
+ *     PROTECTED
+ *     INTERNAL
+ *
+ * Do not rename them here to K_* aliases.
  */
 visibilityModifier
-    : K_PUB
-    | K_PUBLIC
-    | K_PRIVATE
-    | K_PROTECTED
-    | K_INTERNAL
+    : PUB
+    | PUBLIC
+    | PRIVATE
+    | PROTECTED
+    | INTERNAL
     ;
 
 
 /*
  * ============================================================================
- * 2. OPTIONAL VISIBILITY
+ * OPTIONAL VISIBILITY INTEGRATION POINT
  * ============================================================================
  *
- * Declaration grammars should normally use:
+ * Consumers that need optional visibility may use this rule:
+ *
+ *     optionalVisibilityModifier
+ *
+ * This is intentionally equivalent to:
  *
  *     visibilityModifier?
  *
- * directly.
- *
- * This rule exists only as a named integration point for declaration families
- * that need an explicit optional-visibility production.
- *
- * It does not assign a semantic default.
+ * It does not define a semantic default.
  */
 optionalVisibilityModifier
+    : visibilityModifier?
+    ;
+
+
+/*
+ * ============================================================================
+ * COMPATIBILITY ENTRY POINT
+ * ============================================================================
+ *
+ * `visibility` is a thin compatibility alias for tools or consumers that
+ * previously referred to a generic visibility rule.
+ *
+ * It MUST NOT become a second vocabulary.
+ */
+visibility
     : visibilityModifier
-    |
     ;
