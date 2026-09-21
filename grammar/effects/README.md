@@ -1,2028 +1,2543 @@
 Zamani Effects Grammar
 
-Status
-
-Production specification
-
 Path: "grammar/effects/"
-
 Language: Zamani
-
-Grammar technology: ANTLR
-
-Compiler/runtime implementation language: Rust 1.97 / Rust 1.97.1
-
-Safety requirement: Rust implementation must use "#![forbid(unsafe_code)]" and contain no "unsafe" code.
-
-Architectural role: Source-language syntax for declaring, composing, constraining, handling, and propagating computational effects.
+Status: Production architecture and conformance contract
+Grammar technology: ANTLR4
+Rust implementation baseline: Rust 1.97 / Rust 1.97.1, Edition 2021
+Safety: Safe Rust only; "unsafe" is prohibited
+Primary composition grammar: "grammar/effects/effects.g4"
 
 ---
 
 1. Purpose
 
-The "grammar/effects/" subsystem defines the Zamani source-language syntax for effects.
+The "grammar/effects/" subsystem defines the source-language grammar boundary for computational effects in Zamani.
 
-An effect describes a semantically observable property of an operation, function, computation, module, or execution path that may affect how the computation is analyzed, lowered, optimized, scheduled, executed, verified, or authorized.
+An effect describes a computational behavior, observable semantic consequence, or execution property that can participate in:
 
-Effects allow Zamani to express computations involving, for example:
+- function contracts;
+- operation declarations;
+- effect inference;
+- effect checking;
+- effect polymorphism;
+- effect composition;
+- effect handling;
+- semantic analysis;
+- capability analysis;
+- resource analysis;
+- security analysis;
+- optimization legality;
+- lowering;
+- interoperability;
+- execution planning.
 
-- input/output;
-- mutation;
-- allocation;
-- quantum operations;
-- hardware interaction;
-- networking;
-- distributed execution;
-- synchronization;
-- nondeterminism;
-- external state;
-- cryptographic operations;
-- security-sensitive operations;
-- accelerator interaction;
-- custom language or domain effects.
+The effect subsystem must remain independent of the machine on which a program is eventually executed.
 
-Effects are part of the language semantics.
+The architecture is therefore:
 
-They are not themselves:
+Zamani source
+    │
+    ▼
+lexical analysis
+    │
+    ▼
+parser
+    │
+    ▼
+domain-neutral AST
+    │
+    ▼
+effect semantic analysis
+    │
+    ├── effect identity
+    ├── effect sets
+    ├── effect inference
+    ├── effect polymorphism
+    ├── handlers
+    ├── capabilities
+    ├── requirements
+    ├── constraints
+    └── resource analysis
+    │
+    ▼
+canonical semantic representation / IR
+    │
+    ├── classical semantics
+    ├── quantum::ir where quantum semantics are involved
+    ├── HDL/hardware semantics
+    ├── distributed semantics
+    └── other domain representations
+    │
+    ▼
+optimization / lowering
+    │
+    ├── routing
+    ├── scheduling
+    ├── resilience
+    ├── QEC
+    ├── ZQN
+    └── HAL
+    │
+    ▼
+target realization
 
-- hardware resources;
-- hardware capabilities;
-- resource requirements;
-- target descriptions;
-- scheduling decisions;
-- routing decisions;
-- optimization decisions;
-- quantum IR;
-- QEC algorithms;
-- ZQN noise models;
-- runtime implementations;
-- device identifiers;
-- physical topology descriptions.
+The grammar describes what the program means.
 
-The grammar therefore describes what effects a computation may have, while downstream compiler and runtime layers determine how those effects are implemented.
-
----
-
-2. Core architectural principle
-
-Zamani follows:
-
-«Program semantics first; implementation resources second.»
-
-An effect declaration must describe semantic behavior rather than accidentally encode a particular machine.
-
-For example, source code may express:
-
-effect Quantum
-
-or:
-
-effect IO
-
-without implying:
-
-- a fixed number of qubits;
-- a particular QPU;
-- a particular CPU;
-- a particular GPU;
-- a fixed network;
-- a fixed memory capacity;
-- a fixed topology;
-- a fixed device;
-- a fixed operating system.
-
-Consequently, the effects grammar MUST NOT introduce machine-size constants or target-specific assumptions.
-
----
-
-3. Ownership
-
-The "grammar/effects/" subsystem owns the syntax of:
-
-1. effect declarations;
-2. effect names;
-3. effect sets;
-4. effect annotations;
-5. effect application;
-6. effect requirements attached to language constructs;
-7. effect propagation syntax;
-8. effect handling syntax;
-9. effect aliases where supported;
-10. effect composition;
-11. effect subtraction/removal syntax where supported;
-12. effect polymorphism;
-13. effect parameters;
-14. built-in semantic effect categories;
-15. user-defined effect namespaces;
-16. effect-related source metadata.
+It does not describe how a particular machine happens to realize it.
 
 ---
 
-4. Non-ownership
+2. POCO-REAF requirement
 
-"grammar/effects/" MUST NOT own the implementation or semantics of:
+Zamani is designed around:
 
-4.1 Capabilities
+«Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever»
 
-Capabilities belong to:
+The effects subsystem is a foundational part of this architecture.
 
-grammar/core/capabilities.g4
-grammar/effects/capabilities.g4
-grammar/resources/capabilities.g4
+An effect must remain meaningful independently of whether the computation ultimately runs on:
 
-where the distinction between effect and capability is maintained.
+- a tiny embedded processor;
+- one CPU;
+- many CPUs;
+- a GPU;
+- many accelerators;
+- an FPGA;
+- an ASIC;
+- a simulator;
+- a QPU;
+- a hybrid classical/quantum system;
+- a distributed system;
+- an HPC system;
+- a cloud deployment;
+- an edge system;
+- a future computational substrate.
 
-An effect says:
+The source language therefore expresses semantic intent rather than accidental properties of a particular target.
 
-«this computation performs or may perform X.»
+For example:
 
-A capability says:
+effect Quantum;
 
-«this execution environment can provide X.»
+describes an effect identity.
 
-These must never become synonymous.
+It does not mean:
+
+use QPU 0
+use 32 physical qubits
+use topology X
+use vendor Y
+
+Likewise:
+
+effect Network;
+
+does not select:
+
+node 0
+port 8080
+interface eth0
+
+Those are downstream realization concerns.
 
 ---
 
-4.2 Requirements
+3. Non-negotiable architectural invariants
 
-Requirements belong to the requirement model.
+The following rules apply permanently.
 
-An effect may contribute to semantic analysis of requirements, but an effect declaration must not redefine the requirement system.
+3.1 Effects are semantic, not physical
 
----
+An effect describes computational behavior.
 
-4.3 Constraints
+It must not encode:
 
-Constraints belong to the constraint system.
+- CPU counts;
+- core counts;
+- thread counts;
+- GPU counts;
+- FPGA counts;
+- accelerator counts;
+- QPU counts;
+- qubit counts;
+- physical qubit identifiers;
+- memory capacities;
+- register widths;
+- vector widths;
+- tensor hardware dimensions;
+- node counts;
+- network topology;
+- device IDs;
+- physical addresses.
 
-An effect may be constrained, but effect syntax must not become a general-purpose constraint language.
+3.2 Effects are not capabilities
 
----
+An effect describes what a computation does or may do.
 
-4.4 Resources
+A capability describes what an execution environment can provide.
 
-Resources belong to:
+Effect      = computation-side semantic behavior
+Capability  = environment-side ability
 
-grammar/resources/
+They must not be collapsed.
+
+3.3 Effects are not requirements
+
+A requirement describes something execution must provide.
 
 For example:
 
 effect Quantum
-
-does not mean:
-
-requires 100 qubits
 
 and:
 
-effect GPU
+requires capability("quantum.measurement")
 
-does not mean:
+have different meanings.
 
-requires device 0
+3.4 Effects are not constraints
 
----
+A constraint describes a condition that must be satisfied.
 
-4.5 Quantum IR
+Effects may participate in constraint analysis but must not become the universal constraint language.
 
-Quantum syntax eventually lowers through the repository's canonical:
+3.5 Effects are not resources
 
-quantum::ir
+A resource describes something consumed, reserved, transferred, or otherwise managed.
 
-The effect grammar MUST NOT create an alternative quantum representation.
+An effect does not itself represent:
 
-For example:
+- memory;
+- qubits;
+- cores;
+- devices;
+- network links;
+- storage;
+- accelerator capacity.
 
-effect Quantum
+3.6 Effects are not targets
 
-is source-level semantic information.
+An effect must not select:
 
-It is not a quantum IR node.
+- CPU;
+- GPU;
+- FPGA;
+- ASIC;
+- QPU;
+- simulator;
+- vendor;
+- cloud provider;
+- physical device.
 
----
+3.7 Effects are not implementation decisions
 
-4.6 QEC
-
-Quantum error correction belongs to the repository's QEC subsystem.
-
-The effects grammar may express that a computation has an error-correction-related effect where such semantics are intentionally part of the language, but it must not define:
-
-- stabilizer algorithms;
-- decoder algorithms;
-- code distance;
-- syndrome extraction implementation;
-- correction schedules;
-- decoder configuration.
-
----
-
-4.7 ZQN
-
-ZQN owns quantum noise and fault semantics.
-
-Effects may identify that an operation interacts with noise-sensitive or fault-aware execution, but effects must not duplicate ZQN's:
-
-- noise models;
-- fault models;
-- fault classification;
-- correlated faults;
-- leakage semantics;
-- loss semantics;
-- erasure semantics.
+Effect syntax must not encode routing, placement, scheduling, calibration, backend selection, or physical mapping.
 
 ---
 
-4.8 Scheduling
+4. Actual repository ownership
 
-Effects may influence scheduling legality.
+The effect directory currently contains the following established files:
 
-Effects grammar does not own:
+grammar/effects/
+├── README.md
+├── capabilities.g4
+├── custom-effects.g4
+├── distributed.g4
+├── effect-composition.g4
+├── effect-declarations.g4
+├── effect-diagnostics.g4
+├── effect-diagnostics.md
+├── effect-handling.g4
+├── effect-operations.g4
+├── effect-polymorphism.g4
+├── effect-sets.g4
+├── effect-types.g4
+├── effects.g4
+├── hardware.g4
+├── io.g4
+├── network.g4
+├── quantum.g4
+└── security.g4
 
-- operation ordering;
-- timing;
+These filenames should be retained unless a future repository-wide architectural decision demonstrates that a file is genuinely redundant.
+
+No unnecessary rename is required.
+
+---
+
+5. Effect subsystem composition root
+
+"grammar/effects/effects.g4"
+
+This is the single composition root for the effect grammar subsystem.
+
+It owns:
+
+- composition;
+- imports;
+- dispatch integration;
+- the effect subsystem boundary.
+
+It does not redefine the detailed rules owned by the subordinate grammars.
+
+The intended ownership is:
+
+effects.g4
+    │
+    ├── effect-declarations.g4
+    ├── effect-sets.g4
+    ├── effect-operations.g4
+    ├── effect-handling.g4
+    ├── effect-types.g4
+    ├── effect-polymorphism.g4
+    ├── effect-composition.g4
+    └── custom-effects.g4
+
+Domain-specific files remain extensions of the semantic effect vocabulary rather than replacements for the generic effect model.
+
+---
+
+6. File responsibilities
+
+6.1 "effect-declarations.g4"
+
+Owns
+
+- effect declarations;
+- effect declaration names;
+- effect generic parameters;
+- effect parameters;
+- effect signatures;
+- effect operation declarations;
+- declaration-local attributes.
+
+Does not own
+
+- effect use;
+- invocation;
+- handlers;
+- effect-set normalization;
+- capability resolution;
 - resource allocation;
-- ASAP/ALAP;
-- critical paths;
-- scheduling policies;
-- pulse scheduling;
-- dynamic scheduling.
+- hardware selection.
 
-Those belong to "quantum/scheduling" and related compiler infrastructure.
-
----
-
-4.9 Optimization
-
-Effects can restrict transformations.
-
-The effects grammar does not own optimization algorithms.
-
-Optimizers must consume semantic effect information through the appropriate AST/semantic/IR interfaces.
-
----
-
-4.10 Hardware discovery
-
-The grammar must not discover hardware.
-
-Hardware capabilities come from the hardware abstraction and execution environment.
-
----
-
-4.11 Runtime behavior
-
-The grammar does not execute effects.
-
-Runtime systems interpret lowered semantic representations.
-
----
-
-5. Effect model
-
-An effect is represented conceptually as:
-
-Effect =
-    Identity
-    + Parameters
-    + Composition
-    + Optional Arguments
-    + Optional Metadata
-
-The grammar should make effect identity structurally explicit.
-
-An effect may be:
-
-- named;
-- qualified;
-- parameterized;
-- generic;
-- composed;
-- inherited through function calls;
-- declared by a function;
-- attached to a module;
-- attached to an operation;
-- handled;
-- propagated.
-
----
-
-6. Effect categories
-
-Zamani should provide a stable semantic vocabulary for common effects while permitting future extension.
-
-The initial standard categories are:
-
-IO
-State
-Mutation
-Allocation
-Deallocation
-Memory
-Quantum
-Classical
-Hardware
-Distributed
-Parallel
-Synchronization
-Concurrency
-Network
-Security
-Cryptography
-Randomness
-Nondeterminism
-Time
-Environment
-Persistence
-External
-Accelerator
-Device
-Interrupt
-System
-Foreign
-Reflection
-Compilation
-Execution
-
-These names are semantic categories.
-
-They are not machine identifiers.
-
-The standard effect vocabulary must remain extensible.
-
-A future execution model must not require changing the fundamental syntax merely because a new computational substrate appears.
-
----
-
-7. Effect declarations
-
-Effect declarations are defined by:
+Integration
 
 effect-declarations.g4
+        ↓
+AST effect declaration
+        ↓
+name resolution
+        ↓
+semantic effect identity
 
-A declaration introduces a named effect in the current namespace.
+The native AST already contains a dedicated source-level effect declaration representation. The grammar must map into that structure rather than inventing another declaration model.
+
+---
+
+6.2 "effect-sets.g4"
+
+Owns
+
+- effect references;
+- effect lists;
+- effect sets;
+- effect-set syntax;
+- effect-set membership syntax.
+
+Does not own
+
+- semantic deduplication;
+- canonical semantic ordering;
+- effect inference;
+- capability checking.
+
+Required property
+
+Effect-set cardinality must be open-ended.
+
+There must be no grammar-level:
+
+MAX_EFFECTS
+MAX_EFFECT_SET_SIZE
+
+---
+
+6.3 "effect-operations.g4"
+
+Owns
+
+Source-level use/invocation syntax for effect operations.
+
+It may represent:
+
+- operation references;
+- effect operation invocation;
+- arguments;
+- operation use;
+- operation calls.
+
+Does not own
+
+- operation implementation;
+- runtime dispatch;
+- hardware calls;
+- device selection;
+- quantum gate lowering;
+- QEC;
+- ZQN.
+
+An effect operation is source syntax.
+
+Its implementation is determined later.
+
+---
+
+6.4 "effect-handling.g4"
+
+Owns
+
+- "handle" syntax;
+- effect handler syntax;
+- handler arms;
+- handler patterns;
+- handled computations;
+- handler results;
+- effect propagation/discharge syntax where supported.
+
+Does not own
+
+- runtime handler implementation;
+- operating-system calls;
+- device dispatch;
+- scheduler behavior;
+- backend behavior.
+
+The AST must preserve handler structure for semantic analysis.
+
+---
+
+6.5 "effect-types.g4"
+
+Owns
+
+Effect qualification of existing type expressions.
+
+It must not become a second type grammar.
+
+It consumes the canonical type system and effect-set representation.
 
 Conceptually:
 
-effect MyEffect
+typeExpression
+    +
+effect qualification
 
-An effect may optionally contain metadata, parameters, or a semantic body according to the language specification.
+rather than:
 
-Example:
+effectTypes.g4
+    → independent type language
 
-effect Logging
-
-Example:
-
-effect Database
-
-Example:
-
-effect Quantum
-
-The declaration itself does not bind the effect to a particular implementation.
+This prevents divergence from "grammar/types/".
 
 ---
 
-8. Effect namespaces
+6.6 "effect-polymorphism.g4"
 
-Effects may be qualified:
+Owns
 
-effect security::Audit
+- effect variables;
+- effect-polymorphic parameters;
+- effect bounds;
+- effect substitutions;
+- effect-polymorphic constraints;
+- effect-variable references.
 
-or referenced through an imported namespace.
+Does not own
 
-The grammar must use the canonical name/path rules established by:
+- ordinary generic type syntax;
+- ordinary effect references;
+- effect-set syntax.
 
-grammar/core/names.g4
-grammar/core/paths.g4
-grammar/core/qualified-names.g4
-grammar/modules/
-
-"effects/" must not create a competing identifier grammar.
-
----
-
-9. Effect sets
-
-Effect sets represent multiple effects.
-
-Conceptually:
-
-effects { IO, Network, Security }
-
-The syntax must support arbitrary effect-set cardinality.
-
-There must be:
-
-- no fixed maximum number of effects;
-- no fixed maximum nesting depth imposed by the language grammar;
-- no fixed maximum effect parameters;
-- no fixed number of standard effects.
-
-Any implementation limit must be an implementation/resource concern rather than a language semantic restriction.
+It must reuse the canonical generic/type/effect infrastructure.
 
 ---
 
-10. Effect composition
+6.7 "effect-composition.g4"
 
-Effects can compose.
+Owns
 
-For example:
+Effect composition syntax.
 
-effects {
-    IO,
-    Quantum,
-    Network
-}
+It must delegate effect membership syntax to "effect-sets.g4".
 
-Composition must be semantically deterministic.
+It must not create a second effect algebra.
 
-The compiler must normalize effect sets according to canonical effect identity rather than source ordering.
-
-Thus:
-
-effects { IO, Quantum }
-
-and:
-
-effects { Quantum, IO }
-
-represent the same unordered effect set unless a future language feature explicitly gives effects ordering semantics.
+Semantic normalization belongs downstream.
 
 ---
 
-11. Effect polymorphism
+6.8 "custom-effects.g4"
 
-Generic functions may abstract over effects.
+Owns
 
-Conceptually:
+Extensible user/dialect-defined effect declarations or extension relationships.
 
-fn compute<E: Effect>(value: T) effects { E } {
-    ...
-}
+Custom effects are essential for a language intended to survive future computational domains.
 
-The exact generic syntax is owned by the functions/type systems.
-
-"effects/" only defines the effect-side grammar needed to participate in that contract.
-
-Effect polymorphism is essential for POCO-REAF because generic source code must not need to be rewritten for every execution environment.
+A future domain must not require modifying a closed enum inside the core grammar.
 
 ---
 
-12. Effect parameters
+7. Domain-specific effect grammars
 
-Effects may carry semantic parameters where required.
+The repository also contains:
 
-For example:
+io.g4
+quantum.g4
+hardware.g4
+network.g4
+distributed.g4
+security.g4
+capabilities.g4
 
-effect Transaction<Mode>
+These must remain subordinate to the universal effect model.
 
-Parameters must be represented using the canonical generic/type/expression syntax.
+They must not create parallel effect systems.
 
-Effects must not use parameters as disguised hardware constants.
+The generic grammar should support qualified effect identity such as:
 
-Invalid design:
+quantum::measurement
+hardware::signal
+distributed::replication
+networking::request
+security::authorization
+accelerator::compute
+ai::inference
+data::transform
+future::domain::effect
 
-effect Quantum<32>
+The names are semantic identities.
 
-when "32" merely means "this machine has 32 qubits."
-
-Valid semantic use would be something whose value genuinely affects program semantics, with resource capacity handled separately.
-
----
-
-13. Effect application
-
-Effect annotations may be attached to constructs such as:
-
-- functions;
-- declarations;
-- operations;
-- modules;
-- blocks;
-- expressions;
-- foreign interfaces;
-- hardware descriptions;
-- quantum operations;
-- execution boundaries.
-
-The annotation syntax must be centralized enough to avoid incompatible annotation forms.
-
-Where possible, reuse:
-
-grammar/core/annotations.g4
-grammar/core/attributes.g4
-
-rather than inventing competing syntax.
+They are not required to be hard-coded into the generic parser.
 
 ---
 
-14. Function effects
+8. Open-world effect identity
 
-A function may declare its effects.
+The effect language must be open-world.
 
-Conceptually:
+Do not make the fundamental grammar:
 
-fn read_data() effects { IO } {
-    ...
-}
+effectKind
+    : IO
+    | Network
+    | Quantum
+    | GPU
+    | FPGA
+    | QPU
+    ;
 
-A function with multiple effects may declare:
+That would require the grammar to be modified whenever Zamani gains:
 
-fn execute() effects { IO, Quantum, Network } {
-    ...
-}
+- a new quantum technology;
+- a new accelerator;
+- a new security model;
+- a new distributed model;
+- a new AI execution model;
+- a new hardware abstraction;
+- a new scientific domain;
+- a future computational substrate.
 
-The semantic analyzer must subsequently verify that the function body is consistent with its declared effects.
+Instead, effect identity is represented through the language's canonical name/path system.
 
-The grammar only establishes the source representation.
+The semantic registry determines whether an effect is:
+
+- standard;
+- user-defined;
+- imported;
+- dialect-defined;
+- experimental;
+- deprecated;
+- unknown.
 
 ---
 
-15. Effect inference
+9. Relationship to the actual Rust lexer
 
-The language may permit inferred effects.
+The repository's current Rust lexer defines effect-related lexical tokens, including:
 
-For example:
+KeywordEffect
+KeywordHandle
+KeywordPerform
+
+The effect grammars must use the canonical lexer vocabulary rather than inventing competing token spellings.
+
+The lexer owns:
+
+- tokenization;
+- keyword identity;
+- punctuation;
+- operators;
+- source spans.
+
+The effect grammar owns:
+
+- arrangement of those tokens into effect syntax.
+
+This distinction is mandatory.
+
+---
+
+10. Relationship to the actual Rust parser
+
+The current "src/parser.rs" explicitly dispatches effect-related statements, including:
+
+KeywordEffect → parse_effect_decl()
+KeywordHandle  → parse_handle()
+
+Therefore the effects grammar is not merely theoretical.
+
+However, the current Rust parser and the modular ANTLR grammar are not automatically identical merely because both contain effect functionality.
+
+The production conformance chain must be:
+
+normative specification
+        ↓
+modular ANTLR grammar
+        ↓
+lexer vocabulary
+        ↓
+Rust parser
+        ↓
+AST
+        ↓
+semantic analysis
+
+Any difference must be classified as:
+
+SPECIFIED
+IMPLEMENTED
+PARTIALLY IMPLEMENTED
+PLANNED
+DEPRECATED
+
+It must not be hidden by documentation.
+
+---
+
+11. AST integration
+
+The native frontend already contains an effect AST subsystem, including effect declaration and effect-kind structures.
+
+The effect grammar must preserve enough information to construct the existing AST contract.
+
+At minimum, source information must survive for:
+
+- effect declaration;
+- effect identity;
+- namespace/path;
+- generic parameters;
+- parameters;
+- return type;
+- effect references;
+- effect sets;
+- handlers;
+- source spans;
+- source ordering;
+- provenance.
+
+The grammar must not invent a second effect AST.
+
+The direction is:
+
+ANTLR parse tree
+       ↓
+existing frontend AST
+       ↓
+semantic effect model
+
+not:
+
+ANTLR
+ ↓
+new grammar-specific EffectIR
+ ↓
+another effect representation
+
+---
+
+12. Source AST versus semantic model
+
+The source AST must preserve source structure.
+
+Semantic analysis owns:
+
+- name resolution;
+- effect identity;
+- effect inheritance;
+- effect inference;
+- effect compatibility;
+- effect algebra;
+- handler semantics;
+- polymorphic substitution;
+- capability relationships;
+- resource requirements;
+- security properties;
+- domain interpretation.
+
+The AST must not be mutated into a hardware/backend representation.
+
+Semantic information that is derived from the AST should preferably be associated through the repository's existing semantic structures and stable node identities.
+
+---
+
+13. Effect declaration versus effect use
+
+These concepts must remain distinct.
+
+Declaration:
+
+effect Logging;
+
+Use/reference:
+
+Logging
+
+Invocation:
+
+perform Logging(...)
+
+Handling:
+
+handle ...
+
+Type qualification:
+
+Type with effect { Logging }
+
+Polymorphism:
+
+E
+
+where "E" represents an effect variable under the language's effect-polymorphism rules.
+
+These must not collapse into one grammar rule or one AST node.
+
+---
+
+14. Effect inference
+
+Zamani may infer effects from computation.
+
+For example, a function may omit an explicit effect declaration when inference is supported:
 
 fn compute() {
     ...
 }
 
-may have its effects inferred from its body.
+The semantic analyzer may derive the resulting effect set from the body.
 
-The grammar must not require users to enumerate every effect manually when inference is supported.
-
-However, explicit declarations must remain available for:
+Explicit effect declarations remain valuable for:
 
 - API contracts;
 - verification;
-- documentation;
-- optimization;
 - security analysis;
-- compilation;
-- interoperability.
+- optimization;
+- documentation;
+- interoperability;
+- static checking.
+
+The grammar itself does not perform inference.
+
+---
+
+15. Effect polymorphism
+
+Effect polymorphism is required for generic, reusable programs.
+
+Conceptually:
+
+computation<T, E>
+
+may be parameterized by an effect variable.
+
+This enables reusable source semantics without requiring one copy of the program for every execution environment.
+
+For example, a generic algorithm should not have to be rewritten separately for:
+
+CPU
+GPU
+FPGA
+QPU
+distributed cluster
+future accelerator
+
+simply because its effect realization differs.
+
+The effect grammar therefore provides the syntax for abstraction, while semantic analysis determines the actual effect relationships.
 
 ---
 
 16. Effect handling
 
-Effect handlers are defined by:
+A handler changes how an effect is interpreted at a semantic boundary.
 
-effect-handling.g4
+The grammar must represent the structure of:
 
-A handler describes how an effect is intercepted or interpreted at a semantic boundary.
+computation
+    ↓
+handler
+    ↓
+handled effect
+    ↓
+result
 
-Conceptually:
+The handler must not directly encode:
 
-handle computation {
-    ...
-}
-
-with effect-specific handling clauses as defined by the final semantic specification.
-
-The handler grammar must remain independent of runtime implementation.
-
-A handler must not directly encode:
-
-- operating-system calls;
+- OS system calls;
 - vendor APIs;
-- physical device addresses;
-- QPU IDs;
-- GPU IDs;
-- fixed hardware topology.
+- GPU identifiers;
+- QPU identifiers;
+- FPGA identifiers;
+- physical addresses;
+- network interfaces;
+- device queues.
 
-Those belong to lower layers.
-
----
-
-17. Effect propagation
-
-Effects propagate through call relationships and composition.
-
-For example:
-
-caller
-  |
-  +-- calls function A
-          |
-          +-- effects { IO, Quantum }
-
-The semantic layer determines whether the caller:
-
-- inherits;
-- handles;
-- transforms;
-- restricts;
-- rethrows;
-- discharges
-
-those effects.
-
-The grammar provides the constructs required to express these relationships.
+Those are implementation concerns.
 
 ---
 
-18. Effect subtraction
+17. Effect composition
 
-Where supported by the final semantic model, an effect context may explicitly remove or discharge an effect after handling.
+Effect composition must be deterministic.
 
-Conceptually:
+For semantic effect sets:
 
-handle IO {
-    ...
-}
+{ IO, Quantum }
 
-The resulting computation may no longer expose "IO" at that semantic boundary.
+and:
 
-The exact semantics must be defined by semantic analysis rather than by parser actions.
+{ Quantum, IO }
 
----
+must have the same meaning when the effect algebra defines sets as unordered.
 
-19. Built-in effects
+The parser should preserve source order for diagnostics and source fidelity.
 
-Built-in effects should be registered by the language semantic layer rather than hard-coded throughout parser rules.
+Semantic normalization may establish canonical identity/order later.
 
-The grammar should recognize the syntactic form:
+The parser must not depend on:
 
-effect-name
-
-and the semantic registry determines whether a name is:
-
-- standard;
-- user-defined;
-- imported;
-- vendor/dialect-defined;
-- experimental;
-- deprecated;
-- unknown.
-
-This prevents the parser from becoming a permanent catalogue of implementation-specific effects.
+- hash-map iteration order;
+- machine state;
+- target state;
+- hardware discovery;
+- runtime scheduling.
 
 ---
 
-20. Custom effects
+18. Effect identity and namespaces
 
-Users must be able to define effects.
+Effect names must use the canonical Zamani naming/path system.
 
-Example:
+Examples:
 
-effect Telemetry
-
-or:
-
-effect application::Audit
-
-Custom effects are necessary for long-term extensibility.
-
-The grammar must not impose a fixed finite universe of effects.
-
----
-
-21. Domain-specific effects
-
-Domain subsystems may introduce semantic effects.
-
-Examples include:
-
-Classical
-
-State
-Mutation
 IO
-Randomness
+security::Audit
+quantum::Measurement
+hardware::Signal
+distributed::Replication
+future::photonic::Interaction
+vendor::extension::Effect
 
-Quantum
+"grammar/effects/" must not create another qualified-name grammar.
 
-Quantum
-Measurement
-Reset
-Entanglement
+The canonical source of:
 
-HDL
+- identifiers;
+- qualified names;
+- paths;
+- namespaces
 
-Hardware
-Clock
-Signal
-Timing
-
-Distributed
-
-Distributed
-Network
-RemoteExecution
-Replication
-
-Security
-
-Security
-Cryptography
-Identity
-Confidentiality
-
-AI
-
-Training
-Inference
-Differentiation
-Accelerator
-
-These domain effects must remain semantic abstractions.
+remains the shared grammar infrastructure.
 
 ---
 
-22. Quantum integration
+19. Capabilities
 
-Quantum effects integrate with:
+The current repository contains an effect-local "capabilities.g4".
 
+This file requires special treatment.
+
+There must be one canonical semantic capability model across:
+
+grammar/core/
+grammar/resources/
+grammar/hardware/
+grammar/effects/
 grammar/quantum/
-src/quantum/
-quantum::ir
-QEC
-ZQN
-scheduling
-optimization
-hardware
-runtime
 
-The dependency direction is:
+The effect subsystem may reference capabilities.
 
-Zamani source
-    ↓
-ANTLR parser
-    ↓
-Zamani AST
-    ↓
-semantic effect analysis
-    ↓
-quantum semantic lowering
-    ↓
-quantum::ir
-    ↓
-optimization
-    ↓
-routing
-    ↓
-scheduling
-    ↓
-ZQN / hardware / runtime
+It must not create a second capability type system.
 
-Never:
-
-effects grammar
-    ↓
-quantum::ir
-    ↓
-effects grammar
-
-There must be no circular dependency.
-
----
-
-23. Hardware integration
-
-The following distinction is mandatory:
+The semantic relationship is:
 
 Effect
-Capability
-Requirement
-Constraint
-Resource
-Target
-Placement
+   │
+   │ computation performs
+   ▼
+semantic effect
+   │
+   ├──────────────┐
+   │              │
+   ▼              ▼
+Requirement    Capability
+   │              │
+   └──────┬───────┘
+          ▼
+   feasibility analysis
 
-are different concepts.
+That matching happens downstream.
+
+---
+
+20. Resources
+
+Effect syntax must never silently become resource syntax.
 
 For example:
 
 effect Quantum
 
-means the computation has quantum semantics.
+does not mean:
 
-It does not mean:
+requires N qubits
 
-target = specific QPU
+Likewise:
 
-Similarly:
-
-effect Hardware
-
-does not select:
-
-FPGA
-GPU
-ASIC
-CPU
-
-unless an explicit target/resource/capability construct separately specifies that requirement.
-
----
-
-24. Resource integration
-
-Effect syntax may interact with resource requirements during semantic analysis.
-
-Example conceptual source:
-
-requires quantum
-effects { Quantum }
-
-These have different meanings.
-
-"effects { Quantum }":
-
-«this computation performs quantum computation.»
-
-"requires quantum":
-
-«execution requires an environment capable of providing quantum computation.»
-
-The parser must preserve the distinction.
-
----
-
-25. Capability integration
-
-Capabilities describe what an environment can provide.
-
-Effects describe what a computation does or may do.
-
-Therefore:
-
-Effect ⟂ Capability
-
-conceptually.
-
-The compiler may perform:
-
-Effects
-    +
-Requirements
-    +
-Capabilities
-    +
-Constraints
-    ↓
-Feasibility analysis
-
-The effects grammar itself must not perform this matching.
-
----
-
-26. Runtime integration
-
-The runtime receives effect information only after semantic lowering.
-
-A possible pipeline is:
-
-Source
- ↓
-Lexer
- ↓
-Parser
- ↓
-AST
- ↓
-Semantic Analysis
- ↓
-Effect Analysis
- ↓
-Canonical IR
- ↓
-Compilation
- ↓
-Execution Plan
- ↓
-Runtime
-
-The runtime must not parse ".g4" files.
-
-The grammar must not depend on runtime implementation details.
-
----
-
-27. Compiler integration
-
-The compiler must expose a stable semantic representation for effects.
-
-Conceptually:
-
-EffectId
-EffectSet
-EffectDeclaration
-EffectParameter
-EffectContext
-EffectHandler
-
-These are compiler/AST/semantic concepts, not grammar concepts.
-
-They should be defined in the appropriate compiler/frontend/semantic subsystem rather than inside ".g4" files.
-
-The grammar produces parse-tree information from which those structures can be constructed.
-
----
-
-28. AST contract
-
-The AST layer must preserve:
-
-- effect identity;
-- source location;
-- namespace;
-- parameters;
-- declaration/use distinction;
-- effect-set membership;
-- annotations;
-- handler structure;
-- generic/effect variables;
-- source provenance.
-
-The AST must not silently collapse distinct effect declarations into strings without semantic identity.
-
-The AST must also not encode physical hardware properties merely because an effect is associated with hardware.
-
----
-
-29. Diagnostics
-
-Effect-related parser and semantic diagnostics must distinguish:
-
-Syntax errors
-
-Examples:
-
-missing effect name
-malformed effect set
-malformed parameter list
-malformed handler
-
-Name errors
-
-Examples:
-
-unknown effect
-unknown effect namespace
-duplicate effect declaration
-
-Type/effect errors
-
-Examples:
-
-effect used where a type is required
-invalid effect parameter
-invalid effect composition
-
-Effect-system errors
-
-Examples:
-
-undeclared effect
-unhandled effect
-incompatible effect
-effect escape
-invalid effect transformation
-
-Diagnostics must provide:
-
-- stable error category;
-- source span;
-- relevant symbol;
-- contextual explanation;
-- actionable correction where possible.
-
----
-
-30. Determinism
-
-Parsing the same source under the same grammar version must produce the same parse structure.
-
-Effect sets must have canonical semantic normalization.
-
-The semantic representation must not depend on:
-
-- hash-map iteration order;
-- machine resource order;
-- hardware discovery order;
-- network state;
-- runtime scheduling;
-- provider-specific ordering.
-
----
-
-31. Scalability
-
-The grammar must support:
-
-one effect
-
-through arbitrarily large effect sets permitted by available compiler resources.
-
-There must be no source-level constants such as:
-
-MAX_EFFECTS
-MAX_EFFECT_PARAMETERS
-MAX_HANDLERS
-MAX_EFFECT_DEPTH
-MAX_QUANTUM_EFFECTS
-MAX_HARDWARE_EFFECTS
-
-unless a limit is genuinely required by the parser technology itself.
-
-Such an implementation limit must never become a language semantic limit.
-
----
-
-32. POCO-REAF compatibility
-
-Effects are essential to POCO-REAF but must not defeat it.
-
-The following principle applies:
-
-Portable semantics
-        ↓
-Effect description
-        ↓
-Target-independent compilation
-        ↓
-Target capability matching
-        ↓
-Target-specific realization
-
-A developer should not need to rewrite:
-
-effects { Quantum, Network }
-
-simply because execution moves between:
-
-- simulator;
-- QPU;
-- embedded processor;
-- accelerator;
-- cluster;
-- cloud;
-- future architecture.
-
-Only the realization may change.
-
----
-
-33. Hardware-specific anti-patterns
-
-The grammar MUST reject or avoid designs where effects encode physical deployment accidentally.
-
-Bad:
-
-effect GPU0
-
-Bad:
-
-effect QPU32
-
-Bad:
-
-effect Quantum<64>
-
-when "64" represents physical capacity.
-
-Bad:
-
-effect FPGA_1
-
-Bad:
-
-effect NetworkNode<128>
-
-These belong to target/resource/deployment descriptions when they have legitimate meaning.
-
----
-
-34. Security
-
-Effect declarations may identify security-sensitive semantics.
-
-For example:
-
-Security
-Cryptography
-Identity
-Confidentiality
-Privacy
-
-However, declaring an effect does not grant permission.
-
-This distinction is mandatory:
-
-effect Security
+effect Accelerator
 
 does not mean:
 
-permission granted
+requires one GPU
 
-Permissions and authorization belong to the security subsystem.
+Resource requirements belong to the resource/requirement system.
 
----
-
-35. Foreign-function integration
-
-Foreign calls may carry effects.
-
-For example, a C/C++/Python/system interface may declare effects such as:
-
-IO
-Network
-External
-System
-
-The interoperability subsystem owns ABI/FFI details.
-
-Effects provide semantic metadata consumed by interoperability and semantic analysis.
+This distinction is essential for POCO-REAF.
 
 ---
 
-36. HDL integration
+21. Requirements, constraints, preferences and hints
 
-HDL constructs may expose effects related to:
+Zamani must preserve the following distinction:
 
-Hardware
-Clock
-Timing
-Signal
-Memory
-External
+Concept| Meaning
+Effect| What the computation does/may do
+Capability| What the environment can provide
+Requirement| What execution needs
+Constraint| What execution must satisfy
+Resource| What execution consumes/reserves
+Preference| What realization is preferred
+Hint| Optimization guidance
+Target| Intended realization domain
+Placement| Concrete realization decision
 
-Effects do not define HDL semantics themselves.
+The effects grammar must not merge these concepts.
 
-The dependency remains:
+---
 
-HDL grammar
+22. Quantum integration
+
+Quantum-related effects may appear in the effect system.
+
+Examples conceptually include:
+
+quantum::measurement
+quantum::reset
+quantum::state
+quantum::dynamic_control
+
+These are source-level semantic identities.
+
+They must not encode:
+
+physical qubit 0
+physical qubit 1
+QPU 0
+32-qubit machine
+specific coupling map
+specific gate set
+specific calibration
+
+The correct downstream path remains:
+
+Zamani source
     ↓
-AST
+effect-aware AST
     ↓
 semantic analysis
     ↓
-hardware/HDL representation
-
-rather than HDL grammar depending on runtime effects.
-
----
-
-37. Distributed computing integration
-
-Distributed effects may express semantic behavior such as:
-
-Distributed
-Network
-RemoteExecution
-Replication
-Consistency
-
-They must not hard-code:
-
-- node counts;
-- node IDs;
-- cluster topology;
-- network addresses.
-
-Those belong to deployment/resource/hardware layers.
-
----
-
-38. Effect aliases
-
-If aliases are supported, they must be explicitly declared.
-
-Conceptually:
-
-effect alias ExternalIO = IO
-
-Alias resolution must be deterministic.
-
-Aliases must not create semantic ambiguity or cycles.
-
-An alias graph must be validated for:
-
-- duplicate definitions;
-- cycles;
-- invalid targets;
-- namespace collisions.
-
----
-
-39. Effect versioning
-
-Effect semantics may evolve.
-
-Version information must be associated with the language/dialect/effect definition rather than hidden inside parser implementation.
-
-Effects introduced by dialects must use the dialect/versioning mechanisms.
-
-An old program must remain parseable under its declared compatible language version according to the compatibility policy.
-
----
-
-40. Dialect integration
-
-Vendor and experimental effects must be expressible without modifying the universal core grammar every time a new platform appears.
-
-The preferred model is:
-
-core effect syntax
-       +
-qualified dialect namespace
-       +
-dialect registration
-       +
-semantic extension
-
-For example:
-
-vendor::effect_name
-
-may be supported through the dialect system.
-
-Vendor extensions must not become permanent core language requirements merely because one backend introduces them.
-
----
-
-41. Effect metadata
-
-Effect declarations may carry metadata using the canonical metadata/attribute system.
-
-Metadata may include:
-
-- documentation;
-- version;
-- deprecation;
-- stability;
-- provenance;
-- dialect;
-- semantic classification.
-
-Metadata must not silently alter the core meaning of an effect unless explicitly defined by the semantic specification.
-
----
-
-42. Error recovery
-
-ANTLR parser rules must provide predictable recovery behavior.
-
-Malformed effects must not cause unrelated source regions to be interpreted as effects.
-
-Error recovery must preserve useful source locations for diagnostics.
-
-The parser must not emit fake semantic effects to "make parsing succeed."
-
----
-
-43. Lexer contract
-
-Effect syntax depends on the canonical lexer for:
-
-- identifiers;
-- keywords;
-- punctuation;
-- operators;
-- literals;
-- comments;
-- annotations.
-
-Effect-specific tokens should only be introduced where necessary.
-
-Do not duplicate identifier, numeric literal, string literal, or annotation lexical definitions inside "effects/".
-
----
-
-44. Parser contract
-
-The top-level grammar:
-
-grammar/Zamani.g4
-
-must compose the effects grammar through parser rules or the project's established ANTLR composition mechanism.
-
-"effects/" must remain modular.
-
-No effect rule should assume that it owns the complete Zamani compilation unit.
-
----
-
-45. Grammar composition
-
-The expected conceptual relationship is:
-
-Zamani.g4
- ├── core
- ├── types
- ├── expressions
- ├── statements
- ├── declarations
- ├── functions
- ├── modules
- ├── effects
- ├── memory
- ├── concurrency
- ├── classical
- ├── quantum
- ├── hybrid
- ├── hdl
- ├── hardware
- ├── distributed
- ├── ai
- ├── data
- ├── networking
- ├── security
- ├── resources
- ├── compile
- └── execution
-
-The actual ANTLR import/delegation mechanism must follow the repository's chosen grammar-authority architecture.
-
----
-
-46. Required files in this directory
-
-The directory consists of:
-
-effects/
-├── README.md
-├── effects.g4
-├── effect-declarations.g4
-├── effect-sets.g4
-├── effect-handling.g4
-├── capabilities.g4
-├── io.g4
-├── hardware.g4
-├── quantum.g4
-├── distributed.g4
-├── security.g4
-├── network.g4
-└── custom-effects.g4
-
-Each file has a deliberately narrow responsibility.
-
----
-
-47. "effects.g4"
-
-Owns
-
-The composition/root rules for the effect subsystem.
-
-Does not own
-
-Detailed declaration, handler, domain-specific, or capability rules.
-
-Dependencies
-
-- canonical names;
-- paths;
-- annotations;
-- expressions;
-- types.
-
-Consumers
-
-- "Zamani.g4";
-- AST builder;
-- semantic analyzer.
-
-Completion criteria
-
-The file must provide a complete effect grammar composition point without duplicating subordinate rules.
-
----
-
-48. "effect-declarations.g4"
-
-Owns
-
-Syntax for:
-
-- effect declarations;
-- effect names;
-- effect parameters;
-- effect metadata.
-
-Does not own
-
-Effect handling or hardware capabilities.
-
-Tests
-
-- simple declarations;
-- qualified declarations;
-- parameterized declarations;
-- duplicate declarations as semantic-negative tests;
-- malformed declarations.
-
----
-
-49. "effect-sets.g4"
-
-Owns
-
-Syntax for:
-
-- effect sets;
-- effect lists;
-- effect composition;
-- effect variables;
-- effect expressions where defined.
-
-Scalability
-
-No fixed number of effects.
-
-Tests
-
-- empty set if permitted;
-- singleton;
-- multiple effects;
-- arbitrarily large generated sets;
-- duplicate effects;
-- nested/invalid forms.
-
----
-
-50. "effect-handling.g4"
-
-Owns
-
-Syntax for:
-
-- handlers;
-- handled effect clauses;
-- effect propagation syntax;
-- effect discharge syntax.
-
-Does not own
-
-Runtime handler implementation.
-
-Integration
-
-AST → semantic effect analysis → lowered handler representation.
-
----
-
-51. "capabilities.g4"
-
-This file must be handled carefully because capabilities are also represented in:
-
-grammar/core/capabilities.g4
-grammar/resources/capabilities.g4
-grammar/hardware/capabilities.g4
-grammar/quantum/quantum-capabilities.g4
-
-Its purpose is only to define effect-system syntax needed to refer to or constrain effect capabilities.
-
-It must not create a second capability model.
-
-The semantic model must establish one canonical capability abstraction.
-
-If repository inspection shows that the core capability grammar already provides all required syntax, this file should be merged/removed, with "effects" referencing the canonical capability rules instead.
-
-That is preferable to duplicated capability grammars.
-
----
-
-52. "io.g4"
-
-Owns
-
-Standard syntax for semantic IO-effect declarations or IO-specific effect forms, if such specialization is required.
-
-Does not own
-
-Actual filesystem/network operations.
-
-Security
-
-No arbitrary filesystem access is performed by parsing.
-
-Integration
-
-IO syntax
- ↓
-AST
- ↓
-IO effect semantics
- ↓
-compiler/runtime
-
----
-
-53. "hardware.g4"
-
-Owns
-
-Hardware-related semantic effect syntax.
-
-It must express that computation interacts with hardware as a semantic category.
-
-It must NOT encode:
-
-- CPU count;
-- GPU count;
-- device ID;
-- FPGA number;
-- ASIC identity;
-- address;
-- topology;
-- machine size.
-
-Those belong to hardware/resource/target systems.
-
----
-
-54. "quantum.g4"
-
-Owns
-
-Quantum-specific effect syntax.
-
-It must remain backend-independent.
-
-It must not contain:
-
-MAX_QUBITS
-q[0]
-q[1]
-fixed gate counts
-fixed device IDs
-fixed topology
-
-Quantum effects eventually participate in semantic lowering toward:
-
+quantum semantics
+    ↓
 quantum::ir
-
-They do not define that IR.
-
----
-
-55. "distributed.g4"
-
-Owns
-
-Distributed semantic effects.
-
-Examples include:
-
-Distributed
-RemoteExecution
-Replication
-Consistency
-
-It must not define node topology.
-
----
-
-56. "security.g4"
-
-Owns
-
-Security-related semantic effects.
-
-Examples:
-
-Security
-Cryptography
-Privacy
-Identity
-Confidentiality
-
-It does not grant permissions.
-
----
-
-57. "network.g4"
-
-Owns
-
-Network-related semantic effect syntax.
-
-It must not contain:
-
-- IP addresses;
-- fixed ports;
-- network sizes;
-- node counts;
-- topology.
-
-Those belong to networking/deployment/resource systems.
-
----
-
-58. "custom-effects.g4"
-
-Owns
-
-Extensible user/dialect-defined effect syntax.
-
-The grammar must permit future semantic domains without requiring modification of core effect rules.
-
-The preferred identity mechanism is canonical qualified names.
-
----
-
-59. AST integration contract
-
-The frontend must transform parse trees into AST structures that retain semantic information.
-
-Required conceptual structures include:
-
-EffectId
-EffectName
-EffectReference
-EffectDeclaration
-EffectParameter
-EffectSet
-EffectHandler
-EffectContext
-
-Exact Rust locations are determined by repository architecture.
-
-The grammar must not dictate ownership of these structures.
-
----
-
-60. Rust safety contract
-
-All Rust components consuming effect syntax must remain safe Rust.
-
-The relevant crate/module must enforce:
-
-#![forbid(unsafe_code)]
-
-No parser integration, AST construction, effect analysis, serialization, or diagnostic implementation may require "unsafe".
-
-Rust 1.97/1.97.1 compatibility must be tested explicitly.
-
----
-
-61. Testing contract
-
-At minimum:
-
-grammar/tests/effects/
-
-must test:
-
-Positive
-
-- declarations;
-- qualified effects;
-- effect sets;
-- function effects;
-- handlers;
-- custom effects;
-- quantum effects;
-- hardware effects;
-- distributed effects;
-- security effects;
-- network effects.
-
-Negative
-
-- malformed declaration;
-- malformed effect set;
-- malformed handler;
-- invalid identifier;
-- invalid qualification;
-- malformed parameters;
-- duplicate declarations;
-- illegal nesting.
-
-Boundary
-
-- one effect;
-- many effects;
-- deeply nested valid semantic structures;
-- large source files;
-- large effect sets.
-
-Cross-domain
-
-- classical + quantum;
-- quantum + hardware;
-- quantum + distributed;
-- classical + network;
-- AI + accelerator;
-- HDL + hardware;
-- quantum + security;
-- full hybrid program.
-
----
-
-62. Scalability tests
-
-Tests must explicitly prove that effect syntax does not encode arbitrary machine limits.
-
-Examples must vary independently:
-
-effect count
-resource count
-qubit count
-device count
-node count
-thread count
-memory size
-program size
-
-The grammar must continue to represent the program independently of those physical quantities.
-
----
-
-63. Determinism tests
-
-For identical source:
-
-source
- ↓
-lexer
- ↓
-parser
- ↓
-AST
-
-must produce equivalent deterministic structures.
-
-Effect-set normalization must produce deterministic semantic ordering where an ordered representation is required internally.
-
----
-
-64. Round-trip tests
-
-Where the repository provides a formatter/printer:
-
-source
- ↓
-parser
- ↓
-AST
- ↓
-printer
- ↓
-parser
-
-must preserve effect semantics.
-
-Formatting may change whitespace and equivalent syntactic presentation, but must not change:
-
-- effect identity;
-- effect membership;
-- handler structure;
-- parameters;
-- namespaces.
-
----
-
-65. Compatibility
-
-Effect syntax is part of the stable Zamani language surface.
-
-Breaking changes require:
-
-1. language-version declaration;
-2. migration documentation;
-3. compatibility tests;
-4. deprecation period where appropriate;
-5. explicit semantic justification.
-
-A vendor-specific effect must not silently become a core effect with incompatible semantics.
-
----
-
-66. Hard-coding audit
-
-Before this subsystem is declared complete, search for:
-
-MAX_EFFECT
-MAX_EFFECTS
-MAX_QUBITS
-MAX_DEVICES
-MAX_NODES
-MAX_GPUS
-MAX_CPUS
-DEVICE_0
-QPU_0
-GPU_0
-q[0]
-q[1]
-fixed topology
-fixed resource counts
-
-Any occurrence must be classified.
-
-Allowed:
-
-- parser implementation safeguards;
-- test fixture values;
-- documented examples;
-- genuine semantic constants.
-
-Forbidden:
-
-- accidental source-language scalability limits;
-- fixed hardware assumptions;
-- fixed backend assumptions.
-
----
-
-67. Security audit
-
-Verify that effect syntax cannot:
-
-- execute external commands;
-- access files;
-- access network resources;
-- discover hardware;
-- invoke runtime services;
-- bypass authorization.
-
-Parsing is declarative.
-
-Semantic analysis is deterministic.
-
-Execution belongs to later stages.
-
----
-
-68. Repository integration
-
-The final integration path is:
-
-grammar/
-    ↓
-ANTLR lexer/parser
-    ↓
-frontend AST
-    ↓
-semantic analysis
-    ├── type checking
-    ├── effect checking
-    ├── capability checking
-    ├── requirement checking
-    └── constraint checking
-    ↓
-canonical IR
-    ├── classical IR
-    └── quantum::ir
     ↓
 optimization
+    ↓
+decomposition
     ↓
 routing
     ↓
 scheduling
     ↓
-hardware abstraction
+QEC / resilience
     ↓
-ZQN / QEC where applicable
+ZQN
     ↓
-compiler
+HAL
     ↓
-runtime
+target
 
-The arrows represent semantic consumption.
-
-They do not imply that every subsystem directly depends on the grammar.
+The effects subsystem must not create a second quantum IR.
 
 ---
 
-69. Dependency restrictions
+23. Quantum gate/operation independence
 
-The following dependencies are prohibited:
+The effect subsystem must not become a closed catalogue of quantum gates.
 
-effects → runtime implementation
-effects → hardware discovery
-effects → device inventory
-effects → quantum::ir implementation
-effects → QEC implementation
-effects → ZQN implementation
-effects → scheduling implementation
-effects → optimization implementation
+It must not encode:
+
+H
+X
+Y
+Z
+CNOT
+...
+
+as the fundamental effect vocabulary.
+
+Quantum operation identity belongs to the quantum operation model and eventually to canonical quantum semantics.
+
+Effect syntax may express that a computation has quantum behavior without enumerating every operation supported by every present or future device.
+
+---
+
+24. QEC boundary
+
+Quantum error correction remains owned by the QEC subsystem.
+
+Effects may communicate semantic information relevant to resilience or error handling.
+
+They must not implement:
+
+- code distance;
+- syndrome extraction;
+- decoder algorithms;
+- correction schedules;
+- physical layout;
+- decoder-specific state;
+- QEC resource allocation.
+
+The direction is:
+
+effect semantics
+      ↓
+semantic analysis
+      ↓
+quantum::ir / resilience metadata
+      ↓
+QEC
+
+not:
+
+effect grammar
+      ↓
+QEC implementation
+
+---
+
+25. ZQN boundary
+
+ZQN owns quantum noise/fault semantics.
+
+The effects grammar must not duplicate:
+
+- noise models;
+- fault models;
+- leakage;
+- loss;
+- erasure;
+- correlated faults;
+- drift;
+- fault classification;
+- mitigation implementation.
+
+Effect syntax may identify a semantic relationship with noise/fault-sensitive computation, but ZQN remains the authority for those semantics.
+
+---
+
+26. Hardware boundary
+
+"hardware.g4" must remain a semantic extension.
+
+An effect such as:
+
+hardware::interaction
+
+does not identify:
+
+CPU 0
+GPU 1
+FPGA 2
+device address X
+
+Hardware discovery belongs downstream.
+
+Hardware capabilities are supplied by the execution environment.
+
+---
+
+27. Distributed computing boundary
+
+"distributed.g4" may provide effect identities such as:
+
+distributed::remote_execution
+distributed::replication
+distributed::consistency
+distributed::communication
+
+but must not encode a universal machine topology.
+
+No:
+
+node[0]
+node[1]
+node[2]
+MAX_NODES
+
+as universal language limitations.
+
+The source describes distributed semantics; deployment determines realization.
+
+---
+
+28. Networking boundary
+
+"network.g4" may represent networking-related semantic effects.
+
+It must not make:
+
+- IP addresses;
+- ports;
+- interfaces;
+- routing tables;
+- topology;
+- link counts
+
+part of the generic effect model.
+
+Concrete network realization belongs to networking, deployment, resource, and runtime layers.
+
+---
+
+29. Security boundary
+
+"security.g4" may represent semantic effects associated with:
+
+- authorization;
+- authentication;
+- confidentiality;
+- integrity;
+- cryptographic operations;
+- identity;
+- secure computation.
+
+It must not silently grant authority.
+
+An effect such as:
+
+security::authorization
+
+does not itself authorize an operation.
+
+Authorization remains a semantic/security decision.
+
+---
+
+30. IO boundary
+
+"io.g4" describes IO-related semantic syntax where specialized syntax is required.
+
+It must not perform IO.
+
+The parser must never:
+
+- open a file;
+- inspect a filesystem;
+- read environment variables;
+- contact a network;
+- invoke an external command.
+
+The grammar is declarative.
+
+---
+
+31. No runtime behavior in grammar
+
+The effect grammars must contain no embedded runtime behavior.
+
+Prohibited:
+
+filesystem access
+network access
+hardware discovery
+environment inspection
+process execution
+device enumeration
+randomness
+runtime callbacks
+
+The grammar produces syntax.
+
+Semantic analysis interprets it.
+
+The runtime executes lowered semantics.
+
+---
+
+32. Determinism
+
+Parsing must be deterministic.
+
+Given:
+
+same source
++
+same grammar version
++
+same lexical configuration
++
+same explicit dialect configuration
+
+the parser must produce equivalent syntax structures.
+
+Parsing must not depend on:
+
+- time;
+- randomness;
+- hardware availability;
+- filesystem state;
+- network state;
+- environment state;
+- target selection;
+- runtime scheduling.
+
+---
+
+33. Scalability
+
+The effect grammar must scale from a single effect to arbitrarily large programs and effect sets subject only to actual implementation resources.
+
+There must be no language-level limits such as:
+
+MAX_EFFECTS
+MAX_EFFECT_OPERATIONS
+MAX_EFFECT_PARAMETERS
+MAX_EFFECT_GENERICS
+MAX_HANDLER_ARMS
+MAX_EFFECT_DEPTH
+MAX_QUANTUM_EFFECTS
+MAX_HARDWARE_EFFECTS
+
+A compiler may have configurable resource-protection policies.
+
+Those policies must not become language semantics.
+
+This distinction is essential:
+
+language expressiveness
+        ≠
+compiler resource budget
+
+---
+
+34. "Infinity" interpretation
+
+"Infinity" in POCO-REAF does not mean that finite hardware literally contains infinite memory or infinite execution capacity.
+
+It means the language introduces no artificial machine-size ceiling.
+
+The effective limit is determined by:
+
+program size
++
+compiler representation
++
+available memory
++
+available compute
++
+target resources
++
+execution resources
+
+rather than by arbitrary grammar constants.
+
+---
+
+35. Hard-coding audit
+
+Every effect grammar file must pass a hard-coding audit.
+
+Search for suspicious constructs including:
+
+MAX_EFFECT
+MAX_EFFECTS
+MAX_EFFECT_OPERATIONS
+MAX_EFFECT_PARAMETERS
+MAX_EFFECT_GENERICS
+MAX_QUBITS
+MAX_CPUS
+MAX_CORES
+MAX_THREADS
+MAX_GPUS
+MAX_FPGAS
+MAX_QPUS
+MAX_ACCELERATORS
+MAX_NODES
+MAX_MEMORY
+MAX_DEVICES
+DEVICE_0
+GPU_0
+QPU_0
+CPU_0
+NODE_0
+q[0]
+q[1]
+
+An occurrence is acceptable only when it is clearly:
+
+- documentation;
+- a test fixture;
+- an example value;
+- a diagnostic;
+- an explicit compiler resource policy;
+- a genuine source-language semantic constant.
+
+It is forbidden when it creates an artificial universal language limit.
+
+---
+
+36. Existing grammar hard-coding must be removed
+
+The current effect grammar files contain extensive documentation around maximum-cardinality prohibitions, which is useful, but production readiness requires that the actual parser rules and semantic contracts also obey those rules.
+
+For example, "effect-operations.g4" must not introduce fixed operation counts or argument limits merely because documentation says not to.
+
+The implementation must be checked, not merely documented.
+
+---
+
+37. Dependency direction
+
+The effect grammar dependency graph must remain acyclic.
+
+The intended direction is:
+
+Shared lexical vocabulary
+        ↓
+Core parser grammar
+        ↓
+Types / Expressions / Declarations
+        ↓
+Effects
+        ↓
+Domain-neutral AST
+        ↓
+Semantic effect system
+        ↓
+Canonical semantic representation
+        ↓
+Compiler / runtime / domain backends
+
+Within the effect subsystem:
+
+Effects
+ ├── declarations
+ ├── sets
+ ├── operations
+ ├── handling
+ ├── types
+ ├── polymorphism
+ ├── composition
+ └── custom effects
+
+Subordinate grammars must not import the composition root in a way that creates cycles.
+
+---
+
+38. Domain extension rule
+
+A new computational domain must not require changing the generic effect syntax merely because the domain is new.
+
+For example, future domains could introduce:
+
+photonic::interaction
+neuromorphic::spike
+molecular::reaction
+optical::transform
+biological::signal
+future::computation
+
+using the existing open-world identity model.
+
+The generic effect subsystem should remain unchanged unless the language semantics themselves require a genuinely new effect-system construct.
+
+---
+
+39. Dialect integration
+
+Dialects may introduce additional effect identities.
+
+A dialect must declare:
+
+- dialect name;
+- version;
+- namespace;
+- effect identities;
+- syntax extensions, if any;
+- semantic interpretation;
+- AST mapping;
+- compatibility policy;
+- feature status.
+
+A dialect must not silently redefine the meaning of a stable core effect.
+
+A dialect also must not become an independent programming language hidden inside "grammar/effects/".
+
+---
+
+40. AST integration contract
+
+For every effect construct, the mapping must be predetermined:
+
+grammar rule
+    ↓
+AST representation
+    ↓
+semantic effect construct
+    ↓
+canonical representation / IR
+
+Examples:
+
+effect declaration
+    ↓
+Effect AST node
+    ↓
+semantic effect declaration
+
+effect reference
+    ↓
+effect reference AST
+    ↓
+resolved EffectId
+
+effect set
+    ↓
+effect-set AST
+    ↓
+normalized semantic effect set
+
+handler
+    ↓
+handler AST
+    ↓
+handler semantic model
+
+The grammar file must not require a future redesign of the AST to become semantically meaningful.
+
+---
+
+41. Canonical effect semantic model
+
+The semantic layer should conceptually support:
+
+EffectId
+EffectName
+EffectReference
+EffectDeclaration
+EffectOperation
+EffectSet
+EffectVariable
+EffectConstraint
+EffectContext
+EffectHandler
+EffectSubstitution
+
+These are semantic/compiler concepts.
+
+They must not be duplicated as independent grammar-specific IR structures.
+
+---
+
+42. Source spans
+
+Every effect construct must retain sufficient source-location information for diagnostics.
+
+At minimum, diagnostics must be able to identify:
+
+- declaration span;
+- effect name span;
+- effect reference span;
+- effect-set span;
+- operation span;
+- handler span;
+- parameter span;
+- relevant related source locations.
+
+The grammar must not discard source structure needed by the frontend AST.
+
+---
+
+43. Diagnostics integration
+
+The existing:
+
+grammar/effects/effect-diagnostics.g4
+grammar/effects/effect-diagnostics.md
+
+must remain separate from the grammar's semantic ownership.
+
+"effect-diagnostics.g4" may describe syntax needed for diagnostic-related grammar constructs if such constructs genuinely exist.
+
+"effect-diagnostics.md" defines the diagnostic contract.
+
+Diagnostics must distinguish at least:
+
+lexical
+syntax
+name resolution
+effect identity
+effect typing
+effect composition
+effect polymorphism
+effect handling
+capability
+requirement
+constraint
+resource
+security
+compatibility
+implementation
+
+Diagnostics must not confuse:
+
+unknown effect
+
+with:
+
+unsupported hardware
+
+Those are different failures at different architectural layers.
+
+---
+
+44. Diagnostic stability
+
+Diagnostic identifiers must be stable.
+
+Do not rely on source-file line numbers or list position as diagnostic identity.
+
+A diagnostic should conceptually contain:
+
+stable code
+severity
+primary span
+message
+related spans
+structured data
+optional suggestion
+
+Presentation belongs to tooling.
+
+The semantic diagnostic identity must remain stable across:
+
+- CLI;
+- IDE;
+- LSP;
+- JSON;
+- machine-readable output;
+- human-readable output.
+
+---
+
+45. Error recovery
+
+Parser error recovery must not turn malformed effect syntax into silently valid semantics.
+
+For example, malformed:
+
+effect Foo {
+
+must produce a recoverable syntax error while preserving enough source structure for subsequent diagnostics where possible.
+
+Recovery must not invent:
+
+- effect names;
+- effect parameters;
+- capabilities;
+- resources;
+- handlers.
+
+---
+
+46. Positive test contract
+
+The effect subsystem requires positive tests for:
+
+Declarations
+
+effect IO;
+effect Quantum;
+effect security::Audit;
+
+Generic declarations
+
+effect Read<T>;
+
+Effect sets
+
+{ IO }
+{ IO, Network }
+{ Quantum, Security, Network }
+
+Custom effects
+
+application::Telemetry
+future::domain::Effect
+vendor::extension::Effect
+
+Handlers
+
+Valid handler forms defined by the canonical handler grammar.
+
+Polymorphism
+
+Valid effect variables and effect bounds.
+
+Type qualification
+
+Valid effect-qualified types.
+
+Cross-domain use
+
+Examples combining:
+
+classical + quantum
+quantum + hardware
+quantum + distributed
+classical + networking
+AI + accelerator
+HDL + hardware
+quantum + security
+
+---
+
+47. Negative test contract
+
+Negative tests must cover:
+
+- missing effect names;
+- malformed names;
+- malformed qualified names;
+- malformed effect sets;
+- malformed parameters;
+- malformed generic parameters;
+- invalid handler syntax;
+- invalid effect qualification;
+- invalid polymorphic syntax;
+- illegal composition;
+- malformed operation invocation;
+- invalid delimiters;
+- unexpected tokens;
+- invalid nesting.
+
+Semantic negative tests must separately cover:
+
+- unknown effect;
+- duplicate declaration;
+- unresolved effect;
+- invalid effect parameter;
+- incompatible effect composition;
+- invalid handler;
+- unsatisfied effect constraint;
+- illegal effect escape;
+- invalid effect substitution.
+
+---
+
+48. Boundary tests
+
+Boundary tests must include:
+
+- zero effects where the grammar permits an empty set;
+- one effect;
+- many effects;
+- deeply qualified names;
+- long identifiers;
+- many parameters;
+- many generic parameters;
+- deeply nested generic types;
+- deeply nested handler structures;
+- large source files;
+- large effect sets.
+
+The test suite must not use a small number such as "8", "16", "32", or "1024" as an implicit language limit.
+
+Those values may be test fixtures, but tests must also scale beyond them.
+
+---
+
+49. Scalability tests
+
+Scalability tests must vary independently:
+
+program size
+effect-set size
+number of declarations
+number of handlers
+number of generic parameters
+number of operations
+number of modules
+resource requirements
+qubit counts
+device counts
+node counts
+thread counts
+memory requirements
+
+The effect grammar must remain independent of all physical quantities.
+
+For example, changing:
+
+1 qubit
+
+to:
+
+many qubits
+
+must not require changing the effect grammar.
+
+---
+
+50. Determinism tests
+
+For identical source and grammar configuration:
+
+lex(source)
+
+must be deterministic.
+
+Then:
+
+parse(source)
+
+must be deterministic.
+
+Then:
+
+build_ast(parse_tree)
+
+must preserve equivalent effect structure.
+
+Semantic normalization must also be deterministic.
+
+No effect result may depend on:
+
+- hash-map ordering;
+- machine identity;
+- hardware discovery order;
+- current time;
+- randomness;
+- network responses.
+
+---
+
+51. Round-trip tests
+
+Where formatter/printer support exists:
+
+source
+  ↓
+parse
+  ↓
+AST
+  ↓
+format
+  ↓
+parse
+
+must preserve effect semantics.
+
+The round trip must preserve:
+
+- effect identity;
+- qualification;
+- effect membership;
+- generic parameters;
+- operation identity;
+- handler structure;
+- semantic effect relationships.
+
+Formatting may change whitespace and equivalent presentation.
+
+---
+
+52. Compatibility tests
+
+Effect syntax must participate in the repository-wide compatibility system.
+
+Compatibility must compare:
+
+specification
+    ↕
+Zamani.g4 / parser composition
+    ↕
+lexer
+    ↕
+Rust parser
+    ↕
+AST
+    ↕
+semantic model
+    ↕
+IR
+
+Every stable effect feature must have a compatibility status.
+
+Breaking changes require:
+
+1. version identification;
+2. migration documentation;
+3. compatibility tests;
+4. deprecation where appropriate;
+5. semantic justification.
+
+---
+
+53. Feature lifecycle
+
+An effect feature must follow:
+
+proposal
+   ↓
+semantic design
+   ↓
+AST contract
+   ↓
+canonical grammar
+   ↓
+Rust/frontend implementation
+   ↓
+semantic implementation
+   ↓
+IR integration
+   ↓
+compiler integration
+   ↓
+runtime/backend integration
+   ↓
+positive tests
+   ↓
+negative tests
+   ↓
+boundary/scalability tests
+   ↓
+compatibility tests
+   ↓
+stable
+
+"Zamani-Grammar.md" may document a proposal.
+
+That does not automatically make it legal Zamani syntax.
+
+---
+
+54. Implementation status
+
+The repository must distinguish:
+
+SPECIFIED
+IMPLEMENTED
+PARTIALLY IMPLEMENTED
+PLANNED
+DEPRECATED
+
+The effects README must never imply that all documented grammar constructs are already accepted by the Rust frontend.
+
+In particular, the modular grammar and the current recursive-descent parser must be checked for conformance feature-by-feature.
+
+---
+
+55. Rust 1.97 / 1.97.1 contract
+
+All Rust code consuming this grammar must target:
+
+Rust 1.97
+Rust 1.97.1
+Edition 2021
+
+No nightly-only language feature may be required.
+
+No "unsafe" implementation is permitted.
+
+The consuming crate/module must enforce safe Rust, preferably at the crate boundary with:
+
+#![forbid(unsafe_code)]
+
+where consistent with the existing crate architecture.
+
+The grammar itself must contain no embedded Rust actions requiring unsafe behavior.
+
+---
+
+56. Security requirements
+
+Parsing effect syntax must be safe against untrusted source.
+
+The grammar must not:
+
+- execute source code;
+- execute shell commands;
+- access files;
+- access secrets;
+- access network services;
+- discover devices;
+- inspect hardware;
+- invoke runtime APIs;
+- load arbitrary plugins;
+- perform target selection.
+
+Effect parameters are syntax until semantic analysis determines their meaning.
+
+---
+
+57. Resource exhaustion
+
+The language must not encode arbitrary limits merely to protect one implementation.
+
+However, compilers may implement explicit resource-protection policies for hostile or enormous inputs.
+
+Those policies must be:
+
+implementation policy
+
+not:
+
+language semantics
+
+For example:
+
+compiler invocation --max-parse-memory ...
+
+is conceptually different from:
+
+Zamani language supports at most 1024 effects
+
+The first protects an implementation.
+
+The second changes the language.
+
+---
+
+58. No hidden target dependence
+
+The effect grammar must produce equivalent source semantics regardless of whether the compiler eventually discovers:
+
+CPU
+GPU
+FPGA
+ASIC
+QPU
+cluster
+cloud
+edge
+future hardware
+
+The target can influence downstream realization.
+
+It must not alter the meaning of the source effect.
+
+---
+
+59. Effect-aware optimization
+
+Effects provide semantic information that can restrict transformations.
+
+For example, an optimizer may not freely reorder two operations when their effects establish an observable ordering relationship.
+
+The grammar does not implement the optimizer.
+
+The integration is:
+
+effect syntax
+      ↓
+effect AST
+      ↓
+effect semantics
+      ↓
+optimization legality information
+      ↓
+optimizer
+
+This allows optimization without coupling the grammar to a specific optimizer.
+
+---
+
+60. Effect-aware concurrency
+
+Effects may interact with:
+
+- async execution;
+- parallelism;
+- synchronization;
+- shared state;
+- distributed execution.
+
+The grammar should expose only the semantic constructs required to express the relationship.
+
+Concurrency scheduling remains owned by the concurrency/execution/compiler layers.
+
+---
+
+61. Effect-aware hardware/software co-design
+
+Effects are useful for describing semantic interaction between software and hardware.
+
+For example:
+
+hardware::interaction
+accelerator::compute
+hdl::event
+memory::shared
+
+can describe semantic behavior.
+
+They must not decide:
+
+FPGA #3
+GPU #7
+memory bank #2
+physical address 0x...
+
+Those are realization decisions.
+
+---
+
+62. Effect-aware AI/data computation
+
+Effects may represent semantic properties such as:
+
+ai::training
+ai::inference
+data::stream
+data::persistence
+accelerator::compute
+
+but the grammar must not become a framework-specific language for:
+
+- CUDA;
+- ROCm;
+- PyTorch;
+- TensorFlow;
+- a particular accelerator vendor.
+
+Framework interoperability belongs under the interoperability/dialect layers.
+
+---
+
+63. Interoperability
+
+Effect semantics may be translated to external representations.
+
+Examples include:
+
+QIR
+OpenQASM
+LLVM-based representations
+MLIR-based representations
+HDL
+foreign function interfaces
+runtime APIs
+
+Those are interoperability targets.
+
+They are not the canonical Zamani effect model.
+
+---
+
+64. Canonical quantum boundary
+
+Whenever an effect participates in quantum computation, the canonical semantic boundary remains:
+
+quantum::ir
+
+No effect-specific quantum IR may be introduced.
 
 The correct relationship is:
 
-grammar
- ↓
-AST/semantic model
- ↓
-canonical representations
- ↓
-backend subsystems
+Effect AST
+      ↓
+semantic effect model
+      ↓
+quantum semantic analysis
+      ↓
+quantum::ir
+
+The effect grammar must not import or depend directly on the implementation of "quantum::ir".
 
 ---
 
-70. Completion definition
+65. No circular architecture
 
-"grammar/effects/" is production-ready only when:
+Forbidden:
 
-- [ ] effect syntax has one authoritative definition;
-- [ ] effect declarations are complete;
-- [ ] effect sets are complete;
-- [ ] effect handling is complete;
-- [ ] custom effects are supported;
-- [ ] standard effects have stable semantic identities;
-- [ ] capabilities remain distinct from effects;
-- [ ] requirements remain distinct from effects;
-- [ ] constraints remain distinct from effects;
-- [ ] resources remain distinct from effects;
-- [ ] hardware remains distinct from effects;
-- [ ] quantum effects remain distinct from "quantum::ir";
-- [ ] QEC is not duplicated;
-- [ ] ZQN is not duplicated;
-- [ ] runtime behavior is not embedded in grammar;
-- [ ] no physical machine assumptions are encoded;
-- [ ] no fixed resource limits exist;
-- [ ] ANTLR integration is deterministic;
-- [ ] AST contracts are defined;
-- [ ] semantic contracts are defined;
-- [ ] compiler contracts are defined;
-- [ ] runtime boundaries are defined;
-- [ ] dialect integration is defined;
-- [ ] versioning is defined;
-- [ ] diagnostics are defined;
-- [ ] positive tests exist;
-- [ ] negative tests exist;
-- [ ] boundary tests exist;
-- [ ] scalability tests exist;
-- [ ] cross-domain tests exist;
-- [ ] determinism tests exist;
-- [ ] round-trip tests exist where supported;
-- [ ] Rust 1.97/1.97.1 integration passes;
-- [ ] all Rust implementation code uses safe Rust;
-- [ ] "unsafe" is forbidden;
-- [ ] hard-coding audit passes;
-- [ ] security audit passes;
-- [ ] documentation matches the authoritative grammar;
-- [ ] no circular dependency exists;
-- [ ] POCO-REAF semantics are preserved.
+grammar/effects
+    ↓
+quantum::ir
+    ↓
+grammar/effects
+
+Forbidden:
+
+effects grammar
+    ↓
+runtime
+    ↓
+effects grammar
+
+Forbidden:
+
+effects grammar
+    ↓
+hardware discovery
+
+The dependency direction must always proceed toward later semantic realization.
 
 ---
 
-71. Final invariant
+66. Completion contract for each file
 
-The effects system must preserve the following invariant:
+Every effect grammar file is considered complete only when all of the following have been established.
 
-Effect describes computation.
-Capability describes available execution ability.
-Requirement describes what execution needs.
-Constraint describes what execution must satisfy.
-Resource describes what execution consumes or reserves.
-Target describes where/how compilation may be realized.
-Runtime describes how execution actually occurs.
+Purpose
 
-These concepts must never be collapsed into one another.
+What exact syntax does the file own?
 
-The ultimate architecture is:
+Non-ownership
 
-                 Zamani Source
-                       │
-                       ▼
-                  Effect Syntax
-                       │
-                       ▼
-                  Effect AST
-                       │
-                       ▼
-              Effect Semantic Model
-                       │
-          ┌────────────┼─────────────┐
-          ▼            ▼             ▼
-       Types       Capabilities   Requirements
-          │            │             │
-          └────────────┼─────────────┘
-                       ▼
-                 Canonical IR
-                 /          \
-                /            \
-       Classical IR       quantum::ir
-                \            /
-                 \          /
-                  ▼        ▼
-                 Compiler
-                    │
-        ┌───────────┼────────────┐
-        ▼           ▼            ▼
-   Optimization  Routing     Scheduling
-        │           │            │
-        └───────────┼────────────┘
-                    ▼
-             Hardware / ZQN / QEC
-                    │
-                    ▼
-                  Runtime
+What syntax and semantics must remain elsewhere?
+
+Inputs
+
+Which canonical grammar rules/tokens does it consume?
+
+Outputs
+
+Which parse structures does it produce?
+
+AST contract
+
+Which existing AST structures consume those parse structures?
+
+Semantic contract
+
+What semantic analysis consumes them?
+
+IR contract
+
+What canonical representation receives the resulting semantics?
+
+Compiler integration
+
+Which compiler stages consume the semantic information?
+
+Runtime integration
+
+Which runtime/backend stage may eventually consume it?
+
+Cross-domain integration
+
+How does it interact with classical, quantum, HDL, distributed, AI, data, networking, and security domains?
+
+Diagnostics
+
+What syntax and semantic failures can originate from the construct?
+
+Tests
+
+It must have:
+
+- positive tests;
+- negative tests;
+- boundary tests;
+- scalability tests;
+- determinism tests;
+- compatibility tests;
+- cross-domain tests where applicable.
+
+Hard-coding audit
+
+The file must not introduce universal machine limits.
+
+Security audit
+
+The file must remain declarative and safe.
+
+Completion criteria
+
+The complete integration chain must be known before the file is considered complete.
+
+This is the mechanism that allows a file to be completed independently without waiting for another file to be redesigned later.
+
+---
+
+67. Independent-first implementation order
+
+The effect subsystem should be completed in dependency order.
+
+Stage 1 — shared contracts
+
+Confirm:
+
+lexer vocabulary
+core names
+qualified names
+attributes
+types
+expressions
+source spans
+diagnostic model
+
+Stage 2 — effect identity
+
+Complete:
+
+effect-declarations.g4
+effect-sets.g4
+
+These establish the foundation.
+
+Stage 3 — effect use
+
+Complete:
+
+effect-operations.g4
+
+Stage 4 — effect handling
+
+Complete:
+
+effect-handling.g4
+
+Stage 5 — effect qualification
+
+Complete:
+
+effect-types.g4
+
+Stage 6 — polymorphism
+
+Complete:
+
+effect-polymorphism.g4
+
+Stage 7 — composition
+
+Complete:
+
+effect-composition.g4
+
+Stage 8 — extension
+
+Complete:
+
+custom-effects.g4
+
+Stage 9 — domain extensions
+
+Validate:
+
+io.g4
+quantum.g4
+hardware.g4
+network.g4
+distributed.g4
+security.g4
+capabilities.g4
+
+against the generic effect model.
+
+Stage 10 — composition
+
+Finalize:
+
+effects.g4
+
+against all independently completed contracts.
+
+Stage 11 — diagnostics
+
+Finalize:
+
+effect-diagnostics.g4
+effect-diagnostics.md
+
+Stage 12 — repository conformance
+
+Validate:
+
+Zamani.g4
+lexer
+Rust parser
+AST
+semantic analysis
+IR
+compiler
+runtime
+tests
+
+---
+
+68. Definition of production readiness
+
+The effects subsystem is production-ready only when all of these are true:
+
+- [ ] "effects.g4" is the single effect composition root.
+- [ ] Every subordinate grammar has one clear owner.
+- [ ] No duplicate effect grammar authority exists.
+- [ ] Effect declarations are defined.
+- [ ] Effect references are defined.
+- [ ] Effect sets are defined.
+- [ ] Effect operations are defined.
+- [ ] Effect handling is defined.
+- [ ] Effect qualification is defined.
+- [ ] Effect polymorphism is defined.
+- [ ] Effect composition is defined.
+- [ ] Custom effects are defined.
+- [ ] Domain effects use the generic effect model.
+- [ ] Effect identity is open-world.
+- [ ] Qualified names use canonical repository naming rules.
+- [ ] The lexer is the sole lexical authority.
+- [ ] The Rust parser has a conformance mapping.
+- [ ] The AST mapping is defined.
+- [ ] Semantic mapping is defined.
+- [ ] IR mapping is defined.
+- [ ] Capability semantics remain separate.
+- [ ] Requirement semantics remain separate.
+- [ ] Constraint semantics remain separate.
+- [ ] Resource semantics remain separate.
+- [ ] Target selection remains separate.
+- [ ] Hardware topology remains downstream.
+- [ ] Quantum semantics remain backend-independent.
+- [ ] "quantum::ir" remains the canonical quantum boundary.
+- [ ] QEC is not duplicated.
+- [ ] ZQN is not duplicated.
+- [ ] Routing is not duplicated.
+- [ ] Scheduling is not duplicated.
+- [ ] HAL is not duplicated.
+- [ ] Runtime implementation is not embedded in grammar.
+- [ ] No universal machine-size limit is encoded.
+- [ ] No fixed qubit limit is encoded.
+- [ ] No fixed CPU/GPU/FPGA/QPU limit is encoded.
+- [ ] No fixed distributed-node limit is encoded.
+- [ ] No fixed memory or tensor limit is encoded.
+- [ ] No device identifiers are required by generic effects.
+- [ ] Parsing is deterministic.
+- [ ] Source spans are preserved.
+- [ ] Diagnostics are structured and stable.
+- [ ] Positive tests exist.
+- [ ] Negative tests exist.
+- [ ] Boundary tests exist.
+- [ ] Scalability tests exist.
+- [ ] Determinism tests exist.
+- [ ] Cross-domain tests exist.
+- [ ] Round-trip tests exist where formatting support exists.
+- [ ] Compatibility tests exist.
+- [ ] Dialect integration is defined.
+- [ ] Interoperability is defined.
+- [ ] Rust 1.97/1.97.1 compatibility is tested.
+- [ ] Edition 2021 compatibility is maintained.
+- [ ] "unsafe" is prohibited.
+- [ ] Security review passes.
+- [ ] Hard-coding audit passes.
+- [ ] No circular dependency exists.
+- [ ] Documentation matches actual implementation status.
+- [ ] POCO-REAF invariants remain intact.
+
+---
+
+69. Final architecture
+
+The completed effects subsystem fits into Zamani as follows:
+
+                         ZAMANI SOURCE
+                              │
+                              ▼
+                         Zamani Lexer
+                              │
+                              ▼
+                         Zamani Parser
+                              │
+                              ▼
+                    Domain-Neutral AST
+                              │
+                              ▼
+                    Effect AST Structures
+                              │
+                              ▼
+                    Effect Semantic Model
+                              │
+             ┌────────────────┼────────────────┐
+             │                │                │
+             ▼                ▼                ▼
+           Types        Capabilities      Requirements
+             │                │                │
+             └────────────────┼────────────────┘
+                              │
+                              ▼
+                    Constraint Analysis
+                              │
+                              ▼
+                    Canonical Semantic IR
+                              │
+                 ┌────────────┼────────────┐
+                 │            │            │
+                 ▼            ▼            ▼
+            Classical      quantum::ir   HDL/Hardware
+                 │            │            │
+                 └────────────┼────────────┘
+                              │
+                              ▼
+                         Optimization
+                              │
+                 ┌────────────┼────────────┐
+                 │            │            │
+                 ▼            ▼            ▼
+              Routing     Scheduling   Resilience
+                 │            │            │
+                 └────────────┼────────────┘
+                              │
+                    ┌─────────┴─────────┐
+                    │                   │
+                    ▼                   ▼
+                   QEC                 ZQN
+                    │                   │
+                    └─────────┬─────────┘
+                              │
+                              ▼
+                             HAL
+                              │
+                              ▼
+                       Target Realization
+                              │
+          ┌──────────┬────────┼────────┬──────────┐
+          ▼          ▼        ▼        ▼          ▼
+         CPU        GPU      FPGA     QPU     Distributed
+          │          │        │        │          │
+          └──────────┴────────┴────────┴──────────┘
+                              │
+                              ▼
+                           Runtime
+
+The effect subsystem therefore sits at the semantic boundary, not at the physical-machine boundary.
+
+---
+
+70. Final architectural invariant
+
+The following distinction is permanent:
+
+Effect
+    = what the computation does or may do
+
+Capability
+    = what the environment can provide
+
+Requirement
+    = what execution needs
+
+Constraint
+    = what execution must satisfy
+
+Resource
+    = what execution consumes, reserves, or manages
+
+Preference
+    = what realization is preferred
+
+Hint
+    = information supplied to improve realization
+
+Target
+    = intended realization domain
+
+Placement
+    = concrete realization decision
+
+Runtime
+    = actual execution
+
+No effect grammar file may collapse these concepts.
+
+---
+
+71. Final POCO-REAF statement
+
+The purpose of "grammar/effects/" is not to describe today's computers.
+
+It is to provide a stable semantic language for describing computational effects that can survive changes in:
+
+- machine size;
+- processor architecture;
+- accelerator architecture;
+- quantum technology;
+- hardware topology;
+- memory architecture;
+- distributed topology;
+- runtime;
+- compiler;
+- backend;
+- vendor;
+- deployment environment;
+- future computational substrate.
+
+The fundamental invariant is:
+
+Zamani source
+    ↓
+portable semantic intent
+    ↓
+effect analysis
+    ↓
+canonical semantic representation
+    ↓
+target-independent optimization
+    ↓
+target-aware realization
 
 Therefore:
 
-«Zamani effects describe the semantic consequences of computation, not the accidental properties of the machine executing it.»
+«Effects describe computation, not the accidental properties of the machine executing it.»
 
-This is a mandatory foundation for:
+That is the required foundation for:
 
-Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever (POCO-REAF)
+«Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever (POCO-REAF)»
 
-and for the Zamani objective:
+and for the broader Zamani objective:
 
-From Atom to Everywhere.
+«Scale from atom to everywhere, subject to the resources actually available, without turning today's physical limits into tomorrow's language limits.»
