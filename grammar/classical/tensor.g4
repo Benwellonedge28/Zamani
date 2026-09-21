@@ -6,56 +6,40 @@
  * File:
  *     grammar/classical/tensor.g4
  *
+ * Grammar:
+ *     Tensor
+ *
  * Status:
- *     Production-ready tensor-domain parser grammar.
+ *     CANONICAL CLASSICAL TENSOR-DOMAIN PARSER BOUNDARY
  *
- * Grammar technology:
- *     ANTLR4 parser grammar
- *
- * Language/runtime baseline:
+ * Baseline:
  *     Rust 1.97 / Rust 1.97.1
  *     Rust edition 2021
- *
- * Safety:
- *     This grammar contains no embedded Rust actions.
- *     This grammar contains no semantic predicates.
- *     This grammar contains no unsafe implementation.
- *     Runtime/compiler implementations MUST use safe Rust only.
+ *     Safe Rust only
  *
  * ============================================================================
  *
  * PURPOSE
  * ============================================================================
  *
- * This file owns SOURCE-LEVEL TENSOR COMPUTATION SYNTAX.
+ * This file defines the SOURCE-LEVEL TENSOR-DOMAIN SYNTAX BOUNDARY.
  *
- * It provides the parser boundary for tensor-domain constructs while
- * delegating general language concepts to their authoritative grammar owners.
+ * Tensor computation is part of the single Zamani language. It is not a
+ * separate tensor language and it does not create a second expression,
+ * identifier, type, indexing, assignment, or IR system.
  *
- * Tensor syntax expresses computational and mathematical intent.
+ * This grammar provides only syntax that is genuinely useful for identifying
+ * tensor-domain constructs:
  *
- * It MUST NOT encode:
+ *     - tensor literals;
+ *     - tensor-domain construction/invocation boundaries;
+ *     - tensor-domain operation invocation boundaries;
+ *     - tensor shape specification;
+ *     - tensor dimension lists;
+ *     - tensor-domain argument boundaries;
+ *     - tensor-domain composition hooks.
  *
- *     - CPU count;
- *     - GPU count;
- *     - accelerator count;
- *     - thread count;
- *     - SIMD width;
- *     - register count;
- *     - cache size;
- *     - memory capacity;
- *     - device identity;
- *     - device topology;
- *     - physical tensor storage limits;
- *     - vendor library selection;
- *     - BLAS implementation;
- *     - accelerator implementation;
- *     - execution placement;
- *     - scheduling policy;
- *     - target architecture.
- *
- * Those concerns belong to semantic analysis, resource analysis,
- * optimization, scheduling, target lowering, deployment and runtime.
+ * General language syntax remains owned by its canonical grammar modules.
  *
  * ============================================================================
  *
@@ -65,48 +49,49 @@
  *     Zamani source
  *          |
  *          v
- *     ZamaniLexer
+ *     canonical lexer
  *          |
  *          v
- *     ZamaniParser / grammar composition
+ *     canonical parser
  *          |
- *          +-----------------------------+
- *          |                             |
- *          v                             v
- *     Expressions                    Types
- *          |                             |
- *          +-------------+---------------+
- *                        |
- *                        v
- *                  Tensor syntax
- *                        |
- *                        v
+ *          +------------------------------+
+ *          |                              |
+ *          v                              v
+ *     Expressions                       Types
+ *          |                              |
+ *          +---------------+--------------+
+ *                          |
+ *                          v
+ *                    Tensor domain
+ *                          |
+ *                          v
  *                   Frontend AST
- *                        |
- *                        v
- *              Semantic / type analysis
- *                        |
- *          +-------------+-------------+
- *          |                           |
- *          v                           v
- *   Tensor semantic model       Resource/effect metadata
- *          |
- *          v
- *      Classical IR
- *          |
- *          v
- *     Optimization
- *          |
- *          v
- *     Scheduling / placement
- *          |
- *          v
- *   Target-independent lowering
- *          |
- *          v
- *    Target realization
+ *                          |
+ *                          v
+ *                 Semantic analysis
+ *                          |
+ *             +------------+-------------+
+ *             |                          |
+ *             v                          v
+ *       Tensor semantics        resource/capability semantics
+ *             |                          |
+ *             +------------+-------------+
+ *                          |
+ *                          v
+ *                 Canonical semantic model
+ *                          |
+ *                          v
+ *                     Classical IR
+ *                          |
+ *                          v
+ *                     Optimization
+ *                          |
+ *                 scheduling / lowering
+ *                          |
+ *                          v
+ *                   Target realization
  *
- * Tensor.g4 MUST NOT construct IR directly.
+ * This grammar MUST NOT construct IR.
  *
  * ============================================================================
  *
@@ -115,188 +100,248 @@
  *
  * THIS FILE OWNS:
  *
- *     - tensor-domain syntax;
- *     - tensor declarations as a domain composition;
- *     - tensor literals;
- *     - tensor construction syntax;
- *     - tensor indexing syntax;
- *     - tensor slicing syntax;
- *     - tensor shape syntax;
- *     - tensor reshape syntax;
- *     - tensor transpose/permutation syntax;
- *     - tensor contraction syntax;
- *     - tensor reduction syntax;
- *     - tensor element-wise operation syntax;
- *     - tensor algebraic operation syntax;
- *     - tensor decomposition operation syntax;
- *     - tensor-domain expression composition.
+ *     - tensor literal structure;
+ *     - tensor-domain construction syntax boundary;
+ *     - tensor-domain operation invocation boundary;
+ *     - tensor shape specification syntax;
+ *     - tensor dimension-list syntax;
+ *     - tensor-domain argument classification hooks.
  *
  * THIS FILE DOES NOT OWN:
  *
- *     - lexical syntax;
+ *     - lexical tokens;
  *     - identifier spelling;
- *     - numeric literal syntax;
+ *     - keyword recognition;
+ *     - general literals;
  *     - general expressions;
- *     - general operators;
- *     - general type syntax;
- *     - generic type syntax;
- *     - type checking;
- *     - tensor shape validation;
+ *     - expression precedence;
+ *     - arithmetic;
+ *     - logical operators;
+ *     - comparison operators;
+ *     - assignment;
+ *     - general function calls;
+ *     - member access;
+ *     - general indexing;
+ *     - general slicing;
+ *     - declarations;
+ *     - statements;
+ *     - blocks;
+ *     - generic types;
+ *     - tensor type semantics;
+ *     - shape validation;
  *     - rank validation;
  *     - dimension compatibility;
- *     - numerical precision;
+ *     - broadcasting semantics;
  *     - tensor storage;
- *     - dense/sparse representation;
- *     - memory allocation;
  *     - memory layout;
- *     - tiling;
+ *     - allocation;
  *     - vectorization;
- *     - automatic differentiation;
- *     - device selection;
  *     - accelerator selection;
  *     - GPU selection;
- *     - distributed execution;
+ *     - FPGA selection;
+ *     - CPU selection;
+ *     - distributed placement;
  *     - scheduling;
  *     - optimization;
+ *     - automatic differentiation;
  *     - classical IR;
  *     - quantum::ir;
  *     - QEC;
  *     - ZQN;
+ *     - HAL;
  *     - runtime execution.
+ *
+ * ============================================================================
+ *
+ * AUTHORITY MODEL
+ * ============================================================================
+ *
+ * Lexical authority:
+ *
+ *     grammar/antlr/ZamaniLexer.g4
+ *     grammar/lexer/tokens.g4
+ *
+ * Identifier/name authority:
+ *
+ *     grammar/core/names.g4
+ *
+ * General expression authority:
+ *
+ *     grammar/expressions/expressions.g4
+ *
+ * Type authority:
+ *
+ *     grammar/types/
+ *
+ * Classical composition:
+ *
+ *     grammar/classical/classical.g4
+ *
+ * Universal parser composition:
+ *
+ *     grammar/antlr/ZamaniParser.g4
+ *     grammar/Zamani.g4
+ *
+ * AST authority:
+ *
+ *     src/frontend/ast/
+ *
+ * Semantic authority:
+ *
+ *     semantic analysis
+ *
+ * Canonical classical semantic/IR boundary:
+ *
+ *     existing classical semantic/IR infrastructure
+ *
+ * Canonical quantum semantic boundary:
+ *
+ *     quantum::ir
+ *
+ * Tensor.g4 MUST NOT become an additional authority for any of these layers.
+ *
+ * ============================================================================
+ *
+ * SINGLE-LANGUAGE RULE
+ * ============================================================================
+ *
+ * Tensor syntax is Zamani syntax.
+ *
+ * There must not be:
+ *
+ *     tensor language
+ *     matrix language
+ *     vector language
+ *
+ * as separate programming languages.
+ *
+ * Tensor constructs participate in the same:
+ *
+ *     lexer
+ *     parser
+ *     AST
+ *     semantic analysis
+ *     type system
+ *     effect system
+ *     resource system
+ *     capability system
+ *     compiler
+ *     runtime
+ *
+ * as every other Zamani domain.
  *
  * ============================================================================
  *
  * POCO-REAF CONTRACT
  * ============================================================================
  *
- * Tensor syntax describes mathematical/computational intent.
+ * Tensor source describes WHAT tensor computation means.
  *
- * Example:
+ * It MUST NOT prescribe:
  *
- *     A * B
+ *     - which CPU;
+ *     - which GPU;
+ *     - which FPGA;
+ *     - which accelerator;
+ *     - which memory bank;
+ *     - which SIMD width;
+ *     - which register width;
+ *     - which number of threads;
+ *     - which number of devices;
+ *     - which distributed topology;
+ *     - which vendor library;
+ *     - which BLAS implementation;
+ *     - which tensor runtime.
  *
- * means tensor/matrix-compatible multiplication according to the semantic
- * types of A and B.
- *
- * It does NOT mean:
- *
- *     - execute on CPU;
- *     - execute on GPU;
- *     - use a particular accelerator;
- *     - use a particular BLAS implementation;
- *     - use a particular memory layout;
- *     - use a particular number of threads.
- *
- * Likewise:
+ * A source construct such as:
  *
  *     reshape(A, shape)
  *
- * describes a semantic transformation.
+ * expresses semantic intent.
  *
- * The compiler may realize it using:
+ * The implementation may realize it as:
  *
  *     - a view;
  *     - a copy;
  *     - a layout transformation;
  *     - a fused operation;
- *     - distributed storage;
- *     - accelerator-specific lowering;
+ *     - a distributed transformation;
+ *     - an accelerator operation;
+ *     - another semantics-preserving implementation.
  *
- * without changing the source program.
+ * Such decisions belong downstream.
  *
  * ============================================================================
  *
  * SCALABILITY CONTRACT
  * ============================================================================
  *
- * This grammar contains no finite tensor-size limit.
+ * This grammar imposes NO language-level finite limit on:
  *
- * It does not define:
+ *     - tensor rank;
+ *     - tensor dimensions;
+ *     - tensor elements;
+ *     - tensor operations;
+ *     - tensor arguments;
+ *     - nested tensor literals;
+ *     - shape components;
+ *     - operation depth;
+ *     - tensor values;
+ *     - tensor instances;
+ *     - tensors in a program.
  *
- *     MAX_RANK
- *     MAX_DIMENSIONS
- *     MAX_ELEMENTS
+ * In particular, this file MUST NOT introduce:
+ *
+ *     MAX_TENSOR_RANK
+ *     MAX_TENSOR_DIMENSIONS
+ *     MAX_TENSOR_ELEMENTS
  *     MAX_TENSOR_SIZE
  *     MAX_SHAPE
  *     MAX_AXIS_COUNT
- *     MAX_OPERATIONS
+ *     MAX_TENSOR_OPERATIONS
+ *     MAX_TENSOR_ARGUMENTS
  *
- * Tensor rank and dimensions are represented structurally.
+ * Structural repetition uses normal ANTLR repetition operators.
  *
- * Dimensions may be:
+ * Practical limits belong to:
  *
- *     - integer literals;
- *     - identifiers;
- *     - qualified identifiers;
- *     - expressions;
- *     - symbolic dimensions;
- *     - compile-time values;
- *     - dependent values;
- *     - values resolved from generic constraints.
+ *     - parser resource policies;
+ *     - compiler resource policies;
+ *     - memory availability;
+ *     - runtime availability;
+ *     - target capabilities;
+ *     - deployment constraints.
  *
- * Practical limits belong to resource policy and execution environments,
- * not to the source grammar.
+ * Those limits are not tensor-language semantics.
  *
  * ============================================================================
  *
- * TYPE CONTRACT
+ * HARD-CODING PROHIBITION
  * ============================================================================
  *
- * Tensor type syntax belongs to the canonical type system.
+ * This grammar MUST NOT encode:
  *
- * This file MUST NOT redefine:
+ *     CPU counts
+ *     core counts
+ *     thread counts
+ *     GPU counts
+ *     FPGA counts
+ *     accelerator counts
+ *     QPU counts
+ *     memory capacities
+ *     register widths
+ *     SIMD widths
+ *     vector widths
+ *     machine topology
+ *     device identifiers
+ *     physical addresses
+ *     vendor APIs
+ *     tensor storage formats
+ *     physical placement.
  *
- *     typeExpression
- *     typeArgument
- *     genericParameters
- *     generic constraints
+ * It MUST NOT enumerate tensor algorithms as language keywords.
  *
- * A semantic tensor type may ultimately be represented by the canonical
- * classical type system, for example:
- *
- *     Tensor<T>
- *     Tensor<T, Shape>
- *
- * but this file does not impose those semantic representations.
- *
- * ============================================================================
- *
- * EXPRESSION CONTRACT
- * ============================================================================
- *
- * General expressions are owned by:
- *
- *     grammar/expressions/expressions.g4
- *
- * This file reuses the canonical `expression` rule.
- *
- * It MUST NOT redefine:
- *
- *     arithmetic precedence;
- *     calls;
- *     identifiers;
- *     literals;
- *     unary operators;
- *     binary operators;
- *     assignment;
- *     conditionals;
- *     general indexing;
- *     member access.
- *
- * ============================================================================
- *
- * LEXER CONTRACT
- * ============================================================================
- *
- * This is a parser grammar.
- *
- * Canonical lexical tokens are provided by:
- *
- *     grammar/antlr/ZamaniLexer.g4
- *
- * No lexer rules are declared in this file.
- *
- * In particular, tensor operations such as:
+ * Therefore names such as:
  *
  *     reshape
  *     transpose
@@ -307,50 +352,184 @@
  *     broadcast
  *     concatenate
  *     stack
+ *     svd
+ *     qr
+ *     lu
+ *     eigen
  *
- * are NOT made reserved lexical keywords by this grammar.
+ * remain names resolved by the semantic/library/dialect layers.
  *
- * They remain ordinary identifiers so that:
- *
- *     libraries;
- *     user-defined functions;
- *     dialects;
- *     future operations;
- *     domain extensions;
- *
- * do not require changes to the lexical grammar.
+ * The grammar does not need to change when a new tensor operation is added.
  *
  * ============================================================================
  *
- * INTEGRATION CONTRACT
+ * EXPRESSION SEPARATION
  * ============================================================================
  *
- * Canonical dependencies:
+ * General expressions are owned by:
  *
- *     ZamaniLexer
- *     Types
- *     Expressions
- *
- * Canonical consumers:
- *
- *     grammar/classical/classical.g4
  *     grammar/expressions/expressions.g4
- *     grammar/antlr/ZamaniParser.g4
- *     frontend AST
- *     semantic analysis
- *     classical IR lowering
  *
- * Tensor.g4 MUST remain below semantic analysis.
+ * Therefore this file MUST NOT define another expression hierarchy.
  *
- * It MUST NOT depend on:
+ * In particular, it MUST NOT define:
  *
- *     quantum::ir
- *     QEC
- *     ZQN
- *     scheduling
- *     routing
- *     hardware discovery
- *     runtime state.
+ *     tensorExpression
+ *         -> tensorExpression + tensorExpression
+ *
+ * or equivalent tensor-local arithmetic precedence.
+ *
+ * A tensor expression is an ordinary Zamani expression whose semantic type
+ * or operation may be tensor-valued.
+ *
+ * Consequently:
+ *
+ *     A + B
+ *     A * B
+ *     f(A)
+ *     A[i]
+ *     A[i, j]
+ *     A.member
+ *
+ * are parsed through the canonical expression system.
+ *
+ * Tensor semantics are determined later.
+ *
+ * ============================================================================
+ *
+ * TYPE SEPARATION
+ * ============================================================================
+ *
+ * Tensor type syntax belongs to the canonical type grammar.
+ *
+ * Examples of semantic type forms may include:
+ *
+ *     Tensor<T>
+ *     Tensor<T, Shape>
+ *
+ * but this file does not define those types.
+ *
+ * Consumers requiring a tensor type MUST use:
+ *
+ *     typeExpression
+ *
+ * and the canonical generic/type infrastructure.
+ *
+ * Shape compatibility, rank compatibility, element type compatibility and
+ * dependent constraints are semantic concerns.
+ *
+ * ============================================================================
+ *
+ * INDEXING AND SLICING SEPARATION
+ * ============================================================================
+ *
+ * General indexing and slicing belong to the canonical expression system.
+ *
+ * Therefore this file MUST NOT define:
+ *
+ *     tensorIndexExpression
+ *     tensorSliceExpression
+ *
+ * as competing implementations of generic indexing.
+ *
+ * For example:
+ *
+ *     A[i]
+ *     A[i, j]
+ *     A[i, j, k]
+ *
+ * are ordinary expression/indexing syntax.
+ *
+ * Whether A is a tensor and whether the indexing is valid are semantic
+ * questions.
+ *
+ * ============================================================================
+ *
+ * DECLARATION AND ASSIGNMENT SEPARATION
+ * ============================================================================
+ *
+ * Declarations belong to:
+ *
+ *     grammar/declarations/
+ *
+ * Assignments belong to:
+ *
+ *     grammar/expressions/
+ *
+ * Statements belong to:
+ *
+ *     grammar/statements/
+ *
+ * Consequently this file MUST NOT define:
+ *
+ *     tensorDeclaration
+ *     tensorAssignment
+ *     tensorStatement
+ *
+ * as alternate declaration/assignment/statement authorities.
+ *
+ * Tensor values may occur in ordinary declarations:
+ *
+ *     let A: Tensor<f64> = ...
+ *
+ * through the canonical declaration and expression grammars.
+ *
+ * ============================================================================
+ *
+ * LEXER CONTRACT
+ * ============================================================================
+ *
+ * This is a parser grammar.
+ *
+ * No lexer rules are declared here.
+ *
+ * No tensor-specific keyword tokens are created here.
+ *
+ * Canonical lexical tokens remain owned by the canonical lexer.
+ *
+ * This preserves:
+ *
+ *     one lexer
+ *     one token vocabulary
+ *     one identifier system
+ *     one keyword authority.
+ *
+ * ============================================================================
+ *
+ * IDENTIFIER CONTRACT
+ * ============================================================================
+ *
+ * This grammar MUST use the canonical:
+ *
+ *     identifier
+ *     qualifiedName
+ *
+ * rules supplied by the core name grammar.
+ *
+ * It MUST NOT redefine:
+ *
+ *     IDENTIFIER
+ *     identifier
+ *     qualifiedName
+ *     qualifiedIdentifier
+ *
+ * This is particularly important for extensible tensor operations.
+ *
+ * An operation name is source-level name data.
+ *
+ * Its semantic meaning is resolved after parsing.
+ *
+ * ============================================================================
+ *
+ * PUBLIC ENTRY POINT
+ * ============================================================================
+ *
+ * `tensorConstruct` is retained as the stable tensor-domain entry point.
+ *
+ * It identifies constructs that are structurally tensor-specific.
+ *
+ * It intentionally does NOT attempt to parse every expression that might
+ * eventually have tensor type.
  *
  * ============================================================================
  */
@@ -364,142 +543,33 @@ options {
 import Types, Expressions;
 
 
-/* ============================================================================
- * 1. PUBLIC TENSOR ENTRY POINT
+/*
+ * ============================================================================
+ * 1. PUBLIC TENSOR CONSTRUCT
  * ============================================================================
  *
- * Consumers should integrate tensor syntax through `tensorConstruct`.
+ * Stable tensor-domain composition boundary.
+ *
+ * Tensor consumers may use this rule without taking ownership of general
+ * declarations, statements, expressions, or types.
  *
  * ============================================================================
  */
 
 tensorConstruct
-    : tensorDeclaration
-    | tensorAssignment
-    | tensorExpressionStatement
-    ;
-
-
-/* ============================================================================
- * 2. TENSOR DECLARATION
- * ============================================================================
- *
- * Declaration syntax reuses the canonical type system.
- *
- * Examples:
- *
- *     let A: Tensor<f64> = tensor(...);
- *     let A: Tensor<f64, S> = tensor(...);
- *
- * The grammar does not validate the tensor type or shape.
- *
- * ============================================================================
- */
-
-tensorDeclaration
-    : LET identifier tensorTypeAnnotation? ASSIGN tensorExpression SEMICOLON
-    | VAR identifier tensorTypeAnnotation? ASSIGN tensorExpression SEMICOLON
-    | CONST identifier tensorTypeAnnotation? ASSIGN tensorExpression SEMICOLON
-    | LET identifier tensorTypeAnnotation SEMICOLON
-    | VAR identifier tensorTypeAnnotation SEMICOLON
-    | CONST identifier tensorTypeAnnotation SEMICOLON
-    ;
-
-
-tensorTypeAnnotation
-    : COLON typeExpression
-    ;
-
-
-/* ============================================================================
- * 3. TENSOR ASSIGNMENT
- * ============================================================================
- */
-
-tensorAssignment
-    : tensorAssignableTarget ASSIGN tensorExpression SEMICOLON
-    ;
-
-
-tensorAssignableTarget
-    : identifier
-    | tensorElementAccess
-    | tensorSliceAccess
-    ;
-
-
-/* ============================================================================
- * 4. TENSOR EXPRESSION STATEMENT
- * ============================================================================
- */
-
-tensorExpressionStatement
-    : tensorExpression SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 5. TENSOR EXPRESSION
- * ============================================================================
- *
- * Tensor expressions are intentionally compositional.
- *
- * No finite operation depth or tensor rank is encoded here.
- *
- * ============================================================================
- */
-
-tensorExpression
-    : tensorPrimary
-    | tensorLiteral
+    : tensorLiteral
     | tensorConstruction
-    | tensorUnaryExpression
-    | tensorBinaryExpression
-    | tensorCallExpression
-    | tensorIndexExpression
-    | tensorSliceExpression
-    | tensorShapeExpression
-    | tensorReshapeExpression
-    | tensorPermutationExpression
-    | tensorContractionExpression
-    | tensorReductionExpression
-    | tensorElementwiseExpression
-    | tensorDecompositionExpression
-    | tensorExpressionInParentheses
+    | tensorOperationInvocation
+    | tensorShapeSpecification
     ;
 
 
-/* ============================================================================
- * 6. TENSOR PRIMARY
+/*
+ * ============================================================================
+ * 2. TENSOR LITERAL
  * ============================================================================
  *
- * The primary form delegates ordinary values to the canonical expression
- * system. This permits tensors to participate in larger Zamani expressions.
- *
- * ============================================================================
- */
-
-tensorPrimary
-    : identifier
-    | literal
-    ;
-
-
-/* ============================================================================
- * 7. TENSOR PARENTHESES
- * ============================================================================
- */
-
-tensorExpressionInParentheses
-    : LPAREN tensorExpression RPAREN
-    ;
-
-
-/* ============================================================================
- * 8. TENSOR LITERALS
- * ============================================================================
- *
- * A tensor literal is recursively constructed from nested bracketed values.
+ * Tensor literals are recursively structured.
  *
  * Examples:
  *
@@ -509,19 +579,19 @@ tensorExpressionInParentheses
  *
  *     [[[1, 2], [3, 4]], [[5, 6], [7, 8]]]
  *
- * Rank is determined semantically from nesting.
+ * Rank is determined by semantic analysis.
  *
- * No maximum rank is imposed.
+ * This grammar does NOT impose a maximum rank.
  *
  * ============================================================================
  */
 
 tensorLiteral
-    : LBRACKET tensorLiteralBody? RBRACKET
+    : LBRACKET tensorLiteralElements? RBRACKET
     ;
 
 
-tensorLiteralBody
+tensorLiteralElements
     : tensorLiteralElement
       (COMMA tensorLiteralElement)*
       COMMA?
@@ -534,418 +604,137 @@ tensorLiteralElement
     ;
 
 
-/* ============================================================================
- * 9. TENSOR CONSTRUCTION
+/*
+ * ============================================================================
+ * 3. TENSOR CONSTRUCTION
  * ============================================================================
  *
- * Construction is intentionally identifier-based.
+ * Tensor construction is intentionally name-based.
  *
- * Examples:
+ * Examples may include:
  *
  *     tensor(...)
  *     zeros(...)
  *     ones(...)
  *     fill(...)
- *     identity(...)
  *     random(...)
+ *     identity(...)
  *
- * The grammar does not reserve these names.
+ * None of those names are reserved by this grammar.
  *
- * Semantic resolution determines whether a call is a canonical tensor
- * constructor, a library function, or a user-defined operation.
+ * Semantic analysis determines whether the operation is:
+ *
+ *     - a canonical tensor constructor;
+ *     - a user-defined function;
+ *     - a library operation;
+ *     - a dialect operation;
+ *     - another domain-defined callable.
  *
  * ============================================================================
  */
 
 tensorConstruction
-    : identifier
+    : qualifiedName
       LPAREN
       tensorArgumentList?
       RPAREN
     ;
 
 
-tensorArgumentList
-    : expression
-      (COMMA expression)*
-      COMMA?
-    ;
-
-
-/* ============================================================================
- * 10. GENERAL TENSOR CALL
+/*
+ * ============================================================================
+ * 4. TENSOR OPERATION INVOCATION
  * ============================================================================
  *
- * A tensor call remains a normal Zamani expression-level call composition.
+ * This is the principal open-world tensor extension point.
  *
- * This rule exists as a domain boundary so tensor semantic analysis can
- * recognize tensor-producing calls without creating a second call grammar.
+ * Examples:
+ *
+ *     transpose(A)
+ *     reshape(A, shape)
+ *     contract(A, B)
+ *     einsum(specification, A, B)
+ *     custom_tensor_operation(A, B)
+ *
+ * Namespaces are supported through canonical qualified-name syntax:
+ *
+ *     linalg::transpose(A)
+ *     tensor::contract(A, B)
+ *     vendor::operation(A)
+ *
+ * The operation inventory is intentionally not enumerated.
  *
  * ============================================================================
  */
 
-tensorCallExpression
-    : identifier
+tensorOperationInvocation
+    : qualifiedName
       LPAREN
-      tensorArgumentList?
+      tensorOperationArgumentList?
       RPAREN
     ;
 
 
-/* ============================================================================
- * 11. TENSOR UNARY OPERATIONS
- * ============================================================================
- *
- * Operation names are identifiers rather than reserved keywords.
- *
- * Typical semantic operations include:
- *
- *     transpose
- *     adjoint
- *     negate
- *     conjugate
- *     abs
- *     normalize
- *
- * ============================================================================
- */
-
-tensorUnaryExpression
-    : tensorUnaryOperator tensorExpression
-    ;
-
-
-tensorUnaryOperator
-    : identifier
-    ;
-
-
-/* ============================================================================
- * 12. TENSOR BINARY OPERATIONS
- * ============================================================================
- *
- * Operators remain ordinary Zamani operators.
- *
- * Semantic analysis determines whether an operator represents:
- *
- *     element-wise arithmetic;
- *     tensor contraction;
- *     matrix multiplication;
- *     scalar-tensor multiplication;
- *     broadcasting;
- *     another domain-defined operation.
- *
- * ============================================================================
- */
-
-tensorBinaryExpression
-    : tensorExpression tensorBinaryOperator tensorExpression
-    ;
-
-
-tensorBinaryOperator
-    : PLUS
-    | MINUS
-    | STAR
-    | SLASH
-    | CARET
-    ;
-
-
-/* ============================================================================
- * 13. TENSOR INDEXING
- * ============================================================================
- *
- * Index arity is deliberately unbounded.
- *
- * Examples:
- *
- *     A[i]
- *     A[i, j]
- *     A[i, j, k]
- *     A[i, j, k, l]
- *
- * The grammar imposes no fixed rank.
- *
- * ============================================================================
- */
-
-tensorIndexExpression
-    : identifier
-      LBRACKET
-      tensorIndexList
-      RBRACKET
-    ;
-
-
-tensorIndexList
-    : tensorIndex
-      (COMMA tensorIndex)*
+tensorOperationArgumentList
+    : tensorOperationArgument
+      (COMMA tensorOperationArgument)*
       COMMA?
     ;
 
 
-tensorIndex
-    : expression
-    | tensorRange
-    ;
-
-
-/* ============================================================================
- * 14. TENSOR ELEMENT ACCESS
- * ============================================================================
- *
- * This is a semantic convenience rule for assignment and downstream AST
- * classification.
- *
- * ============================================================================
- */
-
-tensorElementAccess
-    : identifier
-      LBRACKET
-      tensorIndexList
-      RBRACKET
-    ;
-
-
-/* ============================================================================
- * 15. TENSOR RANGES
- * ============================================================================
- */
-
-tensorRange
-    : expression DOT_DOT expression
-    | expression DOT_DOT_EQ expression
-    ;
-
-
-/* ============================================================================
- * 16. TENSOR SLICING
- * ============================================================================
- *
- * Examples:
- *
- *     A[i..j]
- *     A[i..=j, k..l]
- *     A[:, j]
- *
- * Open-ended and wildcard-like slice syntax should be introduced only through
- * canonical expression/range rules when the language specification defines
- * them. This file therefore keeps the base form expression-based.
- *
- * ============================================================================
- */
-
-tensorSliceExpression
-    : identifier
-      LBRACKET
-      tensorSliceList
-      RBRACKET
-    ;
-
-
-tensorSliceAccess
-    : tensorSliceExpression
-    ;
-
-
-tensorSliceList
-    : tensorSlice
-      (COMMA tensorSlice)*
-      COMMA?
-    ;
-
-
-tensorSlice
-    : tensorRange
+tensorOperationArgument
+    : tensorNamedArgument
     | expression
     ;
 
 
-/* ============================================================================
- * 17. TENSOR SHAPE
+/*
+ * ============================================================================
+ * 5. TENSOR NAMED ARGUMENT
  * ============================================================================
  *
- * Shape expressions describe logical tensor dimensions.
+ * Named argument syntax is kept local only as an argument-classification
+ * boundary.
  *
- * They do not describe physical memory.
+ * It does not redefine general assignment syntax.
  *
- * Examples:
+ * Example:
  *
- *     shape(A)
- *     rank(A)
- *     dim(A, i)
+ *     reshape(input: A, shape: S)
  *
- * Operation identity is semantic, not lexical.
+ * Semantic analysis determines whether the called operation accepts these
+ * names.
  *
  * ============================================================================
  */
 
-tensorShapeExpression
+tensorNamedArgument
     : identifier
-      LPAREN
-      tensorArgumentList?
-      RPAREN
+      COLON
+      expression
     ;
 
 
-/* ============================================================================
- * 18. TENSOR RESHAPE
+/*
+ * ============================================================================
+ * 6. TENSOR SHAPE SPECIFICATION
  * ============================================================================
  *
- * Reshape syntax is represented as a normal identifier call:
+ * Shape is semantic information.
  *
- *     reshape(A, shape)
- *
- * The grammar does not determine whether the operation is:
- *
- *     - view-preserving;
- *     - copying;
- *     - layout-changing;
- *     - distributed;
- *     - accelerator-backed.
- *
- * ============================================================================
- */
-
-tensorReshapeExpression
-    : identifier
-      LPAREN
-      tensorArgumentList
-      RPAREN
-    ;
-
-
-/* ============================================================================
- * 19. TENSOR PERMUTATION
- * ============================================================================
- *
- * Supports semantic constructs such as:
- *
- *     transpose(A)
- *     permute(A, axes)
- *
- * Axis validation belongs to semantic analysis.
- *
- * ============================================================================
- */
-
-tensorPermutationExpression
-    : identifier
-      LPAREN
-      tensorArgumentList
-      RPAREN
-    ;
-
-
-/* ============================================================================
- * 20. TENSOR CONTRACTION
- * ============================================================================
- *
- * Supports semantic tensor contractions such as:
- *
- *     contract(A, B, ...)
- *     einsum(...)
- *
- * The grammar does not impose a fixed contraction rank.
- *
- * ============================================================================
- */
-
-tensorContractionExpression
-    : identifier
-      LPAREN
-      tensorArgumentList
-      RPAREN
-    ;
-
-
-/* ============================================================================
- * 21. TENSOR REDUCTION
- * ============================================================================
- *
- * Examples include semantic operations such as:
- *
- *     sum(A)
- *     product(A)
- *     min(A)
- *     max(A)
- *     mean(A)
- *
- * These remain ordinary identifiers and are resolved semantically.
- *
- * ============================================================================
- */
-
-tensorReductionExpression
-    : identifier
-      LPAREN
-      tensorArgumentList?
-      RPAREN
-    ;
-
-
-/* ============================================================================
- * 22. TENSOR ELEMENT-WISE OPERATIONS
- * ============================================================================
- *
- * Element-wise semantics are determined by type and broadcasting rules.
- *
- * This grammar only provides a syntactic composition point.
- *
- * ============================================================================
- */
-
-tensorElementwiseExpression
-    : tensorExpression tensorElementwiseOperator tensorExpression
-    ;
-
-
-tensorElementwiseOperator
-    : PLUS
-    | MINUS
-    | STAR
-    | SLASH
-    ;
-
-
-/* ============================================================================
- * 23. TENSOR DECOMPOSITION
- * ============================================================================
- *
- * Decompositions such as:
- *
- *     SVD
- *     QR
- *     LU
- *     eigendecomposition
- *
- * are semantic/library operations rather than fixed language keywords.
- *
- * ============================================================================
- */
-
-tensorDecompositionExpression
-    : identifier
-      LPAREN
-      tensorArgumentList
-      RPAREN
-    ;
-
-
-/* ============================================================================
- * 24. TENSOR SHAPE SPECIFICATION
- * ============================================================================
- *
- * Shape specifications are structural and can contain symbolic expressions.
+ * This rule provides a structural tensor-domain boundary for a sequence of
+ * dimension expressions.
  *
  * Examples:
  *
  *     <M, N>
  *     <Batch, Height, Width, Channels>
+ *     <n, n>
+ *     <n * m, k>
  *
- * This rule is intentionally generic.
+ * Dimensions may be arbitrary expressions.
+ *
+ * No dimension count is hard-coded.
  *
  * ============================================================================
  */
@@ -964,38 +753,9 @@ tensorDimensionList
     ;
 
 
-/* ============================================================================
- * 25. TENSOR TYPE PARAMETERS
+/*
  * ============================================================================
- *
- * This rule provides a syntax boundary for tensor-related generic parameters
- * without redefining the canonical generic type system.
- *
- * ============================================================================
- */
-
-tensorTypeParameters
-    : LESS_THAN
-      tensorTypeParameterList?
-      GREATER_THAN
-    ;
-
-
-tensorTypeParameterList
-    : tensorTypeParameter
-      (COMMA tensorTypeParameter)*
-      COMMA?
-    ;
-
-
-tensorTypeParameter
-    : typeExpression
-    | expression
-    ;
-
-
-/* ============================================================================
- * 26. TENSOR AXIS EXPRESSIONS
+ * 7. TENSOR AXIS LIST
  * ============================================================================
  *
  * Axis identity is semantic.
@@ -1004,127 +764,341 @@ tensorTypeParameter
  *
  *     - positional;
  *     - symbolic;
- *     - named;
- *     - compile-time computed.
+ *     - computed;
+ *     - represented by a compile-time value.
  *
- * No finite axis limit is encoded.
+ * No finite number of axes is encoded.
  *
  * ============================================================================
  */
 
-tensorAxisExpression
+tensorAxisList
+    : tensorAxis
+      (COMMA tensorAxis)*
+      COMMA?
+    ;
+
+
+tensorAxis
     : expression
     ;
 
 
-tensorAxisList
-    : tensorAxisExpression
-      (COMMA tensorAxisExpression)*
-      COMMA?
-    ;
-
-
-/* ============================================================================
- * 27. TENSOR NAMED ARGUMENT
+/*
+ * ============================================================================
+ * 8. TENSOR DOMAIN EXPRESSION HOOK
  * ============================================================================
  *
- * This supports future extensible tensor operations without introducing
- * operation-specific grammar.
+ * A tensor-valued computation is normally just an ordinary Zamani expression.
  *
- * ============================================================================
- */
-
-tensorNamedArgument
-    : identifier COLON expression
-    ;
-
-
-/* ============================================================================
- * 28. TENSOR OPERATION ARGUMENT
- * ============================================================================
- */
-
-tensorOperationArgument
-    : tensorNamedArgument
-    | expression
-    ;
-
-
-tensorOperationArgumentList
-    : tensorOperationArgument
-      (COMMA tensorOperationArgument)*
-      COMMA?
-    ;
-
-
-/* ============================================================================
- * 29. TENSOR OPERATION INVOCATION
- * ============================================================================
- *
- * This is the principal extension point for tensor libraries and dialects.
- *
- * Example:
- *
- *     operation(A, B)
- *
- * or:
- *
- *     operation(input: A, axes: axes)
- *
- * No operation inventory is hard-coded here.
- *
- * ============================================================================
- */
-
-tensorOperationInvocation
-    : identifier
-      LPAREN
-      tensorOperationArgumentList?
-      RPAREN
-    ;
-
-
-/* ============================================================================
- * 30. TENSOR DOMAIN COMPOSITION
- * ============================================================================
- *
- * This rule intentionally accepts canonical expressions around tensor
- * constructs rather than forcing all tensor computation into a closed grammar.
- *
- * This is essential for POCO-REAF because tensor functionality can evolve
- * without requiring the language grammar to be rewritten for every future
- * tensor algorithm.
+ * This wrapper exists for domain-oriented consumers that need a stable tensor
+ * semantic boundary without creating a second expression grammar.
  *
  * ============================================================================
  */
 
 tensorDomainExpression
-    : tensorExpression
+    : expression
+    ;
+
+
+/*
+ * ============================================================================
+ * 9. TENSOR DOMAIN VALUE
+ * ============================================================================
+ *
+ * Tensor values remain ordinary expressions at the universal syntax level.
+ *
+ * Semantic analysis determines whether the expression has a tensor-valued
+ * type.
+ *
+ * ============================================================================
+ */
+
+tensorValue
+    : expression
+    ;
+
+
+/*
+ * ============================================================================
+ * 10. TENSOR SHAPE VALUE
+ * ============================================================================
+ *
+ * A shape may itself be represented by an ordinary expression.
+ *
+ * This wrapper exists for semantic-domain classification only.
+ *
+ * ============================================================================
+ */
+
+tensorShapeValue
+    : expression
+    ;
+
+
+/*
+ * ============================================================================
+ * 11. TENSOR AXIS VALUE
+ * ============================================================================
+ *
+ * Axis expressions remain ordinary expressions.
+ *
+ * ============================================================================
+ */
+
+tensorAxisValue
+    : expression
+    ;
+
+
+/*
+ * ============================================================================
+ * 12. TENSOR OPERATION NAME
+ * ============================================================================
+ *
+ * Tensor operation names use the canonical name grammar.
+ *
+ * This rule deliberately does not introduce a tensor-specific identifier
+ * system.
+ *
+ * ============================================================================
+ */
+
+tensorOperationName
+    : qualifiedName
+    ;
+
+
+/*
+ * ============================================================================
+ * 13. TENSOR CONSTRUCTION NAME
+ * ============================================================================
+ *
+ * Constructor names use exactly the same canonical name representation as
+ * operation names.
+ *
+ * ============================================================================
+ */
+
+tensorConstructionName
+    : qualifiedName
+    ;
+
+
+/*
+ * ============================================================================
+ * 14. TENSOR TYPE ARGUMENT BOUNDARY
+ * ============================================================================
+ *
+ * Tensor-specific semantic type parameters remain ordinary type expressions.
+ *
+ * This rule is a domain wrapper only.
+ *
+ * ============================================================================
+ */
+
+tensorTypeArgument
+    : typeExpression
+    ;
+
+
+/*
+ * ============================================================================
+ * 15. TENSOR TYPE ARGUMENT LIST
+ * ============================================================================
+ *
+ * There is no finite type-argument limit.
+ *
+ * The canonical type system remains authoritative.
+ *
+ * ============================================================================
+ */
+
+tensorTypeArgumentList
+    : tensorTypeArgument
+      (COMMA tensorTypeArgument)*
+      COMMA?
+    ;
+
+
+/*
+ * ============================================================================
+ * 16. TENSOR SEMANTIC OPERATION ARGUMENT
+ * ============================================================================
+ *
+ * Domain consumers may use this boundary when translating tensor operation
+ * arguments into the domain-neutral frontend AST.
+ *
+ * ============================================================================
+ */
+
+tensorSemanticArgument
+    : tensorNamedArgument
     | expression
     ;
 
 
-/* ============================================================================
- * 31. TENSOR RESOURCE-NEUTRALITY CONTRACT
+/*
+ * ============================================================================
+ * 17. TENSOR SEMANTIC ARGUMENT LIST
+ * ============================================================================
+ */
+
+tensorSemanticArgumentList
+    : tensorSemanticArgument
+      (COMMA tensorSemanticArgument)*
+      COMMA?
+    ;
+
+
+/*
+ * ============================================================================
+ * 18. TENSOR DOMAIN CONSTRUCT LIST
  * ============================================================================
  *
- * The grammar contains no syntax for:
+ * Provides an unbounded composition point for tensor-domain tooling.
  *
- *     device = GPU0
- *     gpu_count = ...
- *     threads = ...
- *     cores = ...
- *     memory = ...
- *     vector_width = ...
- *     accelerator_id = ...
+ * This is not a replacement for the universal program grammar.
  *
- * If a tensor program needs resource requirements, it must use the canonical
- * Zamani resource/capability grammar.
+ * ============================================================================
+ */
+
+tensorConstructList
+    : tensorConstruct*
+    ;
+
+
+/*
+ * ============================================================================
+ * 19. SEMANTIC BOUNDARY
+ * ============================================================================
  *
- * Tensor semantics therefore remain portable across:
+ * After parsing, semantic analysis is responsible for determining:
+ *
+ *     - whether a literal is a tensor;
+ *     - tensor rank;
+ *     - element type;
+ *     - shape;
+ *     - dimension compatibility;
+ *     - broadcasting;
+ *     - contraction compatibility;
+ *     - reduction legality;
+ *     - indexing legality;
+ *     - slicing legality;
+ *     - reshape legality;
+ *     - permutation legality;
+ *     - aliasing;
+ *     - ownership;
+ *     - effects;
+ *     - resource requirements;
+ *     - capability requirements;
+ *     - numerical semantics.
+ *
+ * None of those decisions are made here.
+ *
+ * ============================================================================
+ *
+ * AST CONTRACT
+ * ============================================================================
+ *
+ * These grammar rules lower into the existing domain-neutral frontend AST.
+ *
+ * A tensor literal should preserve:
+ *
+ *     - element ordering;
+ *     - nesting;
+ *     - source spans;
+ *     - literal/source representation;
+ *     - expression structure.
+ *
+ * A tensor operation invocation should preserve:
+ *
+ *     - operation name;
+ *     - namespace/qualification;
+ *     - ordered operands/arguments;
+ *     - named arguments;
+ *     - source spans;
+ *     - syntactic attributes available to the frontend.
+ *
+ * Conceptually:
+ *
+ *     tensorOperationInvocation
+ *             |
+ *             v
+ *     generic AST Operation
+ *             |
+ *             v
+ *     semantic tensor operation
+ *
+ * This file MUST NOT introduce a TensorOperation enum containing every
+ * algorithm.
+ *
+ * ============================================================================
+ *
+ * IR CONTRACT
+ * ============================================================================
+ *
+ * Tensor.g4 MUST NOT directly construct IR.
+ *
+ * The intended flow is:
+ *
+ *     tensor syntax
+ *          |
+ *          v
+ *     domain-neutral frontend AST
+ *          |
+ *          v
+ *     semantic analysis
+ *          |
+ *          v
+ *     canonical semantic representation
+ *          |
+ *          v
+ *     classical/data/tensor IR as defined by the compiler architecture
+ *          |
+ *          v
+ *     optimization
+ *          |
+ *          v
+ *     scheduling / placement / lowering
+ *          |
+ *          v
+ *     target realization
+ *
+ * If tensor operations interact with quantum computation, the semantic layer
+ * determines the appropriate cross-domain representation. Quantum semantics
+ * ultimately use the established:
+ *
+ *     quantum::ir
+ *
+ * boundary.
+ *
+ * This file MUST NOT create another quantum IR merely because a tensor is used
+ * by a quantum program.
+ *
+ * ============================================================================
+ *
+ * RESOURCE AND CAPABILITY CONTRACT
+ * ============================================================================
+ *
+ * Tensor syntax does not select physical resources.
+ *
+ * Requirements such as:
+ *
+ *     memory requirements;
+ *     accelerator capabilities;
+ *     distributed execution;
+ *     numerical precision;
+ *     storage capabilities;
+ *     communication requirements;
+ *
+ * belong to the canonical resource/capability/constraint system.
+ *
+ * Tensor syntax may therefore be compiled for:
  *
  *     embedded systems;
- *     CPUs;
+ *     scalar CPUs;
  *     multicore CPUs;
  *     GPUs;
  *     FPGAs;
@@ -1135,278 +1109,355 @@ tensorDomainExpression
  *     cloud systems;
  *     future architectures.
  *
- * ============================================================================
- */
-
-
-/* ============================================================================
- * 32. SEMANTIC BOUNDARY CONTRACT
- * ============================================================================
- *
- * This grammar emits syntax.
- *
- * Semantic analysis MUST subsequently determine:
- *
- *     - tensor rank;
- *     - tensor element type;
- *     - shape;
- *     - dimension compatibility;
- *     - broadcasting;
- *     - contraction compatibility;
- *     - reduction legality;
- *     - indexing legality;
- *     - slice legality;
- *     - reshape legality;
- *     - aliasing;
- *     - ownership;
- *     - memory effects;
- *     - numerical semantics;
- *     - resource requirements.
- *
- * The grammar must never silently encode those semantic decisions.
+ * The tensor grammar remains unchanged.
  *
  * ============================================================================
- */
-
-
-/* ============================================================================
- * 33. IR BOUNDARY
+ *
+ * CROSS-DOMAIN INTEGRATION
  * ============================================================================
  *
- * Tensor.g4 MUST NOT directly reference or construct:
+ * Tensor values may participate in:
  *
- *     classical IR;
- *     quantum::ir;
- *     QEC;
- *     ZQN;
- *     scheduling IR;
- *     hardware IR;
- *     runtime objects.
+ *     classical computation;
+ *     scientific computation;
+ *     symbolic computation;
+ *     AI/ML;
+ *     data processing;
+ *     distributed computation;
+ *     networking;
+ *     hardware/software co-design;
+ *     hybrid quantum-classical computation.
  *
- * The expected pipeline is:
+ * The domain boundaries are semantic.
  *
- *     tensor syntax
- *         |
- *         v
- *     frontend AST
- *         |
- *         v
- *     semantic tensor model
- *         |
- *         v
- *     canonical classical/data IR
- *         |
- *         +--> optimization
- *         +--> scheduling
- *         +--> resource realization
- *         +--> target lowering
- *
- * Quantum IR remains a separate canonical semantic boundary.
+ * This file does not create separate tensor languages for each domain.
  *
  * ============================================================================
- */
-
-
-/* ============================================================================
- * 34. DETERMINISM
+ *
+ * DETERMINISM
  * ============================================================================
  *
  * This grammar contains:
  *
  *     - no embedded actions;
- *     - no random behavior;
+ *     - no semantic predicates;
  *     - no filesystem access;
  *     - no network access;
+ *     - no hardware discovery;
  *     - no environment inspection;
- *     - no target discovery;
- *     - no mutable global state.
+ *     - no randomness;
+ *     - no runtime callbacks.
  *
- * Parsing the same source with the same grammar and lexer must therefore
- * produce the same parse structure.
- *
- * ============================================================================
- */
-
-
-/* ============================================================================
- * 35. HARD-CODING AUDIT
- * ============================================================================
- *
- * Forbidden in this file:
- *
- *     - fixed tensor rank limits;
- *     - fixed dimension limits;
- *     - fixed element counts;
- *     - fixed device counts;
- *     - fixed accelerator counts;
- *     - fixed thread counts;
- *     - fixed memory sizes;
- *     - fixed hardware topology;
- *     - fixed vendor APIs.
- *
- * Numeric literals appearing in source programs are DATA, not grammar limits.
+ * Parsing therefore depends only on the source token stream and active
+ * grammar/language version.
  *
  * ============================================================================
- */
-
-
-/* ============================================================================
- * 36. COMPATIBILITY
+ *
+ * SECURITY
  * ============================================================================
  *
- * Tensor.g4 is additive.
+ * Parsing tensor syntax MUST have no side effects.
  *
- * It does not modify:
+ * Tensor operation names are data at parse time.
  *
- *     - lexical token definitions;
- *     - general expression precedence;
- *     - canonical type syntax;
- *     - quantum syntax;
- *     - hardware syntax;
- *     - runtime semantics.
+ * The parser MUST NOT:
  *
- * Existing general expressions remain valid.
- *
- * Tensor-specific semantic names remain ordinary identifiers so future
- * libraries and dialects can extend tensor computation without changing the
- * lexical contract.
+ *     - load a tensor library;
+ *     - execute a tensor operation;
+ *     - access a device;
+ *     - access credentials;
+ *     - inspect hardware;
+ *     - allocate tensor storage;
+ *     - contact a network.
  *
  * ============================================================================
- */
-
-
-/* ============================================================================
- * 37. TEST CONTRACT
+ *
+ * COMPATIBILITY CONTRACT
  * ============================================================================
  *
- * Positive examples:
+ * Existing public grammar name:
  *
- *     let x = [1, 2, 3];
- *     let A = [[1, 2], [3, 4]];
- *     let T = [[[1], [2]], [[3], [4]]];
+ *     Tensor
  *
- *     let y = reshape(A, shape);
- *     let z = transpose(A);
- *     let c = contract(A, B);
- *     let r = reduce(A, axis);
+ * is retained.
  *
- * Indexing:
+ * Existing public tensor-domain entry point:
  *
- *     A[i];
- *     A[i, j];
- *     A[i, j, k];
+ *     tensorConstruct
  *
- * Slicing:
+ * is retained.
  *
- *     A[i..j];
- *     A[i..=j, k..l];
+ * Existing canonical names remain available through:
+ *
+ *     identifier
+ *     qualifiedName
+ *
+ * Existing universal expression syntax remains authoritative.
+ *
+ * Existing universal type syntax remains authoritative.
+ *
+ * No tensor-specific lexer tokens are introduced.
+ *
+ * This allows existing consumers to migrate from the previous tensor grammar
+ * without requiring a second language or token vocabulary.
+ *
+ * ============================================================================
+ *
+ * HARD-CODING AUDIT
+ * ============================================================================
+ *
+ * This file contains no:
+ *
+ *     MAX_TENSOR_RANK
+ *     MAX_TENSOR_DIMENSIONS
+ *     MAX_TENSOR_ELEMENTS
+ *     MAX_TENSOR_SIZE
+ *     MAX_AXIS_COUNT
+ *     MAX_TENSOR_ARGUMENTS
+ *     MAX_GPU_COUNT
+ *     MAX_CPU_COUNT
+ *     MAX_THREAD_COUNT
+ *     MAX_ACCELERATOR_COUNT
+ *     MAX_MEMORY
+ *     MAX_REGISTER_WIDTH
+ *     MAX_VECTOR_WIDTH
+ *
+ * No physical device identifier is encoded.
+ *
+ * No vendor operation list is encoded.
+ *
+ * No finite tensor rank is encoded.
+ *
+ * No finite tensor dimension is encoded.
+ *
+ * No finite tensor element count is encoded.
+ *
+ * ============================================================================
+ *
+ * TEST CONTRACT
+ * ============================================================================
+ *
+ * POSITIVE TESTS
+ *
+ * Tensor literals:
+ *
+ *     [1]
+ *     [1, 2, 3]
+ *     [[1, 2], [3, 4]]
+ *     [[[1], [2]], [[3], [4]]]
+ *
+ * Tensor construction:
+ *
+ *     tensor(shape)
+ *     zeros(shape)
+ *     ones(shape)
+ *     fill(shape, value)
+ *
+ * Qualified operations:
+ *
+ *     tensor::reshape(A, shape)
+ *     linalg::transpose(A)
+ *     linalg::contract(A, B)
+ *
+ * Named arguments:
+ *
+ *     reshape(input: A, shape: S)
  *
  * Symbolic dimensions:
  *
- *     let A: Tensor<f64> = tensor(M, N);
+ *     <N>
+ *     <M, N>
+ *     <Batch, Height, Width, Channels>
  *
- * Nested tensor construction:
+ * GENERAL EXPRESSION INTEGRATION
  *
- *     let T = tensor(shape, values);
+ *     A + B
+ *     A * B
+ *     f(A)
+ *     A[i]
+ *     A[i, j]
  *
- * Negative tests must include:
+ * These MUST be handled by the canonical expression grammar rather than by
+ * tensor-specific expression rules.
  *
- *     - malformed brackets;
- *     - malformed commas;
- *     - malformed ranges;
- *     - malformed calls;
- *     - incomplete index expressions;
- *     - incomplete declarations;
- *     - incomplete assignments.
+ * NEGATIVE TESTS
  *
- * Boundary tests must include:
+ * Include:
  *
- *     - scalar tensors;
- *     - vectors;
- *     - matrices;
- *     - deeply nested tensors;
- *     - symbolic dimensions;
- *     - very large source representations generated by tests.
+ *     [
+ *     ]
+ *     [1,
+ *     [[1, 2],]
+ *     tensor(
+ *     tensor(A,
+ *     operation(, A)
+ *     operation(A,)
  *
- * Scalability tests must verify that no source grammar rule imposes:
+ * and malformed shape specifications such as:
  *
- *     - fixed rank;
- *     - fixed dimension;
- *     - fixed element count;
- *     - fixed accelerator size.
+ *     <>
+ *     <,>
+ *     <N,>
  *
- * Integration tests must combine tensor syntax with:
+ * where the surrounding language specification disallows an empty or
+ * incomplete dimension.
  *
- *     - classical expressions;
- *     - functions;
- *     - generics;
- *     - concurrency;
- *     - resource requirements;
- *     - quantum/classical hybrid programs;
- *     - hardware-facing programs.
+ * SEMANTIC NEGATIVE TESTS
+ *
+ * These are NOT parser errors when syntactically valid:
+ *
+ *     reshape(A, incompatible_shape)
+ *     contract(A, B)
+ *     A[i, j, k]
+ *
+ * Their legality is determined by semantic analysis.
+ *
+ * BOUNDARY TESTS
+ *
+ * Include:
+ *
+ *     scalar-like tensor
+ *     vector-shaped tensor
+ *     matrix-shaped tensor
+ *     high-rank nested tensor
+ *     symbolic dimensions
+ *     computed dimensions
+ *     very large generated tensor literals
+ *     deeply nested tensor expressions
+ *     large operation argument lists
+ *
+ * SCALABILITY TESTS
+ *
+ * Verify that the grammar imposes no artificial:
+ *
+ *     rank limit;
+ *     dimension-count limit;
+ *     element-count limit;
+ *     argument-count limit;
+ *     operation-count limit;
+ *     device-count limit;
+ *     machine-size limit.
+ *
+ * CROSS-DOMAIN TESTS
+ *
+ * Tensor syntax must be tested with:
+ *
+ *     classical expressions;
+ *     generic types;
+ *     functions;
+ *     resources;
+ *     capabilities;
+ *     concurrency;
+ *     distributed computation;
+ *     AI/data computation;
+ *     hybrid quantum-classical programs;
+ *     hardware/software co-design.
+ *
+ * DETERMINISM TESTS
+ *
+ * Parsing identical token streams under identical grammar/language versions
+ * must produce equivalent parse structures.
+ *
+ * ROUND-TRIP TESTS
+ *
+ * Where the frontend formatter/source-preservation architecture supports it,
+ * tensor syntax must survive:
+ *
+ *     source
+ *       -> lexer
+ *       -> parser
+ *       -> AST
+ *       -> formatter
+ *       -> source
+ *
+ * without changing semantic meaning.
  *
  * ============================================================================
- */
-
-
-/* ============================================================================
- * 38. COMPLETION CRITERIA
+ *
+ * COMPLETION CRITERIA
  * ============================================================================
  *
- * This file is complete only when:
+ * Tensor.g4 is complete when:
  *
- * [ ] ANTLR accepts the grammar.
+ *     [ ] ANTLR accepts the grammar.
  *
- * [ ] No lexer rules are declared here.
+ *     [ ] The canonical lexer vocabulary is consumed.
  *
- * [ ] Canonical ZamaniLexer tokens are used.
+ *     [ ] No lexer rules exist in this parser grammar.
  *
- * [ ] Canonical Expressions grammar is reused.
+ *     [ ] No tensor-specific keyword tokens are introduced.
  *
- * [ ] Canonical Types grammar is reused.
+ *     [ ] Canonical identifier/name rules are reused.
  *
- * [ ] Tensor syntax is represented without finite machine limits.
+ *     [ ] Canonical expression syntax is reused.
  *
- * [ ] Tensor rank is not hard-coded.
+ *     [ ] Canonical type syntax is reused.
  *
- * [ ] Tensor dimensions are not hard-coded.
+ *     [ ] General indexing/slicing remain owned by expressions.
  *
- * [ ] Tensor element counts are not hard-coded.
+ *     [ ] Declarations remain owned by declarations.
  *
- * [ ] Hardware is not selected by tensor syntax.
+ *     [ ] Assignments remain owned by expressions/statements.
  *
- * [ ] Tensor operations remain extensible.
+ *     [ ] Tensor literals are structurally recursive.
  *
- * [ ] Semantic validation remains outside the grammar.
+ *     [ ] Tensor operation names remain open-world identifiers.
  *
- * [ ] Classical IR lowering remains outside the grammar.
+ *     [ ] Qualified tensor operation names are supported.
  *
- * [ ] quantum::ir remains outside the grammar.
+ *     [ ] Tensor operation algorithms are not hard-coded.
  *
- * [ ] QEC remains outside the grammar.
+ *     [ ] Tensor shape dimensions are structurally represented.
  *
- * [ ] ZQN remains outside the grammar.
+ *     [ ] Tensor rank is not hard-coded.
  *
- * [ ] Scheduling remains outside the grammar.
+ *     [ ] Tensor dimensions are not hard-coded.
  *
- * [ ] Runtime execution remains outside the grammar.
+ *     [ ] Tensor element counts are not hard-coded.
  *
- * [ ] Positive tests pass.
+ *     [ ] Hardware resources are not hard-coded.
  *
- * [ ] Negative tests pass.
+ *     [ ] Device placement is not encoded.
  *
- * [ ] Boundary tests pass.
+ *     [ ] Vendor implementations are not encoded.
  *
- * [ ] Cross-domain tests pass.
+ *     [ ] Semantic validation remains downstream.
  *
- * [ ] Determinism tests pass.
+ *     [ ] AST integration is defined in advance.
  *
- * [ ] Round-trip tests pass where applicable.
+ *     [ ] Classical IR integration is defined in advance.
  *
- * [ ] Rust compiler integration remains safe Rust with no unsafe code.
+ *     [ ] Cross-domain integration is defined in advance.
  *
- * [ ] No subsequent grammar file is required to redefine the tensor
- *     semantic contract established here.
+ *     [ ] quantum::ir remains the canonical quantum semantic boundary.
+ *
+ *     [ ] QEC remains outside the grammar.
+ *
+ *     [ ] ZQN remains outside the grammar.
+ *
+ *     [ ] Scheduling remains outside the grammar.
+ *
+ *     [ ] HAL remains outside the grammar.
+ *
+ *     [ ] Runtime execution remains outside the grammar.
+ *
+ *     [ ] Positive tests exist.
+ *
+ *     [ ] Negative tests exist.
+ *
+ *     [ ] Boundary tests exist.
+ *
+ *     [ ] Scalability tests exist.
+ *
+ *     [ ] Determinism tests exist.
+ *
+ *     [ ] Compatibility tests exist.
+ *
+ *     [ ] Cross-domain tests exist.
+ *
+ *     [ ] Rust integration remains compatible with Rust 1.97 / 1.97.1.
+ *
+ *     [ ] No unsafe Rust is required.
  *
  * ============================================================================
  */
