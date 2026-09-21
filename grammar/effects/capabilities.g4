@@ -6,346 +6,408 @@
  * File:
  *     grammar/effects/capabilities.g4
  *
+ * Grammar:
+ *     EffectCapabilities
+ *
  * Status:
- *     Canonical modular production grammar for EFFECT/CAPABILITY
- *     RELATIONSHIPS.
+ *     Canonical production parser component for the relationship between
+ *     effects and source-level capability requirements.
+ *
+ * Language:
+ *     Zamani
  *
  * Grammar technology:
  *     ANTLR4 parser grammar
  *
- * Runtime/compiler baseline:
+ * Compiler baseline:
  *     Rust 1.97 / Rust 1.97.1
  *
- * Safety:
- *     This grammar contains:
+ * Rust safety:
+ *     The Zamani implementation MUST use safe Rust only.
+ *     This grammar contains no Rust actions and requires no `unsafe`.
  *
- *       - no embedded Rust actions;
- *       - no semantic predicates;
- *       - no filesystem access;
- *       - no network access;
- *       - no runtime calls;
- *       - no hardware discovery;
- *       - no unsafe code.
+ * ============================================================================
+ * PURPOSE
+ * ============================================================================
  *
- * IMPORTANT:
+ * This file answers exactly one syntactic question:
  *
- *     This file does NOT own the language-wide capability system.
+ *     "Which source-level capabilities are required by an effect or
+ *      effect operation?"
+ *
+ * It does NOT define the language-wide capability system.
+ *
+ * Canonical capability ownership remains:
  *
  *     grammar/core/capabilities.g4
  *
- * remains the canonical owner of:
+ * That file owns:
  *
  *     - capability declarations;
  *     - capability identities;
  *     - capability references;
- *     - capability version constraints;
- *     - capability lists.
+ *     - capability version requirements;
+ *     - capability expression syntax used by the general capability system;
+ *     - capability aliases and capability metadata.
  *
- * This file owns only the syntax by which an EFFECT declares the
- * capabilities required to provide or implement that effect.
+ * This file owns only the EFFECT-SIDE relationship.
  *
  * ============================================================================
- * ARCHITECTURAL PRINCIPLE
+ * ARCHITECTURAL SEPARATION
  * ============================================================================
  *
- * Effect:
+ * EFFECT
  *
- *     WHAT computational interaction exists?
+ *     Describes a semantic computational interaction.
  *
- * Capability:
+ * CAPABILITY
  *
- *     WHAT can an execution environment provide?
+ *     Describes an ability/facility/property that an execution context may
+ *     provide.
  *
- * Effect capability requirement:
+ * EFFECT CAPABILITY REQUIREMENT
  *
- *     WHAT capability must be available for this effect to be realized?
+ *     Describes which capabilities are required for an effect realization.
  *
- * Resource:
+ * RESOURCE
  *
- *     WHAT computational resource is available or requested?
+ *     Describes computational capacity or consumable/allocatable resources.
  *
- * Requirement:
+ * REQUIREMENT
  *
- *     WHAT must be satisfied by a valid realization?
+ *     Describes a condition that must be satisfied.
  *
- * Constraint:
+ * CONSTRAINT
  *
- *     WHAT conditions must a realization obey?
+ *     Describes conditions imposed on a valid realization.
  *
- * Preference:
+ * PREFERENCE
  *
- *     WHICH valid realization is preferred?
+ *     Describes which otherwise-valid realization is preferred.
  *
- * These concepts MUST NOT be collapsed.
+ * HINT
+ *
+ *     Provides non-binding implementation guidance.
+ *
+ * TARGET
+ *
+ *     Describes an execution context/target abstraction.
+ *
+ * PLACEMENT
+ *
+ *     Describes where/how a realization may be placed.
+ *
+ * PERFORMANCE
+ *
+ *     Describes performance-related requirements, constraints or preferences.
+ *
+ * These concepts MUST NOT be silently collapsed.
  *
  * In particular:
  *
- *     effect quantum::measurement
+ *     requires {
+ *         quantum::measurement
+ *     }
  *
- * MUST NOT implicitly mean:
+ * MUST NOT mean:
  *
- *     use QPU X
- *     use N qubits
+ *     use physical QPU X
+ *     use physical qubit N
  *     use topology Y
  *     use backend Z
+ *     use a fixed number of qubits
  *
- * Hardware discovery, resource allocation, routing, scheduling and backend
- * selection belong downstream.
+ * Hardware discovery, resource allocation, routing, scheduling, calibration,
+ * target selection, deployment and backend selection are downstream concerns.
  *
  * ============================================================================
  * POCO-REAF
  * ============================================================================
  *
- * Capability requirements are source-level semantic intent.
+ * The grammar is intentionally open-world.
  *
- * They MUST remain independent of the physical machine on which the effect
- * is eventually realized.
- *
- * The same source program MUST therefore remain syntactically valid when
- * the effect is implemented using:
+ * A capability requirement may remain unchanged when the same program is
+ * realized on:
  *
  *     - a tiny embedded processor;
  *     - one CPU;
  *     - many CPUs;
- *     - a GPU;
+ *     - one GPU;
  *     - many GPUs;
- *     - an FPGA;
- *     - an ASIC;
- *     - a quantum processor;
- *     - a quantum simulator;
- *     - a heterogeneous accelerator;
- *     - a distributed system;
- *     - a cloud environment;
- *     - a future computational architecture.
+ *     * an FPGA;
+ *     * an ASIC;
+ *     * a quantum processor;
+ *     * a quantum simulator;
+ *     * a heterogeneous accelerator;
+ *     * a distributed system;
+ *     * an HPC system;
+ *     * a cloud deployment;
+ *     * a future computational substrate.
  *
  * This grammar MUST NOT encode:
  *
  *     MAX_CAPABILITIES
  *     MAX_EFFECT_CAPABILITIES
- *     MAX_DEVICES
+ *     MAX_EFFECTS
+ *     MAX_OPERATIONS
  *     MAX_QUBITS
  *     MAX_CORES
  *     MAX_THREADS
  *     MAX_GPUS
  *     MAX_FPGAS
+ *     MAX_QPUS
  *     MAX_NODES
  *     MAX_MEMORY
+ *     MAX_DEVICES
  *
- * or any equivalent finite machine-specific limit.
- *
- * ============================================================================
- * OWNERSHIP
- * ============================================================================
- *
- * THIS FILE OWNS:
- *
- *     - effect capability clauses;
- *     - effect capability requirement lists;
- *     - effect capability alternatives;
- *     - effect capability conjunctions;
- *     - effect capability grouping;
- *     - effect capability modifiers;
- *     - syntax attaching capability requirements to an effect;
- *     - syntax attaching capability requirements to an effect operation;
- *     - syntactic capability-provision relationships at the effect boundary.
- *
- * THIS FILE DOES NOT OWN:
- *
- *     - capability declarations;
- *     - capability identity syntax;
- *     - capability registry;
- *     - capability discovery;
- *     - capability authorization;
- *     - resource allocation;
- *     - resource discovery;
- *     - target selection;
- *     - hardware discovery;
- *     - hardware topology;
- *     - device identifiers;
- *     - quantum qubits;
- *     - quantum gates;
- *     - quantum::ir;
- *     - QEC;
- *     - ZQN;
- *     - routing;
- *     - scheduling;
- *     - optimization;
- *     - resilience;
- *     - calibration;
- *     - runtime dispatch;
- *     - effect implementation;
- *     - security authorization.
+ * or any equivalent machine-specific ceiling.
  *
  * ============================================================================
- * DEPENDENCY DIRECTION
+ * OPEN-WORLD CAPABILITIES
  * ============================================================================
  *
- *     ZamaniTokens
- *          |
- *          v
- *     Core names / capability model
- *          |
- *          v
- *     capabilities.g4
- *          |
- *          v
- *     effect declarations
- *          |
- *          v
- *     effect semantic analysis
- *          |
- *          +--> capability analysis
- *          +--> requirement analysis
- *          +--> resource analysis
- *          +--> target analysis
- *          |
- *          v
- *     canonical semantic representation
- *          |
- *          +--> classical IR
- *          +--> quantum::ir
- *          +--> HDL / hardware representation
- *          |
- *          v
- *     optimization
- *          |
- *          v
- *     routing / scheduling / resilience
- *          |
- *          v
- *     target lowering
- *          |
- *          v
- *     runtime / hardware
+ * Capability identities are deliberately not enumerated here.
  *
- * The dependency direction MUST NOT be reversed.
+ * Valid examples include:
  *
- * ============================================================================
- * CAPABILITY OWNERSHIP BOUNDARY
- * ============================================================================
- *
- * grammar/core/capabilities.g4 is the canonical capability grammar.
- *
- * This file therefore consumes:
- *
- *     capabilityReference
- *     capabilityVersionClause
- *
- * rather than redefining them.
- *
- * A new capability such as:
- *
- *     quantum::dynamic_control
+ *     quantum::measurement
  *     quantum::mid_circuit_measurement
+ *     quantum::dynamic_control
  *     accelerator::tensor
  *     distributed::consensus
+ *     hardware::reconfigurable_logic
  *     future::photonic::interaction
  *
- * does NOT require a modification to this file.
- *
- * ============================================================================
- * OPEN-WORLD MODEL
- * ============================================================================
- *
- * Capability identities are open-ended.
- *
- * There is deliberately NO grammar such as:
+ * This file MUST NOT introduce domain-specific enumerations such as:
  *
  *     quantumCapability
- *     gpuCapability
  *     cpuCapability
+ *     gpuCapability
  *     fpgaCapability
  *     qpuCapability
  *     vendorCapability
  *
- * Instead:
+ * New capabilities therefore do not require a grammar change merely because
+ * a new computational domain, device family, accelerator or future technology
+ * is introduced.
+ *
+ * ============================================================================
+ * CANONICAL DEPENDENCY DIRECTION
+ * ============================================================================
+ *
+ *     source
+ *       |
+ *       v
+ *     grammar/antlr/ZamaniLexer.g4
+ *       |
+ *       v
+ *     parser grammars
+ *       |
+ *       +--> core/names.g4
+ *       +--> core/attributes.g4
+ *       +--> core/capabilities.g4
+ *       |
+ *       v
+ *     effects/capabilities.g4
+ *       |
+ *       v
+ *     effect declarations / effect operations
+ *       |
+ *       v
+ *     domain-neutral frontend AST
+ *       |
+ *       v
+ *     semantic analysis
+ *       |
+ *       +--> effect analysis
+ *       +--> capability analysis
+ *       +--> requirement analysis
+ *       +--> resource analysis
+ *       +--> target analysis
+ *       |
+ *       v
+ *     canonical semantic representation
+ *       |
+ *       +--> classical IR
+ *       +--> quantum::ir
+ *       +--> HDL / hardware representation
+ *       +--> other domain representations
+ *       |
+ *       v
+ *     optimization / lowering
+ *       |
+ *       +--> routing
+ *       +--> scheduling
+ *       +--> resilience
+ *       +--> QEC
+ *       +--> ZQN
+ *       +--> HAL
+ *       |
+ *       v
+ *     target realization
+ *
+ * This file MUST NOT reverse that dependency direction.
+ *
+ * ============================================================================
+ * LEXICAL AUTHORITY
+ * ============================================================================
+ *
+ * The production lexer is:
+ *
+ *     grammar/antlr/ZamaniLexer.g4
+ *
+ * Parser grammars consume:
+ *
+ *     tokenVocab = ZamaniLexer;
+ *
+ * They MUST NOT use:
+ *
+ *     tokenVocab = ZamaniTokens;
+ *
+ * directly.
+ *
+ * The current repository's canonical lexer exposes the following relevant
+ * tokens:
+ *
+ *     REQUIRES
+ *     AND
+ *     OR
+ *     LBRACE
+ *     RBRACE
+ *     LPAREN
+ *     RPAREN
+ *     COMMA
+ *     SEMICOLON
+ *
+ * This file therefore deliberately does NOT use obsolete names such as:
+ *
+ *     K_REQUIRES
+ *     K_AND
+ *     K_OR
+ *     LEFT_BRACE
+ *     RIGHT_BRACE
+ *
+ * ============================================================================
+ * CAPABILITY OWNERSHIP
+ * ============================================================================
+ *
+ * grammar/core/capabilities.g4 remains the sole owner of:
  *
  *     capabilityReference
+ *     capabilityName
+ *     capabilityVersionClause
+ *     capabilityVersionExpression
  *
- * resolves the identity through the canonical capability system.
+ * This file consumes those rules.
+ *
+ * It MUST NOT redefine:
+ *
+ *     identifier
+ *     qualifiedName
+ *     capabilityName
+ *     capabilityReference
+ *     capabilityVersionClause
+ *     capability version syntax
+ *
+ * This prevents capability identity/version drift between:
+ *
+ *     requirements
+ *     constraints
+ *     preferences
+ *     effects
+ *     hardware
+ *     quantum
+ *     distributed
+ *     AI
+ *     networking
+ *     security
+ *     future domains
  *
  * ============================================================================
- * EFFECT/CAPABILITY SEMANTIC SEPARATION
+ * RESOURCE/CAPABILITY SEPARATION
  * ============================================================================
  *
- * An effect may require one or more capabilities.
+ * This grammar represents capability properties only.
  *
- * For example:
+ * It MUST NOT parse resource quantities as part of the capability relation.
  *
- *     effect Measurement
- *         requires {
- *             quantum::measurement
- *             quantum::readout
- *         };
+ * Therefore constructs such as:
  *
- * This means:
+ *     requires {
+ *         8 gpu
+ *     }
  *
- *     the effect cannot be validly realized unless the semantic capability
- *     requirements are satisfied.
+ *     requires {
+ *         64 qubits
+ *     }
  *
- * It does NOT mean:
+ *     requires {
+ *         32 cores
+ *     }
  *
- *     select a particular QPU;
- *     allocate a particular number of qubits;
- *     select a topology;
- *     select a calibration;
- *     select a vendor backend.
+ * do NOT belong to this file.
  *
- * Those decisions are downstream.
+ * Resource quantities belong to the resource/requirements/constraint
+ * subsystems.
+ *
+ * Capability:
+ *
+ *     quantum::mid_circuit_measurement
+ *
+ * Resource:
+ *
+ *     an available quantum execution capacity
+ *
+ * Requirement:
+ *
+ *     a semantic condition on that capacity
+ *
+ * Target:
+ *
+ *     the eventual execution context
+ *
+ * These remain separate all the way through semantic analysis.
  *
  * ============================================================================
  * CAPABILITY VS AUTHORIZATION
  * ============================================================================
  *
- * A capability requirement is NOT an authorization grant.
+ * A capability requirement is NOT a security authorization grant.
  *
  * For example:
  *
  *     requires {
  *         security::trusted_execution
- *     }
+ *     };
  *
- * does not grant permission to access trusted execution.
+ * means that the semantic capability is required.
  *
- * Security authorization belongs to the security subsystem.
+ * It does NOT:
  *
- * ============================================================================
- * CAPABILITY VS RESOURCE
- * ============================================================================
+ *     - grant permission;
+ *     - acquire credentials;
+ *     - bypass policy;
+ *     - authenticate an identity;
+ *     - authorize an operation.
  *
- * A capability requirement describes a property.
- *
- * It does not allocate a resource.
- *
- * Therefore this grammar MUST NOT contain constructs such as:
- *
- *     requires 8 gpu;
- *     requires 1024 cores;
- *     requires 64 qubits;
- *     requires device 0;
- *     requires topology ring;
- *
- * unless such constructs are explicitly introduced by a separate resource,
- * target or hardware grammar.
- *
- * Even there, those values MUST remain target/resource semantics rather than
- * universal effect capability semantics.
+ * Security authorization remains owned by the security subsystem.
  *
  * ============================================================================
  * QUANTUM BOUNDARY
  * ============================================================================
  *
- * Quantum capability references may appear naturally:
+ * Quantum capabilities are ordinary open-world capability references.
+ *
+ * Examples:
  *
  *     quantum::measurement
+ *     quantum::readout
  *     quantum::dynamic_control
  *     quantum::mid_circuit_measurement
  *     quantum::logical_qubits
  *     quantum::reset
  *
- * This grammar does not define their meaning.
- *
- * It does not import:
+ * This file MUST NOT define:
  *
  *     QubitId
  *     PhysicalQubitId
@@ -353,271 +415,383 @@
  *     quantum::ir
  *     topology
  *     calibration
+ *     routing
+ *     scheduling
  *     QEC
  *     ZQN
  *
- * If a capability affects quantum compilation, semantic analysis may later
- * carry the information into the canonical quantum semantic pipeline.
+ * Correct quantum lowering remains:
  *
- * The canonical quantum semantic boundary remains:
- *
+ *     source
+ *       |
+ *       v
+ *     generic frontend AST
+ *       |
+ *       v
+ *     semantic effect/capability model
+ *       |
+ *       v
+ *     quantum semantic analysis
+ *       |
+ *       v
  *     quantum::ir
+ *       |
+ *       v
+ *     optimization
+ *       |
+ *       v
+ *     routing / scheduling
+ *       |
+ *       v
+ *     QEC / resilience / ZQN
+ *       |
+ *       v
+ *     HAL
+ *       |
+ *       v
+ *     target realization
+ *
+ * This grammar never constructs quantum::ir.
  *
  * ============================================================================
  * HDL / HARDWARE BOUNDARY
  * ============================================================================
  *
- * Hardware-related capabilities may be represented as names:
+ * Hardware capabilities remain names:
  *
  *     hardware::clocked_logic
  *     hardware::reconfigurable_logic
  *     hardware::pipeline
  *     accelerator::tensor
  *
- * No physical implementation is selected by this grammar.
+ * No physical implementation is selected here.
+ *
+ * The grammar MUST NOT encode:
+ *
+ *     device identifiers
+ *     FPGA part numbers
+ *     CPU identifiers
+ *     GPU identifiers
+ *     QPU identifiers
+ *     physical addresses
+ *     fixed topology
+ *     fixed clock rates
+ *     fixed memory sizes
  *
  * ============================================================================
  * DISTRIBUTED BOUNDARY
  * ============================================================================
  *
- * Distributed capabilities may be represented as names:
+ * Distributed capabilities may include:
  *
  *     distributed::communication
  *     distributed::consensus
  *     distributed::replication
  *     distributed::fault_tolerance
+ *     distributed::remote_execution
  *
- * The grammar does not define:
+ * This file does not encode:
  *
- *     node count;
- *     node addresses;
- *     network topology;
- *     region;
- *     deployment;
- *     placement.
+ *     node count
+ *     node addresses
+ *     cluster topology
+ *     region
+ *     placement
+ *     deployment
  *
  * ============================================================================
- * EFFECT OPERATION BOUNDARY
+ * EFFECT DECLARATION INTEGRATION
  * ============================================================================
  *
- * Capability requirements may apply to:
+ * effect-declarations.g4 remains the owner of:
  *
- *     - an entire effect;
- *     - an individual effect operation.
+ *     effectDeclaration
+ *     effectOperationDeclaration
  *
- * This allows a broad effect to contain operations with different
- * implementation requirements.
+ * It consumes:
+ *
+ *     effectCapabilityClause
+ *
+ * where an effect or effect operation accepts capability requirements.
+ *
+ * Conceptually:
+ *
+ *     effect Foo
+ *         requires {
+ *             capability::one
+ *             and capability::two
+ *         }
+ *         {
+ *             ...
+ *         }
+ *
+ * The exact declaration/body syntax remains owned by
+ * effects/effect-declarations.g4.
+ *
+ * This file does NOT reproduce effect declarations.
+ *
+ * ============================================================================
+ * EFFECT SET SEPARATION
+ * ============================================================================
+ *
+ * An effect set answers:
+ *
+ *     "Which effects are associated with this computation?"
+ *
+ * An effect capability clause answers:
+ *
+ *     "Which capabilities are required to realize this effect?"
+ *
+ * Therefore:
+ *
+ *     effect set != capability requirement
+ *
+ * A capability requirement MUST NOT silently become an effect.
+ *
+ * ============================================================================
+ * EFFECT OPERATION INTEGRATION
+ * ============================================================================
+ *
+ * An effect can contain operations with different capability requirements.
  *
  * Example:
  *
  *     effect QuantumIO {
- *         fn measure(...)
+ *         operation measure(...)
  *             requires {
- *                 quantum::measurement,
- *                 quantum::readout
+ *                 quantum::measurement
+ *                 and quantum::readout
  *             };
  *
- *         fn reset(...)
+ *         operation reset(...)
  *             requires {
  *                 quantum::reset
  *             };
  *     }
  *
- * The grammar records the relationship.
+ * This file records only the capability-expression syntax.
  *
- * Semantic analysis determines whether those capabilities are actually
- * sufficient and whether they are compatible.
+ * Semantic analysis determines:
+ *
+ *     - whether the referenced capabilities exist;
+ *     - whether versions are satisfiable;
+ *     - whether combinations are valid;
+ *     - whether the operation's effect semantics permit them;
+ *     - whether the execution context provides them.
  *
  * ============================================================================
- * CAPABILITY COMPOSITION
+ * CAPABILITY EXPRESSION MODEL
  * ============================================================================
  *
- * The syntax supports:
+ * The effect-specific requirement expression supports:
  *
- *     conjunction
- *     alternatives
- *     grouping
+ *     capability
  *
- * Example:
+ *     capability and capability
+ *
+ *     capability or capability
+ *
+ *     capability and (capability or capability)
+ *
+ * The expression is syntactic.
+ *
+ * It does NOT evaluate target availability.
+ *
+ * It does NOT select an implementation.
+ *
+ * It does NOT perform capability negotiation.
+ *
+ * It does NOT authorize anything.
+ *
+ * ============================================================================
+ * WHY NEGATION IS NOT ACCEPTED HERE
+ * ============================================================================
+ *
+ * The general capability grammar supports capability predicates, including
+ * negation, for contexts where predicate semantics are appropriate.
+ *
+ * An effect requirement is narrower:
+ *
+ *     requires capability
+ *
+ * means the capability must be available.
+ *
+ * A construct such as:
+ *
+ *     requires not capability
+ *
+ * changes the meaning from a required ability to an absence/constraint
+ * predicate.
+ *
+ * That belongs to constraints or target/resource predicates, not this
+ * effect-capability requirement relation.
+ *
+ * This separation prevents:
+ *
+ *     capability requirement
+ *
+ * from becoming an implicit:
+ *
+ *     hardware/resource constraint.
+ *
+ * ============================================================================
+ * EMPTY REQUIREMENTS
+ * ============================================================================
+ *
+ * An effect capability clause MUST contain at least one capability expression.
+ *
+ * Therefore:
+ *
+ *     requires {};
+ *
+ * is rejected by this grammar.
+ *
+ * An effect with no capability requirements simply omits the clause.
+ *
+ * This avoids representing an empty requirement as if it were a meaningful
+ * capability contract.
+ *
+ * ============================================================================
+ * OPTIONAL SEMICOLON
+ * ============================================================================
+ *
+ * The capability clause permits an optional semicolon:
  *
  *     requires {
  *         quantum::measurement
- *         and quantum::readout
- *     };
+ *     }
  *
- * Example:
+ * or:
  *
  *     requires {
  *         quantum::measurement
- *         and (
- *             quantum::dynamic_control
- *             or classical::simulation
- *         )
  *     };
  *
- * The parser records the structure.
- *
- * It MUST NOT decide whether the target satisfies the expression.
- *
- * ============================================================================
- * UNKNOWN CAPABILITIES
- * ============================================================================
- *
- * Unknown capabilities MUST remain syntactically valid.
- *
- * For example:
- *
- *     future::quantum::new_operation
- *
- * is syntactically valid even when the current compiler does not know the
- * semantic definition.
- *
- * Semantic analysis may later report:
- *
- *     unknown capability
- *
- * without requiring a grammar modification.
- *
- * This is required for future-proofing and POCO-REAF.
+ * The enclosing effect declaration remains responsible for deciding whether
+ * a particular surrounding construct requires a terminator.
  *
  * ============================================================================
- * VERSION BOUNDARY
+ * TRAILING COMMA
  * ============================================================================
  *
- * Capability versions are owned by:
+ * Capability boolean expressions do not use commas as logical separators.
  *
- *     grammar/core/capabilities.g4
+ * Commas remain available through the canonical capability reference/list
+ * grammar for consumers that explicitly need comma-separated references.
  *
- * This file consumes capability references as defined there.
- *
- * This file MUST NOT create another version language.
- *
- * ============================================================================
- * DETERMINISM
- * ============================================================================
- *
- * This grammar:
- *
- *     - contains no semantic predicates;
- *     - contains no embedded actions;
- *     - performs no I/O;
- *     - performs no network access;
- *     - performs no hardware discovery;
- *     - performs no runtime calls;
- *     - performs no random operations.
- *
- * Parsing therefore depends only on the deterministic token stream.
- *
- * ============================================================================
- * SOURCE PRESERVATION
- * ============================================================================
- *
- * The frontend AST must preserve:
- *
- *     - capability reference ordering;
- *     - conjunction structure;
- *     - disjunction structure;
- *     - grouping;
- *     - version clauses;
- *     - source spans;
- *     - original source spelling where required by diagnostics.
- *
- * Semantic canonicalization occurs downstream.
+ * This avoids introducing two representations for the same boolean
+ * requirement.
  *
  * ============================================================================
  * AST CONTRACT
  * ============================================================================
  *
- * Conceptually this grammar produces:
+ * This grammar produces syntax only.
  *
- *     EffectCapabilityClauseAst
- *         {
- *             expression
- *             source_span
- *         }
+ * Conceptually:
  *
- *     EffectCapabilityExpressionAst
- *         =
- *             CapabilityReference
- *           | All(...)
- *           | Any(...)
- *           | Group(...)
+ *     EffectCapabilityClauseAst {
+ *         expression: EffectCapabilityExpressionAst,
+ *         source_span: Span
+ *     }
  *
- * The exact Rust structures belong to:
+ *     EffectCapabilityExpressionAst =
+ *           CapabilityReference
+ *         | All(...)
+ *         | Any(...)
+ *         | Group(...)
+ *
+ * The actual Rust AST remains owned by:
  *
  *     src/frontend/ast/
  *
  * This grammar MUST NOT define Rust structures.
  *
+ * The AST should preserve:
+ *
+ *     - capability identity;
+ *     - capability version requirement;
+ *     - conjunction structure;
+ *     - disjunction structure;
+ *     - grouping;
+ *     - source ordering;
+ *     - source spans;
+ *     - original source spelling where required for diagnostics.
+ *
+ * Semantic normalization belongs downstream.
+ *
  * ============================================================================
  * SEMANTIC CONTRACT
  * ============================================================================
  *
- * Semantic analysis determines:
+ * Semantic analysis is responsible for:
  *
- *     - whether capability references resolve;
- *     - whether versions are valid;
- *     - whether capability combinations are satisfiable;
- *     - whether an effect operation is compatible with the capability set;
- *     - whether capabilities conflict;
- *     - whether required capabilities are available;
- *     - whether capability requirements are target-independent;
- *     - whether a capability is merely advisory or mandatory;
- *     - whether the enclosing effect declaration is semantically valid.
+ *     - resolving capability references;
+ *     - validating capability versions;
+ *     - determining capability availability;
+ *     - checking capability compatibility;
+ *     - checking capability conflicts;
+ *     - determining whether alternatives are satisfiable;
+ *     - combining effect-level and operation-level requirements;
+ *     - relating capabilities to resource requirements;
+ *     - relating capabilities to target capabilities;
+ *     - determining whether the effect can be lowered.
  *
- * None of these decisions belong in the parser.
+ * The parser MUST NOT perform any of these operations.
  *
  * ============================================================================
  * IR CONTRACT
  * ============================================================================
  *
- * Effect capability information is metadata about semantic operations.
+ * Capability requirements are semantic metadata.
  *
- * It MUST NOT become a duplicate hardware or quantum IR.
+ * They MUST NOT become a second IR.
  *
- * Conceptually:
+ * The intended lowering is:
  *
  *     effect source
- *          |
- *          v
- *     effect AST
- *          |
- *          v
+ *       |
+ *       v
+ *     frontend AST
+ *       |
+ *       v
  *     semantic effect model
- *          |
- *          +--> capability requirements
- *          |
- *          +--> resource requirements
- *          |
- *          +--> constraints
- *          |
- *          v
+ *       |
+ *       +--> capability requirements
+ *       +--> resource requirements
+ *       +--> constraints
+ *       +--> preferences
+ *       |
+ *       v
  *     canonical semantic representation
- *          |
- *          +--> quantum::ir when quantum semantics require it
- *          +--> classical IR
- *          +--> HDL/hardware IR
+ *       |
+ *       +--> classical IR
+ *       +--> quantum::ir
+ *       +--> HDL / hardware representation
+ *       +--> other domain IR
  *
- * This grammar never constructs quantum::ir directly.
+ * Capability metadata may influence legal lowering strategies, but this
+ * grammar never chooses a backend.
  *
  * ============================================================================
  * COMPILER CONTRACT
  * ============================================================================
  *
- * The compiler may use effect capability requirements to:
+ * The compiler may use the resulting semantic capability requirements to:
  *
- *     - validate a compilation context;
- *     - preserve semantic requirements;
- *     - determine legal lowering strategies;
- *     - reject an unsupported realization;
- *     - negotiate target capabilities;
- *     - select among semantically equivalent implementations.
+ *     - validate compilation contexts;
+ *     - reject unsupported realizations;
+ *     - preserve source-level requirements;
+ *     - select semantically equivalent lowering strategies;
+ *     - negotiate available capabilities;
+ *     - guide optimization;
+ *     - guide target-independent specialization.
  *
- * It MUST NOT convert:
+ * The compiler MUST NOT interpret:
  *
  *     capability requirement
  *
- * directly into:
+ * as:
  *
  *     physical device selection.
  *
@@ -625,34 +799,32 @@
  * RUNTIME CONTRACT
  * ============================================================================
  *
- * Runtime capability verification is downstream.
+ * Runtime capability availability is evaluated downstream.
  *
- * Conceptually:
+ * Runtime may have an inventory such as:
  *
- *     source
- *       |
- *       v
- *     capability requirement
- *       |
- *       v
- *     semantic model
- *       |
- *       v
- *     execution capability inventory
- *       |
- *       v
- *     capability evaluation
+ *     available capabilities
+ *     resource capacities
+ *     execution contexts
+ *     device facilities
  *
- * Runtime failure is not parser failure.
+ * None of that is represented directly by this grammar.
+ *
+ * An unavailable runtime capability is:
+ *
+ *     semantic/context/runtime failure
+ *
+ * and is NOT:
+ *
+ *     parser failure.
  *
  * ============================================================================
  * RESILIENCE CONTRACT
  * ============================================================================
  *
- * Resilience may consume capability requirements when determining whether
- * a recovery strategy remains valid.
+ * Resilience may consume capability metadata.
  *
- * This grammar MUST NOT implement:
+ * This grammar does NOT implement:
  *
  *     retry
  *     restart
@@ -663,27 +835,287 @@
  *     recompile
  *     backend switching
  *     quarantine
+ *     recovery
  *
- * Those remain resilience responsibilities.
+ * Those remain downstream resilience responsibilities.
+ *
+ * ============================================================================
+ * DETERMINISM
+ * ============================================================================
+ *
+ * This grammar contains:
+ *
+ *     - no embedded actions;
+ *     - no semantic predicates;
+ *     - no filesystem access;
+ *     - no network access;
+ *     - no runtime calls;
+ *     - no hardware discovery;
+ *     - no randomness;
+ *     - no environment-dependent parsing.
+ *
+ * Identical token streams therefore produce structurally identical parse
+ * trees under the same grammar version.
+ *
+ * ============================================================================
+ * SOURCE PRESERVATION
+ * ============================================================================
+ *
+ * The parser/frontend must preserve enough information for:
+ *
+ *     - diagnostics;
+ *     - source maps;
+ *     - formatting;
+ *     - IDE/LSP tooling;
+ *     - refactoring;
+ *     - semantic analysis;
+ *     - compatibility checking;
+ *     - provenance.
+ *
+ * The grammar itself does not calculate source spans.
  *
  * ============================================================================
  * SCALABILITY
  * ============================================================================
  *
- * The grammar uses repetition and recursion rather than fixed counts.
+ * Repetition is represented structurally:
  *
- * Therefore it imposes no language-level maximum on:
+ *     *
+ *     +
  *
- *     - capability count;
- *     - alternatives;
- *     - conjunctions;
- *     - nesting;
- *     - effect operations;
- *     - effects;
+ * No finite maximum is encoded for:
+ *
+ *     - number of capability references;
+ *     - number of conjunctions;
+ *     - number of alternatives;
+ *     - expression nesting;
+ *     - number of effects;
+ *     - number of effect operations;
  *     - program size.
  *
- * Actual limits are implementation/resource limits and must remain outside
- * language semantics.
+ * Practical parser/compiler limits remain implementation/resource concerns.
+ *
+ * They MUST NOT become language-level semantic ceilings.
+ *
+ * ============================================================================
+ * COMPATIBILITY
+ * ============================================================================
+ *
+ * This file retains the existing public integration concept:
+ *
+ *     effectCapabilityClause
+ *
+ * and provides stable helper boundaries:
+ *
+ *     effectCapabilityExpression
+ *     effectCapabilityDisjunction
+ *     effectCapabilityConjunction
+ *     effectCapabilityPrimary
+ *     effectCapabilityReference
+ *     effectCapabilityReferenceList
+ *     effectCapabilityRequirement
+ *     effectCapabilityRequirementList
+ *
+ * Capability identity/version syntax remains delegated to
+ * core/capabilities.g4.
+ *
+ * New capability names do not require a change here.
+ *
+ * ============================================================================
+ * TEST CONTRACT
+ * ============================================================================
+ *
+ * POSITIVE:
+ *
+ *     requires {
+ *         quantum::measurement
+ *     };
+ *
+ *     requires {
+ *         quantum::measurement
+ *         and quantum::readout
+ *     };
+ *
+ *     requires {
+ *         quantum::measurement
+ *         or classical::simulation
+ *     };
+ *
+ *     requires {
+ *         quantum::measurement
+ *         and (
+ *             quantum::dynamic_control
+ *             or classical::simulation
+ *         )
+ *     };
+ *
+ *     requires {
+ *         future::photonic::interaction
+ *     };
+ *
+ *     requires {
+ *         accelerator::tensor version >= 1.2
+ *     };
+ *
+ * NEGATIVE:
+ *
+ *     requires {};
+ *
+ *     requires {
+ *         quantum::
+ *     };
+ *
+ *     requires {
+ *         and quantum::measurement
+ *     };
+ *
+ *     requires {
+ *         quantum::measurement and
+ *     };
+ *
+ *     requires {
+ *         quantum::measurement or
+ *     };
+ *
+ *     requires {
+ *         quantum::measurement (
+ *     };
+ *
+ *     requires {
+ *         not quantum::measurement
+ *     };
+ *
+ *     requires {
+ *         8 gpu
+ *     };
+ *
+ *     requires {
+ *         64 qubits
+ *     };
+ *
+ *     requires {
+ *         device 0
+ *     };
+ *
+ * BOUNDARY:
+ *
+ *     one capability;
+ *     many capabilities;
+ *     deeply qualified capability names;
+ *     nested grouping;
+ *     many alternatives;
+ *     many conjunctions;
+ *     mixed conjunction/disjunction;
+ *     capability version requirements;
+ *     future capability namespaces;
+ *     unknown capability names.
+ *
+ * CROSS-DOMAIN:
+ *
+ *     classical::io
+ *     quantum::measurement
+ *     hybrid::feedforward
+ *     hdl::synthesis
+ *     hardware::reconfigurable_logic
+ *     distributed::communication
+ *     ai::tensor_compute
+ *     data::stream_processing
+ *     networking::transport
+ *     security::trusted_execution
+ *     accelerator::tensor
+ *     future::domain::capability
+ *
+ * POCO-REAF:
+ *
+ * The same capability requirement must remain syntactically valid regardless
+ * of whether the eventual realization uses:
+ *
+ *     embedded
+ *     CPU
+ *     multicore
+ *     GPU
+ *     FPGA
+ *     ASIC
+ *     QPU
+ *     simulator
+ *     accelerator
+ *     cluster
+ *     HPC
+ *     distributed
+ *     cloud
+ *     future hardware.
+ *
+ * DETERMINISM:
+ *
+ * Identical token streams produce identical capability-expression structure.
+ *
+ * ROUND TRIP:
+ *
+ *     source
+ *       -> lexer
+ *       -> parser
+ *       -> AST
+ *       -> formatter
+ *       -> parser
+ *
+ * must preserve capability identity, version requirements, logical
+ * composition, and grouping.
+ *
+ * ============================================================================
+ * HARD-CODING AUDIT
+ * ============================================================================
+ *
+ * This file contains NO production-level limits for:
+ *
+ *     MAX_CAPABILITIES
+ *     MAX_EFFECT_CAPABILITIES
+ *     MAX_EFFECTS
+ *     MAX_OPERATIONS
+ *     MAX_ALTERNATIVES
+ *     MAX_CONJUNCTIONS
+ *     MAX_NESTING
+ *     MAX_QUBITS
+ *     MAX_CPUS
+ *     MAX_CORES
+ *     MAX_THREADS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_QPUS
+ *     MAX_NODES
+ *     MAX_MEMORY
+ *     MAX_DEVICES
+ *
+ * It contains no:
+ *
+ *     physical device IDs;
+ *     physical qubit IDs;
+ *     backend IDs;
+ *     topology declarations;
+ *     resource allocation;
+ *     routing;
+ *     scheduling;
+ *     calibration;
+ *     QEC implementation;
+ *     ZQN implementation;
+ *     HAL implementation.
+ *
+ * ============================================================================
+ * NON-DEPENDENCIES
+ * ============================================================================
+ *
+ * This file MUST NOT depend semantically on:
+ *
+ *     src/quantum/ir
+ *     src/quantum/qec
+ *     src/quantum/zqn
+ *     src/quantum/routing
+ *     src/quantum/scheduling
+ *     src/quantum/optimization
+ *     src/quantum/hardware
+ *     backend SDKs
+ *     device discovery
+ *     runtime capability tokens
+ *     authorization credentials
  *
  * ============================================================================
  * ANTLR COMPOSITION
@@ -691,17 +1123,11 @@
  *
  * This is a parser grammar.
  *
- * The canonical lexer vocabulary is:
+ * The production parser vocabulary is:
  *
- *     grammar/lexer/tokens.g4
+ *     ZamaniLexer
  *
- * and therefore:
- *
- *     tokenVocab = ZamaniTokens
- *
- * is required.
- *
- * Canonical parser dependencies:
+ * Core parser dependencies are imported through:
  *
  *     Core
  *     Capabilities
@@ -709,175 +1135,87 @@
  * `Capabilities` supplies:
  *
  *     capabilityReference
- *     capabilityVersionClause
  *
- * Core supplies:
+ * `Core` supplies shared parser infrastructure such as names and attributes
+ * according to the repository's parser composition.
  *
- *     identifier
- *     qualifiedName
- *     attributes
- *     shared syntax infrastructure
- *
- * This file MUST NOT redefine those rules.
+ * This file does NOT redefine either.
  *
  * ============================================================================
- * INTEGRATION WITH effect-declarations.g4
+ * PUBLIC INTEGRATION RULES
  * ============================================================================
  *
- * `effect-declarations.g4` remains the owner of:
- *
- *     effectDeclaration
- *     effectOperationDeclaration
- *
- * This file provides:
+ * The stable public rules of this grammar are:
  *
  *     effectCapabilityClause
  *     effectCapabilityExpression
- *
- * Effect declarations MAY consume:
- *
- *     effectCapabilityClause?
- *
- * Effect operations MAY consume:
- *
- *     effectCapabilityClause?
- *
- * The integration must be performed in the effect declaration grammar rather
- * than duplicating effect declaration rules here.
- *
- * ============================================================================
- * INTEGRATION WITH effect-sets.g4
- * ============================================================================
- *
- * Effect sets describe WHICH effects are associated with a computation.
- *
- * Capability clauses describe WHICH capabilities are required to realize
- * an effect.
- *
- * They are intentionally separate:
- *
- *     effect-set
- *          !=
- *     capability-set
- *
- * A capability requirement MUST NOT silently become an effect.
- *
- * ============================================================================
- * INTEGRATION WITH core/requirements.g4
- * ============================================================================
- *
- * A program-level requirement:
- *
- *     requires quantum::measurement;
- *
- * is owned by:
- *
- *     grammar/core/requirements.g4
- *
- * An effect-level capability requirement:
- *
- *     requires {
- *         quantum::measurement
- *     };
- *
- * is owned structurally by this file.
- *
- * The semantic system may unify both into a common semantic requirement model,
- * but the grammars remain separately owned.
- *
- * ============================================================================
- * INTEGRATION WITH hardware/
- * ============================================================================
- *
- * Hardware grammar may define hardware-specific capabilities.
- *
- * This file does not import hardware implementations.
- *
- * Example:
- *
- *     hardware::reconfigurable_logic
- *
- * remains an open capability reference.
- *
- * ============================================================================
- * INTEGRATION WITH quantum/
- * ============================================================================
- *
- * Quantum grammar may define quantum operations whose semantic requirements
- * are evaluated against capabilities produced by this layer.
- *
- * No quantum syntax is duplicated here.
- *
- * ============================================================================
- * INTEGRATION WITH resource/
- * ============================================================================
- *
- * Capability:
- *
- *     what the environment can do.
- *
- * Resource:
- *
- *     what physical/logical capacity is available.
- *
- * This file MUST NOT introduce resource quantities.
- *
- * ============================================================================
- * INTEGRATION WITH SECURITY
- * ============================================================================
- *
- * Capability requirements are not security grants.
- *
- * Security policy may independently evaluate:
- *
- *     capability requirement
- *     authorization policy
- *     trust state
- *     identity
- *
- * ============================================================================
- * HARD-CODING AUDIT
- * ============================================================================
- *
- * Forbidden:
- *
- *     MAX_CAPABILITIES
- *     MAX_EFFECT_CAPABILITIES
- *     MAX_ALTERNATIVES
- *     MAX_EFFECTS
- *     MAX_OPERATIONS
- *     MAX_QUBITS
- *     MAX_CORES
- *     MAX_THREADS
- *     MAX_GPUS
- *     MAX_FPGAS
- *     MAX_NODES
- *     DEVICE_0
- *     QPU_0
- *     CPU_0
- *     GPU_0
- *
- * Also forbidden are hidden finite enumerations such as:
- *
- *     quantumCapability
- *     gpuCapability
- *     cpuCapability
- *
- * unless they are explicitly part of a separate closed semantic vocabulary.
- *
- * ============================================================================
- * PUBLIC RULES
- * ============================================================================
- *
- * Public integration rules:
- *
- *     effectCapabilityClause
- *     effectCapabilityExpression
+ *     effectCapabilityDisjunction
+ *     effectCapabilityConjunction
  *     effectCapabilityPrimary
  *     effectCapabilityReference
  *     effectCapabilityReferenceList
+ *     effectCapabilityRequirement
+ *     effectCapabilityRequirementList
  *
- * These rules form the stable boundary for effect declaration grammars.
+ * Effect declaration grammars should consume:
+ *
+ *     effectCapabilityClause
+ *
+ * rather than reproducing capability-expression syntax.
+ *
+ * ============================================================================
+ * COMPLETION CRITERIA
+ * ============================================================================
+ *
+ * This file is complete when:
+ *
+ * [x] Existing filename is retained.
+ * [x] Grammar name remains EffectCapabilities.
+ * [x] Parser grammar is used.
+ * [x] Production lexer is ZamaniLexer.
+ * [x] No K_* token aliases are used.
+ * [x] No ZamaniTokens token vocabulary is consumed directly.
+ * [x] Capability identity is delegated to core/capabilities.g4.
+ * [x] Capability version syntax is delegated to core/capabilities.g4.
+ * [x] Name syntax is delegated to core/names.g4.
+ * [x] Effect declaration ownership remains outside this file.
+ * [x] Effect-set ownership remains outside this file.
+ * [x] Resource semantics remain outside this file.
+ * [x] Requirements remain semantically distinct.
+ * [x] Constraints remain semantically distinct.
+ * [x] Preferences remain semantically distinct.
+ * [x] Targets remain semantically distinct.
+ * [x] Placement remains semantically distinct.
+ * [x] Performance remains semantically distinct.
+ * [x] Security authorization remains outside this file.
+ * [x] Quantum semantics remain outside this file.
+ * [x] quantum::ir remains the canonical quantum semantic boundary.
+ * [x] No physical hardware is selected.
+ * [x] No device IDs are represented.
+ * [x] No resource quantities are represented.
+ * [x] No finite machine limits are represented.
+ * [x] No fixed quantum capability enumeration exists.
+ * [x] Unknown/future capability names remain syntactically extensible.
+ * [x] Empty capability clauses are rejected.
+ * [x] Capability conjunctions are supported.
+ * [x] Capability alternatives are supported.
+ * [x] Grouping is supported.
+ * [x] Capability negation is intentionally excluded from this requirement
+ *     grammar and remains available to appropriate constraint/predicate
+ *     grammars.
+ * [x] No embedded Rust actions exist.
+ * [x] No semantic predicates exist.
+ * [x] No I/O exists.
+ * [x] No runtime calls exist.
+ * [x] No hardware discovery exists.
+ * [x] No unsafe Rust is required.
+ * [x] Rust 1.97 / 1.97.1 compatibility is preserved.
+ * [x] Deterministic parsing is preserved.
+ * [x] Source structure can be preserved by the frontend AST.
+ * [x] Integration with effect declarations is explicit.
+ * [x] Integration with capability declarations is explicit.
+ * [x] Integration with quantum/classical/HDL/hardware domains is explicit.
+ * [x] POCO-REAF constraints are explicit.
  *
  * ============================================================================
  */
@@ -885,7 +1223,7 @@
 parser grammar EffectCapabilities;
 
 options {
-    tokenVocab = ZamaniTokens;
+    tokenVocab = ZamaniLexer;
 }
 
 import Core, Capabilities;
@@ -893,7 +1231,7 @@ import Core, Capabilities;
 
 /*
  * ============================================================================
- * 1. EFFECT CAPABILITY CLAUSE
+ * EFFECT CAPABILITY CLAUSE
  * ============================================================================
  *
  * Canonical form:
@@ -902,18 +1240,14 @@ import Core, Capabilities;
  *         quantum::measurement
  *     };
  *
- * Multiple capabilities may be supplied.
+ * The expression is mandatory.
  *
- * The braces deliberately distinguish this construct from unrelated
- * `requires(...)` contracts elsewhere in the language.
- *
- * ============================================================================
+ * An effect with no requirements simply omits the clause.
  */
-
 effectCapabilityClause
-    : K_REQUIRES
+    : REQUIRES
       LBRACE
-      effectCapabilityExpression?
+      effectCapabilityExpression
       RBRACE
       SEMICOLON?
     ;
@@ -921,26 +1255,32 @@ effectCapabilityClause
 
 /*
  * ============================================================================
- * 2. EFFECT CAPABILITY EXPRESSION
+ * EFFECT CAPABILITY EXPRESSION
  * ============================================================================
  *
- * Capability requirements support:
+ * Entry point for effect capability requirements.
  *
- *     A
+ * Precedence:
  *
- *     A and B
+ *     OR
+ *       lower precedence
  *
- *     A or B
+ *     AND
+ *       higher precedence
  *
- *     A and (B or C)
+ *     primary/group
+ *       highest precedence
  *
- * The parser records structure.
+ * Therefore:
  *
- * Semantic satisfiability belongs downstream.
+ *     A or B and C
  *
- * ============================================================================
+ * is structurally:
+ *
+ *     A or (B and C)
+ *
+ * Parentheses can explicitly override grouping.
  */
-
 effectCapabilityExpression
     : effectCapabilityDisjunction
     ;
@@ -948,56 +1288,47 @@ effectCapabilityExpression
 
 /*
  * ============================================================================
- * 3. DISJUNCTION
+ * DISJUNCTION
  * ============================================================================
  *
  *     A or B or C
  *
- * No finite alternative count exists.
+ * Represents alternatives.
  *
- * ============================================================================
+ * The parser records alternatives.
+ * Semantic analysis determines whether an alternative is actually available.
  */
-
 effectCapabilityDisjunction
     : effectCapabilityConjunction
-      (K_OR effectCapabilityConjunction)*
+      (OR effectCapabilityConjunction)*
     ;
 
 
 /*
  * ============================================================================
- * 4. CONJUNCTION
+ * CONJUNCTION
  * ============================================================================
  *
  *     A and B and C
  *
- * No finite conjunction count exists.
- *
- * ============================================================================
+ * Represents simultaneous capability requirements.
  */
-
 effectCapabilityConjunction
     : effectCapabilityPrimary
-      (K_AND effectCapabilityPrimary)*
+      (AND effectCapabilityPrimary)*
     ;
 
 
 /*
  * ============================================================================
- * 5. PRIMARY
+ * PRIMARY
  * ============================================================================
  *
- * A primary capability requirement is either:
+ * A primary requirement is either:
  *
- *     capability reference
- *
- * or:
- *
- *     grouped capability expression
- *
- * ============================================================================
+ *     - one canonical capability reference; or
+ *     - a grouped capability expression.
  */
-
 effectCapabilityPrimary
     : effectCapabilityReference
     | LPAREN
@@ -1008,26 +1339,24 @@ effectCapabilityPrimary
 
 /*
  * ============================================================================
- * 6. CAPABILITY REFERENCE
+ * CAPABILITY REFERENCE
  * ============================================================================
  *
- * The canonical capability grammar owns capability identity and version
- * syntax.
+ * Capability identity and version syntax belong exclusively to:
  *
- * This rule intentionally delegates to:
+ *     grammar/core/capabilities.g4
+ *
+ * Therefore this rule delegates directly to:
  *
  *     capabilityReference
  *
- * rather than duplicating:
+ * Examples:
  *
- *     qualifiedName
- *     capability version
- *
- * syntax.
- *
- * ============================================================================
+ *     quantum::measurement
+ *     quantum::measurement version 1
+ *     quantum::measurement version >= 1.2
+ *     future::domain::capability
  */
-
 effectCapabilityReference
     : capabilityReference
     ;
@@ -1035,17 +1364,45 @@ effectCapabilityReference
 
 /*
  * ============================================================================
- * 7. CAPABILITY REFERENCE LIST
+ * SINGLE REQUIREMENT
  * ============================================================================
  *
- * This rule exists as a convenience boundary for effect grammars that need
- * comma-separated capability references.
- *
- * It does not define a new capability representation.
- *
- * ============================================================================
+ * Convenience integration rule for consumers that need exactly one capability
+ * reference rather than a boolean capability expression.
  */
+effectCapabilityRequirement
+    : effectCapabilityReference
+    ;
 
+
+/*
+ * ============================================================================
+ * CAPABILITY REFERENCE LIST
+ * ============================================================================
+ *
+ * Convenience integration rule for consumers that explicitly need a
+ * comma-separated collection of capability references.
+ *
+ * This does not create a second capability representation.
+ *
+ * It remains a sequence of the canonical capabilityReference rule.
+ *
+ * Example:
+ *
+ *     quantum::measurement,
+ *     quantum::readout,
+ *     quantum::reset
+ *
+ * This rule is intentionally separate from the boolean expression grammar:
+ *
+ *     A, B
+ *
+ * does not silently mean:
+ *
+ *     A and B
+ *
+ * The consuming grammar determines the meaning of a comma-separated list.
+ */
 effectCapabilityReferenceList
     : effectCapabilityReference
       (COMMA effectCapabilityReference)*
@@ -1055,30 +1412,13 @@ effectCapabilityReferenceList
 
 /*
  * ============================================================================
- * 8. SINGLE EFFECT CAPABILITY REQUIREMENT
+ * REQUIREMENT LIST
  * ============================================================================
  *
- * Explicit single-reference form for grammar consumers that do not need
- * boolean composition.
+ * Compatibility/convenience alias.
  *
- * ============================================================================
+ * The canonical capability identity remains capabilityReference.
  */
-
-effectCapabilityRequirement
-    : effectCapabilityReference
-    ;
-
-
-/*
- * ============================================================================
- * 9. EFFECT CAPABILITY REQUIREMENT LIST
- * ============================================================================
- *
- * Convenience integration rule.
- *
- * ============================================================================
- */
-
 effectCapabilityRequirementList
     : effectCapabilityReferenceList
     ;
