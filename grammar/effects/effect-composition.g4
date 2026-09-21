@@ -7,189 +7,78 @@
 * File:
 * grammar/effects/effect-composition.g4
 * 
+* Grammar identity:
+* EffectComposition
+* 
 * Status:
-* Canonical modular production grammar for EFFECT COMPOSITION.
+* CANONICAL PRODUCTION MODULAR GRAMMAR
+* 
+* Language:
+* Zamani
 * 
 * Grammar technology:
 * ANTLR4 parser grammar
 * 
-* Language baseline:
+* Rust implementation baseline:
 * Rust 1.97 / Rust 1.97.1
-* Rust edition 2021
+* 
+* Rust edition:
+* 2021
 * 
 * Safety:
-* This grammar contains no embedded Rust actions, semantic predicates,
-* filesystem access, network access, hardware discovery, runtime calls,
-* or unsafe code.
+* This grammar contains:
+* 
+*   - no embedded Rust actions;
+*   - no semantic predicates;
+*   - no unsafe code;
+*   - no filesystem access;
+*   - no network access;
+*   - no environment inspection;
+*   - no hardware discovery;
+*   - no runtime execution;
+*   - no randomness;
+*   - no target probing.
 * 
 * ============================================================================
 * PURPOSE
 * ============================================================================
 * 
-* This file owns the SOURCE SYNTAX for composing already-defined effects.
+* This file owns exactly one concern:
 * 
-* It deliberately does NOT own:
+* the reusable SOURCE-SYNTAX boundary for an effect composition.
 * 
-* - effect declarations;
-* - effect identities;
-* - qualified-name syntax;
-* - effect-set member syntax;
-* - effect operations;
-* - effect handlers;
-* - capabilities;
-* - resources;
-* - requirements;
-* - constraints;
-* - hardware;
-* - quantum operations;
-* - QEC;
-* - ZQN;
-* - routing;
-* - scheduling;
-* - optimization;
-* - runtime behavior.
+* An effect composition is the syntactic occurrence of a canonical effect
+* set at a location where a consuming grammar construct accepts an effect
+* context.
 * 
-* Those concerns remain owned by their canonical grammar/semantic subsystems.
+* This file does NOT define another effect-set language.
 * 
-* The purpose of this file is to provide ONE explicit composition boundary
-* which downstream grammar consumers can use without duplicating effect-set
-* syntax or inventing incompatible effect-composition forms.
-* 
-* ============================================================================
-* ARCHITECTURAL PRINCIPLE
-* ============================================================================
-* 
-* Zamani separates:
-* 
-* EFFECT
-*     What computational behavior occurs or may occur?
-* 
-* CAPABILITY
-*     What can the execution environment provide?
-* 
-* REQUIREMENT
-*     What must be available?
-* 
-* RESOURCE
-*     What computational resource is involved?
-* 
-* CONSTRAINT
-*     What conditions must hold?
-* 
-* PREFERENCE
-*     Which valid realization is preferred?
-* 
-* HINT
-*     Which realization direction is suggested?
-* 
-* TARGET
-*     Which realization environment is selected downstream?
-* 
-* Effect composition MUST NOT collapse these concepts.
-* 
-* ============================================================================
-* POCO-REAF
-* ============================================================================
-* 
-* Zamani follows:
-* 
-* Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
-* 
-* Therefore this grammar MUST remain independent of machine size and target
-* topology.
-* 
-* This file contains no universal limits for:
-* 
-* - effects;
-* - effect references;
-* - effect sets;
-* - effect compositions;
-* - composition nesting;
-* - effect parameters;
-* - handler count;
-* - CPU count;
-* - core count;
-* - thread count;
-* - GPU count;
-* - FPGA count;
-* - accelerator count;
-* - QPU count;
-* - qubit count;
-* - node count;
-* - memory capacity;
-* - tensor dimensions;
-* - register width;
-* - topology size;
-* - timeline count;
-* - deployment size.
-* 
-* Practical parser/compiler resource limits are implementation policies.
-* They MUST NOT become language semantics.
-* 
-* ============================================================================
-* OPEN-WORLD EFFECT MODEL
-* ============================================================================
-* 
-* Effect names are semantic identities resolved downstream.
-* 
-* Examples:
-* 
-* IO
-* Quantum
-* Network
-* Security
-* quantum::Measurement
-* qec::Correction
-* zqn::NoiseObservation
-* distributed::Consensus
-* accelerator::Tensor
-* future::domain::operation
-* vendor::extension::effect
-* 
-* This file MUST NOT enumerate those names.
-* 
-* New computational domains must be representable without modifying this
-* grammar merely because a new effect identity was introduced.
-* 
-* ============================================================================
-* CANONICAL OWNERSHIP
-* ============================================================================
-* 
-* Effect identity / effect references / effect sets are owned by:
+* The canonical effect-set syntax is owned by:
 * 
 * grammar/effects/effect-sets.g4
 * 
-* Effect declarations are owned by:
+* Therefore:
 * 
-* grammar/effects/effect-declarations.g4
+* effectComposition
 * 
-* Effect operations are owned by:
+* delegates completely to:
 * 
-* grammar/effects/effect-operations.g4
+* effectSet
 * 
-* Effect handlers are owned by:
-* 
-* grammar/effects/effect-handling.g4
-* 
-* Effect types/polymorphism are owned by:
-* 
-* grammar/effects/effect-types.g4
-* 
-* Custom effect extensions are owned by:
-* 
-* grammar/effects/custom-effects.g4
-* 
-* The aggregate effect grammar is:
-* 
-* grammar/effects/effects.g4
-* 
-* This file owns ONLY composition.
+* This distinction is intentional.
 * 
 * ============================================================================
-* CRITICAL NON-DUPLICATION RULE
+* OWNERSHIP
 * ============================================================================
 * 
-* This file MUST NOT redefine:
+* THIS FILE OWNS:
+* 
+* effectComposition
+* optionalEffectComposition
+* 
+* These are integration boundaries, not independent semantic constructs.
+* 
+* THIS FILE DOES NOT OWN:
 * 
 * effectReference
 * effectReferenceList
@@ -197,170 +86,391 @@
 * effectSet
 * optionalEffectSet
 * effectSetBody
-* effectSetComposition
-* effectSetEntry
-* effectSetEntries
-* nonEmptyEffectSet
 * 
-* Those rules already belong to EffectSets.
+* Those belong to:
 * 
-* This file consumes those rules.
+* grammar/effects/effect-sets.g4
+* 
+* THIS FILE DOES NOT OWN:
+* 
+* effectDeclaration
+* effectOperation
+* effectOperationDeclaration
+* 
+* Those belong to:
+* 
+* grammar/effects/effect-declarations.g4
+* grammar/effects/effect-operations.g4
+* 
+* THIS FILE DOES NOT OWN:
+* 
+* effect handlers
+* resumption
+* effect discharge
+* 
+* Those belong to:
+* 
+* grammar/effects/effect-handling.g4
+* 
+* THIS FILE DOES NOT OWN:
+* 
+* effect polymorphism
+* effect variables
+* effect bounds
+* effect constraints
+* 
+* Those belong to:
+* 
+* grammar/effects/effect-types.g4
+* 
+* THIS FILE DOES NOT OWN:
+* 
+* capability syntax
+* resource syntax
+* requirements
+* constraints
+* preferences
+* hints
+* target selection
+* 
+* Those remain separate language concerns.
 * 
 * ============================================================================
-* SEMANTIC COMPOSITION
+* NON-DUPLICATION INVARIANT
 * ============================================================================
 * 
-* This grammar deliberately does not introduce semantic set operators.
+* This file MUST NOT contain another implementation of:
 * 
-* It does NOT define:
+* qualifiedName
+* effectReference
+* effectReferenceList
+* effectSet
+* effectSetBody
+* 
+* It MUST NOT introduce local lexer rules.
+* 
+* It MUST NOT recreate braces, commas, identifiers, or qualified-name
+* separators.
+* 
+* The source of truth for:
+* 
+* { A }
+* { A, B }
+* { quantum::Measurement }
+* 
+* is effect-sets.g4.
+* 
+* ============================================================================
+* CANONICAL SOURCE MODEL
+* ============================================================================
+* 
+* The source-level relationship is:
+* 
+* effectComposition
+*         |
+*         v
+*     effectSet
+*         |
+*         v
+* effectReference*
+* 
+* The semantic relationship is:
+* 
+* effect composition syntax
+*         |
+*         v
+* domain-neutral AST
+*         |
+*         v
+* effect semantic analysis
+*         |
+*   +-----+-----+----------------+
+*   |           |                |
+*   v           v                v
+* resolution   normalization   propagation
+*   |           |                |
+*   +-----------+----------------+
+*               |
+*               v
+*      canonical semantic model
+*               |
+*               v
+*             IR
+* 
+* This grammar does not perform any semantic operation.
+* 
+* ============================================================================
+* IMPORTANT SEMANTIC DISTINCTION
+* ============================================================================
+* 
+* The word "composition" here is an integration concept.
+* 
+* It does NOT introduce a source-level effect algebra.
+* 
+* This grammar therefore intentionally does NOT define:
 * 
 * effectSet + effectSet
 * effectSet - effectSet
-* effectSet & effectSet
 * effectSet | effectSet
+* effectSet & effectSet
+* effectSet ^ effectSet
 * 
-* merely because those operations might appear mathematically convenient.
+* Nor does it define textual operators for:
 * 
-* Effect algebra is a semantic concern.
+* union
+* intersection
+* subtraction
+* discharge
+* masking
+* transformation
 * 
-* If a future Zamani specification introduces explicit effect-set algebra,
-* that algebra must receive its own normative specification and compatibility
-* contract before syntax is added.
+* Those are semantic operations.
 * 
-* The current production composition model is structural:
-* 
-* one or more canonical effect sets
-* 
-* Semantic analysis subsequently determines:
-* 
-* - union;
-* - duplicate normalization;
-* - inclusion;
-* - subtraction/discharge;
-* - transformation;
-* - propagation;
-* - polymorphic substitution;
-* - handler effects.
+* If Zamani later standardizes explicit effect algebra, that feature must
+* receive its own specification, AST contract, semantic contract,
+* compatibility policy, and conformance tests before syntax is introduced.
 * 
 * ============================================================================
-* COMPOSITION MEANING
+* WHY THE COMPOSITION RULE IS ONE EFFECT SET
 * ============================================================================
 * 
-* A composition is a syntactic grouping of effect-set declarations/references.
-* 
-* Example:
+* The canonical source syntax for an effect context is already:
 * 
 * { IO }
 * 
-* Example:
-* 
 * { IO, Network }
 * 
-* Example:
+* { quantum::Measurement, classical::State }
 * 
-* { Quantum }
-* { Network, Security }
+* There is no need to invent:
 * 
-* The parser preserves source structure.
+* { IO } { Network }
 * 
-* Semantic analysis decides the canonical effect context.
+* as a second composition syntax.
+* 
+* Allowing arbitrary adjacent effect sets would also make this reusable rule
+* greedy in contexts where the enclosing grammar expects another construct.
+* 
+* Therefore:
+* 
+* effectComposition
+* 
+* consumes exactly one canonical:
+* 
+* effectSet
+* 
+* Semantic composition across multiple effect-bearing constructs is performed
+* by effect analysis.
 * 
 * ============================================================================
-* DETERMINISM
+* OPEN-WORLD EFFECT MODEL
 * ============================================================================
 * 
-* Parsing MUST depend only upon:
+* Effect identities are source-level names.
 * 
-* - source token stream;
-* - selected grammar version;
-* - parser configuration explicitly supplied by the frontend.
+* This grammar does NOT enumerate effects.
 * 
-* Parsing MUST NOT depend upon:
+* Therefore all of the following remain syntactically possible when their
+* names are valid according to the canonical name grammar:
 * 
-* - hardware availability;
-* - CPU count;
-* - GPU count;
-* - QPU availability;
-* - filesystem state;
-* - network state;
-* - environment variables;
-* - runtime state;
-* - wall-clock time;
-* - randomness;
-* - provider ordering.
+* IO
+* Storage
+* Network
+* Security
+* classical::State
+* quantum::Measurement
+* quantum::Reset
+* qec::Correction
+* zqn::NoiseObservation
+* hdl::Timing
+* hardware::Reconfiguration
+* accelerator::Tensor
+* ai::Training
+* distributed::Consensus
+* future::domain::operation
+* vendor::extension::effect
 * 
-* Semantic normalization MUST also be deterministic.
+* No new effect name requires editing this file.
+* 
+* This is essential for POCO-REAF and future-domain extensibility.
+* 
+* ============================================================================
+* POCO-REAF
+* ============================================================================
+* 
+* Zamani's portability model is:
+* 
+* Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
+* 
+* Effect composition therefore expresses computational semantics, not physical
+* realization.
+* 
+* This grammar imposes NO source-language limits on:
+* 
+* effects
+* effect references
+* effect-set entries
+* effect declarations
+* handlers
+* modules
+* functions
+* domains
+* program size
+* CPU count
+* core count
+* thread count
+* GPU count
+* FPGA count
+* accelerator count
+* QPU count
+* qubit count
+* node count
+* memory capacity
+* storage capacity
+* tensor dimensions
+* register width
+* topology size
+* timeline count
+* 
+* There are deliberately no language constants such as:
+* 
+* MAX_EFFECTS
+* MAX_EFFECT_SET_SIZE
+* MAX_EFFECT_REFERENCES
+* MAX_QUBITS
+* MAX_CPUS
+* MAX_GPUS
+* MAX_FPGAS
+* MAX_QPUS
+* MAX_NODES
+* MAX_MEMORY
+* 
+* or equivalent universal implementation limits.
+* 
+* Practical limits imposed by a parser, compiler, operating system, runtime,
+* or target are implementation/resource policies. They MUST NOT change the
+* meaning of valid Zamani source.
+* 
+* ============================================================================
+* EFFECT / CAPABILITY / RESOURCE SEPARATION
+* ============================================================================
+* 
+* EFFECT
+* Describes computational interaction or observable computational
+* behavior.
+* 
+* CAPABILITY
+* Describes what an environment can provide.
+* 
+* REQUIREMENT
+* Describes what must be satisfied for a valid realization.
+* 
+* RESOURCE
+* Describes computational resources and their semantic quantities.
+* 
+* CONSTRAINT
+* Describes conditions that a realization must satisfy.
+* 
+* PREFERENCE
+* Describes a preferred valid realization.
+* 
+* HINT
+* Provides implementation guidance without changing program meaning.
+* 
+* TARGET
+* Identifies a downstream realization environment.
+* 
+* Effect composition MUST NOT collapse these categories.
 * 
 * For example:
 * 
-* { IO, Quantum }
+* { quantum::Measurement }
 * 
-* and:
+* does NOT mean:
 * 
-* { Quantum, IO }
+* use QPU 0
+* use physical qubit 0
+* use a particular topology
+* use a particular gate set
+* use a particular calibration
+* use a particular simulator
 * 
-* must normalize to equivalent semantic effect sets when no ordered-effect
-* feature has explicitly been introduced.
-* 
-* Source ordering may still be preserved for diagnostics and source fidelity.
+* Such decisions belong downstream.
 * 
 * ============================================================================
-* QUANTUM BOUNDARY
+* QUANTUM INTEGRATION
 * ============================================================================
 * 
-* This file permits quantum effect identities because they are ordinary
-* qualified names.
+* Quantum effects remain ordinary effect identities.
 * 
 * Examples:
 * 
 * { quantum::Measurement }
+* 
 * { quantum::Reset, quantum::Readout }
 * 
-* However this file does NOT define:
+* { quantum::DynamicControl }
 * 
-* - QubitId;
-* - PhysicalQubitId;
-* - GateKind;
-* - quantum topology;
-* - calibration;
-* - pulse schedules;
-* - noise models;
-* - QEC codes;
-* - decoder algorithms;
-* - ZQN faults.
+* This grammar does NOT define:
 * 
-* Quantum semantic lowering remains:
-* 
-* source
-*   ->
-* frontend AST
-*   ->
-* semantic effect analysis
-*   ->
-* quantum semantic representation
-*   ->
-* quantum::ir
-*   ->
-* optimization
-*   ->
+* QubitId
+* PhysicalQubitId
+* GateKind
+* quantum topology
+* calibration
+* pulse schedules
+* noise models
+* QEC codes
+* decoder algorithms
+* ZQN fault models
 * routing
-*   ->
 * scheduling
-*   ->
+* 
+* Quantum lowering remains:
+* 
+* Zamani source
+*      |
+*      v
+* lexer
+*      |
+*      v
+* parser
+*      |
+*      v
+* domain-neutral AST
+*      |
+*      v
+* semantic analysis
+*      |
+*      v
+* quantum::ir
+*      |
+*      v
+* optimization
+*      |
+*      v
+* routing
+*      |
+*      v
+* scheduling
+*      |
+*      v
 * QEC / resilience / ZQN
-*   ->
+*      |
+*      v
 * HAL
-*   ->
+*      |
+*      v
 * target realization
 * 
-* This grammar MUST NOT create another quantum IR.
+* This file MUST NOT introduce a second quantum IR.
 * 
 * ============================================================================
-* CLASSICAL / HDL / HARDWARE BOUNDARY
+* CLASSICAL / HDL / HYBRID / HARDWARE INTEGRATION
 * ============================================================================
 * 
-* Classical, HDL, hardware, accelerator, AI, distributed, networking,
-* security, and future effects remain ordinary semantic effect identities.
+* Effect identities may describe any computational domain without changing
+* this grammar.
 * 
 * Examples:
 * 
@@ -373,172 +483,757 @@
 * { network::Communication }
 * { security::Audit }
 * 
-* The effect grammar does not decide how these effects are realized.
+* Domain-specific meaning is resolved downstream.
+* 
+* The composition grammar therefore remains domain-neutral.
 * 
 * ============================================================================
 * AST CONTRACT
 * ============================================================================
 * 
-* This file creates NO AST nodes itself.
+* This file introduces no Rust AST type.
 * 
-* The parser output must be sufficient for the frontend AST builder to
-* preserve:
+* The frontend AST builder must preserve enough information from the parser
+* context to represent:
 * 
-* - source span;
-* - composition structure;
-* - effect-set boundaries;
-* - effect-reference source order;
-* - qualified effect identity;
-* - nesting;
-* - source provenance.
+* - composition source span;
+* - the contained effect-set span;
+* - effect-reference source ordering;
+* - qualified effect names;
+* - source provenance;
+* - surrounding declaration/expression/statement context.
 * 
-* The AST must remain domain-neutral.
+* Conceptually:
 * 
-* It MUST NOT introduce:
+* EffectComposition
+*     {
+*         effect_set,
+*         source
+*     }
 * 
-* - PhysicalQubitId;
-* - GPU identifier;
-* - CPU identifier;
-* - FPGA identifier;
-* - node identifier;
-* - topology;
-* - backend;
-* - vendor device handle.
+* The exact AST structure remains owned by:
 * 
-* ============================================================================
-* GENERIC OPERATION / EFFECT INTEGRATION
-* ============================================================================
+* src/frontend/ast/
 * 
-* Effect composition may be attached to the repository's generic operation
-* model:
+* This grammar MUST NOT introduce:
 * 
-* Operation {
-*     name,
-*     namespace,
-*     operands,
-*     parameters,
-*     results,
-*     attributes,
-*     modifiers,
-*     effects,
-*     capabilities,
-*     source
-* }
+* QuantumGate
+* PhysicalQubit
+* GPUOperation
+* CPUInstruction
+* DeviceHandle
+* VendorOperation
+* HardwareTopology
 * 
-* This grammar does not define that structure.
-* 
-* It only supplies the syntactic effect-composition information consumed by
-* AST construction and semantic analysis.
+* or any other backend-specific representation.
 * 
 * ============================================================================
 * SEMANTIC CONTRACT
 * ============================================================================
 * 
-* After parsing, semantic analysis is responsible for:
+* Semantic analysis is responsible for:
 * 
-* - resolving effect identities;
-* - resolving namespaces;
+* - resolving effect names;
 * - validating declarations;
-* - validating imported effects;
-* - normalizing effect sets;
-* - detecting redundant references;
-* - applying effect polymorphism;
-* - checking effect inclusion;
+* - resolving imports;
+* - resolving aliases;
+* - checking visibility;
+* - validating effect compatibility;
+* - normalizing duplicates;
+* - preserving source provenance;
 * - propagating effects;
-* - validating handler transformations;
-* - determining effect discharge;
+* - applying effect polymorphism;
+* - determining handler discharge;
 * - determining capability implications;
 * - determining resource implications;
 * - determining target-independent requirements.
 * 
-* None of these operations belongs in ANTLR actions or parser predicates.
+* None of these operations belongs in this grammar.
+* 
+* In particular, the parser MUST NOT reject duplicate effect references merely
+* because semantic normalization may later remove them.
+* 
+* Example:
+* 
+* { IO, IO }
+* 
+* is syntactically valid if effectSet permits the corresponding references.
+* 
+* Whether duplicates are normalized, diagnosed, or retained is a semantic
+* policy.
 * 
 * ============================================================================
-* RESOURCE / CAPABILITY INTEGRATION
+* DETERMINISM
 * ============================================================================
 * 
-* Effects may contribute semantic information to resource/capability analysis.
+* Parsing depends only upon:
+* 
+* - source tokens;
+* - the grammar;
+* - the selected language version;
+* - explicitly supplied parser configuration.
+* 
+* Parsing MUST NOT depend upon:
+* 
+* - hardware availability;
+* - CPU count;
+* - GPU count;
+* - QPU availability;
+* - filesystem state;
+* - network state;
+* - environment variables;
+* - wall-clock time;
+* - randomness;
+* - provider ordering;
+* - runtime state.
+* 
+* The grammar contains no actions or predicates that can introduce such
+* dependencies.
+* 
+* ============================================================================
+* SOURCE ORDER AND CANONICALIZATION
+* ============================================================================
+* 
+* Source ordering is preserved by the parse tree.
+* 
+* Semantic analysis may canonicalize an unordered effect set.
+* 
+* For example:
+* 
+* { IO, Network }
+* 
+* and:
+* 
+* { Network, IO }
+* 
+* may be semantically equivalent if the language specification defines effect
+* sets as unordered.
+* 
+* This file does not decide that equivalence.
+* 
+* The distinction between:
+* 
+* source order
+* 
+* and:
+* 
+* semantic canonical order
+* 
+* is intentional and important for diagnostics, formatting, provenance, and
+* deterministic compilation.
+* 
+* ============================================================================
+* ERROR BOUNDARY
+* ============================================================================
+* 
+* This grammar is responsible only for structural syntax.
+* 
+* Structural errors include malformed effect-set syntax, which is diagnosed
+* through the canonical effectSet rule.
+* 
+* Examples include:
+* 
+* {,
+* { IO,,
+* { IO
+* IO }
+* 
+* Name-resolution errors such as:
+* 
+* unknown::effect
+* 
+* are semantic diagnostics, not composition-grammar errors.
+* 
+* Capability/resource errors such as:
+* 
+* required capability unavailable
+* 
+* are downstream feasibility diagnostics.
+* 
+* Hardware errors such as:
+* 
+* selected target cannot realize the effect
+* 
+* are downstream target-analysis diagnostics.
+* 
+* ============================================================================
+* INTEGRATION WITH EFFECT-SETS
+* ============================================================================
+* 
+* The dependency is intentionally one-way:
+* 
+* EffectComposition
+*      |
+*      v
+* EffectSets
+* 
+* EffectComposition consumes:
+* 
+* effectSet
+* 
+* and does not reproduce its implementation.
+* 
+* The canonical ownership remains:
+* 
+* grammar/effects/effect-sets.g4
+* 
+* for:
+* 
+* effectReference
+* effectReferenceList
+* optionalEffectReferenceList
+* effectSet
+* optionalEffectSet
+* effectSetBody
+* 
+* ============================================================================
+* INTEGRATION WITH EFFECT-DECLARATIONS
+* ============================================================================
+* 
+* Effect declarations are owned by:
+* 
+* grammar/effects/effect-declarations.g4
+* 
+* A declaration may use effect composition when its surrounding language
+* construct permits an effect context.
+* 
+* This file supplies only:
+* 
+* effectComposition
+* 
+* It does not modify declaration syntax.
+* 
+* ============================================================================
+* INTEGRATION WITH EFFECT-OPERATIONS
+* ============================================================================
+* 
+* Effect operation declarations and uses are separate concerns.
+* 
+* effect-composition.g4
+*     |
+*     +--> effect context
+* 
+* effect-operations.g4
+*     |
+*     +--> operation identity/use
+* 
+* An operation may have effects, but the operation grammar remains responsible
+* for operation syntax.
+* 
+* This file MUST NOT define:
+* 
+* perform
+* effectOperation
+* effectInvocation
+* 
+* because those belong to the operation/use grammar.
+* 
+* ============================================================================
+* INTEGRATION WITH EFFECT-TYPES
+* ============================================================================
+* 
+* Effect polymorphism is owned by:
+* 
+* grammar/effects/effect-types.g4
+* 
+* That grammar may consume:
+* 
+* effectComposition
+* 
+* when a type-level construct requires an effect context.
+* 
+* This file MUST NOT define effect variables or effect bounds.
+* 
+* ============================================================================
+* INTEGRATION WITH EFFECT-HANDLING
+* ============================================================================
+* 
+* Handler syntax is owned by:
+* 
+* grammar/effects/effect-handling.g4
+* 
+* A handler may consume or transform an effect context.
+* 
+* Handler semantics remain downstream.
+* 
+* This file does not define:
+* 
+* handler
+* handler arm
+* resume
+* abort
+* continuation
+* 
+* ============================================================================
+* INTEGRATION WITH CAPABILITIES
+* ============================================================================
+* 
+* Effect composition may contribute semantic information to capability
+* analysis.
 * 
 * The dependency is:
 * 
 * effect composition
 *      +
-* requirements
-*      +
-* constraints
+* declared requirements
 *      +
 * environment capabilities
 *      |
 *      v
 * feasibility analysis
 * 
-* This grammar MUST NOT perform that analysis.
+* This grammar performs none of that analysis.
 * 
-* In particular:
+* For example:
 * 
-* { Quantum }
+* { quantum::Measurement }
 * 
-* MUST NOT mean:
-* 
-* use QPU 0
-* 
-* and:
-* 
-* { Accelerator }
-* 
-* MUST NOT mean:
-* 
-* use GPU 0
-* 
-* Resource and target realization remain downstream.
+* may semantically imply a capability requirement in a particular language
+* profile, but that implication is NOT encoded here.
 * 
 * ============================================================================
-* IR CONTRACT
+* INTEGRATION WITH RESOURCES
+* ============================================================================
+* 
+* Effects may have resource consequences.
+* 
+* For example, an effect may semantically require:
+* 
+* memory
+* communication
+* quantum resources
+* accelerator resources
+* storage
+* 
+* This grammar does not calculate or allocate any such resource.
+* 
+* Resource realization remains target-independent until later compilation
+* stages determine an implementation.
+* 
+* ============================================================================
+* INTEGRATION WITH HARDWARE
+* ============================================================================
+* 
+* Hardware grammar remains responsible for hardware intent.
+* 
+* Effect composition MUST NOT directly select:
+* 
+* CPU
+* GPU
+* FPGA
+* QPU
+* accelerator
+* node
+* memory bank
+* device
+* physical qubit
+* 
+* Hardware selection, routing, placement, scheduling, calibration, and HAL
+* interaction remain downstream.
+* 
+* ============================================================================
+* INTEGRATION WITH CANONICAL IR
 * ============================================================================
 * 
 * This grammar produces no IR.
 * 
 * The canonical path is:
 * 
-* parse tree
-*   ->
-* domain-neutral AST
-*   ->
+* parser context
+*      |
+*      v
+* frontend AST
+*      |
+*      v
 * semantic effect model
+*      |
+*      v
+* canonical semantic representation
+*      |
+*      +--> classical IR
+*      +--> quantum::ir
+*      +--> HDL/hardware representation
+*      +--> distributed representation
+*      +--> accelerator representation
+*      +--> future domain representation
+* 
+* The exact downstream IR is determined by semantics.
+* 
+* This grammar must remain independent of all IR implementations.
+* 
+* ============================================================================
+* INTEGRATION WITH ZAMANI PARSER
+* ============================================================================
+* 
+* The root parser:
+* 
+* grammar/antlr/ZamaniParser.g4
+* 
+* is the parser composition root.
+* 
+* It ultimately composes the Effects dispatcher, which in turn composes this
+* grammar.
+* 
+* The dependency direction must remain:
+* 
+* ZamaniParser
+*      |
+*      v
+*   Effects
+*      |
+*      v
+* EffectComposition
+*      |
+*      v
+* EffectSets
+* 
+* Leaf grammars must not import ZamaniParser.
+* 
+* This prevents circular grammar ownership.
+* 
+* ============================================================================
+* AGGREGATE EFFECT GRAMMAR INTEGRATION
+* ============================================================================
+* 
+* The aggregate:
+* 
+* grammar/effects/effects.g4
+* 
+* must import:
+* 
+* EffectComposition
+* 
+* and must NOT define another:
+* 
+* effectComposition
+* 
+* rule.
+* 
+* There must be exactly one canonical owner of the rule:
+* 
+* grammar/effects/effect-composition.g4
+* 
+* The aggregate may expose the imported rule through its existing higher-level
+* constructs, but it must not duplicate the implementation.
+* 
+* ============================================================================
+* REQUIRED EFFECT-SETS INTEGRATION
+* ============================================================================
+* 
+* "effect-sets.g4" currently consumes "qualifiedName".
+* 
+* Its canonical dependency must be made explicit through the qualified-name
+* grammar owned by:
+* 
+* grammar/core/names.g4
+* grammar/core/qualified-names.g4
+* 
+* The effect composition grammar deliberately does not work around that
+* dependency by redefining "qualifiedName".
+* 
+* This preserves one canonical name grammar across:
+* 
+* effects
+* modules
+* declarations
+* types
+* functions
+* quantum
+* HDL
+* hardware
+* distributed
+* AI
+* networking
+* security
+* future domains
+* 
+* ============================================================================
+* VERSIONING
+* ============================================================================
+* 
+* Adding a new effect name does NOT require a grammar version change.
+* 
+* Changing:
+* 
+* effectSet
+* 
+* syntax requires changes to:
+* 
+* effect-sets.g4
+* 
+* and its specification/conformance tests.
+* 
+* Changing the integration boundary:
+* 
+* effectComposition
+* 
+* is a grammar compatibility change and must be reflected in:
+* 
+* grammar/compatibility/
+* grammar/spec/
+* grammar/specification/
+* grammar/tests/
+* 
+* ============================================================================
+* FORMATTER / ROUND-TRIP CONTRACT
+* ============================================================================
+* 
+* When a formatter exists, a valid composition must support:
+* 
+* source
 *   ->
-* canonical semantic IR
+* lexer
+*   ->
+* parser
+*   ->
+* AST
+*   ->
+* formatter
+*   ->
+* parser
 * 
-* Depending upon resolved semantics, the resulting information may be
-* consumed by:
+* without changing the semantic identity of its effect references.
 * 
-* classical IR
-* quantum::ir
-* HDL/hardware IR
-* distributed lowering
-* accelerator lowering
-* future domain IR
+* Formatting may normalize whitespace and line breaks according to the
+* formatter specification.
 * 
-* The effect composition grammar must remain independent of those IR formats.
+* It must not silently add or remove effect references.
 * 
 * ============================================================================
-* EFFECT SET COMPOSITION ENTRY
+* TOOLING CONTRACT
 * ============================================================================
 * 
-* "effectComposition" is the single public rule exported by this file.
+* The named rules:
 * 
-* It consumes one or more canonical effect sets.
+* effectComposition
+* optionalEffectComposition
 * 
-* Examples:
+* are stable integration points for:
+* 
+* parser tooling
+* AST construction
+* IDE/LSP tooling
+* formatter
+* documentation generation
+* semantic analysis
+* conformance tests
+* 
+* No tool may depend on generated numeric ANTLR token IDs.
+* 
+* Tools should depend on grammar rule names and semantic contracts.
+* 
+* ============================================================================
+* SECURITY CONTRACT
+* ============================================================================
+* 
+* Parsing this grammar is side-effect free.
+* 
+* A parser invocation MUST NOT:
+* 
+* execute an effect;
+* resolve a device;
+* access a secret;
+* access the network;
+* access the filesystem;
+* allocate hardware resources;
+* invoke a QPU;
+* invoke a GPU;
+* invoke a runtime service.
+* 
+* The source construct is declarative syntax until later semantic/runtime
+* phases explicitly interpret it.
+* 
+* ============================================================================
+* SCALABILITY CONTRACT
+* ============================================================================
+* 
+* This grammar uses delegation rather than fixed enumerations.
+* 
+* There is no language-level maximum for:
+* 
+* effect references
+* effect-set entries
+* effect contexts
+* modules
+* declarations
+* program size
+* domain count
+* machine size
+* 
+* Scaling is therefore determined by:
+* 
+* available compiler resources
+* available runtime resources
+* declared semantic requirements
+* target capabilities
+* deployment resources
+* 
+* rather than parser constants.
+* 
+* "Infinity" here means that the language does not establish an artificial
+* finite machine-size ceiling. Actual execution remains bounded by available
+* computational resources and implementation limits.
+* 
+* ============================================================================
+* HARD-CODING AUDIT
+* ============================================================================
+* 
+* This grammar contains no:
+* 
+* MAX_QUBITS
+* MAX_CPUS
+* MAX_CORES
+* MAX_THREADS
+* MAX_GPUS
+* MAX_FPGAS
+* MAX_ACCELERATORS
+* MAX_QPUS
+* MAX_NODES
+* MAX_MEMORY
+* MAX_STORAGE
+* MAX_TENSOR_RANK
+* MAX_REGISTER_WIDTH
+* DEVICE_0
+* CPU_0
+* GPU_0
+* FPGA_0
+* QPU_0
+* 
+* and does not encode equivalent physical assumptions.
+* 
+* Numeric values appearing in a Zamani program are program data, not grammar
+* limits.
+* 
+* ============================================================================
+* TEST CONTRACT
+* ============================================================================
+* 
+* Positive structural cases:
+* 
+* { }
 * 
 * { IO }
 * 
 * { IO, Network }
 * 
-* { Quantum }
-* { Network, Security }
+* { quantum::Measurement }
 * 
-* No maximum number of sets is encoded.
+* { quantum::Measurement, quantum::Reset }
 * 
+* { classical::State, quantum::Measurement }
+* 
+* { hdl::Timing, hardware::Reconfiguration }
+* 
+* { distributed::Consensus, network::Communication }
+* 
+* { ai::Training, accelerator::Tensor }
+* 
+* {
+*     IO,
+*     Network,
+*     quantum::Measurement,
+* }
+* 
+* Optional composition:
+* 
+* absent
+* 
+* { IO }
+* 
+* Negative structural cases are primarily delegated to effectSet:
+* 
+* {
+* { IO
+* IO }
+* {, IO}
+* { IO,, Network }
+* 
+* Semantic-negative cases must be tested downstream:
+* 
+* unknown effect;
+* inaccessible effect;
+* invalid effect declaration;
+* invalid effect import;
+* incompatible effect;
+* unavailable capability;
+* insufficient resource;
+* unsupported target;
+* invalid handler transformation.
+* 
+* Scalability tests must verify absence of artificial language limits for:
+* 
+* effect-set cardinality;
+* qualified-name depth;
+* source size;
+* number of effect-bearing constructs;
+* cross-domain effect references.
+* 
+* Determinism tests must verify that identical token streams and grammar
+* versions produce equivalent parse trees.
+* 
+* Cross-domain tests must cover:
+* 
+* classical
+* quantum
+* hybrid
+* HDL
+* hardware
+* distributed
+* AI
+* data
+* networking
+* security
+* accelerator
+* future/dialect domains
+* 
+* ============================================================================
+* COMPLETION CRITERIA
+* ============================================================================
+* 
+* This file is complete when:
+* 
+* [x] It owns only effect-composition integration syntax.
+* [x] It delegates effect-set syntax to EffectSets.
+* [x] It does not duplicate qualified-name syntax.
+* [x] It does not define lexical rules.
+* [x] It does not enumerate effect identities.
+* [x] It does not enumerate quantum gates.
+* [x] It does not define quantum IR.
+* [x] It does not define hardware topology.
+* [x] It does not define resources.
+* [x] It does not define capabilities.
+* [x] It does not perform semantic analysis.
+* [x] It does not execute effects.
+* [x] It contains no unsafe Rust.
+* [x] It contains no Rust actions.
+* [x] It contains no semantic predicates.
+* [x] It contains no machine-size constants.
+* [x] It remains open-world.
+* [x] It is deterministic.
+* [x] It preserves source structure through ANTLR contexts.
+* [x] It has explicit AST integration.
+* [x] It has explicit semantic integration.
+* [x] It has explicit IR integration.
+* [x] It has explicit quantum integration.
+* [x] It has explicit hardware/resource integration.
+* 
+* Integration requirements:
+* 
+* [ ] effects.g4 imports EffectComposition.
+* [ ] effects.g4 removes its duplicate effectComposition rule.
+* [ ] effect-sets.g4 explicitly imports the canonical qualified-name owner.
+* [ ] aggregate grammar generation reports no duplicate rule ownership.
+* [ ] Rust frontend tests consume the resulting parse contexts.
+* [ ] positive tests pass.
+* [ ] negative tests pass.
+* [ ] boundary tests pass.
+* [ ] cross-domain tests pass.
+* [ ] scalability tests pass.
+* [ ] determinism tests pass.
+* [ ] compatibility tests pass.
+* 
+* ============================================================================
+* CANONICAL IMPLEMENTATION
 * ============================================================================
   */
 
@@ -553,586 +1248,14 @@ import EffectSets;
 /*
 
 * ============================================================================
-* CANONICAL EFFECT COMPOSITION
+* EFFECT COMPOSITION
 * ============================================================================
 * 
-* This is the ONLY public composition rule owned by this file.
+* This is the sole canonical public rule owned by this file.
 * 
-* It intentionally delegates effect identity and set syntax to EffectSets.
+* It is deliberately a thin adapter over the canonical effect-set grammar.
 * 
-* Semantic composition is NOT performed here.
-  */
-  effectComposition
-  : effectSet+
-  ;
-
-/*
-
-* ============================================================================
-* OPTIONAL EFFECT COMPOSITION
-* ============================================================================
-* 
-* This rule is provided for consumers where effect composition is optional.
-* 
-* It distinguishes:
-* 
-* absent composition
-* 
-* from:
-* 
-* explicitly present composition
-* 
-* Semantic analysis determines whether that distinction has semantic meaning
-* for the consuming construct.
-  */
-  optionalEffectComposition
-  : effectComposition?
-  ;
-
-/*
-
-* ============================================================================
-* EFFECT COMPOSITION MEMBER
-* ============================================================================
-* 
-* A composition member is one complete canonical effect set.
-* 
-* This rule gives downstream grammar consumers a stable named boundary
-* without duplicating effect-set syntax.
-  */
-  effectCompositionMember
-  : effectSet
-  ;
-
-/*
-
-* ============================================================================
-* EFFECT COMPOSITION MEMBERS
-* ============================================================================
-* 
-* Non-empty sequence of composition members.
-* 
-* No fixed cardinality is imposed.
-  */
-  effectCompositionMembers
-  : effectCompositionMember+
-  ;
-
-/*
-
-* ============================================================================
-* OPTIONAL EFFECT COMPOSITION MEMBERS
-* ============================================================================
-* 
-* Convenience integration rule for declarations or constructs that permit an
-* optional composition.
-  */
-  optionalEffectCompositionMembers
-  : effectCompositionMembers?
-  ;
-
-/*
-
-* ============================================================================
-* EFFECT COMPOSITION BODY
-* ============================================================================
-* 
-* Named integration boundary for grammar consumers that need the composition
-* sequence without introducing another composition language.
-  */
-  effectCompositionBody
-  : effectCompositionMembers
-  ;
-
-/*
-
-* ============================================================================
-* SINGLE EFFECT-COMPOSITION MEMBER
-* ============================================================================
-* 
-* Explicitly named single-member boundary.
-* 
-* This is syntactic only.
-  */
-  singleEffectComposition
-  : effectCompositionMember
-  ;
-
-/*
-
-* ============================================================================
-* COMPOSITION LIST
-* ============================================================================
-* 
-* This is intentionally an alias around the canonical composition sequence.
-* 
-* It does NOT introduce comma-separated composition syntax.
-* 
-* Commas belong to effectSet/effectSetEntries.
-  */
-  effectCompositionList
-  : effectCompositionMembers
-  ;
-
-/*
-
-* ============================================================================
-* EMPTY COMPOSITION
-* ============================================================================
-* 
-* An empty composition is represented by omission through:
-* 
-* optionalEffectComposition
-* 
-* rather than by introducing another empty-set syntax.
-* 
-* The canonical empty EFFECT SET remains:
-* 
-* {}
-* 
-* and is owned by EffectSets.
-* 
-* Therefore this file deliberately does NOT define:
-* 
-* emptyEffectComposition
-* 
-* as a competing semantic construct.
-  */
-
-/*
-
-* ============================================================================
-* SEMANTIC COMPOSITION BOUNDARY
-* ============================================================================
-* 
-* This rule exists for compiler/tooling consumers which need a named boundary
-* representing the entire source-level composition.
-* 
-* It is intentionally identical to the canonical composition rule.
-  */
-  effectCompositionExpression
-  : effectComposition
-  ;
-
-/*
-
-* ============================================================================
-* INTEGRATION CONTRACT
-* ============================================================================
-* 
-* UPSTREAM
-* 
-* Zamani.g4
-*     |
-*     v
-* ZamaniParser
-*     |
-*     v
-* effect aggregate
-*     |
-*     v
-* EffectComposition
-* 
-* EffectSets
-*     |
-*     +--> qualifiedName
-*     +--> effectReference
-*     +--> effectSet
-* 
-* DOWNSTREAM
-* 
-* effect declarations
-*     |
-*     v
-* function/type/effect contracts
-*     |
-*     v
-* frontend AST
-*     |
-*     v
-* semantic effect analysis
-*     |
-*     +--> normalization
-*     +--> propagation
-*     +--> inclusion
-*     +--> handling
-*     +--> capability analysis
-*     +--> resource analysis
-*     |
-*     v
-* canonical semantic IR
-*     |
-*     +--> classical IR
-*     +--> quantum::ir
-*     +--> HDL/hardware IR
-*     +--> other domain lowering
-*     |
-*     v
-* optimization
-*     |
-*     v
-* routing / scheduling / resilience
-*     |
-*     v
-* ZQN / HAL / target realization
-* 
-* This file MUST NOT create any reverse dependency.
-* 
-* ============================================================================
-* AGGREGATE EFFECT-GRAMMAR INTEGRATION
-* ============================================================================
-* 
-* The canonical aggregate:
-* 
-* grammar/effects/effects.g4
-* 
-* must import:
-* 
-* EffectComposition
-* 
-* and expose:
-* 
-* effectComposition
-* 
-* to its downstream consumers.
-* 
-* "effects.g4" MUST NOT redefine:
-* 
-* effectComposition
-* 
-* because doing so creates two authorities for the same rule.
-* 
-* ============================================================================
-* EFFECT-SET INTEGRATION
-* ============================================================================
-* 
-* "EffectSets" remains the sole owner of:
-* 
-* effectReference
-* effectReferenceList
-* optionalEffectReferenceList
-* effectSet
-* optionalEffectSet
-* effectSetBody
-* effectSetComposition
-* effectSetEntry
-* effectSetEntries
-* nonEmptyEffectSet
-* 
-* Therefore composition uses:
-* 
-* effectSet
-* 
-* rather than reconstructing:
-* 
-* LBRACE
-* ...
-* RBRACE
-* 
-* locally.
-* 
-* This guarantees that effect composition follows the same lexical/name/set
-* contract as function effects, effect declarations, type effects, handlers,
-* domain effects, and custom effects.
-* 
-* ============================================================================
-* EFFECT-TYPES INTEGRATION
-* ============================================================================
-* 
-* Effect polymorphism remains owned by effect-types.g4 and the type-system
-* grammar.
-* 
-* This file does not define:
-* 
-* E: Effect
-* effect variables
-* effect bounds
-* effect constraints
-* effectful types
-* 
-* Instead, effect-types.g4 may consume:
-* 
-* effectComposition
-* 
-* when a type-level construct requires an effect composition.
-* 
-* ============================================================================
-* EFFECT-OPERATIONS INTEGRATION
-* ============================================================================
-* 
-* Effect operation declarations and invocations remain owned by:
-* 
-* grammar/effects/effect-operations.g4
-* 
-* An operation may carry an effect composition.
-* 
-* This grammar only supplies the composition portion.
-* 
-* ============================================================================
-* EFFECT-HANDLING INTEGRATION
-* ============================================================================
-* 
-* Handler syntax remains owned by:
-* 
-* grammar/effects/effect-handling.g4
-* 
-* A handler may transform or discharge an effect context.
-* 
-* The handler grammar may consume effectComposition where an explicit
-* composition contract is required.
-* 
-* This file does not define handler semantics.
-* 
-* ============================================================================
-* CUSTOM EFFECT INTEGRATION
-* ============================================================================
-* 
-* "custom-effects.g4" may use:
-* 
-* effectComposition
-* 
-* to compose user-defined or dialect-defined effects.
-* 
-* Custom effect identity remains open-world.
-* 
-* ============================================================================
-* DOMAIN EFFECT INTEGRATION
-* ============================================================================
-* 
-* Domain grammars such as:
-* 
-* quantum.g4
-* hardware.g4
-* distributed.g4
-* network.g4
-* security.g4
-* io.g4
-* 
-* may consume the canonical composition rule.
-* 
-* None of them may create another universal effect-composition grammar.
-* 
-* ============================================================================
-* QUANTUM INTEGRATION
-* ============================================================================
-* 
-* Example:
-* 
-* { quantum::Measurement, quantum::Reset }
-* 
-* is syntactically valid because those are qualified effect identities.
-* 
-* The semantic layer determines whether those effects correspond to quantum
-* computation.
-* 
-* If they do, the quantum semantic pipeline remains:
-* 
-* AST
-*   ->
-* semantic quantum effects
-*   ->
-* quantum::ir
-*   ->
-* optimization
-*   ->
-* routing
-*   ->
-* scheduling
-*   ->
-* QEC / resilience
-*   ->
-* ZQN
-*   ->
-* HAL
-* 
-* No effect-composition rule may directly construct quantum::ir.
-* 
-* ============================================================================
-* HDL / HARDWARE INTEGRATION
-* ============================================================================
-* 
-* Example:
-* 
-* { hdl::Timing, hardware::Signal }
-* 
-* remains source-level semantic information.
-* 
-* It does not select:
-* 
-* FPGA 0
-* ASIC instance 0
-* bus 31:0
-* clock 3
-* memory bank 7
-* 
-* Hardware realization remains downstream.
-* 
-* ============================================================================
-* DISTRIBUTED INTEGRATION
-* ============================================================================
-* 
-* Example:
-* 
-* { distributed::Consensus, network::Communication }
-* 
-* does not establish:
-* 
-* node count;
-* network topology;
-* fixed process count;
-* fixed address;
-* fixed deployment.
-* 
-* Those belong to resource/hardware/distributed execution analysis.
-* 
-* ============================================================================
-* AI / ACCELERATOR INTEGRATION
-* ============================================================================
-* 
-* Example:
-* 
-* { ai::Training, accelerator::Tensor }
-* 
-* expresses semantic computational behavior.
-* 
-* It does not select:
-* 
-* GPU;
-* TPU;
-* NPU;
-* accelerator ID;
-* tensor engine;
-* memory bank.
-* 
-* ============================================================================
-* SOURCE-SPAN CONTRACT
-* ============================================================================
-* 
-* The parser must preserve sufficient parse-tree structure for the AST layer
-* to associate source spans with:
-* 
-* - entire composition;
-* - every composition member;
-* - every effect set;
-* - every effect reference.
-* 
-* This is required for:
-* 
-* diagnostics;
-* IDE navigation;
-* refactoring;
-* formatting;
-* provenance;
-* semantic error reporting;
-* compatibility tooling.
-* 
-* ============================================================================
-* ERROR OWNERSHIP
-* ============================================================================
-* 
-* Parser errors:
-* 
-* - malformed braces;
-* - missing effect set;
-* - malformed set syntax;
-* - malformed token sequence.
-* 
-* Semantic errors:
-* 
-* - unknown effect;
-* - unresolved namespace;
-* - invalid effect combination;
-* - incompatible effects;
-* - unhandled effect;
-* - invalid effect transformation;
-* - unavailable capability;
-* - impossible resource requirement.
-* 
-* This file MUST NOT use semantic predicates to discover whether an effect
-* exists.
-* 
-* ============================================================================
-* SCALABILITY CONTRACT
-* ============================================================================
-* 
-* Composition uses:
-* 
-* effectSet+
-* 
-* rather than a finite list.
-* 
-* Therefore the grammar does not encode:
-* 
-* MAX_EFFECT_SETS
-* MAX_EFFECTS
-* MAX_EFFECT_REFERENCES
-* MAX_EFFECT_DEPTH
-* 
-* The language remains open-ended subject only to actual implementation and
-* available resources.
-* 
-* A compiler may reject a compilation request because an implementation
-* resource policy has been exceeded, but that must be reported as an
-* implementation/resource diagnostic, not as a universal Zamani syntax rule.
-* 
-* ============================================================================
-* HARD-CODING AUDIT
-* ============================================================================
-* 
-* No machine-specific constants are permitted.
-* 
-* Forbidden language-level constructs include:
-* 
-* MAX_EFFECTS
-* MAX_EFFECT_SETS
-* MAX_EFFECT_REFERENCES
-* MAX_EFFECT_PARAMETERS
-* MAX_CPUS
-* MAX_CORES
-* MAX_THREADS
-* MAX_GPUS
-* MAX_FPGAS
-* MAX_ACCELERATORS
-* MAX_QPUS
-* MAX_QUBITS
-* MAX_NODES
-* MAX_MEMORY
-* MAX_STORAGE
-* MAX_DEVICES
-* MAX_TIMELINES
-* 
-* Also forbidden as portable effect identities:
-* 
-* GPU0
-* CPU0
-* QPU0
-* QUBIT0
-* DEVICE0
-* 
-* unless those names are deliberately introduced by a separate target-specific
-* realization language and are never treated as portable effect identities.
-* 
-* ============================================================================
-* DETERMINISM TEST CONTRACT
-* ============================================================================
-* 
-* These source forms must produce equivalent semantic effect composition when
-* no ordering semantics are defined:
-* 
-* { IO, Quantum }
-* 
-* { Quantum, IO }
-* 
-* Source ordering may remain available for diagnostics and formatting.
-* 
-* Semantic normalization must not depend upon hash-map iteration order,
-* hardware discovery order, network state, or runtime scheduling.
-* 
-* ============================================================================
-* POSITIVE TEST CONTRACT
-* ============================================================================
-* 
-* Required examples:
+* Source examples:
 * 
 * { }
 * 
@@ -1140,391 +1263,41 @@ import EffectSets;
 * 
 * { IO, Network }
 * 
-* { Quantum, Network, Security }
-* 
 * { quantum::Measurement }
 * 
-* { distributed::Consensus, network::Communication }
+* { classical::State, quantum::Measurement }
 * 
-* { hdl::Timing, hardware::Signal }
-* 
-* { ai::Training, accelerator::Tensor }
-* 
-* { future::domain::operation }
-* 
-* Multiple composition members:
-* 
-* { IO }
-* { Quantum }
-* 
-* { IO, Network }
-* { Security }
-* 
-* { Quantum, quantum::Measurement }
-* { Network, distributed::Communication }
-* 
-* ============================================================================
-* NEGATIVE TEST CONTRACT
-* ============================================================================
-* 
-* Syntax-invalid forms must include:
-* 
-* {
-* 
-* }
-* 
-* {,}
-* 
-* { IO,, Network }
-* 
-* { IO Network }
-* 
-* { ::IO }
-* 
-* { IO:: }
-* 
-* { IO::::Network }
-* 
-* {{ IO }}
-* 
-* IO
-* 
-* ,
-* 
-* ;
-* 
-* Semantic-invalid forms belong downstream and must NOT be rejected by this
-* grammar solely because the referenced effect is unknown:
-* 
-* { future::unknown::effect }
-* 
-* { vendor::custom::effect }
-* 
-* Unknown semantic identities remain syntactically valid.
-* 
-* ============================================================================
-* BOUNDARY TEST CONTRACT
-* ============================================================================
-* 
-* Test:
-* 
-* empty effect set;
-* one effect;
-* many effects;
-* repeated effects;
-* long qualified names;
-* deeply qualified names;
-* many composition members;
-* nested source constructs containing compositions;
-* very large effect sets;
-* very large programs.
-* 
-* The tests must be bounded by the test environment, not by a grammar
-* constant.
-* 
-* ============================================================================
-* CROSS-DOMAIN TEST CONTRACT
-* ============================================================================
-* 
-* Required domains:
-* 
-* classical
-* quantum
-* hybrid
-* HDL
-* hardware
-* distributed
-* AI
-* data
-* networking
-* security
-* accelerators
-* future/custom domains
-* 
-* The same composition grammar must serve all of them.
-* 
-* ============================================================================
-* COMPATIBILITY CONTRACT
-* ============================================================================
-* 
-* Introducing this file is an additive modularization of effect composition.
-* 
-* Existing source syntax should remain valid where the existing grammar already
-* accepted the same composition structure.
-* 
-* Compatibility-sensitive ownership changes:
-* 
-* effects.g4
-*     ->
-* EffectComposition
-* 
-* must preserve the public rule name:
-* 
-* effectComposition
-* 
-* wherever downstream grammars already consume that rule.
-* 
-* The compatibility layer must record any parse-tree shape change.
-* 
-* ============================================================================
-* REQUIRED COMPANION INTEGRATION
-* ============================================================================
-* 
-* The following repository changes are required for this file to become
-* canonical:
-* 
-* 1. grammar/effects/effects.g4
-* 
-* Import:
-* 
-* EffectComposition
-* 
-* Remove its duplicate local definition of:
-* 
-* effectComposition
-* 
-* Existing consumers continue to reference:
-* 
-* effectComposition
-* 
-* through the aggregate grammar.
-* 
-* 2. grammar/effects/effect-sets.g4
-* 
-* Remains the sole owner of effect-set syntax.
-* 
-* No change is required to its public rule ownership.
-* 
-* 3. grammar/effects/effect-types.g4
-* 
-* May consume:
-* 
-* effectComposition
-* 
-* where required by the normative type/effect contract.
-* 
-* It must not redefine composition.
-* 
-* 4. grammar/effects/effect-operations.g4
-* 
-* May consume:
-* 
-* effectComposition
-* 
-* for operation effect contracts.
-* 
-* It must not redefine composition.
-* 
-* 5. grammar/effects/effect-handling.g4
-* 
-* May consume:
-* 
-* effectComposition
-* 
-* where a handler explicitly declares a resulting effect context.
-* 
-* It must not redefine composition.
-* 
-* 6. grammar/effects/custom-effects.g4
-* 
-* May consume:
-* 
-* effectComposition
-* 
-* for custom effect composition.
-* 
-* It must not create a second composition rule with different semantics.
-* 
-* 7. grammar/statements/effects.g4
-* 
-* Continues to use the aggregate effect statement entry point.
-* 
-* It must not directly duplicate composition syntax.
-* 
-* 8. grammar/expressions/effects.g4
-* 
-* Continues to adapt effect expressions to the universal expression grammar.
-* 
-* It must not create another effect-composition syntax.
-* 
-* 9. grammar/spec/effects.md
-* 
-* Remains the normative semantic contract.
-* 
-* This file implements the syntax portion of that contract.
-* 
-* 10. grammar/Zamani.g4
-* 
-* No direct domain-specific import is required here.
-* 
-* The existing root architecture remains:
-* 
-* Zamani
-*   ->
-* ZamaniParser
-*   ->
-* effect aggregate
-* 
-* 11. grammar/grammar.md
-* 
-* Must report the resulting implementation status as:
-* 
-* IMPLEMENTED
-* 
-* only after the complete parser composition and frontend conformance tests
-* pass.
-* 
-* ============================================================================
-* RUST CONTRACT
-* ============================================================================
-* 
-* This grammar requires no Rust implementation code.
-* 
-* Generated/handwritten Rust consuming it must remain compatible with:
-* 
-* Rust 1.97
-* Rust 1.97.1
-* Rust 2021
-* 
-* The repository's Rust implementation must use:
-* 
-* #![forbid(unsafe_code)]
-* 
-* and must not require "unsafe".
-* 
-* ============================================================================
-* SECURITY CONTRACT
-* ============================================================================
-* 
-* This grammar:
-* 
-* - performs no I/O;
-* - performs no network access;
-* - performs no hardware discovery;
-* - performs no environment inspection;
-* - performs no command execution;
-* - performs no dynamic code execution;
-* - performs no secret access;
-* - performs no embedded Rust actions.
-* 
-* Semantic effect resolution must remain explicit and auditable.
-* 
-* ============================================================================
-* COMPLETION CRITERIA
-* ============================================================================
-* 
-* This file is COMPLETE only when:
-* 
-* [ ] EffectComposition compiles as an ANTLR4 parser grammar.
-* 
-* [ ] EffectSets is its canonical upstream dependency.
-* 
-* [ ] effectComposition is owned only by this file.
-* 
-* [ ] effects.g4 no longer duplicates effectComposition.
-* 
-* [ ] effectReference is not duplicated.
-* 
-* [ ] effectSet is not duplicated.
-* 
-* [ ] effectSetComposition is not duplicated.
-* 
-* [ ] effect declarations remain independently owned.
-* 
-* [ ] effect operations remain independently owned.
-* 
-* [ ] effect handlers remain independently owned.
-* 
-* [ ] effect types remain independently owned.
-* 
-* [ ] custom effects remain independently owned.
-* 
-* [ ] domain effect grammars consume the canonical composition contract.
-* 
-* [ ] source spans can be mapped to composition members.
-* 
-* [ ] AST lowering has a predetermined composition representation.
-* 
-* [ ] semantic normalization is deterministic.
-* 
-* [ ] effect/capability/resource separation is preserved.
-* 
-* [ ] effect/requirement separation is preserved.
-* 
-* [ ] effect/target separation is preserved.
-* 
-* [ ] no hardware topology enters the grammar.
-* 
-* [ ] no physical resource limit enters the grammar.
-* 
-* [ ] quantum composition remains target-independent.
-* 
-* [ ] quantum lowering remains through quantum::ir.
-* 
-* [ ] QEC remains downstream.
-* 
-* [ ] ZQN remains downstream.
-* 
-* [ ] routing remains downstream.
-* 
-* [ ] scheduling remains downstream.
-* 
-* [ ] HAL remains downstream.
-* 
-* [ ] runtime remains downstream.
-* 
-* [ ] positive tests pass.
-* 
-* [ ] negative tests pass.
-* 
-* [ ] boundary tests pass.
-* 
-* [ ] cross-domain tests pass.
-* 
-* [ ] scalability tests pass.
-* 
-* [ ] determinism tests pass.
-* 
-* [ ] compatibility tests pass.
-* 
-* [ ] Rust 1.97/1.97.1 compatibility remains intact.
-* 
-* [ ] no unsafe implementation is required.
-* 
-* ============================================================================
-* FINAL NORMATIVE RULE
-* ============================================================================
-* 
-* Effect composition describes how semantic effect sets are structurally
-* composed in source code.
-* 
-* It does not describe how a machine realizes them.
-* 
-* Therefore:
-* 
-* source effect composition
-*     ->
-* AST
-*     ->
-* semantic effect model
-*     ->
-* capabilities / requirements / resources
-*     ->
-* canonical IR
-*     ->
-* optimization
-*     ->
-* routing / scheduling / resilience
-*     ->
-* ZQN / HAL
-*     ->
-* actual realization
-* 
-* This preserves:
-* 
-* Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
-* 
-* without introducing artificial language limits or backend leakage.
-* 
-* ============================================================================
+* All brace, comma, identifier, and qualified-name syntax is delegated to
+* EffectSets.
   */
+
+effectComposition
+: effectSet
+;
+
+/*
+
+* ============================================================================
+* OPTIONAL EFFECT COMPOSITION
+* ============================================================================
+* 
+* This rule is an integration convenience only.
+* 
+* It distinguishes:
+* 
+* no effect composition
+* 
+* from:
+* 
+* an explicitly supplied effect composition
+* 
+* The semantic meaning of absence versus an explicitly empty effect set:
+* 
+* {}
+* 
+* remains a semantic/specification decision.
+  */
+
+optionalEffectComposition
+: effectComposition?
+;
