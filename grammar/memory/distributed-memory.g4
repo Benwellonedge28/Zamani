@@ -1,1310 +1,850 @@
 /*
- * ============================================================================
- * Zamani Programming Language
- * ============================================================================
- *
- * File:
- *     grammar/memory/distributed-memory.g4
- *
- * Grammar:
- *     ANTLR4 parser grammar component
- *
- * Status:
- *     Production distributed-memory grammar component.
- *
- * Language/runtime baseline:
- *     Rust 1.97 / Rust 1.97.1
- *     Rust Edition 2021
- *     Safe Rust only
- *     No unsafe code
- *
- * ============================================================================
- * PURPOSE
- * ============================================================================
- *
- * This file defines the SOURCE-LEVEL DISTRIBUTED-MEMORY SYNTAX CONTRACT
- * for Zamani.
- *
- * Distributed memory is represented as computation intent rather than as
- * a description of a particular machine, cluster, interconnect, operating
- * system, NUMA topology, accelerator, provider, or network.
- *
- * The grammar therefore describes:
- *
- *     - distributed-memory intent;
- *     - distributed-memory operations;
- *     - logical memory domains;
- *     - replication intent;
- *     - migration intent;
- *     - remote-access intent;
- *     - consistency intent;
- *     - visibility intent;
- *     - ownership/transfer intent;
- *     - placement requirements;
- *     - resource requirements;
- *     - constraints;
- *     - preferences;
- *     - hints;
- *     - extension points.
- *
- * It does NOT describe how those semantics are physically implemented.
- *
- * ============================================================================
- * ARCHITECTURAL POSITION
- * ============================================================================
- *
- *     Zamani source
- *          |
- *          v
- *     canonical lexer
- *          |
- *          v
- *     core/parser composition
- *          |
- *          v
- *     grammar/memory/memory.g4
- *          |
- *          v
- *     distributed-memory.g4
- *          |
- *          v
- *     AST
- *          |
- *          v
- *     structural validation
- *          |
- *          v
- *     semantic analysis
- *          |
- *          +-----------------------+
- *          |                       |
- *          v                       v
- *     memory semantics       distributed semantics
- *          |                       |
- *          +-----------+-----------+
- *                      |
- *                      v
- *              canonical semantic IR
- *                      |
- *          +-----------+-----------+
- *          |           |           |
- *          v           v           v
- *      classical    quantum      hardware
- *         IR          IR          IR
- *          |           |           |
- *          +-----------+-----------+
- *                      |
- *                      v
- *          routing / scheduling / optimization
- *                      |
- *                      v
- *              distributed runtime
- *
- * IMPORTANT:
- *
- * This grammar is upstream of:
- *
- *     - distributed placement;
- *     - node discovery;
- *     - transport selection;
- *     - network routing;
- *     - scheduling;
- *     - replication implementation;
- *     - consistency implementation;
- *     - hardware selection;
- *     - backend selection;
- *     - runtime execution.
- *
- * ============================================================================
- * OWNERSHIP
- * ============================================================================
- *
- * THIS FILE OWNS:
- *
- *     - distributed-memory operation classification;
- *     - distributed-memory semantic intent;
- *     - distributed-memory operation structure;
- *     - distributed-memory access intent;
- *     - distributed-memory replication intent;
- *     - distributed-memory migration intent;
- *     - distributed-memory remote-access intent;
- *     - distributed-memory consistency intent;
- *     - distributed-memory visibility intent;
- *     - distributed-memory placement intent;
- *     - distributed-memory resource requirements;
- *     - distributed-memory constraints;
- *     - distributed-memory preferences;
- *     - distributed-memory hints;
- *     - distributed-memory extension points.
- *
- * ============================================================================
- * NON-OWNERSHIP
- * ============================================================================
- *
- * THIS FILE DOES NOT OWN:
- *
- *     - lexical token definitions;
- *     - identifier spelling;
- *     - general expressions;
- *     - general statements;
- *     - general declarations;
- *     - general type syntax;
- *     - memory-place syntax;
- *     - memory-qualified-name syntax;
- *     - ownership checking;
- *     - borrow checking;
- *     - lifetime checking;
- *     - alias analysis;
- *     - allocation;
- *     - deallocation;
- *     - physical addresses;
- *     - virtual addresses;
- *     - node discovery;
- *     - node identifiers;
- *     - cluster topology;
- *     - network topology;
- *     - network routing;
- *     - transport protocols;
- *     - RPC;
- *     - message delivery;
- *     - serialization implementation;
- *     - replication algorithms;
- *     - consensus algorithms;
- *     - cache coherence;
- *     - distributed coherence implementation;
- *     - distributed garbage collection;
- *     - distributed scheduling;
- *     - placement algorithms;
- *     - load balancing;
- *     - fault detection;
- *     - fault recovery;
- *     - resilience policy;
- *     - hardware discovery;
- *     - backend selection;
- *     - quantum routing;
- *     - QEC;
- *     - ZQN;
- *     - canonical classical IR;
- *     - quantum::ir;
- *     - HDL IR;
- *     - hardware IR;
- *     - runtime execution.
- *
- * ============================================================================
- * CANONICAL MEMORY BOUNDARY
- * ============================================================================
- *
- * The common memory-domain syntax is owned by:
- *
- *     grammar/memory/memory.g4
- *
- * This file MUST consume the memory foundation rather than redefine it.
- *
- * The common memory foundation owns concepts such as:
- *
- *     memoryPlace
- *     memoryQualifiedName
- *     memoryPlaceArgumentList
- *     memoryOperation
- *     memorySharing
- *
- * Specialized distributed-memory rules in this file refine those concepts.
- *
- * This file MUST NOT create competing definitions of:
- *
- *     memory place
- *     general expression
- *     general type
- *     lifetime
- *     ownership
- *     allocation
- *     generic resource expressions
- *
- * ============================================================================
- * PARSER COMPOSITION CONTRACT
- * ============================================================================
- *
- * This file is a parser-grammar component consumed by the repository's
- * grammar composition layer.
- *
- * The composition layer is responsible for supplying the canonical:
- *
- *     lexer vocabulary;
- *     expression rules;
- *     type rules;
- *     memory foundation rules;
- *     source-location information;
- *     AST construction.
- *
- * If the repository's ANTLR composition mechanism uses imported parser
- * grammars, this component is imported by that composition layer.
- *
- * If the repository instead combines grammar fragments during generation,
- * these rules are incorporated there without duplicating their ownership.
- *
- * This file therefore MUST NOT introduce a second lexer.
- *
- * ============================================================================
- * LEXER CONTRACT
- * ============================================================================
- *
- * The canonical lexer remains responsible for all lexical definitions.
- *
- * This grammar MUST NOT define lexer rules.
- *
- * Distributed-memory concepts remain open-world wherever possible.
- *
- * A future distributed-memory domain must not require adding a new global
- * lexer keyword merely because a new technology appears.
- *
- * For example, the following semantic domains may be represented through
- * qualified identifiers/metadata without changing this grammar:
- *
- *     cluster
- *     shard
- *     partition
- *     remote
- *     replicated
- *     persistent
- *     transactional
- *     accelerator
- *     quantum
- *     future_domain
- *
- * ============================================================================
- * POCO-REAF PRINCIPLE
- * ============================================================================
- *
- * Distributed memory MUST scale according to available resources.
- *
- * The grammar contains no fixed limits for:
- *
- *     nodes;
- *     processes;
- *     tasks;
- *     shards;
- *     replicas;
- *     partitions;
- *     memory regions;
- *     addresses;
- *     devices;
- *     links;
- *     machines;
- *     clusters;
- *     data volume;
- *     memory capacity;
- *     communication capacity.
- *
- * It MUST NOT define:
- *
- *     MAX_NODES
- *     MAX_REPLICAS
- *     MAX_SHARDS
- *     MAX_PARTITIONS
- *     MAX_REMOTE_MEMORY
- *     MAX_DISTRIBUTED_MEMORY
- *     MAX_CLUSTER_SIZE
- *     MAX_DEVICES
- *     MAX_NETWORK_SIZE
- *
- * Nor may it encode:
- *
- *     node 0
- *     node 1
- *     device 0
- *     fixed cluster size
- *     fixed topology
- *     fixed address width
- *     fixed memory capacity.
- *
- * A program may describe an arbitrary number of distributed resources,
- * subject only to the parser/compiler/runtime resources and semantic
- * requirements available to the execution environment.
- *
- * ============================================================================
- * SEMANTIC MODEL
- * ============================================================================
- *
- * Distributed memory means that a memory object or memory domain may have
- * logically distributed realization across execution resources.
- *
- * The source language describes the semantic property.
- *
- * It does NOT imply:
- *
- *     one process per node;
- *     one memory object per machine;
- *     one network hop;
- *     one transport protocol;
- *     one consistency algorithm;
- *     one replication algorithm;
- *     one placement strategy;
- *     one serialization format;
- *     one physical memory technology.
- *
- * Those are implementation decisions.
- *
- * ============================================================================
- * PRIMARY PUBLIC RULES
- * ============================================================================
- *
- *     distributedMemory
- *     distributedMemoryOperation
- *     distributedMemoryAction
- *     distributedMemoryTarget
- *     distributedMemoryOptions
- *     distributedMemoryOption
- *     distributedMemoryAccess
- *     distributedMemoryConsistency
- *     distributedMemoryVisibility
- *     distributedMemoryReplication
- *     distributedMemoryMigration
- *     distributedMemoryPlacement
- *     distributedMemoryRequirement
- *     distributedMemoryConstraint
- *     distributedMemoryPreference
- *     distributedMemoryHint
- *     distributedMemoryExtension
- *
- * These rules intentionally describe distributed-memory semantics without
- * implementing them.
- *
- * ============================================================================
- * DISTRIBUTED MEMORY ROOT
- * ============================================================================
- *
- * A distributed-memory construct has one logical target and zero or more
- * semantic options.
- *
- * The target remains a source-level memory place.
- *
- * This is essential for POCO-REAF:
- *
- *     source memory identity
- *
- * must remain independent from:
- *
- *     physical location.
- *
- * ============================================================================
+ * Zamani — Distributed Memory Grammar
+ * File: grammar/memory/distributed-memory.g4
+ *
+ * ========================================================================
+ * FILE CONTRACT
+ * ========================================================================
+ *
+ * Purpose
+ * -------
+ * Defines portable source syntax for expressing distributed-memory intent.
+ *
+ * Distributed memory means that a logical memory object may be represented
+ * across independently addressable execution/memory domains. The language
+ * describes WHAT distribution means to the program, not HOW a compiler or
+ * runtime realizes it.
+ *
+ * Owns
+ * ----
+ * - distributed-memory declarations/specifications
+ * - distributed-memory operations
+ * - logical distribution targets
+ * - partition/sharding intent
+ * - replication intent
+ * - migration intent
+ * - distribution consistency intent
+ * - distribution placement intent
+ * - communication intent associated with distributed memory
+ * - fault/recovery intent associated with distributed memory
+ * - distributed-memory requirements
+ * - distributed-memory constraints
+ * - distributed-memory preferences
+ * - distributed-memory hints
+ * - open-world distributed-memory extensions/metadata
+ *
+ * Does NOT own
+ * -------------
+ * - lexical definitions
+ * - identifiers
+ * - general expressions
+ * - general types
+ * - ownership checking
+ * - borrowing checking
+ * - lifetime checking
+ * - allocation/deallocation semantics
+ * - physical memory addresses
+ * - physical node identifiers
+ * - fixed node counts
+ * - fixed replica counts
+ * - fixed shard counts
+ * - network topology
+ * - routing algorithms
+ * - placement algorithms
+ * - scheduling
+ * - communication implementation
+ * - persistence implementation
+ * - distributed consensus implementation
+ * - runtime behavior
+ * - hardware selection
+ * - accelerator realization
+ * - quantum hardware realization
+ * - canonical IR
+ * - quantum::ir
+ * - QEC
+ * - ZQN
+ * - HAL
+ *
+ * Architectural boundary
+ * ----------------------
+ *
+ * Source
+ *   -> ZamaniLexer
+ *   -> Zamani parser/composition root
+ *   -> domain-neutral AST
+ *   -> semantic/resource/effect analysis
+ *   -> canonical semantic model
+ *   -> canonical IR
+ *   -> optimization / partitioning / placement / replication /
+ *      communication / scheduling / resilience
+ *   -> target-specific realization
+ *
+ * DistributedMemory is therefore a SOURCE-SYNTAX CONTRACT only.
+ *
+ * ========================================================================
+ * POCO-REAF / SCALABILITY CONTRACT
+ * ========================================================================
+ *
+ * This grammar MUST NOT impose physical limits.
+ *
+ * Forbidden as language limits:
+ *
+ *   MAX_NODES
+ *   MAX_REPLICAS
+ *   MAX_SHARDS
+ *   MAX_PARTITIONS
+ *   MAX_MEMORY
+ *   MAX_NETWORK_LINKS
+ *   MAX_PROCESSES
+ *   MAX_WORKERS
+ *   MAX_DEVICES
+ *   NODE_0 ... NODE_N
+ *   REPLICA_0 ... REPLICA_N
+ *
+ * Counts expressed by a program are DATA or semantic requirements and are
+ * therefore valid. A grammar/compiler implementation limit is not a
+ * language semantic limit.
+ *
+ * Example of portable intent:
+ *
+ *   distribute data across domains
+ *   replication factor = desired_replication
+ *
+ * The value may be determined at compile time, deployment time, or runtime.
+ *
+ * The language MUST NOT require a programmer to identify physical machines,
+ * NICs, memory banks, sockets, NUMA nodes, network routes, or device IDs.
+ *
+ * ========================================================================
+ * TOKEN POLICY
+ * ========================================================================
+ *
+ * This grammar intentionally adds no lexer keywords.
+ *
+ * Existing generic identifiers are used as open-world semantic names.
+ * This prevents distributed-memory concepts from becoming an ever-growing
+ * hard-coded keyword list and permits future capabilities without changing
+ * the lexical vocabulary.
+ *
+ * Canonical repository convention:
+ *
+ *   tokenVocab = ZamaniLexer
+ *   IDENT      = canonical identifier token
+ *
+ * If the repository's canonical lexer evolves, token changes belong in the
+ * canonical lexer/token contract, never in this parser grammar.
+ *
+ * ========================================================================
+ * IMPORT POLICY
+ * ========================================================================
+ *
+ * Memory is the canonical memory-domain foundation.
+ *
+ * Names and Expressions are shared language foundations. This grammar does
+ * not duplicate identifier, qualified-name, or expression syntax.
+ *
+ * ========================================================================
+ * AST CONTRACT
+ * ========================================================================
+ *
+ * Every accepted construct maps to domain-neutral AST data representing:
+ *
+ *   operation/name
+ *   targets
+ *   arguments
+ *   options
+ *   requirements
+ *   constraints
+ *   preferences
+ *   hints
+ *   metadata/extensions
+ *   source spans
+ *
+ * No AST node produced by this grammar may encode:
+ *
+ *   a physical node ID
+ *   a physical address
+ *   a hardware-specific replica
+ *   a fixed cluster topology
+ *
+ * Generic operation/attribute structures should be preferred where the
+ * existing AST already provides them.
+ *
+ * ========================================================================
+ * SEMANTIC CONTRACT
+ * ========================================================================
+ *
+ * Semantic analysis is responsible for determining whether a distributed
+ * memory specification is meaningful and compatible with:
+ *
+ *   types
+ *   ownership
+ *   borrowing
+ *   lifetimes
+ *   memory regions
+ *   resources
+ *   capabilities
+ *   effects
+ *   concurrency
+ *   distributed execution
+ *   communication
+ *   resilience
+ *
+ * The grammar only establishes structural validity.
+ *
+ * Requirement != capability != constraint != preference != hint
+ *
+ * These distinctions MUST be preserved downstream.
+ *
+ * ========================================================================
+ * IR CONTRACT
+ * ========================================================================
+ *
+ * This grammar does not define a distributed-memory IR.
+ *
+ * Distributed-memory semantics lower through the repository's canonical
+ * semantic/IR architecture. Classical, distributed, accelerator, HDL, and
+ * quantum lowering remain separate downstream responsibilities.
+ *
+ * If a distributed-memory operation eventually affects quantum execution,
+ * the quantum semantic path continues through the existing canonical
+ * quantum::ir boundary. This file MUST NOT introduce another quantum IR.
+ *
+ * ========================================================================
+ * COMPILER / RUNTIME CONTRACT
+ * ========================================================================
+ *
+ * Compiler responsibilities:
+ *   - validate semantic requirements
+ *   - determine feasible realizations
+ *   - lower logical distribution
+ *   - choose/coordinate partitioning and placement
+ *   - perform communication and synchronization lowering
+ *   - preserve observable semantics
+ *
+ * Runtime responsibilities:
+ *   - discover actual resources
+ *   - realize placement
+ *   - execute communication
+ *   - manage failures/recovery
+ *   - monitor capabilities
+ *
+ * Hardware/backend responsibilities:
+ *   - actual memory/network/device realization
+ *
+ * ========================================================================
+ * DIAGNOSTICS CONTRACT
+ * ========================================================================
+ *
+ * Diagnostics must preserve source spans from the parsed construct.
+ *
+ * Examples of semantic diagnostics:
+ *
+ *   invalid distribution policy
+ *   incompatible consistency requirement
+ *   impossible capability requirement
+ *   conflicting placement constraints
+ *   unsupported migration policy
+ *   invalid replication specification
+ *   incompatible memory type
+ *
+ * These are semantic errors, not parser keyword errors.
+ *
+ * ========================================================================
+ * TEST CONTRACT
+ * ========================================================================
+ *
+ * Positive:
+ *   - logical distribution
+ *   - partitioning
+ *   - replication
+ *   - migration
+ *   - consistency
+ *   - placement intent
+ *   - communication intent
+ *   - fault/recovery intent
+ *   - requirements
+ *   - constraints
+ *   - preferences
+ *   - hints
+ *   - arbitrary user-defined extensions
+ *
+ * Negative:
+ *   - malformed argument lists
+ *   - malformed options
+ *   - missing targets
+ *   - malformed assignments
+ *   - malformed nested specifications
+ *
+ * Boundary:
+ *   - empty option sets where permitted
+ *   - nested specifications
+ *   - symbolic values
+ *   - expression-valued policies
+ *   - qualified names
+ *
+ * Scalability:
+ *   - one logical memory object
+ *   - arbitrary number of partitions
+ *   - arbitrary number of logical replicas
+ *   - arbitrary number of logical domains
+ *   - dynamically computed distribution values
+ *   - very large qualified names/metadata where supported by the lexer
+ *
+ * Determinism:
+ *   - identical source + identical lexer/parser configuration produces the
+ *     same parse structure.
+ *
+ * Compatibility:
+ *   - existing memory syntax remains reusable
+ *   - no new lexer keyword is required
+ *   - future distributed-memory operations can use the extension mechanism
+ *     without invalidating existing syntax
+ *
+ * ========================================================================
+ * HARD-CODING AUDIT
+ * ========================================================================
+ *
+ * No physical resource cardinality, topology, address, device ID, or
+ * implementation-specific limit is encoded here.
+ *
+ * ========================================================================
+ * COMPLETION CRITERIA
+ * ========================================================================
+ *
+ * This file is complete when:
+ *
+ *   [x] It is parser-only.
+ *   [x] It uses ZamaniLexer.
+ *   [x] It composes with Memory.
+ *   [x] It does not duplicate Names/Expressions.
+ *   [x] It introduces no mandatory distributed-memory lexer keywords.
+ *   [x] It is open-world for future distributed-memory operations.
+ *   [x] It distinguishes semantic intent from physical realization.
+ *   [x] It has no fixed resource/topology limits.
+ *   [x] It preserves downstream AST/semantic/IR ownership.
+ *   [x] It preserves quantum::ir as the quantum semantic boundary.
+ *   [x] It supports requirements, constraints, preferences and hints.
+ *   [x] It supports distribution, partitioning, replication and migration.
+ *   [x] It supports consistency and communication intent.
+ *   [x] It supports resilience/recovery intent.
+ *   [x] It supports extensibility without lexer expansion.
+ *
+ * ========================================================================
  */
 
-distributedMemory
-    : distributedMemoryOperation
-    ;
+parser grammar DistributedMemory;
+
+options {
+    tokenVocab = ZamaniLexer;
+}
 
 /*
- * A distributed-memory operation is represented by a qualified memory
- * operation plus an optional distributed-memory option list.
+ * Memory is the canonical memory-domain foundation.
  *
- * The exact operation name remains extensible.
+ * Names and Expressions provide the repository's canonical naming and
+ * expression syntax. They must not be duplicated here.
+ */
+import Memory, Names, Expressions;
+
+
+/*
+ * ========================================================================
+ * PUBLIC ENTRY POINT
+ * ========================================================================
  *
- * This allows future domains without requiring grammar changes for every
- * new distributed-memory technology.
+ * `distributedMemory` is the public rule consumed by the memory grammar
+ * composition layer.
+ *
+ * It intentionally permits both:
+ *
+ *   a single distributed-memory operation/specification
+ *
+ * and:
+ *
+ *   a braced distributed-memory specification containing multiple members.
+ *
+ * The semantic layer determines whether the selected construct is valid in
+ * its surrounding context.
+ */
+distributedMemory
+    : distributedMemoryConstruct
+    ;
+
+
+/*
+ * A distributed-memory construct can be either an operation or a
+ * declarative specification.
+ */
+distributedMemoryConstruct
+    : distributedMemoryOperation
+    | distributedMemorySpecification
+    ;
+
+
+/*
+ * ========================================================================
+ * DISTRIBUTED-MEMORY OPERATIONS
+ * ========================================================================
+ *
+ * The action name is an IDENT rather than a fixed lexer keyword.
+ *
+ * This deliberately permits:
+ *
+ *   distribute(...)
+ *   partition(...)
+ *   replicate(...)
+ *   migrate(...)
+ *   rebalance(...)
+ *   synchronize(...)
+ *   recover(...)
+ *
+ * and future operations without requiring a new lexer token for every
+ * distributed-memory feature.
+ *
+ * Semantic validation determines which action names are standardized,
+ * experimental, dialect-defined, or unknown.
  */
 distributedMemoryOperation
-    : memoryQualifiedName
+    : distributedMemoryAction
       LPAREN
-      distributedMemoryArguments?
+      distributedMemoryArgumentList?
       RPAREN
+      SEMICOLON?
     ;
 
+
 /*
- * Distributed-memory arguments are intentionally delegated to the existing
- * expression/type infrastructure.
+ * Open-world action name.
  *
- * The first argument is conventionally the logical memory target.
- *
- * Semantic analysis, rather than this grammar, determines whether the
- * operation actually requires a target, a value, a region, or another
- * semantic object.
+ * A qualified name permits namespace-owned operations without introducing
+ * vendor/framework keywords into the core language.
  */
-distributedMemoryArguments
+distributedMemoryAction
+    : qualifiedName
+    ;
+
+
+/*
+ * ========================================================================
+ * DECLARATIVE DISTRIBUTED-MEMORY SPECIFICATION
+ * ========================================================================
+ *
+ * A specification is a collection of members. Members use identifiers and
+ * expressions rather than a closed enumeration of implementation concepts.
+ */
+distributedMemorySpecification
+    : LBRACE
+      distributedMemoryMember*
+      RBRACE
+    ;
+
+
+/*
+ * A member may be:
+ *
+ *   action-like
+ *   assignment-like
+ *   nested specification
+ *
+ * This gives the semantic layer an extensible representation while keeping
+ * syntax deterministic.
+ */
+distributedMemoryMember
+    : distributedMemoryProperty
+    | distributedMemoryMemberOperation
+    | distributedMemoryNestedMember
+    ;
+
+
+/*
+ * Property:
+ *
+ *   identifier = expression
+ *
+ * Values may be constants, variables, generic expressions, resource
+ * expressions, capability expressions, or values computed later.
+ */
+distributedMemoryProperty
+    : identifier
+      ASSIGN
+      expression
+      SEMICOLON?
+    ;
+
+
+/*
+ * Member operation:
+ *
+ *   action(...)
+ *
+ * The action remains open-world.
+ */
+distributedMemoryMemberOperation
+    : distributedMemoryAction
+      LPAREN
+      distributedMemoryArgumentList?
+      RPAREN
+      SEMICOLON?
+    ;
+
+
+/*
+ * Nested specification:
+ *
+ *   name { ... }
+ *
+ * This is useful for hierarchical logical distribution descriptions.
+ */
+distributedMemoryNestedMember
+    : identifier
+      distributedMemorySpecification
+    ;
+
+
+/*
+ * ========================================================================
+ * ARGUMENTS
+ * ========================================================================
+ *
+ * Arguments are expression-based so that values can be:
+ *
+ *   constants
+ *   variables
+ *   symbolic values
+ *   computed values
+ *   generic resource expressions
+ *   capability expressions
+ *   target-independent policies
+ */
+distributedMemoryArgumentList
     : distributedMemoryArgument
       (COMMA distributedMemoryArgument)*
     ;
+
 
 distributedMemoryArgument
     : expression
     ;
 
-/*
- * Semantic action classification.
- *
- * The action name is intentionally an identifier rather than a closed
- * enumeration of every future distributed-memory operation.
- *
- * Examples of semantic names include:
- *
- *     distributed
- *     remote
- *     replicate
- *     migrate
- *     partition
- *     shard
- *     gather
- *     scatter
- *     publish
- *     unpublish
- *
- * Classification is semantic analysis responsibility.
- */
-distributedMemoryAction
-    : memoryQualifiedName
-    ;
 
 /*
- * A distributed-memory target is always a logical memory place.
+ * ========================================================================
+ * DISTRIBUTED-MEMORY TARGET
+ * ========================================================================
  *
- * It is never a physical node/address/device.
+ * A target is a logical memory object/name, not a physical address or
+ * machine/device identifier.
+ *
+ * The semantic layer may resolve this against:
+ *
+ *   memory regions
+ *   declarations
+ *   allocations
+ *   data objects
+ *   shared-memory objects
+ *   distributed resources
+ *
+ * It MUST NOT assume that a qualified name is a physical node.
  */
 distributedMemoryTarget
-    : memoryPlace
+    : qualifiedName
     ;
 
+
 /*
- * Options are deliberately extensible.
+ * ========================================================================
+ * DISTRIBUTION
+ * ========================================================================
  *
- * Each option carries a semantic key and an expression value.
- *
- * Examples:
- *
- *     consistency = relaxed
- *     visibility = eventual
- *     replication = desired
- *     placement = locality
- *     reliability = required
- *
- * None of these selects a physical implementation.
+ * Distribution intent describes logical decomposition across execution or
+ * memory domains.
  */
-distributedMemoryOptions
-    : distributedMemoryOption
-      (COMMA distributedMemoryOption)*
+distributedMemoryDistribution
+    : identifier
+      LPAREN
+      distributedMemoryTarget
+      (COMMA distributedMemoryArgumentList)?
+      RPAREN
     ;
 
-distributedMemoryOption
-    : IDENTIFIER
-      ASSIGN
-      expression
-    ;
 
 /*
- * Distributed-memory access intent.
+ * Explicit logical partitioning/sharding intent.
  *
- * Access mode is distinct from placement, consistency, and replication.
- *
- * Semantic examples include:
- *
- *     read
- *     write
- *     read_write
- *     remote_read
- *     remote_write
- *
- * These are semantic identifiers, not physical operations.
+ * Partition counts, shapes, keys, ranges, and policies are expressions.
+ * They are therefore not fixed by this grammar.
  */
-distributedMemoryAccess
-    : memoryQualifiedName
+distributedMemoryPartition
+    : identifier
+      LPAREN
+      distributedMemoryTarget
+      COMMA
+      distributedMemoryArgumentList
+      RPAREN
     ;
 
-/*
- * Consistency is intentionally independent of replication and visibility.
- *
- * The grammar accepts an open semantic name.
- *
- * Examples:
- *
- *     relaxed
- *     eventual
- *     causal
- *     strong
- *     sequential
- *     transactional
- *
- * The grammar does not promise that every target supports every model.
- */
-distributedMemoryConsistency
-    : memoryQualifiedName
-    ;
 
 /*
- * Visibility is independent from consistency.
+ * ========================================================================
+ * REPLICATION
+ * ========================================================================
  *
- * Examples:
+ * Replication is expressed as semantic intent.
  *
- *     local
- *     remote
- *     eventual
- *     immediate
- *     explicit
+ * A replication factor is an expression, not a compile-time grammar limit.
  *
- * The semantic layer validates whether the requested model is implementable.
- */
-distributedMemoryVisibility
-    : memoryQualifiedName
-    ;
-
-/*
- * Replication intent.
+ * Example semantic forms:
  *
- * The grammar expresses semantic intent, not a fixed replica count.
- *
- * A count, when present in source, is an expression rather than a grammar
- * constant and is therefore subject to normal semantic/resource validation.
- *
- * A program may also request qualitative replication without specifying a
- * count.
+ *   replicate(target, factor)
+ *   replicate(target, policy)
+ *   replicate(target, factor, consistency)
  */
 distributedMemoryReplication
-    : memoryQualifiedName
-      (LPAREN distributedMemoryReplicationArguments? RPAREN)?
+    : identifier
+      LPAREN
+      distributedMemoryTarget
+      COMMA
+      distributedMemoryArgumentList
+      RPAREN
     ;
 
-distributedMemoryReplicationArguments
-    : distributedMemoryReplicationArgument
-      (COMMA distributedMemoryReplicationArgument)*
-    ;
-
-distributedMemoryReplicationArgument
-    : expression
-    ;
 
 /*
- * Migration intent.
+ * ========================================================================
+ * MIGRATION
+ * ========================================================================
  *
- * Migration identifies a semantic transition of the logical memory object.
+ * Migration expresses logical movement of distributed state.
  *
- * It does not select:
- *
- *     a machine;
- *     a node;
- *     an address;
- *     a network;
- *     a transport;
- *     a scheduler.
+ * It does not identify physical machines, memory banks, network routes, or
+ * hardware addresses.
  */
 distributedMemoryMigration
-    : memoryQualifiedName
+    : identifier
       LPAREN
-      distributedMemoryArguments?
+      distributedMemoryArgumentList
       RPAREN
     ;
 
+
 /*
- * Placement intent is intentionally symbolic.
+ * ========================================================================
+ * PLACEMENT
+ * ========================================================================
  *
- * Examples may include semantic policies such as:
+ * Placement describes logical placement requirements/preferences.
  *
- *     locality
- *     affinity
- *     proximity
- *     balanced
- *     topology_aware
- *     energy_aware
- *
- * Actual placement remains owned by resource/hardware/runtime systems.
+ * Actual node selection, topology mapping, NUMA placement, accelerator
+ * selection, and deployment realization are downstream.
  */
 distributedMemoryPlacement
-    : memoryQualifiedName
-    ;
-
-/*
- * A requirement is a mandatory semantic property.
- *
- * Requirements are not device selections.
- */
-distributedMemoryRequirement
-    : REQUIREMENT
-      distributedMemoryOption
-    ;
-
-/*
- * A constraint restricts legal implementation choices.
- *
- * It is not equivalent to a preference or hint.
- */
-distributedMemoryConstraint
-    : CONSTRAINT
-      distributedMemoryOption
-    ;
-
-/*
- * A preference describes a desired implementation property but does not
- * become a correctness requirement.
- */
-distributedMemoryPreference
-    : PREFERENCE
-      distributedMemoryOption
-    ;
-
-/*
- * A hint provides non-binding implementation guidance.
- */
-distributedMemoryHint
-    : HINT
-      distributedMemoryOption
-    ;
-
-/*
- * Open-world extension point.
- *
- * Future distributed-memory semantics may be introduced through qualified
- * names without changing the foundational memory grammar.
- */
-distributedMemoryExtension
-    : memoryQualifiedName
+    : identifier
       LPAREN
-      distributedMemoryArguments?
+      distributedMemoryTarget
+      (COMMA distributedMemoryArgumentList)?
       RPAREN
     ;
 
+
 /*
- * ============================================================================
- * STRUCTURAL INTEGRATION RULE
- * ============================================================================
+ * ========================================================================
+ * CONSISTENCY
+ * ========================================================================
  *
- * A host grammar SHOULD integrate distributed-memory statements through the
- * memory-domain composition layer rather than adding a second statement
- * hierarchy here.
+ * Consistency models are semantic values.
  *
- * Conceptually:
+ * The grammar does not enumerate a fixed set such as:
  *
- *     memoryStatement
- *         |
- *         +--> ownership
- *         +--> borrowing
- *         +--> allocation
- *         +--> deallocation
- *         +--> shared memory
- *         +--> distributed memory
- *         +--> memory constraints
+ *   strong
+ *   eventual
+ *   causal
  *
- * This file owns only the distributed-memory branch.
- *
- * ============================================================================
- * MEMORY SAFETY
- * ============================================================================
- *
- * Distributed memory syntax MUST NOT imply that an ordinary reference can
- * safely outlive its owner.
- *
- * Distributed access must continue to obey:
- *
- *     ownership;
- *     borrowing;
- *     lifetime;
- *     aliasing;
- *     synchronization;
- *     capability;
- *     effect;
- *     resource
- *
- * semantics defined elsewhere.
- *
- * A remote location is not automatically a valid borrow.
- *
- * A replicated location is not automatically independently mutable.
- *
- * A migrated object does not automatically change source-level ownership.
- *
- * Those are semantic-analysis decisions.
- *
- * ============================================================================
- * OWNERSHIP INTEGRATION
- * ============================================================================
- *
- * grammar/memory/ownership.g4 owns ownership syntax.
- *
- * This file MUST NOT redefine ownership modes.
- *
- * Distributed-memory operations may consume ownership-qualified values, but
- * whether a transfer is legal is determined by ownership analysis.
- *
- * ============================================================================
- * BORROWING INTEGRATION
- * ============================================================================
- *
- * grammar/memory/borrowing.g4 owns borrowing syntax.
- *
- * This file MUST NOT redefine:
- *
- *     &
- *     &mut
- *     borrow types
- *     borrow lifetimes
- *
- * A remote operation may semantically reject a borrow if its lifetime,
- * ownership, transport, or execution model cannot guarantee validity.
- *
- * ============================================================================
- * LIFETIME INTEGRATION
- * ============================================================================
- *
- * grammar/memory/lifetimes.g4 owns lifetime syntax.
- *
- * Distributed execution MUST NOT introduce an implicit infinite lifetime.
- *
- * The grammar merely preserves lifetime information supplied by the source.
- *
- * ============================================================================
- * ALLOCATION INTEGRATION
- * ============================================================================
- *
- * grammar/memory/allocation.g4 owns allocation syntax.
- *
- * Distributed placement does not itself allocate memory.
- *
- * A distributed-memory request may require allocation during semantic
- * lowering, but the allocation implementation belongs to the allocation and
- * resource systems.
- *
- * ============================================================================
- * DEALLOCATION INTEGRATION
- * ============================================================================
- *
- * grammar/memory/deallocation.g4 owns deallocation syntax.
- *
- * Distributed release may require coordination, but coordination belongs to
- * the distributed runtime/resource implementation.
- *
- * ============================================================================
- * SHARED MEMORY INTEGRATION
- * ============================================================================
- *
- * grammar/memory/shared-memory.g4 owns shared-memory semantics.
- *
- * Distributed shared memory may therefore be represented by combining:
- *
- *     shared-memory semantics
- *
- * with:
- *
- *     distributed-memory semantics.
- *
- * Neither grammar should duplicate the other's rules.
- *
- * ============================================================================
- * CONCURRENCY INTEGRATION
- * ============================================================================
- *
- * Distributed memory may interact with:
- *
- *     tasks;
- *     futures;
- *     actors;
- *     channels;
- *     parallel execution;
- *     synchronization.
- *
- * Those constructs remain owned by:
- *
- *     grammar/concurrency/
- *
- * This file does not define them.
- *
- * ============================================================================
- * RESOURCE INTEGRATION
- * ============================================================================
- *
- * Distributed-memory resource requirements are interpreted by:
- *
- *     grammar/resources/
- *
- * Resource semantics may consider:
- *
- *     memory capacity;
- *     bandwidth;
- *     latency;
- *     reliability;
- *     locality;
- *     energy;
- *     scalability;
- *     portability.
- *
- * This grammar does not decide whether resources exist.
- *
- * ============================================================================
- * HARDWARE INTEGRATION
- * ============================================================================
- *
- * Physical hardware information remains owned by:
- *
- *     grammar/hardware/
- *
- * and downstream hardware abstraction layers.
- *
- * This file must never encode:
- *
- *     CPU identifiers;
- *     GPU identifiers;
- *     FPGA identifiers;
- *     QPU identifiers;
- *     NUMA node identifiers;
- *     physical addresses;
- *     interconnect identifiers.
- *
- * ============================================================================
- * DISTRIBUTED SYSTEM INTEGRATION
- * ============================================================================
- *
- * Distributed execution semantics are consumed by:
- *
- *     grammar/distributed/
- *
- * and subsequently by semantic analysis/runtime infrastructure.
- *
- * The grammar should permit distributed-memory intent to coexist with:
- *
- *     node;
- *     service;
- *     remote execution;
- *     replication;
- *     consistency;
- *     fault tolerance;
- *     placement.
- *
- * Those concepts must remain owned by their respective subsystems.
- *
- * ============================================================================
- * QUANTUM INTEGRATION
- * ============================================================================
- *
- * Distributed memory may participate in hybrid quantum-classical execution.
- *
- * Examples include:
- *
- *     measurement result distribution;
- *     parameter distribution;
- *     classical control state;
- *     distributed quantum simulation state;
- *     orchestration metadata.
- *
- * This file does NOT define:
- *
- *     qubits;
- *     quantum gates;
- *     physical qubits;
- *     quantum topology;
- *     QEC;
- *     ZQN;
- *     quantum routing.
- *
- * If a distributed-memory construct ultimately affects quantum computation,
- * semantic lowering decides how that information reaches the canonical
- * quantum semantic boundary.
- *
- * The grammar MUST NOT depend directly on `quantum::ir`.
- *
- * ============================================================================
- * HDL / HARDWARE CO-DESIGN
- * ============================================================================
- *
- * Distributed memory may be used by hardware/software co-design programs.
- *
- * This grammar does not define:
- *
- *     wires;
- *     clocks;
- *     ports;
- *     registers;
- *     hardware state machines.
- *
- * Those remain owned by:
- *
- *     grammar/hdl/
- *
- * and the corresponding hardware IR.
- *
- * ============================================================================
- * AI / DATA INTEGRATION
- * ============================================================================
- *
- * Distributed memory can support:
- *
- *     tensor partitioning;
- *     dataset sharding;
- *     distributed training;
- *     model replication;
- *     distributed inference.
- *
- * This grammar does not define AI or data semantics.
- *
- * Those remain owned by:
- *
- *     grammar/ai/
- *     grammar/data/
- *
- * ============================================================================
- * SECURITY
- * ============================================================================
- *
- * A distributed-memory construct must not implicitly grant:
- *
- *     remote access;
- *     network access;
- *     cross-domain authority;
- *     data publication;
- *     replication permission;
- *     remote mutation permission.
- *
- * Capability and security analysis determine whether the requested operation
- * is authorized.
- *
- * Security semantics remain owned by:
- *
- *     grammar/security/
- *
- * ============================================================================
- * DETERMINISM
- * ============================================================================
- *
- * This grammar contains:
- *
- *     - no embedded Rust;
- *     - no semantic predicates;
- *     - no filesystem access;
- *     - no network access;
- *     - no hardware discovery;
- *     - no runtime execution;
- *     - no generated random identifiers;
- *     - no environment-dependent parsing;
- *     - no provider calls.
- *
- * Parsing is therefore deterministic with respect to the source and grammar.
- *
- * ============================================================================
- * SECURITY / PARSER PURITY
- * ============================================================================
- *
- * Parsing a distributed-memory construct MUST NEVER:
- *
- *     allocate runtime memory;
- *     access distributed memory;
- *     connect to a node;
- *     contact a provider;
- *     inspect a cluster;
- *     discover hardware;
- *     perform RPC;
- *     perform network I/O;
- *     perform serialization;
- *     invoke a scheduler;
- *     invoke a runtime;
- *     invoke an allocator.
- *
- * ============================================================================
- * AST CONTRACT
- * ============================================================================
- *
- * The AST representation must preserve at least:
- *
- *     - source span;
- *     - qualified operation name;
- *     - logical target;
- *     - operation arguments;
- *     - access intent;
- *     - consistency intent;
- *     - visibility intent;
- *     - replication intent;
- *     - migration intent;
- *     - placement intent;
- *     - requirements;
- *     - constraints;
- *     - preferences;
- *     - hints;
- *     - extension metadata.
- *
- * The AST MUST NOT silently resolve:
- *
- *     node;
- *     address;
- *     device;
- *     network;
- *     transport;
- *     backend;
- *     topology.
- *
- * ============================================================================
- * SEMANTIC CONTRACT
- * ============================================================================
- *
- * Semantic analysis must validate:
- *
- *     1. target existence;
- *     2. target type;
- *     3. ownership;
- *     4. borrowing;
- *     5. lifetime;
- *     6. aliasing;
- *     7. mutability;
- *     8. distributed-access legality;
- *     9. consistency requirements;
- *     10. visibility requirements;
- *     11. replication requirements;
- *     12. migration legality;
- *     13. placement requirements;
- *     14. resource requirements;
- *     15. capability requirements;
- *     16. security/effect requirements;
- *     17. cross-domain compatibility;
- *     18. target capability satisfaction.
- *
- * None of these checks belongs in this grammar.
- *
- * ============================================================================
- * IR CONTRACT
- * ============================================================================
- *
- * This file does NOT define an IR.
- *
- * The semantic lowering layer converts distributed-memory AST nodes into the
- * repository's canonical semantic representation.
- *
- * Distributed-memory semantics must remain independent of:
- *
- *     parser implementation;
- *     physical address representation;
- *     network implementation;
- *     provider API;
- *     runtime implementation.
- *
- * ============================================================================
- * NO DUPLICATE QUANTUM IR
- * ============================================================================
- *
- * This grammar must never create:
- *
- *     DistributedQuantumIR
- *     QuantumMemoryIR
- *     QuantumMemoryGate
- *
- * merely to represent distributed memory.
- *
- * If a distributed-memory operation affects quantum computation, its semantic
- * information is lowered through the repository's established semantic
- * pipeline and, where appropriate, ultimately into `quantum::ir`.
- *
- * ============================================================================
- * COMPILER CONTRACT
- * ============================================================================
- *
- * The compiler may use distributed-memory information for:
- *
- *     partitioning;
- *     placement;
- *     replication;
- *     communication planning;
- *     synchronization;
- *     memory movement;
- *     optimization;
- *     scheduling.
- *
- * These are compiler decisions.
- *
- * The grammar only records source intent.
- *
- * ============================================================================
- * RUNTIME CONTRACT
- * ============================================================================
- *
- * Runtime systems may realize distributed-memory semantics using any
- * supported mechanism, including future mechanisms.
- *
- * The grammar makes no assumption about:
- *
- *     RPC;
- *     MPI;
- *     shared-memory transport;
- *     message passing;
- *     RDMA;
- *     provider APIs;
- *     cloud storage;
- *     distributed object stores;
- *     quantum-network transport;
- *     custom interconnects.
- *
- * ============================================================================
- * COMPATIBILITY
- * ============================================================================
- *
- * Existing memory syntax remains owned by memory.g4.
- *
- * Adding distributed-memory syntax must not invalidate programs that do not
- * use distributed-memory constructs.
- *
- * Unknown future qualified distributed-memory operations must remain capable
- * of being diagnosed as semantic/extension errors rather than causing the
- * entire foundational memory grammar to require redesign.
- *
- * ============================================================================
- * SCALABILITY
- * ============================================================================
- *
- * There is no grammar-level maximum for:
- *
- *     operation count;
- *     argument count;
- *     logical memory objects;
- *     regions;
- *     partitions;
- *     replicas;
- *     nodes;
- *     distributed domains;
- *     source-program size.
- *
- * Practical limits are imposed only by:
- *
- *     source representation;
- *     parser implementation;
- *     compiler resources;
- *     runtime resources;
- *     target capabilities.
- *
- * ============================================================================
- * HARD-CODING AUDIT
- * ============================================================================
- *
- * Forbidden:
- *
- *     MAX_NODES
- *     MAX_REPLICAS
- *     MAX_SHARDS
- *     MAX_PARTITIONS
- *     MAX_MEMORY
- *     MAX_DISTRIBUTED_MEMORY
- *     MAX_REMOTE_MEMORY
- *     MAX_DEVICES
- *     MAX_LINKS
- *     MAX_CLUSTER_SIZE
- *
- * Forbidden:
- *
- *     node0
- *     node1
- *     device0
- *     address0
- *     address1
- *
- * Forbidden:
- *
- *     fixed cluster topology;
- *     fixed replica count;
- *     fixed memory capacity;
- *     fixed machine count;
- *     fixed network count.
- *
- * Any actual resource limit belongs downstream to:
- *
- *     resource policy;
- *     capability model;
- *     target description;
- *     runtime configuration;
- *     deployment policy.
- *
- * ============================================================================
- * TEST CONTRACT
- * ============================================================================
- *
- * Positive tests MUST cover:
- *
- *     - basic distributed-memory operation;
- *     - remote access;
- *     - replication intent;
- *     - migration intent;
- *     - partition/sharding intent;
- *     - consistency intent;
- *     - visibility intent;
- *     - placement intent;
- *     - resource requirements;
- *     - constraints;
- *     - preferences;
- *     - hints;
- *     - qualified extension operations;
- *     - nested expressions;
- *     - generic memory places;
- *     - cross-domain memory usage.
- *
- * Negative tests MUST cover:
- *
- *     - malformed distributed operations;
- *     - malformed argument lists;
- *     - malformed options;
- *     - missing targets where required semantically;
- *     - malformed qualified names;
- *     - invalid option syntax;
- *     - accidental physical-address syntax when prohibited;
- *     - invalid composition with unrelated memory syntax.
- *
- * Boundary tests MUST cover:
- *
- *     - one distributed object;
- *     - arbitrarily long argument lists within parser-resource limits;
- *     - deeply qualified extension names within parser-resource limits;
- *     - large source programs;
- *     - large numbers of independent distributed-memory constructs.
- *
- * Scalability tests MUST verify that parsing does not contain artificial
- * limits corresponding to:
- *
- *     nodes;
- *     replicas;
- *     shards;
- *     partitions;
- *     memory capacity;
- *     device count;
- *     cluster size.
- *
- * Determinism tests MUST verify identical parse structure for identical source.
- *
- * Cross-domain tests MUST include at least:
- *
- *     classical + distributed memory
- *     quantum + distributed memory
- *     quantum + classical + distributed memory
- *     HDL + distributed memory
- *     hardware + distributed memory
- *     AI + distributed memory
- *     data + distributed memory
- *     distributed + security
- *     distributed + concurrency
- *     distributed + resources
- *
- * ============================================================================
- * COMPLETION CRITERIA
- * ============================================================================
- *
- * This file is complete only when:
- *
- *     [ ] It defines distributed-memory syntax only.
- *     [ ] It consumes the canonical memory foundation.
- *     [ ] It does not redefine memory places.
- *     [ ] It does not redefine expressions.
- *     [ ] It does not redefine types.
- *     [ ] It does not define lexer rules.
- *     [ ] It has no physical machine assumptions.
- *     [ ] It has no fixed distributed-resource limits.
- *     [ ] It has no runtime behavior.
- *     [ ] It has no hardware discovery.
- *     [ ] It has no network I/O.
- *     [ ] It has no provider-specific semantics.
- *     [ ] It does not duplicate quantum::ir.
- *     [ ] It integrates with ownership.
- *     [ ] It integrates with borrowing.
- *     [ ] It integrates with lifetimes.
- *     [ ] It integrates with allocation/deallocation.
- *     [ ] It integrates with shared memory.
- *     [ ] It integrates with concurrency.
- *     [ ] It integrates with resources.
- *     [ ] It integrates with distributed execution.
- *     [ ] It integrates with security.
- *     [ ] It supports classical/quantum/hardware cross-domain use.
- *     [ ] Positive tests exist.
- *     [ ] Negative tests exist.
- *     [ ] Boundary tests exist.
- *     [ ] Scalability tests exist.
- *     [ ] Determinism tests exist.
- *     [ ] Cross-domain tests exist.
- *     [ ] Rust-generated integration remains compatible with Rust 1.97/1.97.1.
- *     [ ] No unsafe implementation is required.
- *
- * ============================================================================
+ * because new models and dialect-defined models must remain possible.
  */
+distributedMemoryConsistency
+    : identifier
+      LPAREN
+      distributedMemoryTarget
+      (COMMA distributedMemoryArgumentList)?
+      RPAREN
+    ;
+
+
+/*
+ * ========================================================================
+ * COMMUNICATION
+ * ========================================================================
+ *
+ * Communication intent may describe:
+ *
+ *   synchronization
+ *   exchange
+ *   transfer
+ *   collective
+ *   streaming
+ *   ordering
+ *   latency/bandwidth requirements
+ *
+ * Actual protocols, links and routes remain downstream.
+ */
+distributedMemoryCommunication
+    : identifier
+      LPAREN
+      distributedMemoryArgumentList?
+      RPAREN
+    ;
+
+
+/*
+ * ========================================================================
+ * RESILIENCE / RECOVERY
+ * ========================================================================
+ *
+ * Distributed memory can express logical resilience requirements without
+ * prescribing an implementation.
+ */
+distributedMemoryRecovery
+    : identifier
+      LPAREN
+      distributedMemoryTarget
+      (COMMA distributedMemoryArgumentList)?
+      RPAREN
+    ;
+
+
+/*
+ * ========================================================================
+ * RESOURCE REQUIREMENTS
+ * ========================================================================
+ *
+ * Requirements are not implementation decisions.
+ *
+ * Example:
+ *
+ *   requires capability("distributed.memory")
+ *
+ * The grammar does not restrict the value to a fixed capability registry.
+ */
+distributedMemoryRequirement
+    : identifier
+      LPAREN
+      distributedMemoryArgumentList?
+      RPAREN
+    ;
+
+
+/*
+ * ========================================================================
+ * CONSTRAINTS
+ * ========================================================================
+ *
+ * Constraints describe conditions that a valid realization must satisfy.
+ */
+distributedMemoryConstraint
+    : identifier
+      LPAREN
+      distributedMemoryArgumentList?
+      RPAREN
+    ;
+
+
+/*
+ * ========================================================================
+ * PREFERENCES
+ * ========================================================================
+ *
+ * Preferences guide realization but do not necessarily make a target
+ * invalid.
+ */
+distributedMemoryPreference
+    : identifier
+      LPAREN
+      distributedMemoryArgumentList?
+      RPAREN
+    ;
+
+
+/*
+ * ========================================================================
+ * HINTS
+ * ========================================================================
+ *
+ * Hints are advisory information for compilers/runtimes.
+ */
+distributedMemoryHint
+    : identifier
+      LPAREN
+      distributedMemoryArgumentList?
+      RPAREN
+    ;
+
+
+/*
+ * ========================================================================
+ * EXTENSIONS
+ * ========================================================================
+ *
+ * Dialects, vendors, research extensions, future distributed-memory
+ * mechanisms, and implementation-specific metadata can be represented
+ * through qualified names.
+ *
+ * Such extensions must still declare their semantic/AST/IR compatibility
+ * outside this grammar.
+ */
+distributedMemoryExtension
+    : qualifiedName
+      LPAREN
+      distributedMemoryArgumentList?
+      RPAREN
+    ;
+
+
+/*
+ * ========================================================================
+ * SPECIALIZED DISTRIBUTED-MEMORY SPECIFICATION
+ * ========================================================================
+ *
+ * This rule provides a semantic grouping for the standard conceptual
+ * categories without forcing those categories into lexer keywords.
+ *
+ * The surrounding memory composition layer may use this rule where a
+ * distributed-memory-specific clause is expected.
+ */
+distributedMemoryOption
+    : distributedMemoryDistribution
+    | distributedMemoryPartition
+    | distributedMemoryReplication
+    | distributedMemoryMigration
+    | distributedMemoryPlacement
+    | distributedMemoryConsistency
+    | distributedMemoryCommunication
+    | distributedMemoryRecovery
+    | distributedMemoryRequirement
+    | distributedMemoryConstraint
+    | distributedMemoryPreference
+    | distributedMemoryHint
+    | distributedMemoryExtension
+    ;
+
+
+/*
+ * A sequence of distributed-memory options.
+ */
+distributedMemoryOptions
+    : distributedMemoryOption*
+    ;
+
+
+/*
+ * ========================================================================
+ * IDENTIFIER ADAPTER
+ * ========================================================================
+ *
+ * The repository's current memory grammar convention uses IDENT.
+ *
+ * Do not redefine the canonical identifier syntax here.
+ */
+identifier
+    : IDENT
+    ;
