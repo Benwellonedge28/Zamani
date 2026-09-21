@@ -9,8 +9,14 @@
  * Grammar:
  *     Imports
  *
+ * Status:
+ *     CANONICAL MODULE IMPORT GRAMMAR
+ *
  * Purpose:
- *     Canonical source-level grammar for Zamani import declarations.
+ *     Define the complete source-level syntax of Zamani import declarations
+ *     while delegating names, lexical tokens, literals, semantic resolution,
+ *     package resolution, dependency resolution, and target realization to
+ *     their canonical owners.
  *
  * Language:
  *     Zamani
@@ -21,1066 +27,823 @@
  * Rust implementation baseline:
  *     Rust 1.97 / Rust 1.97.1
  *
- * Safety:
- *     This grammar contains no embedded Rust actions, semantic predicates,
- *     filesystem access, network access, runtime callbacks, or unsafe code.
+ * Rust safety:
+ *     Zamani Rust implementation MUST remain safe Rust.
+ *     No unsafe Rust is required by this grammar or its integration contract.
  *
  * ============================================================================
  * ARCHITECTURAL POSITION
  * ============================================================================
  *
- *     Zamani source
+ * The import grammar participates in the following pipeline:
+ *
+ *     source
+ *        |
+ *        v
+ *     grammar/lexer/*
+ *        |
+ *        v
+ *     grammar/antlr/ZamaniLexer.g4
+ *        |
+ *        v
+ *     grammar/modules/imports.g4
+ *        |
+ *        v
+ *     grammar/antlr/ZamaniParser.g4
+ *        |
+ *        v
+ *     domain-neutral frontend AST
+ *        |
+ *        v
+ *     module / package / symbol resolution
+ *        |
+ *        v
+ *     semantic analysis
+ *        |
+ *        +-------------------+-------------------+
+ *        |                   |                   |
+ *        v                   v                   v
+ *     classical          quantum::ir       HDL/hardware
+ *        |                   |                   |
+ *        +-------------------+-------------------+
+ *                            |
+ *                            v
+ *                     optimization
+ *                            |
+ *                     routing/scheduling
+ *                            |
+ *                     resilience/QEC/ZQN
+ *                            |
+ *                            v
+ *                           HAL
+ *                            |
+ *                            v
+ *                     target realization
+ *
+ * THIS FILE IS A SYNTAX COMPONENT ONLY.
+ *
+ * It MUST NOT:
+ *
+ *     - resolve imports;
+ *     - access the filesystem;
+ *     - access a registry;
+ *     - access a network;
+ *     - inspect environment variables;
+ *     - discover hardware;
+ *     - discover resources;
+ *     - select a compiler backend;
+ *     - select a CPU;
+ *     - select a GPU;
+ *     - select an FPGA;
+ *     - select an ASIC;
+ *     - select a QPU;
+ *     - allocate qubits;
+ *     - allocate memory;
+ *     - construct classical IR;
+ *     - construct quantum::ir;
+ *     - perform QEC;
+ *     - perform ZQN analysis;
+ *     - perform routing;
+ *     - perform scheduling;
+ *     - execute code.
+ *
+ * ============================================================================
+ * AUTHORITY AND OWNERSHIP
+ * ============================================================================
+ *
+ * Normative syntax:
+ *
+ *     grammar/spec/syntax.md
+ *     grammar/specification/syntax.md
+ *
+ * Grammar architecture:
+ *
+ *     grammar/DESIGN.md
+ *
+ * Canonical parser composition:
+ *
+ *     grammar/antlr/ZamaniParser.g4
+ *
+ * Canonical lexer:
+ *
+ *     grammar/antlr/ZamaniLexer.g4
+ *
+ * Canonical lexical composition:
+ *
+ *     grammar/lexer/tokens.g4
+ *
+ * Canonical source-level names:
+ *
+ *     grammar/core/names.g4
+ *
+ * Qualified-name integration:
+ *
+ *     grammar/core/qualified-names.g4
+ *
+ * Module composition:
+ *
+ *     grammar/modules/modules.g4
+ *
+ * Exports:
+ *
+ *     grammar/modules/exports.g4
+ *
+ * Packages:
+ *
+ *     grammar/modules/packages.g4
+ *
+ * Dependencies:
+ *
+ *     grammar/modules/dependencies.g4
+ *
+ * Namespaces:
+ *
+ *     grammar/modules/namespaces.g4
+ *
+ * Visibility:
+ *
+ *     grammar/modules/visibility.g4
+ *
+ * Module attributes:
+ *
+ *     grammar/modules/module-attributes.g4
+ *
+ * This file MUST NOT become an independent syntax authority.
+ *
+ * ============================================================================
+ * THIS FILE OWNS
+ * ============================================================================
+ *
+ * This file owns:
+ *
+ *     - import declarations;
+ *     - import clauses;
+ *     - direct qualified-symbol imports;
+ *     - named-symbol imports;
+ *     - wildcard imports;
+ *     - import aliases;
+ *     - import source qualifiers;
+ *     - symbolic import sources;
+ *     - literal import sources;
+ *     - import-specifier lists;
+ *     - import-section syntax;
+ *     - import-specific structural wrappers.
+ *
+ * ============================================================================
+ * THIS FILE DOES NOT OWN
+ * ============================================================================
+ *
+ * This file does NOT own:
+ *
+ *     - IDENTIFIER;
+ *     - keyword spellings;
+ *     - punctuation;
+ *     - operators;
+ *     - string literal syntax;
+ *     - qualified-name syntax;
+ *     - path syntax;
+ *     - module declarations;
+ *     - package declarations;
+ *     - dependency declarations;
+ *     - namespace declarations;
+ *     - exports;
+ *     - visibility;
+ *     - attributes;
+ *     - declarations;
+ *     - expressions;
+ *     - types;
+ *     - semantic resolution;
+ *     - package resolution;
+ *     - dependency solving;
+ *     - symbol resolution;
+ *     - visibility checking;
+ *     - capability checking;
+ *     - resource checking;
+ *     - hardware selection;
+ *     - target selection;
+ *     - IR construction;
+ *     - runtime loading.
+ *
+ * ============================================================================
+ * CRITICAL NAME OWNERSHIP
+ * ============================================================================
+ *
+ * `grammar/core/names.g4` is the canonical owner of:
+ *
+ *     identifier
+ *     simpleName
+ *     nameSegment
+ *     qualifiedName
+ *     nameList
+ *     qualifiedNameList
+ *     nameAlias
+ *     nameReference
+ *     nameReferenceList
+ *
+ * This grammar MUST reuse those rules.
+ *
+ * It MUST NOT define another version of:
+ *
+ *     identifier
+ *     qualifiedName
+ *     nameSegment
+ *
+ * In particular, this grammar MUST NOT contain:
+ *
+ *     identifier (DOUBLE_COLON identifier)*
+ *
+ * or an equivalent duplicate.
+ *
+ * ============================================================================
+ * LEXICAL TOKEN CONTRACT
+ * ============================================================================
+ *
+ * Parser grammars consume the canonical production lexer:
+ *
+ *     grammar/antlr/ZamaniLexer.g4
+ *
+ * through:
+ *
+ *     tokenVocab = ZamaniLexer;
+ *
+ * The actual canonical keyword names in the repository are:
+ *
+ *     IMPORT
+ *     FROM
+ *     AS
+ *
+ * NOT:
+ *
+ *     K_IMPORT
+ *     K_FROM
+ *     K_AS
+ *
+ * The canonical string literal token is:
+ *
+ *     STRING
+ *
+ * NOT:
+ *
+ *     STRING_LITERAL
+ *
+ * Other punctuation/operator tokens are consumed exactly as supplied by
+ * ZamaniLexer.
+ *
+ * This grammar MUST NOT redefine any lexical token.
+ *
+ * ============================================================================
+ * ANTLR COMPOSITION CONTRACT
+ * ============================================================================
+ *
+ * This is a parser grammar.
+ *
+ * It imports the canonical name grammar directly:
+ *
+ *     Names
+ *
+ * `Names` is used instead of defining another qualified-name grammar here.
+ *
+ * The dependency direction is:
+ *
+ *     ZamaniTokens
  *          |
  *          v
  *     ZamaniLexer
  *          |
  *          v
+ *     Names
+ *          |
+ *          v
  *     Imports
  *          |
  *          v
- *     Frontend AST
- *          |
- *          v
- *     Module / name resolution
- *          |
- *          v
- *     Semantic analysis
- *          |
- *          +--------------------+
- *          |                    |
- *          v                    v
- *     Classical IR          quantum::ir
- *          |                    |
- *          +---------+----------+
- *                    |
- *                    v
- *              optimization
- *                    |
- *                    v
- *            routing / scheduling
- *                    |
- *                    v
- *        hardware / runtime / deployment
+ *     Modules / ZamaniParser
  *
- * This grammar owns only the concrete syntax of imports.
+ * `grammar/core/qualified-names.g4` remains an integration layer for consumers
+ * that require qualified-name/path wrappers. This file does not need to import
+ * it because imports require only the canonical `qualifiedName` rule owned by
+ * `Names`.
  *
- * It does NOT resolve imports.
+ * This avoids introducing an unnecessary additional grammar dependency path.
  *
  * ============================================================================
- * OWNERSHIP
+ * IMPORT MODEL
  * ============================================================================
  *
- * THIS FILE OWNS:
+ * Zamani supports three source-level import target forms:
  *
- *   - import declarations;
- *   - import clauses;
- *   - imported qualified names;
- *   - imported symbol lists;
- *   - import aliases;
- *   - wildcard imports;
- *   - source-qualified imports;
- *   - import source literals;
- *   - import-list separators;
- *   - import-specific syntactic structure.
+ *     1. qualified import
+ *     2. named import list
+ *     3. wildcard import
  *
- * THIS FILE DOES NOT OWN:
+ * Examples:
  *
- *   - lexical keywords;
- *   - identifiers;
- *   - qualified-name syntax;
- *   - filesystem paths;
- *   - URLs;
- *   - package resolution;
- *   - dependency resolution;
- *   - module discovery;
- *   - registry access;
- *   - downloading;
- *   - caching;
- *   - signature verification;
- *   - symbol resolution;
- *   - visibility checking;
- *   - capability checking;
- *   - type checking;
- *   - effects;
- *   - resources;
- *   - hardware;
- *   - quantum devices;
- *   - QEC;
- *   - ZQN;
- *   - scheduling;
- *   - routing;
- *   - optimization;
- *   - runtime execution;
- *   - canonical IR construction.
+ *     import math;
+ *
+ *     import math::linear;
+ *
+ *     import math::linear as linear;
+ *
+ *     import {Vector, Matrix};
+ *
+ *     import {Vector as V, Matrix};
+ *
+ *     import *;
+ *
+ * Optional source qualification may be used:
+ *
+ *     import {Vector} from "math";
+ *
+ *     import * from "math";
+ *
+ *     import math::linear from "math";
+ *
+ *     import math::linear as linear from "math";
+ *
+ * A source qualifier is syntactic data.
+ *
+ * It does not itself establish:
+ *
+ *     - a filesystem path;
+ *     - a URL;
+ *     - a package registry;
+ *     - a workspace;
+ *     - a remote source;
+ *     - a local source;
+ *     - a generated source;
+ *     - a hardware source.
+ *
+ * The semantic/toolchain layer determines the meaning of the source reference.
  *
  * ============================================================================
- * CRITICAL SEMANTIC BOUNDARY
+ * SYMBOLIC VERSUS LITERAL SOURCE
  * ============================================================================
  *
- * The following source:
+ * A source qualifier may be represented as either:
  *
- *     import quantum::algorithm;
+ *     qualifiedName
  *
- * means only:
+ * or:
  *
- *     "the source program contains an import declaration whose target is
- *      the qualified name quantum::algorithm."
+ *     STRING
+ *
+ * Examples:
+ *
+ *     from math::linear
+ *
+ *     from "math"
+ *
+ * The parser preserves the distinction.
+ *
+ * Semantic analysis decides whether the source reference denotes:
+ *
+ *     - a module;
+ *     - a package;
+ *     - a workspace;
+ *     - an embedded module;
+ *     - a generated module;
+ *     - a registry coordinate;
+ *     - another source provider.
+ *
+ * The grammar does not make that decision.
+ *
+ * ============================================================================
+ * IMPORT TARGET SEMANTICS
+ * ============================================================================
+ *
+ * A direct qualified import:
+ *
+ *     import quantum::algorithms;
+ *
+ * represents a source-level symbolic reference.
  *
  * It does NOT mean:
  *
- *     - open a file named quantum::algorithm;
- *     - access a filesystem;
- *     - contact a package registry;
- *     - select a quantum processor;
- *     - select a number of qubits;
- *     - select a topology;
- *     - allocate hardware;
- *     - load a runtime;
- *     - invoke quantum::ir;
- *     - compile anything.
+ *     use a QPU;
+ *     allocate qubits;
+ *     select a backend;
+ *     invoke quantum::ir;
+ *     load a runtime.
  *
- * Those decisions belong to downstream semantic/toolchain layers.
+ * Likewise:
+ *
+ *     import hardware::capability;
+ *
+ * does not select a physical hardware capability.
+ *
+ * Hardware capability resolution occurs downstream.
  *
  * ============================================================================
  * POCO-REAF
  * ============================================================================
  *
- * Import syntax is intentionally independent of execution scale.
+ * Import syntax is target-independent.
  *
- * There are no grammar-level limits on:
+ * There are NO grammar-level limits on:
  *
  *     - number of imports;
  *     - number of imported symbols;
+ *     - number of import declarations;
  *     - number of qualified-name segments;
  *     - number of aliases;
- *     - number of source modules;
+ *     - number of modules;
  *     - number of packages;
+ *     - number of dependencies;
  *     - number of compilation units;
  *     - number of domains;
  *     - number of quantum resources;
  *     - number of hardware resources;
- *     - number of execution targets.
+ *     - number of deployment targets.
  *
- * Repetition uses ANTLR repetition operators rather than finite constants.
- *
- * The grammar MUST NOT contain:
+ * The grammar MUST NOT introduce:
  *
  *     MAX_IMPORTS
- *     MAX_MODULES
  *     MAX_IMPORT_DEPTH
+ *     MAX_IMPORTED_SYMBOLS
+ *     MAX_MODULES
  *     MAX_PACKAGES
+ *     MAX_DEPENDENCIES
  *     MAX_TARGETS
+ *     MAX_QUBITS
+ *     MAX_CPUS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_NODES
  *
- * or equivalent limitations.
+ * Repetition is represented using ANTLR repetition operators.
  *
- * ============================================================================
- * IMPORT SOURCE MODEL
- * ============================================================================
- *
- * Zamani supports two syntactic categories of import source:
- *
- *   1. symbolic source
- *
- *        import quantum::algorithm;
- *
- *   2. explicit source literal
- *
- *        import {algorithm} from "library";
- *
- * The grammar preserves the distinction.
- *
- * A string literal is opaque syntax here.
- *
- * It may later represent:
- *
- *   - a package coordinate;
- *   - a workspace source;
- *   - an embedded module;
- *   - a generated module;
- *   - a registry coordinate;
- *   - a logical source identifier;
- *   - another compiler-defined source provider.
- *
- * The grammar does not decide which.
+ * Practical parser/compiler limits MAY exist as configurable implementation
+ * resource budgets. Such limits MUST NOT become source-language semantics.
  *
  * ============================================================================
- * NAME OWNERSHIP
+ * HARDWARE INDEPENDENCE
  * ============================================================================
  *
- * `identifier` and `qualifiedName` are owned by:
+ * Import declarations MUST NOT encode:
  *
- *     grammar/core/names.g4
- *
- * This grammar imports Names rather than redefining those rules.
- *
- * This is essential because:
- *
- *     math::linear
- *     quantum::ir
- *     hardware::capability
- *
- * must have exactly one canonical qualified-name syntax throughout Zamani.
- *
- * ============================================================================
- * LEXER OWNERSHIP
- * ============================================================================
- *
- * Keyword and punctuation tokens are supplied by the canonical Zamani lexer:
- *
- *     grammar/lexer/tokens.g4
- *
- * Relevant tokens include:
- *
- *     K_IMPORT
- *     K_FROM
- *     K_AS
- *     DOUBLE_COLON
- *     STAR
- *     LBRACE
- *     RBRACE
- *     COMMA
- *     SEMICOLON
- *     STRING_LITERAL
- *     IDENTIFIER
- *
- * This grammar does not redefine any of them.
- *
- * ============================================================================
- * NO FILESYSTEM PATH SEMANTICS
- * ============================================================================
- *
- * Import targets are symbolic language names.
- *
- * This grammar deliberately does not interpret:
- *
- *     /
- *     \
- *     .
- *     ..
- *     C:
- *     file extensions
- *     URLs
- *
- * as filesystem semantics.
- *
- * If Zamani later supports explicit path-based imports, that syntax must be
- * introduced through the canonical path grammar and an explicit import-path
- * construct rather than silently changing the meaning of qualified names.
- *
- * ============================================================================
- * NO TARGET COUPLING
- * ============================================================================
- *
- * An import must never encode:
- *
+ *     CPU identity
  *     CPU count
+ *     core count
+ *     thread count
+ *     GPU identity
  *     GPU count
+ *     FPGA identity
  *     FPGA count
  *     ASIC identity
  *     QPU identity
+ *     physical qubit
  *     qubit count
- *     topology
+ *     memory bank
  *     memory capacity
- *     network topology
- *     deployment node
+ *     network node
+ *     topology
  *     accelerator count
+ *     physical address
  *
- * Such information belongs to resource/capability/target semantics.
+ * Target realization belongs downstream to:
+ *
+ *     resources
+ *     capabilities
+ *     compile
+ *     execution
+ *     hardware
+ *     HAL
+ *     scheduling
+ *     routing
+ *     deployment
  *
  * ============================================================================
  * DETERMINISM
  * ============================================================================
  *
- * These rules:
+ * This grammar contains no:
  *
- *     - perform no I/O;
- *     - perform no network operations;
- *     - inspect no environment variables;
- *     - inspect no hardware;
- *     - access no clock;
- *     - use no randomness;
- *     - invoke no runtime;
- *     - perform no semantic lookup.
+ *     - actions;
+ *     - semantic predicates;
+ *     - filesystem access;
+ *     - network access;
+ *     - registry access;
+ *     - environment lookup;
+ *     - hardware discovery;
+ *     - resource discovery;
+ *     - randomness;
+ *     - clock access;
+ *     - runtime execution.
  *
- * Therefore parsing is deterministic for a deterministic token stream.
+ * Given the same token stream and grammar version, the parser MUST produce the
+ * same syntactic interpretation.
  *
  * ============================================================================
  * AST CONTRACT
  * ============================================================================
  *
- * The downstream AST should be able to preserve:
+ * The parser must preserve enough structure for a domain-neutral AST to
+ * represent at least:
  *
- *     - import declaration span;
- *     - import kind;
- *     - target qualified-name segments;
- *     - imported symbol names;
- *     - aliases;
- *     - wildcard marker;
- *     - source literal;
- *     - source spans;
- *     - source ordering.
+ *     ImportDeclaration
+ *         target
+ *         alias
+ *         source
+ *         source_span
  *
- * Recommended semantic categories:
+ * Target variants are conceptually:
  *
- *     SymbolImport
+ *     QualifiedImport
  *     NamedImport
  *     WildcardImport
  *
- * These are AST/semantic concepts, not grammar-owned types.
+ * Source variants are conceptually:
+ *
+ *     NoSource
+ *     SymbolicSource
+ *     LiteralSource
+ *
+ * A named import item conceptually contains:
+ *
+ *     importedName
+ *     localAlias?
+ *
+ * The exact Rust AST type names belong to the frontend AST owner.
+ *
+ * This grammar MUST NOT create a second module AST or a second quantum AST.
  *
  * ============================================================================
  * SEMANTIC CONTRACT
  * ============================================================================
  *
- * After parsing, semantic analysis is responsible for:
+ * After parsing, semantic/module analysis owns:
  *
- *     - resolving module identities;
- *     - resolving packages;
- *     - resolving symbols;
- *     - checking aliases;
- *     - checking duplicate imports;
- *     - checking visibility;
- *     - detecting dependency cycles;
- *     - determining source-provider semantics;
- *     - validating package/version requirements;
- *     - checking capabilities;
- *     - constructing the module dependency graph.
+ *     - source-provider resolution;
+ *     - module identity resolution;
+ *     - package resolution;
+ *     - dependency resolution;
+ *     - symbol resolution;
+ *     - alias validation;
+ *     - duplicate-import detection;
+ *     - visibility checking;
+ *     - export checking;
+ *     - dependency graph construction;
+ *     - dependency cycle detection;
+ *     - version compatibility;
+ *     - capability requirements;
+ *     - resource requirements;
+ *     - dialect compatibility;
+ *     - interoperability validation.
  *
- * None of those checks belong here.
+ * None of these checks belong in this grammar.
  *
  * ============================================================================
  * IR CONTRACT
  * ============================================================================
  *
- * This grammar never constructs IR.
+ * Import declarations do not directly lower to execution IR.
  *
- * Import declarations are consumed by module/name semantic analysis before
- * program semantics are lowered.
+ * Their information is consumed during source/module semantic analysis.
  *
- * Quantum imports must eventually feed quantum semantic lowering and,
- * where quantum computation is involved, the repository's canonical
- * `quantum::ir`.
+ * The resulting program semantics then follow the repository's canonical path:
  *
- * This grammar must never define:
+ *     frontend AST
+ *          |
+ *          v
+ *     semantic analysis
+ *          |
+ *          +-------------------+-------------------+
+ *          |                   |                   |
+ *          v                   v                   v
+ *     classical model     quantum semantics    HDL/hardware
+ *                              |
+ *                              v
+ *                         quantum::ir
+ *                              |
+ *                              v
+ *                     optimization/lowering
+ *                              |
+ *                     routing/scheduling
+ *                              |
+ *                     QEC/resilience/ZQN
+ *                              |
+ *                             HAL
+ *
+ * This grammar MUST NOT define:
  *
  *     QuantumImportIR
- *     QuantumModuleIR
+ *     ModuleIR
+ *     ImportIR
  *     HardwareImportIR
  *
- * or equivalent duplicate representations.
+ * or equivalent duplicate IR structures.
  *
  * ============================================================================
- * COMPILER / RUNTIME CONTRACT
+ * MODULE INTEGRATION
  * ============================================================================
  *
- * Compiler:
+ * `grammar/modules/modules.g4` owns module declaration syntax.
  *
- *     parser
- *       -> AST
- *       -> module resolution
- *       -> semantic analysis
- *       -> canonical semantic IR
+ * It should consume:
  *
- * Runtime:
+ *     importDeclaration
  *
- *     NO DIRECT DEPENDENCY.
+ * through the canonical aggregate `item`/source-element composition supplied
+ * by the parser architecture.
  *
- * Import resolution must happen before runtime execution and must not cause
- * this grammar to depend on runtime APIs.
+ * `modules.g4` MUST NOT redefine:
  *
- * ============================================================================
- * TOOLING CONTRACT
- * ============================================================================
+ *     importDeclaration
+ *     importClause
+ *     importSpecifier
+ *     importAlias
+ *     importSource
  *
- * IDEs, formatters, documentation tools, dependency analyzers and language
- * servers may consume the parse tree/AST produced from this grammar.
- *
- * The parser must preserve enough source structure for:
- *
- *     - import navigation;
- *     - go-to-definition;
- *     - dependency visualization;
- *     - import sorting;
- *     - unused-import analysis;
- *     - rename operations;
- *     - diagnostics;
- *     - formatting;
- *     - source-preserving transformations.
+ * This keeps imports independently completable.
  *
  * ============================================================================
- * COMPATIBILITY
+ * EXPORT INTEGRATION
  * ============================================================================
  *
- * This file is the canonical modular replacement for older module grammar
- * implementations that used obsolete token names such as:
+ * `grammar/modules/exports.g4` owns:
  *
- *     IMPORT
- *     FROM
- *     AS
- *     SEMI
+ *     exportDeclaration
+ *     exportClause
+ *     exportSpecifier
+ *     re-export syntax
  *
- * The current lexical authority uses:
+ * Imports and exports intentionally remain separate grammar owners.
  *
- *     K_IMPORT
- *     K_FROM
- *     K_AS
- *     SEMICOLON
- *
- * No compatibility aliases are created inside this file.
- *
- * Compatibility belongs to the language-versioning/migration layer.
+ * A re-export is an export construct, not an import construct, even if it
+ * contains source-reference syntax.
  *
  * ============================================================================
- */
-
-parser grammar Imports;
-
-options {
-    tokenVocab = ZamaniLexer;
-}
-
-/*
- * ============================================================================
- * DEPENDENCIES
+ * PACKAGE INTEGRATION
  * ============================================================================
  *
- * Names owns:
+ * `grammar/modules/packages.g4` owns package syntax.
  *
- *     identifier
- *     qualifiedName
+ * This grammar does not define package declarations.
  *
- * Import syntax consumes those canonical rules.
- */
-import Names;
-
-
-/*
- * ============================================================================
- * 1. PUBLIC IMPORT DECLARATION
- * ============================================================================
- *
- * Canonical form:
- *
- *     import <clause>;
- *
- * Examples:
- *
- *     import math;
- *     import math::linear;
- *     import math::linear as linear;
- *     import {Vector, Matrix};
- *     import {Vector as V, Matrix};
- *     import *;
- *
- * Source-qualified forms are also supported:
- *
- *     import {Vector} from "math";
- *     import * from "math";
- *     import * as math from "math";
- *     import math::linear from "math";
- *
- * The terminating semicolon is required.
- *
- * Requiring the terminator gives deterministic declaration boundaries and
- * avoids coupling import parsing to newline/trivia behavior.
- */
-importDeclaration
-    : K_IMPORT importClause SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * 2. IMPORT CLAUSE
- * ============================================================================
- *
- * An import has one of three structural forms:
- *
- *     qualified target
- *     wildcard target
- *     named target list
- *
- * An optional source qualifier may follow any target form where syntactically
- * meaningful.
- */
-importClause
-    : qualifiedImportClause
-    | wildcardImportClause
-    | namedImportClause
-    ;
-
-
-/*
- * ============================================================================
- * 3. QUALIFIED IMPORT
- * ============================================================================
- *
- * Examples:
- *
- *     import math;
- *     import math::linear;
- *     import math::linear as linear;
- *     import math::linear from "math";
- *     import math::linear as linear from "math";
- *
- * The source qualifier is syntactic only.
- */
-qualifiedImportClause
-    : qualifiedName importAlias? importSource?
-    ;
-
-
-/*
- * ============================================================================
- * 4. QUALIFIED IMPORT ALIAS
- * ============================================================================
- *
- * Example:
- *
- *     import quantum::algorithm as algorithm;
- *
- * The imported qualified name remains canonical.
- *
- * The alias is another canonical identifier.
- */
-importAlias
-    : K_AS identifier
-    ;
-
-
-/*
- * ============================================================================
- * 5. NAMED IMPORT
- * ============================================================================
- *
- * Examples:
- *
- *     import {Vector};
- *     import {Vector, Matrix};
- *     import {Vector as V, Matrix};
- *     import {Vector, Matrix, Tensor,};
- *
- * A trailing comma is accepted.
- *
- * No finite number of imported symbols is imposed.
- */
-namedImportClause
-    : LBRACE importSpecifierList RBRACE importSource?
-    ;
-
-
-/*
- * ============================================================================
- * 6. IMPORT SPECIFIER LIST
- * ============================================================================
- *
- * The list is non-empty.
- *
- * Empty:
- *
- *     import {};
- *
- * is intentionally rejected by the grammar because it has no syntactic
- * import target and provides no useful source-level meaning.
- *
- * Semantic validation remains responsible for duplicate names and visibility.
- */
-importSpecifierList
-    : importSpecifier (COMMA importSpecifier)* COMMA?
-    ;
-
-
-/*
- * ============================================================================
- * 7. IMPORT SPECIFIER
- * ============================================================================
- *
- * A named import uses one qualified name with an optional local alias.
- *
- * Examples:
- *
- *     Vector
- *     math::Vector
- *     math::Vector as Vector
- *
- * Keeping the target as a qualifiedName allows the syntax to scale to nested
- * module namespaces without introducing a depth limit.
- */
-importSpecifier
-    : qualifiedName importAlias?
-    ;
-
-
-/*
- * ============================================================================
- * 8. WILDCARD IMPORT
- * ============================================================================
- *
- * Examples:
- *
- *     import *;
- *     import * as math;
- *     import * from "math";
- *     import * as math from "math";
- *
- * Wildcard semantics are NOT determined by this grammar.
- *
- * In particular, this grammar does not decide whether wildcard import means:
- *
- *     - all public declarations;
- *     - all names in a namespace;
- *     - all exports;
- *     - all symbols from a source provider.
- *
- * That is a semantic/module-system policy.
- */
-wildcardImportClause
-    : STAR importAlias? importSource?
-    ;
-
-
-/*
- * ============================================================================
- * 9. IMPORT SOURCE
- * ============================================================================
- *
- * Example:
- *
- *     from "math";
- *
- * The string literal is intentionally opaque.
- *
- * The grammar does not interpret it as:
- *
- *     - filesystem path;
- *     - URL;
- *     - package registry coordinate;
- *     - device address;
- *     - hardware identifier.
- *
- * The module/source resolver assigns that meaning.
- */
-importSource
-    : K_FROM importSourceLiteral
-    ;
-
-
-/*
- * ============================================================================
- * 10. IMPORT SOURCE LITERAL
- * ============================================================================
- *
- * This wrapper exists only to give import syntax an explicit parse-tree node.
- *
- * STRING_LITERAL remains owned by the canonical lexer.
- *
- * No string lexical syntax is duplicated here.
- */
-importSourceLiteral
-    : STRING_LITERAL
-    ;
-
-
-/*
- * ============================================================================
- * 11. IMPORT TARGET
- * ============================================================================
- *
- * Generic integration wrapper.
- *
- * This rule is useful to downstream grammar composition when a construct needs
- * to accept an import target without caring which concrete import form was
- * selected.
- */
-importTarget
-    : qualifiedImportTarget
-    | wildcardImportTarget
-    | namedImportTarget
-    ;
-
-
-/*
- * ============================================================================
- * 12. QUALIFIED IMPORT TARGET
- * ============================================================================
- *
- * This is deliberately separated from `qualifiedImportClause`.
- *
- * `qualifiedImportClause` owns the complete declaration-level form.
- *
- * `qualifiedImportTarget` owns only the target itself.
- */
-qualifiedImportTarget
-    : qualifiedName
-    ;
-
-
-/*
- * ============================================================================
- * 13. WILDCARD IMPORT TARGET
- * ============================================================================
- */
-wildcardImportTarget
-    : STAR
-    ;
-
-
-/*
- * ============================================================================
- * 14. NAMED IMPORT TARGET
- * ============================================================================
- *
- * This wrapper exposes a named target without the surrounding `import`
- * keyword or source qualifier.
- */
-namedImportTarget
-    : LBRACE importSpecifierList RBRACE
-    ;
-
-
-/*
- * ============================================================================
- * 15. IMPORT TARGET LIST
- * ============================================================================
- *
- * Generic reusable list for tooling or higher-level grammar composition.
- */
-importTargetList
-    : importTarget (COMMA importTarget)*
-    ;
-
-
-/*
- * ============================================================================
- * 16. IMPORT SOURCE LIST
- * ============================================================================
- *
- * This is intentionally provided as a reusable syntax boundary for future
- * language constructs that may associate multiple source descriptors with
- * import declarations.
- *
- * It does NOT imply that multiple sources are currently legal in a normal
- * `importDeclaration`.
- */
-importSourceList
-    : importSource (COMMA importSource)*
-    ;
-
-
-/*
- * ============================================================================
- * 17. IMPORT ALIAS LIST
- * ============================================================================
- *
- * Generic alias list for tooling/composition.
- *
- * Normal imports do not use this rule directly because aliases are attached
- * to their imported target.
- */
-importAliasList
-    : importAlias (COMMA importAlias)*
-    ;
-
-
-/*
- * ============================================================================
- * 18. OPTIONAL IMPORT SOURCE
- * ============================================================================
- *
- * Integration wrapper.
- */
-optionalImportSource
-    : importSource?
-    ;
-
-
-/*
- * ============================================================================
- * 19. OPTIONAL IMPORT ALIAS
- * ============================================================================
- *
- * Integration wrapper.
- */
-optionalImportAlias
-    : importAlias?
-    ;
-
-
-/*
- * ============================================================================
- * 20. IMPORT DECLARATION LIST
- * ============================================================================
- *
- * No finite number of imports is imposed.
- *
- * This rule is useful where a module grammar wants to explicitly represent
- * a contiguous import section.
- *
- * The top-level module grammar may instead use `importDeclaration*` directly.
- */
-importDeclarationList
-    : importDeclaration+
-    ;
-
-
-/*
- * ============================================================================
- * 21. OPTIONAL IMPORT DECLARATION LIST
- * ============================================================================
- */
-optionalImportDeclarationList
-    : importDeclarationList?
-    ;
-
-
-/*
- * ============================================================================
- * 22. IMPORT SECTION
- * ============================================================================
- *
- * A section may contain zero or more imports.
- *
- * This is a composition rule, not a declaration of module ordering semantics.
- *
- * Whether imports must precede declarations is owned by the module/source
- * grammar.
- */
-importSection
-    : importDeclaration*
-    ;
-
-
-/*
- * ============================================================================
- * 23. NON-EMPTY IMPORT SECTION
- * ============================================================================
- */
-nonEmptyImportSection
-    : importDeclaration+
-    ;
-
-
-/*
- * ============================================================================
- * 24. IMPORT SOURCE NAME
- * ============================================================================
- *
- * A source may be represented by a language-level qualified name through
- * `importSourceName`.
- *
- * This is intentionally separate from `importSourceLiteral`.
- *
- * Example:
- *
- *     import math::linear;
- *
- * uses the symbolic import target.
- *
- * An explicit:
+ * A literal source such as:
  *
  *     from "math"
  *
- * uses `importSourceLiteral`.
+ * remains opaque until semantic/toolchain resolution.
  *
- * The two forms must not be conflated in the AST.
- */
-importSourceName
-    : qualifiedName
-    ;
-
-
-/*
- * ============================================================================
- * 25. IMPORT SOURCE REFERENCE
- * ============================================================================
- *
- * Generic source reference preserving whether the source was expressed as
- * a symbolic name or a literal.
- *
- * This is a syntax-only distinction.
- */
-importSourceReference
-    : importSourceName
-    | importSourceLiteral
-    ;
-
-
-/*
- * ============================================================================
- * 26. OPTIONAL IMPORT SOURCE REFERENCE
- * ============================================================================
- */
-optionalImportSourceReference
-    : importSourceReference?
-    ;
-
-
-/*
- * ============================================================================
- * 27. NAMED IMPORT SPECIFIER LIST
- * ============================================================================
- *
- * Explicit alias-aware wrapper.
- *
- * This rule exists so tooling can refer directly to the list structure without
- * reconstructing it from the declaration rule.
- */
-namedImportSpecifierList
-    : importSpecifierList
-    ;
-
-
-/*
- * ============================================================================
- * 28. IMPORT SPECIFIER WITH SOURCE
- * ============================================================================
- *
- * Reusable syntax wrapper for:
- *
- *     symbol from "source"
- *
- * This is not itself a complete declaration.
- */
-importSpecifierWithSource
-    : importSpecifier importSource
-    ;
-
-
-/*
- * ============================================================================
- * 29. WILDCARD IMPORT WITH SOURCE
- * ============================================================================
- *
- * Reusable syntax wrapper for:
- *
- *     * from "source"
- *
- * This is not itself a complete declaration.
- */
-wildcardImportWithSource
-    : STAR importSource
-    ;
-
-
-/*
- * ============================================================================
- * 30. QUALIFIED IMPORT WITH SOURCE
- * ============================================================================
- *
- * Reusable syntax wrapper for:
- *
- *     qualifiedName from "source"
- *
- * This is not itself a complete declaration.
- */
-qualifiedImportWithSource
-    : qualifiedName importSource
-    ;
-
-
-/*
- * ============================================================================
- * 31. QUALIFIED IMPORT WITH ALIAS AND SOURCE
- * ============================================================================
- *
- * Reusable syntax wrapper for:
- *
- *     qualifiedName as identifier from "source"
- */
-qualifiedImportWithAliasAndSource
-    : qualifiedName importAlias importSource
-    ;
-
-
-/*
- * ============================================================================
- * 32. WILDCARD IMPORT WITH ALIAS AND SOURCE
- * ============================================================================
- *
- * Reusable syntax wrapper for:
- *
- *     * as identifier from "source"
- */
-wildcardImportWithAliasAndSource
-    : STAR importAlias importSource
-    ;
-
-
-/*
- * ============================================================================
- * 33. SEMANTIC BOUNDARY DOCUMENTATION
- * ============================================================================
- *
- * The following operations are intentionally absent:
- *
- *     resolveImport
- *     resolveModule
- *     resolvePackage
- *     loadImport
- *     fetchImport
- *     openImport
- *     readImport
- *     installPackage
- *     downloadPackage
- *     verifyPackage
- *     selectBackend
- *     selectDevice
- *     allocateResource
- *
- * They belong to later compiler/toolchain layers.
+ * It must not be interpreted by this grammar as a filesystem directory.
  *
  * ============================================================================
- * MODULE GRAPH BOUNDARY
+ * DEPENDENCY INTEGRATION
  * ============================================================================
  *
- * Given:
+ * `grammar/modules/dependencies.g4` owns dependency declaration syntax.
  *
- *     import quantum::algorithms::search as search;
+ * An import declaration references source-level symbols/modules.
  *
- * the parser produces syntax equivalent to:
+ * A dependency declaration describes source-level dependency requirements.
  *
- *     ImportDeclaration
- *       Target:
- *         QualifiedName
- *           quantum
- *           algorithms
- *           search
- *       Alias:
- *         search
- *
- * The semantic layer may subsequently determine:
- *
- *     source module
- *     package
- *     workspace dependency
- *     embedded module
- *     generated module
- *
- * without changing the grammar.
+ * These are related semantic concepts but are not the same syntax and must
+ * remain separate.
  *
  * ============================================================================
- * SCALABILITY BOUNDARY
+ * NAMESPACE INTEGRATION
  * ============================================================================
  *
- * This file contains no:
+ * `grammar/modules/namespaces.g4` owns namespace declarations.
  *
- *     MAX_IMPORTS
- *     MAX_IMPORT_DEPTH
- *     MAX_SYMBOLS
- *     MAX_MODULES
- *     MAX_PACKAGES
- *     MAX_TARGETS
- *     MAX_QUANTUM_RESOURCES
- *     MAX_HARDWARE_RESOURCES
+ * A qualified name used by an import is syntactically neutral.
  *
- * Any operational parser/compiler limits must be configurable implementation
- * policy rather than source-language grammar constants.
+ * For example:
+ *
+ *     quantum::algorithms
+ *
+ * does not imply that `quantum` is:
+ *
+ *     - a namespace;
+ *     - a module;
+ *     - a package;
+ *     - a directory;
+ *     - a domain;
+ *     - a hardware resource.
+ *
+ * Semantic analysis determines its identity.
  *
  * ============================================================================
- * CROSS-DOMAIN INTEGRATION
+ * VISIBILITY INTEGRATION
  * ============================================================================
  *
- * Imports can name entities from:
+ * Visibility checking belongs to:
+ *
+ *     grammar/modules/visibility.g4
+ *     semantic analysis
+ *
+ * Imports do not introduce a second visibility vocabulary.
+ *
+ * The grammar accepts import syntax without determining whether the imported
+ * entity is accessible.
+ *
+ * ============================================================================
+ * ATTRIBUTES
+ * ============================================================================
+ *
+ * Attributes attached to an import declaration, if the language specification
+ * permits them, belong to the canonical attribute system.
+ *
+ * This file deliberately does not introduce a second attribute syntax.
+ *
+ * If import attributes are standardized later, they must be composed through
+ * the canonical attribute grammar rather than adding ad-hoc import-only
+ * attribute tokens here.
+ *
+ * ============================================================================
+ * DIALECT INTEGRATION
+ * ============================================================================
+ *
+ * Dialects may extend import semantics only through the established dialect
+ * extension mechanism.
+ *
+ * A dialect MUST NOT silently replace:
+ *
+ *     importDeclaration
+ *
+ * with an incompatible second import language.
+ *
+ * Dialect-specific import forms must be:
+ *
+ *     - explicitly declared;
+ *     - versioned;
+ *     - unambiguous;
+ *     - mapped to the domain-neutral AST;
+ *     - semantically validated;
+ *     - compatibility-tested.
+ *
+ * ============================================================================
+ * INTEROPERABILITY
+ * ============================================================================
+ *
+ * Imports may ultimately reference interoperability providers for:
+ *
+ *     C
+ *     C++
+ *     Rust
+ *     Python
+ *     WebAssembly
+ *     OpenQASM
+ *     QIR
+ *     HDL formats
+ *     vendor-neutral interfaces
+ *     future formats
+ *
+ * The import grammar remains format-neutral.
+ *
+ * Interoperability semantics belong to:
+ *
+ *     grammar/interoperability/
+ *
+ * and downstream semantic/compiler layers.
+ *
+ * ============================================================================
+ * QUANTUM INTEGRATION
+ * ============================================================================
+ *
+ * Quantum modules are imported exactly like other source-level modules.
+ *
+ * Example:
+ *
+ *     import quantum::algorithms;
+ *
+ * The grammar does not know:
+ *
+ *     - gate sets;
+ *     - qubit counts;
+ *     - physical qubits;
+ *     - topology;
+ *     - QPU identity;
+ *     - calibration;
+ *     - pulse representation;
+ *     - scheduling;
+ *     - routing;
+ *     - QEC.
+ *
+ * Once imported declarations are semantically resolved, quantum constructs
+ * follow the existing canonical pipeline to:
+ *
+ *     quantum::ir
+ *
+ * and then:
+ *
+ *     optimization
+ *     decomposition
+ *     routing
+ *     scheduling
+ *     resilience/QEC
+ *     ZQN
+ *     HAL
+ *     target realization
+ *
+ * No import syntax may create a second quantum semantic boundary.
+ *
+ * ============================================================================
+ * CLASSICAL / HDL / HARDWARE / OTHER DOMAINS
+ * ============================================================================
+ *
+ * The same import syntax applies to:
  *
  *     classical
  *     quantum
@@ -1094,74 +857,379 @@ wildcardImportWithAliasAndSource
  *     security
  *     resources
  *     effects
- *     dialects
  *     interoperability
+ *     dialects
+ *     macros
+ *     metaprogramming
+ *     future domains
  *
- * No domain-specific import grammar is created here.
+ * No domain-specific import grammar is required merely because the imported
+ * declaration belongs to a different computational domain.
  *
- * For example:
+ * ============================================================================
+ * ERROR BOUNDARY
+ * ============================================================================
  *
- *     import quantum::algorithm;
+ * Syntax errors owned by this grammar include:
  *
- * and:
+ *     import;
  *
+ *     import ;
+ *
+ *     import {};
+ *
+ *     import { };
+ *
+ *     import {Vector,};
+ *
+ *     import math::;
+ *
+ *     import ::math;
+ *
+ *     import math::linear as;
+ *
+ *     import math::linear from;
+ *
+ *     import * as;
+ *
+ *     import * from;
+ *
+ *     import {Vector as};
+ *
+ *     import {Vector,,Matrix};
+ *
+ *     import math::linear from "source" extra;
+ *
+ * Semantic errors NOT owned by this grammar include:
+ *
+ *     unresolved module;
+ *     unresolved symbol;
+ *     inaccessible symbol;
+ *     duplicate imported binding;
+ *     duplicate alias;
+ *     dependency cycle;
+ *     incompatible package version;
+ *     unavailable source provider;
+ *     unavailable capability;
+ *     unavailable hardware;
+ *     insufficient memory;
+ *     insufficient qubits;
+ *     unsupported target;
+ *
+ * ============================================================================
+ * COMPATIBILITY POLICY
+ * ============================================================================
+ *
+ * Historical token names such as:
+ *
+ *     K_IMPORT
+ *     K_FROM
+ *     K_AS
+ *     STRING_LITERAL
+ *
+ * are NOT used because they do not match the current canonical lexical
+ * vocabulary.
+ *
+ * The current repository's canonical lexical spellings are represented by:
+ *
+ *     IMPORT
+ *     FROM
+ *     AS
+ *     STRING
+ *
+ * No compatibility aliases are created inside this grammar.
+ *
+ * Compatibility migrations belong to:
+ *
+ *     grammar/compatibility/
+ *
+ * Token-number assumptions are prohibited.
+ *
+ * ============================================================================
+ * WHY REDUNDANT WRAPPERS ARE AVOIDED
+ * ============================================================================
+ *
+ * The previous implementation contained many generic wrappers such as:
+ *
+ *     importTarget
+ *     importTargetList
+ *     importAliasList
+ *     importSourceList
+ *     optionalImportAlias
+ *     optionalImportSource
+ *     optionalImportSourceReference
+ *     namedImportSpecifierList
+ *
+ * merely to expose variants of already-existing productions.
+ *
+ * Such wrappers are not independently meaningful language constructs and make
+ * ownership harder to audit.
+ *
+ * This production version keeps only wrappers that have a concrete integration
+ * purpose:
+ *
+ *     importDeclaration
+ *     importClause
+ *     importSpecifierList
+ *     importSpecifier
+ *     importSource
+ *     importSourceReference
+ *     importSection
+ *
+ * The grammar therefore has a smaller and more stable public surface.
+ *
+ * ============================================================================
+ * SOURCE ORDERING
+ * ============================================================================
+ *
+ * This file does NOT impose a universal rule that all imports must appear
+ * before all declarations.
+ *
+ * Whether a source unit/module requires:
+ *
+ *     imports first
+ *
+ * or permits imports to be interleaved with declarations is owned by the
+ * canonical source/module composition grammar and language specification.
+ *
+ * `importSection` exists for contexts that explicitly require an import
+ * section.
+ *
+ * ============================================================================
+ * TRAILING COMMA POLICY
+ * ============================================================================
+ *
+ * Named import lists permit a trailing comma:
+ *
+ *     import {Vector, Matrix,};
+ *
+ * This is intentionally supported for formatter stability and generated-source
+ * friendliness.
+ *
+ * A list MUST contain at least one import specifier.
+ *
+ * ============================================================================
+ * WILDCARD POLICY
+ * ============================================================================
+ *
+ * Wildcard imports are syntactically valid:
+ *
+ *     import *;
+ *
+ *     import * as math;
+ *
+ *     import * from "math";
+ *
+ *     import * as math from "math";
+ *
+ * The grammar does not decide what a wildcard imports.
+ *
+ * Semantic analysis determines:
+ *
+ *     - exported-name visibility;
+ *     - collision behavior;
+ *     - namespace population;
+ *     - ambiguity;
+ *     - tooling behavior.
+ *
+ * ============================================================================
+ * ALIAS POLICY
+ * ============================================================================
+ *
+ * An alias is syntactically:
+ *
+ *     AS identifier
+ *
+ * The alias is always a canonical identifier.
+ *
+ * This grammar does not allow:
+ *
+ *     as qualified::alias
+ *
+ * because aliases bind a local name rather than a qualified path.
+ *
+ * ============================================================================
+ * SOURCE POLICY
+ * ============================================================================
+ *
+ * Source qualifiers have the following syntax:
+ *
+ *     FROM qualifiedName
+ *
+ * or:
+ *
+ *     FROM STRING
+ *
+ * They cannot be empty.
+ *
+ * The grammar does not interpret the contents of STRING.
+ *
+ * In particular, this grammar does not classify:
+ *
+ *     "foo"
+ *     "./foo"
+ *     "../foo"
+ *     "https://example.org/foo"
+ *     "registry:foo"
+ *
+ * as filesystem, URL, registry, or network forms.
+ *
+ * Such classification belongs to source-provider/toolchain semantics.
+ *
+ * ============================================================================
+ * TEST CONTRACT
+ * ============================================================================
+ *
+ * Positive syntax tests MUST include:
+ *
+ *     import math;
+ *     import math::linear;
+ *     import math::linear::matrix;
+ *     import math::linear as linear;
+ *
+ *     import {Vector};
+ *     import {Vector, Matrix};
+ *     import {Vector as V, Matrix};
+ *     import {Vector, Matrix,};
+ *
+ *     import *;
+ *     import * as math;
+ *
+ *     import {Vector} from "math";
+ *     import {Vector as V, Matrix} from "math";
+ *     import * from "math";
+ *     import * as math from "math";
+ *
+ *     import math::linear from "math";
+ *     import math::linear as linear from "math";
+ *
+ *     import {Vector} from math::linear;
+ *     import * from math::linear;
+ *
+ * Cross-domain examples MUST include:
+ *
+ *     import quantum::algorithms;
+ *     import classical::linear;
  *     import hardware::capability;
+ *     import hdl::components;
+ *     import distributed::services;
+ *     import ai::models;
+ *     import networking::protocols;
  *
- * have exactly the same syntactic import model.
- *
- * Their semantic interpretation belongs to their respective owning domains.
- *
- * ============================================================================
- * QUANTUM INTEGRATION
- * ============================================================================
- *
- * This grammar does not know what a quantum import contains.
- *
- * It must not define:
- *
- *     QuantumModule
- *     QuantumImportIR
- *     QubitImport
- *     GateImport
- *
- * Quantum syntax is lowered through the repository's normal frontend and
- * semantic pipeline and ultimately uses canonical `quantum::ir` where
- * appropriate.
+ * These examples are syntactically identical regardless of target hardware.
  *
  * ============================================================================
- * HARDWARE INTEGRATION
+ * NEGATIVE TEST CONTRACT
  * ============================================================================
  *
- * Hardware imports identify source-level symbols only.
+ * The parser MUST reject:
  *
- * They do not select physical hardware.
+ *     import;
+ *     import ;
+ *     import {};
+ *     import { };
+ *     import math::;
+ *     import ::math;
+ *     import math::::linear;
+ *     import math::linear as;
+ *     import math::linear from;
+ *     import math::linear from "";
+ *     import * as;
+ *     import * from;
+ *     import {Vector as};
+ *     import {Vector,,Matrix};
+ *     import {,Vector};
+ *     import {Vector Matrix};
+ *     import math::linear extra;
+ *     import math::linear from "source" extra;
  *
- * Hardware discovery, capabilities, topology, placement and target selection
- * remain owned by the hardware abstraction/resource/compiler layers.
+ * Whether an empty STRING is lexically valid is a lexical concern; the module
+ * semantic layer may separately reject an empty source identifier. The syntax
+ * grammar itself should not create a special empty-string rule.
+ *
+ * Therefore the `from ""` example is a semantic validation case if the lexer
+ * accepts an empty STRING.
  *
  * ============================================================================
- * RUNTIME INTEGRATION
+ * BOUNDARY TEST CONTRACT
  * ============================================================================
  *
- * There is intentionally no runtime dependency.
+ * Tests MUST cover:
  *
- * Runtime availability cannot alter the grammar accepted by the parser.
+ *     - one-character names;
+ *     - long identifiers;
+ *     - deeply qualified names;
+ *     - many imported symbols;
+ *     - many import declarations;
+ *     - aliases;
+ *     - trailing commas;
+ *     - symbolic source references;
+ *     - literal source references;
+ *     - wildcard imports;
+ *     - cross-domain imports;
+ *     - nested module contexts.
+ *
+ * The grammar MUST NOT establish artificial finite bounds for these cases.
  *
  * ============================================================================
- * RUST INTEGRATION
+ * SCALABILITY TEST CONTRACT
  * ============================================================================
  *
- * This `.g4` file contains no Rust code.
+ * The following must be generated/tested parametrically:
  *
- * The Rust frontend generated/integrated from the grammar must target:
+ *     import a::b::c::...;
  *
- *     Rust 1.97
- *     Rust 1.97.1
+ *     import {a, b, c, ...};
  *
- * under the repository's safe-Rust policy.
+ *     import module::symbol as local;
  *
- * No grammar action, semantic predicate, or generated integration contract in
- * this file requires `unsafe`.
+ *     import * from source;
+ *
+ * Test size may be bounded by the available test environment.
+ *
+ * Such a test bound MUST NOT become a language grammar limit.
+ *
+ * ============================================================================
+ * DETERMINISM TEST CONTRACT
+ * ============================================================================
+ *
+ * Identical token streams MUST produce identical parse structures.
+ *
+ * Import parsing MUST NOT depend on:
+ *
+ *     CPU count;
+ *     GPU availability;
+ *     QPU availability;
+ *     filesystem state;
+ *     network state;
+ *     environment variables;
+ *     wall-clock time;
+ *     randomness;
+ *     resource availability.
+ *
+ * ============================================================================
+ * HARD-CODING AUDIT
+ * ============================================================================
+ *
+ * This grammar contains no:
+ *
+ *     MAX_IMPORTS
+ *     MAX_IMPORT_DEPTH
+ *     MAX_SYMBOLS
+ *     MAX_MODULES
+ *     MAX_PACKAGES
+ *     MAX_DEPENDENCIES
+ *     MAX_TARGETS
+ *     MAX_QUBITS
+ *     MAX_CPUS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_NODES
+ *     MAX_MEMORY
+ *     MAX_DEVICES
+ *
+ * Numeric source values, where permitted elsewhere in Zamani, remain program
+ * semantics and are not interpreted here.
  *
  * ============================================================================
  * COMPLETION CRITERIA
@@ -1169,31 +1237,300 @@ wildcardImportWithAliasAndSource
  *
  * This file is complete when:
  *
- *   [x] It consumes the canonical Zamani lexer vocabulary.
- *   [x] It uses K_IMPORT rather than obsolete IMPORT.
- *   [x] It uses K_FROM rather than obsolete FROM.
- *   [x] It uses K_AS rather than obsolete AS.
- *   [x] It uses SEMICOLON rather than obsolete SEMI.
- *   [x] It reuses canonical `identifier`.
- *   [x] It reuses canonical `qualifiedName`.
- *   [x] It does not redefine identifier syntax.
- *   [x] It does not redefine qualified-name syntax.
- *   [x] It does not perform module resolution.
- *   [x] It does not access files or networks.
- *   [x] It does not select hardware.
- *   [x] It does not create IR.
- *   [x] It contains no machine-size constants.
- *   [x] It contains no qubit limits.
- *   [x] It contains no device limits.
- *   [x] It contains no topology assumptions.
- *   [x] It contains no embedded Rust.
- *   [x] It requires no unsafe code.
- *   [x] It supports arbitrarily repeated imports within available resources.
- *   [x] It supports arbitrarily deep qualified names within available
- *       parser/compiler resources.
- *   [x] It preserves symbolic-vs-literal import-source structure.
- *   [x] It can be integrated into the canonical Zamani parser without
- *       redefining shared lexical/name rules.
+ *     [x] It is the single grammar owner of import declarations.
+ *     [x] It uses the repository's actual IMPORT token.
+ *     [x] It uses the repository's actual FROM token.
+ *     [x] It uses the repository's actual AS token.
+ *     [x] It uses the repository's actual STRING token.
+ *     [x] It reuses canonical identifier syntax.
+ *     [x] It reuses canonical qualified-name syntax.
+ *     [x] It supports direct qualified imports.
+ *     [x] It supports named imports.
+ *     [x] It supports wildcard imports.
+ *     [x] It supports aliases.
+ *     [x] It supports symbolic source references.
+ *     [x] It supports literal source references.
+ *     [x] It supports trailing commas in named imports.
+ *     [x] It has no finite import-count limit.
+ *     [x] It has no finite qualification-depth limit.
+ *     [x] It has no hardware limits.
+ *     [x] It has no quantum limits.
+ *     [x] It performs no semantic resolution.
+ *     [x] It performs no I/O.
+ *     [x] It creates no IR.
+ *     [x] It creates no quantum-specific IR.
+ *     [x] It contains no embedded Rust.
+ *     [x] It requires no unsafe Rust.
+ *     [x] It preserves source-level symbolic/literal source distinction.
+ *     [x] It integrates with modules.g4.
+ *     [x] It integrates with ZamaniParser.g4.
+ *     [x] It remains compatible with classical, quantum, HDL, hardware,
+ *         distributed, AI, networking, security and future domains.
+ *
+ * ============================================================================
+ * FINAL ARCHITECTURAL RULE
+ * ============================================================================
+ *
+ * An import declaration says:
+ *
+ *     "this source program depends on or references a source-level entity."
+ *
+ * It does NOT say:
+ *
+ *     "use this particular machine."
+ *
+ * It does NOT say:
+ *
+ *     "use this particular hardware topology."
+ *
+ * It does NOT say:
+ *
+ *     "allocate this many resources."
+ *
+ * It does NOT say:
+ *
+ *     "select this backend."
+ *
+ * Therefore imports remain compatible with:
+ *
+ *     tiny systems
+ *     embedded systems
+ *     CPUs
+ *     multicore systems
+ *     GPUs
+ *     FPGAs
+ *     ASICs
+ *     QPUs
+ *     simulators
+ *     heterogeneous systems
+ *     clusters
+ *     HPC systems
+ *     distributed systems
+ *     cloud systems
+ *     future computational substrates
+ *
+ * The source-level contract remains:
+ *
+ *     Program Once
+ *          ->
+ *     Compile Once
+ *          ->
+ *     Run Everywhere
+ *          ->
+ *     Anywhere
+ *          ->
+ *     Forever
+ *
+ * subject to semantic validity, target capabilities, available resources, and
+ * explicitly defined compatibility policy.
  *
  * ============================================================================
  */
+
+parser grammar Imports;
+
+options {
+    tokenVocab = ZamaniLexer;
+}
+
+/*
+ * Names is the canonical owner of:
+ *
+ *     identifier
+ *     qualifiedName
+ *     nameSegment
+ *
+ * It uses the repository's shared lexical vocabulary and must not be replaced
+ * by an import-specific name grammar.
+ */
+import Names;
+
+
+/*
+ * ============================================================================
+ * PUBLIC IMPORT DECLARATION
+ * ============================================================================
+ *
+ * Every ordinary import is terminated by SEMICOLON.
+ *
+ * Examples:
+ *
+ *     import math;
+ *     import math::linear;
+ *     import {Vector, Matrix};
+ *     import *;
+ */
+importDeclaration
+    : IMPORT importClause SEMICOLON
+    ;
+
+
+/*
+ * ============================================================================
+ * IMPORT CLAUSE
+ * ============================================================================
+ *
+ * Exactly one target form is selected.
+ */
+importClause
+    : qualifiedImportClause
+    | namedImportClause
+    | wildcardImportClause
+    ;
+
+
+/*
+ * ============================================================================
+ * QUALIFIED IMPORT
+ * ============================================================================
+ *
+ * Examples:
+ *
+ *     import math;
+ *     import math::linear;
+ *     import math::linear as linear;
+ *     import math::linear from "math";
+ *     import math::linear as linear from "math";
+ *     import math::linear from math::source;
+ */
+qualifiedImportClause
+    : qualifiedName importAlias? importSource?
+    ;
+
+
+/*
+ * ============================================================================
+ * NAMED IMPORT
+ * ============================================================================
+ *
+ * Examples:
+ *
+ *     import {Vector};
+ *     import {Vector, Matrix};
+ *     import {Vector as V, Matrix};
+ *     import {Vector, Matrix,};
+ *
+ * The list is non-empty.
+ *
+ * A trailing comma is accepted.
+ */
+namedImportClause
+    : LBRACE importSpecifierList RBRACE importSource?
+    ;
+
+
+/*
+ * ============================================================================
+ * NAMED IMPORT SPECIFIER LIST
+ * ============================================================================
+ */
+importSpecifierList
+    : importSpecifier (COMMA importSpecifier)* COMMA?
+    ;
+
+
+/*
+ * ============================================================================
+ * NAMED IMPORT SPECIFIER
+ * ============================================================================
+ *
+ * The imported symbol is a canonical qualified name.
+ *
+ * The local binding is an optional canonical identifier alias.
+ *
+ * Examples:
+ *
+ *     Vector
+ *     math::Vector
+ *     math::Vector as Vector
+ *     math::Vector as V
+ */
+importSpecifier
+    : qualifiedName importAlias?
+    ;
+
+
+/*
+ * ============================================================================
+ * WILDCARD IMPORT
+ * ============================================================================
+ *
+ * Examples:
+ *
+ *     import *;
+ *     import * as math;
+ *     import * from "math";
+ *     import * as math from "math";
+ *     import * from math::source;
+ */
+wildcardImportClause
+    : STAR importAlias? importSource?
+    ;
+
+
+/*
+ * ============================================================================
+ * IMPORT ALIAS
+ * ============================================================================
+ *
+ * Alias is deliberately restricted to a single identifier.
+ *
+ * An alias is a local binding, not a qualified path.
+ */
+importAlias
+    : AS identifier
+    ;
+
+
+/*
+ * ============================================================================
+ * IMPORT SOURCE
+ * ============================================================================
+ *
+ * Source qualification is either:
+ *
+ *     FROM qualifiedName
+ *
+ * or:
+ *
+ *     FROM STRING
+ *
+ * The grammar preserves which form was used.
+ */
+importSource
+    : FROM importSourceReference
+    ;
+
+
+/*
+ * ============================================================================
+ * IMPORT SOURCE REFERENCE
+ * ============================================================================
+ *
+ * A symbolic source remains a canonical qualified name.
+ *
+ * A literal source remains the canonical STRING token.
+ *
+ * Neither is interpreted here.
+ */
+importSourceReference
+    : qualifiedName
+    | STRING
+    ;
+
+
+/*
+ * ============================================================================
+ * IMPORT SECTION
+ * ============================================================================
+ *
+ * This rule is a reusable section-level boundary.
+ *
+ * It does not impose source-order semantics on the whole language.
+ *
+ * A module/source grammar may choose to require imports before declarations
+ * while another explicitly standardized context may permit interleaving.
+ */
+importSection
+    : importDeclaration*
+    ;
