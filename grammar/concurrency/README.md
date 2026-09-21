@@ -1,1912 +1,2610 @@
-Zamani Concurrency Grammar
+Below is the production-ready grammar/concurrency/README.md. It treats concurrency/ as a modular grammar domain, keeps concurrency.g4 as its composition boundary, prevents duplicate syntax ownership, preserves the existing token strategy, and defines integration contracts in advance so each child grammar can be completed independently.
 
-1. Purpose
+# Zamani Concurrency Grammar
 
-"grammar/concurrency/" defines the syntax-level concurrency domain of the Zamani programming language.
+## Status
 
-Its purpose is to allow Zamani programs to express portable computational concurrency and parallelism while remaining independent of:
+**Production architecture target:** normative  
+**Domain:** concurrency, asynchronous execution, parallelism, tasks, actors, channels, synchronization, distributed concurrency  
+**Language:** Zamani  
+**Compiler baseline:** Rust 1.97 / Rust 1.97.1  
+**Rust safety:** safe Rust only; `unsafe` is prohibited  
+**Primary composition owner:** `grammar/concurrency/concurrency.g4`
 
-- CPU architecture;
-- CPU core count;
-- thread count;
-- worker count;
-- GPU count;
-- accelerator count;
-- FPGA resources;
-- QPU resources;
-- cluster size;
-- node count;
-- machine topology;
-- network topology;
-- memory capacity;
-- operating system;
-- runtime implementation;
-- scheduler implementation;
-- deployment environment.
+This directory defines the **syntax-level concurrency domain** of the Zamani programming language.
 
-The concurrency grammar describes computational intent.
+It is designed for:
 
-It does not describe the physical machine used to realize that intent.
+> **Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever (POCO-REAF)**
 
-This is fundamental to Zamani's:
-
-«Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever (POCO-REAF)»
-
-model.
+Concurrency syntax describes **portable computational intent**. It must not encode assumptions about the size, topology, or implementation of the machine on which the program eventually executes.
 
 ---
 
-2. Architectural principle
+# 1. Purpose
 
-Zamani concurrency follows:
+The `grammar/concurrency/` directory provides the modular grammar contracts for:
 
-source syntax
+- asynchronous computation;
+- futures and promises;
+- tasks;
+- spawning;
+- awaiting;
+- structured concurrency;
+- parallel computation;
+- data parallelism;
+- task parallelism;
+- pipelines;
+- reductions;
+- actors;
+- channels;
+- synchronization;
+- cancellation;
+- deterministic parallelism;
+- distributed concurrency;
+- future concurrency models.
+
+The directory exists to prevent concurrency from becoming a monolithic collection of rules inside `Zamani.g4`.
+
+The grammar must allow a program to express **what concurrency means** without requiring the programmer to specify **how many execution resources happen to exist**.
+
+---
+
+# 2. Architectural Principle
+
+The concurrency grammar follows:
+
+```text
+Zamani source
     ↓
-lexer
+canonical lexer
     ↓
-parser
+ANTLR parser
     ↓
-frontend AST
+domain-neutral frontend AST
     ↓
 semantic analysis
+    ├── types
+    ├── ownership
+    ├── effects
+    ├── capabilities
+    ├── resource requirements
+    ├── determinism
+    ├── synchronization
+    └── distributed semantics
     ↓
-effect analysis
+canonical semantic IR
     ↓
-resource/capability analysis
+optimization / lowering
     ↓
-canonical program representation / IR
+scheduling / placement / runtime realization
     ↓
-optimization
-    ↓
-routing / placement
-    ↓
-scheduling
-    ↓
-hardware/backend lowering
-    ↓
-runtime
+target
 
-Concurrency grammar must stop at the parser/AST boundary.
+The grammar is not the scheduler.
 
-It must never become a runtime scheduler.
+The grammar is not the runtime.
+
+The grammar is not the thread manager.
+
+The grammar is not the distributed deployment system.
+
+The grammar is not the hardware topology model.
+
 
 ---
 
-3. Core rule
+3. POCO-REAF Requirement
 
-The language describes:
+A valid Zamani concurrency program must remain meaningful when the available execution resources change.
 
-WHAT computation means
+For example, a program may describe:
 
-rather than:
+parallel computation
 
-HOW MANY physical resources happen to execute it
+without encoding:
 
-For example, a concurrent computation may eventually execute using:
+run on 8 threads
 
-1 execution resource
-4 CPU cores
+The same program should be able to execute using whatever resources the compiler/runtime can legitimately provide:
+
+one execution resource
+multiple CPU cores
 many CPU cores
 GPU execution
-FPGA execution
-distributed execution
-quantum/classical execution
-heterogeneous execution
-future execution resources
+accelerator execution
+distributed workers
+HPC resources
+cloud resources
+future execution models
 
-without requiring a different source program merely because the available resources changed.
+provided the required semantic capabilities are available.
+
+The concurrency grammar therefore has no universal limits on:
+
+tasks;
+
+futures;
+
+actors;
+
+channels;
+
+workers;
+
+threads;
+
+cores;
+
+processes;
+
+nodes;
+
+execution domains;
+
+parallel branches;
+
+pipeline stages;
+
+distributed participants;
+
+synchronization objects;
+
+messages;
+
+queues;
+
+reductions;
+
+timelines.
+
+
 
 ---
 
-4. POCO-REAF requirements
+4. Hard-Coding Prohibition
 
-The concurrency grammar MUST NOT encode a fixed maximum for:
-
-tasks
-parallel operations
-threads
-workers
-cores
-devices
-nodes
-actors
-channels
-queues
-execution contexts
-parallel regions
-concurrent regions
-distributed participants
-
-There must be no constructs such as:
+The following must never become language-level grammar limits:
 
 MAX_THREADS
 MAX_TASKS
 MAX_WORKERS
 MAX_CORES
-MAX_NODES
-MAX_DEVICES
+MAX_PROCESSES
 MAX_ACTORS
 MAX_CHANNELS
+MAX_PIPELINE_STAGES
+MAX_NODES
+MAX_MESSAGES
+MAX_PARALLEL_BRANCHES
+MAX_FUTURES
+MAX_QUEUES
 
-inside the grammar.
+Likewise, the grammar must never contain artificial alternatives such as:
 
-Likewise, the grammar must not contain assumptions such as:
+threadCount
+    : '1'
+    | '2'
+    | '4'
+    | '8'
+    | '16'
+    ;
 
-one task = one thread
-one task = one CPU core
-one actor = one OS process
-one worker = one core
-one parallel operation = one device
+or:
 
-Those are implementation decisions.
+workerCount
+    : INTEGER /* only 1024 maximum */
+    ;
 
----
+A numeric literal supplied by a program is ordinary program data.
 
-5. Meaning of "infinity"
-
-"Infinity" means that the language imposes no artificial finite machine-scale ceiling.
-
-Actual execution remains bounded by resources available to:
-
-- the lexer/parser;
-- compiler;
-- optimizer;
-- scheduler;
-- runtime;
-- deployment environment;
-- target hardware.
+A compiler-imposed universal hardware limit is not.
 
 For example:
 
-1 task
+parallel for i in 0..n
 
-and
+is valid portable intent.
 
-1,000,000 tasks
+A grammar rule that only permits a fixed number of parallel workers is not.
 
-may both be valid language programs.
-
-Whether the compiler/runtime can execute them is a resource and implementation question, not a grammar restriction.
 
 ---
 
-6. Directory ownership
+5. Requirement vs Implementation
 
-The directory is organized around independent concurrency domains.
+Concurrency must preserve the distinction between:
 
-grammar/concurrency/
+Semantic requirement
+
+What the computation requires.
+
+requires deterministic ordering
+requires atomicity
+requires communication
+requires capability("distributed.execution")
+
+Capability
+
+What the execution environment can provide.
+
+capability("parallel.execution")
+capability("async.execution")
+capability("message.passing")
+
+Constraint
+
+A property that must be respected.
+
+constraint ordering(...)
+constraint latency(...)
+constraint synchronization(...)
+
+Preference
+
+A non-mandatory optimization preference.
+
+prefer parallel
+prefer locality
+
+Hint
+
+Information supplied to aid implementation.
+
+hint locality(...)
+
+Implementation decision
+
+A target-specific realization.
+
+Examples include:
+
+physical worker selection
+CPU-core placement
+GPU stream assignment
+network-node placement
+scheduler decisions
+
+These belong downstream.
+
+The grammar must not turn implementation decisions into universal concurrency semantics.
+
+
+---
+
+6. Directory Ownership
+
+The directory has one composition boundary:
+
+grammar/concurrency/concurrency.g4
+
+The remaining files are specialized owners.
+
+Recommended production structure:
+
+concurrency/
 ├── README.md
 ├── concurrency.g4
+├── async.g4
+├── await.g4
+├── spawn.g4
 ├── tasks.g4
 ├── futures.g4
 ├── actors.g4
 ├── channels.g4
 ├── synchronization.g4
+├── cancellation.g4
 ├── parallel.g4
 ├── data-parallel.g4
 ├── task-parallel.g4
-└── cancellation.g4
+├── pipeline.g4
+├── reduction.g4
+├── deterministic-parallelism.g4
+└── distributed-concurrency.g4
 
-The files have distinct ownership.
+A new subdirectory should only be created when it introduces a genuinely independent maintainability boundary.
+
+Do not create duplicate domain trees merely for organizational symmetry.
+
 
 ---
 
-7. "concurrency.g4"
+7. File Completion Contract
+
+Every grammar file in this directory is complete only when the following contract has been satisfied.
+
+Each file must have a clearly defined:
+
+Purpose
+Status
+Owns
+Does Not Own
+Inputs
+Outputs
+Dependencies
+Upstream Contracts
+Downstream Consumers
+Grammar Contract
+Lexer Contract
+AST Contract
+Semantic Contract
+IR Contract
+Compiler Integration
+Runtime Integration
+Tooling Integration
+Cross-Domain Integration
+Positive Tests
+Negative Tests
+Boundary Tests
+Scalability Tests
+Determinism Tests
+Compatibility Tests
+Diagnostics
+Security
+Performance
+Hard-Coding Audit
+Completion Criteria
+
+This information should be documented in the file's header comments or corresponding specification document.
+
+A file must not depend on an undocumented future edit to another grammar.
+
+
+---
+
+8. concurrency.g4
+
+Ownership
+
+concurrency.g4 is the concurrency composition boundary.
+
+It is not the owner of every individual concurrency construct.
+
+It composes the specialized grammar components.
+
+Conceptually:
+
+Concurrency
+├── Tasks
+├── Futures
+├── Parallel
+├── DataParallel
+├── TaskParallel
+├── Actors
+├── Channels
+├── Synchronization
+├── Cancellation
+├── Pipeline
+├── Reduction
+├── DeterministicParallelism
+└── DistributedConcurrency
+
+The exact imports must match the actual files and valid ANTLR parser-grammar declarations.
+
+It owns
+
+concurrency-domain composition;
+
+the stable concurrency category;
+
+integration of specialized concurrency grammars;
+
+concurrency-level semantic classification.
+
+
+It does not own
+
+task leaf syntax;
+
+future leaf syntax;
+
+channel leaf syntax;
+
+actor leaf syntax;
+
+scheduler implementation;
+
+resource allocation;
+
+machine topology;
+
+distributed deployment;
+
+runtime behavior.
+
+
+Important rule
+
+Do not add sibling alternatives that cause the same concrete source text to be parseable through multiple ownership paths.
+
+For example, if parallel.g4 owns a parallel construct, concurrency.g4 must not recreate the same construct.
+
+
+---
+
+9. async.g4
 
 Owns
 
-"concurrency.g4" owns the composition boundary for the concurrency domain.
-
-It establishes the stable parser-facing concurrency entry points.
-
-It may classify concurrency constructs into their respective domains.
-
-It may expose integration rules used by the canonical parser.
+Asynchronous declaration/expression intent where asynchronous syntax is distinct from task creation or awaiting.
 
 Does not own
 
-It must not reimplement:
+future result semantics;
 
-- task syntax;
-- future syntax;
-- actor syntax;
-- channel syntax;
-- synchronization syntax;
-- parallel syntax;
-- data-parallel syntax;
-- task-parallel syntax;
-- cancellation syntax.
+task spawning;
 
-Those belong to their dedicated files.
+scheduler behavior;
 
-Completion condition
+executor implementation.
 
-"concurrency.g4" is complete when the canonical parser can identify concurrency constructs without duplicating the grammar owned by the individual domain files.
+
+Integration
+
+async syntax
+    ↓
+AST asynchronous construct
+    ↓
+effect / concurrency semantic analysis
+
+The lexer remains responsible for canonical ASYNC.
+
 
 ---
 
-8. "tasks.g4"
+10. await.g4
 
 Owns
 
-Task-oriented concurrency syntax:
+Awaiting asynchronous/future computation.
 
-- spawning;
-- awaiting;
-- task-oriented concurrent computation;
-- task bodies;
-- task composition.
+Existing asynchronous naming must remain compatible with the current frontend.
 
-The existing task grammar explicitly defines itself as the parser-level owner of task spawning, awaiting and task-oriented parallel scopes.
+Known future-related grammar names such as:
+
+futureExpression
+futureObservationRoot
+futureResultRoot
+
+must be reconciled in their owning grammar rather than duplicated here.
 
 Does not own
 
-It must not own:
+future creation;
 
-- task scheduling;
-- worker allocation;
-- executor implementation;
-- thread pools;
-- hardware topology;
-- runtime queues;
-- resource discovery;
-- routing;
-- optimization;
-- QEC;
-- ZQN;
-- quantum IR.
+task spawning;
 
-Those remain downstream responsibilities.
+executor implementation;
+
+blocking policy;
+
+runtime scheduling.
+
+
+AST
+
+Awaiting should map to the existing domain-neutral frontend representation, such as:
+
+ExpressionKind::Await
+
+rather than introducing a second concurrency IR.
+
 
 ---
 
-9. "futures.g4"
+11. spawn.g4
 
 Owns
 
-Syntax for asynchronous result/future abstractions.
+Explicit task/process/actor execution initiation where spawning is part of Zamani syntax.
 
-The grammar may express:
+Canonical lexer vocabulary includes:
 
-future
-awaitable
-deferred computation
-asynchronous result
-
-where those concepts have been formally established by the language specification.
+SPAWN
 
 Does not own
 
-It does not define:
+worker-count limits;
 
-- a particular Future implementation;
-- a particular executor;
-- thread pools;
-- event loops;
-- OS primitives;
-- network transport.
+thread creation implementation;
 
-A future may ultimately be implemented locally, remotely, distributedly, or on another computational substrate.
+operating-system process IDs;
 
----
+CPU-core assignment;
 
-10. "actors.g4"
+cluster-node assignment.
 
-Owns
 
-Actor-model syntax once the actor syntax has a canonical lexical and language-specification contract.
+A spawn describes computation creation, not physical resource allocation.
 
-Possible semantic concepts include:
-
-actor declaration
-actor instance
-actor message interaction
-actor lifecycle
-
-Does not own
-
-It must not define:
-
-- operating-system processes;
-- threads;
-- process IDs;
-- machine placement;
-- network addresses;
-- fixed actor counts.
-
-The repository already has a compiler language-specification component specifically concerned with actor concurrency.
-
-That specification must be reconciled with this grammar rather than creating a second language definition.
 
 ---
 
-11. "channels.g4"
+12. tasks.g4
 
-Owns
+Primary owner
 
-Syntax for channel/message-passing constructs.
+tasks.g4 owns task syntax.
 
-The channel abstraction must remain semantic rather than assuming:
+This is the authoritative location for task-specific concrete syntax.
 
-queue implementation
-buffer size
-network transport
-thread implementation
+It should cover the task abstraction required by the existing frontend and concurrency design.
 
-Does not own
+Potential semantic concepts include:
 
-It does not determine:
-
-- queue implementation;
-- channel capacity unless capacity is genuinely semantic;
-- network topology;
-- transport protocol;
-- scheduler;
-- OS synchronization primitive.
-
----
-
-12. "synchronization.g4"
-
-Owns
-
-Syntax for explicit synchronization concepts that are formally part of Zamani.
-
-Examples may include:
-
-synchronization boundaries
-coordination
-join/wait semantics
-barrier-like semantic operations
-
-Only constructs with an established language-level contract belong here.
-
-Does not own
-
-It does not implement:
-
-- mutexes;
-- futexes;
-- spinlocks;
-- OS locks;
-- hardware atomics;
-- scheduling algorithms.
-
-Those belong to lower layers.
-
-The repository already has concurrency-related low-level primitives and standard-library synchronization facilities; the grammar must not duplicate those implementations.
-
----
-
-13. "parallel.g4"
-
-Owns
-
-General parallel-computation syntax.
-
-Parallelism represents intent and permitted concurrency.
-
-For example, conceptually:
-
-parallel {
-    computation_a()
-    computation_b()
-}
-
-means that independent work may be exposed to the compiler for concurrent execution.
-
-It does not promise that both operations physically execute simultaneously.
-
----
-
-14. "data-parallel.g4"
-
-Owns
-
-Data-parallel computation syntax.
-
-The grammar may express that an operation applies independently across a logical data domain.
-
-It must not hard-code:
-
-SIMD width
-vector width
-GPU warp size
-GPU block size
-GPU count
-accelerator count
-
-The repository already has a dedicated "data-parallel.g4", so "concurrency.g4" must compose it rather than recreate its rules.
-
----
-
-15. "task-parallel.g4"
-
-Owns
-
-Task-level parallelism.
-
-It describes:
-
-independent tasks
-dependencies
-task relationships
-parallel task intent
-
-It must not select:
-
-worker count
-thread count
-core count
-machine
-device
-node
-topology
-
-Those are derived later.
-
----
-
-16. "cancellation.g4"
-
-Owns
-
-Syntax for cancellation semantics.
-
-Cancellation must represent the program's semantic request to stop or invalidate eligible computation.
-
-It must not implement:
-
-- thread interruption;
-- OS signals;
-- process termination;
-- device cancellation;
-- network cancellation;
-- scheduler cancellation algorithms.
-
-Those are runtime/backend concerns.
-
----
-
-17. Lexical ownership
-
-The concurrency directory does not own lexical definitions.
-
-The canonical lexer owns:
-
-- keywords;
-- identifiers;
-- literals;
-- punctuation;
-- operators.
-
-The repository currently identifies concurrency vocabulary such as:
-
-async
-await
+task
 spawn
-parallel
+task result
+task handle
+task scope
+task dependency
+task completion
 
-in its grammar ecosystem. The grammar documentation also identifies concurrency around "async", "await", and "spawn".
+Concrete syntax must be aligned with the existing lexer/parser rather than introducing a second vocabulary.
 
-A concurrency grammar file must never silently create a new keyword merely by writing an identifier into a parser rule.
+Does not own
 
-For example, this is forbidden as an implicit language-extension mechanism:
+generic parallel syntax;
 
-identifier { ... }
+distributed placement;
 
-where semantic tooling later guesses that the identifier means:
+scheduling;
+
+resource discovery;
+
+hardware selection.
+
+
+
+---
+
+13. futures.g4
+
+Owns
+
+Future/promise-like computation syntax.
+
+It must be reconciled with the existing future rule names.
+
+The known existing naming discrepancy:
+
+futureConstruct
+futureStatement
+
+versus actual future-oriented rules such as:
+
+futureExpression
+futureObservationRoot
+futureResultRoot
+
+must be resolved in this owning file.
+
+No external file should have to compensate for inconsistent future rule names.
+
+Completion requirement
+
+There must be one authoritative future syntax model.
+
+
+---
+
+14. parallel.g4
+
+Owns
+
+Generic parallel computation syntax.
+
+It must express semantic parallelism without imposing implementation topology.
+
+Canonical existing token:
+
+PARALLEL
+
+must be retained.
+
+Parallelism may represent:
+
+independent operations;
+
+parallel blocks;
+
+parallel iteration;
+
+parallel computation;
+
+composable parallel expressions.
+
+
+Does not own
+
+task-specific syntax;
+
+data-parallel reductions;
+
+hardware placement;
+
+worker count;
+
+scheduler implementation.
+
+
+
+---
+
+15. data-parallel.g4
+
+Owns
+
+Data-parallel computation.
+
+Examples of semantic concepts include:
+
+map
+transform
+parallel iteration
+partition-independent computation
+collect
+reduce
+
+The concrete grammar must integrate with existing expression and collection syntax.
+
+It must not create artificial limits on:
+
+data elements;
+
+partitions;
+
+workers;
+
+dimensions;
+
+tensor size.
+
+
+
+---
+
+16. task-parallel.g4
+
+Owns
+
+Structured parallelism among tasks.
+
+It composes with:
+
+tasks
+parallelism
+dependencies
+structured scopes
+
+It must not redefine task syntax already owned by tasks.g4.
+
+It must not define physical workers.
+
+
+---
+
+17. pipeline.g4
+
+Owns
+
+Pipeline composition.
+
+A pipeline may express stages and dependencies:
+
+stage → stage → stage
+
+The number of stages must not be limited by the grammar.
+
+Pipeline execution may later map to:
+
+CPU execution;
+
+GPU execution;
+
+FPGA pipelines;
+
+accelerator pipelines;
+
+distributed pipelines;
+
+streaming systems.
+
+
+The grammar expresses the computational structure, not the implementation topology.
+
+
+---
+
+18. reduction.g4
+
+Ownership
+
+reduction.g4 is a semantic/concurrency adapter for reduction functionality.
+
+The concrete reduction operation must have exactly one syntax owner.
+
+If data-parallel.g4 owns the canonical reduction syntax, reduction.g4 must not recreate it.
+
+For example, if the canonical syntax is already represented by:
+
+parallel::reduce(...)
+
+then reduction.g4 should integrate that construct rather than introduce a competing:
+
+reduce(...)
+
+syntax.
+
+This prevents ambiguous parsing and competing AST mappings.
+
+
+---
+
+19. actors.g4
+
+Owns
+
+Actor-oriented concurrency syntax.
+
+Concepts may include:
 
 actor
+actor state
+message handling
+mailbox interaction
+actor lifecycle
+
+The actor abstraction must remain independent of physical processes or machines.
+
+One actor may eventually map to:
+
+a local task;
+
+a thread;
+
+a process;
+
+a runtime object;
+
+a distributed service;
+
+another execution mechanism.
+
+
+The grammar does not choose the implementation.
+
+
+---
+
+20. channels.g4
+
+Owns
+
+Channel/message-passing syntax.
+
+Concepts include:
+
 channel
-task
-worker
-thread
+send
+receive
+select
+close
 
-New reserved words require coordinated language evolution.
+Only tokens that already exist in the canonical lexer should be used without reconciliation.
 
----
+Potential vocabulary such as:
 
-18. Parser ownership
+SEND
+RECEIVE
+CHANNEL
+SELECT
 
-The canonical parser must have exactly one authoritative path for concurrency syntax.
+must be registered centrally if they are required.
 
-The repository currently contains another concurrency grammar under:
+Do not create local token definitions inside this parser grammar.
 
-grammar/antlr/Concurrency.g4
+Channel capacity must not be interpreted as a universal machine limitation.
 
-which describes itself as a reusable ANTLR concurrency grammar.
-
-This creates a potential duplicate grammar authority.
-
-The production architecture must resolve this to:
-
-canonical lexer
-      ↓
-canonical parser
-      ↓
-grammar/concurrency/*
-
-and not:
-
-canonical parser
-      ↓
-grammar/concurrency/*
-
-plus
-
-canonical parser
-      ↓
-grammar/antlr/Concurrency.g4
-
-There must ultimately be one authoritative syntax path.
 
 ---
 
-19. ANTLR composition rule
+21. synchronization.g4
 
-The existence of multiple ".g4" files does not by itself make their parser rules visible to one another.
+Owns
 
-Therefore the final parser architecture must explicitly establish one of the supported ANTLR composition mechanisms.
+Language-level synchronization semantics.
 
-The repository must choose and document one authoritative mechanism, such as:
+Potential constructs include:
 
-parser grammar imports
+atomic
+critical
+synchronized
+barrier
+lock
+condition
+join
+
+Only concepts that are actually accepted by the language specification should become syntax.
+
+Synchronization semantics belong to semantic analysis.
+
+The grammar does not define:
+
+lock implementation;
+
+OS primitives;
+
+CPU instructions;
+
+memory topology;
+
+hardware coherence mechanisms.
+
+
+
+---
+
+22. cancellation.g4
+
+Owns
+
+Cancellation intent and structured cancellation syntax.
+
+Cancellation must integrate with:
+
+tasks
+futures
+async
+structured concurrency
+distributed concurrency
+
+Cancellation semantics must distinguish:
+
+request cancellation
+observe cancellation
+propagate cancellation
+handle cancellation
+
+The grammar must not assume that cancellation is implemented by a specific runtime primitive.
+
+
+---
+
+23. deterministic-parallelism.g4
+
+Owns
+
+Syntax expressing deterministic parallel computation where deterministic behavior is a language-level semantic requirement.
+
+Examples of semantic properties include:
+
+deterministic execution
+deterministic reduction
+ordered observation
+reproducible parallel behavior
+
+Determinism must be defined semantically.
+
+It must not mean:
+
+run on exactly N threads
 
 or:
 
-canonical parser owns integration rules and incorporates domain grammar
+run on CPU core 0
 
-or another explicitly supported ANTLR composition architecture.
-
-The decision must be recorded in the grammar authority documentation.
-
-Individual files must never assume an undeclared cross-file rule dependency.
 
 ---
 
-20. AST integration
+24. distributed-concurrency.g4
 
-The grammar produces syntax.
+Owns
 
-It does not create the final concurrency semantic model.
+Composition of concurrency with distributed computation.
 
-The frontend AST must represent the structure of parsed concurrency operations.
+It must integrate existing distributed grammar ownership without creating a second distributed language.
 
-A concurrency AST node should preserve enough information for downstream analysis to determine:
+It may express semantic relationships such as:
 
-construct kind
-source span
-operand/body
-ordering
-nested computation
-source attributes
+distributed task
+distributed actor
+remote computation
+message-based concurrency
+collective computation
+distributed synchronization
 
-It must not secretly contain:
+The actual distributed deployment model belongs downstream.
 
-thread ID
-CPU core ID
-GPU ID
-device ID
-worker ID
-machine ID
+It must not encode fixed:
 
-unless such data is genuinely part of an explicitly target-specific language construct.
+node counts
+process counts
+network sizes
+machine IDs
+topologies
+worker counts
+cluster dimensions
+
 
 ---
 
-21. Semantic integration
+25. statements/concurrency.g4
 
-Semantic analysis determines whether parsed concurrency is valid.
+This file must remain a thin statement-layer adapter.
 
-Examples:
+The ownership rule is:
 
-await non-awaitable-value
+grammar/concurrency/
+    ↓
+owns concurrency syntax
 
-may be syntactically valid but semantically invalid.
+grammar/statements/concurrency.g4
+    ↓
+adapts concurrency constructs into universal statement composition
 
-Likewise:
+It must not duplicate:
 
-parallel {
-    conflicting_mutation()
+task
+spawn
+parallel
+channel
+actor
+future
+
+rules.
+
+This prevents two parser paths from recognizing the same source construct.
+
+
+---
+
+26. Zamani.g4 Integration
+
+Zamani.g4 remains the canonical ANTLR composition root.
+
+It should not copy concurrency rules into the root grammar.
+
+Conceptually:
+
+Zamani.g4
+    ↓
+Concurrency
+    ↓
+specialized concurrency grammars
+
+The root should expose the universal program/item/statement/expression/type composition.
+
+Concurrency remains a domain module.
+
+
+---
+
+27. ZamaniParser.g4 Integration
+
+Where the repository still contains ZamaniParser.g4, it must not become a competing language authority.
+
+The established composition direction is:
+
+ZamaniParser.g4
+    ↓
+Concurrency
+
+while the preferred final canonical root remains:
+
+Zamani.g4
+
+No second independent concurrency grammar should be introduced under another root.
+
+
+---
+
+28. Lexer Integration
+
+The lexer is the sole token authority.
+
+Concurrency grammars consume canonical lexer tokens.
+
+Known canonical concurrency tokens include:
+
+ASYNC
+AWAIT
+SPAWN
+PARALLEL
+
+REQUIRES is also a canonical language token, but resource requirements belong to the resources domain.
+
+Therefore concurrency grammars should not redefine:
+
+REQUIRES
+
+or give it concurrency-specific semantics.
+
+Potential additional tokens such as:
+
+ACTOR
+CHANNEL
+SEND
+RECEIVE
+SELECT
+JOIN
+CANCEL
+ATOMIC
+CRITICAL
+SYNCHRONIZE
+DISTRIBUTED
+REMOTE
+
+must first be reconciled with the canonical lexer registry.
+
+Do not create parser-local lexical tokens.
+
+
+---
+
+29. Token Ownership Rule
+
+All token definitions belong to the canonical lexer.
+
+The hierarchy is:
+
+lexer/
+    ↓
+canonical token vocabulary
+    ↓
+ANTLR parser grammars
+
+Not:
+
+concurrency grammar
+    ↓
+private tokens
+
+This prevents token collisions across:
+
+concurrency;
+
+networking;
+
+distributed;
+
+hardware;
+
+quantum;
+
+HDL;
+
+effects;
+
+security.
+
+
+
+---
+
+30. AST Integration
+
+Concurrency syntax must lower into the domain-neutral frontend AST.
+
+The grammar must not define a second concurrency AST that duplicates the frontend architecture.
+
+Examples of appropriate semantic AST categories include:
+
+ExpressionKind::Await
+Spawn
+Task
+Parallel
+Call
+Block
+Operation
+
+where those types already exist or are established by the frontend contract.
+
+The preferred universal operation representation remains conceptually:
+
+Operation {
+    name,
+    namespace,
+    operands,
+    parameters,
+    results,
+    attributes,
+    modifiers,
+    effects,
+    capabilities,
+    source
 }
 
-may require semantic rejection if the memory/effect system determines that the operations cannot legally execute concurrently.
+Concurrency-specific semantic information belongs in appropriate attributes/effects/semantic structures rather than a grammar-owned IR.
 
-Therefore:
-
-parse success
-
-does not mean:
-
-program semantically valid
 
 ---
 
-22. Type-system integration
+31. Semantic Integration
 
-Concurrency participates in the type system but does not own it.
+After parsing:
 
-The type system determines concepts such as:
+AST
+ ↓
+semantic analysis
 
-awaitable<T>
-future<T>
-task result
-channel<T>
-actor message types
-parallel operation types
+Concurrency semantic analysis must determine:
 
-where those types are part of the Zamani type model.
+task ownership;
 
-The concurrency grammar must not define a duplicate type system.
+lifetime;
+
+scope;
+
+dependency validity;
+
+await validity;
+
+send/receive compatibility;
+
+synchronization correctness;
+
+data races where applicable;
+
+effect requirements;
+
+cancellation propagation;
+
+deterministic semantics;
+
+distributed semantics;
+
+capability requirements;
+
+resource requirements.
+
+
+The parser should not attempt to perform these checks.
+
 
 ---
 
-23. Memory integration
+32. Effects Integration
 
-Concurrency must integrate with the canonical memory model.
-
-This includes:
-
-- ownership;
-- borrowing;
-- lifetimes;
-- aliasing;
-- mutation;
-- shared state;
-- synchronization requirements.
-
-Concurrency syntax must not create a second ownership model.
-
----
-
-24. Effect integration
-
-Concurrency constructs may generate effects such as:
+Concurrency constructs may introduce effects such as:
 
 async
-concurrent
+spawn
 parallel
 communication
 synchronization
 cancellation
 distributed execution
 
-The effect system owns the representation and checking of those effects.
+Effects must be represented through the existing effect system.
 
-The grammar only identifies their syntactic origin.
+The concurrency grammar does not become an effect system.
 
----
+The pipeline is:
 
-25. Resource integration
-
-Resource analysis determines what is required to execute the concurrency semantics.
-
-Potential resources include:
-
-compute capacity
-memory
-communication
-latency budget
-energy
-reliability
-accelerator capabilities
-quantum capabilities
-distributed capabilities
-
-A resource requirement is different from a physical resource selection.
-
-For example:
-
-requires parallel_execution
-
-must not mean:
-
-use 16 CPU cores
-
-unless the program explicitly requests a semantic constraint that requires that physical property.
-
----
-
-26. Capability integration
-
-Capabilities describe what a target can provide.
-
-Concurrency may require capabilities such as:
-
-asynchronous execution
-parallel execution
-communication
-distributed execution
-cancellation
-synchronization
-
-The grammar must not discover capabilities itself.
-
-Capability discovery belongs to the target/resource/hardware layers.
-
----
-
-27. Scheduling integration
-
-The grammar does not schedule anything.
-
-The downstream scheduler determines:
-
-ordering
-resource allocation
-execution timing
-dependency satisfaction
-placement
-parallel realization
-
-A "parallel" construct must therefore be interpreted as semantic intent.
-
-A target with insufficient parallel resources may legally serialize work if doing so preserves program semantics.
-
-A target with abundant resources may exploit more parallelism.
-
-This is central to POCO-REAF.
-
----
-
-28. Quantum integration
-
-Concurrency may coordinate quantum and classical computation.
-
-For example, a semantic program may conceptually contain:
-
-classical computation
-        ↓
-quantum computation
-        ↓
-classical analysis
-        ↓
-another quantum computation
-
-or multiple independent quantum computations.
-
-The concurrency grammar must not own:
-
-- qubits;
-- physical qubits;
-- logical qubits;
-- quantum gates;
-- quantum circuits;
-- quantum operations;
-- quantum IR;
-- QEC;
-- ZQN;
-- quantum routing;
-- quantum scheduling.
-
-The canonical "quantum::ir" remains the quantum semantic boundary.
-
-Thus:
-
-quantum syntax
+concurrency syntax
     ↓
-quantum AST/semantic analysis
+AST
     ↓
-quantum::ir
+effect analysis
 
-while concurrency remains orthogonal.
-
----
-
-29. HDL integration
-
-Concurrency may surround hardware computations, but HDL syntax remains owned by:
-
-grammar/hdl/
-
-The concurrency grammar must not redefine:
-
-- clocks;
-- signals;
-- wires;
-- registers;
-- hardware processes;
-- hardware modules.
-
-Hardware concurrency has different semantic rules from software concurrency and must be interpreted by the HDL/hardware semantic layers.
 
 ---
 
-30. Distributed integration
+33. Ownership and Memory Integration
 
-Concurrency and distribution are separate dimensions.
+Concurrency must integrate with the existing memory/ownership model.
 
-A computation can be:
+The semantic layer must determine whether concurrent access is valid.
 
-concurrent but local
+The grammar itself must not encode assumptions such as:
+
+shared memory always exists
 
 or:
 
-concurrent and distributed
+all workers share one address space
 
-Therefore concurrency must not assume that concurrency implies multiple machines.
+Concurrency may eventually execute over:
 
-Distributed grammar owns:
+shared memory
+distributed memory
+message passing
+accelerator memory
+remote memory
+future memory models
 
-- nodes;
-- services;
-- communication;
-- replication;
-- placement;
-- distributed semantics.
+without changing the source language's fundamental concurrency syntax.
 
-Concurrency supplies computational relationships that may later be distributed.
-
----
-
-31. Runtime integration
-
-The repository already contains a runtime concurrency subsystem responsible for runtime concurrency functionality.
-
-The runtime may implement concurrency through:
-
-coroutines
-event loops
-tasks
-workers
-threads
-work stealing
-queues
-accelerator streams
-distributed execution
-remote execution
-
-The source grammar must remain independent of which implementation is chosen.
 
 ---
 
-32. Standard-library integration
+34. Resources Integration
 
-The standard library contains concurrency-oriented functionality.
+Resource declarations belong to:
 
-Grammar must not duplicate standard-library APIs.
+grammar/resources/
+
+not to the concurrency leaf grammars.
+
+Concurrency may consume resource/capability information.
 
 For example:
 
-grammar
+requires capability("parallel.execution")
 
-should recognize the language syntax for an operation, while:
+may semantically constrain execution.
 
-stdlib
+But the concurrency grammar must not turn this into:
 
-provides library-level abstractions.
+requires 8 threads
+
+as a universal implementation rule.
+
+Resource negotiation belongs downstream.
+
 
 ---
 
-33. Compiler integration
+35. Hardware Integration
 
-Compiler processing should be:
+Concurrency syntax must remain independent from:
 
-source
- ↓
-lexer
- ↓
-parser
- ↓
-AST
- ↓
-name resolution
- ↓
-type checking
- ↓
-effect checking
- ↓
-concurrency analysis
- ↓
-resource/capability analysis
- ↓
-canonical IR
- ↓
-optimization
- ↓
+CPU IDs
+GPU IDs
+QPU IDs
+FPGA IDs
+core IDs
+thread IDs
+memory-bank IDs
+network-node IDs
+device addresses
+
+Hardware realization occurs later:
+
+semantic concurrency
+    ↓
+resource analysis
+    ↓
+target selection
+    ↓
 scheduling
- ↓
-lowering
+    ↓
+placement
+    ↓
+HAL/runtime
 
-The compiler must never need to reparse the original source to determine runtime concurrency behavior.
-
----
-
-34. Runtime integration
-
-Runtime execution consumes compiled semantic representations.
-
-It must not depend directly on:
-
-grammar/concurrency/*.g4
-
-The dependency must therefore be:
-
-grammar
-   ↓
-AST
-   ↓
-semantic model / IR
-   ↓
-compiler
-   ↓
-runtime
-
-and never:
-
-runtime
-   ↓
-grammar
-
-This prevents architectural cycles.
 
 ---
 
-35. Resilience integration
+36. Distributed Integration
 
-Concurrency can fail at runtime because of:
+Distributed concurrency must compose with:
 
-- resource exhaustion;
-- executor failure;
-- backend failure;
-- distributed failure;
-- cancellation;
-- unavailable execution resources.
+grammar/distributed/
+grammar/networking/
+grammar/resources/
+grammar/execution/
 
-The resilience layer may decide to:
+The concurrency grammar expresses distributed computation semantics.
 
-retry
-restart
-resume
-rollback
-reschedule
-reroute
-switch backend
-quarantine resource
-abort
+The distributed subsystem determines actual realization.
 
-The concurrency grammar does not own those decisions.
+For example, a logical collection of concurrent computations may eventually execute across any available number of resources.
+
+No fixed node topology belongs in the grammar.
+
 
 ---
 
-36. Determinism
+37. Quantum Integration
 
-Parsing must be deterministic.
-
-Given identical:
-
-source
-language version
-grammar version
-lexer configuration
-
-the parser must produce the same syntax structure.
-
-Runtime scheduling nondeterminism is separate from parser determinism.
-
-The grammar must never depend on:
-
-thread scheduling
-hardware discovery
-hash-map iteration
-device availability
-runtime timing
-
----
-
-37. Error handling
-
-Syntax errors must be reported by the parser/diagnostic layer.
+Concurrency may be used around or within hybrid quantum programs.
 
 Examples include:
 
-await
-spawn
-parallel
+classical task
+    ↓
+quantum operation
+    ↓
+measurement
+    ↓
+classical task
 
-with missing required operands/bodies.
+or multiple independent quantum computations.
 
-Semantic errors belong to semantic analysis.
+The concurrency grammar must not create a quantum execution IR.
 
-Resource errors belong to resource analysis.
+The established quantum path remains:
 
-Runtime failures belong to runtime/resilience.
+Zamani syntax
+    ↓
+domain-neutral AST
+    ↓
+quantum semantic analysis
+    ↓
+quantum::ir
+    ↓
+optimization
+    ↓
+routing
+    ↓
+scheduling
+    ↓
+QEC / resilience / ZQN
+    ↓
+HAL
 
-Errors must not be incorrectly collapsed into generic parser failures.
+Concurrency metadata may influence semantic scheduling requirements, but the grammar does not own QEC, ZQN, routing, calibration, or HAL behavior.
 
----
-
-38. Compatibility
-
-Existing valid Zamani concurrency constructs must be preserved unless an explicit language-version migration says otherwise.
-
-Compatibility work must distinguish:
-
-syntax compatibility
-AST compatibility
-semantic compatibility
-IR compatibility
-runtime compatibility
-source compatibility
-
-A syntax change must not silently alter the meaning of an existing concurrency program.
-
----
-
-39. Versioning
-
-Concurrency syntax is versioned as part of the Zamani language.
-
-A future concurrency feature must have:
-
-language-version decision
-keyword decision
-grammar rule
-AST representation
-semantic specification
-diagnostics
-compiler integration
-runtime integration
-tests
-documentation
-compatibility policy
-
-before becoming a stable language feature.
-
-Experimental constructs must not silently become permanent syntax.
 
 ---
 
-40. Security
+38. HDL Integration
 
-Concurrency syntax must not bypass:
+Concurrency concepts may interact with hardware-description and hardware/software co-design.
 
-- capability checks;
-- permission checks;
-- resource policies;
-- isolation;
-- memory safety;
-- execution boundaries.
+For example:
 
-The grammar itself does not provide security.
+software computation
+        +
+parallel computation
+        +
+accelerator intent
 
-Security analysis belongs downstream.
+The concurrency grammar must not assume a specific number of hardware pipelines, execution units, FPGA resources, or ASIC structures.
 
----
+Those are resolved by:
 
-41. Safe Rust requirement
+HDL semantics
+hardware analysis
+resource analysis
+compiler
+synthesis
+target backend
 
-The grammar contains no Rust execution code.
-
-Where Zamani's lexer/parser/compiler implementation is written in Rust:
-
-Rust 1.97
-or
-Rust 1.97.1
-
-must be supported.
-
-The compiler implementation must use safe Rust.
-
-"unsafe" is prohibited unless a separate repository-wide architectural decision explicitly changes this requirement.
-
-Concurrency syntax must never require unsafe Rust.
 
 ---
 
-42. Forbidden machine assumptions
+39. AI/Data Integration
 
-The entire directory must remain free of assumptions such as:
-
-thread_count = 8
-worker_count = 16
-core_count = 32
-gpu_count = 4
-node_count = 64
-queue_size = 1024
-channel_capacity = 256
-max_tasks = 1000000
-
-A number is not automatically forbidden.
-
-The distinction is:
-
-language syntax number
-
-versus:
-
-machine capacity number
-
-For example, a user-defined numeric value may be valid program data.
-
-A hidden compiler capacity must never be represented as language syntax.
-
----
-
-43. Semantic requirements versus implementation decisions
-
-This distinction is mandatory.
-
-Semantic
-
-these operations may execute concurrently
-
-Implementation
-
-execute them on four workers
-
-Semantic
-
-this computation must wait for that result
-
-Implementation
-
-block a thread
-
-or:
-
-suspend a coroutine
-
-or:
-
-enqueue an event
-
-are implementation decisions.
-
-The grammar owns the first category.
-
-It must not own the second.
-
----
-
-44. Cross-domain model
-
-Concurrency must remain composable with every major Zamani domain.
-
-classical
-    ↕
-concurrency
-
-quantum
-    ↕
-concurrency
-
-HDL
-    ↕
-concurrency
-
-hardware
-    ↕
-concurrency
+Concurrency may compose with:
 
 AI
-    ↕
-concurrency
-
 data
-    ↕
-concurrency
+tensor
+stream
+pipeline
+distributed training
 
-distributed
-    ↕
-concurrency
+but must not introduce framework-specific syntax into the concurrency domain.
 
-networking
-    ↕
-concurrency
+For example:
 
-resilience
-    ↕
-concurrency
+parallel data transformation
 
-No domain should need to duplicate the concurrency grammar.
+is a concurrency/data semantic combination.
 
----
+A specific framework's executor belongs to interoperability/backend layers.
 
-45. Example conceptual program
-
-A portable concurrent program might express:
-
-spawn {
-    classical_work()
-}
-
-spawn {
-    quantum_work()
-}
-
-await results
-
-The source does not specify whether the implementation uses:
-
-one CPU
-many CPUs
-CPU + GPU
-CPU + QPU
-distributed workers
-cloud resources
-future hardware
-
-That is precisely the intended architecture.
 
 ---
 
-46. Scalability model
+40. Networking Integration
 
-The grammar must support:
+Channels and distributed concurrency may use networking abstractions.
 
-tiny program
+The grammar must distinguish:
 
-through:
+logical communication
 
-very large program
+from:
 
-without changing syntax merely because the machine becomes larger.
+physical network endpoint
 
-Likewise:
+The first may belong to the language.
 
-one concurrent operation
+The second is normally a deployment/runtime concern.
 
-and:
+No universal network topology may be encoded.
 
-many concurrent operations
-
-must use the same semantic constructs.
-
-The grammar must not introduce a special "large machine" language.
 
 ---
 
-47. Parser complexity
+41. Canonical IR Boundary
 
-The grammar must avoid unnecessary ambiguity.
+Concurrency grammar must not create:
 
-Particular care must be taken with constructs involving:
+ConcurrencyIR
 
-expression
-block
-statement
-function call
-closure
-async
-await
-spawn
-parallel
+merely because concurrency exists.
 
-A concurrency rule must not greedily consume ordinary expressions in a way that prevents other grammar domains from parsing correctly.
+The canonical semantic representation must use the repository's established IR architecture.
 
-Concurrency constructs should have identifiable syntactic boundaries.
+Concurrency information should be represented through the canonical semantic model and corresponding IR structures owned by the compiler architecture.
 
----
+The same principle applies to quantum:
 
-48. No arbitrary extension syntax
+DO NOT:
+grammar → custom QuantumConcurrencyIR
 
-The grammar must not solve extensibility by accepting arbitrary identifiers such as:
+DO:
+grammar → AST → semantic concurrency/quantum analysis
 
-foo computation
-bar computation
-whatever computation
+and then use the existing canonical IR boundaries.
 
-and leaving their meaning to runtime interpretation.
-
-Future extensibility belongs to:
-
-dialects
-versioning
-capabilities
-namespaces
-attributes
-semantic extension points
-
-with explicit contracts.
 
 ---
 
-49. Testing requirements
+42. Scheduling
 
-Every concurrency grammar file requires tests.
+Scheduling is downstream.
 
-Tests must exist under:
+The grammar can express semantic scheduling constraints where the language specification explicitly requires them.
 
-grammar/tests/concurrency/
+It must not select:
 
-and where appropriate:
+CPU core
+GPU stream
+QPU
+FPGA pipeline
+cluster node
+thread
+worker
 
-grammar/tests/positive/
-grammar/tests/negative/
-grammar/tests/boundary/
-grammar/tests/cross-domain/
-grammar/tests/scalability/
-grammar/tests/determinism/
-grammar/tests/roundtrip/
+The implementation pipeline determines these choices.
 
----
+This is essential for POCO-REAF.
 
-50. Positive tests
-
-At minimum:
-
-spawn expression
-spawn block
-await expression
-parallel block
-nested concurrency
-concurrency inside functions
-concurrency with generic code
-concurrency with classical computation
-concurrency with quantum computation
-concurrency with distributed computation
 
 ---
 
-51. Negative tests
+43. Runtime Integration
 
-Test:
+The runtime may implement:
 
-spawn
-await
-parallel
+task execution;
 
-without required operands.
+futures;
 
-Also test:
+async execution;
 
-malformed concurrency expressions
-malformed nesting
-invalid delimiter combinations
-ambiguous constructs
-unknown pseudo-keywords
+cancellation;
 
-and ensure ordinary identifiers cannot accidentally become concurrency keywords.
+scheduling;
+
+synchronization;
+
+channels;
+
+actors;
+
+distributed communication;
+
+recovery.
+
+
+The grammar must remain independent of runtime implementation details.
+
+Changing the runtime should not require rewriting the language grammar merely because a different executor is used.
+
 
 ---
 
-52. Boundary tests
+44. Compiler Integration
 
-Test very large syntactic structures.
+The compiler must consume semantic concurrency information and lower it appropriately.
+
+Potential targets include:
+
+single-threaded execution
+multicore CPU
+GPU
+FPGA
+ASIC
+QPU
+accelerators
+distributed systems
+HPC
+cloud
+embedded systems
+future execution platforms
+
+The grammar must not encode these target choices.
+
+
+---
+
+45. Determinism
+
+Parsing must be deterministic.
+
+For identical source and language version:
+
+same source
++
+same grammar version
++
+same lexical rules
+
+must produce the same parse structure.
+
+Concurrency itself may be nondeterministic at runtime when the program semantics permit it, but parser behavior must not be nondeterministic.
+
+Where deterministic semantics are requested, semantic analysis must establish the required guarantees.
+
+
+---
+
+46. Ambiguity Prevention
+
+Every concrete concurrency construct must have one authoritative syntax owner.
 
 Examples:
 
-deeply nested concurrent regions
-large task dependency structures
+tasks.g4          → task syntax
+futures.g4        → future syntax
+parallel.g4       → generic parallel syntax
+data-parallel.g4  → data parallel syntax
+task-parallel.g4  → task parallel syntax
+actors.g4         → actor syntax
+channels.g4       → channel syntax
+
+Composition files must delegate.
+
+They must not copy leaf rules.
+
+This is particularly important for ANTLR imported grammars because duplicate alternatives can create:
+
+ambiguity;
+
+unreachable alternatives;
+
+inconsistent parse trees;
+
+different AST mappings for identical source;
+
+maintenance cycles.
+
+
+
+---
+
+47. Circular Import Prevention
+
+The dependency graph must remain acyclic.
+
+Preferred direction:
+
+leaf grammar
+    ↓
+domain composition
+    ↓
+universal grammar root
+
+not:
+
+Concurrency
+    ↔
+DistributedConcurrency
+
+For example, if:
+
+concurrency.g4
+
+imports:
+
+distributed-concurrency.g4
+
+then distributed-concurrency.g4 must not import concurrency.g4.
+
+It should instead depend on the specific leaf grammars it actually requires.
+
+
+---
+
+48. Cross-Domain Dependency Rule
+
+A grammar may consume another domain's public grammar contract.
+
+It must not silently redefine that domain.
+
+Examples:
+
+concurrency
+    → resources
+
+may consume resource/capability semantics.
+
+But concurrency must not redefine the resource language.
+
+Likewise:
+
+distributed concurrency
+    → distributed
+
+does not mean distributed-concurrency owns distributed node syntax.
+
+
+---
+
+49. Grammar Actions
+
+The concurrency grammars must contain no target-language semantic actions.
+
+Do not embed Rust execution logic in .g4 files.
+
+Avoid:
+
+@members { ... }
+
+for compiler/runtime behavior.
+
+The grammar should produce parse structures.
+
+Rust 1.97/1.97.1 code belongs in the frontend/compiler implementation.
+
+Generated Rust must remain safe Rust.
+
+No unsafe code is permitted.
+
+
+---
+
+50. Diagnostics
+
+The grammar must preserve sufficient source information for diagnostics.
+
+Every concurrency construct should ultimately be traceable to:
+
+source file
+source range
+line
+column
+construct
+
+Semantic diagnostics should be able to identify:
+
+invalid await;
+
+invalid task scope;
+
+invalid synchronization;
+
+invalid channel operation;
+
+invalid cancellation;
+
+incompatible task dependencies;
+
+invalid distributed concurrency;
+
+unsupported capability;
+
+violated semantic requirement.
+
+
+The grammar itself should not perform semantic diagnosis that belongs to later phases.
+
+
+---
+
+51. Security
+
+Concurrency grammar design must avoid creating syntax that implicitly bypasses:
+
+ownership;
+
+authorization;
+
+capability checking;
+
+isolation;
+
+effect checking;
+
+resource policy.
+
+
+Concurrency does not grant permission to access resources.
+
+Security and capability analysis remain separate semantic concerns.
+
+
+---
+
+52. Performance
+
+The grammar should scale with program size rather than machine size.
+
+It must support:
+
+tiny programs
+large programs
+deep task graphs
 large parallel regions
-large source files
-large expressions
-large concurrency compositions
+large pipelines
+large distributed programs
+large generated programs
 
-No artificial machine-scale maximum may appear.
+without artificial language limits.
 
----
+Performance optimizations should target:
 
-53. Cross-domain tests
+deterministic parsing;
 
-Required combinations include:
+avoiding duplicate alternatives;
 
-classical + concurrency
-quantum + concurrency
-classical + quantum + concurrency
-HDL + concurrency
-hardware + concurrency
-distributed + concurrency
-AI + concurrency
-data + concurrency
-networking + concurrency
-quantum + distributed + concurrency
-quantum + hardware + concurrency
-classical + quantum + HDL + concurrency
+avoiding unnecessary backtracking;
 
----
+bounded local ambiguity;
 
-54. Round-trip tests
+reusable grammar components;
 
-Where a canonical formatter/printer exists:
+efficient tokenization.
 
-source
- ↓
-lexer
- ↓
-parser
- ↓
-AST
- ↓
-printer
- ↓
-parser
 
-must preserve concurrency semantics.
+Do not solve parser performance by imposing semantic limits on the language.
 
-Formatting differences are acceptable.
-
-Semantic changes are not.
 
 ---
 
-55. Determinism tests
+53. Scalability Contract
 
-Repeated parsing of the same source must produce equivalent:
+The grammar must be unbounded in the language-specification sense.
 
-token sequence
-parse tree
-AST
-diagnostic ordering
+Actual execution remains constrained only by available:
 
-where deterministic ordering is part of the frontend contract.
-
----
-
-56. Hard-coding audit
-
-Every change to this directory must be checked for:
-
-MAX_*
-DEFAULT_* resource capacities
-fixed thread counts
-fixed worker counts
-fixed core counts
-fixed device counts
-fixed node counts
-fixed topology
-fixed queue capacity
-fixed channel capacity
-fixed accelerator capacity
-fixed quantum capacity
-
-Each finding must be classified as:
-
-1. language semantic requirement;
-2. target-specific requirement;
-3. resource constraint;
-4. implementation limitation;
-5. accidental hard-coding;
-6. test-only limitation;
-7. documentation-only limitation.
-
-Accidental hard-coding must be removed.
-
----
-
-57. File completion contract
-
-A concurrency grammar file is not complete merely because ANTLR accepts it.
-
-It is complete only when all of the following are established:
-
-Purpose
-Ownership
-Non-ownership
-Lexer contract
-Parser contract
-AST contract
-Semantic contract
-Type contract
-Effect contract
-Resource contract
-Capability contract
-Compiler contract
-IR contract
-Runtime contract
-Cross-domain contract
-Compatibility contract
-Error contract
-Scalability contract
-Security contract
-Testing contract
-Documentation contract
-Hard-coding audit
-
-have been satisfied.
-
----
-
-58. Dependency order
-
-Concurrency implementation must proceed in dependency order.
-
-Recommended order:
-
-1. language specification
-        ↓
-2. lexical vocabulary
-        ↓
-3. core names/types/expressions/statements
-        ↓
-4. tasks.g4
-        ↓
-5. futures.g4
-        ↓
-6. parallel.g4
-        ↓
-7. data-parallel.g4
-        ↓
-8. task-parallel.g4
-        ↓
-9. actors.g4
-        ↓
-10. channels.g4
-        ↓
-11. synchronization.g4
-        ↓
-12. cancellation.g4
-        ↓
-13. concurrency.g4 composition root
-        ↓
-14. canonical parser integration
-        ↓
-15. AST integration
-        ↓
-16. semantic/effect/type integration
-        ↓
-17. resource/capability integration
-        ↓
-18. compiler/IR integration
-        ↓
-19. scheduling integration
-        ↓
-20. runtime integration
-        ↓
-21. cross-domain integration tests
-
-The exact ordering must be adjusted if repository inspection identifies a different concrete dependency.
-
----
-
-59. Integration graph
-
-The intended architecture is:
-
-                   Zamani Source
-                         |
-                         v
-                  Canonical Lexer
-                         |
-                         v
-                  Canonical Parser
-                         |
-              +----------+----------+
-              |                     |
-              v                     v
-        Ordinary Syntax       Concurrency Root
-                                    |
-              +----------+----------+----------+
-              |          |          |          |
-              v          v          v          v
-            Tasks      Futures   Parallel   Data/Task
-                                                Parallel
-              |
-              +----------+----------+----------+
-                         |
-                         v
-                    Frontend AST
-                         |
-             +-----------+-----------+
-             |           |           |
-             v           v           v
-          Types       Effects     Capabilities
-             |           |           |
-             +-----------+-----------+
-                         |
-                         v
-                Semantic Program Model
-                         |
-                         v
-                    Canonical IR
-                         |
-       +-----------------+------------------+
-       |                 |                  |
-       v                 v                  v
-   Classical          Quantum          Distributed
-       |                 |                  |
-       +-----------------+------------------+
-                         |
-                         v
-                    Optimization
-                         |
-                         v
-                   Routing/Placement
-                         |
-                         v
-                     Scheduling
-                         |
-                         v
-                    Resilience
-                         |
-                         v
-                       Runtime
-
----
-
-60. Dependency prohibition
-
-The following dependency directions are forbidden:
-
-runtime → grammar
-scheduler → grammar
-hardware → grammar
-quantum::ir → grammar
-ZQN → grammar
-QEC → grammar
-
-The correct direction is:
-
-grammar → AST/semantic representation
-
-and then:
-
-semantic representation → IR/compiler/runtime subsystems
-
-This prevents circular architecture.
-
----
-
-61. Quantum boundary
-
-Concurrency must never create an alternative quantum representation.
-
-The canonical boundary remains:
-
-quantum syntax
-      ↓
-quantum semantic analysis
-      ↓
-quantum::ir
-
-Concurrency may refer semantically to quantum computation.
-
-It must not become a second quantum IR.
-
----
-
-62. Hardware boundary
-
-Concurrency must never become a hardware-discovery mechanism.
-
-The hardware layer determines:
-
-available resources
-capabilities
-topology
-calibration
-device state
-
-Concurrency determines:
-
-what computation may proceed concurrently
-
-These are separate concerns.
-
----
-
-63. Scheduling boundary
-
-Concurrency defines potential concurrency.
-
-Scheduling determines realizable execution.
-
-Therefore:
-
-parallel
-
-does not mean:
-
-run simultaneously regardless of resources
-
-It means the compiler may exploit legal parallelism subject to:
-
-dependencies
-effects
-memory rules
-resource constraints
+memory
+compute
+storage
+communication
+runtime capabilities
+compiler resources
 target capabilities
-scheduling policy
 
----
-
-64. Runtime boundary
-
-Runtime decides how semantic concurrency is implemented.
-
-Possible implementations include:
-
-single-context execution
-cooperative scheduling
-preemptive scheduling
-threads
-coroutines
-event loops
-distributed workers
-accelerator queues
-heterogeneous execution
-
-The grammar remains unchanged.
-
-This is a core POCO-REAF property.
-
----
-
-65. Future-proofing
-
-Future concurrency models must be able to integrate without changing existing semantics unnecessarily.
-
-Potential future models include:
-
-dataflow
-actor systems
-reactive systems
-distributed actors
-speculative execution
-transactional concurrency
-hardware task graphs
-quantum-classical concurrent execution
-neuromorphic execution
-photonic execution
-future computational substrates
-
-A new model should normally be added as an independently owned grammar domain rather than expanding "concurrency.g4" into an unmaintainable monolith.
-
----
-
-66. Repository integration requirements
-
-Before merging a concurrency grammar change, verify:
-
-grammar/spec/
-grammar/lexer/
-grammar/core/
-grammar/types/
-grammar/expressions/
-grammar/statements/
-grammar/functions/
-grammar/effects/
-grammar/memory/
-grammar/resources/
-grammar/classical/
-grammar/quantum/
-grammar/hybrid/
-grammar/hdl/
-grammar/hardware/
-grammar/distributed/
-grammar/ai/
-grammar/networking/
-grammar/security/
-
-for conflicts.
-
-Also verify corresponding compiler/runtime consumers.
-
-The repository already contains concurrency-specific compiler and runtime components, so the grammar must be aligned with them rather than inventing an unrelated concurrency model.
-
----
-
-67. Production-readiness checklist
-
-Architecture
-
-- [ ] One canonical concurrency grammar authority.
-- [ ] No duplicate parser authority.
-- [ ] Clear ownership of every construct.
-- [ ] No circular dependencies.
-- [ ] No runtime dependency from grammar.
-- [ ] No scheduler dependency from grammar.
-
-Lexical
-
-- [ ] All keywords have canonical lexical ownership.
-- [ ] No accidental keyword creation.
-- [ ] Identifier handling is deterministic.
-
-Syntax
-
-- [ ] Tasks are defined once.
-- [ ] Futures are defined once.
-- [ ] Parallelism is defined once.
-- [ ] Data parallelism is defined once.
-- [ ] Task parallelism is defined once.
-- [ ] Actors are defined once.
-- [ ] Channels are defined once.
-- [ ] Synchronization is defined once.
-- [ ] Cancellation is defined once.
-
-Semantics
-
-- [ ] AST contract exists.
-- [ ] Type contract exists.
-- [ ] Effect contract exists.
-- [ ] Capability contract exists.
-- [ ] Resource contract exists.
-- [ ] Memory contract exists.
-
-POCO-REAF
-
-- [ ] No fixed thread maximum.
-- [ ] No fixed task maximum.
-- [ ] No fixed worker maximum.
-- [ ] No fixed core maximum.
-- [ ] No fixed device maximum.
-- [ ] No fixed node maximum.
-- [ ] No topology assumptions.
-- [ ] No hardware-specific source requirement.
-- [ ] Same semantic program can target different scales.
-
-Quantum
-
-- [ ] No duplicated quantum IR.
-- [ ] No QEC ownership.
-- [ ] No ZQN ownership.
-- [ ] No physical-qubit assumptions.
-- [ ] Quantum concurrency remains composable.
-
-Hardware/HDL
-
-- [ ] No hardware discovery.
-- [ ] No device IDs.
-- [ ] No fixed hardware topology.
-- [ ] No fixed accelerator count.
-- [ ] HDL remains independently owned.
-
-Safety
-
-- [ ] Rust 1.97 supported.
-- [ ] Rust 1.97.1 supported.
-- [ ] No unsafe Rust required.
-- [ ] Compiler implementation remains safe Rust.
-
-Testing
-
-- [ ] Positive tests.
-- [ ] Negative tests.
-- [ ] Boundary tests.
-- [ ] Cross-domain tests.
-- [ ] Scalability tests.
-- [ ] Determinism tests.
-- [ ] Round-trip tests.
-- [ ] Compatibility tests.
-- [ ] Hard-coding audit.
-
----
-
-68. Definition of done
-
-"grammar/concurrency/" is production-ready only when:
-
-Every syntax construct has one owner.
-Every owner has a documented contract.
-Every cross-file dependency is explicit.
-Every parser integration point is defined.
-Every AST mapping is defined.
-Every semantic interpretation is defined.
-Every downstream consumer is identified.
-Every forbidden dependency is documented.
-Every scalability constraint is externalized.
-Every machine-specific property is externalized.
-Every concurrency feature has tests.
-Every compatibility decision is documented.
-Every duplicate grammar authority is resolved.
-
-The final architectural invariant is:
-
-Zamani source
-     ↓
-portable concurrency intent
-     ↓
-canonical semantics
-     ↓
-target-independent IR
-     ↓
-target-aware compilation
-     ↓
-resource-aware scheduling
-     ↓
-hardware/runtime realization
+The language must not impose artificial universal limits.
 
 Therefore:
 
-«Concurrency syntax describes what computations may happen concurrently; it does not dictate the machine resources used to make that happen.»
+number of tasks
+number of futures
+number of actors
+number of channels
+number of workers
+number of nodes
+number of stages
+number of messages
 
-This is the concurrency-domain expression of:
+must be represented as grammar repetition, parameterized constructs, or ordinary program data rather than finite enumerations.
 
-«Zamani — From Atom to Everywhere»
+
+---
+
+54. Compatibility
+
+Concurrency syntax must be versioned through the repository's compatibility system.
+
+Relevant integration points:
+
+grammar/compatibility/
+grammar/spec/
+grammar/specification/
+
+Compatibility must track:
+
+language specification
+lexer
+parser grammar
+AST
+semantic analyzer
+IR
+compiler
+runtime
+
+A grammar change is not automatically a language-compatible change merely because ANTLR accepts it.
+
+
+---
+
+55. Deprecated Syntax
+
+Deprecated concurrency syntax must remain explicitly documented.
+
+Use the repository's compatibility/deprecation mechanism rather than silently accepting multiple interpretations forever.
+
+A deprecated construct should have:
+
+old syntax
+replacement
+version introduced
+version deprecated
+migration guidance
+AST mapping
+semantic compatibility
+test coverage
+
+
+---
+
+56. Testing Requirements
+
+The concurrency test suite must contain at least these categories:
+
+tests/concurrency/
+├── positive/
+├── negative/
+├── boundary/
+├── scalability/
+├── determinism/
+├── compatibility/
+├── async/
+├── futures/
+├── tasks/
+├── parallel/
+├── data-parallel/
+├── task-parallel/
+├── pipeline/
+├── reduction/
+├── actors/
+├── channels/
+├── synchronization/
+├── cancellation/
+├── distributed/
+└── cross-domain/
+
+The exact final directory layout should follow the existing repository instead of creating duplicates.
+
+
+---
+
+57. Positive Tests
+
+Positive tests must verify:
+
+valid async syntax;
+
+valid await;
+
+valid spawning;
+
+valid task composition;
+
+valid futures;
+
+valid parallel blocks;
+
+valid data parallelism;
+
+valid task parallelism;
+
+valid pipelines;
+
+valid reductions;
+
+valid actors;
+
+valid channels;
+
+valid synchronization;
+
+valid cancellation;
+
+valid deterministic parallelism;
+
+valid distributed concurrency;
+
+valid cross-domain compositions.
+
+
+
+---
+
+58. Negative Tests
+
+Negative tests must verify rejection of:
+
+malformed concurrency constructs;
+
+invalid task syntax;
+
+invalid await placement;
+
+invalid channel syntax;
+
+malformed synchronization;
+
+malformed cancellation;
+
+invalid distributed forms;
+
+ambiguous constructs;
+
+invalid resource/concurrency syntax;
+
+unsupported syntax that is only documented as proposed.
+
+
+
+---
+
+59. Boundary Tests
+
+Boundary tests must test semantic scale without establishing artificial limits.
+
+Examples:
+
+one task
+many tasks
+empty parallel region where legal
+single pipeline stage
+many pipeline stages
+single channel
+many channels
+single distributed participant
+many participants
+deep dependency graph
+large generated task graph
+
+No test may accidentally establish a maximum such as:
+
+1024 tasks maximum
+64 channels maximum
+32 workers maximum
+
+
+---
+
+60. Scalability Tests
+
+Scalability tests must distinguish:
+
+language scalability
+
+from:
+
+hardware capacity
+
+The grammar must continue to describe larger programs without changing the language contract.
+
+Tests should verify that no grammar rule contains machine-derived constants.
+
+
+---
+
+61. Determinism Tests
+
+Identical input must produce identical parser results.
+
+Tests should verify:
+
+same source
+same language version
+same lexical configuration
+→ same parse structure
+
+Concurrency runtime nondeterminism must not leak into parser determinism.
+
+
+---
+
+62. Compatibility Tests
+
+Compatibility tests must verify existing valid programs remain valid unless a documented breaking change is intentional.
+
+Particular attention is required for:
+
+ASYNC
+AWAIT
+SPAWN
+PARALLEL
+
+and any existing concurrency syntax already consumed by src/parser.rs.
+
+
+---
+
+63. Cross-Domain Tests
+
+Concurrency must be tested with:
+
+classical
+quantum
+hybrid
+HDL
+hardware
+distributed
+AI
+data
+networking
+security
+memory
+effects
+resources
+execution
+
+Examples include:
+
+classical task → quantum operation
+quantum measurement → classical task
+parallel tensor computation
+distributed data processing
+async network operation
+parallel accelerator computation
+hardware/software co-design
+
+These tests must validate composition rather than create duplicate domain syntax.
+
+
+---
+
+64. Grammar-to-AST Traceability
+
+Every public concurrency grammar rule must have a predetermined AST destination.
+
+Required mapping:
+
+grammar rule
+    ↓
+AST construct
+    ↓
+semantic construct
+    ↓
+canonical IR representation
+
+No grammar rule may be declared production-ready with:
+
+AST mapping: TBD
+
+or:
+
+IR mapping: TBD
+
+The mapping may point to an existing generic AST/semantic operation when a specialized AST node is unnecessary.
+
+
+---
+
+65. No Concurrency-Specific Duplicate IR
+
+Do not introduce:
+
+ConcurrencyIR
+UniversalConcurrencyIR
+TaskIR
+ParallelIR
+
+merely to represent parser output.
+
+The existing compiler architecture owns IR.
+
+Concurrency is a semantic domain that contributes information to the canonical IR pipeline.
+
+
+---
+
+66. Generic Operations
+
+Concurrency operations that are naturally extensible should use the generic operation model rather than requiring an ever-growing parser enumeration.
+
+This permits:
+
+standard operation
+custom operation
+vendor operation
+future operation
+domain-specific operation
+
+to be represented without changing the fundamental grammar every time a new backend or execution model appears.
+
+This is particularly important for POCO-REAF.
+
+
+---
+
+67. Vendor Independence
+
+The core concurrency grammar must not contain framework-specific or vendor-specific execution syntax such as:
+
+CUDA thread block
+specific GPU stream ID
+specific CPU core ID
+specific runtime executor ID
+specific cluster node ID
+
+Vendor interoperability may be provided through:
+
+interoperability/
+dialects/
+capabilities/
+
+with explicit contracts.
+
+
+---
+
+68. Dialect Integration
+
+Concurrency dialects must declare:
+
+dialect name
+version
+owner
+syntax additions
+semantic additions
+AST mapping
+IR mapping
+capabilities
+compatibility
+feature gates
+
+A dialect must not silently modify the meaning of core concurrency syntax.
+
+
+---
+
+69. Documentation Authority
+
+The authority hierarchy is:
+
+grammar/DESIGN.md
+        ↓
+grammar/specification/
+        ↓
+grammar/spec/
+        ↓
+canonical grammar
+        ↓
+frontend implementation
+        ↓
+grammar/grammar.md
+
+Zamani-Grammar.md remains an extended/historical design reference.
+
+It does not automatically create legal concurrency syntax.
+
+grammar.md describes implementation conformance.
+
+It is not a second independent grammar authority.
+
+
+---
+
+70. Existing Filename Preservation
+
+Existing files must not be renamed merely to make the directory aesthetically consistent.
+
+In particular, preserve established names such as:
+
+concurrency.g4
+tasks.g4
+parallel.g4
+data-parallel.g4
+task-parallel.g4
+reduction.g4
+distributed-concurrency.g4
+
+where they already exist.
+
+Correct ownership and integration are preferred over unnecessary renaming.
+
+
+---
+
+71. Existing Grammar Reconciliation
+
+Before adding new rules, each existing concurrency grammar must be checked for:
+
+valid ANTLR parser grammar header;
+
+tokenVocab = ZamaniLexer;
+
+correct imports;
+
+correct rule references;
+
+duplicate rules;
+
+duplicate parser paths;
+
+undefined rules;
+
+stale rule names;
+
+token mismatches;
+
+inconsistent punctuation;
+
+source-span compatibility;
+
+AST mapping;
+
+semantic mapping;
+
+IR mapping;
+
+test coverage.
+
+
+The future grammar naming mismatch is a specific example requiring correction in its owning file rather than being hidden by another grammar.
+
+
+---
+
+72. Canonical ANTLR Form
+
+Parser grammars in this directory should follow the repository's canonical structure:
+
+parser grammar <Name>;
+
+options {
+    tokenVocab = ZamaniLexer;
+}
+
+import <Dependency>;
+
+The exact imported grammar list must correspond to actual owning files.
+
+Do not invent imports merely because a future directory is planned.
+
+Do not use a parser grammar as a lexer grammar.
+
+
+---
+
+73. Dependency Direction
+
+The preferred dependency structure is:
+
+lexer
+  ↓
+core syntax
+  ↓
+expressions / types / declarations
+  ↓
+concurrency leaf grammars
+  ↓
+Concurrency composition
+  ↓
+statement/domain composition
+  ↓
+Zamani.g4
+
+Dependencies should flow toward composition.
+
+Avoid reverse dependencies.
+
+
+---
+
+74. Independent-First Completion Strategy
+
+The recommended implementation order inside this directory is:
+
+1. README.md
+2. token reconciliation
+3. async.g4
+4. await.g4
+5. spawn.g4
+6. tasks.g4
+7. futures.g4
+8. parallel.g4
+9. data-parallel.g4
+10. task-parallel.g4
+11. actors.g4
+12. channels.g4
+13. synchronization.g4
+14. cancellation.g4
+15. pipeline.g4
+16. reduction.g4
+17. deterministic-parallelism.g4
+18. distributed-concurrency.g4
+19. concurrency.g4
+20. statements/concurrency.g4 adapter
+21. Zamani.g4 integration
+22. frontend conformance
+23. semantic/IR conformance
+24. complete test matrix
+
+The important principle is:
+
+> Finish the contract before integrating the file.
+
+
+
+Integration should consume an already-defined public contract rather than forcing the completed file to be redesigned later.
+
+
+---
+
+75. Definition of Done for Every .g4
+
+A concurrency grammar file is DONE only when:
+
+[ ] Purpose is documented.
+
+[ ] Status is documented.
+
+[ ] Ownership is explicit.
+
+[ ] Non-ownership is explicit.
+
+[ ] Inputs are defined.
+
+[ ] Outputs are defined.
+
+[ ] Dependencies are defined.
+
+[ ] Import direction is acyclic.
+
+[ ] Lexer tokens are identified.
+
+[ ] No private lexer tokens exist.
+
+[ ] Concrete syntax is unambiguous.
+
+[ ] Rule names are stable.
+
+[ ] Existing compatible names are preserved.
+
+[ ] Duplicate syntax has been eliminated.
+
+[ ] AST mapping is predetermined.
+
+[ ] Semantic mapping is predetermined.
+
+[ ] Canonical IR mapping is predetermined.
+
+[ ] Compiler consumer is identified.
+
+[ ] Runtime consumer is identified.
+
+[ ] Tooling consumer is identified.
+
+[ ] Cross-domain interactions are documented.
+
+[ ] Diagnostics are defined.
+
+[ ] Security implications are reviewed.
+
+[ ] Performance implications are reviewed.
+
+[ ] Positive tests exist.
+
+[ ] Negative tests exist.
+
+[ ] Boundary tests exist.
+
+[ ] Scalability tests exist.
+
+[ ] Determinism tests exist.
+
+[ ] Compatibility tests exist.
+
+[ ] Hard-coding audit passes.
+
+[ ] No artificial machine limits exist.
+
+[ ] No duplicate IR exists.
+
+[ ] No unsafe Rust dependency is introduced.
+
+[ ] Rust 1.97/1.97.1 compatibility is established.
+
+[ ] Completion does not depend on an undocumented future edit.
+
+
+
+---
+
+76. Definition of Done for concurrency.g4
+
+concurrency.g4 is complete when:
+
+[ ] It is the sole concurrency composition boundary.
+
+[ ] It imports the authoritative concurrency leaf grammars.
+
+[ ] It does not duplicate leaf syntax.
+
+[ ] It does not introduce private tokens.
+
+[ ] It does not introduce hardware limits.
+
+[ ] It does not introduce scheduler behavior.
+
+[ ] It does not introduce runtime behavior.
+
+[ ] It does not create a concurrency IR.
+
+[ ] It exposes a stable concurrency semantic category.
+
+[ ] It integrates with the universal statement/expression architecture.
+
+[ ] It integrates with Zamani.g4.
+
+[ ] It does not create an import cycle.
+
+[ ] All imported grammar rules are valid.
+
+[ ] All referenced rules exist.
+
+[ ] AST mappings are known.
+
+[ ] semantic mappings are known.
+
+[ ] conformance tests pass.
+
+
+
+---
+
+77. Definition of Done for the Directory
+
+The complete grammar/concurrency/ directory is production-ready only when:
+
+every leaf grammar
+      ↓
+has one owner
+      ↓
+has one lexer vocabulary
+      ↓
+has one AST mapping
+      ↓
+has one semantic mapping
+      ↓
+has a canonical IR destination
+      ↓
+has tests
+      ↓
+is composed exactly once
+      ↓
+integrates into Zamani.g4
 
 and:
 
-«Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever (POCO-REAF).»
+no duplicate grammar authority
+no duplicate tokens
+no duplicate AST
+no duplicate IR
+no fixed hardware limits
+no fixed concurrency limits
+no scheduler embedded in grammar
+no runtime embedded in grammar
+no unsafe Rust
+no undocumented compatibility break
+
+remain.
+
+
+---
+
+78. Final Architecture
+
+The intended final relationship is:
+
+Zamani.g4
+                         │
+                         ▼
+                  Concurrency.g4
+                         │
+       ┌─────────────────┼──────────────────┐
+       │                 │                  │
+       ▼                 ▼                  ▼
+     Tasks            Futures            Parallel
+       │                 │                  │
+       │                 │          ┌───────┴────────┐
+       │                 │          ▼                ▼
+       │                 │     DataParallel       TaskParallel
+       │                 │
+       ├──────────────┬──┴───────┬──────────────┐
+       ▼              ▼          ▼              ▼
+    Actors         Channels   Synchronization Cancellation
+       │              │          │              │
+       └──────────────┴──────────┴──────────────┘
+                              │
+              ┌───────────────┼────────────────┐
+              ▼               ▼                ▼
+          Pipeline         Reduction      Determinism
+                              │
+                              ▼
+                  DistributedConcurrency
+                              │
+                              ▼
+                       Domain-neutral AST
+                              │
+                              ▼
+                   Semantic Analysis
+                              │
+              ┌───────────────┼────────────────┐
+              │               │                │
+          Effects        Resources       Capabilities
+              │               │                │
+              └───────────────┼────────────────┘
+                              ▼
+                       Canonical IR
+                              │
+                ┌─────────────┼──────────────┐
+                ▼             ▼              ▼
+             Classical      Quantum          HDL
+                │             │              │
+                └─────────────┼──────────────┘
+                              ▼
+                       Optimization
+                              │
+                   Scheduling / Placement
+                              │
+                     Runtime / HAL
+                              │
+             ┌────────────────┼─────────────────┐
+             ▼                ▼                 ▼
+            CPU              GPU              FPGA
+             │                │                 │
+             ├────────────────┼─────────────────┤
+             ▼                ▼                 ▼
+            QPU          Distributed          Future
+                         / HPC / Cloud        targets
+
+The fundamental invariant is:
+
+Zamani concurrency syntax
+        ≠
+machine topology
+        ≠
+scheduler
+        ≠
+runtime
+        ≠
+hardware
+
+Instead:
+
+Zamani concurrency syntax
+        ↓
+portable computational intent
+        ↓
+semantic analysis
+        ↓
+resource/capability resolution
+        ↓
+implementation selection
+        ↓
+execution
+
+That separation is what allows the same concurrency program to scale from the smallest available execution environment to arbitrarily larger environments supported by the compiler, runtime, and target.
+
+
+---
+
+79. Final POCO-REAF Invariant
+
+The concurrency subsystem must preserve this invariant:
+
+> A Zamani program describes the computation and its semantic requirements, not the accidental size or topology of the machine currently available to execute it.
+
+
+
+Therefore the grammar must never make today's:
+
+CPU count
+core count
+thread count
+GPU count
+FPGA resources
+QPU capacity
+node count
+memory capacity
+network topology
+accelerator count
+
+into tomorrow's language limitations.
+
+Resource availability determines realization.
+
+The source program remains the portable semantic specification.
+
+That is the concurrency-level foundation required for:
+
+Program Once → Compile Once → Run Everywhere → Anywhere → Forever.
+
+This README is intended to be the **contract for the whole `concurrency/` directory**, so the individual `.g4` files can subsequently be completed against fixed ownership and integration rules rather than repeatedly redesigned as other files change.
