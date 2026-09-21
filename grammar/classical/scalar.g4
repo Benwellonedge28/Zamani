@@ -7,19 +7,23 @@
  *     grammar/classical/scalar.g4
  *
  * Role:
- *     Classical scalar-domain parser grammar.
+ *     Canonical classical scalar-value parser grammar.
  *
  * Grammar technology:
  *     ANTLR4 parser grammar
  *
- * Implementation baseline:
+ * Compiler baseline:
  *     Rust 1.97 / Rust 1.97.1
- *     Rust edition 2021
+ *     Rust 2021
+ *     safe Rust only
  *
  * Safety:
+ *     This file contains grammar only.
  *     No embedded Rust actions.
  *     No semantic predicates.
  *     No target-specific code.
+ *     No hardware access.
+ *     No runtime execution.
  *     No unsafe Rust.
  *
  * ============================================================================
@@ -27,29 +31,49 @@
  * PURPOSE
  * ============================================================================
  *
- * This file owns the SOURCE-LEVEL CLASSICAL SCALAR DOMAIN.
+ * This file owns the SOURCE-LEVEL SCALAR VALUE BOUNDARY for the classical
+ * domain.
  *
- * A scalar is a single computational value rather than a collection,
- * sequence, vector, matrix, tensor, distributed object, quantum register,
- * hardware resource, or physical device.
+ * It provides parser-level classification for values that occupy one source
+ * value position, including:
  *
- * This grammar provides stable parser boundaries for scalar values while
- * delegating lexical representation and general expression semantics to
- * their authoritative grammar layers.
+ *     integer literals
+ *     floating-point literals
+ *     boolean literals
+ *     character literals
+ *     string literals
+ *     nil/null literals
+ *     scalar identifier references
  *
- * Scalar values may participate in:
+ * It also exposes stable parser boundaries for consumers that need to
+ * distinguish:
  *
- *     classical computation
- *     quantum-classical control
- *     HDL parameterization
- *     hardware parameterization
- *     distributed computation
- *     AI/data computation
- *     compile-time computation
- *     resource expressions
- *     metadata
- *     configuration
- *     generic/value parameters
+ *     numeric scalar
+ *     integral scalar
+ *     real scalar
+ *     boolean scalar
+ *     character scalar
+ *     text scalar
+ *     null scalar
+ *     compile-time scalar candidate
+ *
+ * These are SYNTACTIC CLASSIFICATIONS.
+ *
+ * They do not perform:
+ *
+ *     type inference
+ *     type checking
+ *     name resolution
+ *     constant evaluation
+ *     numeric conversion
+ *     overflow analysis
+ *     precision selection
+ *     representation selection
+ *     target selection
+ *     resource allocation
+ *     hardware selection
+ *     IR construction
+ *     runtime execution
  *
  * ============================================================================
  *
@@ -59,47 +83,54 @@
  *     source
  *       |
  *       v
- *     ZamaniLexer
+ *     grammar/antlr/ZamaniLexer.g4
  *       |
  *       v
- *     parser
+ *     ZamaniParser
  *       |
- *       +-----------------------------+
- *       |                             |
- *       v                             v
- *     expressions                 types
- *       |                             |
- *       +-------------+---------------+
- *                     |
- *                     v
- *               classical domain
- *                     |
- *                     v
- *                 Scalar.g4
- *                     |
- *                     v
- *                 frontend AST
- *                     |
- *                     v
- *             semantic analysis
- *                     |
- *          +----------+-----------+
- *          |                      |
- *          v                      v
- *     classical IR          constant/value IR
- *          |                      |
- *          +----------+-----------+
- *                     |
- *                     v
- *               optimization
- *                     |
- *                     v
- *             lowering / scheduling
- *                     |
- *                     v
- *              target realization
+ *       v
+ *     Scalar
+ *       |
+ *       v
+ *     domain-neutral frontend AST
+ *       |
+ *       v
+ *     structural analysis
+ *       |
+ *       v
+ *     semantic analysis
+ *       |
+ *       +----------------------+----------------------+
+ *       |                      |                      |
+ *       v                      v                      v
+ *   classical semantics   resource semantics   cross-domain semantics
+ *       |                      |                      |
+ *       +----------------------+----------------------+
+ *                              |
+ *                              v
+ *                    canonical semantic model
+ *                              |
+ *                 +------------+------------+
+ *                 |            |            |
+ *                 v            v            v
+ *            Classical IR  quantum::ir  HDL/Hardware IR
+ *                 |            |            |
+ *                 +------------+------------+
+ *                              |
+ *                              v
+ *                    optimization / lowering
+ *                              |
+ *                       scheduling / routing
+ *                              |
+ *                       resilience / QEC
+ *                              |
+ *                              ZQN
+ *                              |
+ *                              HAL
+ *                              |
+ *                       target realization
  *
- * This file NEVER directly creates IR.
+ * Scalar.g4 NEVER constructs IR.
  *
  * ============================================================================
  *
@@ -108,247 +139,267 @@
  *
  * THIS FILE OWNS:
  *
- *     - classical scalar-domain parser boundaries;
+ *     - scalar value classification;
  *     - scalar literal classification;
- *     - scalar literal alternatives;
- *     - scalar literal groups;
- *     - scalar constant/value composition;
- *     - scalar identifier references;
- *     - scalar compile-time value boundaries;
- *     - scalar-domain syntactic wrappers;
- *     - scalar-domain parser integration points.
+ *     - scalar identifier-reference classification;
+ *     - numeric scalar parser boundaries;
+ *     - integral scalar parser boundaries;
+ *     - real scalar parser boundaries;
+ *     - boolean scalar parser boundaries;
+ *     - character scalar parser boundaries;
+ *     - text scalar parser boundaries;
+ *     - null scalar parser boundaries;
+ *     - compile-time scalar candidate boundaries;
+ *     - classical scalar integration boundaries.
  *
  * THIS FILE DOES NOT OWN:
  *
  *     - lexical token definitions;
- *     - identifier spelling;
  *     - numeric literal spelling;
- *     - string literal spelling;
- *     - character literal spelling;
- *     - boolean literal spelling;
+ *     - numeric digit syntax;
+ *     - numeric bases;
+ *     - numeric suffixes;
+ *     - string escape syntax;
+ *     - character escape syntax;
+ *     - identifier spelling;
+ *     - keywords;
  *     - operators;
- *     - arithmetic precedence;
- *     - comparison precedence;
- *     - logical expressions;
+ *     - operator precedence;
  *     - general expressions;
  *     - assignments;
- *     - type definitions;
- *     - scalar type declarations;
+ *     - function calls;
+ *     - indexing;
+ *     - member access;
+ *     - ranges;
+ *     - collections;
+ *     - tuples;
+ *     - arrays;
  *     - vectors;
  *     - matrices;
  *     - tensors;
- *     - arrays;
- *     - quantum state;
- *     - quantum registers;
- *     - hardware resources;
- *     - hardware topology;
- *     - execution placement;
+ *     - type expressions;
+ *     - generic syntax;
+ *     - declarations;
+ *     - statements;
+ *     - memory semantics;
+ *     - concurrency;
+ *     - quantum semantics;
+ *     - HDL semantics;
+ *     - hardware realization;
+ *     - resource allocation;
  *     - scheduling;
+ *     - routing;
  *     - optimization;
  *     - classical IR;
  *     - quantum::ir;
  *     - QEC;
  *     - ZQN;
+ *     - HAL;
  *     - runtime representation.
  *
  * ============================================================================
  *
- * NON-OWNERSHIP / IMPORTANT SEPARATION
+ * AUTHORITY MODEL
  * ============================================================================
  *
- * The following layers remain authoritative:
+ * Lexical authority:
  *
  *     grammar/lexer/*
- *         lexical spelling
+ *     grammar/antlr/ZamaniLexer.g4
+ *
+ * General expression authority:
  *
  *     grammar/expressions/*
- *         general expression syntax and operator precedence
+ *
+ * Type authority:
  *
  *     grammar/types/*
- *         type syntax
+ *
+ * Classical-domain composition:
  *
  *     grammar/classical/classical.g4
- *         classical-domain composition
  *
- *     frontend / AST
- *         semantic source representation
+ * Universal parser composition:
+ *
+ *     grammar/antlr/ZamaniParser.g4
+ *
+ * AST authority:
+ *
+ *     frontend AST
+ *
+ * Semantic authority:
  *
  *     semantic analysis
- *         meaning and legality
  *
- *     classical IR
- *         canonical classical representation
+ * Canonical quantum semantic authority:
  *
  *     quantum::ir
- *         canonical quantum representation
  *
- *     optimization
- *         implementation improvement
+ * Classical lowering:
  *
- *     scheduling
- *         ordering, timing and resource scheduling
+ *     canonical classical semantic/IR layers
  *
- *     hardware
- *         hardware capabilities and realization
+ * Hardware realization:
  *
- *     runtime
- *         execution
+ *     hardware / HAL / backend layers
+ *
+ * ============================================================================
+ *
+ * SINGLE LEXER CONTRACT
+ * ============================================================================
+ *
+ * This parser grammar consumes ONLY the canonical Zamani lexer vocabulary:
+ *
+ *     ZamaniLexer
+ *
+ * It therefore uses:
+ *
+ *     tokenVocab = ZamaniLexer;
+ *
+ * It MUST NOT define lexer rules.
+ *
+ * It MUST NOT create:
+ *
+ *     SCALAR
+ *     SCALAR_INTEGER
+ *     SCALAR_FLOAT
+ *     SCALAR_IDENTIFIER
+ *     INTEGER_LITERAL
+ *     FLOAT_LITERAL
+ *     BOOLEAN_LITERAL
+ *     STRING_LITERAL
+ *     CHARACTER_LITERAL
+ *
+ * as replacement tokens.
+ *
+ * Existing canonical tokens remain authoritative.
+ *
+ * ============================================================================
+ *
+ * EXISTING TOKEN CONTRACT
+ * ============================================================================
+ *
+ * This file intentionally consumes the existing canonical tokens:
+ *
+ *     INTEGER
+ *     FLOAT
+ *     TRUE
+ *     FALSE
+ *     CHAR
+ *     STRING
+ *     NIL
+ *     NULL
+ *     IDENTIFIER
+ *     COMMA
+ *     LPAREN
+ *     RPAREN
+ *
+ * No new token is required by this grammar.
+ *
+ * The token meanings are owned by the canonical lexer.
+ *
+ * In particular:
+ *
+ *     INTEGER
+ *
+ * means source integer syntax only.
+ *
+ *     FLOAT
+ *
+ * means source floating-point syntax only.
+ *
+ * Neither token establishes a machine representation.
  *
  * ============================================================================
  *
  * POCO-REAF CONTRACT
  * ============================================================================
  *
- * Scalar syntax describes VALUE SEMANTICS.
+ * Scalar syntax MUST remain independent of the machine on which the program
+ * eventually executes.
  *
- * It does NOT prescribe:
+ * This grammar therefore contains no limits on:
  *
  *     CPU count
- *     CPU architecture
+ *     core count
+ *     thread count
+ *     GPU count
+ *     FPGA count
+ *     accelerator count
+ *     QPU count
+ *     qubit count
  *     register count
  *     register width
  *     SIMD width
- *     GPU count
- *     GPU lane count
- *     accelerator count
  *     memory capacity
  *     cache size
  *     NUMA topology
  *     cluster size
- *     network topology
- *     device identifier
- *     physical address
- *     ABI representation
- *     storage layout
+ *     node count
+ *     network size
+ *     tensor dimensions
+ *     tensor rank
+ *     scalar precision
+ *     scalar bit width
+ *     identifier length
+ *     literal digit count
+ *     scalar argument count
  *
- * For example:
+ * A scalar literal such as:
  *
  *     42
  *
- * does not mean:
+ * does NOT intrinsically mean:
  *
  *     i32
  *     i64
- *     one machine register
- *     one CPU word
- *
- * unless semantic/type resolution explicitly establishes that meaning.
+ *     u32
+ *     u64
+ *     usize
+ *     machine word
+ *     register
  *
  * Likewise:
  *
  *     1.0
  *
- * does not inherently mean:
+ * does NOT intrinsically mean:
  *
+ *     f32
+ *     f64
  *     IEEE-754 binary32
  *     IEEE-754 binary64
- *     one hardware floating-point register
  *
- * Representation is determined downstream.
+ * Semantic/type analysis determines the language-level meaning and later
+ * compilation determines the target representation.
  *
  * ============================================================================
  *
  * SCALABILITY CONTRACT
  * ============================================================================
  *
- * This grammar contains NO artificial finite limits.
+ * This grammar contains no artificial finite limits.
  *
- * In particular, it does not define:
+ * There are deliberately no constructs such as:
  *
- *     MAX_INTEGER_DIGITS
- *     MAX_FLOAT_DIGITS
- *     MAX_LITERAL_LENGTH
- *     MAX_SCALAR_COUNT
- *     MAX_EXPRESSION_DEPTH
+ *     MAX_INTEGER_BITS
+ *     MAX_FLOAT_BITS
+ *     MAX_LITERAL_DIGITS
+ *     MAX_SCALAR_ARGUMENTS
  *     MAX_IDENTIFIER_LENGTH
- *     MAX_PRECISION
- *     MAX_SCALE
- *     MAX_BITS
- *     MAX_WIDTH
+ *     MAX_SCALAR_SIZE
  *
- * Repetition and recursion are structural.
+ * Structural repetition belongs to the owning grammar layers.
  *
- * Any implementation limit must belong to an explicit:
- *
- *     parser resource policy
- *     compiler resource policy
- *     semantic validation policy
- *     target capability
- *     resource manager
- *     runtime environment
- *
- * Such limits must never silently become language semantics.
+ * Practical implementation limits are allowed only as explicit implementation
+ * or resource policies. They must never silently become language semantics.
  *
  * ============================================================================
  *
- * LEXER CONTRACT
+ * EXPRESSION SEPARATION
  * ============================================================================
  *
- * This grammar consumes the canonical Zamani lexer:
- *
- *     grammar/antlr/ZamaniLexer.g4
- *
- * It MUST NOT define lexer rules.
- *
- * The canonical lexer already owns:
- *
- *     INTEGER
- *     FLOAT
- *     TRUE
- *     FALSE
- *     NIL
- *     NULL
- *     STRING
- *     CHAR
- *     IDENTIFIER
- *
- * among other tokens.
- *
- * Numeric literal syntax, Unicode identifiers and literal spelling therefore
- * remain outside this parser grammar.
- *
- * ============================================================================
- *
- * IMPORTANT TOKEN CONSISTENCY RULE
- * ============================================================================
- *
- * The canonical lexer token is:
- *
- *     IDENTIFIER
- *
- * This file intentionally uses IDENTIFIER directly.
- *
- * It does NOT introduce:
- *
- *     IDENT
- *     ID
- *     NAME
- *     SCALAR_IDENTIFIER
- *
- * or any other token alias.
- *
- * This prevents the scalar grammar from perpetuating token-name divergence
- * between grammar layers.
- *
- * ============================================================================
- *
- * EXPRESSION CONTRACT
- * ============================================================================
- *
- * Scalar literals are PRIMARY VALUES.
- *
- * Arithmetic such as:
- *
- *     1 + 2
- *     x * 4
- *     a / b
- *     -42
- *     x < y
- *     a && b
- *
- * belongs to the authoritative expression grammar.
- *
- * This file therefore does NOT redefine:
+ * Scalar.g4 deliberately does NOT define:
  *
  *     +
  *     -
@@ -366,29 +417,63 @@
  *     ||
  *     !
  *     bitwise operators
+ *     calls
+ *     indexing
+ *     member access
+ *     assignment
+ *     ranges
  *
- * This avoids duplicate precedence hierarchies and parser ambiguity.
+ * Those belong to grammar/expressions/.
+ *
+ * For example:
+ *
+ *     1 + 2
+ *
+ * is an expression containing two scalar literals.
+ *
+ * It is NOT itself a scalar grammar production.
+ *
+ * Likewise:
+ *
+ *     -42
+ *
+ * is an expression involving a scalar literal and a unary operator.
+ *
+ * Scalar.g4 therefore provides the value leaf:
+ *
+ *     42
+ *
+ * while the expression grammar owns:
+ *
+ *     -42
+ *     1 + 2
+ *     x * 4
+ *     a < b
+ *
+ * This prevents competing precedence hierarchies.
  *
  * ============================================================================
  *
- * TYPE CONTRACT
+ * TYPE SEPARATION
  * ============================================================================
  *
- * A scalar VALUE is not the same thing as a scalar TYPE.
+ * Scalar VALUE syntax is not scalar TYPE syntax.
  *
  * Examples:
  *
  *     42
- *     3.14159
+ *     1.0
  *     true
  *     'a'
  *     "hello"
  *
- * are values.
+ * are source values.
  *
- * Their types are determined through the type system.
+ * Type syntax remains owned by:
  *
- * Therefore this grammar does not define:
+ *     grammar/types/
+ *
+ * This grammar MUST NOT define:
  *
  *     int
  *     float
@@ -396,108 +481,507 @@
  *     char
  *     string
  *
- * as scalar types.
- *
- * Type syntax remains owned by:
- *
- *     grammar/types/*
+ * as type syntax.
  *
  * ============================================================================
  *
- * SEMANTIC BOUNDARY
+ * SEMANTIC CLASSIFICATION
  * ============================================================================
  *
- * The parser establishes syntactic categories only.
+ * The following rules are intentionally syntactic:
  *
- * Semantic analysis determines:
+ *     numericScalar
+ *     integralScalar
+ *     realScalar
+ *     booleanScalar
+ *     characterScalar
+ *     textScalar
+ *     nullScalar
  *
- *     - literal type;
- *     - numeric domain;
- *     - precision;
- *     - signedness;
- *     - exactness;
- *     - overflow policy;
- *     - underflow policy;
- *     - NaN/Infinity policy;
- *     - character validity;
- *     - string encoding semantics;
- *     - constant-folding eligibility;
- *     - compile-time evaluability;
- *     - coercion;
- *     - promotion;
- *     - conversion;
- *     - target representation.
+ * For an identifier:
  *
- * The parser must never silently make these decisions.
+ *     x
+ *
+ * the grammar can establish that `x` is an identifier reference.
+ *
+ * It cannot establish that `x` is:
+ *
+ *     integer
+ *     floating point
+ *     boolean
+ *     character
+ *     string
+ *     numeric
+ *
+ * without name and type resolution.
+ *
+ * Therefore identifier references remain under:
+ *
+ *     scalarReference
+ *
+ * and their semantic type is resolved downstream.
  *
  * ============================================================================
  *
- * EXACTNESS / PRECISION CONTRACT
+ * NULL / NIL COMPATIBILITY
  * ============================================================================
  *
- * Literal spelling must be preserved by the frontend.
+ * The repository currently retains both:
  *
- * The grammar does not convert:
+ *     NIL
+ *     NULL
+ *
+ * as canonical lexer tokens.
+ *
+ * Scalar.g4 preserves both spellings for compatibility.
+ *
+ * Whether they are semantically equivalent is NOT decided here.
+ *
+ * That decision belongs to the type/compatibility specification.
+ *
+ * This prevents the parser from silently changing an existing compatibility
+ * contract.
+ *
+ * ============================================================================
+ *
+ * STRING CLASSIFICATION
+ * ============================================================================
+ *
+ * `STRING` is included in scalarLiteral because it is one source-level value
+ * occupying one value position.
+ *
+ * This is a PARSER CATEGORY only.
+ *
+ * It does NOT assert that strings are numeric scalars.
+ *
+ * Consequently:
+ *
+ *     stringLiteral
+ *
+ * is available through:
+ *
+ *     textScalar
+ *
+ * but NOT through:
+ *
+ *     numericScalar
+ *
+ * ============================================================================
+ *
+ * CHARACTER CLASSIFICATION
+ * ============================================================================
+ *
+ * `CHAR` is a source-level character literal.
+ *
+ * Character encoding and storage representation are semantic/backend concerns.
+ *
+ * This grammar therefore does not assume:
+ *
+ *     ASCII
+ *     UTF-8 byte width
+ *     UTF-16 code-unit width
+ *     UTF-32 storage
+ *     machine character width
+ *
+ * ============================================================================
+ *
+ * NUMERIC CLASSIFICATION
+ * ============================================================================
+ *
+ * Numeric literal spelling is owned by:
+ *
+ *     grammar/lexer/numeric-literals.g4
+ *
+ * That grammar already defines:
  *
  *     INTEGER
- *
- * into a Rust integer.
- *
- * It does not convert:
- *
  *     FLOAT
  *
- * into f32 or f64.
+ * and supports scalable source forms including:
+ *
+ *     decimal integers
+ *     binary integers
+ *     octal integers
+ *     hexadecimal integers
+ *     decimal floating point
+ *     exponent notation
+ *     digit separators
+ *
+ * Scalar.g4 does not duplicate any of those lexical rules.
+ *
+ * ============================================================================
+ *
+ * PRECISION / EXACTNESS
+ * ============================================================================
+ *
+ * The parser does not convert literal text into a Rust primitive.
  *
  * It does not choose:
  *
- *     arbitrary precision
- *     fixed precision
- *     decimal precision
- *     machine precision
+ *     i32
+ *     i64
+ *     u32
+ *     u64
+ *     usize
+ *     f32
+ *     f64
  *
- * Those decisions belong to semantic analysis and compilation.
+ * or any other representation.
+ *
+ * The frontend must preserve source spelling/source span sufficiently for:
+ *
+ *     exact diagnostics
+ *     deterministic semantic analysis
+ *     constant evaluation
+ *     reproducible compilation
+ *     provenance
+ *     later target lowering
+ *
+ * ============================================================================
+ *
+ * COMPILE-TIME SCALAR CONTRACT
+ * ============================================================================
+ *
+ * `compileTimeScalar` means:
+ *
+ *     syntactically eligible to be considered as a scalar compile-time value
+ *
+ * It does NOT mean:
+ *
+ *     already evaluated
+ *     guaranteed constant
+ *     guaranteed pure
+ *     guaranteed compile-time executable
+ *
+ * Semantic/compiler analysis determines whether an identifier actually refers
+ * to a compile-time value.
+ *
+ * Examples:
+ *
+ *     1024
+ *     1.0
+ *     true
+ *     N
+ *     Rows
+ *
+ * are syntactically eligible.
  *
  * ============================================================================
  *
  * CROSS-DOMAIN CONTRACT
  * ============================================================================
  *
- * Scalar values may be consumed by:
+ * Scalar values can be consumed by:
  *
  *     classical computation
- *     quantum control expressions
  *     quantum parameters
- *     hardware parameters
+ *     quantum control conditions
  *     HDL parameters
- *     timing expressions
- *     resource constraints
- *     capability requirements
- *     distributed control
+ *     hardware requirements
+ *     resource requirements
+ *     timing constraints
+ *     distributed configuration
  *     AI/data computation
- *     compile-time evaluation
+ *     compile-time type/value parameters
+ *     interoperability layers
  *
- * The scalar grammar therefore remains domain-neutral.
+ * Scalar.g4 does not need to know which domain consumes the value.
  *
- * A scalar value does NOT imply a classical-only execution target.
+ * Domain-specific semantics are downstream.
  *
  * ============================================================================
  *
- * SECURITY CONTRACT
+ * QUANTUM INTEGRATION
+ * ============================================================================
+ *
+ * A scalar may appear as a quantum parameter:
+ *
+ *     angle
+ *     phase
+ *     coefficient
+ *     threshold
+ *     probability
+ *     symbolic parameter
+ *
+ * The quantum parser/domain owns the surrounding quantum syntax.
+ *
+ * Scalar.g4 MUST NOT:
+ *
+ *     enumerate quantum gates;
+ *     define physical qubits;
+ *     define qubit limits;
+ *     define quantum topology;
+ *     define routing;
+ *     define scheduling;
+ *     define QEC;
+ *     define ZQN;
+ *     define HAL behavior.
+ *
+ * Quantum semantic lowering remains:
+ *
+ *     scalar source value
+ *          |
+ *          v
+ *     domain-neutral AST
+ *          |
+ *          v
+ *     semantic analysis
+ *          |
+ *          v
+ *     quantum::ir
+ *
+ * ============================================================================
+ *
+ * HDL / HARDWARE INTEGRATION
+ * ============================================================================
+ *
+ * Scalar values may parameterize:
+ *
+ *     hardware-independent widths
+ *     timing
+ *     resource requirements
+ *     generic hardware structures
+ *     HDL parameters
+ *
+ * A source value such as:
+ *
+ *     1024
+ *
+ * has no machine-specific interpretation until the owning declaration and
+ * semantic layers establish one.
+ *
+ * Scalar.g4 does not decide whether 1024 means:
+ *
+ *     a dimension
+ *     a timing quantity
+ *     a resource quantity
+ *     a mathematical value
+ *     a parameter
+ *
+ * ============================================================================
+ *
+ * RESOURCE INTEGRATION
+ * ============================================================================
+ *
+ * Resource grammar owns resource intent.
+ *
+ * Scalar.g4 only supplies scalar values that resource syntax may consume.
+ *
+ * Distinguish downstream:
+ *
+ *     value
+ *     requirement
+ *     constraint
+ *     capability
+ *     preference
+ *     hint
+ *     implementation decision
+ *
+ * For example, the scalar:
+ *
+ *     1024
+ *
+ * does not itself mean:
+ *
+ *     1024 CPUs
+ *     1024 GPUs
+ *     1024 qubits
+ *     1024 nodes
+ *     1024 bytes
+ *
+ * The surrounding semantic construct establishes the unit and meaning.
+ *
+ * ============================================================================
+ *
+ * MEMORY / OWNERSHIP
+ * ============================================================================
+ *
+ * Scalar.g4 contains no ownership or memory-management syntax.
+ *
+ * It may supply scalar values to:
+ *
+ *     memory sizes
+ *     alignment requirements
+ *     region parameters
+ *     allocation expressions
+ *
+ * Memory semantics remain owned by grammar/memory/ and downstream semantic
+ * analysis.
+ *
+ * ============================================================================
+ *
+ * CONCURRENCY
+ * ============================================================================
+ *
+ * Scalar values may parameterize:
+ *
+ *     task counts
+ *     thresholds
+ *     timing
+ *     queue limits
+ *     partition expressions
+ *
+ * Scalar.g4 does not define concurrency.
+ *
+ * No thread/core count is hard-coded here.
+ *
+ * ============================================================================
+ *
+ * DETERMINISM
+ * ============================================================================
+ *
+ * For a fixed:
+ *
+ *     source token stream
+ *     language version
+ *     grammar version
+ *
+ * this grammar has deterministic parse behavior.
+ *
+ * It contains:
+ *
+ *     no actions
+ *     no semantic predicates
+ *     no runtime queries
+ *     no environment queries
+ *     no hardware queries
+ *     no randomness
+ *     no time dependence
+ *
+ * ============================================================================
+ *
+ * SECURITY
  * ============================================================================
  *
  * This grammar:
  *
- *     - contains no embedded code;
  *     - performs no I/O;
  *     - performs no filesystem access;
  *     - performs no network access;
+ *     - executes no source code;
  *     - performs no evaluation;
- *     - performs no dynamic code execution;
  *     - performs no target selection;
- *     - performs no hardware access.
+ *     - performs no hardware discovery;
+ *     - creates no unsafe Rust;
+ *     - bypasses no semantic safety checks.
  *
- * Literal interpretation must occur in controlled compiler layers.
+ * Macro and metaprogramming layers remain subject to semantic validation.
+ *
+ * ============================================================================
+ *
+ * AST CONTRACT
+ * ============================================================================
+ *
+ * This grammar produces parser structure only.
+ *
+ * The domain-neutral frontend AST should preserve the literal category and
+ * source representation.
+ *
+ * Representative semantic categories are:
+ *
+ *     integer literal
+ *     floating literal
+ *     boolean literal
+ *     character literal
+ *     string literal
+ *     null literal
+ *     scalar reference
+ *
+ * The exact Rust AST type remains owned by the frontend AST implementation.
+ *
+ * Scalar.g4 MUST NOT introduce a second AST hierarchy.
+ *
+ * ============================================================================
+ *
+ * CLASSICAL IR CONTRACT
+ * ============================================================================
+ *
+ * Scalar.g4 has no dependency on classical IR.
+ *
+ * Semantic analysis maps the scalar AST/value into the canonical classical
+ * semantic representation.
+ *
+ * Lowering may subsequently choose:
+ *
+ *     scalar SSA values
+ *     constants
+ *     symbolic values
+ *     vectorized representations
+ *     accelerator representations
+ *     distributed representations
+ *
+ * according to program semantics and available target resources.
+ *
+ * ============================================================================
+ *
+ * QUANTUM IR CONTRACT
+ * ============================================================================
+ *
+ * Scalar.g4 has no dependency on quantum::ir.
+ *
+ * If a scalar is consumed by a quantum operation, the quantum semantic layer
+ * remains responsible for mapping the resulting operation to:
+ *
+ *     quantum::ir
+ *
+ * No quantum IR is created here.
+ *
+ * ============================================================================
+ *
+ * COMPILER / RUNTIME CONTRACT
+ * ============================================================================
+ *
+ * Compiler and runtime decisions remain downstream.
+ *
+ * This grammar does not select:
+ *
+ *     CPU
+ *     GPU
+ *     FPGA
+ *     ASIC
+ *     QPU
+ *     accelerator
+ *     cluster node
+ *     device
+ *     memory bank
+ *     register
+ *     physical address
+ *
+ * POCO-REAF is preserved because source scalar syntax remains target-neutral.
+ *
+ * ============================================================================
+ *
+ * PUBLIC ENTRY POINTS
+ * ============================================================================
+ *
+ * The public leaf entry point is:
+ *
+ *     scalar
+ *
+ * Additional stable classification boundaries are:
+ *
+ *     scalarLiteral
+ *     scalarReference
+ *     numericScalar
+ *     integralScalar
+ *     realScalar
+ *     booleanScalar
+ *     characterScalar
+ *     textScalar
+ *     nullScalar
+ *     compileTimeScalar
+ *     scalarConstant
+ *     scalarConstantOrReference
+ *
+ * Classical integration boundaries:
+ *
+ *     classicalScalar
+ *     classicalNumericScalar
+ *     classicalCompileTimeScalar
+ *
+ * These names are parser contracts.
+ *
+ * Their semantic interpretation belongs downstream.
  *
  * ============================================================================
  */
@@ -509,13 +993,17 @@ options {
 }
 
 
-/* ============================================================================
- * 1. PUBLIC ENTRY POINT
+/*
+ * ============================================================================
+ * 1. PRIMARY SCALAR ENTRY
  * ============================================================================
  *
- * `scalar` is the stable public entry point for the classical scalar domain.
+ * A scalar value is either:
  *
- * It represents a scalar VALUE, not a scalar TYPE.
+ *     - a scalar literal; or
+ *     - a reference whose semantic type may resolve to a scalar.
+ *
+ * Name resolution and type resolution occur downstream.
  *
  * ============================================================================
  */
@@ -526,12 +1014,14 @@ scalar
     ;
 
 
-/* ============================================================================
- * 2. SCALAR LITERAL
+/*
+ * ============================================================================
+ * 2. SCALAR LITERALS
  * ============================================================================
  *
- * A scalar literal is a source-level literal whose semantic value occupies
- * one scalar value position.
+ * This rule classifies canonical literal tokens only.
+ *
+ * Lexical spelling remains owned by grammar/lexer/.
  *
  * ============================================================================
  */
@@ -546,24 +1036,17 @@ scalarLiteral
     ;
 
 
-/* ============================================================================
+/*
+ * ============================================================================
  * 3. INTEGER LITERAL
  * ============================================================================
  *
- * The lexical representation is owned by ZamaniLexer.
+ * INTEGER is the canonical lexer token.
  *
- * This rule performs only parser-level classification.
+ * It may represent decimal, binary, octal, or hexadecimal source syntax
+ * according to grammar/lexer/numeric-literals.g4.
  *
- * Examples accepted by the canonical lexer include forms such as:
- *
- *     0
- *     42
- *     1_000_000
- *     0xFF
- *     0b1010
- *     0o755
- *
- * No width is implied.
+ * No width or signedness is implied here.
  *
  * ============================================================================
  */
@@ -573,20 +1056,12 @@ integerLiteral
     ;
 
 
-/* ============================================================================
+/*
+ * ============================================================================
  * 4. FLOATING-POINT LITERAL
  * ============================================================================
  *
- * The lexer owns the spelling.
- *
- * Examples include:
- *
- *     1.0
- *     0.5
- *     .5
- *     1e9
- *     1.5e-9
- *     1_000.25
+ * FLOAT is the canonical lexer token.
  *
  * Precision and representation remain semantic decisions.
  *
@@ -598,19 +1073,12 @@ floatingLiteral
     ;
 
 
-/* ============================================================================
+/*
+ * ============================================================================
  * 5. BOOLEAN LITERAL
  * ============================================================================
  *
- * Boolean semantics are independent of machine representation.
- *
- * The parser does not decide whether the target represents a boolean using:
- *
- *     one bit
- *     one byte
- *     one word
- *     a predicate register
- *     a vector mask
+ * TRUE and FALSE are canonical lexer tokens.
  *
  * ============================================================================
  */
@@ -621,22 +1089,9 @@ booleanLiteral
     ;
 
 
-/* ============================================================================
- * 6. CHARACTER LITERAL
+/*
  * ============================================================================
- *
- * Character lexical spelling is owned by the lexer.
- *
- * Semantic validation belongs to the frontend/type system.
- *
- * This grammar deliberately does not assume:
- *
- *     ASCII
- *     UTF-8 byte width
- *     UTF-16 code-unit width
- *     UTF-32 representation
- *     fixed machine character size
- *
+ * 6. CHARACTER LITERAL
  * ============================================================================
  */
 
@@ -645,24 +1100,14 @@ characterLiteral
     ;
 
 
-/* ============================================================================
+/*
+ * ============================================================================
  * 7. STRING LITERAL
  * ============================================================================
  *
- * A string is accepted here as a scalar source value because it occupies one
- * source-level scalar value position.
+ * STRING is treated as a source-level scalar value category.
  *
- * This does NOT mean that strings are mathematically scalar values.
- *
- * The distinction is:
- *
- *     parser scalar-value category
- *
- * versus:
- *
- *     semantic numeric scalar category.
- *
- * Semantic analysis retains the actual type.
+ * This does NOT classify strings as numeric scalars.
  *
  * ============================================================================
  */
@@ -672,22 +1117,14 @@ stringLiteral
     ;
 
 
-/* ============================================================================
- * 8. NULL-LIKE LITERALS
+/*
+ * ============================================================================
+ * 8. NIL / NULL LITERAL
  * ============================================================================
  *
- * `nil` and `null` are both currently lexical literal spellings.
+ * Both existing lexical spellings remain accepted.
  *
- * Their semantic equivalence or distinction belongs to the type system.
- *
- * This grammar deliberately does not decide whether they mean:
- *
- *     nullable reference
- *     optional value
- *     unit-like value
- *     absence
- *     sentinel
- *     invalid value
+ * Compatibility/type semantics remain downstream.
  *
  * ============================================================================
  */
@@ -698,25 +1135,18 @@ nullLiteral
     ;
 
 
-/* ============================================================================
+/*
+ * ============================================================================
  * 9. SCALAR REFERENCE
  * ============================================================================
  *
- * A scalar reference is a source identifier used where semantic analysis may
- * establish that the referenced value is scalar.
+ * This is deliberately only an identifier token.
  *
- * The grammar does not resolve the name.
+ * Qualified names, member access, indexing, calls, dereferencing, and other
+ * reference forms belong to the canonical expression/name grammar.
  *
- * The identifier may refer to:
- *
- *     local variable
- *     parameter
- *     constant
- *     module item
- *     imported value
- *     compile-time value
- *     generated value
- *     future domain-defined scalar
+ * Semantic name resolution determines whether the referenced entity is a
+ * scalar value.
  *
  * ============================================================================
  */
@@ -726,17 +1156,15 @@ scalarReference
     ;
 
 
-/* ============================================================================
+/*
+ * ============================================================================
  * 10. NUMERIC SCALAR
  * ============================================================================
  *
- * Stable integration point for consumers that require a scalar known
- * syntactically to be numeric.
+ * Syntactically numeric scalar literals.
  *
- * This is deliberately limited to literal numeric syntax.
- *
- * An identifier may also resolve to a numeric scalar, but that is a semantic
- * property and therefore belongs to semantic analysis.
+ * An identifier is not included because whether an identifier denotes a
+ * numeric value is a semantic/type property.
  *
  * ============================================================================
  */
@@ -747,19 +1175,19 @@ numericScalar
     ;
 
 
-/* ============================================================================
+/*
+ * ============================================================================
  * 11. INTEGRAL SCALAR
  * ============================================================================
  *
- * This is a syntactic classification only.
+ * Syntactic integer classification only.
  *
- * It does not imply:
+ * It does NOT establish:
  *
  *     signedness
  *     width
- *     precision
- *     representation
  *     overflow behavior
+ *     machine representation
  *
  * ============================================================================
  */
@@ -769,13 +1197,12 @@ integralScalar
     ;
 
 
-/* ============================================================================
- * 12. REAL-LIKE SCALAR
+/*
+ * ============================================================================
+ * 12. REAL SCALAR
  * ============================================================================
  *
- * A floating literal is syntactically floating-point.
- *
- * Semantic analysis determines its actual numeric domain.
+ * Syntactic floating-point classification only.
  *
  * ============================================================================
  */
@@ -785,7 +1212,8 @@ realScalar
     ;
 
 
-/* ============================================================================
+/*
+ * ============================================================================
  * 13. BOOLEAN SCALAR
  * ============================================================================
  */
@@ -795,7 +1223,8 @@ booleanScalar
     ;
 
 
-/* ============================================================================
+/*
+ * ============================================================================
  * 14. CHARACTER SCALAR
  * ============================================================================
  */
@@ -805,13 +1234,9 @@ characterScalar
     ;
 
 
-/* ============================================================================
- * 15. TEXT SCALAR
+/*
  * ============================================================================
- *
- * This parser-level classification is intentionally separate from the
- * language's type system.
- *
+ * 15. TEXT SCALAR
  * ============================================================================
  */
 
@@ -820,7 +1245,8 @@ textScalar
     ;
 
 
-/* ============================================================================
+/*
+ * ============================================================================
  * 16. NULL SCALAR
  * ============================================================================
  */
@@ -830,30 +1256,19 @@ nullScalar
     ;
 
 
-/* ============================================================================
- * 17. COMPILE-TIME SCALAR VALUE
+/*
+ * ============================================================================
+ * 17. COMPILE-TIME SCALAR CANDIDATE
  * ============================================================================
  *
- * This rule establishes the parser boundary used by type-level and
- * compile-time facilities.
+ * This rule means:
  *
- * It deliberately accepts:
+ *     syntactically eligible for compile-time scalar analysis.
  *
- *     literal
- *     identifier
+ * It does not perform compile-time evaluation.
  *
- * but does not evaluate them.
- *
- * Examples:
- *
- *     N
- *     Rows
- *     Cols
- *     1024
- *     1.0
- *     true
- *
- * Whether the referenced value is compile-time constant is semantic.
+ * An identifier must be resolved by the compiler to determine whether it is
+ * actually a compile-time value.
  *
  * ============================================================================
  */
@@ -864,107 +1279,15 @@ compileTimeScalar
     ;
 
 
-/* ============================================================================
- * 18. SCALAR VALUE LIST
+/*
+ * ============================================================================
+ * 18. SCALAR CONSTANT
  * ============================================================================
  *
- * This rule is provided for consumers such as:
+ * Literal syntax is the only syntactic form that is intrinsically constant
+ * at the parser level.
  *
- *     scalar parameter lists
- *     compile-time argument lists
- *     value-level generic arguments
- *     configuration values
- *
- * It does not define function-call argument syntax.
- *
- * ============================================================================
- */
-
-scalarValueList
-    : scalar
-      (COMMA scalar)*
-      COMMA?
-    ;
-
-
-/* ============================================================================
- * 19. NUMERIC SCALAR LIST
- * ============================================================================
- *
- * No finite arity is encoded.
- *
- * ============================================================================
- */
-
-numericScalarList
-    : numericScalar
-      (COMMA numericScalar)*
-      COMMA?
-    ;
-
-
-/* ============================================================================
- * 20. COMPILE-TIME SCALAR LIST
- * ============================================================================
- */
-
-compileTimeScalarList
-    : compileTimeScalar
-      (COMMA compileTimeScalar)*
-      COMMA?
-    ;
-
-
-/* ============================================================================
- * 21. SCALAR VALUE GROUP
- * ============================================================================
- *
- * Parentheses belong to the expression/type layers when they affect
- * precedence or type structure.
- *
- * This rule exists only as a semantic grouping boundary for consumers that
- * explicitly need a scalar grouping.
- *
- * ============================================================================
- */
-
-scalarGroup
-    : LPAREN scalar RPAREN
-    ;
-
-
-/* ============================================================================
- * 22. SCALAR VALUE WITH GROUPING
- * ============================================================================
- *
- * This is intentionally NOT recursive expression parsing.
- *
- * It is only:
- *
- *     scalar
- *
- * or:
- *
- *     (scalar)
- *
- * Arithmetic such as `(x + y)` remains owned by the expression grammar.
- *
- * ============================================================================
- */
-
-scalarPrimary
-    : scalar
-    | scalarGroup
-    ;
-
-
-/* ============================================================================
- * 23. SCALAR CONSTANT
- * ============================================================================
- *
- * A scalar constant is syntactically represented by a scalar literal.
- *
- * Whether an identifier denotes a constant is semantic.
+ * Named constants are represented as scalarReference and resolved later.
  *
  * ============================================================================
  */
@@ -974,12 +1297,13 @@ scalarConstant
     ;
 
 
-/* ============================================================================
- * 24. SCALAR CONSTANT OR REFERENCE
+/*
+ * ============================================================================
+ * 19. SCALAR CONSTANT OR REFERENCE
  * ============================================================================
  *
- * This is useful to compile-time consumers without allowing general runtime
- * expressions to leak into the scalar grammar.
+ * Stable boundary for consumers that accept either a literal constant or a
+ * named value.
  *
  * ============================================================================
  */
@@ -990,13 +1314,12 @@ scalarConstantOrReference
     ;
 
 
-/* ============================================================================
- * 25. SCALAR DOMAIN ENTRY FOR CLASSICAL COMPOSITION
+/*
+ * ============================================================================
+ * 20. CLASSICAL SCALAR DOMAIN BOUNDARY
  * ============================================================================
  *
- * Classical.g4 can consume this rule as the scalar-domain boundary.
- *
- * It should not duplicate scalarLiteral alternatives.
+ * Classical.g4 may consume this rule rather than duplicating scalar syntax.
  *
  * ============================================================================
  */
@@ -1006,12 +1329,9 @@ classicalScalar
     ;
 
 
-/* ============================================================================
- * 26. NUMERIC CLASSICAL SCALAR ENTRY
+/*
  * ============================================================================
- *
- * Stable entry point for numerical classical-domain consumers.
- *
+ * 21. CLASSICAL NUMERIC SCALAR DOMAIN BOUNDARY
  * ============================================================================
  */
 
@@ -1020,12 +1340,9 @@ classicalNumericScalar
     ;
 
 
-/* ============================================================================
- * 27. COMPILE-TIME CLASSICAL SCALAR ENTRY
+/*
  * ============================================================================
- *
- * Stable entry point for compile-time/value-parameter consumers.
- *
+ * 22. CLASSICAL COMPILE-TIME SCALAR DOMAIN BOUNDARY
  * ============================================================================
  */
 
@@ -1039,11 +1356,18 @@ classicalCompileTimeScalar
  * INTEGRATION CONTRACT
  * ============================================================================
  *
- * Direct dependencies:
+ * DIRECT DEPENDENCY
+ * -----------------
  *
  *     grammar/antlr/ZamaniLexer.g4
  *
- * Canonical tokens consumed:
+ * through:
+ *
+ *     tokenVocab = ZamaniLexer;
+ *
+ *
+ * EXISTING TOKENS CONSUMED
+ * ------------------------
  *
  *     INTEGER
  *     FLOAT
@@ -1054,31 +1378,55 @@ classicalCompileTimeScalar
  *     NIL
  *     NULL
  *     IDENTIFIER
- *     COMMA
- *     LPAREN
- *     RPAREN
  *
- * No other grammar file is required to understand or generate this grammar.
+ * No new lexer token is required.
  *
- * This makes Scalar.g4 independently completable.
  *
- * ============================================================================
+ * LEXER INTEGRATION
+ * -----------------
+ *
+ * Numeric spelling remains owned by:
+ *
+ *     grammar/lexer/numeric-literals.g4
+ *
+ * String spelling remains owned by:
+ *
+ *     grammar/lexer/string-literals.g4
+ *
+ * Character spelling remains owned by:
+ *
+ *     grammar/lexer/character-literals.g4
+ *
+ * Boolean spelling remains owned by:
+ *
+ *     grammar/lexer/boolean-literals.g4
+ *
+ * Identifier spelling remains owned by:
+ *
+ *     grammar/lexer/identifiers.g4
+ *
+ * The canonical parser-facing lexer remains:
+ *
+ *     ZamaniLexer
+ *
  *
  * CLASSICAL INTEGRATION
- * ============================================================================
+ * ---------------------
  *
- * grammar/classical/classical.g4 should import:
+ * The canonical classical dispatcher is:
  *
- *     Scalar
+ *     grammar/classical/classical.g4
  *
- * and consume:
+ * That grammar should import Scalar through its ANTLR grammar-composition
+ * mechanism and consume:
  *
  *     classicalScalar
  *     classicalNumericScalar
  *     classicalCompileTimeScalar
  *
- * It MUST NOT recreate:
+ * It MUST NOT redefine:
  *
+ *     scalarLiteral
  *     integerLiteral
  *     floatingLiteral
  *     booleanLiteral
@@ -1087,168 +1435,373 @@ classicalCompileTimeScalar
  *     nullLiteral
  *     scalarReference
  *
- * ============================================================================
  *
- * TYPE INTEGRATION
- * ============================================================================
+ * ROOT PARSER INTEGRATION
+ * -----------------------
  *
- * grammar/types/* may consume scalar-related value boundaries where a
- * type-level value is permitted.
+ * The universal parser composition root is:
  *
- * Scalar.g4 does NOT import Types.g4.
+ *     grammar/antlr/ZamaniParser.g4
  *
- * This direction is intentional:
+ * Its existing architecture imports:
  *
- *     scalar
- *        |
- *        v
- *     type/value consumer
+ *     Classical
  *
- * rather than:
+ * rather than importing every classical leaf grammar directly.
  *
- *     scalar <-> types
+ * Therefore the intended dependency direction is:
  *
- * This prevents a circular parser dependency.
+ *     Scalar
+ *       |
+ *       v
+ *     Classical
+ *       |
+ *       v
+ *     ZamaniParser
  *
- * ============================================================================
+ * not:
+ *
+ *     Scalar -> ZamaniParser
+ *
  *
  * EXPRESSION INTEGRATION
- * ============================================================================
+ * ----------------------
  *
- * The general expression grammar may use:
+ * grammar/expressions/ owns:
  *
- *     scalar
+ *     expression
+ *     unary expressions
+ *     binary expressions
+ *     calls
+ *     indexing
+ *     member access
+ *     assignments
+ *     ranges
+ *     precedence
  *
- * as a primary-value category.
+ * Scalar.g4 intentionally does not import Expressions.
  *
- * Scalar.g4 does NOT import or redefine the general expression grammar.
+ * This prevents a circular parser dependency:
  *
- * Therefore expression precedence remains centralized.
+ *     Expressions -> Scalar
+ *     Scalar -> Expressions
  *
- * ============================================================================
+ * A general expression can consume the scalar-value boundary through the
+ * canonical expression composition layer.
  *
- * AST INTEGRATION
- * ============================================================================
  *
- * Parser output must map to the existing frontend AST representation.
+ * TYPE INTEGRATION
+ * ----------------
  *
- * Recommended semantic categories:
+ * grammar/types/ owns type syntax.
  *
- *     IntegerLiteral
- *     FloatingLiteral
- *     BooleanLiteral
- *     CharacterLiteral
- *     StringLiteral
- *     NullLiteral
- *     ScalarReference
+ * Scalar.g4 does not import Types.
  *
- * The grammar itself must not construct Rust AST objects.
+ * Type/value parameterization may consume the scalar compile-time boundary
+ * through the canonical composition architecture, without making Scalar.g4
+ * responsible for type parsing.
  *
- * ============================================================================
  *
- * CLASSICAL IR INTEGRATION
- * ============================================================================
+ * DECLARATION INTEGRATION
+ * -----------------------
  *
- * Scalar.g4 does not depend on classical IR.
+ * Declarations remain owned by:
  *
- * The frontend/semantic layer maps scalar syntax into the canonical
- * classical/value representation.
+ *     grammar/declarations/
  *
- * Literal representation must preserve enough source information to support:
+ * Scalar.g4 does not define:
  *
- *     exactness
- *     diagnostics
- *     constant evaluation
- *     deterministic lowering
- *     reproducibility
- *     provenance
+ *     let
+ *     var
+ *     const
+ *     parameter declarations
+ *     fields
+ *     function declarations
  *
- * ============================================================================
+ *
+ * MEMORY / RESOURCE INTEGRATION
+ * -----------------------------
+ *
+ * Scalar values may be consumed by:
+ *
+ *     grammar/memory/
+ *     grammar/resources/
+ *     grammar/hardware/
+ *     grammar/compile/
+ *     grammar/execution/
+ *
+ * The surrounding grammar establishes semantic units and meaning.
+ *
  *
  * QUANTUM INTEGRATION
- * ============================================================================
+ * -------------------
  *
- * Scalar.g4 has NO dependency on quantum::ir.
+ * Quantum grammar may consume scalar values for:
  *
- * Classical scalar values may nevertheless be consumed by quantum syntax,
- * for example as gate parameters or classical control conditions.
+ *     operation parameters
+ *     phase values
+ *     coefficients
+ *     probabilities
+ *     thresholds
+ *     classical control conditions
  *
- * The dependency direction remains:
+ * The quantum layer remains responsible for:
  *
- *     scalar syntax
- *          |
- *          v
- *     semantic analysis
- *          |
- *          v
- *     quantum frontend
- *          |
- *          v
+ *     operation semantics
+ *     quantum types
+ *     measurement
+ *     routing
+ *     scheduling
+ *     resilience
+ *     QEC
+ *     ZQN
+ *     HAL
+ *
+ * and eventually lowers through:
+ *
  *     quantum::ir
  *
- * Scalar.g4 MUST NOT import quantum::ir or quantum parser semantics.
+ * Scalar.g4 creates no quantum IR.
+ *
+ *
+ * HDL / HARDWARE INTEGRATION
+ * --------------------------
+ *
+ * HDL/hardware grammars may consume scalar values as parameters.
+ *
+ * Scalar.g4 does not define:
+ *
+ *     wire widths
+ *     register widths
+ *     device counts
+ *     physical addresses
+ *     topology
+ *     implementation resources
+ *
+ * Those meanings belong to the owning semantic domains.
+ *
+ *
+ * AST INTEGRATION
+ * ---------------
+ *
+ * Parser contexts from this grammar are mapped by the frontend into the
+ * existing domain-neutral AST/value representation.
+ *
+ * This file does not create Rust AST objects.
+ *
+ * No new scalar-specific IR is permitted merely because this grammar exists.
+ *
+ *
+ * CLASSICAL IR INTEGRATION
+ * ------------------------
+ *
+ * Scalar syntax is lowered by semantic analysis into the repository's
+ * canonical classical/value representation.
+ *
+ * Possible downstream realizations include:
+ *
+ *     constant
+ *     symbolic value
+ *     SSA value
+ *     vectorized value
+ *     accelerator value
+ *     distributed value
+ *
+ * without changing the source grammar.
+ *
+ *
+ * QUANTUM IR INTEGRATION
+ * ----------------------
+ *
+ * If a scalar participates in a quantum operation:
+ *
+ *     scalar syntax
+ *         ->
+ *     frontend AST
+ *         ->
+ *     semantic analysis
+ *         ->
+ *     quantum::ir
+ *
+ * No second quantum IR is introduced.
+ *
+ *
+ * COMPILER / RUNTIME INTEGRATION
+ * ------------------------------
+ *
+ * This file provides source syntax only.
+ *
+ * Compiler/runtime layers determine:
+ *
+ *     representation
+ *     placement
+ *     vectorization
+ *     parallelization
+ *     accelerator use
+ *     device selection
+ *     memory placement
+ *     scheduling
+ *     deployment
+ *
+ * according to semantics, capabilities, constraints, requirements,
+ * preferences, hints, and available resources.
  *
  * ============================================================================
  *
- * HARDWARE INTEGRATION
+ * TEST CONTRACT
  * ============================================================================
  *
- * Scalar syntax is hardware-independent.
+ * POSITIVE
+ * --------
  *
- * A scalar parameter may eventually become:
+ * Integer:
  *
- *     CPU value
- *     GPU value
- *     FPGA parameter
- *     ASIC parameter
- *     QPU control parameter
- *     HDL constant
+ *     0
+ *     42
+ *     1_000_000
+ *     0b1010
+ *     0o755
+ *     0xFF
  *
- * The grammar must not distinguish those representations.
+ * Floating:
  *
- * ============================================================================
+ *     0.0
+ *     1.0
+ *     .5
+ *     1.
+ *     1e10
+ *     1.5e-9
+ *     .5e2
+ *     1.e2
  *
- * RESOURCE INTEGRATION
- * ============================================================================
+ * Boolean:
  *
- * Scalar values may be used as:
+ *     true
+ *     false
  *
- *     symbolic dimensions
- *     thresholds
- *     timing values
- *     resource constraints
- *     capability parameters
- *     performance parameters
+ * Character:
  *
- * Resource semantics remain outside this file.
+ *     'a'
+ *     'λ'
+ *     '\n'
+ *     '\u03BB'
  *
- * ============================================================================
+ * String:
+ *
+ *     ""
+ *     "hello"
+ *     "Zamani"
+ *
+ * Null:
+ *
+ *     nil
+ *     null
+ *
+ * References:
+ *
+ *     value
+ *     _value
+ *     scientific_value
+ *
+ *
+ * CLASSIFICATION
+ * --------------
+ *
+ * The following must parse through their respective boundaries:
+ *
+ *     numericScalar
+ *     integralScalar
+ *     realScalar
+ *     booleanScalar
+ *     characterScalar
+ *     textScalar
+ *     nullScalar
+ *
+ *
+ * NEGATIVE
+ * --------
+ *
+ * These must not become valid scalar literals through this grammar:
+ *
+ *     malformed numeric spellings
+ *     malformed strings
+ *     malformed characters
+ *     unterminated literals
+ *     invalid identifier spellings
+ *
+ * Their diagnostics belong to the canonical lexer/parser error architecture.
+ *
+ *
+ * EXPRESSION SEPARATION
+ * ---------------------
+ *
+ * The scalar grammar must NOT independently parse:
+ *
+ *     1 + 2
+ *     -42
+ *     x * 4
+ *     a < b
+ *     f(42)
+ *     x[0]
+ *     x.field
+ *
+ * Those belong to the expression grammar.
+ *
+ *
+ * BOUNDARY
+ * --------
+ *
+ * Tests must cover source values substantially larger than common native
+ * machine widths to verify that scalar.g4 imposes no artificial width limit.
+ *
+ * For example, lexical acceptance must not change merely because a numeric
+ * literal exceeds:
+ *
+ *     32 bits
+ *     64 bits
+ *     host usize
+ *
+ * Semantic representability is tested downstream.
+ *
+ *
+ * SCALABILITY
+ * -----------
+ *
+ * Tests must verify that the grammar itself contains no fixed:
+ *
+ *     scalar width
+ *     scalar precision
+ *     identifier length
+ *     literal digit count
+ *     resource count
+ *
+ * Practical parser/resource limits belong to implementation policy.
+ *
+ *
+ * CROSS-DOMAIN
+ * -----------
+ *
+ * At minimum test scalar values consumed as:
+ *
+ *     classical values
+ *     quantum parameters
+ *     HDL parameters
+ *     hardware-independent requirements
+ *     resource values
+ *     compile-time dimensions
+ *     distributed configuration values
+ *
  *
  * DETERMINISM
- * ============================================================================
+ * -----------
  *
- * Parsing the same token stream with the same grammar version must produce
- * the same parse structure.
+ * Identical:
  *
- * There are:
+ *     source
+ *     language version
+ *     grammar version
  *
- *     no actions
- *     no predicates
- *     no environment queries
- *     no target queries
- *     no runtime queries
- *
- * ============================================================================
- *
- * COMPATIBILITY
- * ============================================================================
- *
- * Existing literal spellings remain delegated to the canonical lexer.
- *
- * Adding future scalar semantic types must not require changing this grammar
- * when the value syntax remains one of the existing literal categories.
- *
- * New literal syntax requires a lexer/specification change first.
+ * must produce identical lexical classification and parse structure.
  *
  * ============================================================================
  *
@@ -1258,110 +1811,140 @@ classicalCompileTimeScalar
  * This file contains no:
  *
  *     MAX_*
- *     fixed scalar widths
- *     fixed precision
- *     fixed number of scalar arguments
+ *     fixed scalar width
+ *     fixed scalar precision
+ *     fixed digit count
  *     fixed identifier length
- *     fixed literal digit count
- *     machine architecture
- *     hardware identifier
- *     device identifier
- *     topology
- *     memory size
  *     CPU count
  *     GPU count
+ *     FPGA count
  *     QPU count
+ *     qubit count
+ *     node count
+ *     memory capacity
+ *     register width
+ *     SIMD width
+ *     topology
+ *     device identifier
+ *     physical address
+ *     vendor-specific instruction
  *
  * ============================================================================
  *
- * TEST CONTRACT
+ * RUST SAFETY CONTRACT
  * ============================================================================
  *
- * Positive:
+ * This grammar contains no Rust actions.
  *
- *     0
- *     42
- *     1_000_000
- *     0xFF
- *     0b1010
- *     0o755
- *     1.0
- *     .5
- *     1e9
- *     1.5e-9
- *     true
- *     false
- *     'a'
- *     "hello"
- *     nil
- *     null
- *     value
- *     _value
- *     scientific_value
+ * The Rust implementation consuming it must remain compatible with:
  *
- * Negative:
+ *     Rust 1.97
+ *     Rust 1.97.1
+ *     Rust 2021
  *
- *     malformed numeric literals
- *     malformed character literals
- *     malformed strings
- *     unterminated literals
- *     invalid token spellings
+ * and must use safe Rust only.
  *
- * Boundary:
- *
- *     very long integer literal
- *     very long floating literal
- *     very long identifier
- *     deeply nested scalar grouping within compiler resource policy
- *
- * Cross-domain:
- *
- *     classical scalar used as quantum parameter
- *     scalar used as HDL parameter
- *     scalar used as resource expression
- *     scalar used as compile-time dimension
- *     scalar used in distributed configuration
- *
- * Determinism:
- *
- *     identical source -> identical token classification and parse tree
+ * No `unsafe` implementation is required for this grammar.
  *
  * ============================================================================
  *
  * COMPLETION CRITERIA
  * ============================================================================
  *
- * This file is complete when:
+ * Scalar.g4 is complete when:
  *
- *     1. It consumes only canonical lexer tokens.
+ *     [x] It has one clear ownership responsibility.
  *
- *     2. It compiles independently as an ANTLR parser grammar.
+ *     [x] It consumes the canonical ZamaniLexer vocabulary.
  *
- *     3. It contains no embedded target-language code.
+ *     [x] It does not define lexer tokens.
  *
- *     4. It contains no artificial machine/resource limits.
+ *     [x] It does not duplicate numeric/string/character/boolean lexical
+ *         syntax.
  *
- *     5. It does not duplicate general expression precedence.
+ *     [x] It does not define expression precedence.
  *
- *     6. It does not duplicate type syntax.
+ *     [x] It does not define type syntax.
  *
- *     7. It does not duplicate lexical syntax.
+ *     [x] It does not define declaration syntax.
  *
- *     8. It exposes stable scalar-domain parser entry points.
+ *     [x] It does not define collection syntax.
  *
- *     9. Classical.g4 can compose it without recreating scalar rules.
+ *     [x] It does not define quantum gate syntax.
  *
- *    10. Type/value consumers can use its compile-time scalar boundary
- *        without importing the general expression grammar.
+ *     [x] It does not define HDL syntax.
  *
- *    11. Semantic analysis can distinguish literal categories without
- *        requiring parser changes for hardware targets.
+ *     [x] It does not define hardware topology.
  *
- *    12. Quantum, HDL, hardware, distributed and future domains can consume
- *        scalar values without introducing machine-specific scalar syntax.
+ *     [x] It does not define resource limits.
  *
- *    13. Positive, negative, boundary, cross-domain and determinism tests
- *        pass.
+ *     [x] It does not construct IR.
+ *
+ *     [x] It does not construct AST objects.
+ *
+ *     [x] It does not contain Rust actions.
+ *
+ *     [x] It does not contain unsafe code.
+ *
+ *     [x] It preserves existing canonical token names.
+ *
+ *     [x] It preserves NIL/NULL compatibility.
+ *
+ *     [x] It provides stable scalar classification boundaries.
+ *
+ *     [x] It remains target-independent.
+ *
+ *     [x] It remains compatible with POCO-REAF.
+ *
+ *     [ ] Classical.g4 imports this grammar through the canonical ANTLR
+ *         composition mechanism.
+ *
+ *     [ ] Scalar-specific conformance tests are wired into grammar/tests/.
+ *
+ * The final two items are repository integration tasks, not responsibilities
+ * of this leaf grammar itself.
+ *
+ * ============================================================================
+ *
+ * FINAL INVARIANT
+ * ============================================================================
+ *
+ * Scalar.g4 answers exactly one question:
+ *
+ *     "Which source-level value forms are scalar-value candidates?"
+ *
+ * It does NOT answer:
+ *
+ *     "How wide is the value?"
+ *     "Where is it stored?"
+ *     "Which machine executes it?"
+ *     "Which device receives it?"
+ *     "How is it optimized?"
+ *     "How is it scheduled?"
+ *     "How is it represented physically?"
+ *
+ * Those questions remain downstream.
+ *
+ * Therefore the same scalar source syntax can participate in:
+ *
+ *     tiny systems
+ *     embedded systems
+ *     CPUs
+ *     multicore CPUs
+ *     GPUs
+ *     FPGAs
+ *     ASICs
+ *     accelerators
+ *     QPUs
+ *     quantum simulators
+ *     clusters
+ *     HPC systems
+ *     distributed systems
+ *     cloud systems
+ *     future computational substrates
+ *
+ * subject only to the semantics and resources of the actual compilation and
+ * execution environment.
  *
  * ============================================================================
  */
