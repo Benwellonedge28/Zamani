@@ -1,4 +1,4 @@
-Below is the production-ready grammar/concurrency/README.md. It treats concurrency/ as a modular grammar domain, keeps concurrency.g4 as its composition boundary, prevents duplicate syntax ownership, preserves the existing token strategy, and defines integration contracts in advance so each child grammar can be completed independently.
+
 
 # Zamani Concurrency Grammar
 
