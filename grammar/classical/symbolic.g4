@@ -7,7 +7,7 @@
  *     grammar/classical/symbolic.g4
  *
  * Status:
- *     Production-ready symbolic-computation parser grammar.
+ *     Production-ready symbolic-domain parser boundary.
  *
  * Grammar technology:
  *     ANTLR4 parser grammar
@@ -15,6 +15,7 @@
  * Implementation baseline:
  *     Rust 1.97 / Rust 1.97.1
  *     Rust edition 2021
+ *     Safe Rust only
  *
  * Safety:
  *     - No embedded Rust actions.
@@ -22,146 +23,92 @@
  *     - No target-specific code.
  *     - No filesystem access.
  *     - No network access.
- *     - No runtime evaluation.
  *     - No hardware access.
+ *     - No runtime execution.
  *     - No unsafe Rust.
  *
  * ============================================================================
  * PURPOSE
  * ============================================================================
  *
- * This file owns the SOURCE-LEVEL SYMBOLIC COMPUTATION SYNTAX.
+ * This file defines the CLASSICAL SYMBOLIC COMPUTATION DOMAIN BOUNDARY.
  *
- * Symbolic computation means that a program may describe mathematical
- * quantities, expressions, relations, transformations, functions, domains,
- * and symbolic operations without requiring those quantities to be evaluated
- * during parsing.
+ * Symbolic computation is intentionally represented using Zamani's canonical
+ * expression language.
  *
- * The grammar supports symbolic computation as a language-level abstraction
- * while leaving symbolic meaning and evaluation to later compiler stages.
+ * This file does NOT create a second expression language.
  *
- * Symbolic syntax may therefore be used for:
+ * The canonical expression grammar owns:
  *
- *     - algebra;
- *     - symbolic arithmetic;
- *     - symbolic equations;
- *     - symbolic inequalities;
- *     - symbolic functions;
- *     - symbolic parameters;
- *     - symbolic constants;
- *     - symbolic differentiation;
- *     - symbolic integration;
- *     - symbolic summation;
- *     - symbolic products;
- *     - symbolic limits;
- *     - symbolic substitutions;
- *     - symbolic simplification;
- *     - symbolic expansion;
- *     - symbolic factorization;
- *     - symbolic transformations;
- *     - symbolic constraints;
- *     - symbolic domains;
- *     - symbolic numerical computation;
- *     - symbolic tensor/vector/matrix expressions;
- *     - compile-time symbolic computation;
- *     - runtime symbolic computation;
- *     - scientific computing;
- *     - optimization;
- *     - AI/ML mathematical expressions;
- *     - quantum parameter expressions;
- *     - hardware parameter expressions;
- *     - resource expressions.
+ *     expression
+ *     assignment
+ *     conditional expressions
+ *     ranges
+ *     logical operators
+ *     bitwise operators
+ *     equality
+ *     relational operators
+ *     shifts
+ *     arithmetic
+ *     prefix operators
+ *     postfix operators
+ *     calls
+ *     indexing
+ *     member access
+ *     literals
+ *     aggregates
+ *     lambdas
  *
- * This file does NOT implement symbolic mathematics.
- *
- * For example, names such as:
- *
- *     sin
- *     cos
- *     tan
- *     exp
- *     log
- *     sqrt
- *     abs
- *     diff
- *     integrate
- *     simplify
- *     factor
- *     expand
- *     substitute
- *
- * are deliberately not hard-coded into the grammar as the only valid
- * symbolic operations.
- *
- * They may be:
- *
- *     library functions;
- *     user functions;
- *     compiler intrinsics;
- *     dialect operations;
- *     symbolic-system operations;
- *     accelerator operations;
- *     future mathematical operations.
+ * Symbolic semantics are determined after parsing.
  *
  * ============================================================================
  * ARCHITECTURAL POSITION
  * ============================================================================
  *
- *     Zamani source
- *          |
- *          v
+ *     source
+ *       |
+ *       v
  *     ZamaniLexer
- *          |
- *          v
- *     parser
- *          |
- *          v
+ *       |
+ *       v
+ *     canonical parser
+ *       |
+ *       v
  *     Expressions
- *          |
- *          v
+ *       |
+ *       v
  *     Symbolic
- *          |
- *          v
- *     frontend AST
- *          |
- *          v
- *     name resolution
- *          |
- *          v
- *     type / effect / capability analysis
- *          |
- *          v
- *     symbolic semantic model
- *          |
- *          +--> classical semantic representation
- *          +--> numerical semantic representation
- *          +--> tensor/data representation
- *          +--> constraint representation
- *          +--> resource metadata
- *          +--> compile-time representation
- *          |
- *          v
- *     canonical IR
- *          |
- *          v
- *     optimization / lowering
- *          |
- *          v
- *     target realization
+ *       |
+ *       v
+ *     domain-neutral frontend AST
+ *       |
+ *       v
+ *     name / type / effect / capability analysis
+ *       |
+ *       v
+ *     symbolic semantic interpretation
+ *       |
+ *       v
+ *     canonical semantic model / IR
+ *       |
+ *       +--------------------+--------------------+
+ *       |                    |                    |
+ *       v                    v                    v
+ *   classical            quantum::ir       other domains
+ *       |                    |                    |
+ *       +--------------------+--------------------+
+ *                            |
+ *                            v
+ *                     optimization/lowering
+ *                            |
+ *                     routing/scheduling
+ *                            |
+ *                     resource analysis
+ *                            |
+ *                            v
+ *                       target realization
  *
- * IMPORTANT:
- *
- * This grammar does NOT directly construct:
- *
- *     classical IR
- *     quantum::ir
- *     HDL IR
- *     hardware state
- *     scheduling state
- *     routing state
- *     QEC state
- *     ZQN state
- *     runtime state
+ * Symbolic.g4 MUST NOT bypass the canonical frontend AST or semantic model.
  *
  * ============================================================================
  * OWNERSHIP
@@ -169,268 +116,316 @@
  *
  * THIS FILE OWNS:
  *
- *     - symbolic-domain parser composition;
- *     - symbolic expression classification;
- *     - symbolic declaration composition;
- *     - symbolic binding composition;
- *     - symbolic assignment composition;
- *     - symbolic expression statements;
- *     - symbolic equations;
- *     - symbolic relations;
- *     - symbolic function expressions;
- *     - symbolic operation composition;
- *     - symbolic transformation composition;
- *     - symbolic substitution composition;
- *     - symbolic differentiation composition;
- *     - symbolic integration composition;
- *     - symbolic summation composition;
- *     - symbolic product composition;
- *     - symbolic limit composition;
- *     - symbolic range/domain composition;
- *     - symbolic sequence composition;
- *     - symbolic constraint composition;
- *     - symbolic-domain integration points.
+ *     - the classical symbolic-domain entry point;
+ *     - symbolic-domain expression classification;
+ *     - symbolic-domain semantic composition points.
  *
  * THIS FILE DOES NOT OWN:
  *
  *     - lexer rules;
  *     - token spelling;
- *     - identifier spelling;
- *     - numeric literal spelling;
- *     - string literal spelling;
- *     - character literal spelling;
- *     - operator precedence;
- *     - general expression syntax;
- *     - general assignment syntax;
- *     - general type syntax;
- *     - classical type definitions;
- *     - vector types;
- *     - matrix types;
- *     - tensor types;
- *     - numerical algorithms;
+ *     - keywords;
+ *     - identifiers;
+ *     - qualified names;
+ *     - literals;
+ *     - arithmetic precedence;
+ *     - unary operators;
+ *     - binary operators;
+ *     - assignment;
+ *     - calls;
+ *     - indexing;
+ *     - member access;
+ *     - ranges;
+ *     - collections;
+ *     - declarations;
+ *     - statements;
+ *     - function declarations;
+ *     - type declarations;
  *     - symbolic evaluation;
- *     - symbolic simplification algorithms;
+ *     - symbolic simplification;
  *     - theorem proving;
- *     - equation solving algorithms;
+ *     - equation solving;
  *     - differentiation algorithms;
  *     - integration algorithms;
- *     - numerical precision;
- *     - numerical representation;
- *     - memory allocation;
- *     - parallelization;
- *     - accelerator selection;
- *     - CPU selection;
- *     - GPU selection;
- *     - FPGA selection;
- *     - ASIC selection;
- *     - quantum hardware;
+ *     - numerical algorithms;
+ *     - tensor algorithms;
+ *     - matrix algorithms;
+ *     - vector algorithms;
+ *     - optimization algorithms;
+ *     - resource management;
+ *     - scheduling;
+ *     - routing;
+ *     - hardware selection;
+ *     - quantum operations;
  *     - quantum::ir;
  *     - QEC;
  *     - ZQN;
- *     - scheduling;
- *     - routing;
- *     - optimization implementation;
+ *     - HAL;
  *     - runtime execution.
  *
  * ============================================================================
- * POCO-REAF
+ * SINGLE-AUTHORITY RULE
  * ============================================================================
  *
- * Symbolic source describes mathematical and computational intent.
+ * There MUST be exactly one authoritative expression hierarchy.
  *
- * It MUST NOT encode:
+ * That authority is:
  *
- *     MAX_SYMBOLS
- *     MAX_VARIABLES
- *     MAX_TERMS
- *     MAX_FACTORS
- *     MAX_POLYNOMIAL_DEGREE
- *     MAX_EXPRESSION_SIZE
- *     MAX_EXPRESSION_DEPTH
- *     MAX_FUNCTION_ARGUMENTS
- *     MAX_DERIVATIVE_ORDER
- *     MAX_INTEGRATION_ORDER
- *     MAX_SUMMATION_RANGE
- *     MAX_PRODUCT_RANGE
- *     MAX_MATRIX_SIZE
- *     MAX_TENSOR_RANK
- *     MAX_PRECISION
- *     MAX_DIGITS
- *     MAX_BITS
- *     MAX_THREADS
- *     MAX_CORES
- *     MAX_GPUS
- *     MAX_ACCELERATORS
- *     MAX_MEMORY
- *     MAX_DEVICES
+ *     grammar/expressions/expressions.g4
  *
- * No symbolic rule selects:
+ * Symbolic.g4 MUST NOT redefine:
  *
- *     a processor;
- *     a machine word size;
- *     a register size;
- *     a vector width;
- *     a GPU;
- *     an accelerator;
- *     a quantum processor;
- *     a hardware topology;
- *     a memory capacity;
- *     a deployment topology.
+ *     expression
+ *     additiveExpression
+ *     multiplicativeExpression
+ *     prefixExpression
+ *     postfixExpression
+ *     equalityExpression
+ *     relationalExpression
+ *     assignmentExpression
  *
- * Practical limits belong to explicit implementation/resource policies.
- *
- * ============================================================================
- * SCALABILITY
- * ============================================================================
- *
- * Symbolic structures are represented structurally.
- *
- * Examples:
- *
- *     x + y
- *
- *     f(x)
- *
- *     f(x, y, z, ...)
- *
- *     sum(f(i), i, domain)
- *
- *     product(g(i), i, domain)
- *
- *     derivative(f, x)
- *
- *     integral(f, x)
- *
- *     limit(f, x, a)
- *
- *     substitute(expression, x, replacement)
- *
- *     equation(lhs, rhs)
- *
- * Symbolic domains may be represented using arbitrary expressions.
- *
- * The grammar imposes no mathematical bound on:
- *
- *     - number of symbols;
- *     - number of terms;
- *     - number of operations;
- *     - function arity;
- *     - derivative order;
- *     - integral nesting;
- *     - summation nesting;
- *     - product nesting;
- *     - domain magnitude;
- *     - symbolic dimension;
- *     - expression count.
+ * Symbolic computation therefore uses the exact same expression semantics as
+ * every other Zamani domain.
  *
  * ============================================================================
  * LEXER CONTRACT
  * ============================================================================
  *
- * This is a PARSER grammar.
+ * This is a parser grammar.
  *
- * It consumes the canonical lexical vocabulary from:
+ * The canonical lexer is:
  *
  *     grammar/antlr/ZamaniLexer.g4
  *
- * through:
- *
- *     options {
- *         tokenVocab = ZamaniLexer;
- *     }
+ * All lexical tokens are supplied by that lexer.
  *
  * This file MUST NOT declare lexer rules.
  *
- * Symbolic operation names remain ordinary identifiers unless the canonical
- * language specification explicitly reserves a keyword.
+ * Symbolic mathematical names remain identifiers.
  *
  * Therefore names such as:
  *
  *     sin
  *     cos
+ *     tan
+ *     exp
+ *     log
+ *     sqrt
  *     diff
+ *     derivative
  *     integrate
+ *     integral
+ *     limit
+ *     sum
+ *     product
  *     simplify
- *     factor
  *     expand
+ *     factor
  *     substitute
  *     solve
  *     determinant
+ *     transpose
  *
- * are not required to be lexer keywords.
+ * are NOT hard-coded as an exhaustive symbolic keyword list.
  *
- * ============================================================================
- * EXPRESSION CONTRACT
- * ============================================================================
+ * They may be:
  *
- * General expressions are owned by:
- *
- *     grammar/expressions/expressions.g4
- *
- * Symbolic grammar must not create a second arithmetic-precedence hierarchy.
- *
- * Therefore:
- *
- *     x + y
- *     x * y
- *     -x
- *     x < y
- *     x == y
- *     f(x)
- *     a[i]
- *     object.member
- *
- * remain ordinary Zamani expressions.
- *
- * This grammar only adds symbolic-domain composition around those expressions.
+ *     - standard-library functions;
+ *     - user functions;
+ *     - compiler intrinsics;
+ *     - symbolic-system operations;
+ *     - dialect operations;
+ *     - future operations.
  *
  * ============================================================================
  * TYPE CONTRACT
  * ============================================================================
  *
- * Symbolic VALUE syntax is different from symbolic TYPE syntax.
+ * Symbolic.g4 does not define symbolic types.
  *
- * This file does not define symbolic types.
+ * Type syntax belongs to:
  *
- * Type syntax remains owned by the canonical type grammar.
+ *     grammar/types/
  *
- * A symbolic expression may therefore eventually have a type such as:
+ * Examples of semantic types that may eventually participate in symbolic
+ * computation include:
  *
  *     Integer
  *     Float
  *     Complex
  *     Rational
  *     Vector<T>
- *     Matrix<T, R, C>
+ *     Matrix<T, Shape>
  *     Tensor<T, Shape>
  *     Symbolic<T>
+ *     Function<...>
  *
- * without requiring this grammar to redefine those types.
- *
- * ============================================================================
- * SEMANTIC BOUNDARY
- * ============================================================================
- *
- * The parser MUST NOT decide:
- *
- *     - whether an expression is mathematically valid;
- *     - whether a symbol is declared;
- *     - whether a function exists;
- *     - whether a function is differentiable;
- *     - whether an integral exists;
- *     - whether an equation has a solution;
- *     - whether a transformation is valid;
- *     - whether an expression can be simplified;
- *     - whether evaluation terminates;
- *     - whether a numerical approximation is stable;
- *     - whether an expression is exact;
- *     - whether a symbolic result is representable;
- *     - whether an operation is compile-time evaluable.
- *
- * Those decisions belong downstream semantic/compiler systems.
+ * The grammar does not impose representation limits on those types.
  *
  * ============================================================================
- * CROSS-DOMAIN CONTRACT
+ * SEMANTIC CONTRACT
+ * ============================================================================
+ *
+ * Parsing determines structure.
+ *
+ * Semantic analysis determines meaning.
+ *
+ * The parser MUST NOT decide whether:
+ *
+ *     - an identifier denotes a symbol;
+ *     - a function is differentiable;
+ *     - an expression is integrable;
+ *     - an equation is solvable;
+ *     - a transformation is valid;
+ *     - a symbolic expression is exact;
+ *     - a numerical approximation is stable;
+ *     - an operation terminates;
+ *     - an expression can be simplified;
+ *     - a symbolic value can be represented by a selected backend.
+ *
+ * Those decisions belong downstream.
+ *
+ * ============================================================================
+ * SYMBOLIC OPERATION MODEL
+ * ============================================================================
+ *
+ * Symbolic operations are ordinary Zamani expressions.
+ *
+ * For example, all of the following can be represented without changing the
+ * grammar:
+ *
+ *     sin(x)
+ *     derivative(f, x)
+ *     integrate(f, x)
+ *     simplify(x + x)
+ *     factor(p)
+ *     expand(p)
+ *     substitute(e, x, y)
+ *     solve(equation, x)
+ *     determinant(A)
+ *     transpose(A)
+ *
+ * The parser does not need a separate rule for every mathematical operation.
+ *
+ * This is critical for extensibility.
+ *
+ * A future operation such as:
+ *
+ *     future_symbolic_operation(...)
+ *
+ * does not require a grammar change merely because the operation is new.
+ *
+ * ============================================================================
+ * EQUATIONS AND RELATIONS
+ * ============================================================================
+ *
+ * Equations and mathematical relations use the canonical expression
+ * comparison/equality syntax.
+ *
+ * Symbolic.g4 MUST NOT introduce another equality or relational operator
+ * vocabulary.
+ *
+ * For example:
+ *
+ *     lhs == rhs
+ *     x < y
+ *     x <= y
+ *     x > y
+ *     x >= y
+ *
+ * remain ordinary Zamani expressions.
+ *
+ * Whether such an expression is interpreted semantically as:
+ *
+ *     boolean comparison
+ *     mathematical equation
+ *     symbolic constraint
+ *     proof obligation
+ *     optimization constraint
+ *     resource constraint
+ *
+ * is determined downstream.
+ *
+ * ============================================================================
+ * CALCULUS
+ * ============================================================================
+ *
+ * Calculus is represented through ordinary symbolic expressions and calls.
+ *
+ * Examples:
+ *
+ *     derivative(f, x)
+ *     derivative(f, x, order)
+ *     integral(f, x)
+ *     integral(f, x, lower, upper)
+ *     limit(f, x, value)
+ *     gradient(f, x)
+ *     jacobian(f, x)
+ *     hessian(f, x)
+ *
+ * The grammar does not implement calculus.
+ *
+ * The grammar does not reserve these names.
+ *
+ * The symbolic semantic subsystem determines their meaning.
+ *
+ * ============================================================================
+ * ALGEBRA
+ * ============================================================================
+ *
+ * Algebraic computation uses canonical Zamani expressions.
+ *
+ * Examples:
+ *
+ *     x + y
+ *     x * y
+ *     x / y
+ *     x ^ y
+ *
+ * where an exponentiation operator is supported by the canonical expression
+ * specification.
+ *
+ * IMPORTANT:
+ *
+ * Symbolic.g4 MUST NOT introduce a local exponentiation token or precedence
+ * rule.
+ *
+ * If exponentiation is standardized in Zamani, it belongs exactly once in the
+ * canonical lexer/expression precedence system.
+ *
+ * ============================================================================
+ * SYMBOLIC DOMAINS
+ * ============================================================================
+ *
+ * Symbolic expressions may represent:
+ *
+ *     - variables;
+ *     - constants;
+ *     - functions;
+ *     - equations;
+ *     - inequalities;
+ *     - constraints;
+ *     - polynomials;
+ *     - rational expressions;
+ *     - series;
+ *     - sequences;
+ *     - sets;
+ *     - symbolic vectors;
+ *     - symbolic matrices;
+ *     - symbolic tensors;
+ *     - symbolic quantities;
+ *     - symbolic units;
+ *     - symbolic dimensions;
+ *     - symbolic probabilities;
+ *     - symbolic distributions;
+ *     - symbolic optimization expressions;
+ *     - symbolic physical models;
+ *     - symbolic quantum parameters.
+ *
+ * These are semantic classifications rather than separate parser languages.
+ *
+ * ============================================================================
+ * CROSS-DOMAIN INTEGRATION
  * ============================================================================
  *
  * Symbolic expressions may participate in:
@@ -440,53 +435,313 @@
  *     vector computation
  *     matrix computation
  *     tensor computation
- *     quantum parameterization
- *     quantum-classical control
- *     HDL parameters
- *     hardware parameters
- *     resource constraints
- *     compile-time expressions
- *     AI/ML mathematical models
- *     scientific computation
+ *     AI/ML
+ *     scientific computing
  *     optimization
+ *     quantum parameterization
+ *     hybrid quantum/classical computation
+ *     HDL parameters
+ *     hardware requirements
+ *     resource expressions
  *     distributed computation
+ *     compile-time computation
+ *     runtime computation
  *
- * Symbolic syntax therefore remains domain-neutral.
+ * The same expression syntax is intentionally reused.
+ *
+ * ============================================================================
+ * QUANTUM INTEGRATION
+ * ============================================================================
+ *
+ * Symbolic values may parameterize quantum operations.
+ *
+ * Conceptually:
+ *
+ *     symbolic expression
+ *          |
+ *          v
+ *     semantic quantum parameter
+ *          |
+ *          v
+ *     quantum operation
+ *          |
+ *          v
+ *     quantum::ir
+ *
+ * Symbolic.g4 MUST NOT:
+ *
+ *     - define quantum gates;
+ *     - enumerate gate names;
+ *     - define physical qubits;
+ *     - define physical topology;
+ *     - define QEC;
+ *     - define routing;
+ *     - define scheduling;
+ *     - define QZN/ZQN behavior;
+ *     - define HAL behavior.
+ *
+ * Quantum semantic ownership remains with the existing quantum pipeline.
+ *
+ * ============================================================================
+ * HARDWARE / POCO-REAF CONTRACT
+ * ============================================================================
+ *
+ * Symbolic.g4 imposes NO universal finite limits on:
+ *
+ *     - number of symbols;
+ *     - number of variables;
+ *     - number of terms;
+ *     - polynomial degree;
+ *     - expression size;
+ *     - expression depth;
+ *     - function arity;
+ *     - derivative order;
+ *     - integration nesting;
+ *     - summation nesting;
+ *     - product nesting;
+ *     - matrix dimensions;
+ *     - tensor rank;
+ *     - tensor dimensions;
+ *     - numerical precision;
+ *     - integer width;
+ *     - floating-point width;
+ *     - thread count;
+ *     - core count;
+ *     - GPU count;
+ *     - accelerator count;
+ *     - memory capacity;
+ *     - node count;
+ *     - device count.
+ *
+ * No MAX_* language constant is defined here.
+ *
+ * A program's mathematical values and dimensions may be finite program
+ * semantics without becoming universal language limits.
+ *
+ * For example:
+ *
+ *     Matrix<3, 3>
+ *
+ * can describe a 3-by-3 mathematical object.
+ *
+ * It MUST NOT mean:
+ *
+ *     "Zamani matrices may never exceed 3-by-3."
+ *
+ * ============================================================================
+ * SCALABILITY
+ * ============================================================================
+ *
+ * Symbolic expression lists and nested expressions use canonical expression
+ * structures and therefore do not encode fixed mathematical capacities.
+ *
+ * Examples:
+ *
+ *     f(x)
+ *
+ *     f(x, y, z, ...)
+ *
+ *     operation(a, b, c, ...)
+ *
+ *     nested(nested(nested(expression)))
+ *
+ * are constrained only by actual parser/compiler/resource policies.
+ *
+ * The grammar itself establishes no artificial finite maximum.
+ *
+ * "Infinity" in the POCO-REAF context means that the language does not impose
+ * an arbitrary finite hardware-derived ceiling on symbolic computation.
+ *
+ * Physical execution remains subject to actual resources and mathematical
+ * computability.
+ *
+ * ============================================================================
+ * AST CONTRACT
+ * ============================================================================
+ *
+ * Symbolic expressions MUST lower into the existing domain-neutral frontend
+ * AST.
+ *
+ * The preferred operation representation remains structurally equivalent to:
+ *
+ *     Operation {
+ *         name,
+ *         namespace,
+ *         operands,
+ *         parameters,
+ *         results,
+ *         attributes,
+ *         modifiers,
+ *         effects,
+ *         capabilities,
+ *         source
+ *     }
+ *
+ * Symbolic.g4 MUST NOT introduce a separate:
+ *
+ *     SymbolicExpression AST
+ *     SymbolicOperation AST
+ *     SymbolicIR
+ *
+ * merely because the source expression is interpreted symbolically.
+ *
+ * Semantic classification belongs downstream.
+ *
+ * ============================================================================
+ * IR CONTRACT
+ * ============================================================================
+ *
+ * Symbolic.g4 does not define an IR.
+ *
+ * Symbolic expressions lower through the repository's canonical semantic/IR
+ * pipeline.
+ *
+ * Depending on semantic classification, an expression may eventually feed:
+ *
+ *     classical representation
+ *     numerical representation
+ *     tensor representation
+ *     constraint representation
+ *     optimization representation
+ *     quantum::ir
+ *     HDL/hardware semantic representation
+ *
+ * No second symbolic IR is introduced by this grammar.
+ *
+ * ============================================================================
+ * COMPILER CONTRACT
+ * ============================================================================
+ *
+ * Compiler stages are responsible for:
+ *
+ *     - constant evaluation;
+ *     - symbolic simplification;
+ *     - algebraic transformation;
+ *     - specialization;
+ *     - numerical lowering;
+ *     - differentiation;
+ *     - integration;
+ *     - solver selection;
+ *     - optimization;
+ *     - target lowering.
+ *
+ * Symbolic.g4 performs none of these operations.
+ *
+ * ============================================================================
+ * RUNTIME CONTRACT
+ * ============================================================================
+ *
+ * The parser performs no symbolic evaluation.
+ *
+ * A source expression such as:
+ *
+ *     solve(problem, x)
+ *
+ * MUST NOT execute a solver while parsing.
+ *
+ * Runtime execution is determined only after semantic analysis and lowering.
  *
  * ============================================================================
  * DETERMINISM
  * ============================================================================
  *
- * This grammar contains:
+ * Parsing depends only on:
  *
- *     - no semantic predicates;
- *     - no embedded target actions;
- *     - no runtime evaluation;
- *     - no hardware queries;
- *     - no resource discovery;
- *     - no nondeterministic parser decisions.
+ *     - source token sequence;
+ *     - active language version;
+ *     - canonical grammar version.
  *
- * The same source/token sequence therefore has the same syntactic structure
- * regardless of the target machine.
+ * Parsing MUST NOT depend on:
+ *
+ *     - CPU availability;
+ *     - GPU availability;
+ *     - QPU availability;
+ *     - memory capacity;
+ *     - device state;
+ *     - filesystem state;
+ *     - network state;
+ *     - wall-clock time;
+ *     - random state;
+ *     - scheduler state.
  *
  * ============================================================================
  * SECURITY
  * ============================================================================
  *
- * Parsing symbolic syntax performs no:
+ * Symbolic syntax is non-executing.
  *
- *     - symbolic evaluation;
- *     - arbitrary code execution;
- *     - filesystem access;
- *     - network access;
- *     - device access;
- *     - dynamic library loading;
- *     - external process execution.
+ * This grammar contains:
+ *
+ *     - no embedded Rust;
+ *     - no unsafe code;
+ *     - no filesystem operations;
+ *     - no network operations;
+ *     - no process execution;
+ *     - no dynamic library loading;
+ *     - no hardware discovery;
+ *     - no device access;
+ *     - no runtime evaluation.
+ *
+ * ============================================================================
+ * DIAGNOSTICS
+ * ============================================================================
+ *
+ * Syntax errors are parser errors.
+ *
+ * Semantic errors belong downstream.
+ *
+ * Examples of semantic diagnostics include:
+ *
+ *     - unresolved symbolic name;
+ *     - invalid symbolic type;
+ *     - invalid operation;
+ *     - invalid operand domain;
+ *     - incompatible dimensions;
+ *     - invalid symbolic constraint;
+ *     - unsupported capability;
+ *     - unavailable target realization.
+ *
+ * These MUST NOT be encoded as parser alternatives.
+ *
+ * ============================================================================
+ * COMPATIBILITY
+ * ============================================================================
+ *
+ * Historical symbolic syntax from older monolithic grammar documents must not
+ * automatically become canonical syntax.
+ *
+ * Compatibility follows the repository language-version process:
+ *
+ *     specified
+ *         ->
+ *     implemented
+ *         ->
+ *     tested
+ *         ->
+ *     stable
+ *
+ * Legacy syntax must be explicitly classified as:
+ *
+ *     compatible
+ *     deprecated
+ *     experimental
+ *     historical
+ *     unsupported
+ *
+ * ============================================================================
+ * PUBLIC GRAMMAR CONTRACT
+ * ============================================================================
+ *
+ * The public symbolic entry point is:
+ *
+ *     symbolicConstruct
+ *
+ * It delegates to the canonical expression rule.
  *
  * ============================================================================
  */
 
-parser grammar Symbolic;
+parser grammar ClassicalSymbolic;
 
 options {
     tokenVocab = ZamaniLexer;
@@ -495,105 +750,34 @@ options {
 import Expressions;
 
 
-/* ============================================================================
- * 1. PUBLIC SYMBOLIC ENTRY POINT
+/*
+ * ============================================================================
+ * PUBLIC SYMBOLIC DOMAIN ENTRY
  * ============================================================================
  *
- * Stable integration point for consumers that explicitly recognize a symbolic
- * domain construct.
+ * Symbolic computation is structurally an ordinary Zamani expression.
+ *
+ * The symbolic semantic subsystem classifies the resulting AST according to
+ * symbol/type/domain information.
  *
  * ============================================================================
  */
 
 symbolicConstruct
-    : symbolicDeclaration
-    | symbolicAssignment
-    | symbolicExpressionStatement
-    | symbolicEquation
-    | symbolicRelation
-    | symbolicOperation
-    | symbolicTransformation
-    | symbolicConstraint
-    ;
-
-
-/* ============================================================================
- * 2. SYMBOLIC DECLARATION
- * ============================================================================
- *
- * Declaration syntax is deliberately composed from canonical expression and
- * type syntax rather than redefining either subsystem.
- *
- * Examples:
- *
- *     let x = symbolicExpression;
- *     let x: SymbolicType = symbolicExpression;
- *
- * Semantic analysis determines whether the binding is genuinely symbolic.
- *
- * ============================================================================
- */
-
-symbolicDeclaration
-    : symbolicBindingKeyword
-      identifier
-      symbolicTypeAnnotation?
-      ASSIGN
-      symbolicExpression
-      SEMICOLON
-    | symbolicBindingKeyword
-      identifier
-      symbolicTypeAnnotation
-      SEMICOLON
-    ;
-
-
-symbolicBindingKeyword
-    : LET
-    | VAR
-    | CONST
-    ;
-
-
-symbolicTypeAnnotation
-    : COLON
-      typeExpression
-    ;
-
-
-/* ============================================================================
- * 3. SYMBOLIC ASSIGNMENT
- * ============================================================================
- *
- * Assignment semantics remain owned by the general expression subsystem.
- *
- * ============================================================================
- */
-
-symbolicAssignment
-    : expression
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 4. SYMBOLIC EXPRESSION STATEMENT
- * ============================================================================
- */
-
-symbolicExpressionStatement
     : symbolicExpression
-      SEMICOLON
     ;
 
 
-/* ============================================================================
- * 5. SYMBOLIC EXPRESSION
+/*
+ * ============================================================================
+ * SYMBOLIC EXPRESSION
  * ============================================================================
  *
- * This is a semantic classification boundary.
+ * This is intentionally a thin semantic-domain boundary.
  *
- * It intentionally delegates ordinary expression syntax to Expressions.
+ * ALL expression precedence and syntax come from Expressions.
+ *
+ * This rule MUST NOT be expanded into another arithmetic hierarchy.
  *
  * ============================================================================
  */
@@ -603,333 +787,202 @@ symbolicExpression
     ;
 
 
-/* ============================================================================
- * 6. SYMBOLIC REFERENCE
+/*
+ * ============================================================================
+ * SYMBOLIC VALUE
  * ============================================================================
  *
- * A symbolic reference is represented by the ordinary identifier syntax.
+ * Alias used by semantic/domain consumers that need to state explicitly that
+ * an expression is being consumed as a symbolic value.
  *
- * Identifier resolution is a semantic concern.
- *
- * ============================================================================
- */
-
-symbolicReference
-    : identifier
-    ;
-
-
-/* ============================================================================
- * 7. IDENTIFIER
- * ============================================================================
- *
- * The canonical lexical token owns identifier spelling.
- *
- * This local parser rule is an integration boundary only.
+ * It creates no new AST representation.
  *
  * ============================================================================
  */
 
-identifier
-    : IDENTIFIER
-    ;
-
-
-/* ============================================================================
- * 8. SYMBOLIC FUNCTION
- * ============================================================================
- *
- * A symbolic function is represented by an identifier followed by a general
- * expression argument list.
- *
- * This deliberately avoids a fixed list such as:
- *
- *     sin
- *     cos
- *     exp
- *     log
- *     sqrt
- *
- * The semantic layer resolves the function identity.
- *
- * ============================================================================
- */
-
-symbolicFunction
-    : identifier
-      LPAREN
-      symbolicArgumentList?
-      RPAREN
-    ;
-
-
-symbolicArgumentList
+symbolicValue
     : symbolicExpression
-      (
-          COMMA
-          symbolicExpression
-      )*
     ;
 
 
-/* ============================================================================
- * 9. SYMBOLIC FUNCTION DEFINITION REFERENCE
+/*
+ * ============================================================================
+ * SYMBOLIC OPERATION
  * ============================================================================
  *
- * The grammar does not define function declaration syntax here.
+ * A symbolic operation is represented by the canonical expression language.
  *
- * Function declarations remain owned by the functions subsystem.
+ * This intentionally accepts calls, operators, member access, indexing,
+ * nested expressions, lambdas, literals, and future expression forms through
+ * the canonical `expression` rule.
  *
- * This rule merely provides a stable symbolic call boundary.
+ * Operation names remain ordinary identifiers resolved semantically.
  *
  * ============================================================================
  */
 
-symbolicFunctionReference
-    : identifier
-    ;
-
-
-/* ============================================================================
- * 10. SYMBOLIC EQUATION
- * ============================================================================
- *
- * An equation establishes two symbolic expressions separated by an equality
- * operator.
- *
- * Equality-token spelling belongs to ZamaniLexer.
- *
- * Semantic analysis determines whether the relation represents an equation,
- * boolean comparison, constraint, or another language construct.
- *
- * ============================================================================
- */
-
-symbolicEquation
+symbolicOperation
     : symbolicExpression
-      EQUAL
-      symbolicExpression
-      SEMICOLON
     ;
 
 
-/* ============================================================================
- * 11. SYMBOLIC RELATION
+/*
+ * ============================================================================
+ * SYMBOLIC RELATION
  * ============================================================================
  *
- * Relations remain syntactic constructs.
+ * Relations are ordinary canonical expressions.
  *
- * Semantic analysis determines their mathematical meaning.
+ * Equality and relational operators are owned by Expressions.
+ *
+ * The semantic layer determines whether the expression is interpreted as a
+ * mathematical relation, boolean predicate, equation, or constraint.
  *
  * ============================================================================
  */
 
 symbolicRelation
     : symbolicExpression
-      symbolicRelationalOperator
-      symbolicExpression
-      SEMICOLON
     ;
 
 
-symbolicRelationalOperator
-    : LESS
-    | GREATER
-    | LESS_EQUAL
-    | GREATER_EQUAL
-    | EQUAL
-    | NOT_EQUAL
-    ;
-
-
-/* ============================================================================
- * 12. SYMBOLIC OPERATION
+/*
+ * ============================================================================
+ * SYMBOLIC CONSTRAINT
  * ============================================================================
  *
- * Generic symbolic operations are intentionally identifier-based.
+ * Constraint meaning belongs to semantic analysis.
  *
- * This allows future operations without changing the grammar.
- *
- * Examples:
- *
- *     diff(f, x);
- *     integrate(f, x);
- *     simplify(expression);
- *     solve(equation, x);
- *     transform(expression, rule);
- *
- * The grammar does not prescribe which operation names exist.
+ * The syntax remains the canonical expression syntax.
  *
  * ============================================================================
  */
 
-symbolicOperation
-    : symbolicFunction
-      SEMICOLON
+symbolicConstraint
+    : symbolicExpression
     ;
 
 
-/* ============================================================================
- * 13. DIFFERENTIATION COMPOSITION
+/*
+ * ============================================================================
+ * SYMBOLIC TRANSFORMATION
  * ============================================================================
  *
- * Differentiation is represented as symbolic operation composition rather than
- * a hard-coded mathematical evaluator.
+ * Transformations such as:
  *
- * The first argument is the expression being differentiated.
+ *     simplify(...)
+ *     expand(...)
+ *     factor(...)
+ *     substitute(...)
+ *     transform(...)
  *
- * The second argument identifies the differentiation variable or expression.
+ * are ordinary expressions/calls.
  *
- * An optional order expression permits arbitrary symbolic derivative order.
+ * The operation name and transformation semantics are resolved downstream.
  *
  * ============================================================================
  */
 
-symbolicDifferentiation
-    : identifier
-      LPAREN
-      symbolicExpression
-      COMMA
-      symbolicExpression
-      (
-          COMMA
-          symbolicExpression
-      )?
-      RPAREN
+symbolicTransformation
+    : symbolicExpression
     ;
 
 
-/* ============================================================================
- * 14. INTEGRATION COMPOSITION
+/*
+ * ============================================================================
+ * SYMBOLIC CALCULUS
  * ============================================================================
  *
- * Integration remains an operation-level syntactic construct.
+ * Calculus operations such as:
  *
- * Optional bounds are expressions rather than fixed numeric values.
+ *     derivative(...)
+ *     integrate(...)
+ *     limit(...)
+ *     gradient(...)
+ *     jacobian(...)
+ *     hessian(...)
+ *
+ * remain ordinary expressions.
  *
  * ============================================================================
  */
 
-symbolicIntegration
-    : identifier
-      LPAREN
-      symbolicExpression
-      COMMA
-      symbolicExpression
-      (
-          COMMA
-          symbolicExpression
-          COMMA
-          symbolicExpression
-      )?
-      RPAREN
+symbolicCalculus
+    : symbolicExpression
     ;
 
 
-/* ============================================================================
- * 15. SUMMATION
+/*
+ * ============================================================================
+ * SYMBOLIC ALGEBRA
  * ============================================================================
  *
- * A symbolic summation consists of:
+ * Algebraic operations remain canonical expressions.
  *
- *     expression
- *     iterator
- *     domain
- *
- * All three are expressions.
- *
- * No finite iteration bound is imposed by the grammar.
+ * No algebra-specific precedence is introduced here.
  *
  * ============================================================================
  */
 
-symbolicSummation
-    : identifier
-      LPAREN
-      symbolicExpression
-      COMMA
-      symbolicIterator
-      COMMA
-      symbolicDomain
-      RPAREN
+symbolicAlgebra
+    : symbolicExpression
     ;
 
 
-/* ============================================================================
- * 16. PRODUCT
+/*
  * ============================================================================
- */
-
-symbolicProduct
-    : identifier
-      LPAREN
-      symbolicExpression
-      COMMA
-      symbolicIterator
-      COMMA
-      symbolicDomain
-      RPAREN
-    ;
-
-
-/* ============================================================================
- * 17. LIMIT
+ * SYMBOLIC MATHEMATICAL OBJECT
  * ============================================================================
  *
- * A limit may contain:
+ * Semantic analysis may classify an expression as:
  *
- *     expression
- *     variable
- *     target value
- *
- * All remain symbolic expressions.
+ *     scalar
+ *     polynomial
+ *     rational expression
+ *     vector
+ *     matrix
+ *     tensor
+ *     function
+ *     set
+ *     sequence
+ *     relation
+ *     constraint
+ *     operator
+ *     distribution
+ *     another supported mathematical object
  *
  * ============================================================================
  */
 
-symbolicLimit
-    : identifier
-      LPAREN
-      symbolicExpression
-      COMMA
-      symbolicExpression
-      COMMA
-      symbolicExpression
-      RPAREN
+symbolicMathematicalObject
+    : symbolicExpression
     ;
 
 
-/* ============================================================================
- * 18. SYMBOLIC ITERATOR
+/*
+ * ============================================================================
+ * SYMBOLIC PARAMETER
  * ============================================================================
  *
- * The iterator name is an ordinary identifier.
- *
- * Its scope and binding semantics belong to semantic analysis.
+ * Parameter syntax is owned by the canonical expression/type/function
+ * systems. This rule is only a semantic integration point.
  *
  * ============================================================================
  */
 
-symbolicIterator
-    : identifier
+symbolicParameter
+    : symbolicExpression
     ;
 
 
-/* ============================================================================
- * 19. SYMBOLIC DOMAIN
+/*
+ * ============================================================================
+ * SYMBOLIC DOMAIN
  * ============================================================================
  *
- * A symbolic domain may be:
+ * Domains may be represented by arbitrary expressions.
  *
- *     - a general expression;
- *     - a range;
- *     - a collection;
- *     - a symbolic set;
- *     - a runtime value;
- *     - a compile-time value;
- *     - a future domain representation.
- *
- * This grammar does not impose a finite domain size.
+ * No finite domain cardinality is imposed here.
  *
  * ============================================================================
  */
@@ -939,194 +992,30 @@ symbolicDomain
     ;
 
 
-/* ============================================================================
- * 20. SYMBOLIC RANGE
+/*
+ * ============================================================================
+ * SYMBOLIC SEQUENCE
  * ============================================================================
  *
- * Range syntax is delegated to the canonical expression subsystem.
- *
- * ============================================================================
- */
-
-symbolicRange
-    : expression
-    ;
-
-
-/* ============================================================================
- * 21. SYMBOLIC SUBSTITUTION
- * ============================================================================
- *
- * Generic substitution syntax:
- *
- *     substitute(expression, variable, replacement)
- *
- * The operation name remains an identifier.
+ * Sequence construction remains an expression concern.
  *
  * ============================================================================
  */
 
-symbolicSubstitution
-    : identifier
-      LPAREN
-      symbolicExpression
-      COMMA
-      symbolicExpression
-      COMMA
-      symbolicExpression
-      RPAREN
-    ;
-
-
-/* ============================================================================
- * 22. SYMBOLIC TRANSFORMATION
- * ============================================================================
- *
- * Transformations operate on symbolic expressions and transformation
- * specifications.
- *
- * ============================================================================
- */
-
-symbolicTransformation
-    : identifier
-      LPAREN
-      symbolicExpression
-      (
-          COMMA
-          symbolicExpression
-      )*
-      RPAREN
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 23. SYMBOLIC CONSTRAINT
- * ============================================================================
- *
- * A symbolic constraint is a relational or general symbolic expression that
- * can later be interpreted by semantic constraint infrastructure.
- *
- * ============================================================================
- */
-
-symbolicConstraint
-    : symbolicRelation
-    | symbolicExpression
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 24. SYMBOLIC SET / COLLECTION COMPOSITION
- * ============================================================================
- *
- * Symbolic collections are deliberately represented through ordinary
- * expression syntax.
- *
- * This avoids inventing a second collection literal grammar here.
- *
- * ============================================================================
- */
-
-symbolicCollection
-    : expression
-    ;
-
-
-/* ============================================================================
- * 25. SYMBOLIC CALL
- * ============================================================================
- *
- * General call syntax remains owned by Expressions.
- *
- * This rule exists solely as a stable symbolic-domain integration point.
- *
- * ============================================================================
- */
-
-symbolicCall
-    : symbolicFunction
-    ;
-
-
-/* ============================================================================
- * 26. SYMBOLIC VALUE
- * ============================================================================
- *
- * A symbolic value may be an ordinary expression or a symbolic function.
- *
- * The semantic layer determines its symbolic classification.
- *
- * ============================================================================
- */
-
-symbolicValue
-    : symbolicExpression
-    | symbolicFunction
-    ;
-
-
-/* ============================================================================
- * 27. SYMBOLIC DEFINITION REFERENCE
- * ============================================================================
- *
- * Symbolic definitions are resolved semantically.
- *
- * The grammar does not maintain a symbol table.
- *
- * ============================================================================
- */
-
-symbolicDefinitionReference
-    : symbolicReference
-    ;
-
-
-/* ============================================================================
- * 28. SYMBOLIC OPERATION INVOCATION
- * ============================================================================
- *
- * Generic extensibility boundary.
- *
- * This is intentionally identifier-driven so new symbolic operations do not
- * require grammar changes.
- *
- * ============================================================================
- */
-
-symbolicOperationInvocation
-    : identifier
-      LPAREN
-      symbolicArgumentList?
-      RPAREN
-    ;
-
-
-/* ============================================================================
- * 29. SYMBOLIC NESTING
- * ============================================================================
- *
- * Symbolic operations may be nested arbitrarily through ordinary expression
- * composition.
- *
- * No grammar-level nesting maximum exists.
- *
- * ============================================================================
- */
-
-symbolicNestedExpression
+symbolicSequence
     : symbolicExpression
     ;
 
 
-/* ============================================================================
- * 30. SYMBOLIC PROGRAM REGION
+/*
+ * ============================================================================
+ * SYMBOLIC REGION
  * ============================================================================
  *
- * Provides a stable domain boundary for tools that parse a sequence of
- * symbolic-domain constructs independently from the complete source grammar.
+ * This permits tools that explicitly consume a symbolic region to reuse the
+ * canonical expression boundary.
+ *
+ * It does not define a second program grammar.
  *
  * ============================================================================
  */
@@ -1136,363 +1025,54 @@ symbolicRegion
     ;
 
 
-/* ============================================================================
- * 31. SYMBOLIC SEQUENCE
+/*
+ * ============================================================================
+ * COMPLETION CONTRACT
  * ============================================================================
  *
- * A sequence is structurally unbounded.
+ * This file is complete when:
  *
- * Practical limits belong to parser/compiler resource policies.
+ * [x] It has one canonical lexer vocabulary.
+ * [x] It contains no lexer rules.
+ * [x] It imports the canonical Expressions grammar.
+ * [x] It does not redefine expression precedence.
+ * [x] It does not redefine identifiers.
+ * [x] It does not redefine literals.
+ * [x] It does not redefine assignment.
+ * [x] It does not redefine declarations.
+ * [x] It does not redefine statements.
+ * [x] It does not redefine calls.
+ * [x] It does not redefine indexing.
+ * [x] It does not redefine member access.
+ * [x] It does not redefine types.
+ * [x] It does not enumerate mathematical function names.
+ * [x] It does not create a symbolic AST.
+ * [x] It does not create a symbolic IR.
+ * [x] It does not create a quantum IR.
+ * [x] It does not enumerate quantum gates.
+ * [x] It does not select hardware.
+ * [x] It contains no machine-size limits.
+ * [x] It contains no MAX_* scalability constants.
+ * [x] It contains no embedded Rust.
+ * [x] It contains no unsafe Rust.
+ * [x] It remains target-independent.
+ * [x] It preserves POCO-REAF.
  *
- * ============================================================================
- */
-
-symbolicSequence
-    : symbolicConstruct*
-    ;
-
-
-/* ============================================================================
- * 32. SYMBOLIC EXPRESSION LIST
- * ============================================================================
- */
-
-symbolicExpressionList
-    : symbolicExpression
-      (
-          COMMA
-          symbolicExpression
-      )*
-    ;
-
-
-/* ============================================================================
- * 33. SYMBOLIC OPERATION ARGUMENTS
- * ============================================================================
- */
-
-symbolicArguments
-    : symbolicExpressionList?
-    ;
-
-
-/* ============================================================================
- * 34. SYMBOLIC MAPPING
- * ============================================================================
+ * Integration acceptance additionally requires:
  *
- * Mapping syntax is represented by a generic symbolic operation rather than
- * introducing a second map/collection grammar.
- *
- * ============================================================================
- */
-
-symbolicMapping
-    : identifier
-      LPAREN
-      symbolicExpressionList?
-      RPAREN
-    ;
-
-
-/* ============================================================================
- * 35. SYMBOLIC NORMALIZATION
- * ============================================================================
- *
- * Normalization is intentionally an operation name resolved downstream.
- *
- * ============================================================================
- */
-
-symbolicNormalization
-    : identifier
-      LPAREN
-      symbolicExpression
-      RPAREN
-    ;
-
-
-/* ============================================================================
- * 36. SYMBOLIC SOLVE OPERATION
- * ============================================================================
- *
- * Equation/constraint solving remains semantic.
- *
- * The grammar merely accepts the operation composition.
- *
- * ============================================================================
- */
-
-symbolicSolve
-    : identifier
-      LPAREN
-      symbolicExpressionList
-      RPAREN
-    ;
-
-
-/* ============================================================================
- * 37. SYMBOLIC EVALUATION REQUEST
- * ============================================================================
- *
- * Evaluation is not performed by the parser.
- *
- * The syntax merely represents an operation request.
- *
- * ============================================================================
- */
-
-symbolicEvaluation
-    : identifier
-      LPAREN
-      symbolicExpression
-      RPAREN
-    ;
-
-
-/* ============================================================================
- * 38. SYMBOLIC EXPANSION / FACTORIZATION
- * ============================================================================
- *
- * Both are generic symbolic transformations.
- *
- * ============================================================================
- */
-
-symbolicExpansion
-    : identifier
-      LPAREN
-      symbolicExpression
-      RPAREN
-    ;
-
-
-symbolicFactorization
-    : identifier
-      LPAREN
-      symbolicExpression
-      RPAREN
-    ;
-
-
-/* ============================================================================
- * 39. SYMBOLIC DIFFERENCE / VARIATION
- * ============================================================================
- *
- * Generic operation composition permits finite-difference, variation,
- * perturbation, and future mathematical operations without grammar changes.
- *
- * ============================================================================
- */
-
-symbolicVariation
-    : identifier
-      LPAREN
-      symbolicExpressionList
-      RPAREN
-    ;
-
-
-/* ============================================================================
- * 40. SYMBOLIC DOMAIN OPERATION
- * ============================================================================
- *
- * Domain operations may describe transformations over arbitrary symbolic
- * domains.
- *
- * ============================================================================
- */
-
-symbolicDomainOperation
-    : identifier
-      LPAREN
-      symbolicExpressionList?
-      RPAREN
-    ;
-
-
-/* ============================================================================
- * 41. SYMBOLIC PARAMETER
- * ============================================================================
- *
- * Parameters are ordinary identifiers.
- *
- * Parameter semantics are resolved by declarations, scopes, generics,
- * functions, and semantic analysis.
- *
- * ============================================================================
- */
-
-symbolicParameter
-    : identifier
-    ;
-
-
-/* ============================================================================
- * 42. SYMBOLIC CONSTANT
- * ============================================================================
- *
- * Constants remain ordinary references.
- *
- * This grammar does not reserve names such as:
- *
- *     pi
- *     e
- *     tau
- *     infinity
- *
- * A standard library may provide them.
- *
- * ============================================================================
- */
-
-symbolicConstant
-    : identifier
-    ;
-
-
-/* ============================================================================
- * 43. SYMBOLIC EXPRESSION GROUP
- * ============================================================================
- *
- * Parentheses and grouping semantics remain owned by Expressions.
- *
- * ============================================================================
- */
-
-symbolicGroup
-    : LPAREN
-      symbolicExpression
-      RPAREN
-    ;
-
-
-/* ============================================================================
- * 44. SYMBOLIC DOMAIN STATEMENT
- * ============================================================================
- *
- * Stable integration point for a domain-level symbolic statement.
- *
- * ============================================================================
- */
-
-symbolicStatement
-    : symbolicConstruct
-    ;
-
-
-/* ============================================================================
- * 45. SYMBOLIC BLOCK
- * ============================================================================
- *
- * Blocks contain arbitrary numbers of symbolic constructs.
- *
- * No finite size is imposed.
- *
- * ============================================================================
- */
-
-symbolicBlock
-    : LBRACE
-      symbolicConstruct*
-      RBRACE
-    ;
-
-
-/* ============================================================================
- * 46. SYMBOLIC DECLARATION REGION
- * ============================================================================
- */
-
-symbolicDeclarationRegion
-    : symbolicDeclaration*
-    ;
-
-
-/* ============================================================================
- * 47. SYMBOLIC TRANSFORMATION REGION
- * ============================================================================
- */
-
-symbolicTransformationRegion
-    : symbolicTransformation*
-    ;
-
-
-/* ============================================================================
- * 48. SYMBOLIC CONSTRAINT REGION
- * ============================================================================
- */
-
-symbolicConstraintRegion
-    : symbolicConstraint*
-    ;
-
-
-/* ============================================================================
- * 49. SYMBOLIC COMPUTATION REGION
- * ============================================================================
- *
- * This is the preferred high-level integration boundary for tooling that needs
- * to parse a symbolic computation region.
- *
- * ============================================================================
- */
-
-symbolicComputationRegion
-    : symbolicConstruct*
-    ;
-
-
-/* ============================================================================
- * 50. FINAL ARCHITECTURAL CONTRACT
- * ============================================================================
- *
- * This grammar establishes syntax only.
- *
- * Downstream responsibilities:
- *
- *     name resolution
- *         -> resolves symbolic references
- *
- *     type checking
- *         -> determines symbolic value/type semantics
- *
- *     semantic analysis
- *         -> validates mathematical/domain meaning
- *
- *     symbolic subsystem
- *         -> performs symbolic transformations/evaluation
- *
- *     numerical subsystem
- *         -> performs numerical realization where required
- *
- *     tensor/vector/matrix subsystems
- *         -> realize structured numerical objects
- *
- *     compiler
- *         -> selects representation and lowering strategy
- *
- *     resource subsystem
- *         -> determines available computational resources
- *
- *     optimization
- *         -> optimizes implementation
- *
- *     scheduling
- *         -> determines execution order/timing
- *
- *     hardware abstraction
- *         -> determines target realization
- *
- *     runtime
- *         -> executes the resulting representation
- *
- *     quantum semantic pipeline
- *         -> consumes canonical quantum semantics where symbolic expressions
- *            parameterize quantum operations
- *
- * Symbolic.g4 MUST NEVER become a second implementation of any of these
- * systems.
+ *     - Classical imports this grammar exactly once;
+ *     - the root composition grammar exposes the symbolic domain through
+ *       Classical rather than importing a second symbolic grammar;
+ *     - symbolic expressions lower to the existing domain-neutral AST;
+ *     - semantic analysis classifies symbolic values;
+ *     - canonical IR lowering exists for supported symbolic semantics;
+ *     - parser diagnostics preserve source spans;
+ *     - positive tests exist;
+ *     - negative tests exist;
+ *     - boundary tests exist;
+ *     - scalability tests exist;
+ *     - determinism tests exist;
+ *     - compatibility tests exist.
  *
  * ============================================================================
  */
