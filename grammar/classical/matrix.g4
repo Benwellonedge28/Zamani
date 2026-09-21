@@ -7,71 +7,30 @@
  *     grammar/classical/matrix.g4
  *
  * Status:
- *     Production-ready classical matrix-domain composition grammar.
+ *     Production classical matrix-domain parser component.
  *
  * Grammar:
  *     ANTLR4 parser grammar
  *
  * Implementation baseline:
  *     Rust 1.97 / Rust 1.97.1
- *     Rust edition 2021
- *
- * Safety:
- *     This grammar contains no embedded Rust actions, semantic predicates,
- *     target-specific implementation code, or unsafe implementation.
+ *     Rust 2021
+ *     Safe Rust only
+ *     No embedded Rust actions
+ *     No semantic predicates
+ *     No unsafe implementation
  *
  * ============================================================================
- *
  * PURPOSE
  * ============================================================================
  *
- * This file owns SOURCE-LEVEL MATRIX COMPUTATION SYNTAX.
+ * This file owns the MATRIX-SPECIFIC SOURCE-SYNTAX BOUNDARY.
  *
- * It provides the parser boundary for matrix-specific constructs while
- * deliberately delegating general language concepts to their authoritative
- * grammar owners.
+ * Matrix computation is part of the single Zamani language. This file does
+ * not create a second matrix language, second expression language, second
+ * type system, or matrix-specific IR.
  *
- * This file may express:
- *
- *     - matrix declarations;
- *     - matrix values;
- *     - matrix literals;
- *     - matrix initialization;
- *     - matrix indexing;
- *     - matrix assignment;
- *     - matrix construction;
- *     - matrix transformation expressions;
- *     - matrix algebra operation syntax;
- *     - matrix decomposition operation syntax;
- *     - matrix reduction operation syntax;
- *     - matrix element-wise operation syntax;
- *     - matrix shape expressions;
- *     - matrix dimension expressions;
- *     - matrix-domain computation statements;
- *     - matrix-domain expression composition.
- *
- * This file MUST remain independent of any particular:
- *
- *     CPU
- *     GPU
- *     FPGA
- *     ASIC
- *     accelerator
- *     BLAS implementation
- *     vendor library
- *     memory layout
- *     SIMD width
- *     thread count
- *     cache size
- *     machine word size
- *     device topology
- *     physical memory capacity
- *     execution backend.
- *
- * ============================================================================
- *
- * ARCHITECTURAL POSITION
- * ============================================================================
+ * Matrix syntax ultimately follows:
  *
  *     Zamani source
  *          |
@@ -79,290 +38,494 @@
  *     ZamaniLexer
  *          |
  *          v
- *     parser
- *          |
- *          +----------------------+
- *          |                      |
- *          v                      v
- *     Types.g4              Expressions.g4
- *          |                      |
- *          +----------+-----------+
- *                     |
- *                     v
- *              Matrix.g4
- *                     |
- *                     v
- *                Frontend AST
- *                     |
- *                     v
- *              Semantic Analysis
- *                     |
- *          +----------+-----------+
- *          |                      |
- *          v                      v
- *    Matrix semantic model   Resource/effect metadata
+ *     ZamaniParser
  *          |
  *          v
- *      Classical IR
+ *     domain-neutral frontend AST
  *          |
  *          v
- *      Optimization
+ *     semantic analysis
+ *          |
+ *          +----------------------------+
+ *          |                            |
+ *          v                            v
+ *     classical semantics       resource/capability metadata
  *          |
  *          v
- *      Scheduling / placement
+ *     canonical semantic representation
  *          |
  *          v
- *      Target-independent lowering
+ *     classical IR / canonical IR
  *          |
  *          v
- *      Target realization
+ *     optimization
+ *          |
+ *          v
+ *     scheduling / placement / lowering
+ *          |
+ *          v
+ *     target realization
  *
- * Matrix.g4 MUST NOT construct IR directly.
+ * This file MUST NOT construct IR directly.
  *
  * ============================================================================
- *
  * OWNERSHIP
  * ============================================================================
  *
  * THIS FILE OWNS:
  *
- *     - matrix-domain syntax;
- *     - matrix expression composition;
- *     - matrix literal syntax;
- *     - matrix construction syntax;
- *     - matrix operation syntax;
- *     - matrix decomposition operation syntax;
- *     - matrix reduction operation syntax;
- *     - matrix indexing composition;
- *     - matrix assignment composition;
- *     - matrix-domain statement composition.
+ *   - matrix-domain composition;
+ *   - matrix literal syntax;
+ *   - matrix operation-call composition;
+ *   - matrix operation-name composition;
+ *   - matrix argument-list composition;
+ *   - matrix-domain entry points for the classical grammar;
+ *   - source-level matrix constructs that cannot be represented merely as
+ *     ordinary generic expression syntax.
  *
  * THIS FILE DOES NOT OWN:
  *
- *     - lexical rules;
- *     - identifier spelling;
- *     - numeric literal definitions;
- *     - general expressions;
- *     - general type syntax;
- *     - generic type syntax;
- *     - classical type definitions;
- *     - matrix semantic typing;
- *     - matrix dimension validation;
- *     - matrix shape compatibility;
- *     - matrix algorithms;
- *     - numerical precision;
- *     - floating-point semantics;
- *     - sparse storage representation;
- *     - dense storage representation;
- *     - memory allocation;
- *     - memory layout;
- *     - tiling;
- *     - vectorization;
- *     - parallelization;
- *     - GPU selection;
- *     - FPGA selection;
- *     - accelerator selection;
- *     - BLAS selection;
- *     - LAPACK selection;
- *     - vendor libraries;
- *     - hardware capabilities;
- *     - scheduling;
- *     - routing;
- *     - optimization;
- *     - runtime execution;
- *     - classical IR;
- *     - quantum::ir;
- *     - QEC;
- *     - ZQN.
+ *   - lexical tokens;
+ *   - identifiers;
+ *   - keywords;
+ *   - numeric literals;
+ *   - strings;
+ *   - general expressions;
+ *   - expression precedence;
+ *   - function calls generally;
+ *   - indexing;
+ *   - slicing;
+ *   - ranges;
+ *   - assignment;
+ *   - declarations;
+ *   - statements;
+ *   - control flow;
+ *   - general type syntax;
+ *   - generic type arguments;
+ *   - matrix semantic typing;
+ *   - shape validation;
+ *   - dimension arithmetic;
+ *   - numerical algorithms;
+ *   - numerical precision;
+ *   - sparse/dense representation;
+ *   - storage layout;
+ *   - memory allocation;
+ *   - vectorization;
+ *   - tiling;
+ *   - parallelization;
+ *   - scheduling;
+ *   - placement;
+ *   - target selection;
+ *   - hardware discovery;
+ *   - classical IR;
+ *   - quantum::ir;
+ *   - QEC;
+ *   - ZQN;
+ *   - HAL;
+ *   - runtime execution.
  *
  * ============================================================================
- *
- * POCO-REAF
+ * SINGLE-AUTHORITY RULE
  * ============================================================================
  *
- * Matrix syntax describes mathematical/computational intent.
- *
- * It MUST NOT encode physical realization.
- *
- * For example:
- *
- *     Matrix<f64, Rows, Cols>
- *
- * does not mean:
- *
- *     - a fixed number of CPU registers;
- *     - a fixed SIMD width;
- *     - a fixed GPU allocation;
- *     - a fixed number of accelerator threads;
- *     - a fixed memory layout;
- *     - a fixed machine size.
- *
- * Likewise:
- *
- *     A * B
- *
- * expresses matrix multiplication semantics.
- *
- * It does not select:
- *
- *     - CPU execution;
- *     - GPU execution;
- *     - FPGA execution;
- *     - ASIC execution;
- *     - distributed execution;
- *     - a particular BLAS provider.
- *
- * Those decisions belong downstream.
- *
- * ============================================================================
- *
- * SCALABILITY
- * ============================================================================
- *
- * No finite machine-oriented matrix limit is encoded here.
- *
- * In particular, this grammar contains no:
- *
- *     MAX_ROWS
- *     MAX_COLUMNS
- *     MAX_ELEMENTS
- *     MAX_RANK
- *     MAX_MATRIX_SIZE
- *     MAX_DIMENSION
- *     MAX_OPERATIONS
- *     MAX_NESTING
- *     MAX_MEMORY
- *
- * Matrix dimensions are represented structurally.
- *
- * They may be:
- *
- *     literals;
- *     identifiers;
- *     qualified identifiers;
- *     compile-time expressions;
- *     symbolic dimensions;
- *     dependent values;
- *     expressions resolved later by semantic analysis.
- *
- * Practical resource limits belong to:
- *
- *     parser resource policy;
- *     semantic validation;
- *     compiler resource policy;
- *     resource management;
- *     scheduling;
- *     deployment;
- *     runtime.
- *
- * Such limits MUST NOT silently become language semantics.
- *
- * ============================================================================
- *
- * DIMENSION CONTRACT
- * ============================================================================
- *
- * Matrix dimensions are syntax only.
- *
- * The grammar does NOT require dimensions to be:
- *
- *     - positive;
- *     - equal;
- *     - statically known;
- *     - compile-time constants;
- *     - bounded by an integer size.
- *
- * Semantic analysis is responsible for determining whether a particular
- * matrix operation has compatible shapes.
- *
- * ============================================================================
- *
- * TYPE CONTRACT
- * ============================================================================
- *
- * Matrix type syntax is owned by:
- *
- *     grammar/types/classical-types.g4
- *
- * and is integrated into:
- *
- *     grammar/types/types.g4
- *
- * This file therefore MUST NOT redefine:
- *
- *     Matrix<T>
- *     Matrix<T, Rows, Cols>
- *     typeExpression
- *     typeArgument
- *     typeValueExpression
- *
- * Matrix declarations reuse canonical typeExpression.
- *
- * ============================================================================
- *
- * EXPRESSION CONTRACT
- * ============================================================================
- *
- * General expression syntax is owned by:
+ * General expression syntax belongs to:
  *
  *     grammar/expressions/expressions.g4
  *
- * This file MUST NOT redefine:
+ * General indexing/slicing syntax belongs to:
  *
- *     arithmetic precedence;
- *     function calls;
- *     identifiers;
- *     literals;
- *     unary operators;
- *     binary operators;
- *     assignment operators;
- *     conditional expressions;
- *     indexing primitives;
- *     member access.
+ *     grammar/expressions/indexing.g4
  *
- * Matrix-specific constructs are composed around the canonical expression
- * grammar.
+ * General type syntax belongs to:
+ *
+ *     grammar/types/types.g4
+ *
+ * Classical type constructors, including the open-world generic form used
+ * for Matrix<T, ...>, belong to:
+ *
+ *     grammar/types/classical.g4
+ *
+ * General declarations belong to:
+ *
+ *     grammar/declarations/
+ *
+ * General statements belong to:
+ *
+ *     grammar/statements/
+ *
+ * This file MUST NOT redefine those authorities.
  *
  * ============================================================================
+ * MATRIX TYPE MODEL
+ * ============================================================================
  *
+ * Matrix types are intentionally represented by the canonical generic type
+ * system.
+ *
+ * Examples include:
+ *
+ *     Matrix<f64>
+ *     Matrix<f32, Rows, Cols>
+ *     math::Matrix<f64, Rows, Cols>
+ *
+ * The word "Matrix" is NOT made a special lexer token here.
+ *
+ * The existing classical type grammar already supports open-world type
+ * applications and symbolic/value arguments.
+ *
+ * Therefore semantic analysis determines whether:
+ *
+ *     Matrix<T, ...>
+ *
+ * denotes a matrix semantic type.
+ *
+ * This prevents this file from creating a competing matrix type system.
+ *
+ * ============================================================================
+ * MATRIX DIMENSIONS
+ * ============================================================================
+ *
+ * Matrix dimensions are semantic values, not parser limits.
+ *
+ * They may be:
+ *
+ *     - literals;
+ *     - identifiers;
+ *     - qualified names;
+ *     - compile-time expressions;
+ *     - symbolic values;
+ *     - dependent values;
+ *     - values obtained from other program computations where permitted by
+ *       the type system.
+ *
+ * Examples:
+ *
+ *     Matrix<f64, N, M>
+ *     Matrix<f64, Rows, Cols>
+ *     Matrix<f64, N * M, K>
+ *
+ * This grammar imposes no maximum for:
+ *
+ *     rows
+ *     columns
+ *     elements
+ *     dimensions
+ *     operation count
+ *     matrix rank
+ *     source size
+ *     expression depth
+ *
+ * Implementation/resource limits remain compiler, runtime, resource-policy,
+ * or deployment concerns and MUST NOT become matrix-language semantics.
+ *
+ * ============================================================================
+ * POCO-REAF
+ * ============================================================================
+ *
+ * Matrix syntax describes WHAT computation means.
+ *
+ * It does not select:
+ *
+ *     CPU
+ *     GPU
+ *     FPGA
+ *     ASIC
+ *     accelerator
+ *     distributed node
+ *     memory bank
+ *     SIMD width
+ *     vector unit
+ *     BLAS implementation
+ *     LAPACK implementation
+ *     vendor library
+ *     device identifier
+ *
+ * The same source-level matrix computation can therefore be lowered to
+ * different target realizations according to available capabilities and
+ * resources.
+ *
+ * ============================================================================
+ * OPEN-WORLD OPERATION MODEL
+ * ============================================================================
+ *
+ * Matrix algorithms MUST NOT be encoded as a closed parser enumeration.
+ *
+ * This file deliberately does NOT contain:
+ *
+ *     transpose
+ *     inverse
+ *     determinant
+ *     solve
+ *     LU
+ *     QR
+ *     SVD
+ *     eigenvalues
+ *     Cholesky
+ *     FFT
+ *     GEMM
+ *     BLAS
+ *     LAPACK
+ *
+ * as a finite grammar-level operation list.
+ *
+ * Such operations may be represented by ordinary source-level operation names
+ * and resolved semantically.
+ *
+ * Examples:
+ *
+ *     transpose(A)
+ *     inverse(A)
+ *     solve(A, b)
+ *     lu(A)
+ *     qr(A)
+ *     svd(A)
+ *     vendor::operation(A)
+ *     user_defined_operation(A, B)
+ *
+ * The parser records structure.
+ *
+ * Semantic analysis determines:
+ *
+ *     - whether the operation exists;
+ *     - its signature;
+ *     - operand types;
+ *     - shape requirements;
+ *     - effects;
+ *     - capabilities;
+ *     - resource requirements;
+ *     - numerical semantics;
+ *     - legal lowering.
+ *
+ * ============================================================================
+ * OPERATOR MODEL
+ * ============================================================================
+ *
+ * Matrix arithmetic uses the universal expression grammar.
+ *
+ * Examples:
+ *
+ *     A + B
+ *     A - B
+ *     A * B
+ *     A / B
+ *     A @ B
+ *
+ * where a future/operator-specific spelling is defined by the canonical
+ * expression grammar.
+ *
+ * This file MUST NOT recreate operator precedence.
+ *
+ * Semantic analysis determines whether an operator applied to matrix operands
+ * means:
+ *
+ *     matrix addition;
+ *     matrix multiplication;
+ *     element-wise operation;
+ *     scalar/matrix operation;
+ *     another user-defined operation.
+ *
+ * ============================================================================
+ * LITERAL MODEL
+ * ============================================================================
+ *
+ * Matrix literals use structural nesting:
+ *
+ *     [[1, 2], [3, 4]]
+ *
+ *     [[a, b], [c, d]]
+ *
+ *     [[f(i, j), g(i, j)], [h(i, j), k(i, j)]]
+ *
+ * There is no fixed row or column count.
+ *
+ * Semantic analysis determines:
+ *
+ *     - rectangularity;
+ *     - element-type compatibility;
+ *     - dimensional compatibility;
+ *     - whether an empty matrix is legal;
+ *     - whether nested structures denote a matrix rather than another
+ *       collection type.
+ *
+ * ============================================================================
+ * INDEXING MODEL
+ * ============================================================================
+ *
+ * Matrix indexing is intentionally NOT redefined here.
+ *
+ * The canonical indexing grammar already supports:
+ *
+ *     A[i]
+ *     A[i, j]
+ *     A[i, j, k]
+ *     A[start:end]
+ *     A[start:end:step]
+ *
+ * through:
+ *
+ *     grammar/expressions/indexing.g4
+ *
+ * Therefore matrix-specific indexing semantics are determined by semantic
+ * analysis after the universal postfix/indexing syntax has been parsed.
+ *
+ * ============================================================================
  * LEXER CONTRACT
  * ============================================================================
  *
- * This is a parser grammar.
+ * This is a PARSER grammar.
  *
  * The canonical lexer is:
  *
  *     grammar/antlr/ZamaniLexer.g4
  *
- * No lexer rules are declared here.
+ * The canonical token composition is:
  *
- * Matrix names such as:
+ *     grammar/lexer/tokens.g4
  *
- *     Matrix
- *     matrix
- *     transpose
- *     inverse
- *     determinant
- *     solve
- *     eigenvalues
+ * This file declares NO lexer rules.
  *
- * are intentionally not made lexer-level keywords by this file.
+ * Existing repository tokens used here include:
  *
- * This permits:
+ *     IDENTIFIER
+ *     LBRACKET
+ *     RBRACKET
+ *     LPAREN
+ *     RPAREN
+ *     COMMA
  *
- *     user-defined matrix libraries;
- *     domain extensions;
- *     dialects;
- *     future algorithms;
- *     vendor-independent operations;
- *     compatibility evolution.
+ * No matrix-specific token is required.
  *
- * Semantic resolution determines whether an identifier denotes a canonical
- * matrix operation.
+ * In particular, this file MUST NOT define parser-local lexer rules such as:
+ *
+ *     MATRIX_CONSTRUCTOR
+ *     TRANSPOSE_OPERATOR
+ *     INVERSE_OPERATOR
+ *     ADJOINT_OPERATOR
+ *     NEGATE_OPERATOR
+ *
+ * Those were previously incorrect because this is a parser grammar and the
+ * canonical lexical vocabulary already provides IDENTIFIER.
  *
  * ============================================================================
+ * AST CONTRACT
+ * ============================================================================
  *
- * IMPORT CONTRACT
+ * Matrix syntax lowers into the existing domain-neutral frontend AST.
+ *
+ * This file MUST NOT define a matrix-specific Rust AST.
+ *
+ * Conceptual mappings:
+ *
+ *     matrixLiteral
+ *         -> generic/domain-neutral literal or collection structure
+ *
+ *     matrixOperationExpression
+ *         -> generic Operation expression
+ *
+ *     matrixOperationName
+ *         -> operation name / qualified operation namespace
+ *
+ *     matrixArgumentList
+ *         -> generic ordered operation operands/arguments
+ *
+ * The repository's generic operation model remains authoritative:
+ *
+ *     Operation {
+ *         name,
+ *         namespace,
+ *         operands,
+ *         parameters,
+ *         results,
+ *         attributes,
+ *         modifiers,
+ *         effects,
+ *         capabilities,
+ *         source
+ *     }
+ *
+ * Exact Rust field construction belongs to the frontend lowering layer, not
+ * this grammar.
+ *
+ * ============================================================================
+ * SEMANTIC CONTRACT
+ * ============================================================================
+ *
+ * Parsing answers:
+ *
+ *     "Is this structurally valid matrix-domain syntax?"
+ *
+ * Semantic analysis answers:
+ *
+ *     "What does this matrix computation mean?"
+ *
+ * Semantic analysis owns:
+ *
+ *     - matrix type recognition;
+ *     - shape inference;
+ *     - shape compatibility;
+ *     - dimension arithmetic;
+ *     - scalar/matrix compatibility;
+ *     - matrix operation resolution;
+ *     - overload resolution;
+ *     - numerical semantics;
+ *     - precision;
+ *     - sparsity;
+ *     - storage semantics;
+ *     - resource requirements;
+ *     - capability requirements;
+ *     - effects;
+ *     - legality of target-specific realization.
+ *
+ * ============================================================================
+ * RESOURCE / CAPABILITY SEPARATION
+ * ============================================================================
+ *
+ * Matrix syntax must not turn resources into language limits.
+ *
+ * A program may express resource intent through the canonical resource and
+ * capability grammar, for example:
+ *
+ *     requires capability("matrix.compute")
+ *
+ * or a domain-specific resource contract.
+ *
+ * Whether a target provides the requested capability is not determined here.
+ *
+ * The decision belongs downstream to:
+ *
+ *     semantic analysis
+ *     resource management
+ *     compiler
+ *     scheduler
+ *     deployment
+ *     runtime
+ *     HAL
+ *
+ * ============================================================================
+ * DETERMINISM
+ * ============================================================================
+ *
+ * Parsing this grammar depends only on:
+ *
+ *     - source text;
+ *     - the selected grammar version;
+ *     - canonical lexer vocabulary;
+ *     - canonical imported parser grammars.
+ *
+ * It MUST NOT depend on:
+ *
+ *     - hardware;
+ *     - available RAM;
+ *     - CPU/GPU count;
+ *     - target device;
+ *     - filesystem state;
+ *     - network state;
+ *     - randomness;
+ *     - wall-clock time;
+ *     - environment variables.
+ *
+ * ============================================================================
+ * DEPENDENCIES
  * ============================================================================
  */
 
@@ -377,700 +540,702 @@ import Types, Expressions;
 
 /*
  * ============================================================================
- * 1. PUBLIC MATRIX DOMAIN ENTRY POINT
+ * PUBLIC MATRIX COMPOSITION ENTRY
  * ============================================================================
  *
- * This is the primary parser integration point.
+ * This is the only public matrix-domain entry point.
  *
- * A consumer that wants matrix-domain syntax should depend on:
+ * It intentionally contains matrix-specific constructs only.
  *
- *     matrixConstruct
- *
- * rather than duplicating matrix productions.
+ * General declarations, statements, assignments, indexing, and expressions
+ * remain owned by their respective canonical grammars.
  * ============================================================================
  */
 
 matrixConstruct
-    : matrixDeclaration
-    | matrixAssignment
-    | matrixExpressionStatement
-    | matrixControlExpression
+    : matrixLiteral
+    | matrixOperationExpression
     ;
 
 
 /*
  * ============================================================================
- * 2. MATRIX DECLARATION
+ * MATRIX LITERAL
  * ============================================================================
  *
- * Matrix declarations reuse the canonical type system.
+ * Structural form:
+ *
+ *     []
+ *     [[]]
+ *     [[1]]
+ *     [[1, 2], [3, 4]]
+ *
+ * Empty and nested forms are accepted syntactically.
+ *
+ * Semantic analysis decides whether a particular literal is a valid matrix.
+ * ============================================================================
+ */
+
+matrixLiteral
+    : LBRACKET
+      matrixRowList?
+      RBRACKET
+    ;
+
+
+/*
+ * ============================================================================
+ * MATRIX ROW LIST
+ * ============================================================================
+ *
+ * No fixed row count is encoded.
+ * ============================================================================
+ */
+
+matrixRowList
+    : matrixRow
+      (
+          COMMA
+          matrixRow
+      )*
+      COMMA?
+    ;
+
+
+/*
+ * ============================================================================
+ * MATRIX ROW
+ * ============================================================================
+ *
+ * A row is structurally a nested expression list.
+ * ============================================================================
+ */
+
+matrixRow
+    : LBRACKET
+      matrixElementList?
+      RBRACKET
+    ;
+
+
+/*
+ * ============================================================================
+ * MATRIX ELEMENT LIST
+ * ============================================================================
+ *
+ * Elements use the canonical expression grammar.
+ *
+ * This permits:
+ *
+ *     [[1, 2]]
+ *     [[a, b]]
+ *     [[f(x), g(y)]]
+ *     [[i + 1, j * 2]]
+ *
+ * without introducing a matrix-specific expression language.
+ * ============================================================================
+ */
+
+matrixElementList
+    : expression
+      (
+          COMMA
+          expression
+      )*
+      COMMA?
+    ;
+
+
+/*
+ * ============================================================================
+ * MATRIX OPERATION EXPRESSION
+ * ============================================================================
+ *
+ * Matrix operations are open-world.
+ *
+ * The operation name is source-level data and is resolved semantically.
  *
  * Examples:
  *
- *     let A: Matrix<f64, Rows, Cols> = ...;
- *     let A = matrix(...);
- *     const A: Matrix<f64> = ...;
+ *     transpose(A)
+ *     inverse(A)
+ *     determinant(A)
+ *     solve(A, b)
+ *     svd(A)
+ *     math::transpose(A)
+ *     linear_algebra::solve(A, b)
+ *     vendor::operation(A)
+ *     custom_operation(A, B)
  *
- * The grammar does not determine whether the declared type is semantically
- * a matrix. That remains a semantic-analysis responsibility.
+ * This grammar does not establish that any particular operation exists.
  * ============================================================================
  */
 
-matrixDeclaration
-    : LET identifier matrixTypeAnnotation? ASSIGN matrixExpression SEMICOLON
-    | VAR identifier matrixTypeAnnotation? ASSIGN matrixExpression SEMICOLON
-    | CONST identifier matrixTypeAnnotation? ASSIGN matrixExpression SEMICOLON
-    | LET identifier matrixTypeAnnotation SEMICOLON
-    | VAR identifier matrixTypeAnnotation SEMICOLON
-    | CONST identifier matrixTypeAnnotation SEMICOLON
-    ;
-
-
-matrixTypeAnnotation
-    : COLON typeExpression
+matrixOperationExpression
+    : matrixOperationName
+      LPAREN
+      matrixArgumentList?
+      RPAREN
     ;
 
 
 /*
  * ============================================================================
- * 3. MATRIX ASSIGNMENT
+ * MATRIX OPERATION NAME
  * ============================================================================
  *
- * Assignment operators remain owned by the general expression grammar.
+ * Qualified names use the canonical identifier token.
  *
- * This production only establishes a matrix-domain composition boundary.
+ * No namespace-depth limit exists.
  *
- * Semantic analysis determines:
+ * Examples:
  *
- *     - whether the target is assignable;
- *     - whether it denotes a matrix;
- *     - whether the value has a compatible shape;
- *     - whether element types are compatible.
+ *     transpose
+ *     math::transpose
+ *     linear_algebra::decompose
+ *     vendor::domain::operation
+ *
+ * The semantic layer resolves the resulting name.
  * ============================================================================
  */
 
-matrixAssignment
-    : matrixAssignableTarget ASSIGN matrixExpression SEMICOLON
-    ;
-
-
-matrixAssignableTarget
-    : identifier
-    | matrixElementAccess
-    | matrixSliceAccess
+matrixOperationName
+    : IDENTIFIER
+      (
+          DOUBLE_COLON
+          IDENTIFIER
+      )*
     ;
 
 
 /*
  * ============================================================================
- * 4. MATRIX EXPRESSION STATEMENT
+ * MATRIX OPERATION ARGUMENTS
+ * ============================================================================
+ *
+ * Arguments are ordinary Zamani expressions.
+ *
+ * This is intentionally not a second matrix-expression grammar.
+ *
+ * Examples:
+ *
+ *     solve(A, b)
+ *     reshape(A, rows, cols)
+ *     multiply(A, B)
+ *     scale(A, alpha)
+ *     custom(A[i, j], f(x))
+ *
+ * Indexing itself is owned by the universal postfix/indexing grammar.
  * ============================================================================
  */
 
-matrixExpressionStatement
-    : matrixExpression SEMICOLON
+matrixArgumentList
+    : expression
+      (
+          COMMA
+          expression
+      )*
+      COMMA?
     ;
 
 
 /*
  * ============================================================================
- * 5. MATRIX EXPRESSION
+ * MATRIX TYPE INTEGRATION
  * ============================================================================
  *
- * This is intentionally recursive.
+ * Matrix types are deliberately NOT redefined here.
  *
- * It permits matrix computations to compose without a finite operation count.
+ * The canonical type path is:
  *
+ *     typeExpression
+ *         |
+ *         v
+ *     classical type application
+ *         |
+ *         v
+ *     Matrix<T, ...>
+ *
+ * The following source-level type forms are therefore resolved through the
+ * existing type grammar rather than a duplicate matrix type grammar:
+ *
+ *     Matrix<T>
+ *     Matrix<T, Rows, Cols>
+ *     math::Matrix<T, Rows, Cols>
+ *
+ * This preserves one type-system authority.
  * ============================================================================
  */
-
-matrixExpression
-    : matrixPrimary
-    | matrixConstruction
-    | matrixUnaryOperation
-    | matrixBinaryOperation
-    | matrixCallOperation
-    | matrixIndexExpression
-    | matrixTransformExpression
-    | matrixReductionExpression
-    | matrixDecompositionExpression
-    | matrixSolveExpression
-    | matrixExpressionInParentheses
-    ;
 
 
 /*
  * ============================================================================
- * 6. MATRIX PRIMARY
+ * MATRIX EXPRESSION INTEGRATION
  * ============================================================================
  *
- * Existing general expressions remain available.
+ * Matrix arithmetic does NOT receive another precedence hierarchy here.
  *
- * This permits matrix values to participate in ordinary Zamani expressions.
+ * Ordinary expressions already own:
+ *
+ *     +
+ *     -
+ *     *
+ *     /
+ *     %
+ *     comparisons
+ *     logical operations
+ *     ranges
+ *     calls
+ *     indexing
+ *     member access
+ *     assignments
+ *     conditional expressions
+ *
+ * Therefore:
+ *
+ *     A + B
+ *     A - B
+ *     A * B
+ *
+ * are parsed through the canonical expression grammar.
+ *
+ * Semantic analysis determines whether the operands are matrices and what the
+ * corresponding operation means.
+ *
  * ============================================================================
  */
-
-matrixPrimary
-    : identifier
-    | INTEGER
-    | FLOAT
-    | STRING
-    | matrixLiteral
-    ;
 
 
 /*
  * ============================================================================
- * 7. MATRIX CONSTRUCTION
+ * MATRIX INDEXING INTEGRATION
  * ============================================================================
  *
- * Matrix construction is expressed through semantic constructor names rather
- * than fixed machine-specific mechanisms.
+ * Matrix indexing uses the canonical postfix/indexing grammar.
  *
- * Supported source-level constructors include:
+ * Examples:
+ *
+ *     A[i]
+ *     A[i, j]
+ *     A[i, j, k]
+ *     A[start:end]
+ *     A[start:end:step]
+ *
+ * No matrix-specific indexing rule is declared here.
+ *
+ * This avoids a second indexing authority and permits the same syntax to work
+ * for vectors, tensors, arrays, quantum registers, data objects, and future
+ * indexable domains.
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * MATRIX CONSTRUCTION INTEGRATION
+ * ============================================================================
+ *
+ * Named constructors remain ordinary semantic operation names.
+ *
+ * Examples:
  *
  *     matrix(...)
  *     zeros(...)
  *     ones(...)
  *     identity(...)
  *     diagonal(...)
- *     random(...)
  *     fill(...)
  *
- * Additional constructors can be introduced through dialects/libraries
- * without changing the core matrix semantics.
+ * The grammar intentionally does NOT enumerate these names.
+ *
+ * They are ordinary identifiers consumed by matrixOperationExpression.
+ *
+ * This permits future/user-defined constructors without modifying the grammar.
  *
  * ============================================================================
  */
 
-matrixConstruction
-    : MATRIX_CONSTRUCTOR
-      LPAREN
-      matrixArgumentList?
-      RPAREN
-    ;
-
-
-MATRIX_CONSTRUCTOR
-    : IDENT
-    ;
-
 
 /*
  * ============================================================================
- * 8. MATRIX LITERALS
+ * NUMERICAL ALGORITHM INTEGRATION
  * ============================================================================
  *
- * Matrix literals are structurally recursive.
- *
- * Examples:
- *
- *     [[1, 2], [3, 4]]
- *     [[a, b], [c, d]]
- *
- * There is no finite row/column limit.
- *
- * Semantic analysis validates:
- *
- *     - rectangularity;
- *     - element compatibility;
- *     - dimension compatibility.
- *
- * ============================================================================
- */
-
-matrixLiteral
-    : LBRACKET
-      LBRACKET
-      matrixRowElements?
-      RBRACKET
-      matrixAdditionalRows*
-      RBRACKET
-    ;
-
-
-matrixAdditionalRows
-    : COMMA
-      LBRACKET
-      matrixRowElements?
-      RBRACKET
-    ;
-
-
-matrixRowElements
-    : expression
-      (COMMA expression)*
-      COMMA?
-    ;
-
-
-/*
- * ============================================================================
- * 9. MATRIX ARGUMENTS
- * ============================================================================
- *
- * Arguments are general expressions.
- *
- * This allows symbolic dimensions and values without creating a second
- * expression language.
- * ============================================================================
- */
-
-matrixArgumentList
-    : expression
-      (COMMA expression)*
-      COMMA?
-    ;
-
-
-/*
- * ============================================================================
- * 10. MATRIX UNARY OPERATIONS
- * ============================================================================
- *
- * Unary matrix operations have semantic names.
- *
- * No operation is tied to a particular backend.
- * ============================================================================
- */
-
-matrixUnaryOperation
-    : matrixUnaryOperator
-      matrixExpression
-    ;
-
-
-matrixUnaryOperator
-    : TRANSPOSE_OPERATOR
-    | INVERSE_OPERATOR
-    | ADJOINT_OPERATOR
-    | NEGATE_OPERATOR
-    ;
-
-
-TRANSPOSE_OPERATOR
-    : IDENT
-    ;
-
-
-INVERSE_OPERATOR
-    : IDENT
-    ;
-
-
-ADJOINT_OPERATOR
-    : IDENT
-    ;
-
-
-NEGATE_OPERATOR
-    : IDENT
-    ;
-
-
-/*
- * ============================================================================
- * 11. MATRIX BINARY OPERATIONS
- * ============================================================================
- *
- * Ordinary mathematical operators remain available through the canonical
- * expression system.
- *
- * Matrix-specific semantic operations are represented here as operation
- * names.
- * ============================================================================
- */
-
-matrixBinaryOperation
-    : matrixExpression matrixBinaryOperator matrixExpression
-    ;
-
-
-matrixBinaryOperator
-    : PLUS
-    | MINUS
-    | STAR
-    | SLASH
-    | CARET
-    ;
-
-
-/*
- * ============================================================================
- * 12. MATRIX INDEXING
- * ============================================================================
- *
- * Matrix indexing does not impose a fixed rank.
- *
- * Examples:
- *
- *     A[i, j]
- *     A[i, j, k]
- *     A[i]
- *
- * Semantic analysis determines whether a particular indexing form is valid
- * for the matrix type.
- *
- * ============================================================================
- */
-
-matrixIndexExpression
-    : identifier
-      LBRACKET
-      matrixIndexList
-      RBRACKET
-    ;
-
-
-matrixIndexList
-    : matrixIndex
-      (COMMA matrixIndex)*
-      COMMA?
-    ;
-
-
-matrixIndex
-    : expression
-    | matrixRange
-    ;
-
-
-matrixRange
-    : expression
-      RANGE_OPERATOR
-      expression
-    ;
-
-
-RANGE_OPERATOR
-    : DOT
-      DOT
-    ;
-
-
-/*
- * ============================================================================
- * 13. MATRIX ELEMENT ACCESS
- * ============================================================================
- */
-
-matrixElementAccess
-    : identifier
-      LBRACKET
-      expression
-      COMMA
-      expression
-      RBRACKET
-    ;
-
-
-/*
- * ============================================================================
- * 14. MATRIX SLICE ACCESS
- * ============================================================================
- *
- * Slice dimensionality is unbounded by this grammar.
- *
- * Examples:
- *
- *     A[r0:r1, c0:c1]
- *
- * Semantic analysis determines whether the resulting slice is valid.
- * ============================================================================
- */
-
-matrixSliceAccess
-    : identifier
-      LBRACKET
-      matrixSliceDimension
-      (COMMA matrixSliceDimension)*
-      COMMA?
-      RBRACKET
-    ;
-
-
-matrixSliceDimension
-    : expression
-      RANGE_OPERATOR
-      expression
-    | expression
-    ;
-
-
-/*
- * ============================================================================
- * 15. MATRIX TRANSFORM OPERATIONS
- * ============================================================================
- *
- * The operation names are represented as identifiers at lexical level.
- *
- * Canonical semantic operations may include:
+ * Algorithms such as:
  *
  *     transpose
- *     conjugate
- *     adjoint
- *     reshape
- *     permute
- *     reorder
- *     broadcast
- *     tile
- *     flatten
+ *     inverse
+ *     determinant
+ *     solve
+ *     LU
+ *     QR
+ *     SVD
+ *     eigenvalue
+ *     eigenvector
+ *     Cholesky
+ *     least_squares
  *
- * The grammar does not restrict future operations to this list.
- * ============================================================================
- */
-
-matrixTransformExpression
-    : identifier
-      LPAREN
-      matrixArgumentList?
-      RPAREN
-    ;
-
-
-/*
- * ============================================================================
- * 16. MATRIX REDUCTION OPERATIONS
- * ============================================================================
+ * are semantic operations, not a finite parser vocabulary.
  *
- * Examples:
+ * A semantic operation registry/library/dialect may define their meaning.
  *
- *     trace(A)
- *     sum(A)
- *     product(A)
- *     norm(A)
- *     max(A)
- *     min(A)
+ * This preserves:
  *
- * Whether an operation is mathematically valid depends on the semantic type
- * and operation definition.
+ *     Program Once
+ *     Compile Once
+ *     Run Everywhere
+ *     Anywhere
+ *     Forever
+ *
+ * without requiring the grammar to be modified whenever a new matrix
+ * algorithm is introduced.
+ *
  * ============================================================================
- */
-
-matrixReductionExpression
-    : identifier
-      LPAREN
-      matrixReductionArguments
-      RPAREN
-    ;
-
-
-matrixReductionArguments
-    : matrixExpression
-      (COMMA expression)*
-      COMMA?
-    ;
-
-
-/*
- * ============================================================================
- * 17. MATRIX DECOMPOSITION OPERATIONS
+ * CROSS-DOMAIN INTEGRATION
  * ============================================================================
  *
- * Examples:
+ * Matrix values and operations remain ordinary Zamani values/operations.
  *
- *     lu(A)
- *     qr(A)
- *     svd(A)
- *     eig(A)
- *     cholesky(A)
+ * Therefore matrix computation can participate in:
  *
- * The parser records the operation structure.
+ *     classical
+ *     hybrid
+ *     quantum-classical
+ *     AI/ML
+ *     data
+ *     distributed
+ *     networking
+ *     hardware/software co-design
  *
- * It does not decide whether:
+ * without introducing domain-specific machine syntax here.
  *
- *     - A is square;
- *     - A is positive definite;
- *     - A is Hermitian;
- *     - a decomposition exists;
- *     - the requested precision is supported.
+ * For example, a matrix may be used as:
+ *
+ *     - a classical computation operand;
+ *     - a tensor/data object;
+ *     - a model parameter;
+ *     - a quantum-control parameter where semantically permitted;
+ *     - an HDL/hardware-co-design parameter;
+ *     - distributed data;
+ *     - an accelerator input.
+ *
+ * Semantic analysis determines whether each use is legal.
+ *
  * ============================================================================
- */
-
-matrixDecompositionExpression
-    : matrixOperationName
-      LPAREN
-      matrixExpression
-      RPAREN
-    ;
-
-
-matrixOperationName
-    : identifier
-    ;
-
-
-/*
- * ============================================================================
- * 18. MATRIX SOLVE OPERATIONS
+ * RESOURCE / HARDWARE INTEGRATION
  * ============================================================================
  *
- * Examples:
+ * This file does NOT select:
  *
+ *     CPU
+ *     GPU
+ *     FPGA
+ *     ASIC
+ *     accelerator
+ *     device
+ *     memory bank
+ *     node
+ *     SIMD width
+ *     vector width
+ *
+ * A matrix operation may later be lowered to any suitable realization.
+ *
+ * Example conceptual pipeline:
+ *
+ *     matrix operation
+ *          |
+ *          v
+ *     semantic operation
+ *          |
+ *          v
+ *     canonical classical representation
+ *          |
+ *          v
+ *     optimization
+ *          |
+ *          +---------------------+
+ *          |                     |
+ *          v                     v
+ *     target-independent    resource analysis
+ *          |                     |
+ *          +----------+----------+
+ *                     |
+ *                     v
+ *               target lowering
+ *                     |
+ *          +----------+----------+
+ *          |          |          |
+ *          v          v          v
+ *         CPU        GPU       FPGA/ASIC/etc.
+ *
+ * The grammar does not choose among those targets.
+ *
+ * ============================================================================
+ * QUANTUM INTEGRATION
+ * ============================================================================
+ *
+ * A matrix occurring in a quantum program remains a classical semantic object
+ * unless the semantic system explicitly defines a quantum-domain meaning.
+ *
+ * This grammar MUST NOT create:
+ *
+ *     quantum matrix IR
+ *     quantum matrix gate enum
+ *     quantum matrix routing
+ *     quantum matrix scheduling
+ *
+ * Quantum semantics continue through:
+ *
+ *     domain-neutral AST
+ *          |
+ *          v
+ *     semantic analysis
+ *          |
+ *          v
+ *     quantum::ir
+ *
+ * where appropriate.
+ *
+ * ============================================================================
+ * HDL / HARDWARE INTEGRATION
+ * ============================================================================
+ *
+ * Matrix dimensions and values may participate in hardware/software
+ * co-design, but this grammar does not encode:
+ *
+ *     fixed bus widths
+ *     fixed register widths
+ *     fixed memory sizes
+ *     fixed accelerator counts
+ *     fixed pipeline depths
+ *     fixed device topology
+ *
+ * Such properties remain source-level parameters, requirements, capabilities,
+ * constraints, or downstream target decisions according to their semantics.
+ *
+ * ============================================================================
+ * ERROR / DIAGNOSTIC CONTRACT
+ * ============================================================================
+ *
+ * Syntax errors are structural parser errors.
+ *
+ * Semantic errors belong downstream.
+ *
+ * Examples of semantic errors:
+ *
+ *     non-rectangular matrix literal;
+ *     incompatible matrix shapes;
+ *     invalid matrix multiplication;
+ *     invalid dimension expression;
+ *     unknown matrix operation;
+ *     incompatible element types;
+ *     unsupported numerical semantics;
+ *     unavailable required capability.
+ *
+ * The parser MUST NOT attempt to diagnose these as syntax errors merely
+ * because they are semantically invalid.
+ *
+ * ============================================================================
+ * SCALABILITY CONTRACT
+ * ============================================================================
+ *
+ * The following are structurally unbounded:
+ *
+ *     matrix rows
+ *     matrix columns
+ *     matrix elements
+ *     matrix operation arguments
+ *     qualified operation-name depth
+ *     nested expressions
+ *     symbolic dimensions
+ *     matrix operation sequences
+ *
+ * The grammar contains no:
+ *
+ *     MAX_ROWS
+ *     MAX_COLUMNS
+ *     MAX_ELEMENTS
+ *     MAX_MATRIX_SIZE
+ *     MAX_DIMENSIONS
+ *     MAX_RANK
+ *     MAX_OPERATIONS
+ *     MAX_ARGUMENTS
+ *     MAX_NAMESPACE_DEPTH
+ *     MAX_MEMORY
+ *     MAX_THREADS
+ *     MAX_CORES
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_NODES
+ *
+ * Resource availability is evaluated downstream.
+ *
+ * "Infinity" here means that the language grammar itself does not impose an
+ * arbitrary finite hardware-oriented ceiling.
+ *
+ * ============================================================================
+ * COMPATIBILITY CONTRACT
+ * ============================================================================
+ *
+ * This replacement deliberately preserves the existing matrix file path:
+ *
+ *     grammar/classical/matrix.g4
+ *
+ * and the primary public rule:
+ *
+ *     matrixConstruct
+ *
+ * Existing consumers should therefore integrate through matrixConstruct rather
+ * than depending on internal rules.
+ *
+ * Internal rules are not a substitute for the canonical generic expression,
+ * type, declaration, statement, or indexing grammars.
+ *
+ * ============================================================================
+ * TEST CONTRACT
+ * ============================================================================
+ *
+ * Required positive cases:
+ *
+ *     []
+ *     [[]]
+ *     [[1]]
+ *     [[1, 2], [3, 4]]
+ *     [[a, b], [c, d]]
+ *     [[f(x), g(y)], [h(x), k(y)]]
+ *
+ *     transpose(A)
+ *     inverse(A)
  *     solve(A, b)
- *     least_squares(A, b)
- *     inverse_solve(A, b)
+ *     math::transpose(A)
+ *     linear_algebra::solve(A, b)
+ *     vendor::domain::operation(A, B)
+ *     custom_operation(A, B, C)
  *
- * Shape and numerical legality are semantic concerns.
- * ============================================================================
- */
-
-matrixSolveExpression
-    : matrixSolveOperation
-      LPAREN
-      matrixExpression
-      COMMA
-      matrixExpression
-      matrixOptionalArguments?
-      RPAREN
-    ;
-
-
-matrixSolveOperation
-    : identifier
-    ;
-
-
-matrixOptionalArguments
-    : COMMA
-      matrixArgumentList
-    ;
-
-
-/*
- * ============================================================================
- * 19. MATRIX CONTROL EXPRESSION
- * ============================================================================
+ * Required semantic integration cases:
  *
- * Matrix operations may appear inside general control expressions.
+ *     Matrix<f64>
+ *     Matrix<f64, Rows, Cols>
+ *     math::Matrix<f64, Rows, Cols>
  *
- * This rule is deliberately small because control-flow ownership belongs to
- * statements/expressions grammar.
- * ============================================================================
- */
-
-matrixControlExpression
-    : IF
-      expression
-      matrixExpressionBlock
-      matrixElseRegion?
-    ;
-
-
-matrixElseRegion
-    : ELSE
-      (
-          matrixControlExpression
-        | matrixExpressionBlock
-      )
-    ;
-
-
-matrixExpressionBlock
-    : LBRACE
-      matrixConstruct*
-      RBRACE
-    ;
-
-
-/*
- * ============================================================================
- * 20. PARENTHESIZED MATRIX EXPRESSION
- * ============================================================================
- */
-
-matrixExpressionInParentheses
-    : LPAREN
-      matrixExpression
-      RPAREN
-    ;
-
-
-/*
- * ============================================================================
- * 21. MATRIX IDENTIFIER BRIDGE
- * ============================================================================
+ *     A + B
+ *     A - B
+ *     A * B
+ *     A[i]
+ *     A[i, j]
+ *     A[i, j:k]
  *
- * Identifier spelling remains owned by ZamaniLexer.
- * ============================================================================
- */
-
-identifier
-    : IDENT
-    ;
-
-
-/*
- * ============================================================================
- * 22. MATRIX SEMANTIC OPERATORS
- * ============================================================================
+ * Required negative cases:
  *
- * These rules are intentionally parser-level abstractions.
+ *     malformed row delimiters;
+ *     malformed argument lists;
+ *     missing closing bracket;
+ *     missing closing parenthesis;
+ *     malformed qualified operation name;
+ *     malformed comma placement.
  *
- * They do not define numerical behavior.
+ * Required boundary/scalability cases:
  *
- * Semantic analysis is responsible for resolving operation identity.
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 23. COMPLETION CONTRACT
- * ============================================================================
+ *     one element;
+ *     many rows;
+ *     many columns;
+ *     symbolic expressions as elements;
+ *     symbolic dimensions;
+ *     deeply qualified operation names;
+ *     large operation argument lists.
  *
- * This file is complete when:
+ * Required cross-domain cases:
  *
- *     1. It parses through the canonical Zamani lexer.
- *
- *     2. It imports only authoritative grammar dependencies.
- *
- *     3. It declares no machine/resource maximum.
- *
- *     4. It declares no lexer rules.
- *
- *     5. It does not duplicate Matrix<T, Rows, Cols> type syntax owned by
- *        ClassicalTypes.g4.
- *
- *     6. It does not duplicate general expression syntax.
- *
- *     7. It does not construct IR.
- *
- *     8. It does not select hardware.
- *
- *     9. It does not impose numerical implementation limits.
- *
- *    10. It supports arbitrarily many matrix elements at the language level,
- *        subject only to downstream parser/compiler/resource availability.
- *
- *    11. It preserves symbolic dimensions.
- *
- *    12. It permits user-defined/future matrix operations through semantic
- *        identifier resolution.
- *
- *    13. Positive, negative, boundary, determinism and round-trip tests exist.
- *
- *    14. Cross-domain tests verify matrix syntax can participate in:
- *
- *            classical + quantum
- *            classical + HDL
- *            classical + hardware
- *            classical + distributed
- *            classical + AI
- *
- *        without adding machine-specific syntax here.
+ *     classical matrix + data;
+ *     classical matrix + AI;
+ *     classical matrix + distributed;
+ *     classical matrix + hardware/resource intent;
+ *     hybrid program containing matrix operations;
+ *     quantum-classical program carrying matrix values through semantic
+ *     analysis without introducing a second quantum IR.
  *
  * ============================================================================
- *
- * IMPORTANT ANTLR NOTE
+ * DETERMINISM TEST
  * ============================================================================
  *
- * The productions above deliberately avoid Rust actions and semantic
- * predicates. ANTLR's generated parser therefore remains independent of the
- * Rust implementation version.
+ * Identical source text and identical grammar/token vocabulary must produce
+ * identical parser structure regardless of:
  *
- * Rust 1.97 / 1.97.1 compatibility is enforced by the generated frontend and
- * compiler crate, not by embedding Rust code in this grammar.
+ *     CPU;
+ *     GPU;
+ *     memory size;
+ *     available devices;
+ *     runtime environment;
+ *     hardware topology.
  *
+ * ============================================================================
+ * HARD-CODING AUDIT
+ * ============================================================================
+ *
+ * This file passes the matrix-domain hard-coding requirements when it contains:
+ *
+ *     no physical device identifiers;
+ *     no hardware capacities;
+ *     no fixed resource counts;
+ *     no fixed matrix dimensions;
+ *     no finite matrix algorithm registry;
+ *     no vendor-specific parser tokens;
+ *     no fixed SIMD width;
+ *     no fixed numerical precision limit;
+ *     no fixed memory capacity;
+ *     no machine-specific ABI assumption.
+ *
+ * ============================================================================
+ * COMPLETION CRITERIA
+ * ============================================================================
+ *
+ * This file is independently complete when:
+ *
+ *   1. It is a valid ANTLR parser grammar.
+ *
+ *   2. It consumes the canonical ZamaniLexer vocabulary.
+ *
+ *   3. It declares no lexer rules.
+ *
+ *   4. It introduces no new token requirement.
+ *
+ *   5. It uses IDENTIFIER rather than an invented IDENT token.
+ *
+ *   6. It does not redefine universal expression precedence.
+ *
+ *   7. It does not redefine indexing or slicing.
+ *
+ *   8. It does not redefine declarations.
+ *
+ *   9. It does not redefine statements or control flow.
+ *
+ *  10. It does not redefine the universal type system.
+ *
+ *  11. Matrix types remain represented through canonical generic types.
+ *
+ *  12. Matrix algorithms remain open-world semantic operations.
+ *
+ *  13. Matrix literals have no finite row/column limit.
+ *
+ *  14. Matrix operation argument lists have no finite arity limit.
+ *
+ *  15. Qualified operation names have no finite namespace-depth limit.
+ *
+ *  16. No hardware/resource limits are encoded.
+ *
+ *  17. No target-specific implementation is selected.
+ *
+ *  18. No second matrix IR is introduced.
+ *
+ *  19. The AST contract is domain-neutral.
+ *
+ *  20. The semantic contract is explicitly downstream.
+ *
+ *  21. Positive, negative, boundary, scalability, compatibility,
+ *      determinism, and cross-domain tests are defined.
+ *
+ * ============================================================================
+ * END OF FILE
  * ============================================================================
  */
