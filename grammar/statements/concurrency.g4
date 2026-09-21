@@ -1,1485 +1,1896 @@
 /*
  * ============================================================================
  * Zamani Universal Computing Language
- * Canonical Concurrency-Domain Composition Grammar
+ * Statement-Layer Concurrency Integration Grammar
  * ============================================================================
  *
- * File:
- *     grammar/concurrency/concurrency.g4
+ * FILE
+ * ----
+ * grammar/statements/concurrency.g4
  *
- * Status:
- *     PRODUCTION CONCURRENCY COMPOSITION ROOT
+ * STATUS
+ * ------
+ * PRODUCTION STATEMENT-INTEGRATION ADAPTER
  *
- * Language:
- *     Zamani
+ * LANGUAGE
+ * --------
+ * Zamani
  *
- * Compiler baseline:
- *     Rust 1.97 / Rust 1.97.1
- *     Rust 2021 edition
- *     Safe Rust only.
+ * COMPILER BASELINE
+ * -----------------
+ * Rust 1.97 / Rust 1.97.1
+ * Rust 2021 edition
+ * Safe Rust only
  *
  * ============================================================================
  * PURPOSE
  * ============================================================================
  *
- * This file is the SINGLE COMPOSITION OWNER for Zamani concurrency syntax.
+ * This file is the STATEMENT-LAYER integration boundary for concurrency.
  *
- * It does not implement individual concurrency constructs.
+ * It does NOT own the concurrency language.
  *
- * It composes the independently owned concurrency grammars:
+ * The concurrency domain itself is owned by:
  *
- *     tasks.g4
- *     futures.g4
- *     parallel.g4
- *     data-parallel.g4
- *     task-parallel.g4
- *     actors.g4
- *     channels.g4
- *     cancellation.g4
- *     synchronization.g4
+ *     grammar/concurrency/
  *
- * The individual files remain responsible for their own syntax.
- *
- * This file provides stable parser-level integration points for:
- *
- *     expressions
- *     statements
- *     declarations
- *     concurrency-domain tooling
- *
- * ============================================================================
- * IMPORTANT PATH / OWNERSHIP RULE
- * ============================================================================
- *
- * This file is located at:
+ * and its canonical composition boundary:
  *
  *     grammar/concurrency/concurrency.g4
  *
- * It MUST NOT be duplicated as:
+ * This file exists because the universal statement grammar needs a stable,
+ * statement-context entry point through which concurrency constructs can enter
+ * the language.
  *
- *     grammar/statements/concurrency.g4
+ * The architectural relationship is:
  *
- * `grammar/statements/statements.g4` remains the universal statement
- * composition owner.
  *
- * `grammar/concurrency/concurrency.g4` owns only the concurrency-domain
- * composition boundary.
+ *     grammar/antlr/ZamaniLexer.g4
+ *                    |
+ *                    v
+ *     grammar/antlr/ZamaniParser.g4
+ *                    |
+ *          +---------+----------+
+ *          |                    |
+ *          v                    v
+ *     Statements            Concurrency
+ *          |                    |
+ *          |                    v
+ *          |        grammar/concurrency/
+ *          |                    |
+ *          +---------+----------+
+ *                    |
+ *                    v
+ *        statement-level adapter
+ *                    |
+ *                    v
+ *          frontend/domain-neutral AST
+ *
+ *
+ * This file therefore MUST remain thin.
  *
  * ============================================================================
- * ARCHITECTURAL AUTHORITY
+ * PRIMARY OWNERSHIP RULE
  * ============================================================================
  *
  * THIS FILE OWNS:
  *
- *     - concurrency-domain composition;
- *     - concurrency expression composition;
- *     - concurrency statement composition;
- *     - concurrency declaration composition;
- *     - concurrency integration adapters;
- *     - stable public concurrency parser entry points.
+ *     - statement-context admission of concurrency;
+ *     - the statement-layer adapter name;
+ *     - statement-level integration with the universal Statements grammar;
+ *     - documentation of the concurrency/statement boundary;
+ *     - stable integration naming for tooling.
  *
  * THIS FILE DOES NOT OWN:
  *
- *     - lexical tokens;
+ *     - concurrency domain syntax;
+ *     - task syntax;
+ *     - async syntax;
+ *     - await syntax;
+ *     - spawn syntax;
+ *     - parallel syntax;
+ *     - data-parallel syntax;
+ *     - task-parallel syntax;
+ *     - actor syntax;
+ *     - channel syntax;
+ *     - cancellation syntax;
+ *     - synchronization syntax;
+ *     - future syntax;
  *     - identifiers;
- *     - qualified names;
- *     - general expressions;
- *     - expression precedence;
- *     - ordinary statements;
- *     - blocks;
+ *     - expressions;
  *     - types;
- *     - ownership;
- *     - borrowing;
+ *     - blocks;
+ *     - declarations;
  *     - effects;
- *     - resource semantics;
- *     - capability evaluation;
+ *     - memory;
+ *     - resources;
+ *     - capabilities;
  *     - scheduling;
- *     - routing;
  *     - placement;
+ *     - routing;
  *     - optimization;
  *     - runtime execution;
- *     - worker creation;
- *     - thread creation;
- *     - CPU selection;
- *     - GPU selection;
- *     - FPGA selection;
- *     - QPU selection;
- *     - node selection;
- *     - physical topology;
- *     - quantum operations;
- *     - quantum::ir;
+ *     - hardware selection;
+ *     - topology;
+ *     - quantum IR;
+ *     - classical IR;
+ *     - HDL IR;
  *     - QEC;
  *     - ZQN;
  *     - HAL.
  *
- * Those concerns belong to their canonical downstream owners.
+ * Those responsibilities belong to their canonical owners.
+ *
+ * ============================================================================
+ * WHY THIS FILE EXISTS
+ * ============================================================================
+ *
+ * Zamani deliberately separates:
+ *
+ *     DOMAIN OWNERSHIP
+ *
+ * from:
+ *
+ *     CONTEXT INTEGRATION.
+ *
+ * `grammar/concurrency/concurrency.g4` answers:
+ *
+ *     "What belongs to the concurrency domain?"
+ *
+ * This file answers:
+ *
+ *     "How does an already-defined concurrency construct enter statement
+ *      context?"
+ *
+ * That distinction prevents the statement grammar from becoming a second
+ * concurrency language.
  *
  * ============================================================================
  * SINGLE-AUTHORITY RULE
  * ============================================================================
  *
- * There must be exactly one effective concurrency-domain composition grammar.
+ * There MUST be exactly one owner for each concurrency production.
  *
- * This file is that owner.
+ * For example:
  *
- * Leaf grammars MUST NOT redefine:
+ *     taskSpawnStatement
+ *         -> grammar/concurrency/tasks.g4
  *
- *     concurrencyExpression
- *     concurrencyStatement
- *     concurrencyDeclaration
- *     concurrencyConstruct
+ *     parallelStatement
+ *         -> grammar/concurrency/parallel.g4
  *
- * The leaf grammars own only their specific constructs.
+ *     channelStatement
+ *         -> grammar/concurrency/channels.g4
+ *
+ *     synchronizationStatement
+ *         -> grammar/concurrency/synchronization.g4
+ *
+ * This file MUST NOT redefine any of them.
+ *
+ * The concurrency-domain composition grammar remains responsible for composing
+ * those independently owned constructs.
  *
  * ============================================================================
  * ANTLR COMPOSITION MODEL
  * ============================================================================
  *
- * ANTLR parser grammar imports behave as grammar composition/inheritance:
+ * This is a parser grammar.
+ *
+ * The canonical token vocabulary is supplied by:
+ *
+ *     ZamaniLexer
+ *
+ * This file contains NO lexer rules.
+ *
+ * This file also contains NO parser actions, semantic predicates, embedded
+ * Rust, target-language code, filesystem operations, network operations,
+ * hardware discovery, or runtime behavior.
+ *
+ * ============================================================================
+ * IMPORT CONTRACT
+ * ============================================================================
+ *
+ * The imported `Concurrency` grammar is the domain-level concurrency
+ * composition authority.
+ *
+ * Therefore:
+ *
+ *     Statements/ConcurrencyStatements
+ *                |
+ *                v
+ *            Concurrency
+ *                |
+ *        +-------+--------+
+ *        |       |        |
+ *       Tasks  Parallel  ...
+ *
+ * This adapter must never import every concurrency leaf directly.
+ *
+ * Doing so would create a second domain composition hierarchy.
+ *
+ * ============================================================================
+ * IMPORTANT: GRAMMAR NAME
+ * ============================================================================
+ *
+ * The grammar name is intentionally:
+ *
+ *     ConcurrencyStatements
+ *
+ * rather than:
  *
  *     Concurrency
- *          |
- *          +--> Tasks
- *          +--> Futures
- *          +--> Parallel
- *          +--> DataParallel
- *          +--> TaskParallel
- *          +--> Actors
- *          +--> Channels
- *          +--> Cancellation
- *          +--> Synchronization
  *
- * The resulting effective parser sees the imported rules as part of the
- * composed grammar.
+ * because `Concurrency` is already owned by:
  *
- * Therefore this file must not copy the rules from those grammars.
+ *     grammar/concurrency/concurrency.g4
  *
- * ============================================================================
- * REQUIRED DELEGATE CONTRACT
- * ============================================================================
+ * and the canonical parser already imports that domain grammar.
  *
- * Every imported grammar MUST be a valid ANTLR parser grammar.
+ * The distinct grammar name prevents an accidental duplicate ANTLR grammar
+ * authority.
  *
- * In particular:
- *
- *     parallel.g4
- *     task-parallel.g4
- *
- * currently require their parser-grammar headers and canonical token-vocabulary
- * declarations to be repaired before this composition can be generated.
- *
- * That repair belongs to those files.
- *
- * This file deliberately does not duplicate their syntax as a workaround.
- *
- * ============================================================================
- * CANONICAL IMPORTS
  * ============================================================================
  */
 
-parser grammar Concurrency;
+parser grammar ConcurrencyStatements;
 
 options {
     tokenVocab = ZamaniLexer;
 }
 
-import
-    Tasks,
-    Futures,
-    Parallel,
-    DataParallel,
-    TaskParallel,
-    Actors,
-    Channels,
-    Cancellation,
-    Synchronization
-;
+
+/*
+ * ============================================================================
+ * DOMAIN COMPOSITION IMPORT
+ * ============================================================================
+ *
+ * The complete concurrency-domain composition is imported once.
+ *
+ * This file does NOT import:
+ *
+ *     Tasks
+ *     Futures
+ *     Parallel
+ *     DataParallel
+ *     TaskParallel
+ *     Actors
+ *     Channels
+ *     Cancellation
+ *     Synchronization
+ *
+ * individually.
+ *
+ * Those are already composed by the canonical `Concurrency` grammar.
+ *
+ * This gives the repository the following ownership graph:
+ *
+ *
+ *     ZamaniParser
+ *          |
+ *          +--> Statements
+ *          |       |
+ *          |       +--> ConcurrencyStatements
+ *          |               |
+ *          |               +--> Concurrency
+ *          |
+ *          +--> Concurrency
+ *
+ *
+ * The important invariant is that both paths ultimately refer to the SAME
+ * concurrency-domain grammar rather than defining independent syntax.
+ *
+ * ============================================================================
+ */
+
+import Concurrency;
 
 
 /*
  * ============================================================================
- * 1. CONCURRENCY EXPRESSION COMPOSITION
+ * 1. PUBLIC STATEMENT-LAYER ADAPTER
  * ============================================================================
  *
- * This is the concurrency-domain expression boundary.
+ * This is the ONLY production owned by this file that the universal statement
+ * grammar needs to consume.
  *
- * It is intended to be consumed by the canonical expression composition layer.
+ * It deliberately has a different name from `concurrencyStatement`.
  *
- * Important:
+ * Reason:
  *
- *     - ordinary `await` and `spawn` remain owned by Tasks/Async;
- *     - ordinary parallel syntax remains owned by Parallel;
- *     - data parallel syntax remains owned by DataParallel;
- *     - structured task parallelism remains owned by TaskParallel;
- *     - actor/channel/cancellation/synchronization expressions remain owned by
- *       their respective files.
+ *     `concurrencyStatement`
  *
- * No implementation detail is encoded here.
- */
-
-concurrencyExpression
-    : concurrencyTaskExpression
-    | concurrencyParallelExpression
-    | concurrencyDataParallelExpression
-    | concurrencyTaskParallelExpression
-    | concurrencyActorExpression
-    | concurrencyChannelExpression
-    | concurrencyCancellationExpression
-    | concurrencySynchronizationExpression
-    ;
-
-
-/*
- * ============================================================================
- * 2. TASK EXPRESSION ADAPTER
- * ============================================================================
+ * belongs to the concurrency domain.
  *
- * Tasks own spawn/await syntax.
+ *     `concurrencyStatementAdapter`
  *
- * `taskConcurrencyExpression` currently contains the task-level expression
- * forms defined by tasks.g4.
+ * belongs to the statement-context integration layer.
  *
- * This adapter deliberately does not recreate:
+ * This distinction prevents a second generic concurrency statement authority.
  *
- *     spawn
- *     await
- *     async
- *
- * syntax.
- */
-
-concurrencyTaskExpression
-    : taskConcurrencyExpression
-    ;
-
-
-/*
- * ============================================================================
- * 3. PARALLEL EXPRESSION ADAPTER
- * ============================================================================
- *
- * Parallel computation syntax belongs to parallel.g4.
- *
- * This adapter provides one stable concurrency-domain name.
- */
-
-concurrencyParallelExpression
-    : parallelConstruct
-    ;
-
-
-/*
- * ============================================================================
- * 4. DATA-PARALLEL EXPRESSION ADAPTER
- * ============================================================================
- *
- * Data-parallel syntax remains owned by data-parallel.g4.
- */
-
-concurrencyDataParallelExpression
-    : dataParallelConstruct
-    ;
-
-
-/*
- * ============================================================================
- * 5. TASK-PARALLEL EXPRESSION ADAPTER
- * ============================================================================
- *
- * Structured task parallelism remains owned by task-parallel.g4.
- *
- * `taskParallelRootExpression` is the stable expression-level entry point.
- */
-
-concurrencyTaskParallelExpression
-    : taskParallelRootExpression
-    ;
-
-
-/*
- * ============================================================================
- * 6. ACTOR EXPRESSION ADAPTER
- * ============================================================================
- *
- * Actor semantics remain owned by actors.g4.
- *
- * This file does not define actor lifecycle, messaging, supervision or
- * restart semantics.
- */
-
-concurrencyActorExpression
-    : actorExpressionRoot
-    ;
-
-
-/*
- * ============================================================================
- * 7. CHANNEL EXPRESSION ADAPTER
- * ============================================================================
- *
- * Channel syntax remains owned by channels.g4.
- *
- * This file does not define:
- *
- *     channel type semantics;
- *     buffering;
- *     ownership;
- *     send/receive behavior;
- *     close semantics;
- *     select semantics.
- */
-
-concurrencyChannelExpression
-    : channelRootExpression
-    ;
-
-
-/*
- * ============================================================================
- * 8. CANCELLATION EXPRESSION ADAPTER
- * ============================================================================
- *
- * Cancellation syntax remains owned by cancellation.g4.
- *
- * Cancellation propagation and runtime behavior are semantic/runtime concerns.
- */
-
-concurrencyCancellationExpression
-    : cancellationExpressionRoot
-    ;
-
-
-/*
- * ============================================================================
- * 9. SYNCHRONIZATION EXPRESSION ADAPTER
- * ============================================================================
- *
- * Synchronization syntax remains owned by synchronization.g4.
- */
-
-concurrencySynchronizationExpression
-    : synchronizationExpression
-    ;
-
-
-/*
- * ============================================================================
- * 10. CONCURRENCY STATEMENT COMPOSITION
- * ============================================================================
- *
- * This is the concurrency-domain statement boundary.
- *
- * It is intended to be consumed by:
- *
- *     grammar/statements/statements.g4
- *
- * That file remains the authoritative universal `statement` owner.
- *
- * This file MUST NOT redefine `statement`.
- */
-
-concurrencyStatement
-    : concurrencyTaskStatement
-    | concurrencyParallelStatement
-    | concurrencyDataParallelStatement
-    | concurrencyTaskParallelStatement
-    | concurrencyActorStatement
-    | concurrencyChannelStatement
-    | concurrencyCancellationStatement
-    | concurrencySynchronizationStatement
-    ;
-
-
-/*
- * ============================================================================
- * 11. TASK STATEMENT ADAPTER
- * ============================================================================
- *
- * Task statement syntax remains owned by tasks.g4.
- */
-
-concurrencyTaskStatement
-    : taskStatement
-    ;
-
-
-/*
- * ============================================================================
- * 12. PARALLEL STATEMENT ADAPTER
  * ============================================================================
  */
 
-concurrencyParallelStatement
-    : parallelStatement
-    ;
-
-
-/*
- * ============================================================================
- * 13. DATA-PARALLEL STATEMENT ADAPTER
- * ============================================================================
- */
-
-concurrencyDataParallelStatement
-    : dataParallelStatement
-    ;
-
-
-/*
- * ============================================================================
- * 14. TASK-PARALLEL STATEMENT ADAPTER
- * ============================================================================
- *
- * The canonical task-parallel grammar exposes a root statement boundary.
- */
-
-concurrencyTaskParallelStatement
-    : taskParallelRootStatement
-    ;
-
-
-/*
- * ============================================================================
- * 15. ACTOR STATEMENT ADAPTER
- * ============================================================================
- */
-
-concurrencyActorStatement
-    : actorStatementRoot
-    ;
-
-
-/*
- * ============================================================================
- * 16. CHANNEL STATEMENT ADAPTER
- * ============================================================================
- */
-
-concurrencyChannelStatement
-    : channelRootStatement
-    ;
-
-
-/*
- * ============================================================================
- * 17. CANCELLATION STATEMENT ADAPTER
- * ============================================================================
- */
-
-concurrencyCancellationStatement
-    : cancellationStatement
-    ;
-
-
-/*
- * ============================================================================
- * 18. SYNCHRONIZATION STATEMENT ADAPTER
- * ============================================================================
- */
-
-concurrencySynchronizationStatement
-    : synchronizationStatement
-    ;
-
-
-/*
- * ============================================================================
- * 19. CONCURRENCY DECLARATION COMPOSITION
- * ============================================================================
- *
- * Concurrency declarations are intentionally kept separate from statements.
- *
- * This prevents declaration syntax from becoming an accidental statement
- * alternative and allows the universal declarations dispatcher to decide
- * where declarations are legal.
- */
-
-concurrencyDeclaration
-    : concurrencyActorDeclaration
-    | concurrencyChannelDeclaration
-    | concurrencyCancellationDeclaration
-    | concurrencySynchronizationDeclaration
-    ;
-
-
-/*
- * ============================================================================
- * 20. ACTOR DECLARATION
- * ============================================================================
- */
-
-concurrencyActorDeclaration
-    : actorDeclarationRoot
-    ;
-
-
-/*
- * ============================================================================
- * 21. CHANNEL DECLARATION
- * ============================================================================
- */
-
-concurrencyChannelDeclaration
-    : channelDeclaration
-    ;
-
-
-/*
- * ============================================================================
- * 22. CANCELLATION DECLARATION
- * ============================================================================
- */
-
-concurrencyCancellationDeclaration
-    : cancellationDeclaration
-    ;
-
-
-/*
- * ============================================================================
- * 23. SYNCHRONIZATION DECLARATION
- * ============================================================================
- */
-
-concurrencySynchronizationDeclaration
-    : synchronizationDeclaration
-    ;
-
-
-/*
- * ============================================================================
- * 24. CONCURRENCY CONSTRUCT
- * ============================================================================
- *
- * IMPORTANT:
- *
- * A single rule mixing expression and statement forms is intentionally NOT
- * used here.
- *
- * For example:
- *
- *     spawn work();
- *
- * can be structurally valid both as an expression followed by a terminator
- * and as a statement-level task construct.
- *
- * Mixing both contexts into one root creates avoidable prediction ambiguity.
- *
- * Therefore the production API is context-specific:
- *
- *     concurrencyExpression
- *     concurrencyStatement
- *     concurrencyDeclaration
- *
- * `concurrencyConstruct` is retained as an expression-oriented compatibility
- * boundary for existing tooling.
- */
-
-concurrencyConstruct
-    : concurrencyExpression
-    ;
-
-
-/*
- * ============================================================================
- * 25. FUTURE SEMANTIC BOUNDARY
- * ============================================================================
- *
- * Futures are intentionally NOT added as another competing syntax alternative.
- *
- * In the current language design:
- *
- *     futures.g4
- *         -> awaitExpression
- *         -> canonical async grammar
- *
- * Therefore a future is a semantic property of an asynchronous computation,
- * not a requirement for a separate `future` keyword.
- *
- * The following boundary is provided for tooling that needs to identify the
- * future-specific parser representation.
- */
-
-concurrencyFutureExpression
-    : futureExpression
-    ;
-
-
-/*
- * ============================================================================
- * 26. FUTURE OBSERVATION BOUNDARY
- * ============================================================================
- *
- * Await remains the syntactic operation.
- *
- * Whether its operand denotes a Future-like semantic value is decided by
- * semantic/type analysis.
- */
-
-concurrencyFutureObservation
-    : futureObservationRoot
-    ;
-
-
-/*
- * ============================================================================
- * 27. CONCURRENCY DOMAIN
- * ============================================================================
- *
- * A domain-level consumer should use the context-specific roots rather than
- * this rule when it knows whether it is parsing an expression, statement or
- * declaration.
- *
- * This rule is retained as a structural classification boundary for tooling.
- */
-
-concurrencyDomainExpression
-    : concurrencyExpression
-    ;
-
-concurrencyDomainStatement
+concurrencyStatementAdapter
     : concurrencyStatement
     ;
 
-concurrencyDomainDeclaration
-    : concurrencyDeclaration
+
+/*
+ * ============================================================================
+ * 2. STATEMENT-CONTEXT CLASSIFICATION BOUNDARY
+ * ============================================================================
+ *
+ * Tooling may need to identify that a statement originated from the
+ * concurrency domain without inspecting individual task/parallel/channel/
+ * actor/etc. productions.
+ *
+ * This rule provides that classification boundary.
+ *
+ * It does NOT create a second syntax model.
+ *
+ * ============================================================================
+ */
+
+concurrencyStatementDomain
+    : concurrencyStatementAdapter
     ;
 
 
 /*
  * ============================================================================
- * 28. RESOURCE / CAPABILITY SEPARATION
+ * 3. CONCURRENCY STATEMENT INTEGRATION CONTRACT
  * ============================================================================
  *
- * Concurrency MUST NOT own `requires` syntax.
+ * A successful match means only:
  *
- * Resource requirements belong to the resource subsystem.
+ *     "the source has the structural shape of a concurrency statement."
  *
- * For example, source-level requirements such as:
+ * It does NOT mean:
  *
- *     requires capability(...)
- *     requires memory(...)
- *     requires communication(...)
+ *     - the statement is semantically valid;
+ *     - its operands have valid types;
+ *     - its effects are legal;
+ *     - its resources are available;
+ *     - its capabilities are supported;
+ *     - its dependencies are satisfiable;
+ *     - its parallelism can be realized;
+ *     - its cancellation policy is executable;
+ *     - its synchronization is race-free;
+ *     - its target is capable of executing it.
  *
- * are parsed through the canonical resource/capability grammar.
+ * Those decisions belong downstream.
  *
- * This concurrency grammar only supplies the concurrency construct that causes
- * semantic/resource analysis to derive concurrency-related requirements.
- *
- * Therefore there is intentionally NO:
- *
- *     concurrencyRequirementClause
- *
- * here.
- *
- * This prevents duplicate ownership of REQUIRES.
+ * ============================================================================
  */
 
 
 /*
  * ============================================================================
- * 29. TYPE INTEGRATION
+ * 4. AST INTEGRATION CONTRACT
  * ============================================================================
  *
- * This grammar does not define:
+ * This grammar creates NO AST implementation type.
  *
- *     Task<T>
- *     Future<T>
- *     Promise<T>
- *     Executor<T>
- *     Worker<T>
- *     Channel<T>
+ * The parser/frontend layer must lower the resulting parse structure into the
+ * repository's existing domain-neutral AST.
  *
- * as runtime-specific language types.
+ * The AST must preserve:
  *
- * Type syntax belongs to grammar/types/.
+ *     - source span;
+ *     - source ordering;
+ *     - concurrency construct identity;
+ *     - nested expressions;
+ *     - nested statements;
+ *     - declarations where applicable;
+ *     - attributes/modifiers;
+ *     - names/references;
+ *     - dependency relationships;
+ *     - syntactic operands.
  *
- * Semantic analysis determines whether an expression is:
+ * The AST MUST NOT gain machine-specific information merely because a source
+ * statement is concurrent.
  *
- *     awaitable;
- *     spawnable;
- *     parallelizable;
- *     cancellable;
- *     sendable;
- *     receivable;
- *     synchronizable.
+ * In particular, this adapter must never imply:
  *
- * The parser only establishes source structure.
+ *     ThreadId
+ *     WorkerId
+ *     CoreId
+ *     CpuId
+ *     GpuId
+ *     FpgaId
+ *     QpuId
+ *     NodeId
+ *     DeviceId
+ *     PhysicalQueueId
+ *     PhysicalAddress
+ *
+ * Those belong to downstream target-specific realization where explicitly
+ * required.
+ *
+ * ============================================================================
  */
 
 
 /*
  * ============================================================================
- * 30. EFFECT INTEGRATION
+ * 5. EXPRESSION INTEGRATION CONTRACT
  * ============================================================================
  *
- * Concurrency constructs may introduce effects such as:
+ * This file does NOT define:
  *
- *     asynchronous execution
- *     suspension
- *     communication
- *     synchronization
- *     cancellation
- *     nondeterministic ordering
- *     distributed interaction
+ *     expression
+ *     assignment
+ *     call
+ *     await
+ *     spawn
+ *     indexing
+ *     member access
+ *     operators
+ *     literals
  *
- * Effects are owned by grammar/effects/ and semantic effect analysis.
+ * Those constructs remain owned by the canonical expression and concurrency
+ * grammars.
  *
- * No effect implementation belongs here.
+ * A concurrency statement may contain expressions because its owning domain
+ * grammar consumes the canonical expression boundary.
+ *
+ * Therefore the dependency direction remains:
+ *
+ *
+ *     canonical expressions
+ *             ^
+ *             |
+ *     concurrency leaf
+ *             ^
+ *             |
+ *     Concurrency
+ *             ^
+ *             |
+ *     ConcurrencyStatements
+ *
+ *
+ * There is no expression implementation in this file.
+ *
+ * ============================================================================
  */
 
 
 /*
  * ============================================================================
- * 31. OWNERSHIP / MEMORY INTEGRATION
+ * 6. BLOCK INTEGRATION CONTRACT
  * ============================================================================
  *
- * Concurrency does not create a second ownership model.
+ * This file does not define blocks.
  *
- * Ownership, borrowing, aliasing and lifetime rules remain owned by the
- * canonical memory/type/semantic systems.
+ * A concurrency construct requiring a body must use the canonical block/body
+ * production owned by the appropriate concurrency or core grammar.
  *
- * A concurrent operation may impose additional semantic restrictions, but
- * those restrictions are checked downstream.
+ * This prevents:
+ *
+ *     statements/concurrency.g4
+ *
+ * from becoming a second block grammar.
+ *
+ * Nested concurrency remains legal whenever the owning concurrency construct
+ * permits nested statements according to its semantic contract.
+ *
+ * No nesting depth is hard-coded here.
+ *
+ * ============================================================================
  */
 
 
 /*
  * ============================================================================
- * 32. DETERMINISM
+ * 7. DECLARATION SEPARATION
  * ============================================================================
  *
- * Parsing must be deterministic.
+ * Concurrency declarations are NOT automatically statements.
  *
- * Parsing may depend only on:
+ * Examples include domain-specific declarations such as:
  *
- *     source token stream;
- *     selected grammar/language version;
- *     explicitly selected dialect configuration.
+ *     actor declarations;
+ *     channel declarations;
+ *     synchronization declarations;
+ *     cancellation declarations;
  *
- * Parsing MUST NOT depend on:
+ * Their legality in declaration context is determined by:
  *
- *     wall-clock time;
- *     randomness;
- *     environment state;
- *     filesystem state;
- *     network state;
- *     available hardware;
- *     runtime state;
- *     scheduler state.
+ *     grammar/declarations/
+ *     grammar/concurrency/
  *
- * No semantic predicate or target-dependent parser action is used here.
+ * and the canonical parser composition.
+ *
+ * This file admits only the statement-level concurrency boundary.
+ *
+ * This prevents declarations from accidentally becoming legal wherever a
+ * generic statement is accepted.
+ *
+ * ============================================================================
  */
 
 
 /*
  * ============================================================================
- * 33. POCO-REAF
+ * 8. EXPRESSION-STATEMENT SEPARATION
  * ============================================================================
  *
- * Concurrency expresses LOGICAL COMPUTATIONAL INTENT.
+ * Some concurrency constructs may have both expression and statement forms.
  *
- * It MUST NOT encode universal implementation limits.
+ * Examples include concepts such as:
  *
- * In particular, this grammar does not establish maximum values for:
+ *     spawn
+ *     await
+ *     send
+ *     receive
+ *     cancellation observation
  *
- *     tasks
- *     concurrent operations
- *     workers
- *     threads
- *     cores
- *     CPUs
- *     GPUs
- *     FPGAs
- *     QPUs
- *     nodes
- *     devices
- *     channels
- *     actors
+ * This adapter does not attempt to decide whether an expression should be
+ * interpreted as a statement.
+ *
+ * The owning concurrency grammar determines the syntactic form.
+ *
+ * The canonical statement grammar remains responsible for ordinary:
+ *
+ *     expression SEMICOLON
+ *
+ * integration.
+ *
+ * This avoids introducing precedence or ambiguity hacks into this adapter.
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * 9. TASK INTEGRATION
+ * ============================================================================
+ *
+ * Task syntax remains owned by:
+ *
+ *     grammar/concurrency/tasks.g4
+ *
+ * This file therefore does NOT contain:
+ *
+ *     taskSpawnStatement
+ *     taskAwaitStatement
+ *     taskParallelStatement
+ *     taskStatement
+ *
+ * implementations.
+ *
+ * The dependency is:
+ *
+ *     tasks.g4
+ *          |
+ *          v
+ *     Concurrency
+ *          |
+ *          v
+ *     concurrencyStatement
+ *          |
+ *          v
+ *     concurrencyStatementAdapter
+ *
+ * The same task syntax can therefore participate in other contexts without
+ * copying its grammar into statements/concurrency.g4.
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * 10. PARALLEL INTEGRATION
+ * ============================================================================
+ *
+ * General parallel syntax remains owned by:
+ *
+ *     grammar/concurrency/parallel.g4
+ *
+ * This adapter does not define:
+ *
+ *     parallel
  *     parallel regions
- *     task groups
- *     data elements
+ *     parallel work items
+ *     parallel iteration
+ *     parallel reduction
+ *     parallel dependencies
  *
- * Repetition and nesting are represented structurally by grammar operators
- * and delegated grammar rules.
+ * A parallel statement expresses semantic opportunity/intent.
  *
- * Any actual finite limit comes from:
+ * It does NOT specify:
  *
- *     source data;
- *     compiler resources;
- *     runtime resources;
- *     target capabilities;
- *     deployment policy;
- *     explicit program requirements.
+ *     worker count;
+ *     thread count;
+ *     CPU count;
+ *     GPU count;
+ *     accelerator count;
+ *     QPU count;
+ *     execution width;
+ *     physical placement.
  *
- * None of those becomes a universal grammar maximum.
+ * Those are downstream scheduling/resource decisions.
+ *
+ * ============================================================================
  */
 
 
 /*
  * ============================================================================
- * 34. RESOURCE-SCALABLE EXECUTION
+ * 11. DATA-PARALLEL INTEGRATION
  * ============================================================================
  *
- * The same logical program may be lowered differently according to resources.
+ * Data-parallel syntax remains owned by:
  *
- * Example semantic intent:
+ *     grammar/concurrency/data-parallel.g4
  *
- *     parallel {
- *         a()
- *         b()
- *         c()
- *     }
+ * This adapter does not define:
  *
- * may be realized as:
+ *     SIMD width;
+ *     vector width;
+ *     warp width;
+ *     block size;
+ *     GPU count;
+ *     accelerator count;
+ *     partition count;
+ *     physical data placement.
  *
- *     one execution context;
- *     cooperative concurrency;
- *     multiple CPU execution contexts;
- *     SIMD/data-parallel execution;
- *     GPU execution;
- *     FPGA/ASIC execution;
- *     distributed execution;
- *     heterogeneous execution;
- *     quantum/classical orchestration;
- *     future computational substrates.
+ * Logical data domains remain independent of target realization.
  *
- * The grammar does not choose among these realizations.
- *
- * A resource-poor target may serialize independent work while preserving
- * semantics.
- *
- * A resource-rich target may exploit additional available parallelism.
- *
- * This is a compiler/scheduler/runtime decision.
+ * ============================================================================
  */
 
 
 /*
  * ============================================================================
- * 35. QUANTUM INTEGRATION
+ * 12. TASK-PARALLEL INTEGRATION
  * ============================================================================
  *
- * Concurrency may surround and coordinate quantum computation.
+ * Task-parallel syntax remains owned by:
  *
- * This grammar does NOT define:
+ *     grammar/concurrency/task-parallel.g4
  *
- *     quantum operations;
- *     gates;
- *     physical qubit identifiers;
- *     logical-to-physical mappings;
- *     QEC;
- *     QZN/ZQN;
- *     routing;
- *     pulse scheduling;
- *     calibration.
+ * This adapter does not define:
  *
- * If a concurrency construct contains quantum computation, the downstream
- * pipeline remains:
+ *     task count limits;
+ *     worker counts;
+ *     dependency storage;
+ *     scheduler implementation;
+ *     DAG representation;
+ *     queue representation.
  *
- *     Zamani source
- *          |
- *          v
- *     domain-neutral AST
- *          |
- *          v
- *     semantic analysis
- *          |
- *          v
- *     quantum::ir
- *          |
- *          v
- *     optimization
- *          |
- *          v
- *     routing
- *          |
- *          v
- *     scheduling
- *          |
- *          v
- *     QEC / resilience
- *          |
- *          v
- *     ZQN
- *          |
- *          v
- *     HAL
- *          |
- *          v
- *     target realization
+ * Logical task dependencies belong to the semantic/task-parallel layer.
  *
- * There is no concurrency-specific quantum IR here.
+ * ============================================================================
  */
 
 
 /*
  * ============================================================================
- * 36. CLASSICAL INTEGRATION
+ * 13. FUTURE / ASYNC INTEGRATION
  * ============================================================================
  *
- * Classical concurrency lowers through the canonical classical semantic/IR
- * path.
+ * Future and asynchronous syntax remains owned by:
  *
- * This grammar does not select:
+ *     grammar/concurrency/futures.g4
+ *     grammar/concurrency/tasks.g4
+ *
+ * This adapter does not introduce a FUTURE token and does not define a
+ * future implementation.
+ *
+ * A future-like computation may ultimately be realized:
+ *
+ *     locally;
+ *     asynchronously;
+ *     remotely;
+ *     distributively;
+ *     on an accelerator;
+ *     through quantum/classical orchestration;
+ *     on another computational substrate.
+ *
+ * The source statement remains target-independent.
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * 14. ACTOR INTEGRATION
+ * ============================================================================
+ *
+ * Actor syntax remains owned by:
+ *
+ *     grammar/concurrency/actors.g4
+ *
+ * This file does not define:
+ *
+ *     actor declarations;
+ *     actor spawning;
+ *     actor messaging;
+ *     actor lifecycle;
+ *     supervision;
+ *     mailbox semantics.
+ *
+ * In particular:
+ *
+ *     actor != thread
+ *     actor != process
+ *     actor != node
+ *     actor != machine
+ *
+ * These are possible implementation realizations, not parser semantics.
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * 15. CHANNEL INTEGRATION
+ * ============================================================================
+ *
+ * Channel syntax remains owned by:
+ *
+ *     grammar/concurrency/channels.g4
+ *
+ * This adapter does not define:
+ *
+ *     send;
+ *     receive;
+ *     select;
+ *     close;
+ *     buffering;
+ *     queue implementation;
+ *     transport.
+ *
+ * A channel may ultimately be realized using:
+ *
+ *     local communication;
+ *     shared memory;
+ *     accelerator communication;
+ *     hardware FIFOs;
+ *     interconnects;
+ *     networking;
+ *     distributed transport;
+ *     another communication substrate.
+ *
+ * None of those implementation choices belong here.
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * 16. CANCELLATION INTEGRATION
+ * ============================================================================
+ *
+ * Cancellation syntax remains owned by:
+ *
+ *     grammar/concurrency/cancellation.g4
+ *
+ * This adapter does not implement cancellation propagation.
+ *
+ * It does not define:
+ *
+ *     OS signals;
+ *     thread interruption;
+ *     process termination;
+ *     device cancellation;
+ *     rollback;
+ *     retry;
+ *     recovery.
+ *
+ * Those are semantic/runtime/resilience concerns.
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * 17. SYNCHRONIZATION INTEGRATION
+ * ============================================================================
+ *
+ * Synchronization syntax remains owned by:
+ *
+ *     grammar/concurrency/synchronization.g4
+ *
+ * This adapter does not define:
+ *
+ *     mutex algorithms;
+ *     futexes;
+ *     spinlocks;
+ *     hardware atomics;
+ *     lock implementations;
+ *     scheduler behavior;
+ *     fairness algorithms.
+ *
+ * It merely admits an already-defined synchronization statement into the
+ * concurrency statement domain.
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * 18. CLASSICAL INTEGRATION
+ * ============================================================================
+ *
+ * Concurrency may surround classical computation.
+ *
+ * This file does not select:
  *
  *     CPU;
  *     core;
  *     SIMD width;
- *     vector register;
- *     worker pool;
- *     OS thread.
+ *     vector register width;
+ *     thread;
+ *     worker pool.
+ *
+ * Classical semantic/IR lowering remains downstream.
+ *
+ * A resource-poor target may serialize logically independent computation.
+ *
+ * A resource-rich target may exploit available parallelism.
+ *
+ * Both are compatible with POCO-REAF when semantic guarantees are preserved.
+ *
+ * ============================================================================
  */
 
 
 /*
  * ============================================================================
- * 37. HDL / HARDWARE INTEGRATION
+ * 19. QUANTUM INTEGRATION
  * ============================================================================
  *
- * Concurrency syntax may participate in software/hardware co-design.
+ * Concurrency may surround or coordinate quantum computation.
  *
- * The grammar does not interpret:
+ * This file does NOT define:
  *
- *     parallel
+ *     qubits;
+ *     quantum gates;
+ *     quantum operations;
+ *     physical qubit IDs;
+ *     logical-to-physical mappings;
+ *     quantum circuits;
+ *     QEC;
+ *     ZQN;
+ *     routing;
+ *     pulse scheduling;
+ *     calibration.
  *
- * as a fixed hardware replication factor.
+ * Quantum syntax continues through the canonical path:
  *
- * HDL semantics determine clocking, processes, pipeline behavior and hardware
- * realization downstream.
+ *     source
+ *       |
+ *       v
+ *     domain-neutral AST
+ *       |
+ *       v
+ *     semantic analysis
+ *       |
+ *       v
+ *     quantum::ir
+ *       |
+ *       v
+ *     optimization
+ *       |
+ *       v
+ *     routing
+ *       |
+ *       v
+ *     scheduling
+ *       |
+ *       v
+ *     QEC / resilience
+ *       |
+ *       v
+ *     ZQN
+ *       |
+ *       v
+ *     HAL
+ *       |
+ *       v
+ *     target realization
+ *
+ * This file creates no quantum-specific IR.
+ *
+ * ============================================================================
  */
 
 
 /*
  * ============================================================================
- * 38. DISTRIBUTED INTEGRATION
+ * 20. HDL / HARDWARE INTEGRATION
  * ============================================================================
  *
- * A concurrency construct does not imply locality.
+ * Concurrency statements may contain or coordinate computations whose eventual
+ * realization involves HDL or hardware/software co-design.
  *
- * The same logical computation may eventually execute:
+ * This file does not define:
  *
- *     locally;
- *     in another process;
- *     on another machine;
- *     on an accelerator;
- *     across a cluster;
- *     in a cloud deployment;
- *     on a future computational substrate.
+ *     clocks;
+ *     signals;
+ *     wires;
+ *     registers;
+ *     hardware processes;
+ *     pipelines;
+ *     hardware modules.
  *
- * Placement, communication and topology remain downstream concerns.
+ * Those remain owned by:
+ *
+ *     grammar/hdl/
+ *     grammar/hardware/
+ *
+ * A parallel source construct does not imply a fixed hardware replication
+ * factor.
+ *
+ * ============================================================================
  */
 
 
 /*
  * ============================================================================
- * 39. AI / DATA INTEGRATION
+ * 21. DISTRIBUTED INTEGRATION
  * ============================================================================
  *
- * Concurrency can surround:
+ * Concurrency does not imply distribution.
  *
- *     tensor computation;
- *     model inference;
- *     training;
+ * A concurrency construct may remain:
+ *
+ *     local;
+ *     process-local;
+ *     accelerator-local;
+ *     distributed;
+ *     heterogeneous.
+ *
+ * Distribution remains owned by:
+ *
+ *     grammar/distributed/
+ *
+ * Placement and topology are downstream concerns.
+ *
+ * No node count or network topology is encoded here.
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * 22. AI / DATA INTEGRATION
+ * ============================================================================
+ *
+ * Concurrency may surround:
+ *
+ *     tensor operations;
  *     data pipelines;
- *     streaming;
+ *     model training;
+ *     model inference;
+ *     streaming computation;
  *     distributed learning.
  *
- * This grammar does not introduce framework-specific syntax.
+ * AI/data semantics remain owned by:
  *
- * Tensor/model/data semantics remain owned by their canonical domains.
+ *     grammar/ai/
+ *     grammar/data/
+ *
+ * This file does not introduce framework-specific syntax.
+ *
+ * ============================================================================
  */
 
 
 /*
  * ============================================================================
- * 40. SECURITY INTEGRATION
+ * 23. NETWORKING INTEGRATION
  * ============================================================================
  *
- * Concurrency constructs may cross security boundaries.
+ * Concurrency may participate in networked computation.
  *
- * Authentication, authorization, capability enforcement, isolation and secure
- * execution remain downstream semantic/runtime concerns.
+ * Networking syntax remains owned by:
  *
- * Parser behavior must remain deterministic and side-effect free.
+ *     grammar/networking/
+ *
+ * This file does not interpret a concurrent operation as:
+ *
+ *     socket;
+ *     packet;
+ *     connection;
+ *     network node.
+ *
+ * Such interpretations belong downstream.
+ *
+ * ============================================================================
  */
 
 
 /*
  * ============================================================================
- * 41. AST CONTRACT
+ * 24. RESOURCE / CAPABILITY INTEGRATION
  * ============================================================================
  *
- * This grammar constructs NO Rust AST directly.
+ * Concurrency does not own `requires` syntax.
  *
- * Every accepted concurrency construct must map into the repository's existing
- * domain-neutral frontend AST.
+ * Requirements and capabilities remain owned by:
  *
- * Existing canonical frontend expression representations include:
+ *     grammar/resources/
+ *     grammar/hardware/
  *
- *     ExpressionKind::Await
- *     ExpressionKind::Spawn
- *     ExpressionKind::Async
+ * The concurrency semantic layer may derive requirements from source
+ * constructs.
  *
- * Therefore this grammar MUST NOT create a second concurrency expression enum.
+ * For example, a parallel construct might cause semantic analysis to derive:
  *
- * The AST must preserve at minimum:
+ *     requirement: parallel_execution
  *
- *     source span;
- *     source ordering;
- *     construct category;
- *     nested operands;
- *     nested statements;
- *     declaration structure;
- *     modifiers/attributes owned by canonical grammar;
- *     semantic names;
- *     dependency structure.
+ * or:
  *
- * It MUST NOT embed:
+ *     capability: concurrent_execution
  *
- *     WorkerId
- *     ThreadId
- *     CoreId
- *     DeviceId
- *     GPUId
- *     QPUId
- *     PhysicalQubitId
- *     runtime queue ID
+ * without the statement grammar selecting a physical implementation.
  *
- * merely because a source construct is concurrent.
+ * This distinction is fundamental:
+ *
+ *
+ *     requirement
+ *         !=
+ *     physical resource selection
+ *
+ *
+ * ============================================================================
  */
 
 
 /*
  * ============================================================================
- * 42. SEMANTIC CONTRACT
+ * 25. EFFECT INTEGRATION
  * ============================================================================
  *
- * Parsing establishes structural validity only.
+ * Concurrency constructs may introduce effects such as:
  *
- * Semantic analysis owns:
+ *     asynchronous;
+ *     concurrent;
+ *     parallel;
+ *     communication;
+ *     synchronization;
+ *     cancellation;
+ *     distributed interaction.
  *
- *     name resolution;
- *     type checking;
- *     ownership;
- *     borrowing;
- *     lifetime validation;
- *     effect checking;
- *     dependency analysis;
- *     data-race analysis;
- *     synchronization correctness;
- *     cancellation correctness;
- *     determinism;
- *     capability requirements;
+ * Effects remain owned by:
+ *
+ *     grammar/effects/
+ *
+ * and the semantic effect system.
+ *
+ * This file does not encode effect implementation.
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * 26. MEMORY / OWNERSHIP INTEGRATION
+ * ============================================================================
+ *
+ * Concurrency must use the canonical ownership, borrowing, aliasing and
+ * lifetime model.
+ *
+ * This file does not create a second memory model.
+ *
+ * Semantic analysis remains responsible for determining whether a concurrent
+ * access is legal.
+ *
+ * For example, syntactic validity does not guarantee that two concurrent
+ * mutations are semantically race-free.
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * 27. DETERMINISM
+ * ============================================================================
+ *
+ * This grammar is parser-deterministic.
+ *
+ * Its result depends only upon:
+ *
+ *     source tokens;
+ *     grammar version;
+ *     parser configuration;
+ *     explicitly selected dialect configuration.
+ *
+ * It MUST NOT depend upon:
+ *
+ *     hardware availability;
+ *     scheduler state;
+ *     runtime timing;
+ *     randomness;
+ *     filesystem state;
+ *     network state;
+ *     environment state;
+ *     device discovery.
+ *
+ * Runtime scheduling nondeterminism is separate from parser determinism.
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * 28. POCO-REAF SCALABILITY
+ * ============================================================================
+ *
+ * This adapter introduces NO grammar-level finite machine limits.
+ *
+ * In particular, it does not define:
+ *
+ *     MAX_TASKS
+ *     MAX_THREADS
+ *     MAX_WORKERS
+ *     MAX_CORES
+ *     MAX_CPUS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_QPUS
+ *     MAX_NODES
+ *     MAX_DEVICES
+ *     MAX_CHANNELS
+ *     MAX_ACTORS
+ *     MAX_PARALLELISM
+ *     MAX_DATA_ITEMS
+ *     MAX_DEPENDENCIES
+ *     MAX_NESTING
+ *     MAX_MEMORY
+ *     MAX_STORAGE
+ *
+ * Repetition and nesting are represented by the underlying grammar structure.
+ *
+ * "Infinity" means:
+ *
+ *     no artificial language-level machine ceiling.
+ *
+ * Actual execution remains bounded by available:
+ *
+ *     compiler resources;
+ *     runtime resources;
+ *     target capabilities;
+ *     deployment policy;
+ *     explicit program constraints.
+ *
+ * Those limits must never be silently promoted into grammar constants.
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * 29. NUMERIC-LITERAL RULE
+ * ============================================================================
+ *
+ * Numeric values occurring in source code are program semantics.
+ *
+ * This file must never reinterpret a numeric value as an implementation limit.
+ *
+ * Therefore:
+ *
+ *     1024
+ *
+ * may be a perfectly valid source value.
+ *
+ * What is prohibited is a grammar-level rule such as:
+ *
+ *     concurrencyWidth : [1..1024]
+ *
+ * when 1024 is merely an implementation limitation.
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * 30. NO HARDWARE BINDING
+ * ============================================================================
+ *
+ * This adapter must never introduce syntax equivalent to:
+ *
+ *     run_on_core(...)
+ *     run_on_gpu(...)
+ *     run_on_qpu(...)
+ *     run_on_node(...)
+ *     use_thread(...)
+ *     use_worker(...)
+ *     use_device(...)
+ *
+ * unless such constructs are independently established as explicit,
+ * target-specific language features by the resource/hardware/dialect
+ * specification.
+ *
+ * Even then, those features must not be silently introduced through this file.
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * 31. NO RESOURCE OWNERSHIP
+ * ============================================================================
+ *
+ * This file does not allocate resources.
+ *
+ * It does not:
+ *
+ *     create threads;
+ *     create workers;
+ *     allocate CPUs;
+ *     allocate GPUs;
+ *     allocate QPUs;
+ *     allocate nodes;
+ *     allocate channels;
+ *     reserve memory;
+ *     select devices.
+ *
+ * It only provides syntax composition.
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * 32. NO SCHEDULING
+ * ============================================================================
+ *
+ * A concurrency statement can expose logical parallelism.
+ *
+ * It does not establish physical execution order.
+ *
+ * The downstream scheduler determines a legal realization based upon:
+ *
+ *     dependencies;
+ *     effects;
  *     resource requirements;
- *     portability;
- *     distributed legality;
- *     quantum/classical legality;
- *     HDL/software co-design legality.
+ *     capabilities;
+ *     constraints;
+ *     preferences;
+ *     correctness requirements;
+ *     target characteristics.
  *
- * A syntactically valid concurrent construct is therefore not automatically
- * semantically valid.
+ * ============================================================================
  */
 
 
 /*
  * ============================================================================
- * 43. IR CONTRACT
+ * 33. NO RUNTIME DEPENDENCY
  * ============================================================================
  *
- * This grammar produces NO IR.
+ * The grammar must be usable without:
  *
- * The intended pipeline is:
+ *     a runtime;
+ *     an executor;
+ *     an operating system;
+ *     a scheduler;
+ *     a physical device;
+ *     a network;
+ *     hardware discovery.
  *
- *     grammar
- *         |
- *         v
- *     domain-neutral AST
- *         |
- *         v
- *     semantic model
- *         |
- *         v
- *     canonical IR
- *         |
- *         +------------------+
- *         |                  |
- *         v                  v
- *     classical          quantum::ir
- *         |                  |
- *         +--------+---------+
- *                  |
- *                  v
- *       optimization / lowering
- *                  |
- *          routing / scheduling
- *                  |
- *             resilience
- *                  |
- *               ZQN/HAL
- *                  |
- *             target runtime
+ * This is necessary for:
  *
- * Concurrency does not create a second universal IR.
+ *     parsing;
+ *     formatting;
+ *     static analysis;
+ *     language servers;
+ *     documentation generation;
+ *     source transformation;
+ *     deterministic compilation.
+ *
+ * ============================================================================
  */
 
 
 /*
  * ============================================================================
- * 44. SCHEDULING CONTRACT
+ * 34. ERROR BOUNDARY
  * ============================================================================
  *
- * Scheduling is downstream.
+ * This file introduces no custom error actions.
  *
- * This grammar does not select:
+ * Structural errors are reported by the canonical parser/diagnostic layer.
  *
- *     worker;
- *     thread;
- *     CPU;
- *     GPU;
- *     QPU;
- *     node;
- *     queue;
- *     time slot;
- *     placement;
- *     topology.
+ * Examples of syntax failures include:
  *
- * The scheduler receives semantic dependencies and resource/capability
- * information and determines an executable plan.
- */
-
-
-/*
- * ============================================================================
- * 45. RUNTIME CONTRACT
- * ============================================================================
+ *     malformed concurrency statement;
+ *     missing required concurrency operand;
+ *     malformed concurrency body;
+ *     invalid statement-level structure.
  *
- * Runtime code MUST consume compiled semantic/IR representations.
+ * Errors such as:
  *
- * Runtime code MUST NOT parse:
- *
- *     grammar/concurrency/*.g4
- *
- * directly.
- *
- * The grammar therefore has no dependency on:
- *
- *     executor implementation;
- *     thread pool implementation;
- *     async runtime;
- *     OS scheduler;
- *     device runtime;
- *     distributed runtime.
- */
-
-
-/*
- * ============================================================================
- * 46. SAFETY CONTRACT
- * ============================================================================
- *
- * This grammar contains:
- *
- *     no actions;
- *     no semantic predicates;
- *     no embedded Rust;
- *     no filesystem access;
- *     no networking;
- *     no environment inspection;
- *     no hardware discovery;
- *     no randomness;
- *     no runtime execution.
- *
- * The compiler/runtime implementation must use:
- *
- *     Rust 2021
- *     Rust 1.97 / Rust 1.97.1
- *     safe Rust only.
- *
- * No unsafe Rust is required or permitted.
- */
-
-
-/*
- * ============================================================================
- * 47. HARD-CODING AUDIT
- * ============================================================================
- *
- * Forbidden language-level implementation assumptions include:
- *
- *     fixed worker counts;
- *     fixed thread counts;
- *     fixed core counts;
- *     fixed CPU counts;
- *     fixed GPU counts;
- *     fixed FPGA counts;
- *     fixed QPU counts;
- *     fixed node counts;
- *     fixed device counts;
- *     fixed channel capacities;
- *     fixed task counts;
- *     fixed parallelism widths;
- *     fixed topology;
- *     physical device identifiers.
- *
- * Numeric literals appearing in ordinary Zamani expressions remain ordinary
- * program values.
- *
- * The prohibition applies to implementation limits, not program semantics.
- */
-
-
-/*
- * ============================================================================
- * 48. DIAGNOSTICS CONTRACT
- * ============================================================================
- *
- * Grammar-level diagnostics should identify structural failures only.
- *
- * Examples:
- *
- *     malformed concurrency construct;
- *     missing operand;
- *     malformed actor construct;
- *     malformed channel construct;
- *     malformed cancellation construct;
- *     malformed synchronization construct;
- *     malformed parallel construct.
- *
- * Diagnostics about:
- *
- *     insufficient CPUs;
- *     insufficient GPUs;
- *     insufficient QPUs;
+ *     insufficient workers;
  *     insufficient memory;
+ *     unavailable GPU;
+ *     unavailable QPU;
  *     unsupported topology;
- *     unavailable workers;
+ *     resource exhaustion;
+ *     invalid synchronization semantics;
  *
- * are NOT syntax diagnostics.
+ * are NOT parser errors.
  *
- * They belong to semantic/resource/target analysis.
+ * They belong to semantic/resource/target/runtime layers.
+ *
+ * ============================================================================
  */
 
 
 /*
  * ============================================================================
- * 49. DETERMINISTIC RECOVERY
+ * 35. AST / SEMANTIC / IR PIPELINE
  * ============================================================================
  *
- * Error recovery belongs to the canonical parser/frontend infrastructure.
+ * The complete path remains:
  *
- * This grammar deliberately contains no recovery actions.
- *
- * Recovery must:
- *
- *     make progress;
- *     preserve source spans;
- *     avoid fabricated valid concurrency constructs;
- *     avoid infinite loops;
- *     remain deterministic.
- */
-
-
-/*
- * ============================================================================
- * 50. COMPATIBILITY
- * ============================================================================
- *
- * Stable concurrency source syntax must remain compatible across language
- * versions unless a documented language-version rule explicitly changes it.
- *
- * A newly introduced concurrency capability MUST NOT silently reinterpret an
- * existing valid program.
- *
- * Lexical reservation changes belong to the canonical lexer compatibility
- * process, not this file.
- */
-
-
-/*
- * ============================================================================
- * 51. TEST CONTRACT
- * ============================================================================
- *
- * This composition root requires tests at the domain level.
- *
- * Positive:
- *
- *     spawn
- *     await
- *     parallel
- *     data-parallel
- *     task-parallel
- *     actors
- *     channels
- *     cancellation
- *     synchronization
- *
- * Negative:
- *
- *     missing operands;
- *     malformed blocks;
- *     malformed dependencies;
- *     malformed declarations;
- *     malformed synchronization;
- *     malformed channel operations;
- *     malformed cancellation.
- *
- * Boundary:
- *
- *     one task;
- *     many tasks;
- *     nested concurrency;
- *     nested parallel regions;
- *     empty/near-empty legal structures where owned by leaf grammars;
- *     deep dependency graphs;
- *     broad dependency graphs.
- *
- * Scalability:
- *
- *     source size;
- *     task count;
- *     dependency count;
- *     nesting depth;
- *     data-domain size;
- *     distributed logical participants.
- *
- * No test may establish a universal implementation maximum.
- *
- * Determinism:
- *
- *     identical source + identical grammar configuration
- *         => identical parse structure.
- *
- * Cross-domain:
- *
- *     classical + concurrency;
- *     quantum + concurrency;
- *     hybrid + concurrency;
- *     HDL + concurrency;
- *     AI + concurrency;
- *     data + concurrency;
- *     distributed + concurrency;
- *     networking + concurrency;
- *     hardware + concurrency.
- */
-
-
-/*
- * ============================================================================
- * 52. FEATURE COMPLETION CONTRACT
- * ============================================================================
- *
- * This file is complete only when the following integration chain exists:
- *
- *     specification
- *         |
- *         v
+ *     Zamani source
+ *          |
+ *          v
  *     canonical lexer
- *         |
- *         v
- *     canonical concurrency parser composition
- *         |
- *         v
- *     frontend AST
- *         |
- *         v
- *     semantic analysis
- *         |
- *         v
+ *          |
+ *          v
+ *     canonical parser
+ *          |
+ *          v
+ *     statement adapter
+ *          |
+ *          v
+ *     domain-neutral AST
+ *          |
+ *          v
+ *     name/type/effect analysis
+ *          |
+ *          v
+ *     concurrency/dependency analysis
+ *          |
+ *          v
  *     resource/capability analysis
- *         |
- *         v
- *     canonical IR
- *         |
- *         v
- *     optimization
- *         |
- *         v
- *     scheduling
- *         |
- *         v
- *     runtime/target realization
+ *          |
+ *          v
+ *     canonical semantic IR
+ *          |
+ *          +-----------------------------+
+ *          |                             |
+ *          v                             v
+ *     classical representation      quantum::ir
+ *          |                             |
+ *          +--------------+--------------+
+ *                         |
+ *                         v
+ *                    optimization
+ *                         |
+ *                    routing/scheduling
+ *                         |
+ *                     resilience
+ *                         |
+ *                      ZQN/HAL
+ *                         |
+ *                         v
+ *                  target realization
  *
- * Every concurrency leaf must have:
+ * This file participates only in the parser stage.
  *
- *     syntax contract;
- *     AST mapping;
- *     semantic mapping;
- *     effect mapping;
- *     resource/capability mapping;
- *     IR destination;
- *     diagnostics;
- *     positive tests;
- *     negative tests;
- *     boundary tests;
- *     scalability tests;
- *     determinism tests;
- *     compatibility tests.
+ * ============================================================================
  */
 
 
 /*
  * ============================================================================
- * 53. FINAL INVARIANTS
+ * 36. CROSS-DOMAIN INVARIANT
  * ============================================================================
  *
- * Invariant 1:
+ * Concurrency is orthogonal to computational domain.
  *
- *     This file composes concurrency.
+ * The same concurrency syntax may surround:
  *
- * Invariant 2:
+ *     classical computation;
+ *     quantum computation;
+ *     hybrid computation;
+ *     HDL/hardware co-design;
+ *     AI computation;
+ *     data processing;
+ *     networking;
+ *     distributed computation;
+ *     accelerator computation;
+ *     future computational domains.
  *
- *     Leaf files own leaf syntax.
+ * This file therefore must not create domain-specific copies such as:
  *
- * Invariant 3:
+ *     quantumConcurrencyStatement
+ *     gpuConcurrencyStatement
+ *     cpuConcurrencyStatement
+ *     hdlConcurrencyStatement
  *
- *     statements/statements.g4 owns `statement`.
+ * unless a separate language-domain specification explicitly establishes such
+ * a syntax boundary.
  *
- * Invariant 4:
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * 37. COMPATIBILITY
+ * ============================================================================
  *
- *     expressions/expressions.g4 owns `expression`.
+ * This adapter is intentionally small so that concurrency-domain evolution
+ * does not require repeated edits here.
  *
- * Invariant 5:
+ * When a new concurrency feature is added:
  *
- *     lexer files own tokens.
+ *     1. define it in its owning concurrency grammar;
+ *     2. expose it through the canonical `Concurrency` composition grammar;
+ *     3. preserve the `concurrencyStatement` domain boundary;
+ *     4. this adapter continues to consume that boundary unchanged.
  *
- * Invariant 6:
+ * Therefore:
  *
- *     resources/ owns requirements and capabilities.
+ *     new concurrency feature
+ *             |
+ *             v
+ *       owning grammar
+ *             |
+ *             v
+ *       Concurrency
+ *             |
+ *             v
+ *   concurrencyStatement
+ *             |
+ *             v
+ * concurrencyStatementAdapter
  *
- * Invariant 7:
+ * This is specifically designed to satisfy the requirement that this file
+ * should not need to be reopened merely because another concurrency leaf was
+ * expanded.
  *
- *     semantic analysis owns concurrency validity.
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * 38. DIALECT INTEGRATION
+ * ============================================================================
  *
- * Invariant 8:
+ * Dialects must not bypass this boundary.
  *
- *     scheduling owns physical execution ordering.
+ * A concurrency dialect may extend the concurrency domain through the
+ * repository's dialect mechanism, but the resulting construct must still
+ * enter the canonical parser/AST/semantic pipeline.
  *
- * Invariant 9:
+ * A dialect must not:
  *
- *     runtime owns execution.
+ *     inject runtime behavior;
+ *     bypass type checking;
+ *     bypass resource checking;
+ *     create a private concurrency IR;
+ *     select hardware directly;
+ *     introduce unsafe Rust requirements.
  *
- * Invariant 10:
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * 39. MACRO / METAPROGRAMMING INTEGRATION
+ * ============================================================================
  *
- *     quantum semantics ultimately cross the canonical `quantum::ir`
- *     boundary.
+ * Macro expansion may produce concurrency syntax.
  *
- * Invariant 11:
+ * After expansion, generated syntax must pass through the same canonical
+ * grammar/AST/semantic validation pipeline.
  *
- *     no physical machine limit becomes a language limit.
+ * Macros must not use this adapter as an escape hatch from:
  *
- * Invariant 12:
+ *     type checking;
+ *     effect checking;
+ *     resource checking;
+ *     capability checking;
+ *     portability checking.
  *
- *     no Rust `unsafe` is required.
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * 40. SECURITY INVARIANT
+ * ============================================================================
  *
- * Invariant 13:
+ * Parsing concurrency syntax must not provide:
  *
- *     no target-specific implementation is embedded in the grammar.
+ *     filesystem access;
+ *     network access;
+ *     secret access;
+ *     hardware access;
+ *     runtime execution;
+ *     arbitrary code execution.
  *
- * Invariant 14:
+ * The grammar is declarative and side-effect free.
  *
- *     POCO-REAF remains the portability contract.
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * 41. SAFE-RUST INVARIANT
+ * ============================================================================
  *
+ * This grammar contains no Rust implementation code.
+ *
+ * The repository implementation consuming this grammar is required to support:
+ *
+ *     Rust 1.97
+ *     Rust 1.97.1
+ *     Rust 2021 edition
+ *
+ * without requiring:
+ *
+ *     unsafe Rust.
+ *
+ * No grammar construct here requires unsafe operations.
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * 42. TEST CONTRACT
+ * ============================================================================
+ *
+ * Tests for this file must test INTEGRATION, not re-test every concurrency
+ * leaf implementation.
+ *
+ * ============================================================================
+ *
+ * POSITIVE TESTS
+ * --------------
+ *
+ * At minimum, statement-level integration must accept representative valid
+ * forms for:
+ *
+ *     task concurrency;
+ *     async/task computation;
+ *     await;
+ *     parallel computation;
+ *     data-parallel computation;
+ *     task-parallel computation;
+ *     actor operations;
+ *     channel operations;
+ *     cancellation;
+ *     synchronization.
+ *
+ * The concrete examples belong in the corresponding domain test directories.
+ *
+ * ============================================================================
+ *
+ * NEGATIVE TESTS
+ * --------------
+ *
+ * The adapter must reject malformed statement-level structures through the
+ * canonical parser.
+ *
+ * It must not convert semantic failures into parser acceptance.
+ *
+ * ============================================================================
+ *
+ * BOUNDARY TESTS
+ * --------------
+ *
+ * Test:
+ *
+ *     one concurrency statement;
+ *     many concurrency statements;
+ *     nested concurrency;
+ *     concurrency inside ordinary blocks;
+ *     ordinary statements around concurrency;
+ *     deeply nested valid structures where supported.
+ *
+ * ============================================================================
+ *
+ * SCALABILITY TESTS
+ * -----------------
+ *
+ * Test increasing source sizes without introducing grammar-level resource
+ * ceilings.
+ *
+ * No test may assert a universal maximum number of:
+ *
+ *     tasks;
+ *     parallel regions;
+ *     channels;
+ *     actors;
+ *     workers;
+ *     devices;
+ *     nodes;
+ *     threads;
+ *     qubits.
+ *
+ * ============================================================================
+ *
+ * DETERMINISM TESTS
+ * -----------------
+ *
+ * Given identical:
+ *
+ *     source;
+ *     grammar version;
+ *     lexer configuration;
+ *     dialect configuration;
+ *
+ * repeated parsing must produce equivalent structural results.
+ *
+ * ============================================================================
+ *
+ * CROSS-DOMAIN TESTS
+ * ------------------
+ *
+ * The statement layer must be able to compose concurrency with:
+ *
+ *     classical;
+ *     quantum;
+ *     hybrid;
+ *     HDL;
+ *     hardware;
+ *     distributed;
+ *     AI;
+ *     data;
+ *     networking;
+ *     security;
+ *     resources.
+ *
+ * ============================================================================
+ *
+ * ROUND-TRIP TESTS
+ * ----------------
+ *
+ * Where formatter support exists:
+ *
+ *     source
+ *       -> lexer
+ *       -> parser
+ *       -> AST
+ *       -> formatter
+ *       -> parser
+ *
+ * must preserve the meaning of concurrency constructs.
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * 43. HARD-CODING AUDIT
+ * ============================================================================
+ *
+ * This file contains no:
+ *
+ *     MAX_TASKS
+ *     MAX_THREADS
+ *     MAX_WORKERS
+ *     MAX_CORES
+ *     MAX_CPUS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_QPUS
+ *     MAX_NODES
+ *     MAX_DEVICES
+ *     MAX_CHANNELS
+ *     MAX_ACTORS
+ *     MAX_PARALLELISM
+ *     MAX_MEMORY
+ *     MAX_STORAGE
+ *     MAX_REGISTER_WIDTH
+ *     MAX_VECTOR_WIDTH
+ *     MAX_TENSOR_RANK
+ *     MAX_TIMELINES
+ *
+ * It contains no physical identifiers.
+ *
+ * It contains no fixed topology.
+ *
+ * It contains no target-specific scheduling rule.
+ *
+ * It contains no implementation-specific worker count.
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * 44. COMPLETION CONTRACT
+ * ============================================================================
+ *
+ * This file is DONE when all of the following are true:
+ *
+ *     [ ] Grammar name is unique.
+ *
+ *     [ ] It does not compete with `Concurrency`.
+ *
+ *     [ ] It imports the canonical concurrency composition boundary.
+ *
+ *     [ ] It exposes exactly one statement-layer adapter.
+ *
+ *     [ ] It does not redefine `statement`.
+ *
+ *     [ ] It does not redefine `concurrencyStatement`.
+ *
+ *     [ ] It does not redefine any concurrency leaf syntax.
+ *
+ *     [ ] It does not define lexer rules.
+ *
+ *     [ ] It does not define expressions.
+ *
+ *     [ ] It does not define types.
+ *
+ *     [ ] It does not define blocks.
+ *
+ *     [ ] It does not define declarations.
+ *
+ *     [ ] It does not define resources.
+ *
+ *     [ ] It does not define capabilities.
+ *
+ *     [ ] It does not define effects.
+ *
+ *     [ ] It does not define scheduling.
+ *
+ *     [ ] It does not define placement.
+ *
+ *     [ ] It does not define routing.
+ *
+ *     [ ] It does not define runtime behavior.
+ *
+ *     [ ] It does not define hardware topology.
+ *
+ *     [ ] It does not create a quantum IR.
+ *
+ *     [ ] It does not create a concurrency IR.
+ *
+ *     [ ] It contains no target-language actions.
+ *
+ *     [ ] It contains no semantic predicates.
+ *
+ *     [ ] It requires no unsafe Rust.
+ *
+ *     [ ] It supports Rust 1.97 / 1.97.1 through the repository frontend.
+ *
+ *     [ ] The canonical `Concurrency` grammar is valid and exposes
+ *         `concurrencyStatement`.
+ *
+ *     [ ] `Statements` imports this grammar.
+ *
+ *     [ ] `Statements.statement` admits `concurrencyStatementAdapter`.
+ *
+ *     [ ] `ZamaniParser` receives the resulting integrated statement rule
+ *         through `Statements`.
+ *
+ *     [ ] The standalone `Concurrency` import remains the domain authority.
+ *
+ *     [ ] No duplicate concurrency statement authority remains.
+ *
+ *     [ ] Positive integration tests pass.
+ *
+ *     [ ] Negative integration tests pass.
+ *
+ *     [ ] Boundary tests pass.
+ *
+ *     [ ] Scalability tests pass.
+ *
+ *     [ ] Determinism tests pass.
+ *
+ *     [ ] Cross-domain tests pass.
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * 45. FINAL ARCHITECTURAL INVARIANTS
+ * ============================================================================
+ *
+ * INVARIANT 1
+ * ----------
+ * `grammar/concurrency/` owns concurrency syntax.
+ *
+ * INVARIANT 2
+ * ----------
+ * `grammar/concurrency/concurrency.g4` owns concurrency-domain composition.
+ *
+ * INVARIANT 3
+ * ----------
+ * `grammar/statements/statements.g4` owns `statement`.
+ *
+ * INVARIANT 4
+ * ----------
+ * This file owns only the statement-layer adapter.
+ *
+ * INVARIANT 5
+ * ----------
+ * No leaf concurrency grammar is duplicated here.
+ *
+ * INVARIANT 6
+ * ----------
+ * No lexer rule is duplicated here.
+ *
+ * INVARIANT 7
+ * ----------
+ * No type system is duplicated here.
+ *
+ * INVARIANT 8
+ * ----------
+ * No semantic analysis is performed here.
+ *
+ * INVARIANT 9
+ * ----------
+ * No resource is selected here.
+ *
+ * INVARIANT 10
+ * -----------
+ * No scheduler decision is made here.
+ *
+ * INVARIANT 11
+ * -----------
+ * No runtime behavior is implemented here.
+ *
+ * INVARIANT 12
+ * -----------
+ * Quantum computation continues through the canonical `quantum::ir` boundary.
+ *
+ * INVARIANT 13
+ * -----------
+ * Hardware limits never become language limits.
+ *
+ * INVARIANT 14
+ * -----------
+ * Logical concurrency remains independent of physical execution width.
+ *
+ * INVARIANT 15
+ * -----------
+ * The same source-level concurrency semantics can be realized on different
+ * available resources without rewriting this grammar.
+ *
+ * INVARIANT 16
+ * -----------
+ * The grammar contains no unsafe Rust and requires no unsafe Rust.
+ *
+ * INVARIANT 17
+ * -----------
+ * POCO-REAF is preserved:
+ *
+ *     Program Once
+ *       -> Compile Once
+ *       -> Run Everywhere
+ *       -> Anywhere
+ *       -> Forever
+ *
+ * ============================================================================
+ * END OF grammar/statements/concurrency.g4
  * ============================================================================
  */
