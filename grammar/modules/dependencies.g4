@@ -1,957 +1,511 @@
-/*
- * ============================================================================
- * Zamani Universal Programming Language
- * ============================================================================
+/**
+ * Zamani — Dependency Grammar
  *
  * File:
- *     grammar/modules/dependencies.g4
+ *   grammar/modules/dependencies.g4
  *
- * Role:
- *     Canonical parser grammar for source-level dependency declarations.
+ * Purpose:
+ *   Defines the portable source-language syntax for declaring dependencies
+ *   and dependency requirements.
  *
- * Grammar layer:
- *     Syntax only.
+ * Architectural role:
+ *   Dependency declarations are source-level intent. This grammar records
+ *   what a program depends on and the constraints/preferences associated
+ *   with that dependency.
  *
- * Rust integration baseline:
- *     Rust 1.97 / Rust 1.97.1
+ * This grammar DOES:
+ *   - define dependency declarations;
+ *   - define dependency identity;
+ *   - define dependency aliases;
+ *   - define optional dependency declarations;
+ *   - define dependency version constraints;
+ *   - define dependency source specifications;
+ *   - define dependency features/options;
+ *   - define dependency capability requirements;
+ *   - define dependency metadata;
+ *   - provide unbounded lists/sets/maps through repetition;
+ *   - preserve target-independent dependency intent.
  *
- * Safety:
- *     - No embedded Rust.
- *     - No semantic predicates.
- *     - No filesystem access.
- *     - No network access.
- *     - No registry access.
- *     - No package resolution.
- *     - No dependency solving.
- *     - No unsafe implementation.
+ * This grammar DOES NOT:
+ *   - resolve dependencies;
+ *   - access a registry;
+ *   - access a filesystem;
+ *   - access a network;
+ *   - download packages;
+ *   - select a compiler;
+ *   - select hardware;
+ *   - select a CPU/GPU/FPGA/QPU;
+ *   - assign physical devices;
+ *   - determine a dependency's implementation;
+ *   - lower dependencies to quantum::ir;
+ *   - perform linking;
+ *   - perform runtime loading;
+ *   - impose maximum dependency counts;
+ *   - impose maximum dependency-tree depth;
+ *   - impose maximum feature counts;
+ *   - impose maximum version components;
+ *   - impose hardware/resource limits.
  *
- * ============================================================================
+ * Integration:
  *
- * ARCHITECTURAL POSITION
- * ============================================================================
+ *   source
+ *      |
+ *      v
+ *   Zamani.g4
+ *      |
+ *      +--> packageDeclaration      (packages.g4)
+ *      +--> moduleDeclaration       (modules.g4)
+ *      +--> importDeclaration       (imports.g4)
+ *      +--> exportDeclaration       (exports.g4)
+ *      +--> dependencyDeclaration   (this grammar)
+ *      |
+ *      v
+ *   Frontend AST
+ *      |
+ *      v
+ *   semantic dependency graph
+ *      |
+ *      +--> package/module resolver
+ *      +--> version resolver
+ *      +--> registry/filesystem/network tooling
+ *      +--> build graph
+ *      +--> compiler
  *
- *     Zamani source
- *          |
- *          v
- *     ZamaniTokens
- *          |
- *          v
- *     parser
- *          |
- *          +--> Packages
- *          |
- *          +--> Modules
- *          |
- *          +--> Dependencies
- *                    |
- *                    v
- *             DependencySyntax
- *                    |
- *                    v
- *             semantic analysis
- *                    |
- *          +---------+---------+
- *          |                   |
- *          v                   v
- *     PackageGraph       ModuleGraph
- *          |                   |
- *          +---------+---------+
- *                    |
- *                    v
- *             compilation graph
- *                    |
- *                    v
- *              canonical IR
- *                    |
- *          +---------+---------+
- *          |         |         |
- *          v         v         v
- *       Classical Quantum    HDL/
- *          IR       IR      Hardware
- *                    |
- *                    v
- *          optimization / lowering
- *                    |
- *                    v
- *                runtime
+ * Dependencies are therefore semantic/build-graph input and are not an IR
+ * replacement for classical, quantum, HDL, AI, distributed, or hardware
+ * semantics.
  *
- * Dependency syntax MUST remain above the semantic/IR boundary.
+ * Rust compatibility:
+ *   This grammar contains no target-specific actions or embedded code.
+ *   Generated/parser integration must remain compatible with Rust 1.97 /
+ *   Rust 1.97.1 and must not require unsafe Rust.
  *
- * ============================================================================
+ * Canonical lexer:
+ *   ZamaniLexer
  *
- * OWNERSHIP
- * ============================================================================
+ * Important:
+ *   Do not introduce a second token vocabulary such as ZamaniTokens here.
  *
- * THIS FILE OWNS:
+ * Ownership:
+ *   Dependencies.g4 owns dependency declaration syntax only.
  *
- *   - dependency declaration syntax;
- *   - dependency identity/reference syntax;
- *   - dependency aliases;
- *   - dependency requirement syntax;
- *   - version requirement syntax;
- *   - dependency feature-selection syntax;
- *   - dependency classification syntax;
- *   - dependency source-selector syntax;
- *   - dependency capability/requirement syntax;
- *   - dependency integrity metadata syntax;
- *   - dependency metadata syntax;
- *   - dependency declaration extension points.
- *
- * THIS FILE DOES NOT OWN:
- *
- *   - package declarations;
- *   - package identity semantics;
- *   - module declarations;
- *   - imports;
- *   - exports;
- *   - namespaces;
- *   - identifier spelling;
- *   - qualified-name spelling;
- *   - package resolution;
- *   - dependency graph construction;
- *   - dependency version solving;
- *   - registry access;
- *   - network access;
- *   - filesystem access;
- *   - package downloading;
- *   - package installation;
- *   - package publication;
- *   - package signing;
- *   - signature verification;
- *   - trust policy;
- *   - cryptographic implementation;
- *   - target selection;
- *   - hardware discovery;
- *   - resource discovery;
- *   - scheduling;
- *   - routing;
- *   - optimization;
- *   - quantum IR;
- *   - QEC;
- *   - ZQN;
- *   - runtime dispatch.
- *
- * ============================================================================
- *
- * CRITICAL SEMANTIC BOUNDARY
- * ============================================================================
- *
- * A dependency declaration describes SOURCE-LEVEL DEPENDENCY INTENT.
- *
- * For example:
- *
- *     dependency quantum::linear {
- *         version: "^1.0";
- *     }
- *
- * MUST NOT itself mean:
- *
- *     download quantum::linear
- *     contact a registry
- *     read a directory
- *     open a network connection
- *     trust a publisher
- *     select a machine
- *     select a quantum processor
- *     select a GPU
- *     select an FPGA
- *     allocate resources
- *
- * Those operations belong to later package/toolchain/compiler/runtime layers.
- *
- * ============================================================================
- *
- * POCO-REAF
- * ============================================================================
- *
- * Dependency syntax is independent of machine scale.
- *
- * It MUST NOT contain:
- *
- *     MAX_DEPENDENCIES
- *     MAX_PACKAGE_DEPTH
- *     MAX_FEATURES
- *     MAX_TARGETS
- *     MAX_GRAPH_SIZE
- *
- * It MUST NOT encode:
- *
- *     CPU counts
- *     GPU counts
- *     FPGA counts
- *     qubit counts
- *     memory sizes
- *     device identifiers
- *     topology
- *     physical addresses
- *     deployment locations
- *
- * A dependency may express an ABSTRACT requirement or capability.
- *
- * Example:
- *
- *     requires quantum
- *
- * is fundamentally different from:
- *
- *     use device "specific-device"
- *
- * The latter does not belong in this grammar's dependency semantics.
- *
- * ============================================================================
- *
- * DETERMINISM
- * ============================================================================
- *
- * Parsing performs no:
- *
- *     - filesystem I/O;
- *     - network I/O;
- *     - registry lookup;
- *     - environment lookup;
- *     - hardware discovery;
- *     - resource discovery;
- *     - dependency solving;
- *     - randomness;
- *     - clock access.
- *
- * Identical token streams therefore produce identical dependency syntax
- * structures.
- *
- * ============================================================================
- *
- * CANONICAL LEXICAL DEPENDENCY
- * ============================================================================
- *
- * The authoritative lexer is:
- *
- *     grammar/lexer/tokens.g4
- *
- * whose grammar name is:
- *
- *     ZamaniTokens
- *
- * This grammar therefore uses:
- *
- *     tokenVocab = ZamaniTokens;
- *
- * Dependency-specific keyword tokens must be added to the authoritative
- * lexer rather than defined here.
- *
- * ============================================================================
+ * Non-ownership:
+ *   packages.g4 owns package declarations.
+ *   modules.g4 owns module declarations.
+ *   imports.g4 owns imports.
+ *   exports.g4 owns exports.
+ *   QualifiedNames owns qualified-name syntax.
+ *   semantic analysis owns dependency validation/resolution semantics.
+ *   compiler/build tooling owns actual dependency resolution.
  */
 
 parser grammar Dependencies;
 
 options {
-    tokenVocab = ZamaniTokens;
+    tokenVocab = ZamaniLexer;
 }
 
 import QualifiedNames;
 
 
-/*
- * ============================================================================
- * 1. DEPENDENCY DECLARATION
- * ============================================================================
- *
- * Canonical forms:
- *
- *     dependency math::linear;
- *
- *     dependency math::linear as linear;
- *
- *     dependency math::linear {
- *         version: "^1.0";
- *     }
- *
- *     dependency quantum::algorithms {
- *         version: "^2";
- *         optional: true;
- *     }
- *
- * The dependency body is optional.
- *
- * The semantic layer determines whether a declaration is valid in the
- * surrounding package/module context.
- */
+/* ============================================================================
+ * TOP-LEVEL DEPENDENCY DECLARATION
+ * ========================================================================== */
 
+/**
+ * A dependency declaration.
+ *
+ * Examples:
+ *
+ *   dependency core.math;
+ *
+ *   dependency core.math version ">=1";
+ *
+ *   dependency core.math version ">=1" as math;
+ *
+ *   dependency quantum.runtime {
+ *       version ">=1";
+ *       feature "measurement";
+ *   }
+ *
+ *   dependency optional.ml;
+ *
+ * The grammar deliberately does not limit the number of dependency
+ * declarations in a source unit.
+ */
 dependencyDeclaration
-    : K_DEPENDENCY
-      dependencyTarget
-      dependencyAlias?
+    : DEPENDENCY dependencySpecification SEMICOLON?
+    ;
+
+
+/**
+ * Complete dependency specification.
+ *
+ * The dependency identity is mandatory.
+ *
+ * Everything following the identity is optional and may be expressed
+ * either inline or through a dependency body.
+ */
+dependencySpecification
+    : dependencyIdentity
+      dependencyInlineClause*
       dependencyBody?
-      SEMICOLON?
     ;
 
 
-/*
- * ============================================================================
- * 2. DEPENDENCY TARGET
- * ============================================================================
+/* ============================================================================
+ * DEPENDENCY IDENTITY
+ * ========================================================================== */
+
+/**
+ * Canonical dependency identity.
  *
- * A dependency target is a logical source-level dependency identity.
+ * A dependency is identified using the same qualified-name model used by
+ * the rest of the module system.
  *
- * It is NOT:
- *
- *     filesystem path
- *     URL
- *     hardware address
- *     network endpoint
- *     device identifier
- *
- * Semantic resolution determines what the name refers to.
+ * This avoids creating a competing package/module naming grammar.
  */
-
-dependencyTarget
-    : qualifiedNameReference
+dependencyIdentity
+    : qualifiedName
     ;
 
 
-/*
- * ============================================================================
- * 3. DEPENDENCY ALIAS
- * ============================================================================
+/* ============================================================================
+ * INLINE CLAUSES
+ * ========================================================================== */
+
+/**
+ * Inline dependency clauses.
  *
- * Example:
+ * Each clause has one semantic responsibility.
  *
- *     dependency quantum::linear_algebra as qla;
+ * The order is intentionally unrestricted so that source formatting does
+ * not become semantic.
  */
-
-dependencyAlias
-    : K_AS IDENTIFIER
+dependencyInlineClause
+    : dependencyVersionClause
+    | dependencyAliasClause
+    | dependencyOptionalClause
+    | dependencySourceClause
+    | dependencyFeatureClause
+    | dependencyCapabilityClause
+    | dependencyMetadataClause
     ;
 
 
-/*
- * ============================================================================
- * 4. DEPENDENCY BODY
- * ============================================================================
+/* ============================================================================
+ * VERSION CONSTRAINTS
+ * ========================================================================== */
+
+/**
+ * Version requirement.
  *
- * A dependency body contains declarative dependency properties.
+ * Version syntax is represented as source data rather than as a fixed
+ * three-component grammar such as:
  *
- * The body is intentionally extensible.
+ *   major "." minor "." patch
  *
- * It does not contain executable statements.
+ * This permits arbitrary versioning schemes and prevents the grammar from
+ * imposing artificial limits on version structure.
  */
-
-dependencyBody
-    : LBRACE
-      dependencyItem*
-      RBRACE
+dependencyVersionClause
+    : VERSION dependencyVersionConstraint
     ;
 
 
-/*
- * ============================================================================
- * 5. DEPENDENCY ITEMS
- * ============================================================================
- */
-
-dependencyItem
-    : dependencyRequirement
-    | dependencyVersion
-    | dependencyFeatures
-    | dependencySource
-    | dependencyKind
-    | dependencyOptionality
-    | dependencyIntegrity
-    | dependencyMetadata
-    ;
-
-
-/*
- * ============================================================================
- * 6. ABSTRACT REQUIREMENTS
- * ============================================================================
+/**
+ * A version constraint is represented as a string literal.
+ *
+ * The semantic/versioning subsystem interprets the value according to
+ * the dependency ecosystem and declared compatibility rules.
  *
  * Examples:
  *
- *     requires: quantum;
+ *   "1"
+ *   "1.2"
+ *   "1.2.3"
+ *   ">=1"
+ *   ">=1,<2"
+ *   "^2"
+ *   "~3.4"
+ *   "stable"
+ *   "rolling"
  *
- *     requires: distributed;
- *
- *     requires: hardware::accelerator;
- *
- *     requires: capability::tensor;
- *
- * The semantic capability system determines whether such a requirement can
- * be satisfied.
- *
- * No physical resource is selected here.
+ * The grammar deliberately does not hard-code one versioning algorithm.
  */
-
-dependencyRequirement
-    : K_REQUIRES
-      COLON
-      dependencyRequirementValue
-      SEMICOLON?
-    ;
-
-
-dependencyRequirementValue
-    : qualifiedNameReference
-    | expression
-    ;
-
-
-/*
- * ============================================================================
- * 7. VERSION REQUIREMENTS
- * ============================================================================
- *
- * Version information is syntax, not dependency solving.
- *
- * Examples:
- *
- *     version: "1.0.0";
- *     version: "^1.0";
- *     version: "~2.4";
- *     version: ">=1.0,<2.0";
- *
- * The semantic/package resolver determines the meaning of the constraint.
- *
- * The grammar deliberately does not implement a particular version-solving
- * algorithm.
- */
-
-dependencyVersion
-    : K_VERSION
-      COLON
-      dependencyVersionValue
-      SEMICOLON?
-    ;
-
-
-dependencyVersionValue
+dependencyVersionConstraint
     : STRING_LITERAL
-    | expression
     ;
 
 
-/*
- * ============================================================================
- * 8. FEATURES
- * ============================================================================
+/* ============================================================================
+ * ALIASES
+ * ========================================================================== */
+
+/**
+ * Local dependency alias.
  *
- * Dependency features are logical feature selections.
+ * The alias affects source-level name lookup only.
  *
- * They do not imply:
+ * It does not change dependency identity.
+ */
+dependencyAliasClause
+    : AS identifier
+    ;
+
+
+/* ============================================================================
+ * OPTIONAL DEPENDENCIES
+ * ========================================================================== */
+
+/**
+ * Marks a dependency as optional.
  *
- *     a specific processor;
- *     a specific GPU;
- *     a specific FPGA;
- *     a specific number of resources.
+ * Whether an optional dependency is selected is a semantic/build decision,
+ * not a parser decision.
+ */
+dependencyOptionalClause
+    : OPTIONAL
+    ;
+
+
+/* ============================================================================
+ * SOURCE SPECIFICATION
+ * ========================================================================== */
+
+/**
+ * Dependency source.
+ *
+ * Source syntax is intentionally represented as data.
+ *
+ * The compiler/build system decides how to resolve the source.
  *
  * Examples:
  *
- *     features: ["linear", "sparse"];
+ *   source "registry://..."
+ *   source "git://..."
+ *   source "https://..."
+ *   source "path://..."
+ *   source "file://..."
+ *   source "vendor://..."
  *
- *     features: [linear, sparse];
+ * The grammar does not know which registries, URLs, repositories, paths,
+ * transports, or package managers exist.
  */
-
-dependencyFeatures
-    : K_FEATURES
-      COLON
-      dependencyFeatureList
-      SEMICOLON?
+dependencySourceClause
+    : SOURCE dependencySourceValue
     ;
 
 
-dependencyFeatureList
-    : LBRACKET
-      dependencyFeatureItem*
-      RBRACKET
-    ;
-
-
-dependencyFeatureItem
-    : dependencyFeatureValue
-      dependencyFeatureSeparator?
-    ;
-
-
-dependencyFeatureSeparator
-    : COMMA
-    ;
-
-
-dependencyFeatureValue
-    : IDENTIFIER
-    | STRING_LITERAL
-    ;
-
-
-/*
- * ============================================================================
- * 9. SOURCE SELECTOR
- * ============================================================================
- *
- * A source selector identifies a logical dependency source.
- *
- * It is NOT interpreted by the grammar.
- *
- * Examples:
- *
- *     source: "registry";
- *     source: "workspace";
- *     source: "git";
- *     source: "local";
- *
- * A source value does not cause network or filesystem access.
+/**
+ * Source values are strings so the grammar remains independent from any
+ * particular package registry, VCS, operating system, filesystem layout,
+ * network protocol, or deployment environment.
  */
-
-dependencySource
-    : K_SOURCE
-      COLON
-      dependencySourceValue
-      SEMICOLON?
-    ;
-
-
 dependencySourceValue
     : STRING_LITERAL
-    | qualifiedNameReference
-    | expression
     ;
 
 
-/*
- * ============================================================================
- * 10. DEPENDENCY KIND
- * ============================================================================
+/* ============================================================================
+ * FEATURES
+ * ========================================================================== */
+
+/**
+ * Dependency feature selection.
  *
- * Examples:
+ * Multiple feature clauses are allowed.
  *
- *     kind: "runtime";
- *     kind: "build";
- *     kind: "development";
- *     kind: "test";
- *
- * The language does not hard-code a finite set of dependency lifecycle
- * categories.
- *
- * The semantic/package specification determines recognized kinds.
+ * No artificial feature-count limit exists.
  */
-
-dependencyKind
-    : K_KIND
-      COLON
-      dependencyKindValue
-      SEMICOLON?
+dependencyFeatureClause
+    : FEATURE dependencyFeatureList
     ;
 
 
-dependencyKindValue
-    : IDENTIFIER
-    | STRING_LITERAL
-    ;
-
-
-/*
- * ============================================================================
- * 11. OPTIONALITY
- * ============================================================================
- *
- * Examples:
- *
- *     optional: true;
- *     optional: false;
- *
- * Optionality changes dependency graph semantics downstream.
- *
- * It does not change parsing behavior based on target hardware.
+/**
+ * One or more dependency feature names.
  */
-
-dependencyOptionality
-    : K_OPTIONAL
-      COLON
-      dependencyBooleanValue
-      SEMICOLON?
+dependencyFeatureList
+    : dependencyFeature
+    | LBRACKET dependencyFeatureItems? RBRACKET
     ;
 
 
-dependencyBooleanValue
-    : K_TRUE
-    | K_FALSE
-    | expression
-    ;
-
-
-/*
- * ============================================================================
- * 12. INTEGRITY
- * ============================================================================
- *
- * Integrity declarations are metadata.
- *
- * Cryptographic verification is NOT performed by this grammar.
- *
- * Examples:
- *
- *     integrity: "sha256:...";
- *
- *     integrity: "algorithm:value";
- *
- * The actual integrity policy belongs to the package/security subsystem.
+/**
+ * Feature names are qualified names so namespaces can be represented
+ * without introducing a second naming system.
  */
-
-dependencyIntegrity
-    : K_INTEGRITY
-      COLON
-      dependencyIntegrityValue
-      SEMICOLON?
+dependencyFeature
+    : qualifiedName
     ;
 
 
-dependencyIntegrityValue
-    : STRING_LITERAL
-    | expression
-    ;
-
-
-/*
- * ============================================================================
- * 13. GENERIC DEPENDENCY METADATA
- * ============================================================================
+/**
+ * Comma-separated feature collection.
  *
- * This is the primary extensibility mechanism.
- *
- * Unknown future metadata can be represented without modifying the grammar.
- *
- * Examples:
- *
- *     organization: "zamani";
- *
- *     documentation: "docs";
- *
- *     compatibility: "stable";
- *
- *     provenance: "source";
- *
- *     policy: "portable";
- *
- * The semantic layer decides which keys are valid and what they mean.
+ * The list is intentionally unbounded.
  */
-
-dependencyMetadata
-    : dependencyMetadataKey
-      COLON
-      dependencyMetadataValue
-      SEMICOLON?
+dependencyFeatureItems
+    : dependencyFeature (COMMA dependencyFeature)*
     ;
 
 
-dependencyMetadataKey
-    : IDENTIFIER
-    ;
+/* ============================================================================
+ * CAPABILITY REQUIREMENTS
+ * ========================================================================== */
 
-
-dependencyMetadataValue
-    : expression
-    ;
-
-
-/*
- * ============================================================================
- * 14. DEPENDENCY REQUIREMENT LIST
- * ============================================================================
+/**
+ * Dependency capability requirement.
  *
- * Generic reusable list for semantic consumers.
+ * This records semantic capability intent.
  *
- * No cardinality limit is encoded.
+ * It must not be confused with hardware selection.
+ *
+ * Valid conceptually:
+ *
+ *   dependency quantum.runtime capability "quantum.measurement";
+ *
+ * Invalid architectural interpretation:
+ *
+ *   dependency quantum.runtime use_qpu_0;
+ *
+ * Hardware/resource realization belongs to the resource/capability and
+ * backend layers, not this grammar.
  */
-
-dependencyRequirementList
-    : dependencyRequirementEntry
-      (COMMA dependencyRequirementEntry)*
-      COMMA?
-    ;
-
-
-dependencyRequirementEntry
-    : dependencyRequirementValue
-    ;
-
-
-/*
- * ============================================================================
- * 15. DEPENDENCY REFERENCE
- * ============================================================================
- *
- * This rule is deliberately separate from dependencyDeclaration.
- *
- * A reference can be consumed by:
- *
- *     package manifests
- *     module graphs
- *     compiler metadata
- *     tooling
- *     diagnostics
- *     semantic analysis
- *
- * without creating another dependency declaration language.
- */
-
-dependencyReference
-    : dependencyTarget
-    ;
-
-
-dependencyReferenceList
-    : dependencyReference
-      (COMMA dependencyReference)*
-      COMMA?
-    ;
-
-
-/*
- * ============================================================================
- * 16. OPTIONAL DEPENDENCY REFERENCE
- * ============================================================================
- */
-
-optionalDependencyReference
-    : dependencyReference?
-    ;
-
-
-/*
- * ============================================================================
- * 17. DEPENDENCY SPECIFICATION
- * ============================================================================
- *
- * A dependency specification is the reusable syntactic representation of:
- *
- *     identity
- *     alias
- *     properties
- *
- * It intentionally does not perform resolution.
- */
-
-dependencySpecification
-    : dependencyTarget
-      dependencyAlias?
-      dependencyBody?
-    ;
-
-
-/*
- * ============================================================================
- * 18. DEPENDENCY SPECIFICATION LIST
- * ============================================================================
- */
-
-dependencySpecificationList
-    : dependencySpecification
-      (COMMA dependencySpecification)*
-      COMMA?
-    ;
-
-
-/*
- * ============================================================================
- * 19. DEPENDENCY GROUP
- * ============================================================================
- *
- * Allows future composition mechanisms to group dependency specifications.
- *
- * Example:
- *
- *     dependencies {
- *         ...
- *     }
- *
- * This rule is deliberately separate from `dependencyDeclaration`.
- *
- * The package/module composition layer decides whether and where a dependency
- * group is legal.
- */
-
-dependencyGroup
-    : LBRACE
-      dependencySpecificationList?
-      RBRACE
-    ;
-
-
-/*
- * ============================================================================
- * 20. DEPENDENCY CONDITION
- * ============================================================================
- *
- * Conditions are expressions interpreted by the semantic/package layer.
- *
- * Examples:
- *
- *     when: feature::quantum;
- *
- *     when: target::embedded;
- *
- *     when: capability::gpu;
- *
- * The grammar does not inspect the current machine.
- */
-
-dependencyCondition
-    : K_WHEN
-      COLON
-      expression
-      SEMICOLON?
-    ;
-
-
-/*
- * ============================================================================
- * 21. DEPENDENCY CAPABILITY REQUIREMENT
- * ============================================================================
- *
- * This is intentionally separate from physical target selection.
- *
- * Example:
- *
- *     capability: quantum;
- *
- *     capability: hardware::accelerator;
- *
- * The semantic capability resolver determines whether the execution
- * environment can satisfy the declaration.
- */
-
-dependencyCapability
-    : K_CAPABILITY
-      COLON
-      dependencyCapabilityValue
-      SEMICOLON?
+dependencyCapabilityClause
+    : CAPABILITY dependencyCapabilityValue
     ;
 
 
 dependencyCapabilityValue
-    : qualifiedNameReference
-    | expression
-    ;
-
-
-/*
- * ============================================================================
- * 22. DEPENDENCY PLATFORM REQUIREMENT
- * ============================================================================
- *
- * A platform declaration describes an abstract compatibility requirement.
- *
- * It must NOT be used to encode:
- *
- *     device IDs
- *     physical addresses
- *     machine topology
- *     fixed CPU counts
- *     fixed GPU counts
- *     fixed qubit counts
- *
- * Such properties belong to target/resource/capability models.
- */
-
-dependencyPlatform
-    : K_PLATFORM
-      COLON
-      dependencyPlatformValue
-      SEMICOLON?
-    ;
-
-
-dependencyPlatformValue
-    : qualifiedNameReference
+    : qualifiedName
     | STRING_LITERAL
-    | expression
     ;
 
 
-/*
- * ============================================================================
- * 23. DEPENDENCY CONSTRAINT
- * ============================================================================
- *
- * A generic constraint is distinct from a requirement.
- *
- * Requirement:
- *
- *     something must be available.
- *
- * Constraint:
- *
- *     a permitted solution must satisfy a rule.
- *
- * The semantic layer interprets the expression.
- */
+/* ============================================================================
+ * GENERIC METADATA
+ * ========================================================================== */
 
-dependencyConstraint
-    : K_CONSTRAINT
-      COLON
-      expression
-      SEMICOLON?
+/**
+ * Dependency metadata.
+ *
+ * Metadata is intentionally generic. Known metadata keys may later receive
+ * semantic validation without requiring a grammar rewrite.
+ *
+ * This permits future dependency ecosystems without turning every new
+ * metadata key into a language keyword.
+ */
+dependencyMetadataClause
+    : dependencyMetadataKey ASSIGN dependencyMetadataValue
     ;
 
 
-/*
- * ============================================================================
- * 24. DEPENDENCY PREFERENCE
- * ============================================================================
- *
- * Preferences are advisory.
- *
- * They must never silently become mandatory hardware requirements.
- */
-
-dependencyPreference
-    : K_PREFERENCE
-      COLON
-      expression
-      SEMICOLON?
+dependencyMetadataKey
+    : identifier
+    | qualifiedName
     ;
 
 
-/*
- * ============================================================================
- * 25. DEPENDENCY HINT
- * ============================================================================
- *
- * Hints are non-binding information supplied to later compilation/toolchain
- * layers.
- */
-
-dependencyHint
-    : K_HINT
-      COLON
-      expression
-      SEMICOLON?
+dependencyMetadataValue
+    : dependencyMetadataAtom
+    | dependencyMetadataList
+    | dependencyMetadataMap
     ;
 
 
-/*
- * ============================================================================
- * 26. COMPLETE EXTENDED DEPENDENCY ITEM
- * ============================================================================
- *
- * This rule provides a single composition point for future package-aware
- * parsers.
- *
- * It deliberately remains syntax-only.
+/**
+ * Scalar dependency metadata.
  */
+dependencyMetadataAtom
+    : STRING_LITERAL
+    | INTEGER_LITERAL
+    | FLOAT_LITERAL
+    | TRUE
+    | FALSE
+    | qualifiedName
+    ;
 
-dependencyExtendedItem
-    : dependencyRequirement
-    | dependencyVersion
-    | dependencyFeatures
-    | dependencySource
-    | dependencyKind
-    | dependencyOptionality
-    | dependencyIntegrity
-    | dependencyMetadata
-    | dependencyCondition
-    | dependencyCapability
-    | dependencyPlatform
-    | dependencyConstraint
-    | dependencyPreference
-    | dependencyHint
+
+/**
+ * Arbitrarily sized metadata list.
+ */
+dependencyMetadataList
+    : LBRACKET dependencyMetadataElements? RBRACKET
+    ;
+
+
+dependencyMetadataElements
+    : dependencyMetadataValue
+      (COMMA dependencyMetadataValue)*
+    ;
+
+
+/**
+ * Arbitrarily sized metadata map.
+ */
+dependencyMetadataMap
+    : LBRACE dependencyMetadataEntries? RBRACE
+    ;
+
+
+dependencyMetadataEntries
+    : dependencyMetadataEntry
+      (COMMA dependencyMetadataEntry)*
+    ;
+
+
+dependencyMetadataEntry
+    : dependencyMetadataKey ASSIGN dependencyMetadataValue
+    ;
+
+
+/* ============================================================================
+ * DEPENDENCY BODY
+ * ========================================================================== */
+
+/**
+ * Dependency body.
+ *
+ * The body contains dependency-local clauses only.
+ *
+ * Module declarations, package declarations, imports, exports, functions,
+ * quantum operations, HDL constructs, etc. do not belong here.
+ */
+dependencyBody
+    : LBRACE dependencyBodyItem* RBRACE
+    ;
+
+
+dependencyBodyItem
+    : dependencyBodyClause SEMICOLON?
+    ;
+
+
+dependencyBodyClause
+    : dependencyVersionClause
+    | dependencyAliasClause
+    | dependencyOptionalClause
+    | dependencySourceClause
+    | dependencyFeatureClause
+    | dependencyCapabilityClause
+    | dependencyMetadataClause
+    ;
+
+
+/* ============================================================================
+ * SHARED NAME CONTRACT
+ * ========================================================================== */
+
+/**
+ * Dependency-local identifier.
+ *
+ * The canonical identifier rule is supplied by QualifiedNames.
+ *
+ * Keeping this rule local as an alias makes the dependency grammar's
+ * contract explicit without creating a second identifier implementation.
+ */
+dependencyIdentifier
+    : identifier
     ;
