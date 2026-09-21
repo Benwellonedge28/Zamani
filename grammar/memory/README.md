@@ -1,34 +1,24 @@
-Worked for 43s
-
-I inspected the actual current repository files, including the existing grammar/memory/ directory, memory.g4, memory-capabilities.g4, memory-constraints.g4, grammar/core/capabilities.g4, the canonical grammar/antlr/ZamaniLexer.g4, and the resource grammar architecture.
-
-The main correction needed in the current memory/README.md is that its file inventory is out of date: the repository already contains additional memory grammars such as address-spaces.g4, accelerator-memory.g4, quantum-memory.g4, persistence.g4, references.g4, and regions.g4. The README also needs to explicitly integrate memory-capabilities.g4 with the canonical core/capabilities.g4 and resources/capabilities.g4 rather than treating capabilities as a memory-owned model.
-
-Below is the complete replacement for:
-
-github.com/Benwellonedge28/Zamani/grammar/memory/README.md
-
-# Zamani Memory Grammar
+Zamani Memory Grammar
 
 Production Architecture, Ownership, Integration, Scalability, and Conformance Contract
 
-**Path:** `grammar/memory/`  
-**Language:** Zamani  
-**Grammar technology:** ANTLR4  
-**Implementation baseline:** Rust 1.97 / Rust 1.97.1  
-**Rust edition:** 2021  
-**Safety:** Safe Rust only; `unsafe` is prohibited  
-**Primary architectural objective:** Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever (POCO-REAF)  
-**Domain:** Source-level memory semantics and memory-related intent  
-**Status:** Normative memory-domain architecture and completion contract
+Path: "grammar/memory/"
+Language: Zamani
+Grammar technology: ANTLR4
+Rust baseline: Rust 1.97 / Rust 1.97.1
+Rust edition: 2021
+Safety: Safe Rust only; "unsafe" is prohibited
+Primary architectural objective: Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever (POCO-REAF)
+Scope: Source-level memory semantics, memory intent, memory requirements, and memory-related language constructs
+Status: Production architecture contract
 
 ---
 
-## 1. Purpose
+1. Purpose
 
-The `grammar/memory/` subsystem defines the source-language syntax required for expressing memory-related semantics and intent in Zamani.
+"grammar/memory/" defines the source-language memory model of Zamani.
 
-It is a foundational domain shared by:
+Memory is not merely an implementation detail. It is a cross-domain semantic foundation shared by:
 
 - classical computing;
 - systems programming;
@@ -42,756 +32,882 @@ It is a foundational domain shared by:
 - AI/ML;
 - tensor/data processing;
 - persistent computing;
+- networking;
+- security;
+- edge/cloud computing;
 - future computational architectures.
 
-The memory grammar must allow a program to express **what memory semantics it requires** without encoding the accidental physical characteristics of the machine on which the program happens to execute.
+The memory grammar therefore MUST express portable memory meaning and intent, while leaving physical realization to later compiler, resource-management, scheduling, hardware, HAL, and runtime stages.
 
-The fundamental rule is:
+The fundamental invariant is:
 
-> Zamani source describes portable memory semantics, requirements, capabilities, constraints, preferences, and intent. Compiler, resource-management, hardware, scheduling, routing, HAL, and runtime systems determine physical realization later.
+Zamani source
+    ↓
+memory semantics / intent
+    ↓
+semantic analysis
+    ↓
+resource and capability analysis
+    ↓
+canonical semantic representation
+    ↓
+IR
+    ↓
+optimization / placement / scheduling
+    ↓
+target realization
 
-Therefore the memory grammar must not become a description of today's RAM, cache, NUMA, GPU memory, QPU infrastructure, or any other fixed hardware architecture.
+The memory grammar MUST NOT turn a particular machine's physical memory architecture into a universal Zamani language limitation.
 
 ---
 
-# 2. POCO-REAF Requirement
+2. Production Goals
 
-Memory is a critical part of:
+The memory subsystem is production-ready only when it provides:
 
-> **Program Once → Compile Once → Run Everywhere → Anywhere → Forever**
+1. one canonical memory syntax;
+2. deterministic parsing;
+3. complete lexical integration;
+4. complete AST traceability;
+5. semantic-analysis contracts;
+6. resource/capability integration;
+7. ownership and borrowing integration;
+8. lifetime integration;
+9. allocation/deallocation integration;
+10. abstract address-space support;
+11. shared-memory support;
+12. distributed-memory support;
+13. accelerator-memory support;
+14. quantum-classical memory support;
+15. persistence support;
+16. memory constraints and requirements;
+17. memory preferences and hints;
+18. cross-domain integration;
+19. diagnostics;
+20. compatibility/versioning;
+21. positive tests;
+22. negative tests;
+23. boundary tests;
+24. scalability tests;
+25. determinism tests;
+26. round-trip tests where supported;
+27. hard-coding audits;
+28. safe-Rust implementation compatibility;
+29. no duplicated IR;
+30. no physical-resource assumptions.
 
-The same source program must remain semantically meaningful when executed on:
+A ".g4" file is not considered complete merely because ANTLR accepts it.
 
-- a tiny embedded system;
-- a single CPU;
-- a multicore system;
+A memory feature is complete only when its entire contract exists:
+
+Specification
+    ↓
+Tokens
+    ↓
+Grammar
+    ↓
+Parser
+    ↓
+AST
+    ↓
+Semantic analysis
+    ↓
+Resource/capability analysis
+    ↓
+Canonical semantic representation
+    ↓
+IR
+    ↓
+Compiler
+    ↓
+Runtime/backend where applicable
+    ↓
+Tests
+    ↓
+Diagnostics
+    ↓
+Compatibility
+    ↓
+Scalability audit
+    ↓
+Hard-coding audit
+
+---
+
+3. POCO-REAF Memory Principle
+
+Zamani memory semantics must support:
+
+«Program Once → Compile Once → Run Everywhere → Anywhere → Forever»
+
+A memory-aware Zamani program must be capable of being realized on:
+
+- a tiny embedded target;
+- one CPU;
+- many CPUs;
+- a multicore processor;
 - a GPU;
 - an FPGA;
 - an ASIC;
 - an accelerator;
 - a quantum-classical system;
-- a distributed machine;
+- a simulator;
+- a distributed system;
 - an HPC cluster;
 - a cloud deployment;
-- a simulator;
 - a future computational architecture.
 
-The source program must not need to be rewritten merely because the underlying memory architecture changes.
+The source program must not require semantic rewriting merely because the target has a different memory hierarchy.
 
-For example, source intent may express:
+For example, these are different concepts:
 
-```text
-requires memory capability memory::persistent;
-requires memory capability memory::shared;
-requires memory capability memory::remote_access;
+requires memory capability("persistent")
 
-without selecting:
+and:
 
-GPU 0
-NUMA node 3
-memory bank 7
-physical address 0x...
+use storage device 3
 
-The latter decisions belong downstream.
+The first describes portable program intent.
 
+The second describes a particular realization.
+
+The memory grammar is responsible for the first category. Target-specific realization belongs downstream.
 
 ---
 
-3. Authority Model
+4. Scalability Requirement
 
-The memory grammar participates in the repository's single-language architecture.
+The memory grammar MUST scale from the smallest useful memory computation to arbitrarily large computations subject only to:
+
+- program semantics;
+- explicitly declared semantic requirements;
+- representation capabilities;
+- compiler policies;
+- runtime policies;
+- target capabilities;
+- actual available resources.
+
+The grammar MUST NOT impose universal limits such as:
+
+MAX_MEMORY
+MAX_ALLOCATIONS
+MAX_REGIONS
+MAX_REFERENCES
+MAX_LIFETIMES
+MAX_MEMORY_SPACES
+MAX_ADDRESS_BITS
+MAX_DEVICES
+MAX_NODES
+MAX_ACCELERATORS
+MAX_BUFFERS
+MAX_OBJECTS
+MAX_THREADS
+MAX_PROCESSES
+
+Likewise it MUST NOT encode:
+
+32-bit memory
+64-bit memory
+1024 memory regions
+4096 allocations
+8 memory spaces
+16 devices
+
+as universal language restrictions.
+
+A target may have such limitations.
+
+A compiler profile may expose such limitations.
+
+A runtime may report such limitations.
+
+A particular program may explicitly require a particular size.
+
+But none of those facts may silently become a universal grammar limitation.
+
+---
+
+5. Program Constants vs Artificial Limits
+
+The prohibition on hard-coding does not prohibit ordinary program data.
+
+This is valid:
+
+let n = 1024;
+allocate n elements;
+
+because "1024" is program semantics.
+
+This is not valid as a universal implementation rule:
+
+MAX_MEMORY = 1024
+
+when it means Zamani cannot express a larger computation.
+
+Likewise:
+
+Memory<T, 1024>
+
+may be valid program semantics.
+
+But this is prohibited:
+
+Zamani memory objects may never exceed 1024 elements.
+
+The same distinction applies to:
+
+- memory capacity;
+- address width;
+- allocation count;
+- region count;
+- object count;
+- process count;
+- thread count;
+- device count;
+- accelerator count;
+- node count;
+- quantum resources;
+- tensor dimensions;
+- vector widths;
+- register widths;
+- storage capacity.
+
+---
+
+6. Existing Memory Directory
+
+The current repository already contains the memory-domain files below. They are retained; unnecessary renaming is prohibited.
+
+grammar/memory/
+├── README.md
+├── memory.g4
+├── ownership.g4
+├── borrowing.g4
+├── lifetimes.g4
+├── references.g4
+├── allocation.g4
+├── deallocation.g4
+├── regions.g4
+├── address-spaces.g4
+├── shared-memory.g4
+├── distributed-memory.g4
+├── accelerator-memory.g4
+├── quantum-memory.g4
+├── persistence.g4
+├── memory-capabilities.g4
+└── memory-constraints.g4
+
+The directory may gain additional files only when a real independent responsibility exists.
+
+Do not create empty files merely to satisfy a proposed directory tree.
+
+Every file must own a real contract.
+
+---
+
+7. File Ownership Matrix
+
+File| Owns| Does not own
+"README.md"| memory architecture and integration contract| executable grammar
+"memory.g4"| foundational memory syntax| ownership checking, allocation implementation
+"ownership.g4"| ownership syntax| ownership analysis
+"borrowing.g4"| borrowing syntax| borrow checking
+"lifetimes.g4"| lifetime syntax| lifetime inference/runtime timing
+"references.g4"| source memory references| pointer/reference implementation
+"allocation.g4"| allocation intent| allocator selection
+"deallocation.g4"| release/deallocation intent| physical reclamation
+"regions.g4"| semantic regions| physical memory regions
+"address-spaces.g4"| abstract address-space syntax| physical addresses
+"shared-memory.g4"| shared-memory intent| cache-coherence implementation
+"distributed-memory.g4"| distributed-memory intent| node topology and placement
+"accelerator-memory.g4"| accelerator-memory intent| GPU/device selection
+"quantum-memory.g4"| quantum-classical memory intent| quantum IR/QEC/ZQN
+"persistence.g4"| persistence/durability intent| storage-device selection
+"memory-capabilities.g4"| memory-specific capability composition| global capability identity
+"memory-constraints.g4"| memory requirements/constraints/preferences/hints| physical resource discovery
+
+No file may silently take ownership of another file's responsibilities.
+
+---
+
+8. Repository Authority
+
+The memory grammar participates in the repository-wide authority model.
 
 The authority chain is:
 
 language specification
-        |
-        v
-canonical lexical specification
-        |
-        v
-grammar/lexer/*
-        |
-        v
-grammar/antlr/ZamaniLexer.g4
-        |
-        v
-grammar/antlr/ZamaniParser.g4
-        |
-        v
-grammar/memory/*
-        |
-        v
-frontend AST
-        |
-        v
-semantic analysis
-        |
-        v
-canonical semantic representation / IR
-        |
-        +-------------------+
-        |                   |
-        v                   v
-   classical IR        quantum::ir
-        |                   |
-        +---------+---------+
-                  |
-                  v
-        optimization / lowering
-                  |
-          +-------+-------+
-          |       |       |
-          v       v       v
-       routing scheduling resilience
-                          |
-                          v
-                         ZQN
-                          |
-                         HAL
-                          |
-                          v
-                  target realization
-
-The memory grammar is therefore a syntax layer, not an independent semantic or runtime architecture.
-
-
----
-
-4. Repository Authorities
-
-The following existing repository authorities must be preserved.
-
-4.1 Lexer authority
-
-Canonical production lexer:
-
-grammar/antlr/ZamaniLexer.g4
-
-The modular lexical source lives under:
-
+        ↓
+lexical specification
+        ↓
 grammar/lexer/
-
-The memory grammar does not create its own lexer.
-
-Memory-specific .g4 files consume the existing Zamani token vocabulary.
-
-
----
-
-4.2 Parser authority
-
-Canonical parser composition:
-
-grammar/antlr/ZamaniParser.g4
-
-The memory grammar is composed into the canonical parser.
-
-grammar/memory/memory.g4 is the canonical memory-domain parser foundation.
-
-The root parser, not an individual memory grammar, decides how memory syntax participates in the complete Zamani language.
-
-
----
-
-4.3 Capability authority
-
-Capability identity and capability-reference syntax belong to:
-
-grammar/core/capabilities.g4
-
-Resource-side capability relationships belong to:
-
-grammar/resources/capabilities.g4
-
-Memory-specific capability use belongs to:
-
-grammar/memory/memory-capabilities.g4
-
-This produces the required separation:
-
-core/capabilities.g4
-        |
-        | capability identity/reference
-        v
-resources/capabilities.g4
-        |
-        | resource capability intent
-        v
-memory/memory-capabilities.g4
-        |
-        | memory-domain association
-        v
-memory semantics
-
-memory-capabilities.g4 must never redefine the canonical capability identity model.
-
-
----
-
-5. Actual Memory Directory
-
-The current repository already contains the following memory-domain files:
-
+        ↓
+canonical Zamani token vocabulary
+        ↓
 grammar/memory/
-├── README.md
-├── accelerator-memory.g4
-├── address-spaces.g4
-├── allocation.g4
-├── borrowing.g4
-├── deallocation.g4
-├── distributed-memory.g4
-├── lifetimes.g4
-├── memory-capabilities.g4
-├── memory-constraints.g4
-├── memory.g4
-├── ownership.g4
-├── persistence.g4
-├── quantum-memory.g4
-├── references.g4
-├── regions.g4
-└── shared-memory.g4
-
-This inventory is authoritative for this directory.
-
-The README must not describe a smaller or competing directory structure.
-
-No existing file should be renamed merely to make the architecture appear cleaner.
-
-
----
-
-6. Memory File Ownership Matrix
-
-File	Owns	Does not own
-
-memory.g4	foundational memory syntax, places, operations, spaces, generic memory constructs	ownership checking, allocation implementation, hardware
-ownership.g4	ownership syntax	ownership analysis
-borrowing.g4	borrow syntax	borrow checking
-lifetimes.g4	lifetime syntax	lifetime inference or physical time
-references.g4	memory-reference syntax	pointer/reference runtime representation
-allocation.g4	allocation intent	allocator selection
-deallocation.g4	release/deallocation intent	physical reclamation
-regions.g4	region syntax	physical memory regions
-address-spaces.g4	abstract address-space syntax	physical addresses
-shared-memory.g4	shared-memory intent	cache-coherence implementation
-distributed-memory.g4	distributed-memory intent	distributed scheduling/topology
-accelerator-memory.g4	accelerator-memory intent	GPU/accelerator selection
-quantum-memory.g4	quantum-classical memory intent	quantum IR/QEC/ZQN
-persistence.g4	persistence/durability intent	storage hardware
-memory-capabilities.g4	memory-specific capability associations	capability identity/registry
-memory-constraints.g4	memory requirements/constraints/preferences/hints	resource discovery
-README.md	architecture, ownership, integration, conformance	executable grammar
-
-
-No file may silently acquire another file's ownership.
-
-
----
-
-7. memory.g4 — Canonical Foundation
-
-memory.g4 is the foundational memory grammar.
-
-It owns the reusable memory-domain vocabulary and composition boundary.
-
-It may provide constructs for:
-
-memory declarations;
-
-memory places;
-
-memory paths;
-
-memory spaces;
-
-memory regions;
-
-memory operations;
-
-memory operation arguments;
-
-memory annotations;
-
-memory-qualified constructs;
-
-generic memory subjects;
-
-memory-domain extension points.
-
-
-It does not own:
-
-ownership analysis;
-
-borrow checking;
-
-lifetime inference;
-
-allocation algorithms;
-
-garbage collection;
-
-reference counting;
-
-physical addresses;
-
-cache hierarchy;
-
-NUMA discovery;
-
-hardware discovery;
-
-device selection;
-
-scheduling;
-
-routing;
-
-optimization;
-
-quantum IR;
-
-QEC;
-
-ZQN;
-
-runtime execution.
-
-
-The existing memory.g4 already establishes the important architecture:
-
-memory syntax
-    |
-    v
-canonical parser
-    |
-    v
-AST
-    |
-    v
+        ↓
+canonical parser composition
+        ↓
+frontend AST
+        ↓
 semantic analysis
+        ↓
+resource/capability analysis
+        ↓
+canonical semantic representation
+        ↓
+IR
+        ↓
+compiler
+        ↓
+runtime / backend / HAL
 
-It must remain target-independent.
-
+The memory grammar is therefore not an independent language.
 
 ---
 
-8. ownership.g4
+9. Existing Root Authorities
 
-ownership.g4 owns source syntax for ownership.
+9.1 "grammar/DESIGN.md"
 
-Possible semantic categories include:
+"grammar/DESIGN.md" owns the architecture of the grammar subsystem.
 
-owned;
+It defines:
 
-linear;
+- authority;
+- composition;
+- integration;
+- portability;
+- POCO-REAF;
+- hard-coding rules;
+- domain boundaries;
+- AST/semantic/IR boundaries.
 
-affine;
+The memory subsystem MUST conform to it.
 
-moved;
+---
 
-transferred;
+9.2 "grammar/Zamani.g4"
 
-shared;
+"Zamani.g4" remains the canonical root ANTLR composition surface.
 
-borrowed.
+The memory grammar must not create a competing root grammar.
 
+Memory-specific productions belong under "grammar/memory/".
 
-Only constructs actually standardized by the language specification may become permanent syntax.
+The root composition layer determines how memory constructs participate in the complete Zamani program.
 
-The grammar does not perform:
+---
 
-move checking;
+9.3 "grammar/grammar.md"
 
-alias analysis;
+"grammar.md" is the implementation-conformance reference.
 
-escape analysis;
+It must distinguish statuses such as:
 
-ownership inference;
+SPECIFIED
+IMPLEMENTED
+PARTIALLY IMPLEMENTED
+PLANNED
+DEPRECATED
 
-reference counting;
+A memory construct appearing in "Zamani-Grammar.md" does not become valid merely because it is documented there.
 
-garbage collection;
+---
 
-allocation optimization.
+9.4 "grammar/Zamani-Grammar.md"
 
+This remains the extended/historical/design reference.
 
-The integration is:
+It may contain:
+
+- future memory concepts;
+- Sankofa concepts;
+- temporal memory;
+- historical memory;
+- learning/memory concepts;
+- experimental memory models;
+- future architectures.
+
+Such material becomes stable Zamani syntax only after:
+
+proposal
+ ↓
+specification
+ ↓
+AST contract
+ ↓
+canonical grammar
+ ↓
+semantic implementation
+ ↓
+IR integration
+ ↓
+tests
+ ↓
+compatibility review
+ ↓
+stable
+
+---
+
+10. Canonical Token Rule
+
+The memory grammars MUST reuse the repository's existing canonical lexer/token vocabulary.
+
+The memory subsystem must not independently redefine tokens already owned by the lexer.
+
+This includes existing concepts such as:
+
+- identifiers;
+- qualified names;
+- literals;
+- punctuation;
+- separators;
+- operators;
+- keywords;
+- delimiters;
+- expression operators.
+
+Where a genuinely new lexical concept is required, it must first be added to the canonical lexical authority and then consumed by memory grammar rules.
+
+Do not create memory-local aliases for existing tokens merely because they have a memory-related meaning.
+
+For example, memory syntax must reuse the canonical token for an identifier rather than introducing:
+
+MEMORY_IDENTIFIER
+
+when ordinary Zamani identifiers already provide the required lexical behavior.
+
+Likewise, do not create duplicate tokens equivalent to existing concepts.
+
+The previous repository-wide token cleanup remains applicable:
+
+- duplicate "Question" / "QuestionMark" semantics must not be reintroduced;
+- duplicate "Ampersand" / "BitAnd" concepts must remain resolved according to the canonical lexer contract;
+- literal syntax must agree with the actual lexer;
+- memory grammar must never assume a token that the canonical lexer cannot produce.
+
+---
+
+11. "memory.g4" — Foundational Memory Grammar
+
+"memory.g4" is the foundational memory-domain grammar.
+
+It owns reusable memory syntax and composition boundaries.
+
+It may define concepts including:
+
+- memory constructs;
+- memory declarations;
+- memory bindings;
+- memory operations;
+- memory places;
+- memory paths;
+- memory regions;
+- memory spaces;
+- memory qualifications;
+- memory annotations;
+- memory resource intent;
+- memory requirements;
+- memory constraints;
+- memory preferences;
+- memory hints;
+- memory extension points.
+
+It MUST NOT implement:
+
+- ownership analysis;
+- borrow checking;
+- lifetime inference;
+- allocation algorithms;
+- garbage collection;
+- reference counting;
+- physical address assignment;
+- hardware discovery;
+- cache discovery;
+- NUMA discovery;
+- device selection;
+- routing;
+- scheduling;
+- optimization;
+- QEC;
+- ZQN;
+- HAL behavior;
+- runtime execution.
+
+The current "memory.g4" establishes the correct target-independent direction and must remain the foundation.
+
+---
+
+12. Universal Rule Reuse
+
+Memory grammars MUST consume universal grammar concepts rather than redefining them.
+
+Where provided by the canonical composition, memory grammar should reuse:
+
+identifier
+qualifiedName
+expression
+expressionList
+typeExpression
+attribute
+modifier
+visibility
+path
+literal
+
+The exact rule names are determined by the repository's canonical grammar.
+
+Do not create a second:
+
+identifier
+expression
+type
+qualifiedName
+
+inside memory.
+
+This prevents grammar divergence.
+
+---
+
+13. Ownership — "ownership.g4"
+
+"ownership.g4" owns source-level ownership syntax.
+
+The semantic model may represent concepts such as:
+
+owned
+moved
+transferred
+shared
+linear
+affine
+borrowed
+
+The grammar only represents source intent.
+
+Ownership validity belongs to semantic analysis.
+
+The pipeline is:
 
 ownership syntax
-      |
-      v
-frontend AST
-      |
-      v
-ownership analysis
-      |
-      v
-type/resource validation
-      |
-      v
-canonical semantic representation
+    ↓
+AST ownership information
+    ↓
+type/resource/ownership analysis
+    ↓
+semantic validation
 
+The grammar must not implement:
+
+- move checking;
+- alias analysis;
+- escape analysis;
+- ownership inference;
+- reference counting;
+- garbage collection;
+- allocator behavior.
+
+No:
+
+MAX_OWNERS
+MAX_MOVES
+MAX_ALIASES
+
+may be introduced.
 
 ---
 
-9. borrowing.g4
+14. Borrowing — "borrowing.g4"
 
-borrowing.g4 owns borrow syntax.
+"borrowing.g4" owns source-level borrowing syntax.
 
-Where the language specification adopts such forms, it may represent concepts such as:
+Where supported by the canonical Zamani type system, it may express concepts analogous to:
 
 &value
 &mut value
-'lifetime
 
-The grammar does not determine whether a borrow is semantically valid.
+and lifetime-associated forms.
 
 Borrow validity belongs to semantic analysis.
 
-It must support arbitrary nesting and composition without grammar-level limits.
-
-It must not impose:
+The grammar must support arbitrary composition without imposing:
 
 MAX_BORROWS
 MAX_REFERENCES
-MAX_LIFETIMES
+MAX_NESTING
 
+as universal language limits.
 
----
-
-10. lifetimes.g4
-
-A lifetime is a symbolic semantic relationship.
-
-It is not a physical clock duration.
-
-Examples may include:
-
-'a
-'scope
-'region
-'transaction
-
-A lifetime grammar must not encode:
-
-nanoseconds;
-
-clock cycles;
-
-fixed lifetime counts;
-
-hardware retention times;
-
-scheduler timing.
-
-
-Lifetime meaning belongs to semantic analysis.
-
-The parser only preserves the symbolic lifetime information.
-
+Borrow checking must remain outside ANTLR grammar actions.
 
 ---
 
-11. references.g4
+15. Lifetimes — "lifetimes.g4"
 
-references.g4 owns source-level memory-reference syntax.
+A lifetime is a semantic relationship, not necessarily physical time.
 
-It may represent references to:
+It may describe:
 
-variables;
+- lexical scope;
+- ownership scope;
+- region lifetime;
+- resource lifetime;
+- transaction lifetime;
+- execution lifetime.
 
-fields;
+A lifetime identifier must not imply a fixed machine clock.
 
-indexed values;
+The grammar must not encode:
 
-slices;
+nanoseconds
+cycles
+ticks
+fixed retention periods
 
-regions;
+unless those are ordinary program values in a separately defined timing model.
 
-abstract memory objects;
+Lifetime inference and validity belong to semantic analysis.
 
-other source-level memory places.
+---
 
+16. References — "references.g4"
 
-It must integrate with:
+"references.g4" owns source-level memory-reference constructs.
+
+References may point to:
+
+- variables;
+- fields;
+- indexed elements;
+- slices;
+- regions;
+- abstract memory objects;
+- other memory places.
+
+It integrates with:
 
 grammar/types/
 grammar/expressions/
 grammar/memory/memory.g4
 
-It must not redefine the canonical type system.
+It must not create an independent pointer/reference IR.
 
-It must not introduce an independent pointer/reference IR.
-
-
----
-
-12. allocation.g4
-
-allocation.g4 owns source-level allocation intent.
-
-Examples may conceptually include:
-
-memory::allocate(...)
-memory::reserve(...)
-memory::acquire(...)
-
-provided those forms are part of the canonical specification.
-
-Allocation syntax may express:
-
-symbolic sizes;
-
-computed sizes;
-
-extents;
-
-shapes;
-
-memory spaces;
-
-regions;
-
-requirements;
-
-preferences;
-
-alignment requirements where semantically meaningful.
-
-
-It must not choose:
-
-heap implementation;
-
-stack implementation;
-
-allocator;
-
-physical page;
-
-memory bank;
-
-NUMA node;
-
-GPU memory;
-
-physical device;
-
-DMA engine.
-
-
-Those are downstream decisions.
-
+Physical pointer representation is a backend concern.
 
 ---
 
-13. deallocation.g4
+17. Allocation — "allocation.g4"
 
-deallocation.g4 owns source-level release/deallocation intent.
+"allocation.g4" owns allocation intent.
 
-It must support memory models where explicit release is meaningful without assuming that every Zamani target uses explicit deallocation.
+Allocation may express:
+
+- symbolic sizes;
+- computed sizes;
+- extents;
+- shapes;
+- memory spaces;
+- regions;
+- semantic requirements;
+- alignment requirements where meaningful;
+- persistence requirements;
+- capability requirements.
+
+Examples are conceptual:
+
+allocate n elements
+allocate Memory<T, size>
+allocate region
+reserve memory satisfying requirement
+
+The exact legal syntax is determined by the canonical specification and existing grammar.
+
+The grammar must not select:
+
+- stack;
+- heap;
+- allocator;
+- page;
+- memory bank;
+- NUMA node;
+- GPU memory;
+- DMA engine;
+- physical address.
+
+Those are downstream realization decisions.
+
+---
+
+18. Deallocation — "deallocation.g4"
+
+"deallocation.g4" owns explicit release/deallocation intent.
+
+It must not assume that every target uses explicit physical deallocation.
 
 It must not encode:
 
-garbage-collection algorithms;
+- garbage collection algorithms;
+- reference-count implementations;
+- page reclamation;
+- physical memory release;
+- allocator internals.
 
-allocator internals;
-
-physical page reclamation;
-
-hardware memory release;
-
-reference-count implementation.
-
-
+The semantic model determines whether explicit release is valid and what it means.
 
 ---
 
-14. regions.g4
+19. Regions — "regions.g4"
 
-A memory region is a semantic grouping.
+A memory region is an abstract semantic grouping.
 
-It may represent:
+A region may represent:
 
-ownership scope;
-
-lifetime scope;
-
-allocation grouping;
-
-isolation;
-
-semantic locality;
-
-policy grouping.
-
+- lifetime;
+- ownership;
+- allocation grouping;
+- isolation;
+- locality;
+- policy;
+- persistence;
+- security;
+- transactional scope.
 
 A region does not automatically mean:
 
-NUMA node;
-
-memory bank;
-
-cache region;
-
-page;
-
-physical address range.
-
+- NUMA node;
+- cache;
+- memory bank;
+- page;
+- physical address range.
 
 Physical realization is downstream.
 
-No fixed number of regions is permitted.
-
-
----
-
-15. address-spaces.g4
-
-Address spaces are abstract semantic concepts.
-
-They may distinguish things such as:
-
-local;
-
-shared;
-
-remote;
-
-device;
-
-accelerator;
-
-persistent;
-
-managed;
-
-unified;
-
-distributed;
-
-custom/future-defined spaces.
-
-
-The grammar must not require a physical address.
-
-It must not define a universal address width.
-
-It must not encode:
-
-32-bit addresses
-64-bit addresses
-128-bit addresses
-
-as a universal machine limitation.
-
-If a specific width is semantically required by a program, it is program data or a target-specific requirement, not an implicit grammar maximum.
-
+There is no universal maximum number of regions.
 
 ---
 
-16. shared-memory.g4
+20. Address Spaces — "address-spaces.g4"
 
-This file owns shared-memory source intent.
+"address-spaces.g4" defines abstract memory-space semantics.
+
+Potential semantic categories include:
+
+local
+shared
+remote
+device
+accelerator
+persistent
+managed
+unified
+distributed
+custom
+
+These are semantic categories, not necessarily a closed enumeration.
+
+The grammar must support open-ended extension where the canonical capability/name system permits it.
+
+The grammar must never impose a universal:
+
+32-bit address
+64-bit address
+128-bit address
+
+limit.
+
+A program may explicitly require an address representation as program semantics. That is different from the language imposing a global address width.
+
+---
+
+21. Shared Memory — "shared-memory.g4"
+
+"shared-memory.g4" owns source-level shared-memory intent.
 
 It may express:
 
-shared access;
+- shared access;
+- shared ownership;
+- shared regions;
+- shared buffers;
+- visibility requirements;
+- synchronization relationships;
+- consistency requirements.
 
-shared ownership;
-
-shared regions;
-
-shared buffers;
-
-synchronization requirements;
-
-sharing policies.
-
-
-It must not define:
-
-cache-line size;
-
-coherence protocol;
-
-NUMA topology;
-
-physical memory bank;
-
-cache hierarchy.
-
-
-Concurrency semantics remain owned by:
+Concurrency semantics remain integrated with:
 
 grammar/concurrency/
 
-The semantic layer connects shared memory and concurrency.
+The grammar must not encode:
 
+- cache-line size;
+- cache-coherence protocol;
+- NUMA topology;
+- cache hierarchy;
+- physical memory bank.
+
+Those belong to target/resource analysis.
 
 ---
 
-17. distributed-memory.g4
+22. Distributed Memory — "distributed-memory.g4"
 
-Distributed memory describes memory semantics that may be realized across:
+"distributed-memory.g4" owns distributed-memory intent.
 
-processes;
+It may describe memory that is:
 
-devices;
-
-nodes;
-
-clusters;
-
-remote execution domains;
-
-future distributed architectures.
-
+- remote;
+- replicated;
+- partitioned;
+- distributed;
+- shared across execution domains;
+- fault tolerant;
+- persistent;
+- consistency constrained.
 
 It must not hard-code:
 
-node[0]
-node[1]
-node[2]
+node0
+node1
+node2
 
-as a language topology.
+as the universal topology.
 
 Nor may it define:
 
 MAX_NODES
-MAX_DEVICES
 MAX_MEMORY_NODES
+MAX_DEVICES
 
-Distributed execution remains owned by:
+as language limits.
+
+Integration belongs with:
 
 grammar/distributed/
 grammar/execution/
 grammar/networking/
-
+grammar/resources/
 
 ---
 
-18. accelerator-memory.g4
+23. Accelerator Memory — "accelerator-memory.g4"
 
-This file owns memory intent associated with abstract accelerator environments.
+"accelerator-memory.g4" describes memory intent associated with abstract accelerators.
 
-It may express concepts such as:
+It may express:
 
-accelerator-accessible memory;
+- accelerator-visible memory;
+- device-accessible memory;
+- managed memory;
+- shared accelerator memory;
+- transfer intent;
+- accelerator memory capabilities;
+- locality preferences;
+- synchronization requirements.
 
-device-visible memory;
-
-shared accelerator memory;
-
-managed accelerator memory;
-
-memory-transfer intent;
-
-accelerator memory capabilities.
-
-
-It must never mean:
+It must not encode:
 
 GPU 0
 GPU 1
@@ -799,138 +915,132 @@ CUDA device 0
 ROCm device 0
 FPGA 0
 
-unless a separate explicitly target-specific dialect has intentionally introduced such semantics.
+as portable language constructs.
 
-Portable Zamani source remains abstract.
-
+Vendor/device-specific syntax belongs to explicit interoperability or dialect systems.
 
 ---
 
-19. quantum-memory.g4
+24. Quantum Memory — "quantum-memory.g4"
 
-Quantum-memory syntax exists only for memory concepts relevant to quantum-classical computation.
+"quantum-memory.g4" handles memory semantics relevant to quantum-classical programs.
 
-It must not create another quantum IR.
+It must integrate with the existing canonical quantum architecture.
 
 The canonical quantum semantic boundary remains:
 
 quantum::ir
 
-The pipeline remains:
+The pipeline is:
 
 Zamani source
-      |
-      v
+    ↓
+lexer
+    ↓
 parser
-      |
-      v
+    ↓
 domain-neutral AST
-      |
-      v
+    ↓
 semantic analysis
-      |
-      v
+    ↓
 quantum::ir
+    ↓
+optimization
+    ↓
+decomposition
+    ↓
+routing
+    ↓
+scheduling
+    ↓
+QEC / resilience
+    ↓
+ZQN
+    ↓
+HAL
+    ↓
+hardware
 
-quantum-memory.g4 must not own:
+"quantum-memory.g4" MUST NOT create:
 
-QubitId;
+QuantumMemoryIR
+QuantumGateIR
+PhysicalQubitIR
+MemoryQuantumIR
 
-PhysicalQubitId;
+or another quantum representation.
 
-QuantumGate;
+It must not own:
 
-QEC;
+- "QubitId";
+- physical qubit mapping;
+- QEC;
+- ZQN;
+- routing;
+- calibration;
+- physical device allocation.
 
-ZQN;
-
-routing;
-
-calibration;
-
-physical qubit allocation.
-
-
-Those belong to their established subsystems.
-
+Those remain owned by their established subsystems.
 
 ---
 
-20. persistence.g4
+25. Persistence — "persistence.g4"
 
-persistence.g4 owns source syntax for persistent/durable memory semantics.
+"persistence.g4" owns persistence and durability intent.
 
-It may express concepts such as:
+It may express:
 
-persistence;
-
-durability;
-
-retention intent;
-
-durable regions;
-
-persistent ownership;
-
-recovery-related persistence requirements.
-
+- persistent data;
+- durable regions;
+- retention requirements;
+- durability properties;
+- recovery-related persistence;
+- persistence capability requirements.
 
 It must not select:
 
-SSD;
+SSD
+NVRAM
+MRAM
+filesystem
+storage controller
+physical storage device
 
-NVRAM;
+unless a separate explicit target-specific dialect is being used.
 
-MRAM;
-
-storage device;
-
-filesystem;
-
-physical medium.
-
-
-The semantic/resource/hardware layers determine realization.
-
+Portable source remains abstract.
 
 ---
 
-21. memory-capabilities.g4
+26. Memory Capabilities — "memory-capabilities.g4"
 
-This file is the memory-domain bridge to the canonical capability system.
+"memory-capabilities.g4" is the bridge between memory semantics and the repository-wide capability model.
 
-It must not create a second capability identity system.
+It MUST NOT become a second capability system.
 
-The current architecture correctly imports:
-
-Capabilities
-Memory
-ResourceCapabilities
-Expressions
-
-and uses the canonical ZamaniLexer token vocabulary.
-
-That architecture must remain.
-
-The capability hierarchy is:
+The intended ownership chain is:
 
 grammar/core/capabilities.g4
-        |
-        | capability identity/reference
-        v
+        ↓
+canonical capability identity/reference
+        ↓
 grammar/resources/capabilities.g4
-        |
-        | resource capability relationships
-        v
+        ↓
+resource capability semantics
+        ↓
 grammar/memory/memory-capabilities.g4
-        |
-        | memory-domain association
-        v
-memory semantics
+        ↓
+memory-domain association
 
-Memory capabilities remain open-world.
+Memory capability syntax must therefore reuse the canonical capability representation.
 
-Examples:
+---
+
+27. Open-World Capabilities
+
+Memory capabilities must be extensible.
+
+Examples may include:
 
 memory::atomic
 memory::coherent
@@ -946,12 +1056,20 @@ memory::transactional
 memory::encrypted
 memory::protected
 memory::recoverable
+
+These are examples, not necessarily a closed built-in enumeration.
+
+The grammar must allow future or dialect-defined capability identities through the canonical qualified-name/capability model.
+
+For example:
+
 future::memory::new_architecture
 vendor::memory::extension
+domain::memory::capability
 
-These are examples, not a closed enumeration.
+must be representable where the general capability system permits it.
 
-The grammar must never become:
+Do not create:
 
 memoryCapability
     : ATOMIC
@@ -960,760 +1078,1060 @@ memoryCapability
     | ...
     ;
 
-That would make future capabilities require grammar modification.
+as a closed universal list.
 
+That would require grammar modification for every new capability.
 
 ---
 
-22. Capability vs Resource vs Requirement
+28. Requirement / Capability / Constraint / Preference / Hint
 
-The memory subsystem must preserve these distinctions.
-
-Capability
-
-What an environment can provide.
-
-memory::persistent
+The memory subsystem MUST preserve the following semantic distinctions.
 
 Requirement
 
-What the program requires.
+A property that must be satisfied.
 
-requires memory capability memory::persistent;
+requires memory capability memory::persistent
+
+Capability
+
+A property an environment can provide.
+
+memory::persistent
 
 Constraint
 
 A condition that a valid realization must satisfy.
 
-constraint memory capability memory::coherent;
+memory constraint durability >= required_durability
 
 Preference
 
 A preferred realization.
 
-preference memory capability memory::local;
+prefer memory capability memory::unified
 
 Hint
 
-Advisory information.
+Optimization guidance that does not change program meaning.
 
-hint memory capability memory::prefetchable;
+hint memory locality
 
-Resource
+Realization
 
-A realizable computational resource.
+A downstream physical mapping.
 
-resource::memory
+logical memory region
+    ↓
+physical memory resource
 
-Implementation decision
-
-Which actual device or physical resource realizes the request.
-
-This belongs downstream.
-
-These concepts must never be collapsed.
-
+The grammar must not collapse these concepts into one generic construct if doing so would destroy semantic distinctions.
 
 ---
 
-23. Capability Subject
+29. Memory Constraints — "memory-constraints.g4"
 
-A capability may be associated with an abstract memory subject.
+"memory-constraints.g4" owns memory-specific resource intent.
 
-Examples include:
+It may express:
 
-memory place
-memory space
-memory region
-resource::memory
-symbolic memory resource
+- minimum requirements;
+- maximum semantic constraints;
+- capability requirements;
+- capacity requirements;
+- latency constraints;
+- bandwidth constraints;
+- locality requirements;
+- persistence requirements;
+- consistency requirements;
+- reliability requirements;
+- security requirements;
+- preferences;
+- hints.
 
-The subject must not be interpreted by the parser as:
+The grammar must not decide whether a target satisfies a constraint.
 
-physical device;
-
-physical memory bank;
-
-NUMA node;
-
-physical address;
-
-GPU index;
-
-QPU index.
-
-
-That resolution belongs to semantic/resource/hardware analysis.
-
-
----
-
-24. Open-World Memory Operations
-
-Memory operations must remain extensible.
-
-The language may eventually support operations such as:
-
-memory::allocate(...)
-memory::release(...)
-memory::share(...)
-memory::map(...)
-memory::migrate(...)
-memory::prefetch(...)
-memory::persist(...)
-memory::flush(...)
-memory::protect(...)
-
-but the grammar must not become a closed dictionary of every future memory operation.
-
-Operation identity should remain semantic data wherever the language architecture permits.
-
-Unknown operations must not be silently accepted as semantically valid merely because the grammar can parse them.
-
-The semantic layer resolves operation identity.
-
-
----
-
-25. memory-constraints.g4
-
-This file owns memory-specific resource intent.
-
-It must distinguish:
-
-requirement
-constraint
-preference
-hint
+That is resource feasibility analysis.
 
 For example:
 
-requires memory capability memory::persistent;
+requires memory capacity >= required_capacity
 
-constraint memory::latency < required_latency;
+means the program requires a capacity.
 
-preference memory capability memory::local;
+It does not mean:
 
-hint memory::reuse;
-
-The exact syntax remains governed by the canonical grammar and token vocabulary.
-
-The important invariant is semantic distinction.
-
-A preference must never silently become a mandatory requirement.
-
-A hint must never silently become a correctness condition.
-
+allocate physical RAM immediately
 
 ---
 
-26. Token Policy
+30. Memory Operations Must Remain Extensible
 
-The memory subsystem must use the existing canonical token vocabulary.
+The memory language should avoid becoming a dictionary of every possible memory operation.
 
-The current architecture has:
+Conceptual operations may include:
 
-grammar/antlr/ZamaniLexer.g4
-        |
-        v
-grammar/lexer/tokens.g4
-        |
-        v
-canonical Zamani tokens
+allocate
+release
+map
+unmap
+share
+migrate
+prefetch
+persist
+flush
+protect
+synchronize
 
-Memory grammars must consume those tokens.
+but operation identity should remain semantic data where the language architecture permits it.
 
-The memory subsystem must not create duplicate versions of:
+Do not add a new keyword merely because a library or hardware vendor introduces a new memory operation.
 
-identifiers;
-
-qualified names;
-
-punctuation;
-
-comparison operators;
-
-literals;
-
-expression operators;
-
-general keywords.
-
-
-Existing tokens such as the repository's K_MEMORY, K_CAPABILITY, K_REQUIRES, K_CONSTRAINT, K_PREFERENCE, K_HINT, K_AVAILABLE, K_WHEN, K_ASSERT, K_IMPLIES, K_EXCLUDES, K_RESOURCE, K_PROPERTY, EQ, NE, LT, LE, GT, GE, SEMI, LBRACE, RBRACE, and COMMA must be reused where appropriate.
-
-New tokens are allowed only when:
-
-1. the language specification requires a genuinely new lexical category;
-
-
-2. no existing token represents the concept;
-
-
-3. the token belongs in the canonical lexer;
-
-
-4. its spelling and compatibility behavior are specified;
-
-
-5. all parser consumers and tests are updated.
-
-
-
-A memory file must never introduce a local lexer merely for convenience.
-
+A new operation becomes core syntax only when it has language-level semantics that genuinely require grammar support.
 
 ---
 
-27. Expression Integration
+31. Memory Type Integration
 
-Memory grammars consume the canonical expression grammar.
+Memory constructs integrate with the canonical type system.
 
-They must not redefine:
-
-arithmetic;
-
-boolean expressions;
-
-comparison precedence;
-
-function calls;
-
-indexing;
-
-ranges;
-
-literals;
-
-general operators.
-
-
-For example:
-
-allocate(rows * columns)
-
-must use the same expression semantics as:
-
-compute(rows * columns)
-
-This is essential for deterministic language-wide semantics.
-
-
----
-
-28. Type Integration
-
-Memory grammars consume the canonical type grammar.
-
-They must not redefine:
-
-arrays;
-
-slices;
-
-tuples;
-
-references;
-
-pointers;
-
-generics;
-
-resource types;
-
-quantum types;
-
-hardware types.
-
-
-For example:
+Potential source-level forms include:
 
 Memory<T, size>
-
-must be interpreted through the canonical type/value/resource architecture.
-
-The grammar must not turn a type parameter into a machine limit.
-
-
----
-
-29. Memory and Types
-
-The following kinds of source-level types may be meaningful:
-
-Memory<T>
-Memory<T, size>
-Buffer<T>
-Region<T>
+Memory<T, shape>
 Reference<T>
-Shared<T>
-Distributed<T>
-Persistent<T>
+Region<T>
 
-where supported by the canonical type system.
+where those forms are actually specified by the canonical type system.
 
-A size such as:
+The memory grammar must not independently redefine generic types, type parameters, array syntax, tensor syntax, or type constraints.
 
-1024
+The type layer owns:
 
-is a program value.
+type structure
+generic parameters
+type constraints
+dependent relationships
+resource-aware types
 
-It must not be interpreted as:
-
-MAX_MEMORY = 1024
-
-
----
-
-30. Memory and Concurrency
-
-Memory and concurrency are related but distinct.
-
-grammar/memory/
-
-owns memory semantics.
-
-grammar/concurrency/
-
-owns:
-
-tasks;
-
-parallelism;
-
-synchronization;
-
-channels;
-
-actors;
-
-scheduling semantics;
-
-concurrency control.
-
-
-Semantic analysis connects the two.
-
-Memory grammar must not duplicate concurrency grammar.
-
+The memory layer owns memory-specific semantic composition.
 
 ---
 
-31. Memory and Effects
+32. Tensor and Data Integration
 
-Memory operations may produce effects.
+Memory must support arbitrarily shaped data where the type/data systems permit it.
 
-Effects remain owned by:
+For example:
 
-grammar/effects/
+Tensor<T, shape>
 
-The architecture is:
+must describe a program-level shape.
 
-memory syntax
-      |
-      v
-AST
-      |
-      v
-effect analysis
+It must not impose:
 
-The memory parser must not implement effect checking.
+MAX_TENSOR_RANK
+MAX_TENSOR_DIMENSION
+MAX_ELEMENTS
 
+as universal grammar limitations.
 
----
+Integration:
 
-32. Memory and Resources
+data/
+types/
+expressions/
+memory/
+resources/
 
-Memory resource intent integrates with:
-
-grammar/resources/
-
-The resource system determines:
-
-requirements;
-
-capabilities;
-
-constraints;
-
-preferences;
-
-hints;
-
-quantities;
-
-availability;
-
-resource relationships.
-
-
-The memory subsystem provides domain-specific memory meaning.
-
-The two must not become competing resource systems.
-
+must converge through semantic analysis rather than competing type systems.
 
 ---
 
-33. Memory and Hardware
+33. Concurrency Integration
 
-Hardware realization belongs to:
+Memory and concurrency are related but not identical.
 
-grammar/hardware/
+Memory owns:
 
-The memory grammar must not select:
+- memory sharing;
+- memory visibility;
+- memory lifetime;
+- memory ownership;
+- memory capability.
 
-CPU;
+Concurrency owns:
 
-GPU;
+- tasks;
+- scheduling;
+- synchronization;
+- channels;
+- parallel execution;
+- actors;
+- execution domains.
 
-FPGA;
+The semantic layer combines these facts.
 
-ASIC;
-
-QPU;
-
-memory controller;
-
-memory bank;
-
-NUMA node;
-
-cache;
-
-physical address.
-
-
-Instead:
-
-memory intent
-      |
-      v
-resource analysis
-      |
-      v
-hardware capabilities
-      |
-      v
-compiler/runtime realization
-
+Do not move concurrency semantics into "memory/".
 
 ---
 
-34. Memory and Distributed Computing
+34. Distributed Integration
 
-Distributed memory does not equal distributed execution.
-
-Therefore:
-
-memory/distributed-memory.g4
-
-must not redefine:
-
-nodes;
-
-services;
-
-messages;
-
-distributed processes;
-
-replication;
-
-collective operations;
-
-distributed scheduling.
-
-
-Those belong to:
+Distributed memory integrates with:
 
 grammar/distributed/
 grammar/networking/
 grammar/execution/
+grammar/resources/
 
+Memory grammar may state:
 
----
+remote
+distributed
+replicated
+consistent
+persistent
+fault-tolerant
 
-35. Memory and HDL
+but must not determine:
 
-HDL memory constructs belong to:
+node 7
+rack 3
+network link 12
+cluster size 64
 
-grammar/hdl/
-
-They may involve:
-
-registers;
-
-memories;
-
-ports;
-
-pipelines;
-
-timing;
-
-clock domains;
-
-hardware interfaces.
-
-
-Memory-domain grammar may provide shared semantic foundations but must not duplicate HDL syntax.
-
-The implementation may eventually map the same source-level memory intent to:
-
-software memory
-hardware memory
-accelerator memory
-distributed memory
-
-without changing the semantic source program.
-
+unless such information is explicitly part of a target-specific deployment description outside portable source semantics.
 
 ---
 
-36. Memory and AI/Data
+35. Hardware / HDL Integration
 
-Memory is fundamental to:
+Memory is fundamental to hardware/software co-design.
 
-tensors;
+HDL may describe:
 
-datasets;
+- memories;
+- interfaces;
+- ports;
+- registers;
+- buffers;
+- pipelines;
+- timing;
+- verification properties.
 
-model parameters;
+Memory grammar describes software-visible semantic intent.
 
-training;
+The relationship is:
 
-inference;
+Zamani memory semantics
+        ↓
+semantic/resource requirements
+        ↓
+hardware/HDL analysis
+        ↓
+hardware representation
+        ↓
+synthesis/lowering
+        ↓
+target
 
-data pipelines;
+The memory grammar must not directly encode physical:
 
-streaming.
+- BRAM count;
+- SRAM count;
+- DRAM banks;
+- cache levels;
+- register-file size;
+- FPGA block counts.
 
-
-However:
-
-grammar/memory/
-
-must not redefine AI or data semantics.
-
-Those remain owned by:
-
-grammar/ai/
-grammar/data/
-grammar/classical/
-
-Memory provides common storage/resource semantics.
-
+Such facts belong to target capabilities.
 
 ---
 
-37. Memory and Quantum Computing
+36. Security Integration
 
-Memory may coexist with:
+Memory syntax may participate in security requirements such as:
 
-quantum registers;
+- protected memory;
+- isolated memory;
+- encrypted memory;
+- secret data;
+- access control;
+- capability-restricted access;
+- trusted memory;
+- secure persistence.
 
-measurement results;
+However, a memory capability MUST NOT silently grant:
 
-classical feed-forward;
+- kernel privilege;
+- DMA;
+- unrestricted physical memory access;
+- device ownership;
+- privileged address-space access;
+- secret-memory access.
 
-quantum-classical data;
+Authorization belongs to the security/capability semantic layer.
 
-quantum control metadata;
+---
 
-simulation state.
+37. Persistence and Recovery Integration
 
+Persistent memory semantics may integrate with:
 
-But memory syntax must not define quantum semantics.
+execution/
+distributed/
+security/
+data/
+resources/
 
-The canonical boundary remains:
+A source-level persistence requirement may be satisfied by different target implementations.
 
+For example:
+
+persistent region
+
+could eventually be realized using:
+
+- persistent memory;
+- storage;
+- replicated memory;
+- transactional backing;
+- distributed persistence;
+- a future persistence architecture.
+
+The source semantics remain stable.
+
+---
+
+38. AI / ML / Data Integration
+
+AI and data workloads may impose memory requirements involving:
+
+- large tensors;
+- streaming;
+- persistence;
+- sharing;
+- distribution;
+- accelerator accessibility;
+- locality;
+- checkpointing;
+- model state;
+- dataset state.
+
+Memory grammar must not encode a particular framework such as:
+
+CUDA
+ROCm
+PyTorch
+TensorFlow
+
+as core language semantics.
+
+Framework integration belongs to interoperability/dialect/backend layers.
+
+---
+
+39. Sankofa / Extended Memory Concepts
+
+The broader Zamani design contains memory-like concepts involving:
+
+- recall;
+- history;
+- learning;
+- temporal information;
+- provenance;
+- wisdom;
+- persistent state;
+- inter-memory;
+- consensus.
+
+These must not be conflated with physical memory.
+
+The memory directory may eventually expose syntax for such concepts where they are formally specified, but their semantics must remain distinct.
+
+For example:
+
+program memory
+persistent state
+historical state
+knowledge memory
+temporal state
+
+are different semantic concepts from:
+
+RAM
+cache
+device memory
+physical storage
+
+The grammar must preserve that distinction.
+
+---
+
+40. Temporal / Multi-Timeline Integration
+
+If MTS functionality is promoted into the stable language, memory may interact with:
+
+- snapshots;
+- checkpoints;
+- state versions;
+- temporal regions;
+- fork/merge;
+- rewind;
+- speculative state.
+
+Those concepts must remain semantic.
+
+There must be no fixed:
+
+MAX_TIMELINES
+MAX_SNAPSHOTS
+MAX_BRANCHES
+
+in the grammar.
+
+---
+
+41. Metaprogramming Integration
+
+Macros and metaprogramming may generate memory constructs.
+
+Generated source MUST re-enter the normal validation pipeline:
+
+generated syntax
+    ↓
+lexer
+    ↓
+parser
+    ↓
+AST
+    ↓
+semantic validation
+
+Macros must not bypass:
+
+- type validation;
+- ownership validation;
+- capability validation;
+- resource validation;
+- security checks.
+
+No macro is allowed to introduce an alternate memory semantics.
+
+---
+
+42. Interoperability
+
+Memory constructs may interoperate with:
+
+- C;
+- C++;
+- Rust;
+- WebAssembly;
+- LLVM-family representations;
+- accelerator APIs;
+- HDL;
+- foreign runtimes.
+
+These are interoperability targets.
+
+They are not the canonical Zamani memory model.
+
+The mapping is:
+
+Zamani memory semantics
+        ↓
+canonical semantic representation
+        ↓
+interoperability lowering
+        ↓
+foreign representation
+
+Never:
+
+foreign representation
+        ↓
+becomes Zamani's canonical memory semantics
+
+without an explicit semantic mapping.
+
+---
+
+43. AST Contract
+
+Every memory grammar construct must have a predetermined AST mapping.
+
+The required relationship is:
+
+grammar rule
+    ↓
+AST node / generic AST construct
+    ↓
+semantic memory construct
+    ↓
+canonical IR representation
+
+The grammar must not introduce syntax whose AST meaning is undefined.
+
+The preferred architecture is domain-neutral AST representation.
+
+For example, memory capability syntax should become a generic capability/resource intent representation rather than a backend-specific node.
+
+Conceptually:
+
+memory capability
+        ↓
+AST capability/resource intent
+        ↓
+semantic capability resolution
+        ↓
+memory resource semantics
+
+---
+
+44. No Memory-Specific IR
+
+The memory grammar MUST NOT create an independent memory IR merely because memory has many constructs.
+
+Memory semantics should integrate with the repository's canonical semantic/IR architecture.
+
+The eventual representation may contribute to:
+
+- classical IR;
+- resource IR;
+- memory-related semantic state;
+- HDL/hardware representation;
+- quantum semantic representation where relevant.
+
+But the memory grammar must not introduce another competing intermediate representation.
+
+---
+
+45. Quantum IR Boundary
+
+Where memory constructs participate in quantum computation:
+
+memory syntax
+    ↓
+domain-neutral AST
+    ↓
+semantic analysis
+    ↓
 quantum::ir
 
-The memory grammar must never create a competing:
+The memory grammar does not lower directly to "quantum::ir".
 
-QuantumMemoryIR
-MemoryQuantumIR
+It also does not create:
 
-or equivalent.
+memory_quantum_ir
+quantum_memory_ir
 
-
----
-
-38. Memory and QEC
-
-QEC remains outside the memory grammar.
-
-The memory grammar must not implement:
-
-code distance;
-
-syndrome extraction;
-
-decoder algorithms;
-
-logical-to-physical mapping;
-
-physical qubit placement.
-
-
-Those remain downstream QEC/compiler responsibilities.
-
+This preserves the established canonical quantum architecture.
 
 ---
 
-39. Memory and ZQN
+46. Resource Integration
 
-ZQN remains responsible for quantum noise/fault semantics.
+Memory requirements must enter the common resource model.
 
-Memory grammar must not define:
+The relationship is:
 
-noise channels;
+program intent
+    ↓
+memory requirement
+    ↓
+resource requirement graph
+    ↓
+capability resolution
+    ↓
+target feasibility
+    ↓
+placement
+    ↓
+scheduling
+    ↓
+realization
 
-leakage;
-
-loss;
-
-correlated faults;
-
-decoder behavior;
-
-resilience actions.
-
-
-If memory semantics affect quantum resilience, that information flows through semantic analysis into the existing ZQN/QEC/resilience architecture.
-
-
----
-
-40. AST Contract
-
-Every accepted memory construct must preserve sufficient source information for the domain-neutral AST.
-
-Where applicable, the AST must retain:
-
-source span;
-
-construct kind;
-
-qualified names;
-
-memory operation;
-
-operands;
-
-expressions;
-
-types;
-
-memory place;
-
-memory space;
-
-memory region;
-
-ownership information;
-
-borrow information;
-
-lifetime references;
-
-capability references;
-
-resource references;
-
-requirement/constraint/preference/hint distinction;
-
-annotations;
-
-modifiers;
-
-source ordering.
-
-
-The grammar must not flatten semantically different constructs into an unstructured string.
-
+The memory grammar does not perform resource discovery.
 
 ---
 
-41. AST Is Not IR
+47. Hardware Capability Resolution
 
-The memory grammar produces syntax information.
+A memory capability expressed by source code is not itself a physical resource.
 
-It does not define a memory IR.
+Example:
 
-The required architecture is:
+requires memory capability memory::persistent
 
-grammar
-   |
-   v
-parser
-   |
-   v
-domain-neutral AST
-   |
-   v
+The compiler/resource system may discover that the target provides persistence through:
+
+persistent-memory
+storage-backed-memory
+replicated-memory
+distributed-memory
+future-memory
+
+The source program does not need to know which implementation satisfies the capability.
+
+This is essential to POCO-REAF.
+
+---
+
+48. Error Handling
+
+Memory grammar errors must be reported with:
+
+- source location;
+- offending construct;
+- expected syntax;
+- actual syntax where available;
+- stable diagnostic identity;
+- relevant context.
+
+The grammar itself must not perform semantic recovery that changes program meaning.
+
+Semantic errors belong to semantic analysis.
+
+Examples:
+
+unknown memory capability
+unsatisfied memory requirement
+invalid ownership relationship
+invalid lifetime
+incompatible address space
+unsupported target capability
+
+must be distinguishable from syntax errors.
+
+---
+
+49. Diagnostics Integration
+
+Diagnostics should distinguish:
+
+LEXICAL_ERROR
+SYNTAX_ERROR
+MEMORY_SYNTAX_ERROR
+TYPE_ERROR
+OWNERSHIP_ERROR
+BORROW_ERROR
+LIFETIME_ERROR
+CAPABILITY_ERROR
+RESOURCE_ERROR
+MEMORY_CONSTRAINT_ERROR
+PORTABILITY_ERROR
+TARGET_FEASIBILITY_ERROR
+
+The exact repository diagnostic taxonomy remains authoritative.
+
+Memory grammar must not invent a conflicting error framework.
+
+---
+
+50. Determinism
+
+The memory grammar must be deterministic.
+
+It must:
+
+- contain no parser actions;
+- perform no I/O;
+- perform no network access;
+- perform no resource discovery;
+- perform no hardware discovery;
+- perform no allocation decisions;
+- use no random behavior;
+- contain no semantic side effects.
+
+Given the same token stream, the grammar must produce equivalent parse structure.
+
+Semantic analysis must also be deterministic wherever the language contract requires deterministic diagnostics/results.
+
+---
+
+51. Security Boundary
+
+The memory grammar is not a security authority.
+
+Parsing:
+
+memory capability privileged::access
+
+must not itself grant privilege.
+
+Capability authorization happens later.
+
+No source construct may bypass:
+
+- security policy;
+- capability authorization;
+- ownership rules;
+- resource policy;
+- sandboxing;
+- target security constraints.
+
+---
+
+52. Safe Rust Requirement
+
+The grammar itself contains no executable Rust.
+
+The Rust implementation consuming it MUST remain compatible with:
+
+Rust 1.97
+Rust 1.97.1
+Rust 2021
+
+No "unsafe" Rust is permitted for the memory grammar implementation.
+
+This includes:
+
+- lexer integration;
+- parser integration;
+- AST construction;
+- semantic analysis;
+- diagnostics;
+- memory-domain validation;
+- conformance tests.
+
+Safe abstractions must be used.
+
+---
+
+53. Performance and Scalability
+
+The memory grammar must support large source programs without embedding artificial language ceilings.
+
+Scalability testing should vary:
+
+- number of memory declarations;
+- number of memory objects;
+- number of references;
+- number of ownership relationships;
+- number of regions;
+- number of capabilities;
+- number of requirements;
+- expression complexity;
+- nesting depth;
+- program size.
+
+Implementation resource limits may exist, but they must be explicit implementation/resource limits rather than language semantics.
+
+If a parser/backend has a practical limit, it must report that limit explicitly rather than silently changing the language specification.
+
+---
+
+54. Positive Tests
+
+Memory tests must cover at least:
+
+memory declarations
+memory bindings
+memory references
+ownership
+borrowing
+lifetimes
+allocation
+deallocation
+regions
+address spaces
+shared memory
+distributed memory
+accelerator memory
+quantum memory
+persistent memory
+memory capabilities
+memory requirements
+memory constraints
+memory preferences
+memory hints
+
+Tests must also cover integration with:
+
+types
+expressions
+functions
+modules
+effects
+concurrency
+classical
+quantum
+hybrid
+HDL
+hardware
+resources
+distributed
+AI
+data
+networking
+security
+execution
+interoperability
+dialects
+macros
+metaprogramming
+
+---
+
+55. Negative Tests
+
+Negative tests must distinguish syntax failure from semantic failure.
+
+Syntax tests should include:
+
+- malformed memory declarations;
+- malformed memory paths;
+- malformed capability references;
+- missing operands;
+- malformed expressions;
+- malformed type expressions;
+- malformed region clauses;
+- malformed allocation forms;
+- malformed ownership syntax;
+- malformed borrowing syntax;
+- malformed lifetime syntax.
+
+Semantic tests should include:
+
+- invalid ownership;
+- invalid borrow;
+- invalid lifetime;
+- invalid capability;
+- unsatisfied requirement;
+- incompatible address space;
+- invalid resource relationship;
+- invalid security capability;
+- invalid persistence requirement.
+
+---
+
+56. Boundary Tests
+
+Boundary tests must exercise:
+
+- empty memory constructs where syntax permits;
+- singleton memory objects;
+- deeply nested memory expressions;
+- deeply nested ownership;
+- deeply nested regions;
+- long qualified capability names;
+- large capability lists;
+- large resource expressions;
+- large symbolic sizes;
+- long programs;
+- mixed-domain memory constructs.
+
+No test may accidentally establish an artificial maximum.
+
+---
+
+57. Scalability Tests
+
+The conformance suite should generate cases with progressively increasing:
+
+N memory objects
+N references
+N regions
+N capabilities
+N requirements
+N resource constraints
+N program statements
+
+where "N" is test-generated rather than hard-coded as a language maximum.
+
+The expected property is:
+
+language acceptance remains semantically defined
+until actual implementation/resource limits are reached.
+
+A test must never assert:
+
+N > 1024 is invalid because Zamani memory supports only 1024 objects
+
+unless that is an explicitly documented implementation resource limit unrelated to language semantics.
+
+---
+
+58. Cross-Domain Tests
+
+At minimum, the memory conformance suite must contain:
+
+classical + memory
+quantum + memory
+hybrid + memory
+HDL + memory
+hardware + memory
+distributed + memory
+AI + memory
+data + memory
+networking + memory
+security + memory
+effects + memory
+resources + memory
+concurrency + memory
+execution + memory
+interoperability + memory
+
+The same memory construct must preserve its semantic meaning across these contexts.
+
+---
+
+59. Quantum Cross-Domain Tests
+
+Quantum-memory tests must cover:
+
+classical state + quantum operation
+quantum result + classical memory
+measurement + memory
+mid-circuit measurement + memory
+classical feed-forward + memory
+logical quantum resources + memory requirements
+quantum resource capabilities + memory capabilities
+
+The tests must verify that:
+
+memory syntax
+    ↓
+AST
+    ↓
 semantic analysis
-   |
-   v
-canonical semantic representation
-   |
-   v
-canonical IR
+    ↓
+quantum::ir
 
-There must not be a second memory-specific compiler IR merely because the memory grammar has its own directory.
-
+does not create a second quantum representation.
 
 ---
 
-42. Semantic Contract
+60. HDL Cross-Domain Tests
 
-Semantic analysis, not parsing, determines:
+HDL-memory tests must cover:
 
-whether an ownership transfer is legal;
+memory interface
+memory region
+buffer
+register-like semantic storage
+parameterized storage
+shared storage
+persistent storage
+memory capability
+memory requirement
 
-whether borrowing is valid;
+Tests must not make:
 
-whether lifetimes are compatible;
+BRAM count
+SRAM count
+register width
+memory bank count
 
-whether a memory operation exists;
-
-whether arguments have valid types;
-
-whether a memory space is compatible;
-
-whether a capability exists;
-
-whether a capability version is compatible;
-
-whether a requirement is satisfiable;
-
-whether a constraint is satisfiable;
-
-whether a preference is actionable;
-
-whether a hint is meaningful;
-
-whether capabilities conflict;
-
-whether memory semantics are compatible with effects;
-
-whether a resource realization exists;
-
-whether the construct can be lowered.
-
-
-The parser must not perform these semantic decisions.
-
+universal Zamani grammar limits.
 
 ---
 
-43. No Hardware Limits
+61. Round-Trip Tests
 
-The memory grammar MUST NOT contain language-level limits such as:
+Where AST serialization/printer infrastructure exists:
+
+source
+  ↓
+lexer
+  ↓
+parser
+  ↓
+AST
+  ↓
+serializer/printer
+  ↓
+parser
+
+must preserve memory semantics.
+
+Whitespace and formatting may change.
+
+Program meaning must not.
+
+---
+
+62. Compatibility
+
+Memory grammar compatibility must track:
+
+language specification
+grammar/Zamani.g4
+grammar/memory/*
+grammar/antlr/ZamaniLexer.g4
+grammar/antlr/ZamaniParser.g4
+src/lexer.rs
+src/parser.rs
+src/ast/
+semantic analysis
+IR
+compiler
+runtime
+
+A change to memory syntax must identify:
+
+1. lexical impact;
+2. parser impact;
+3. AST impact;
+4. semantic impact;
+5. IR impact;
+6. compiler impact;
+7. runtime impact;
+8. compatibility impact;
+9. test impact.
+
+Do not silently change one representation while leaving the others inconsistent.
+
+---
+
+63. Feature Completion Contract
+
+A memory feature is DONE only when all applicable items below are satisfied.
+
+[ ] Specification exists
+[ ] Ownership is explicit
+[ ] Does-not-own boundary is explicit
+[ ] Existing tokens are reused
+[ ] New tokens, if any, are registered centrally
+[ ] Grammar is deterministic
+[ ] Grammar is unambiguous
+[ ] AST mapping is defined
+[ ] Semantic mapping is defined
+[ ] Resource mapping is defined
+[ ] Capability mapping is defined
+[ ] IR mapping is defined
+[ ] Compiler integration is defined
+[ ] Runtime integration is defined where applicable
+[ ] Diagnostics are defined
+[ ] Positive tests exist
+[ ] Negative tests exist
+[ ] Boundary tests exist
+[ ] Scalability tests exist
+[ ] Cross-domain tests exist
+[ ] Determinism tests exist
+[ ] Round-trip tests exist where applicable
+[ ] Compatibility is documented
+[ ] Hard-coding audit passes
+[ ] No duplicate grammar authority exists
+[ ] No duplicate AST exists
+[ ] No duplicate IR exists
+[ ] No physical hardware limit is encoded
+[ ] Rust 1.97 compatibility is preserved
+[ ] Rust 1.97.1 compatibility is preserved
+[ ] No unsafe Rust is introduced
+
+Only after these conditions are satisfied may the feature be marked stable.
+
+---
+
+64. Hard-Coding Audit
+
+The memory subsystem MUST continuously audit for constructs resembling:
 
 MAX_MEMORY
-MAX_HEAP
-MAX_STACK
 MAX_ALLOCATIONS
 MAX_REGIONS
 MAX_REFERENCES
@@ -1722,2364 +2140,638 @@ MAX_MEMORY_SPACES
 MAX_ADDRESS_BITS
 MAX_DEVICES
 MAX_NODES
-MAX_GPUS
-MAX_FPGAS
-MAX_QUBITS
+MAX_ACCELERATORS
 MAX_BUFFERS
 
-Nor may equivalent limits be hidden inside grammar alternatives.
+and fixed physical constructs such as:
 
-Bad:
+memory_bank_0
+memory_bank_1
+device_0
+device_1
+numa_0
+numa_1
+gpu_memory_0
+qpu_memory_0
 
-memorySpace
-    : SPACE0
-    | SPACE1
-    | SPACE2
-    ;
+These may appear in tests that explicitly test target-specific interoperability, but must never become universal portable memory semantics.
 
-Good:
+The audit must distinguish:
 
-qualifiedName
+program constant
 
-with semantic interpretation downstream.
+from:
 
+language implementation limit
 
----
+and from:
 
-44. No Fixed Topology
-
-The memory grammar must not assume a fixed:
-
-number of memory banks;
-
-number of NUMA nodes;
-
-number of devices;
-
-number of GPUs;
-
-number of accelerators;
-
-number of distributed nodes;
-
-number of memory controllers.
-
-
-Topology is supplied later by:
-
-resource discovery
-hardware description
-target context
-deployment configuration
-runtime context
-
+target capability
 
 ---
 
-45. No Physical Address Requirement
+65. What the Memory Grammar Must Never Own
 
-Portable memory syntax must not require:
+The memory grammar must never become responsible for:
 
-0x00000000
-0x80000000
-0x...
+- physical memory discovery;
+- physical memory allocation;
+- hardware discovery;
+- device enumeration;
+- NUMA discovery;
+- cache discovery;
+- DMA execution;
+- scheduling;
+- routing;
+- placement;
+- calibration;
+- QEC;
+- noise modeling;
+- quantum gate lowering;
+- physical qubit assignment;
+- compiler optimization;
+- runtime execution;
+- network transport;
+- cryptographic authorization;
+- allocator implementation.
 
-as ordinary memory semantics.
-
-Physical address manipulation, if ever supported, must belong to an explicitly target-specific systems/hardware mechanism with separately specified safety and capability semantics.
-
-The portable memory grammar remains abstract.
-
-
----
-
-46. Symbolic and Computed Sizes
-
-Memory extents must support symbolic and computed values.
-
-Examples:
-
-allocate(n)
-allocate(rows * columns)
-allocate(shape)
-allocate(required_size)
-allocate(dynamic_extent)
-
-The grammar must not require a fixed compile-time machine capacity.
-
-This is essential for:
-
-dynamic workloads;
-
-tensors;
-
-AI;
-
-scientific computing;
-
-distributed data;
-
-embedded systems;
-
-HPC;
-
-quantum-classical workloads.
-
-
+It describes source-level semantics and intent only.
 
 ---
 
-47. "Infinity" and Scalability
+66. Integration With Compiler Stages
 
-"Scale to infinity" means:
-
-> The language does not impose an arbitrary finite upper bound where the semantic model itself does not require one.
-
-
-
-Actual execution remains limited by available:
-
-memory;
-
-compute resources;
-
-compiler resources;
-
-runtime resources;
-
-hardware capabilities;
-
-deployment policies;
-
-operating-system policies;
-
-provider policies;
-
-security policies.
-
-
-These are environment/resource constraints, not grammar limits.
-
-
----
-
-48. Memory Safety
-
-The grammar must preserve enough information to support:
-
-syntax validation
-      |
-      v
-type validation
-      |
-      v
-ownership validation
-      |
-      v
-borrow validation
-      |
-      v
-lifetime validation
-      |
-      v
-effect validation
-      |
-      v
-resource validation
-      |
-      v
-semantic lowering
-
-The grammar itself does not prove memory safety.
-
-Semantic/compiler analysis does.
-
-
----
-
-49. Rust Implementation Contract
-
-All Rust implementation associated with this grammar must target:
-
-Rust 1.97
-or
-Rust 1.97.1
-
-Edition 2021
-
-and must use safe Rust.
-
-The repository requirement is:
-
-unsafe = prohibited
-
-The .g4 files must remain free of embedded Rust actions.
-
-Generated/parser integration must not require handwritten unsafe code.
-
-
----
-
-50. Determinism
-
-Memory parsing must be deterministic.
-
-The same:
-
-source
-+
-grammar version
-+
-lexer version
-
-must produce equivalent syntax trees.
-
-Parsing must not depend on:
-
-available memory;
-
-machine topology;
-
-hardware discovery;
-
-runtime state;
-
-network state;
-
-scheduling;
-
-resource availability.
-
-
-Resource availability is evaluated after parsing.
-
-
----
-
-51. Versioning
-
-Memory syntax is part of the Zamani language version.
-
-Changes must be classified as:
-
-Compatible addition
-
-Adds new syntax without changing the meaning of valid existing programs.
-
-Breaking change
-
-Changes validity or meaning of existing source.
-
-Deprecation
-
-Retains existing syntax temporarily with migration guidance.
-
-Experimental
-
-Available under explicit experimental status.
-
-Dialect extension
-
-Introduced through the dialect mechanism rather than silently becoming universal syntax.
-
-Every breaking change requires a compatibility entry.
-
-
----
-
-52. Existing Syntax Preservation
-
-Existing valid memory syntax must not be silently removed.
-
-Before changing a memory construct:
-
-1. identify its current owner;
-
-
-2. identify current consumers;
-
-
-3. determine whether it is specified;
-
-
-4. determine whether it is implemented;
-
-
-5. preserve valid semantics;
-
-
-6. migrate only where ownership is incorrect;
-
-
-7. deprecate rather than silently remove when compatibility requires it;
-
-
-8. update tests;
-
-
-9. update grammar.md;
-
-
-10. update the relevant specification.
-
-
-
-No unnecessary file rename is permitted.
-
-
----
-
-53. Important Current Repository Correction
-
-The previous memory README described only a subset of the actual memory files.
-
-The actual repository contains additional files:
-
-accelerator-memory.g4
-address-spaces.g4
-memory-capabilities.g4
-persistence.g4
-quantum-memory.g4
-references.g4
-regions.g4
-
-These are now first-class members of the memory architecture.
-
-The README must therefore not revert to the older incomplete inventory.
-
-
----
-
-54. Current memory-capabilities.g4 Integration Correction
-
-The existing memory-capabilities.g4 correctly follows the open-world capability architecture by importing:
-
-Capabilities
-Memory
-ResourceCapabilities
-Expressions
-
-and using:
-
-tokenVocab = ZamaniLexer;
-
-This must be preserved.
-
-The capability identity remains owned by:
-
-grammar/core/capabilities.g4
-
-Resource capability relationships remain owned by:
-
-grammar/resources/capabilities.g4
-
-Memory-specific association remains owned by:
-
-grammar/memory/memory-capabilities.g4
-
-No third capability registry may be created under memory/.
-
-
----
-
-55. memory-capabilities.g4 Completion Invariant
-
-The memory capability grammar must have a single stable public entry point:
-
-memoryCapabilities
-
-and a memory capability item dispatcher.
-
-All memory capability constructs must be reachable from that composition boundary.
-
-Any helper rule that is intended to be public must either:
-
-1. be reachable through memoryCapabilityItem; or
-
-
-2. be explicitly documented as a composition-only rule.
-
-
-
-For example, if:
-
-memoryCapabilitySubjectPropertyAssertion
-
-is intended to be accepted as a memory capability item, it must be included in the public item dispatch.
-
-No production rule may become accidentally unreachable.
-
-
----
-
-56. Capability Grammar Scalability
-
-Capability lists must use structural repetition.
-
-Valid architecture:
-
-capabilityReference
-    (COMMA capabilityReference)*
-    COMMA?
-
-Invalid architecture:
-
-capabilityList
-    : capability
-    | capability COMMA capability
-    | capability COMMA capability COMMA capability
-    ;
-
-The first has no arbitrary semantic count.
-
-The second creates an artificial finite grammar ceiling.
-
-
----
-
-57. Memory Operation Scalability
-
-Memory operations must similarly use repetition and canonical expressions.
-
-There must be no grammar-level limit on:
-
-number of memory operations;
-
-number of arguments;
-
-number of regions;
-
-number of memory objects;
-
-number of references;
-
-number of capabilities.
-
-
-Actual resource limits remain outside the grammar.
-
-
----
-
-58. Security Boundary
-
-Memory syntax must not silently grant privileged access.
-
-A memory construct must not automatically grant:
-
-kernel access;
-
-physical memory access;
-
-DMA;
-
-device ownership;
-
-unrestricted remote memory;
-
-protected-memory bypass;
-
-privileged address access.
-
-
-Security and authorization belong to:
-
-grammar/security/
-
-and downstream semantic/security systems.
-
-
----
-
-59. Compiler Integration
-
-Memory syntax must flow through the existing compiler architecture:
+The intended pipeline is:
 
 Zamani source
-      |
-      v
-lexer
-      |
-      v
-parser
-      |
-      v
-AST
-      |
-      v
+      ↓
+canonical lexer
+      ↓
+canonical parser
+      ↓
+memory AST constructs
+      ↓
+name resolution
+      ↓
 type analysis
-      |
-      v
+      ↓
 ownership analysis
-      |
-      v
-borrow/lifetime analysis
-      |
-      v
+      ↓
+borrow analysis
+      ↓
+lifetime analysis
+      ↓
 effect analysis
-      |
-      v
-resource/capability analysis
-      |
-      v
-canonical semantic representation
-      |
-      v
-canonical IR
-      |
-      v
-optimization
-      |
-      v
-target lowering
-
-The memory grammar must not directly select compiler passes.
-
-
----
-
-60. Runtime Integration
-
-The runtime consumes compiled representations.
-
-Runtime may determine:
-
-actual memory allocation;
-
-dynamic placement;
-
-migration;
-
-device memory;
-
-distributed placement;
-
-reclamation;
-
-recovery;
-
-runtime resource acquisition.
-
-
-The source grammar must not depend directly on runtime APIs.
-
-No:
-
-grammar -> runtime -> grammar
-
-dependency is permitted.
-
-
----
-
-61. Scheduling Integration
-
-Memory semantics may affect scheduling.
-
-However:
-
-memory grammar != scheduler
-
-The correct flow is:
-
-memory intent
-      |
-      v
-semantic representation
-      |
-      v
+      ↓
 resource analysis
-      |
-      v
-scheduler
-      |
-      v
-target realization
-
-The memory grammar must not contain a fixed machine schedule.
-
-
----
-
-62. Optimization Integration
-
-The optimizer may transform:
-
-allocations;
-
-releases;
-
-memory placement;
-
-reuse;
-
-migration;
-
-buffering;
-
-data movement.
-
-
-provided semantics are preserved.
-
-The grammar does not encode optimizer behavior.
-
-
----
-
-63. Hardware Abstraction Integration
-
-Hardware/HAL layers may discover:
-
-memory spaces;
-
-capacities;
-
-access properties;
-
-bandwidth;
-
-latency;
-
-topology;
-
-coherence;
-
-persistence;
-
-accelerator access;
-
-supported operations.
-
-
-The memory grammar must not perform this discovery.
-
-
----
-
-64. Resilience Integration
-
-Memory failures may participate in resilience.
-
-However:
-
-memory grammar != resilience
-
-Resilience remains responsible for decisions such as:
-
-retry;
-
-recovery;
-
-remapping;
-
-rescheduling;
-
-migration;
-
-backend switching;
-
-quarantine;
-
-abort.
-
-
-The grammar merely preserves portable intent.
-
-
----
-
-65. Forbidden Dependencies
-
-Memory grammar files must not depend on:
-
-specific CPU
-specific GPU
-specific FPGA
-specific ASIC
-specific QPU
-specific physical qubit
-specific NUMA node
-specific memory bank
-specific physical address
-specific cache
-specific allocator
-specific scheduler
-specific optimizer
-specific runtime
-specific QEC implementation
-specific ZQN implementation
-specific HAL implementation
-
-
----
-
-66. Dependency Direction
-
-The intended dependency direction is:
-
-specification/*
-      |
-      v
-lexer/*
-      |
-      v
-core/*
-      |
-      +----> types/*
-      |
-      +----> expressions/*
-      |
-      v
-memory/memory.g4
-      |
-      +----> memory/lifetimes.g4
-      +----> memory/ownership.g4
-      +----> memory/borrowing.g4
-      +----> memory/references.g4
-      +----> memory/allocation.g4
-      +----> memory/deallocation.g4
-      +----> memory/regions.g4
-      +----> memory/address-spaces.g4
-      +----> memory/shared-memory.g4
-      +----> memory/distributed-memory.g4
-      +----> memory/accelerator-memory.g4
-      +----> memory/quantum-memory.g4
-      +----> memory/persistence.g4
-      +----> memory/memory-capabilities.g4
-      +----> memory/memory-constraints.g4
-      |
-      v
-AST
-      |
-      v
-semantic analysis
-      |
-      +----> resources
-      +----> effects
-      +----> concurrency
-      +----> distributed
-      +----> quantum
-      +----> hardware
-      |
-      v
+      ↓
+capability analysis
+      ↓
+memory semantic validation
+      ↓
 canonical semantic representation
-      |
-      v
+      ↓
 IR
-      |
-      v
-compiler
-      |
-      v
-runtime / HAL
+      ↓
+optimization
+      ↓
+placement
+      ↓
+routing
+      ↓
+scheduling
+      ↓
+backend lowering
+      ↓
+HAL
+      ↓
+runtime
+      ↓
+actual target
 
-Downstream systems must not become parser dependencies.
-
-
----
-
-67. Cross-Domain Integration
-
-Memory must integrate with at least:
-
-classical
-quantum
-hybrid
-hdl
-hardware
-distributed
-ai
-data
-networking
-security
-concurrency
-effects
-resources
-compile
-execution
-interoperability
-dialects
-
-The memory grammar must not duplicate their syntax.
-
+No physical memory decision occurs at the grammar layer.
 
 ---
 
-68. Required Quantum Integration Test
+67. Integration With POCO-REAF
 
-At minimum, the repository must contain a fixture combining:
+The decisive boundary is:
 
-classical computation
-+
-memory capability/requirement
-+
-quantum computation
-+
-measurement
-+
-classical feed-forward
+                    PORTABLE
+                       │
+                       ▼
+              Zamani source program
+                       │
+                       ▼
+              memory semantic intent
+                       │
+                       ▼
+            capability/resource model
+                       │
+                       ▼
+                canonical IR
+                       │
+                       ▼
+              compiler optimization
+                       │
+                       ▼
+            target-independent plan
+                       │
+                 REALIZATION
+                       │
+          ┌────────────┼────────────┐
+          ▼            ▼            ▼
+         CPU          GPU          FPGA
+          │            │            │
+          ├────────────┼────────────┤
+          ▼            ▼            ▼
+         QPU       distributed    future
 
-The expected semantic path is:
-
-Zamani source
-      |
-      v
-parser
-      |
-      v
-domain-neutral AST
-      |
-      v
-semantic analysis
-      |
-      v
-quantum::ir
-
-The memory grammar must not create a parallel quantum representation.
-
-
----
-
-69. Required HDL Integration Test
-
-A memory/HDL fixture must combine, where supported:
-
-hardware module
-+
-memory declaration
-+
-memory intent
-+
-signals
-+
-registers
-+
-timing
-+
-verification
-
-The grammar must not convert physical implementation constraints into universal language limits.
-
+A memory feature is architecturally correct when this separation remains intact.
 
 ---
 
-70. Required Distributed Integration Test
+68. Example Semantic Separation
 
-A distributed-memory fixture must demonstrate that the program can express distributed memory without requiring:
-
-N nodes
-N devices
-fixed network topology
-fixed memory-bank topology
-fixed cluster size
-
-The realization is determined later.
-
-
----
-
-71. Required AI/Data Integration Test
-
-A fixture must demonstrate:
-
-tensor/data
-+
-symbolic extent
-+
-memory requirement
-+
-resource capability
-
-without encoding a particular:
-
-GPU
-VRAM size
-tensor dimension limit
-accelerator count
-
-
----
-
-72. Required Test Categories
-
-Memory tests must exist under the repository's canonical test architecture.
-
-At minimum:
-
-tests/
-├── memory/
-│   ├── positive/
-│   ├── negative/
-│   ├── boundary/
-│   ├── scalability/
-│   ├── determinism/
-│   ├── roundtrip/
-│   ├── compatibility/
-│   └── cross-domain/
-
-If the existing test organization uses a different established layout, preserve it rather than creating a competing test hierarchy.
-
-
----
-
-73. Positive Tests
-
-Positive tests must cover:
-
-basic memory;
-
-memory places;
-
-memory spaces;
-
-memory regions;
-
-references;
-
-ownership;
-
-borrowing;
-
-lifetimes;
-
-allocation;
-
-deallocation;
-
-persistence;
-
-shared memory;
-
-distributed memory;
-
-accelerator memory;
-
-quantum-classical memory;
-
-capabilities;
-
-requirements;
-
-constraints;
-
-preferences;
-
-hints;
-
-symbolic sizes;
-
-computed sizes;
-
-qualified names;
-
-open-world capability names.
-
-
-
----
-
-74. Negative Tests
-
-Negative tests must distinguish syntax errors from semantic errors.
-
-Syntax tests include:
-
-missing delimiters;
-
-malformed paths;
-
-malformed lifetime syntax;
-
-malformed capability syntax;
-
-malformed argument lists;
-
-malformed annotations;
-
-malformed memory declarations;
-
-malformed property expressions.
-
-
-Semantic-invalid programs should be tested separately so that parser failures are not confused with semantic-analysis failures.
-
-
----
-
-75. Boundary Tests
-
-Boundary tests must include:
-
-empty optional constructs;
-
-deeply nested expressions;
-
-long qualified names;
-
-many memory operations;
-
-many regions;
-
-many lifetime references;
-
-many capabilities;
-
-large symbolic expressions;
-
-large generated programs;
-
-complex cross-domain programs.
-
-
-No boundary test may define an artificial language maximum.
-
-
----
-
-76. Scalability Tests
-
-Scalability tests must vary:
-
-number of memory operations;
-
-number of allocations;
-
-number of regions;
-
-number of references;
-
-number of lifetimes;
-
-number of capabilities;
-
-symbolic memory extents;
-
-distributed memory declarations;
-
-accelerator memory declarations.
-
-
-The expected property is:
-
-> No grammar-level machine-capacity ceiling exists.
-
-
-
-The test harness may of course be bounded by the test machine's resources.
-
-That test-machine limitation must never become language semantics.
-
-
----
-
-77. Hard-Coding Audit
-
-Every memory grammar file must be audited for:
-
-fixed memory capacities;
-
-fixed address widths;
-
-fixed region counts;
-
-fixed allocation counts;
-
-fixed lifetime counts;
-
-fixed reference counts;
-
-fixed device counts;
-
-fixed node counts;
-
-fixed memory-space counts;
-
-fixed accelerator counts;
-
-fixed topology;
-
-fixed physical identifiers.
-
-
-Each finding must be classified as:
-
-1. language semantic requirement;
-
-
-2. explicit program value;
-
-
-3. target-specific requirement;
-
-
-4. resource constraint;
-
-
-5. implementation limitation;
-
-
-6. test-only limitation;
-
-
-7. accidental hard-coding.
-
-
-
-Accidental hard-coding must be removed.
-
-
----
-
-78. Important Distinction: Program Constants vs Machine Limits
-
-This is valid:
-
-let n = 1024;
-allocate(n);
-
-because 1024 is program data.
-
-This is not valid as a universal language architecture:
-
-MAX_MEMORY = 1024;
-
-Likewise:
-
-Tensor<Float, 1024, 1024>
-
-may be valid program semantics.
-
-But:
-
-Tensor dimensions may never exceed 1024
-
-is a prohibited universal grammar limitation.
-
-The same rule applies to:
-
-memory;
-
-qubits;
-
-CPUs;
-
-cores;
-
-threads;
-
-GPUs;
-
-FPGAs;
-
-nodes;
-
-tensor dimensions;
-
-registers;
-
-accelerators;
-
-timelines.
-
-
-
----
-
-79. Requirement vs Implementation Decision
-
-This distinction is mandatory.
-
-Requirement
+Consider:
 
 requires memory capability memory::persistent;
 
-Resource constraint
+The source says:
 
-constraint memory::latency <= required_latency;
+persistent memory semantics are required.
 
-Preference
+It does not say:
 
-preference memory capability memory::local;
+use SSD 0
+use NVRAM 2
+use memory bank 7
+use physical address 0x...
 
-Hint
+Similarly:
 
-hint memory::reuse;
+requires memory capability memory::shared;
 
-Implementation decision
+does not mean:
 
-map object -> physical_memory_bank(...);
+use NUMA node 1
 
-The first four can be portable source intent.
+And:
 
-The last belongs to a target-specific realization layer unless explicitly introduced by a target dialect.
+requires memory capability memory::accelerator_access;
 
+does not mean:
 
----
+use GPU 0
 
-80. Diagnostics
-
-Memory grammar diagnostics must preserve:
-
-source position;
-
-offending token;
-
-expected syntax;
-
-relevant grammar context;
-
-deterministic error behavior.
-
-
-Semantic diagnostics belong downstream and must distinguish:
-
-syntax error
-type error
-ownership error
-borrow error
-lifetime error
-capability error
-resource error
-effect error
-target realization error
-
-The parser must not disguise semantic failures as syntax failures.
-
+The compiler/resource system determines whether and how the requirement can be satisfied.
 
 ---
 
-81. Generated Artifacts
+69. Open-Ended Future Architecture
 
-ANTLR-generated files are derived artifacts.
+The memory grammar must remain capable of representing future memory architectures without requiring a redesign of the core language.
 
-They are not sources of truth.
+Possible future systems may introduce:
 
-The authoritative source is:
+- new memory technologies;
+- new persistence models;
+- new address spaces;
+- new coherence models;
+- new accelerator memory;
+- new distributed memory;
+- new quantum-classical memory relationships;
+- new secure memory;
+- new temporal memory;
+- new storage-memory hybrids.
 
-grammar/**/*.g4
+The language should represent new semantics through:
 
-Generated parser/lexer artifacts must be reproducible.
+qualified names
+capabilities
+attributes
+resource requirements
+dialects
+extension points
 
-A clean build must be able to regenerate them deterministically.
-
-Generated artifacts must not be manually edited as part of normal development.
-
-
----
-
-82. ANTLR Composition
-
-ANTLR grammar composition must follow the repository's established architecture.
-
-The canonical production lexer is:
-
-grammar/antlr/ZamaniLexer.g4
-
-The canonical production parser is:
-
-grammar/antlr/ZamaniParser.g4
-
-Memory grammars are parser components.
-
-They must not create another production lexer.
-
-The composition model must remain compatible with ANTLR's grammar/import architecture.
-
+where appropriate, instead of adding a new keyword for every invention.
 
 ---
 
-83. No Parallel Memory Language
+70. Dialect Boundary
 
-The memory directory must not become a separate language.
+A vendor-specific memory feature must not silently become core Zamani syntax.
 
-There must not be:
+A dialect must explicitly identify:
 
-MemoryLanguage
-MemoryParser
-MemoryAST
-MemoryIR
-MemoryRuntime
-
-as a competing language stack.
-
-Instead:
-
-Zamani
-  |
-  +-- memory domain
-
-Memory is a domain of the same Zamani language.
-
-
----
-
-84. Dialect Integration
-
-Future memory technologies may require syntax extensions.
-
-They should normally use:
-
-grammar/dialects/
-
-rather than modifying core memory syntax for every vendor or experimental feature.
-
-A dialect must define:
-
-name;
-
-version;
-
-owner;
-
-syntax additions;
-
-semantic meaning;
-
-AST mapping;
-
-IR mapping;
-
-compatibility;
-
-feature status.
-
-
-A dialect must not silently redefine core memory semantics.
-
-
----
-
-85. Interoperability
-
-Foreign memory models belong to:
-
-grammar/interoperability/
-
-The memory grammar must not become a C/C++/Rust-specific grammar.
-
-Foreign memory semantics must enter through explicit interoperability contracts.
-
-
----
-
-86. Specification Integration
-
-The memory grammar must remain consistent with:
-
-grammar/DESIGN.md
-grammar/README.md
-grammar/specification/
-grammar/spec/
-grammar/grammar.md
-grammar/Zamani-Grammar.md
-
-The authority hierarchy is:
-
-DESIGN.md
-    |
-    v
-normative specification
-    |
-    v
-canonical grammar
-    |
-    v
-implementation-conformance reference
-
-Zamani-Grammar.md is not allowed to silently introduce permanent syntax.
-
-
----
-
-87. Implementation Status
-
-The README describes the production contract.
-
-It does not by itself make every .g4 file production-complete.
-
-A memory grammar file is implemented only when:
-
-syntax
-+
-lexer compatibility
-+
-ANTLR composition
-+
+dialect name
+dialect version
+owner
+syntax extension
+semantic extension
 AST mapping
-+
-semantic mapping
-+
 IR mapping
-+
-diagnostics
-+
-tests
-+
-hard-coding audit
-+
 compatibility
+feature gate
+capabilities
 
-have all been satisfied.
+A dialect must not bypass:
 
-The implementation-conformance state must be reflected in:
-
-grammar/grammar.md
-
-using the repository's status vocabulary:
-
-SPECIFIED
-IMPLEMENTED
-PARTIALLY IMPLEMENTED
-PLANNED
-DEPRECATED
-
+- AST validation;
+- semantic analysis;
+- resource analysis;
+- security validation;
+- IR verification.
 
 ---
 
-88. Per-File Independent Completion Contract
+71. No Vendor Lock-In
 
-Every memory .g4 file must be independently completable.
+The following must not become core memory syntax:
 
-Before marking a file complete, the author must be able to answer all of these questions without waiting for another file to be redesigned:
+CUDA memory
+ROCm memory
+specific FPGA primitive
+specific cache instruction
+specific CPU memory instruction
+specific QPU memory primitive
+specific accelerator API
 
-File:
-Purpose:
-Status:
+Such features belong to:
 
-Owns:
-Does not own:
+interoperability/
+dialects/
+backend/
+HAL
 
-Existing tokens used:
-New tokens required:
-Why each new token is necessary:
-
-Grammar entry points:
-Public rules:
-Internal rules:
-
-Dependencies:
-Imported grammars:
-Consumed canonical rules:
-
-AST mapping:
-Semantic mapping:
-Canonical IR mapping:
-
-Compiler consumers:
-Runtime consumers:
-Resource consumers:
-Hardware consumers:
-
-Cross-domain consumers:
-
-Positive tests:
-Negative tests:
-Boundary tests:
-Scalability tests:
-Determinism tests:
-Round-trip tests:
-Compatibility tests:
-
-Hard-coding audit:
-Security audit:
-Diagnostics audit:
-
-Completion criteria:
-
-This contract exists specifically to prevent the workflow:
-
-finish file A
-    |
-    v
-change file B
-    |
-    v
-return to file A
-    |
-    v
-rewrite file A
-
-Instead, the integration contract must be established before the file is declared complete.
-
+The core memory model remains vendor-neutral.
 
 ---
 
-89. Completion Contract: memory.g4
+72. Maintainability Rule
 
-Complete only when:
+Each memory file must be independently completable.
 
-canonical memory foundation exists;
+For every file, the implementation owner must be able to answer:
 
-memory places are defined;
+What does this file own?
+What does it not own?
+Which existing tokens does it consume?
+Which grammar rules does it consume?
+Which rules depend on it?
+Which AST constructs represent it?
+Which semantic analysis consumes it?
+Which resource/capability analysis consumes it?
+Which IR receives its meaning?
+Which compiler stages consume the result?
+Which runtime/backend consumes the result?
+Which tests prove it?
+Which diagnostics prove it?
+Which compatibility rules apply?
+Which scalability guarantees apply?
+Which hard-coding audit applies?
 
-memory operations are defined;
+The answers must be known before the file is considered complete.
 
-memory spaces are represented;
-
-memory regions are represented;
-
-canonical names are consumed;
-
-canonical expressions are consumed;
-
-canonical types are consumed;
-
-memory capability integration exists;
-
-resource integration exists;
-
-no semantic analysis occurs in grammar;
-
-no machine limit exists;
-
-no physical address is required;
-
-no physical device is selected;
-
-no duplicate IR exists;
-
-positive tests exist;
-
-negative tests exist;
-
-boundary tests exist;
-
-scalability tests exist;
-
-cross-domain tests exist.
-
-
+This prevents the situation where completing one memory file requires repeatedly rewriting it because another subsystem was defined later.
 
 ---
 
-90. Completion Contract: ownership.g4
+73. Integration Contract for Every Existing Memory File
 
-Complete only when:
+"memory.g4"
 
-ownership syntax is defined;
+Upstream: lexer, core names, types, expressions
+Downstream: all specialized memory grammars, AST
+Owns: foundational memory syntax
+Does not own: semantic memory behavior
+Completion: universal memory syntax has one canonical owner.
 
-memory composition works;
+"ownership.g4"
 
-canonical type syntax is consumed;
+Upstream: core/type syntax
+Downstream: ownership analysis
+Owns: ownership syntax
+Does not own: ownership checking
+Completion: ownership syntax maps completely to semantic ownership.
 
-ownership information reaches the AST;
+"borrowing.g4"
 
-ownership analysis remains downstream;
+Upstream: types, expressions, ownership
+Downstream: borrow checker
+Owns: borrow syntax
+Does not own: borrow validity
+Completion: all borrow forms have semantic mappings.
 
-no allocator assumptions exist;
+"lifetimes.g4"
 
-no machine limits exist;
+Upstream: names/core syntax
+Downstream: lifetime analysis
+Owns: lifetime notation
+Does not own: lifetime inference
+Completion: lifetime references are unambiguous and source-located.
 
-positive/negative tests pass;
+"references.g4"
 
-cross-domain tests pass.
+Upstream: expressions/types
+Downstream: type/ownership analysis
+Owns: memory-reference syntax
+Does not own: physical pointer representation
+Completion: all reference forms map to canonical AST semantics.
 
+"allocation.g4"
 
+Upstream: expressions/types/memory
+Downstream: resource and allocation analysis
+Owns: allocation intent
+Does not own: allocator implementation
+Completion: symbolic and computed allocation requirements are supported.
+
+"deallocation.g4"
+
+Upstream: memory/reference/ownership
+Downstream: lifetime/resource analysis
+Owns: release intent
+Does not own: physical reclamation
+Completion: release semantics are explicitly defined.
+
+"regions.g4"
+
+Upstream: names/types/memory
+Downstream: lifetime/resource analysis
+Owns: semantic regions
+Does not own: physical topology
+Completion: region semantics are target-independent.
+
+"address-spaces.g4"
+
+Upstream: memory/types/capabilities
+Downstream: resource/backend analysis
+Owns: abstract address-space intent
+Does not own: physical address widths
+Completion: address-space semantics are open-ended.
+
+"shared-memory.g4"
+
+Upstream: memory/concurrency
+Downstream: concurrency/resource analysis
+Owns: sharing intent
+Does not own: coherence implementation
+Completion: shared-memory semantics compose with concurrency.
+
+"distributed-memory.g4"
+
+Upstream: memory/distributed/resource
+Downstream: distributed placement
+Owns: distributed memory intent
+Does not own: node topology
+Completion: no fixed node/device counts.
+
+"accelerator-memory.g4"
+
+Upstream: memory/resources/hardware
+Downstream: accelerator lowering
+Owns: accelerator memory intent
+Does not own: accelerator identity
+Completion: vendor-neutral accelerator semantics.
+
+"quantum-memory.g4"
+
+Upstream: memory/quantum/capabilities
+Downstream: semantic quantum analysis
+Owns: quantum-memory source intent
+Does not own: quantum IR/QEC/ZQN/routing
+Completion: canonical "quantum::ir" remains the only quantum semantic boundary.
+
+"persistence.g4"
+
+Upstream: memory/resources
+Downstream: persistence/resource analysis
+Owns: persistence intent
+Does not own: storage hardware
+Completion: durability semantics are portable.
+
+"memory-capabilities.g4"
+
+Upstream: core capabilities/resources
+Downstream: capability/resource analysis
+Owns: memory-specific capability association
+Does not own: global capability identity
+Completion: open-world capabilities work without duplicated capability grammar.
+
+"memory-constraints.g4"
+
+Upstream: resources/capabilities/memory
+Downstream: resource feasibility
+Owns: memory requirements/constraints/preferences/hints
+Does not own: resource discovery
+Completion: requirement, constraint, preference, and hint remain distinguishable.
 
 ---
 
-91. Completion Contract: borrowing.g4
+74. Production Acceptance Checklist
 
-Complete only when:
-
-borrow syntax is defined;
-
-mutable borrowing is defined if standardized;
-
-lifetime references compose;
-
-expressions/places compose;
-
-source spans are preserved;
-
-malformed syntax is rejected;
-
-borrow checking remains downstream;
-
-scalability limits are absent;
-
-nested/complex expressions are tested.
-
-
-
----
-
-92. Completion Contract: lifetimes.g4
-
-Complete only when:
-
-symbolic lifetime identifiers work;
-
-lifetime annotations compose with types;
-
-lifetime references compose with borrowing;
-
-lifetime relationships are representable;
-
-physical time is never assumed;
-
-no fixed lifetime count exists;
-
-deterministic parsing is verified.
-
-
-
----
-
-93. Completion Contract: references.g4
-
-Complete only when:
-
-source-level references are represented;
-
-canonical expressions are consumed;
-
-canonical types are consumed;
-
-places are structurally preserved;
-
-reference semantics remain downstream;
-
-no target pointer representation is encoded;
-
-no fixed address width exists.
-
-
-
----
-
-94. Completion Contract: allocation.g4
-
-Complete only when:
-
-allocation intent is representable;
-
-symbolic sizes work;
-
-computed sizes work;
-
-memory spaces work;
-
-memory regions work;
-
-capabilities can be associated;
-
-resource intent can be associated;
-
-allocator selection remains downstream;
-
-physical address is not required;
-
-no capacity limit exists.
-
-
-
----
-
-95. Completion Contract: deallocation.g4
-
-Complete only when:
-
-release intent is representable;
-
-ownership/lifetime integration exists;
-
-explicit release remains semantically optional where appropriate;
-
-physical reclamation is downstream;
-
-allocator implementation is not encoded.
-
-
-
----
-
-96. Completion Contract: regions.g4
-
-Complete only when:
-
-region declarations/references are defined;
-
-ownership/lifetime integration works;
-
-regions remain abstract;
-
-no physical topology is implied;
-
-no region-count limit exists.
-
-
-
----
-
-97. Completion Contract: address-spaces.g4
-
-Complete only when:
-
-abstract address spaces are representable;
-
-canonical names are consumed;
-
-target-specific spaces can be extended;
-
-physical addresses are not required;
-
-address width is not hard-coded;
-
-resource/hardware interpretation remains downstream.
-
-
-
----
-
-98. Completion Contract: shared-memory.g4
-
-Complete only when:
-
-shared-memory intent is representable;
-
-ownership integration exists;
-
-concurrency integration exists;
-
-synchronization can be expressed through the correct subsystem;
-
-no cache topology is encoded;
-
-no coherence protocol is hard-coded;
-
-no participant-count limit exists.
-
-
-
----
-
-99. Completion Contract: distributed-memory.g4
-
-Complete only when:
-
-distributed memory intent is representable;
-
-symbolic placement is possible;
-
-resource requirements are possible;
-
-no fixed node count exists;
-
-no fixed topology exists;
-
-distributed execution remains separately owned;
-
-scalability tests pass.
-
-
-
----
-
-100. Completion Contract: accelerator-memory.g4
-
-Complete only when:
-
-accelerator-memory intent is representable;
-
-accelerator capabilities are open-ended;
-
-CPU/GPU/FPGA/QPU identities are not hard-coded;
-
-no device count is hard-coded;
-
-resource negotiation remains downstream;
-
-target selection remains downstream.
-
-
-
----
-
-101. Completion Contract: quantum-memory.g4
-
-Complete only when:
-
-quantum-classical memory intent is representable;
-
-quantum syntax composes;
-
-no duplicate quantum IR exists;
-
-quantum::ir remains canonical;
-
-QEC remains outside the memory grammar;
-
-ZQN remains outside the memory grammar;
-
-physical qubit allocation remains downstream.
-
-
-
----
-
-102. Completion Contract: persistence.g4
-
-Complete only when:
-
-persistence intent is representable;
-
-durability semantics are distinguishable;
-
-resource capability integration exists;
-
-storage implementation remains downstream;
-
-no storage technology is required by portable syntax.
-
-
-
----
-
-103. Completion Contract: memory-capabilities.g4
-
-Complete only when:
-
-Capabilities remains canonical;
-
-ResourceCapabilities remains canonical;
-
-Expressions remains canonical;
-
-Memory remains canonical;
-
-capability identity is not duplicated;
-
-capability names remain open-world;
-
-requirements are distinct from constraints;
-
-preferences are distinct from hints;
-
-availability is distinct from requirement;
-
-assertions are distinct from implementation;
-
-implications/exclusions remain semantic relationships;
-
-capability subject association remains abstract;
-
-every intended public rule is reachable;
-
-no fixed capability enumeration exists;
-
-no physical device is selected;
-
-no resource is allocated;
-
-no hardware discovery occurs;
-
-positive tests exist;
-
-negative tests exist;
-
-scalability tests exist.
-
-
-
----
-
-104. Completion Contract: memory-constraints.g4
-
-Complete only when:
-
-requirements are distinct;
-
-constraints are distinct;
-
-preferences are distinct;
-
-hints are distinct;
-
-expressions are canonical;
-
-resource integration exists;
-
-capabilities integrate correctly;
-
-no physical target is selected;
-
-no machine capacity is hard-coded.
-
-
-
----
-
-105. Required End-to-End Pipeline
-
-The memory subsystem is production-ready only when the complete chain works:
-
-Zamani source
-      |
-      v
-ZamaniLexer
-      |
-      v
-ZamaniParser
-      |
-      v
-memory grammar
-      |
-      v
-domain-neutral AST
-      |
-      v
-type analysis
-      |
-      v
-ownership analysis
-      |
-      v
-borrow/lifetime analysis
-      |
-      v
-effect analysis
-      |
-      v
-resource/capability analysis
-      |
-      v
-canonical semantic representation
-      |
-      +--------------------+
-      |                    |
-      v                    v
- classical             quantum::ir
-      |                    |
-      +---------+----------+
-                |
-                v
-          optimization
-                |
-        +-------+-------+
-        |       |       |
-        v       v       v
-     routing scheduling resilience
-                        |
-                        v
-                       ZQN
-                        |
-                        v
-                       HAL
-                        |
-                        v
-               target realization
-
-
----
-
-106. Production Test Matrix
-
-The final memory subsystem must be tested across:
-
-Category	Required
-
-Lexical	Yes
-Syntax	Yes
-AST	Yes
-Semantic	Yes
-Positive	Yes
-Negative	Yes
-Boundary	Yes
-Scalability	Yes
-Determinism	Yes
-Round-trip	Yes
-Compatibility	Yes
-Classical integration	Yes
-Quantum integration	Yes
-Hybrid integration	Yes
-HDL integration	Yes
-Hardware integration	Yes
-Distributed integration	Yes
-AI integration	Yes
-Data integration	Yes
-Concurrency integration	Yes
-Effects integration	Yes
-Resource integration	Yes
-Security integration	Yes
-Interoperability integration	Yes
-
-
-
----
-
-107. Production Readiness Checklist
+The "grammar/memory/" subsystem is production-ready only when:
 
 Architecture
 
-[ ] One authoritative memory grammar architecture.
-
-[ ] memory.g4 remains the memory foundation.
-
-[ ] ZamaniParser.g4 remains the parser composition root.
-
-[ ] ZamaniLexer.g4 remains the production lexer.
-
-[ ] No competing memory language exists.
-
-[ ] No duplicate memory IR exists.
-
+[ ] one canonical memory grammar architecture
+[ ] no competing memory root grammar
+[ ] no unnecessary renames
+[ ] existing memory files retained
+[ ] real ownership for every file
 
 Lexer
 
-[ ] Existing canonical tokens are reused.
+[ ] existing canonical tokens reused
+[ ] no duplicate token concepts
+[ ] new tokens centrally registered
+[ ] lexer and grammar agree
+[ ] literals agree with lexer implementation
 
-[ ] No duplicate memory lexer exists.
+Syntax
 
-[ ] New tokens are justified and centrally owned.
+[ ] memory syntax is deterministic
+[ ] no ambiguous memory constructs
+[ ] no accidental duplicate rules
+[ ] universal expressions/types/names reused
 
-[ ] Keyword additions are minimized.
+AST
 
-[ ] Identifier extensibility is preserved.
+[ ] every memory construct has an AST mapping
+[ ] no memory-specific duplicate AST architecture
+[ ] source spans preserved
+[ ] generated syntax re-enters normal AST validation
 
+Semantics
 
-Memory semantics
+[ ] ownership mapped
+[ ] borrowing mapped
+[ ] lifetime mapped
+[ ] references mapped
+[ ] allocation mapped
+[ ] deallocation mapped
+[ ] regions mapped
+[ ] address spaces mapped
+[ ] sharing mapped
+[ ] distribution mapped
+[ ] accelerator memory mapped
+[ ] quantum memory mapped
+[ ] persistence mapped
 
-[ ] Memory places are defined.
+Resources
 
-[ ] Memory spaces are defined.
-
-[ ] Memory regions are defined.
-
-[ ] References are defined.
-
-[ ] Ownership is defined.
-
-[ ] Borrowing is defined.
-
-[ ] Lifetimes are defined.
-
-[ ] Allocation intent is defined.
-
-[ ] Deallocation intent is defined.
-
-[ ] Shared memory is defined.
-
-[ ] Distributed memory is defined.
-
-[ ] Accelerator memory is defined.
-
-[ ] Quantum-classical memory is defined.
-
-[ ] Persistence is defined.
-
-[ ] Memory capabilities are defined.
-
-[ ] Memory constraints are defined.
-
-
-Integration
-
-[ ] Core names integrate.
-
-[ ] Expressions integrate.
-
-[ ] Types integrate.
-
-[ ] Effects integrate.
-
-[ ] Concurrency integrates.
-
-[ ] Resources integrate.
-
-[ ] Hardware integrates.
-
-[ ] Classical integrates.
-
-[ ] Quantum integrates.
-
-[ ] Hybrid integrates.
-
-[ ] HDL integrates.
-
-[ ] Distributed computing integrates.
-
-[ ] AI/data integrate.
-
-[ ] Compiler integrates.
-
-[ ] Runtime integrates.
-
+[ ] requirements distinguished from capabilities
+[ ] constraints distinguished from preferences
+[ ] hints distinguished from requirements
+[ ] physical realization remains downstream
+[ ] no physical resource discovery in grammar
 
 Quantum
 
-[ ] quantum::ir remains canonical.
+[ ] no duplicate quantum IR
+[ ] quantum::ir remains canonical
+[ ] no physical qubit mapping in memory grammar
+[ ] no QEC implementation in grammar
+[ ] no ZQN implementation in grammar
 
-[ ] No MemoryQuantumIR.
+Hardware
 
-[ ] No QuantumMemoryIR.
+[ ] no fixed memory banks
+[ ] no fixed cache sizes
+[ ] no fixed register widths
+[ ] no fixed FPGA resources
+[ ] no fixed GPU resources
+[ ] no fixed QPU resources
+[ ] no fixed physical address width
 
-[ ] No duplicated quantum gate model.
+Scalability
 
-[ ] QEC remains downstream.
+[ ] no MAX_MEMORY
+[ ] no MAX_ALLOCATIONS
+[ ] no MAX_REGIONS
+[ ] no MAX_REFERENCES
+[ ] no MAX_DEVICES
+[ ] no MAX_NODES
+[ ] no MAX_ADDRESS_BITS
+[ ] no universal hardware limits
 
-[ ] ZQN remains downstream.
+Testing
 
-[ ] Routing remains downstream.
+[ ] positive tests
+[ ] negative tests
+[ ] boundary tests
+[ ] scalability tests
+[ ] determinism tests
+[ ] cross-domain tests
+[ ] compatibility tests
+[ ] round-trip tests where applicable
 
-[ ] Physical qubit allocation remains downstream.
+Implementation
 
-
-POCO-REAF
-
-[ ] No fixed memory capacity.
-
-[ ] No fixed allocation count.
-
-[ ] No fixed region count.
-
-[ ] No fixed reference count.
-
-[ ] No fixed lifetime count.
-
-[ ] No fixed memory-space count.
-
-[ ] No fixed node count.
-
-[ ] No fixed device count.
-
-[ ] No fixed topology.
-
-[ ] No physical address requirement.
-
-[ ] No fixed address width.
-
-[ ] No hardware-specific source dependency.
-
-
-Capability architecture
-
-[ ] core/capabilities.g4 owns capability identity.
-
-[ ] resources/capabilities.g4 owns resource capability relationships.
-
-[ ] memory/memory-capabilities.g4 owns memory-specific capability association.
-
-[ ] No closed capability enumeration.
-
-[ ] Requirements differ from capabilities.
-
-[ ] Constraints differ from preferences.
-
-[ ] Preferences differ from hints.
-
-[ ] Capability resolution remains downstream.
-
-
-Safety
-
-[ ] Rust 1.97 compatible.
-
-[ ] Rust 1.97.1 compatible.
-
-[ ] Rust 2021.
-
-[ ] No unsafe.
-
-[ ] No embedded Rust actions in grammar.
-
-[ ] Security authorization remains downstream.
-
-
-Validation
-
-[ ] Positive tests.
-
-[ ] Negative tests.
-
-[ ] Boundary tests.
-
-[ ] Scalability tests.
-
-[ ] Determinism tests.
-
-[ ] Round-trip tests.
-
-[ ] Compatibility tests.
-
-[ ] Cross-domain tests.
-
-[ ] Hard-coding audit.
-
-[ ] ANTLR grammar validation.
-
-[ ] Parser composition validation.
-
-[ ] AST coverage.
-
-[ ] Semantic coverage.
-
-[ ] IR coverage.
-
-
+[ ] Rust 1.97 supported
+[ ] Rust 1.97.1 supported
+[ ] Rust 2021 supported
+[ ] safe Rust only
+[ ] no unsafe
 
 ---
 
-108. Definition of Done
+75. Final Architectural Invariant
 
-grammar/memory/ is not complete merely because every .g4 file exists.
+The entire memory subsystem must preserve this invariant:
 
-The directory is complete only when:
+                         ZAMANI SOURCE
+                              │
+                              ▼
+                       MEMORY SEMANTICS
+                              │
+                              ▼
+                 MEMORY REQUIREMENTS / INTENT
+                              │
+                              ▼
+                CAPABILITY / RESOURCE ANALYSIS
+                              │
+                              ▼
+                   CANONICAL SEMANTIC MODEL
+                              │
+                 ┌────────────┼────────────┐
+                 │            │            │
+                 ▼            ▼            ▼
+             Classical     Quantum        HDL/
+               IR         quantum::ir    Hardware
+                 │            │            │
+                 └────────────┼────────────┘
+                              │
+                              ▼
+                         OPTIMIZATION
+                              │
+                              ▼
+                   PLACEMENT / ROUTING
+                              │
+                              ▼
+                         SCHEDULING
+                              │
+                              ▼
+                    RESILIENCE / QEC
+                              │
+                              ▼
+                             ZQN
+                              │
+                              ▼
+                             HAL
+                              │
+                              ▼
+                    TARGET REALIZATION
+                              │
+            ┌─────────┬───────┼───────┬─────────┐
+            ▼         ▼       ▼       ▼         ▼
+           CPU       GPU     FPGA     QPU      Future
 
-Specification
-     +
-Lexer
-     +
-Parser
-     +
-AST
-     +
-Semantic Analysis
-     +
-Resource/Capability Analysis
-     +
-Canonical IR
-     +
-Compiler
-     +
-Runtime
-     +
-Tests
-     +
-Compatibility
-     +
-Scalability Audit
+The memory grammar defines what the program means about memory.
 
-form one traceable system.
+It does not decide where the memory physically exists.
 
-Every memory construct must have a known path:
+It does not decide which device provides it.
 
-source syntax
-    |
-    v
-grammar rule
-    |
-    v
-AST representation
-    |
-    v
-semantic representation
-    |
-    v
-canonical IR
-    |
-    v
-compiler consumer
-    |
-    v
-runtime/hardware realization
+It does not decide which address is used.
 
-There must be no:
+It does not decide which memory bank is selected.
 
-grammar rule
-    |
-    v
-??? unknown semantic meaning
+It does not decide which allocator is used.
 
-and no:
+It does not decide how many machines exist.
 
-grammar
-    |
-    v
-target-specific implementation
+It does not decide how a quantum device realizes the computation.
 
-shortcut.
+It does not duplicate "quantum::ir".
 
+It does not implement QEC.
 
----
+It does not implement ZQN.
 
-109. Final Architectural Rule
+It does not perform scheduling or routing.
 
-The memory grammar exists to express:
+It does not impose artificial resource ceilings.
 
-WHAT memory semantics mean
-WHAT memory properties are required
-WHAT capabilities are required
-WHAT constraints apply
-WHAT preferences are desired
-WHAT hints may help realization
+It does not introduce unsafe Rust.
 
-It does not permanently encode:
+The fundamental production invariant is therefore:
 
-WHICH CPU
-WHICH GPU
-WHICH FPGA
-WHICH ASIC
-WHICH QPU
-WHICH NUMA NODE
-WHICH MEMORY BANK
-WHICH PHYSICAL ADDRESS
-WHICH CACHE
-WHICH ALLOCATOR
-WHICH DEVICE
-WHICH NODE
+MEMORY MEANING
+      ≠
+PHYSICAL MEMORY REALIZATION
 
-Those decisions belong to later stages.
+and:
 
-The fundamental Zamani architecture is therefore:
+PORTABLE PROGRAM INTENT
+      ≠
+TARGET-SPECIFIC IMPLEMENTATION
 
-Zamani Source
-                      |
-                      v
-                Memory Grammar
-                      |
-                      v
-                Domain-Neutral AST
-                      |
-                      v
-              Semantic Analysis
-                      |
-          +-----------+-----------+
-          |           |           |
-          v           v           v
-        Types      Resources    Effects
-          |           |           |
-          +-----------+-----------+
-                      |
-                      v
-             Canonical Semantic Model
-                      |
-          +-----------+-----------+
-          |                       |
-          v                       v
-    Classical IR             quantum::ir
-          |                       |
-          +-----------+-----------+
-                      |
-                      v
-               Optimization
-                      |
-          +-----------+-----------+
-          |           |           |
-          v           v           v
-       Routing    Scheduling   Resilience
-                                  |
-                                  v
-                                 ZQN
-                                  |
-                                  v
-                                 HAL
-                                  |
-                                  v
-                         Target Realization
-                                  |
-            +----------+----------+----------+
-            |          |          |          |
-           CPU        GPU        FPGA       QPU
-            |          |          |          |
-            +----------+----------+----------+
-                                  |
-                                  v
-                           Future Targets
+This separation is mandatory for Zamani's:
 
-The memory grammar is therefore an open, target-independent semantic syntax layer—not a description of a particular memory architecture.
+«Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever»
 
-That is the memory-domain contract required for Zamani to preserve POCO-REAF while scaling from the smallest machine to arbitrarily large systems subject only to actual program semantics, capabilities, policies, and available resources.
+architecture.
 
-I also found one concrete issue that this README now makes explicit: the current `memory-capabilities.g4` contains `memoryCapabilitySubjectPropertyAssertion`, but it is not currently part of the `memoryCapabilityItem` dispatcher. That should be resolved in the grammar file when we harden it; the README now makes the “every intended public rule must be reachable” invariant explicit rather than allowing that drift to remain hidden.0
+A memory grammar that preserves this boundary can scale from the smallest embedded computation to arbitrarily large classical, quantum, hybrid, accelerator, distributed, HDL, HPC, AI, and future systems according to the resources actually available, without turning today's hardware limitations into tomorrow's programming-language limitations.
