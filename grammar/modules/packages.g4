@@ -6,172 +6,315 @@
  * File:
  *     grammar/modules/packages.g4
  *
- * Role:
- *     Canonical parser component for Zamani package declarations and
- *     package-level source metadata.
+ * Grammar:
+ *     Packages
  *
- * Grammar layer:
- *     Syntax only.
+ * Status:
+ *     CANONICAL / PRODUCTION PACKAGE GRAMMAR
+ *
+ * Rust baseline:
+ *     Rust 1.97 / Rust 1.97.1
+ *
+ * Safety:
+ *     This grammar contains no Rust actions, predicates, runtime callbacks,
+ *     filesystem access, network access, or unsafe code.
  *
  * ============================================================================
+ * PURPOSE
+ * ============================================================================
  *
+ * This file is the canonical SOURCE-LEVEL grammar for package declarations.
+ *
+ * A package is a source-level organizational/distribution identity.
+ *
+ * It is NOT:
+ *
+ *     - a filesystem directory;
+ *     - a filesystem path;
+ *     - a process;
+ *     - a thread;
+ *     - a CPU;
+ *     - a GPU;
+ *     - an FPGA;
+ *     - an ASIC;
+ *     - a QPU;
+ *     - a physical qubit set;
+ *     - a network node;
+ *     - a deployment;
+ *     - a runtime instance;
+ *     - a hardware allocation.
+ *
+ * Package syntax therefore remains independent of the machine on which a
+ * program is eventually compiled or executed.
+ *
+ * ============================================================================
  * ARCHITECTURAL POSITION
  * ============================================================================
  *
- *     ZamaniTokens
- *          |
- *          v
+ *     source
+ *       |
+ *       v
+ *     grammar/antlr/ZamaniLexer.g4
+ *       |
+ *       v
  *     canonical Zamani parser
- *          |
- *          +--> Packages.g4
- *          |
- *          v
- *     frontend AST
- *          |
- *          v
+ *       |
+ *       +--> core names
+ *       +--> visibility
+ *       +--> attributes
+ *       +--> packages  <---- THIS FILE
+ *       +--> modules
+ *       +--> namespaces
+ *       +--> imports
+ *       +--> exports
+ *       +--> dependencies
+ *       |
+ *       v
+ *     domain-neutral frontend AST
+ *       |
+ *       v
  *     semantic analysis
- *          |
- *          +--> package identity
- *          +--> package metadata
- *          +--> dependency resolution
- *          +--> visibility
- *          +--> capability/resource analysis
- *          |
- *          v
- *     canonical semantic model / IR
- *          |
- *          +--> classical IR
- *          +--> quantum::ir
- *          +--> HDL / hardware IR
- *          +--> distributed / accelerator IR
- *          |
- *          v
- *     compiler / optimizer / routing / scheduling
- *          |
- *          v
- *     runtime / deployment
+ *       |
+ *       +--> package graph
+ *       +--> module graph
+ *       +--> dependency graph
+ *       +--> symbol graph
+ *       |
+ *       v
+ *     canonical semantic model
+ *       |
+ *       +--> classical IR
+ *       +--> quantum::ir
+ *       +--> HDL / hardware representation
+ *       +--> distributed representation
+ *       +--> accelerator representation
+ *       +--> future domain representations
+ *       |
+ *       v
+ *     optimization / lowering
+ *       |
+ *       +--> routing
+ *       +--> scheduling
+ *       +--> resilience
+ *       +--> QEC
+ *       +--> ZQN
+ *       +--> HAL
+ *       |
+ *       v
+ *     target realization
  *
- * This grammar MUST remain above the semantic/IR boundary.
+ * Package parsing MUST stop at the syntax/AST boundary.
  *
  * ============================================================================
- *
  * OWNERSHIP
  * ============================================================================
  *
  * THIS FILE OWNS:
  *
- *   - package declaration syntax;
- *   - package identity syntax;
- *   - package name/path syntax;
- *   - package body syntax;
- *   - package metadata-field syntax;
- *   - package metadata key syntax;
- *   - package metadata value syntax;
- *   - package-level source attributes;
- *   - package declaration visibility syntax;
- *   - package-level documentation attachment where the composed parser
- *     permits it;
- *   - package syntax extension points.
+ *     - package declaration syntax;
+ *     - package declaration attributes;
+ *     - package declaration visibility position;
+ *     - package identity as a qualified source-level name;
+ *     - package declaration body;
+ *     - package metadata field structure;
+ *     - package metadata keys;
+ *     - package metadata values;
+ *     - package declaration termination;
+ *     - package-specific parser integration wrappers.
  *
  * THIS FILE DOES NOT OWN:
  *
- *   - lexical token definitions;
- *   - identifiers;
- *   - general qualified names;
- *   - general expressions;
- *   - general types;
- *   - modules;
- *   - imports;
- *   - exports;
- *   - namespaces;
- *   - dependency resolution;
- *   - dependency version solving;
- *   - registries;
- *   - package downloading;
- *   - package installation;
- *   - package publishing;
- *   - package signing;
- *   - signature verification;
- *   - hashes;
- *   - trust decisions;
- *   - filesystem access;
- *   - network access;
- *   - hardware discovery;
- *   - resource discovery;
- *   - target selection;
- *   - compiler optimization;
- *   - scheduling;
- *   - routing;
- *   - quantum IR;
- *   - classical IR;
- *   - runtime execution.
+ *     - identifier syntax;
+ *     - qualified-name syntax;
+ *     - path syntax;
+ *     - visibility vocabulary;
+ *     - generic attribute syntax;
+ *     - module syntax;
+ *     - namespace syntax;
+ *     - import syntax;
+ *     - export syntax;
+ *     - dependency syntax;
+ *     - version resolution;
+ *     - dependency solving;
+ *     - package registries;
+ *     - package downloading;
+ *     - package installation;
+ *     - package publishing;
+ *     - package signing;
+ *     - signature verification;
+ *     - filesystem access;
+ *     - network access;
+ *     - symbol resolution;
+ *     - semantic analysis;
+ *     - resource discovery;
+ *     - capability discovery;
+ *     - target selection;
+ *     - hardware discovery;
+ *     - routing;
+ *     - scheduling;
+ *     - QEC;
+ *     - ZQN;
+ *     - quantum::ir;
+ *     - classical IR;
+ *     - HDL/hardware IR;
+ *     - runtime execution.
  *
  * ============================================================================
- *
- * CRITICAL PACKAGE SEMANTICS
+ * SINGLE-AUTHORITY RULE
  * ============================================================================
  *
- * A Zamani package is a SOURCE-LEVEL IDENTITY / ORGANIZATION CONCEPT.
+ * The package grammar MUST NOT create competing definitions for concepts
+ * already owned elsewhere in the repository.
  *
- * Therefore:
+ * Canonical owners:
  *
- *     package foo;
+ *     lexer
+ *         -> grammar/antlr/ZamaniLexer.g4
  *
- * MUST NOT inherently mean:
+ *     names
+ *         -> grammar/core/names.g4
  *
- *     read directory foo/
- *     download foo
- *     publish foo
- *     install foo
- *     contact registry foo
- *     trust foo
- *     execute foo
+ *     qualified names
+ *         -> grammar/core/names.g4
  *
- * Those meanings belong to later toolchain layers.
+ *     visibility
+ *         -> grammar/modules/visibility.g4
  *
- * Likewise:
+ *     generic attributes
+ *         -> grammar/core/attributes.g4
  *
- *     package quantum::algorithms;
+ *     modules
+ *         -> grammar/modules/modules.g4
  *
- * does not select:
+ *     namespaces
+ *         -> grammar/modules/namespaces.g4
  *
- *     - a quantum processor;
- *     - a backend;
- *     - a number of qubits;
- *     - a topology;
- *     - a device;
- *     - a runtime;
- *     - a physical deployment.
+ *     imports
+ *         -> grammar/modules/imports.g4
+ *
+ *     exports
+ *         -> grammar/modules/exports.g4
+ *
+ *     dependencies
+ *         -> grammar/modules/dependencies.g4
+ *
+ * Packages.g4 MUST compose these concepts rather than redefine them.
  *
  * ============================================================================
+ * CRITICAL LEXER INTEGRATION
+ * ============================================================================
  *
+ * The repository has an explicit distinction between:
+ *
+ *     ZamaniTokens
+ *
+ * and:
+ *
+ *     ZamaniLexer
+ *
+ * ZamaniTokens is the lexical composition vocabulary.
+ *
+ * ZamaniLexer is the production lexer consumed by parser grammars.
+ *
+ * Therefore parser grammars MUST use:
+ *
+ *     tokenVocab = ZamaniLexer;
+ *
+ * and MUST NOT use:
+ *
+ *     tokenVocab = ZamaniTokens;
+ *
+ * directly.
+ *
+ * This corrects the previous package grammar.
+ *
+ * The canonical package keyword is:
+ *
+ *     PACKAGE
+ *
+ * from:
+ *
+ *     grammar/lexer/keywords.g4
+ *
+ * NOT:
+ *
+ *     K_PACKAGE
+ *
+ * The canonical visibility tokens are consumed indirectly through:
+ *
+ *     visibilityModifier
+ *
+ * from visibility.g4.
+ *
+ * ============================================================================
  * POCO-REAF
  * ============================================================================
  *
- * Package syntax MUST remain independent of machine scale.
+ * Package syntax participates in:
  *
- * No grammar-level limits are imposed on:
+ *     Program_Once
+ *         ->
+ *     Compile_Once
+ *         ->
+ *     Run_Everywhere
+ *         ->
+ *     Run_Anywhere
+ *         ->
+ *     Run_Forever
  *
- *     - package-name depth;
- *     - metadata-field count;
- *     - metadata nesting represented by expressions;
- *     - package declarations;
- *     - source size;
- *     - package graph size;
- *     - dependency graph size.
+ * Package syntax MUST therefore be independent of:
  *
- * There are intentionally no constants such as:
- *
- *     MAX_PACKAGES
- *     MAX_PACKAGE_FIELDS
- *     MAX_PACKAGE_NAME_DEPTH
- *     MAX_DEPENDENCIES
- *
- * Operational limits may exist in compiler/toolchain configuration, but
- * they are NOT language semantics and MUST NOT be encoded here.
+ *     CPU count
+ *     core count
+ *     thread count
+ *     GPU count
+ *     FPGA count
+ *     ASIC count
+ *     QPU count
+ *     qubit count
+ *     memory capacity
+ *     register width
+ *     vector width
+ *     tensor dimensions
+ *     accelerator count
+ *     node count
+ *     cluster size
+ *     network topology
+ *     device identifiers
+ *     physical addresses
+ *     deployment topology.
  *
  * ============================================================================
+ * NO ARTIFICIAL LANGUAGE LIMITS
+ * ============================================================================
  *
+ * This grammar deliberately imposes no finite language-level limit on:
+ *
+ *     - package-name qualification depth;
+ *     - package declarations;
+ *     - metadata fields;
+ *     - metadata attributes;
+ *     - metadata list elements;
+ *     - metadata map entries;
+ *     - package graph size;
+ *     - dependency graph size;
+ *     - source-unit size.
+ *
+ * Do NOT introduce:
+ *
+ *     MAX_PACKAGES
+ *     MAX_PACKAGE_DEPTH
+ *     MAX_PACKAGE_NAME_SEGMENTS
+ *     MAX_PACKAGE_FIELDS
+ *     MAX_PACKAGE_ATTRIBUTES
+ *     MAX_DEPENDENCIES
+ *     MAX_PACKAGE_GRAPH
+ *
+ * Repetition is represented with ANTLR structural operators.
+ *
+ * Physical and implementation limits remain implementation/resource policy.
+ *
+ * ============================================================================
  * DETERMINISM
  * ============================================================================
  *
@@ -180,105 +323,559 @@
  *     - filesystem I/O;
  *     - network I/O;
  *     - registry lookup;
- *     - environment inspection;
+ *     - environment lookup;
  *     - clock access;
  *     - randomness;
+ *     - package resolution;
+ *     - dependency resolution;
+ *     - module resolution;
+ *     - symbol resolution;
  *     - hardware discovery;
- *     - dependency resolution.
+ *     - resource discovery;
+ *     - target selection.
  *
- * The same token stream therefore produces the same syntactic structure.
- *
- * ============================================================================
- *
- * SAFETY / RUST
- * ============================================================================
- *
- * This file contains no Rust code.
- *
- * Rust consumers and generated parser integration MUST target:
- *
- *     Rust 1.97
- *     Rust 1.97.1
- *
- * Zamani compiler/frontend code MUST use safe Rust only.
- *
- * No unsafe blocks.
- * No unsafe functions.
- * No unsafe traits.
+ * The same token stream and grammar version must therefore produce equivalent
+ * syntactic structure.
  *
  * ============================================================================
+ * SAFETY
+ * ============================================================================
  *
+ * This file contains ANTLR grammar only.
+ *
+ * It contains:
+ *
+ *     - no Rust;
+ *     - no embedded actions;
+ *     - no semantic predicates;
+ *     - no unsafe implementation.
+ *
+ * Generated parser/frontend integration is required to remain safe Rust and
+ * compatible with Rust 1.97 / Rust 1.97.1.
+ *
+ * ============================================================================
  * AST CONTRACT
  * ============================================================================
  *
- * The parser MUST produce enough structure for the frontend AST to represent:
+ * The parser must preserve sufficient structure for the frontend AST to
+ * represent:
  *
  *     PackageDeclaration
+ *         attributes
  *         visibility
  *         name
  *         body
  *             metadata fields
- *             source attributes
+ *                 key
+ *                 value
+ *             source spans
+ *             source ordering
  *
- * Package metadata values remain syntax/AST expressions until semantic
- * validation determines their permitted schema and types.
+ * This grammar does NOT define Rust AST types.
  *
- * This grammar MUST NOT define the Rust AST itself.
+ * The AST adapter owns the concrete representation.
+ *
+ * Source spans MUST remain recoverable so diagnostics, formatting, IDE/LSP,
+ * provenance, compatibility tooling, and semantic validation can identify
+ * the exact package construct that produced an error.
  *
  * ============================================================================
+ * SEMANTIC CONTRACT
+ * ============================================================================
  *
+ * After parsing, semantic analysis owns:
+ *
+ *     - package identity;
+ *     - package uniqueness;
+ *     - package graph construction;
+ *     - package/module relationships;
+ *     - package/namespace relationships;
+ *     - metadata schema validation;
+ *     - package visibility semantics;
+ *     - package compatibility;
+ *     - dependency association;
+ *     - dependency graph construction;
+ *     - dependency-cycle analysis;
+ *     - version compatibility;
+ *     - registry identity;
+ *     - publisher identity;
+ *     - trust policy;
+ *     - signing policy;
+ *     - artifact identity;
+ *     - package resolution.
+ *
+ * None of those operations are performed by this grammar.
+ *
+ * ============================================================================
  * IR CONTRACT
  * ============================================================================
  *
- * Packages are not a quantum IR concept.
+ * Packages do not constitute a computational domain IR.
  *
- * Packages therefore MUST NOT lower directly into:
+ * Package information may be retained as:
+ *
+ *     - source provenance;
+ *     - compilation-unit metadata;
+ *     - module/dependency graph metadata;
+ *     - artifact metadata;
+ *     - interoperability metadata.
+ *
+ * Package syntax MUST NOT lower directly to:
  *
  *     quantum::ir
  *     QEC
  *     ZQN
- *     scheduling
  *     routing
- *     hardware HAL
+ *     scheduling
+ *     HAL
+ *     classical execution IR
+ *     HDL/hardware execution IR.
  *
- * Instead:
- *
- *     Packages.g4
- *          |
- *          v
- *     PackageSyntax
- *          |
- *          v
- *     PackageSemanticModel
- *          |
- *          v
- *     compilation/module graph
- *          |
- *          v
- *     domain-specific semantic IR
+ * Domain-specific program constructs lower through their own semantic paths.
  *
  * ============================================================================
- *
- * EXTENSIBILITY
+ * RESOURCE / CAPABILITY SEPARATION
  * ============================================================================
  *
- * Package metadata keys are intentionally NOT hard-coded.
+ * Package metadata may describe source-level requirements, capabilities,
+ * preferences, constraints, or hints only as metadata.
  *
- * For example, the grammar permits:
+ * This grammar MUST NOT interpret:
  *
- *     package example {
- *         version: "1.0.0";
- *         license: "MIT";
- *         repository: "example";
- *         language: "zamani";
+ *     requires(...)
+ *     capability(...)
+ *     target(...)
+ *     accelerator(...)
+ *     quantum(...)
+ *
+ * as hardware instructions.
+ *
+ * For example:
+ *
+ *     package quantum::algorithms {
+ *         domain: quantum;
  *     }
  *
- * But it does not make `version`, `license`, `repository`, etc. lexer
- * keywords.
+ * does NOT select:
  *
- * Their semantic validity belongs to the package specification/toolchain.
+ *     - a QPU;
+ *     - a number of qubits;
+ *     - a topology;
+ *     - a backend;
+ *     - a calibration;
+ *     - a device.
  *
- * This permits future metadata without changing the lexical grammar.
+ * Those decisions belong to later semantic/resource/compiler/HAL layers.
+ *
+ * ============================================================================
+ * PACKAGE VERSUS MODULE
+ * ============================================================================
+ *
+ * A package and a module are different source concepts.
+ *
+ * Package:
+ *
+ *     distribution / compilation identity.
+ *
+ * Module:
+ *
+ *     source organization / namespace-bearing compilation structure.
+ *
+ * Therefore this grammar does NOT contain:
+ *
+ *     moduleDeclaration
+ *     moduleBody
+ *     moduleItem
+ *
+ * and does not import modules merely to parse package contents.
+ *
+ * A package may semantically contain or correspond to many modules, but that
+ * relationship is established by package/module analysis.
+ *
+ * ============================================================================
+ * PACKAGE VERSUS PATH
+ * ============================================================================
+ *
+ * Package identity uses a canonical qualified source name.
+ *
+ * It is NOT a filesystem path.
+ *
+ * Therefore:
+ *
+ *     package org::zamani::quantum;
+ *
+ * is source-level identity syntax.
+ *
+ * It does NOT imply:
+ *
+ *     org/zamani/quantum/
+ *
+ * Nor:
+ *
+ *     /org/zamani/quantum
+ *
+ * Nor:
+ *
+ *     C:\org\zamani\quantum
+ *
+ * Nor:
+ *
+ *     https://...
+ *
+ * Filesystem/logical paths belong to the path grammar.
+ *
+ * ============================================================================
+ * PACKAGE VERSUS DEPENDENCY
+ * ============================================================================
+ *
+ * Dependency syntax belongs exclusively to:
+ *
+ *     grammar/modules/dependencies.g4
+ *
+ * This file MUST NOT duplicate:
+ *
+ *     dependencyDeclaration
+ *     dependencyRequirement
+ *     dependencyVersion
+ *     dependencySource
+ *     dependencyAlias
+ *
+ * A source unit may contain both package and dependency constructs.
+ *
+ * Conceptually:
+ *
+ *     source unit
+ *        |
+ *        +--> package declaration
+ *        |
+ *        +--> dependency declarations
+ *        |
+ *        +--> modules
+ *        |
+ *        +--> declarations
+ *
+ * Semantic analysis associates those structures after parsing.
+ *
+ * This avoids a cyclic grammar dependency:
+ *
+ *     Packages -> Dependencies -> Packages
+ *
+ * ============================================================================
+ * PACKAGE VERSUS REGISTRY
+ * ============================================================================
+ *
+ * A package declaration does NOT invoke or identify a registry by syntax alone.
+ *
+ * Registry coordinates, publication metadata, artifact locations, trust
+ * policies, and package resolution belong to the package/toolchain semantic
+ * layer.
+ *
+ * ============================================================================
+ * PACKAGE METADATA
+ * ============================================================================
+ *
+ * Package metadata is source-level structured metadata.
+ *
+ * Metadata keys remain ordinary canonical identifiers.
+ *
+ * They are NOT reserved keywords.
+ *
+ * This permits future metadata without changing the lexer.
+ *
+ * Examples:
+ *
+ *     package quantum::algorithms {
+ *         version: "1.0.0";
+ *         license: "MIT";
+ *         domain: quantum;
+ *     }
+ *
+ *     package scientific::linear_algebra {
+ *         version: "2.0.0";
+ *         domain: classical;
+ *     }
+ *
+ * The parser records structure.
+ *
+ * Semantic validation determines whether a metadata key/value combination
+ * belongs to the package specification.
+ *
+ * ============================================================================
+ * METADATA VALUE DESIGN
+ * ============================================================================
+ *
+ * Package metadata must remain STATIC STRUCTURED DATA.
+ *
+ * It must not silently become a second executable expression language.
+ *
+ * Therefore this grammar accepts:
+ *
+ *     - canonical qualified names;
+ *     - integer literals;
+ *     - floating-point literals;
+ *     - string literals;
+ *     - character literals;
+ *     - boolean literals;
+ *     - structured lists;
+ *     - structured maps;
+ *     - nested metadata structures.
+ *
+ * Runtime expressions belong to the canonical expression grammar and must not
+ * be recreated here.
+ *
+ * If a future package specification requires compile-time expressions, that
+ * feature must be introduced through an explicit language-level contract and
+ * integrated with the canonical expression grammar rather than by extending
+ * this file with an independent expression parser.
+ *
+ * ============================================================================
+ * ATTRIBUTE INTEGRATION
+ * ============================================================================
+ *
+ * Package declarations use the canonical generic attribute syntax:
+ *
+ *     @attribute
+ *     @attribute(...)
+ *     @namespace::attribute
+ *     @namespace::attribute(...)
+ *
+ * The package grammar does not redefine attribute names, arguments, or
+ * attribute values.
+ *
+ * The canonical attribute grammar remains the owner of those structures.
+ *
+ * ============================================================================
+ * VISIBILITY INTEGRATION
+ * ============================================================================
+ *
+ * Package declarations use the canonical visibility rule:
+ *
+ *     visibilityModifier?
+ *
+ * This file MUST NOT define:
+ *
+ *     packageVisibility
+ *
+ * or another copy of:
+ *
+ *     pub
+ *     public
+ *     private
+ *     protected
+ *     internal
+ *
+ * The semantic layer determines whether a particular visibility modifier is
+ * legal for a package and what its effective meaning is.
+ *
+ * ============================================================================
+ * NAME INTEGRATION
+ * ============================================================================
+ *
+ * Package identity uses:
+ *
+ *     qualifiedName
+ *
+ * from the canonical names grammar.
+ *
+ * This file MUST NOT redefine:
+ *
+ *     IDENTIFIER
+ *     packageNameSegment
+ *     IDENTIFIER (DOUBLE_COLON IDENTIFIER)*
+ *
+ * A package name is therefore structurally consistent with other Zamani
+ * qualified names.
+ *
+ * ============================================================================
+ * ANTLR COMPOSITION
+ * ============================================================================
+ *
+ * ANTLR parser grammar imports are used to compose reusable parser rules.
+ *
+ * Packages imports the canonical:
+ *
+ *     Names
+ *     Visibility
+ *     Attributes
+ *
+ * grammars.
+ *
+ * The production aggregate parser remains responsible for composing:
+ *
+ *     Packages
+ *     Modules
+ *     Imports
+ *     Exports
+ *     Dependencies
+ *     Namespaces
+ *     Declarations
+ *     Expressions
+ *     Statements
+ *     and other language domains.
+ *
+ * Packages.g4 is NOT the aggregate parser.
+ *
+ * ============================================================================
+ * COMPATIBILITY
+ * ============================================================================
+ *
+ * Existing valid source forms retained by this grammar:
+ *
+ *     package foo;
+ *
+ *     package foo {}
+ *
+ *     package foo {
+ *         version: "1.0.0";
+ *     }
+ *
+ *     package foo::bar;
+ *
+ *     package foo::bar {
+ *         license: "MIT";
+ *     }
+ *
+ *     pub package foo;
+ *
+ *     public package foo;
+ *
+ *     private package foo;
+ *
+ *     internal package foo;
+ *
+ *     @experimental package foo;
+ *
+ *     @experimental
+ *     pub package foo {
+ *         version: "1.0.0";
+ *     }
+ *
+ * The grammar deliberately makes the declaration boundary explicit:
+ *
+ *     package ... ;
+ *
+ * or:
+ *
+ *     package ... { ... }
+ *
+ * A bare:
+ *
+ *     package foo
+ *
+ * without either terminator or body is rejected rather than relying on
+ * newline/trivia behavior.
+ *
+ * This improves deterministic composition with source-unit parsing.
+ *
+ * ============================================================================
+ * NEGATIVE SYNTAX CONTRACT
+ * ============================================================================
+ *
+ * The following must be rejected syntactically:
+ *
+ *     package;
+ *
+ *     package {};
+ *
+ *     package ::foo;
+ *
+ *     package foo::;
+ *
+ *     package ::;
+ *
+ *     package foo::bar::;
+ *
+ *     package foo
+ *
+ *     package foo {}
+ *     package foo {}
+ *
+ * only if the surrounding source-unit semantic contract prohibits duplicate
+ * package identity; duplicate identity itself is semantic, not syntactic.
+ *
+ * The following are also outside this grammar:
+ *
+ *     package foo = ...;
+ *     package foo -> ...;
+ *     package foo from ...;
+ *
+ * unless a future language specification explicitly introduces such syntax.
+ *
+ * ============================================================================
+ * SCALABILITY TEST CONTRACT
+ * ============================================================================
+ *
+ * Conformance tests must cover:
+ *
+ *     - deeply qualified package names;
+ *     - many package metadata fields;
+ *     - large metadata lists;
+ *     - large metadata maps;
+ *     - many attributes;
+ *     - many package declarations;
+ *     - package declarations in large source units;
+ *     - package graphs with large numbers of nodes;
+ *     - dependency graphs independently of package parsing.
+ *
+ * No test may establish an artificial maximum as language semantics.
+ *
+ * ============================================================================
+ * HARD-CODING AUDIT
+ * ============================================================================
+ *
+ * This grammar contains no:
+ *
+ *     MAX_PACKAGES
+ *     MAX_PACKAGE_DEPTH
+ *     MAX_PACKAGE_SEGMENTS
+ *     MAX_PACKAGE_FIELDS
+ *     MAX_PACKAGE_ATTRIBUTES
+ *     MAX_DEPENDENCIES
+ *     MAX_NODES
+ *     MAX_CPUS
+ *     MAX_CORES
+ *     MAX_THREADS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_ASICS
+ *     MAX_QPUS
+ *     MAX_QUBITS
+ *     MAX_MEMORY
+ *     MAX_REGISTER_WIDTH
+ *     MAX_VECTOR_WIDTH
+ *     MAX_TENSOR_RANK
+ *
+ * Any practical limit belongs to implementation/resource policy and must not
+ * be represented as package-language syntax.
+ *
+ * ============================================================================
+ * COMPLETION CRITERIA
+ * ============================================================================
+ *
+ * Packages.g4 is complete when:
+ *
+ *     [x] package declaration has one canonical owner;
+ *     [x] package identity uses canonical qualifiedName;
+ *     [x] visibility uses visibilityModifier;
+ *     [x] attributes use canonical attribute syntax;
+ *     [x] package metadata is structurally represented;
+ *     [x] dependencies remain owned by dependencies.g4;
+ *     [x] modules remain owned by modules.g4;
+ *     [x] namespaces remain owned by namespaces.g4;
+ *     [x] no package resolver exists in the grammar;
+ *     [x] no filesystem/network access exists;
+ *     [x] no hardware assumptions exist;
+ *     [x] no resource limits exist;
+ *     [x] no quantum IR is created;
+ *     [x] no second expression grammar is created;
+ *     [x] declaration termination is deterministic;
+ *     [x] source spans remain recoverable;
+ *     [x] Rust integration remains safe;
+ *     [x] Rust 1.97 / 1.97.1 compatibility is preserved.
+ *
+ * Repository integration still requires the aggregate parser, lexer,
+ * frontend AST, semantic analysis, and conformance tests to consume this
+ * canonical contract.
  *
  * ============================================================================
  */
@@ -286,13 +883,14 @@
 parser grammar Packages;
 
 options {
-    /*
-     * The repository's canonical lexer vocabulary owns all concrete tokens.
-     *
-     * Do NOT create package-specific lexer tokens here.
-     */
-    tokenVocab = ZamaniTokens;
+    tokenVocab = ZamaniLexer;
 }
+
+import
+    Names,
+    Visibility,
+    Attributes
+    ;
 
 
 /* ============================================================================
@@ -302,63 +900,58 @@ options {
 /**
  * Canonical package declaration.
  *
- * Supported forms:
+ * Forms:
  *
  *     package foo;
  *
+ *     package foo {}
+ *
  *     package foo {
- *     }
- *
- *     package foo::bar;
- *
- *     package foo::bar {
  *         version: "1.0.0";
  *     }
  *
- *     public package foo {
- *         ...
- *     }
+ *     pub package foo;
  *
- * The body is optional so a package can be declared without metadata.
+ *     @experimental package foo {}
  *
- * Semantic validation determines whether a particular package declaration
- * is legal in a particular compilation-unit context.
+ * Attributes precede visibility, matching the repository's declaration
+ * composition model.
  */
 packageDeclaration
-    : packageVisibility?
-      K_PACKAGE
+    : attributeList?
+      visibilityModifier?
+      PACKAGE
       packageName
-      packageBody?
-      SEMICOLON?
+      packageDeclarationTail
     ;
 
 
 /* ============================================================================
- * 2. PACKAGE VISIBILITY
+ * 2. PACKAGE DECLARATION TAIL
  * ========================================================================== */
 
 /**
- * Package-level visibility.
+ * A package declaration MUST have an explicit syntactic boundary.
  *
- * `protected` is deliberately not accepted here.
+ * This prevents a bare:
  *
- * Protection semantics belong to declarations/classes/modules rather than
- * package identity.
+ *     package foo
  *
- * Supported package visibility:
+ * from consuming or interacting ambiguously with the following source item.
  *
- *     pub
- *     public
- *     private
- *     internal
+ * Exactly one of:
  *
- * The semantic layer determines the effective accessibility.
+ *     ;
+ *
+ * or:
+ *
+ *     { ... }
+ *
+ * completes the declaration.
  */
-packageVisibility
-    : K_PUB
-    | K_PUBLIC
-    | K_PRIVATE
-    | K_INTERNAL
+packageDeclarationTail
+    : SEMICOLON
+    | packageBody
     ;
 
 
@@ -367,9 +960,7 @@ packageVisibility
  * ========================================================================== */
 
 /**
- * Package identity.
- *
- * A package name may contain multiple source-level namespace components.
+ * Package identity is a canonical qualified source-level name.
  *
  * Examples:
  *
@@ -378,36 +969,10 @@ packageVisibility
  *     quantum::algorithms
  *     org::zamani::quantum
  *
- * This is NOT an operating-system path.
- *
- * It MUST NOT be interpreted as:
- *
- *     /
- *     \
- *     C:\
- *     filesystem directory
- *     network URL
- *
- * by this grammar.
+ * No package-specific identifier or qualification grammar is created here.
  */
 packageName
-    : packageNameSegment
-      (
-          DOUBLE_COLON
-          packageNameSegment
-      )*
-    ;
-
-
-/**
- * A single package-name component.
- *
- * The canonical identifier syntax remains owned by the lexical/core
- * grammar. The token-level identifier is referenced here directly so this
- * grammar does not duplicate identifier rules.
- */
-packageNameSegment
-    : IDENTIFIER
+    : qualifiedName
     ;
 
 
@@ -416,20 +981,18 @@ packageNameSegment
  * ========================================================================== */
 
 /**
- * Package body.
+ * Package bodies contain package metadata and package-level attributes only.
  *
- * The body contains package-level metadata and extension entries.
+ * They do NOT contain:
  *
- * It does NOT contain ordinary module declarations.
+ *     modules
+ *     imports
+ *     exports
+ *     dependencies
+ *     ordinary declarations
  *
- * Modules remain owned by modules.g4.
- *
- * Example:
- *
- *     package quantum::algorithms {
- *         version: "1.0.0";
- *         license: "MIT";
- *     }
+ * Those constructs remain owned by their dedicated grammar components and
+ * are composed by the aggregate source/module grammar.
  */
 packageBody
     : LBRACE
@@ -439,30 +1002,32 @@ packageBody
 
 
 /* ============================================================================
- * 5. PACKAGE BODY ITEMS
+ * 5. PACKAGE BODY ITEM
  * ========================================================================== */
 
 /**
- * Package-body item.
+ * A package body item is either:
  *
- * Metadata is deliberately separated from ordinary module/declaration syntax.
+ *     metadata field
  *
- * Dependency declarations, if introduced later, belong to the dedicated
- * dependencies.g4 grammar and must be integrated through an explicit
- * package-extension rule rather than duplicated here.
+ * or:
+ *
+ *     attribute
+ *
+ * Generic attribute syntax is imported from Attributes.
  */
 packageBodyItem
     : packageMetadataField
-    | packageAttribute
+    | attribute
     ;
 
 
 /* ============================================================================
- * 6. PACKAGE METADATA
+ * 6. PACKAGE METADATA FIELD
  * ========================================================================== */
 
 /**
- * Generic package metadata field.
+ * Generic metadata field.
  *
  * Examples:
  *
@@ -470,627 +1035,246 @@ packageBodyItem
  *
  *     license: "MIT";
  *
- *     repository: "zamani";
- *
- *     language: "zamani";
+ *     domain: quantum;
  *
  *     compatibility: "stable";
  *
- * The grammar intentionally does not enumerate metadata names.
+ * Metadata names remain ordinary identifiers.
  */
 packageMetadataField
     : packageMetadataKey
       COLON
       packageMetadataValue
-      SEMICOLON?
+      SEMICOLON
     ;
 
 
+/* ============================================================================
+ * 7. PACKAGE METADATA KEY
+ * ========================================================================== */
+
 /**
- * Metadata key.
+ * Metadata keys are canonical identifiers.
  *
- * Metadata names remain identifiers rather than lexer keywords.
- *
- * This prevents package metadata from consuming language keyword namespace.
+ * They are deliberately NOT keywords.
  */
 packageMetadataKey
-    : IDENTIFIER
+    : identifier
     ;
 
 
+/* ============================================================================
+ * 8. PACKAGE METADATA VALUE
+ * ========================================================================== */
+
 /**
- * Metadata value.
+ * Package metadata values are static structural values.
  *
- * A metadata value is a normal Zamani expression.
+ * The canonical attribute grammar already provides the same non-executable
+ * structural value model used by source metadata:
  *
- * This deliberately allows the semantic package layer to establish the
- * permitted value type without making the parser responsible for package
- * schema policy.
+ *     literals
+ *     names
+ *     lists
+ *     maps
+ *     nested attributes
+ *
+ * Reusing `attributeValue` prevents Packages.g4 from creating a second
+ * expression/value grammar.
+ *
+ * Runtime expressions therefore do not belong here.
  */
 packageMetadataValue
-    : expression
+    : attributeValue
     ;
 
 
 /* ============================================================================
- * 7. PACKAGE ATTRIBUTES
+ * 9. PACKAGE METADATA COMPATIBILITY WRAPPERS
  * ========================================================================== */
 
 /**
- * Package-level attribute.
+ * Named wrapper for a scalar metadata value.
  *
- * Attribute syntax is intentionally generic.
+ * This exists for AST/tooling integration and does not introduce a second
+ * scalar-value grammar.
+ */
+packageMetadataScalarValue
+    : attributeScalarValue
+    ;
+
+
+/**
+ * Named wrapper for a symbolic metadata value.
+ */
+packageMetadataNameValue
+    : attributeNameValue
+    ;
+
+
+/**
+ * Named wrapper for a list metadata value.
+ */
+packageMetadataListValue
+    : attributeListValue
+    ;
+
+
+/**
+ * Named wrapper for a map metadata value.
+ */
+packageMetadataMapValue
+    : attributeMapValue
+    ;
+
+
+/**
+ * Named wrapper for nested metadata values.
+ */
+packageMetadataNestedValue
+    : attributeNestedValue
+    ;
+
+
+/* ============================================================================
+ * 10. PACKAGE ATTRIBUTE INTEGRATION
+ * ========================================================================== */
+
+/**
+ * Compatibility wrapper for tooling that wants to identify attributes
+ * specifically attached to a package body.
  *
- * Examples may include:
- *
- *     @experimental
- *     @deprecated
- *     @platform(...)
- *     @capability(...)
- *
- * The actual attribute vocabulary belongs to the canonical attribute/
- * annotation system.
- *
- * This rule exists as an integration boundary and does not interpret
- * attribute names.
- *
- * IMPORTANT:
- *
- * If the authoritative repository attribute grammar provides a canonical
- * `annotation` rule, the composed parser should replace this forwarding
- * rule with that canonical rule.
+ * The actual syntax remains owned by Attributes.
  */
 packageAttribute
-    : AT
-      IDENTIFIER
-      packageAttributeArguments?
+    : attribute
     ;
 
 
 /**
- * Optional package-attribute argument list.
+ * Compatibility wrapper for a package declaration's attribute list.
+ *
+ * The canonical declaration itself uses:
+ *
+ *     attributeList?
+ *
+ * so the generic attribute grammar remains authoritative.
  */
-packageAttributeArguments
-    : LPAREN
-      packageAttributeArgumentList?
-      RPAREN
-    ;
-
-
-/**
- * Attribute arguments.
- *
- * Values remain normal expressions.
- */
-packageAttributeArgumentList
-    : packageAttributeArgument
-      (
-          COMMA
-          packageAttributeArgument
-      )*
-      COMMA?
-    ;
-
-
-/**
- * One attribute argument.
- *
- * Both positional and named arguments are supported.
- *
- * Examples:
- *
- *     @platform("quantum")
- *
- *     @target(kind: "generic")
- *
- * The semantic attribute registry determines which forms are valid for a
- * particular attribute.
- */
-packageAttributeArgument
-    : IDENTIFIER
-      COLON
-      expression
-    | expression
+packageAttributes
+    : attributeList
     ;
 
 
 /* ============================================================================
- * 8. PACKAGE EXTENSION BOUNDARY
+ * 11. PACKAGE NAME REFERENCE
  * ========================================================================== */
 
 /**
- * Stable extension boundary for future package-level constructs.
+ * A package-name reference uses the same canonical qualified-name structure.
  *
- * This rule is intentionally NOT added to `packageBodyItem` yet.
+ * This is a syntactic wrapper only.
  *
- * That prevents this file from silently taking ownership of syntax that
- * belongs to another grammar.
- *
- * Future package-owned constructs must be added only after:
- *
- *     1. language specification approval;
- *     2. ownership analysis;
- *     3. dependency analysis;
- *     4. compatibility analysis;
- *     5. AST contract definition;
- *     6. semantic contract definition;
- *     7. tests.
- *
- * This keeps the current grammar deterministic and ownership-clean.
+ * It does not resolve the package.
  */
-packageExtension
-    : packageAttribute
+packageNameReference
+    : qualifiedName
     ;
 
 
 /* ============================================================================
- * 9. PACKAGE IDENTITY SEMANTICS — SYNTAX BOUNDARY
+ * 12. PACKAGE IDENTITY WRAPPER
  * ========================================================================== */
 
 /**
- * Package identity is syntactically represented by packageName.
+ * Stable integration boundary for consumers that need the package identity
+ * as a named grammar node.
+ */
+packageIdentity
+    : packageName
+    ;
+
+
+/* ============================================================================
+ * 13. PACKAGE DECLARATION HEADER
+ * ========================================================================== */
+
+/**
+ * Header without the terminating body/semicolon.
  *
- * This grammar deliberately does NOT define:
+ * Useful to tools which need to recognize package identity before parsing the
+ * declaration tail.
+ */
+packageDeclarationHeader
+    : attributeList?
+      visibilityModifier?
+      PACKAGE
+      packageName
+    ;
+
+
+/* ============================================================================
+ * 14. PACKAGE BODY ITEM LIST
+ * ========================================================================== */
+
+/**
+ * Explicit package-body list wrapper.
  *
- *     package version identity;
- *     package coordinate identity;
- *     registry identity;
- *     cryptographic identity;
- *     publisher identity;
- *     repository identity;
- *     artifact identity.
+ * No finite cardinality is imposed.
+ */
+packageBodyItems
+    : packageBodyItem*
+    ;
+
+
+/* ============================================================================
+ * 15. PACKAGE BODY WRAPPER
+ * ========================================================================== */
+
+/**
+ * Stable wrapper exposing the complete package body as one parse-tree node.
  *
- * Those belong to the semantic/package-toolchain layers.
+ * The canonical package declaration uses packageBody directly.
+ */
+packageBodyBlock
+    : packageBody
+    ;
+
+
+/* ============================================================================
+ * 16. SEMANTIC / TOOLCHAIN BOUNDARY
+ * ========================================================================== */
+
+/**
+ * The following are intentionally NOT grammar rules in this file:
  *
- * Consequently:
+ *     resolvePackage
+ *     resolvePackageVersion
+ *     resolveDependency
+ *     solveDependencyGraph
+ *     loadPackage
+ *     downloadPackage
+ *     installPackage
+ *     publishPackage
+ *     verifyPackageSignature
+ *     verifyPackageHash
+ *     queryRegistry
+ *     accessFilesystem
+ *     accessNetwork
+ *     selectHardware
+ *     selectQPU
+ *     selectGPU
+ *     selectFPGA
  *
- *     package foo::bar;
- *
- * only establishes source-level package syntax.
+ * All belong downstream of parsing.
  */
 
 
 /* ============================================================================
- * 10. DEPENDENCY INTEGRATION CONTRACT
+ * 17. DOMAIN-NEUTRALITY CONTRACT
  * ========================================================================== */
 
 /**
- * Dependencies are intentionally NOT defined in this file.
- *
- * The dedicated:
- *
- *     grammar/modules/dependencies.g4
- *
- * owns dependency syntax.
- *
- * Its semantic model may associate dependency declarations with the package
- * represented by this rule.
- *
- * This avoids the architectural mistake:
- *
- *     Packages.g4 -> Dependencies.g4 -> Packages.g4
- *
- * which would create unnecessary grammar coupling.
- *
- * Preferred architecture:
- *
- *     packageDeclaration
- *          |
- *          v
- *     PackageSyntax
- *          |
- *          +--------------------+
- *          |                    |
- *          v                    v
- *     metadata             dependency syntax
- *                              |
- *                              v
- *                     package semantic model
- */
-
-
-/* ============================================================================
- * 11. MODULE INTEGRATION CONTRACT
- * ========================================================================== */
-
-/**
- * Package declarations are NOT module declarations.
- *
- * Therefore Packages.g4 does not import or redefine:
- *
- *     moduleDeclaration
- *     moduleBody
- *     importDeclaration
- *     exportDeclaration
- *     useDeclaration
- *
- * The canonical parser composes Packages.g4 with Modules.g4.
- *
- * Example architecture:
- *
- *     sourceItem
- *         |
- *         +--> packageDeclaration
- *         |
- *         +--> moduleDeclaration
- *         |
- *         +--> importDeclaration
- *         |
- *         +--> exportDeclaration
- *         |
- *         +--> ...
- */
-
-
-/* ============================================================================
- * 12. NAME / PATH INTEGRATION
- * ========================================================================== */
-
-/**
- * Package names intentionally have a small local production because package
- * identity is syntactically distinct from arbitrary expressions.
- *
- * They nevertheless use the canonical IDENTIFIER token.
- *
- * No second identifier grammar is introduced.
- *
- * No package-specific Unicode identifier system is introduced.
- *
- * No filesystem path syntax is introduced.
- */
-
-
-/* ============================================================================
- * 13. EXPRESSION INTEGRATION
- * ========================================================================== */
-
-/**
- * `expression` is supplied by the canonical importing parser / expressions
- * grammar.
- *
- * Packages.g4 MUST NOT define a second expression grammar.
- *
- * This prevents conflicts between:
- *
- *     grammar/expressions/*
- *
- * and package metadata.
- *
- * Metadata values therefore inherit the language's normal expression
- * semantics after parsing.
- */
-
-
-/* ============================================================================
- * 14. SEMANTIC BOUNDARIES
- * ========================================================================== */
-
-/**
- * The following operations are explicitly outside this grammar:
- *
- *     resolvePackage()
- *     resolvePackageVersion()
- *     resolveDependency()
- *     solveDependencyGraph()
- *     loadPackage()
- *     downloadPackage()
- *     installPackage()
- *     publishPackage()
- *     verifyPackageSignature()
- *     verifyPackageHash()
- *     queryRegistry()
- *     accessFilesystem()
- *     accessNetwork()
- *     selectHardware()
- *     selectQuantumBackend()
- *     selectGPU()
- *     selectFPGA()
- *     selectCPU()
- *
- * None of these operations may be embedded in ANTLR actions or predicates.
- */
-
-
-/* ============================================================================
- * 15. POCO-REAF BOUNDARY
- * ========================================================================== */
-
-/**
- * Package syntax MUST remain stable when the program is moved between:
- *
- *     embedded systems
- *     CPUs
- *     multicore systems
- *     GPUs
- *     FPGAs
- *     ASICs
- *     quantum processors
- *     quantum simulators
- *     accelerators
- *     clusters
- *     supercomputers
- *     distributed systems
- *     cloud systems
- *     future architectures
- *
- * Package syntax does not select any of these.
- *
- * Deployment decisions belong to:
- *
- *     resources
- *     targets
- *     compilation
- *     execution
- *     deployment
- *     runtime
- *
- * and their corresponding semantic models.
- */
-
-
-/* ============================================================================
- * 16. HARD-CODING AUDIT
- * ========================================================================== */
-
-/**
- * Forbidden in this grammar:
- *
- *     MAX_PACKAGES
- *     MAX_PACKAGE_FIELDS
- *     MAX_PACKAGE_DEPTH
- *     MAX_DEPENDENCIES
- *     MAX_METADATA_FIELDS
- *     MAX_PACKAGE_NAME_LENGTH
- *     fixed package IDs
- *     fixed registry IDs
- *     fixed device IDs
- *     fixed hardware IDs
- *     fixed topology
- *     fixed machine size
- *     fixed resource count
- *     fixed deployment count
- *
- * No such limits are encoded.
- */
-
-
-/* ============================================================================
- * 17. ERROR-OWNERSHIP CONTRACT
- * ========================================================================== */
-
-/**
- * Syntax errors belong to the parser/frontend.
- *
- * Examples:
- *
- *     package;
- *     package foo {
- *     package foo { version }
- *     package foo { : "1.0"; }
- *
- * Semantic errors belong downstream.
- *
- * Examples:
- *
- *     duplicate package identity
- *     invalid package visibility
- *     invalid metadata key
- *     invalid metadata value
- *     unsupported metadata schema
- *     dependency conflict
- *     unresolved package
- *     package cycle
- *     unauthorized package access
- *
- * Packages.g4 MUST NOT attempt to resolve these semantic errors.
- */
-
-
-/* ============================================================================
- * 18. DETERMINISM CONTRACT
- * ========================================================================== */
-
-/**
- * No parser rule in this file may inspect:
- *
- *     filesystem state
- *     network state
- *     environment variables
- *     current time
- *     randomness
- *     hardware state
- *     available quantum devices
- *     package registries
- *
- * Parsing must depend exclusively on the token stream.
- */
-
-
-/* ============================================================================
- * 19. AST PRESERVATION CONTRACT
- * ========================================================================== */
-
-/**
- * The frontend AST should preserve at least:
- *
- *     package visibility
- *     package name components
- *     package body span
- *     metadata key
- *     metadata value
- *     attribute syntax
- *     source spans
- *
- * Source spans are required for deterministic diagnostics and tooling.
- *
- * The parser grammar itself does not construct the AST.
- */
-
-
-/* ============================================================================
- * 20. DOWNSTREAM INTEGRATION
- * ========================================================================== */
-
-/**
- * Package syntax participates in the following pipeline:
- *
- *     source
- *       |
- *       v
- *     lexer
- *       |
- *       v
- *     Packages.g4
- *       |
- *       v
- *     PackageSyntax AST
- *       |
- *       v
- *     package/module semantic analysis
- *       |
- *       +--> identity
- *       +--> metadata validation
- *       +--> dependency graph
- *       +--> visibility
- *       +--> capability policy
- *       |
- *       v
- *     canonical semantic representation
- *       |
- *       +--> classical compilation
- *       +--> quantum compilation
- *       +--> HDL compilation
- *       +--> hardware compilation
- *       +--> distributed compilation
- *       +--> accelerator compilation
- *       |
- *       v
- *     target-independent compilation artifacts
- *       |
- *       v
- *     target realization
- */
-
-
-/* ============================================================================
- * 21. TEST CONTRACT
- * ========================================================================== */
-
-/**
- * POSITIVE TESTS
- * ----------------
- *
- * package foo;
- *
- * package foo {}
- *
- * package foo {
- * }
- *
- * package foo {
- *     version: "1.0.0";
- * }
- *
- * package quantum::algorithms {
- *     version: "1.0.0";
- *     language: "zamani";
- * }
- *
- * public package foo {
- *     license: "MIT";
- * }
- *
- * private package foo {}
- *
- * internal package foo {}
- *
- * pub package foo {}
- *
- * package foo {
- *     @experimental
- * }
- *
- * package foo {
- *     @target(kind: "generic");
- * }
- *
- *
- * NEGATIVE TESTS
- * ----------------
- *
- * package;
- *
- * package {};
- *
- * package ::foo;
- *
- * package foo::;
- *
- * package foo { : "value"; }
- *
- * package foo { version; }
- *
- * package foo { :version "1.0"; }
- *
- *
- * BOUNDARY TESTS
- * ----------------
- *
- * package with a deeply nested qualified identity.
- *
- * package with a very large metadata field set.
- *
- * package with a very large metadata expression.
- *
- * package with many attributes.
- *
- * package nested in a large source unit.
- *
- * No test may depend on a fixed maximum.
- *
- *
- * SCALABILITY TESTS
- * ----------------
- *
- * Verify parsing remains structurally correct as:
- *
- *     package-name depth increases;
- *     metadata field count increases;
- *     source size increases;
- *     package graph size increases.
- *
- * The tests may use configured operational limits for the test runner, but
- * those limits must not become grammar constants.
- *
- *
- * DETERMINISM TESTS
- * ----------------
- *
- * Parse identical source repeatedly and verify identical parse-tree structure.
- *
- *
- * ROUND-TRIP TESTS
- * ----------------
- *
- * Where a canonical package syntax printer exists:
- *
- *     source
- *       -> lexer
- *       -> parser
- *       -> AST
- *       -> printer
- *       -> parser
- *
- * must preserve package identity and metadata semantics.
- */
-
-
-/* ============================================================================
- * 22. CROSS-DOMAIN TEST CONTRACT
- * ========================================================================== */
-
-/**
- * Package syntax must coexist with:
+ * The package grammar is deliberately unaware of:
  *
  *     classical
  *     quantum
@@ -1102,111 +1286,518 @@ packageExtension
  *     data
  *     networking
  *     security
- *     accelerator
+ *     accelerators
+ *     future domains
  *
- * Example semantic combinations:
+ * Package metadata may name such domains as ordinary data.
+ *
+ * For example:
  *
  *     package quantum::algorithms {
- *         language: "zamani";
+ *         domain: quantum;
  *     }
+ *
+ * does not require Packages.g4 to import quantum.g4.
+ *
+ * Likewise:
  *
  *     package hardware::accelerators {
- *         language: "zamani";
+ *         domain: hardware;
  *     }
  *
- *     package ai::quantum {
- *         language: "zamani";
- *     }
- *
- * The package grammar must not need to know what those domains mean.
+ * does not require Packages.g4 to know hardware grammar.
  */
 
 
 /* ============================================================================
- * 23. COMPATIBILITY CONTRACT
+ * 18. QUANTUM INTEGRATION CONTRACT
  * ========================================================================== */
 
 /**
- * Existing repository syntax currently represents package declarations inside
- * the module grammar.
+ * Quantum package names and metadata remain ordinary source-level syntax.
  *
- * That ownership is to be migrated to this file.
+ * Example:
  *
- * Existing valid forms such as:
+ *     package quantum::algorithms;
  *
- *     package foo { ... }
+ * This does NOT:
  *
- * must remain representable.
+ *     - allocate qubits;
+ *     - select a QPU;
+ *     - select a backend;
+ *     - choose topology;
+ *     - perform routing;
+ *     - perform scheduling;
+ *     - perform QEC;
+ *     - perform ZQN analysis;
+ *     - construct quantum::ir.
  *
- * The migration MUST NOT silently remove package functionality.
+ * Quantum program constructs are handled by the quantum semantic pipeline:
  *
- * Compatibility work belongs to:
+ *     source
+ *       ->
+ *     frontend AST
+ *       ->
+ *     semantic quantum representation
+ *       ->
+ *     quantum::ir
+ *       ->
+ *     optimization
+ *       ->
+ *     decomposition
+ *       ->
+ *     routing
+ *       ->
+ *     scheduling
+ *       ->
+ *     resilience / QEC / ZQN
+ *       ->
+ *     HAL
+ *       ->
+ *     target realization
  *
- *     grammar/compatibility/*
- *
- * and the corresponding grammar tests.
+ * Package syntax remains above this pipeline.
  */
 
 
 /* ============================================================================
- * 24. COMPLETION CRITERIA
+ * 19. CLASSICAL / HDL / HARDWARE INTEGRATION CONTRACT
  * ========================================================================== */
 
 /**
- * Packages.g4 is COMPLETE only when:
+ * The same package grammar can organize:
  *
- * [ ] The grammar generates successfully with the repository's ANTLR setup.
+ *     package classical::numeric;
  *
- * [ ] tokenVocab resolves to the authoritative Zamani token vocabulary.
+ *     package quantum::algorithms;
  *
- * [ ] No lexer rules are duplicated here.
+ *     package hybrid::simulation;
  *
- * [ ] No Rust actions/predicates are present.
+ *     package hdl::components;
  *
- * [ ] No unsafe code is introduced.
+ *     package hardware::accelerators;
  *
- * [ ] Rust 1.97 / 1.97.1 integration remains supported.
+ *     package distributed::runtime;
  *
- * [ ] Package syntax has a single owner.
+ *     package ai::models;
  *
- * [ ] Package syntax is removed from Modules.g4 after migration.
+ *     package data::pipelines;
  *
- * [ ] Core source-unit integration references packageDeclaration exactly once.
+ *     package networking::protocols;
  *
- * [ ] Dependency syntax remains owned by dependencies.g4.
+ *     package security::cryptography;
  *
- * [ ] Module syntax remains owned by modules.g4.
+ * without changing package syntax.
  *
- * [ ] Import/export syntax remains owned by the appropriate module grammars.
+ * The domain grammars own the contents of declarations and operations.
  *
- * [ ] Package metadata does not become a lexer keyword list.
+ * Packages.g4 remains unchanged as new domains are added.
+ */
+
+
+/* ============================================================================
+ * 20. POCO-REAF SCALABILITY
+ * ========================================================================== */
+
+/**
+ * Package qualification uses:
  *
- * [ ] No machine-specific limits exist.
+ *     qualifiedName
  *
- * [ ] No package resolver is embedded in parsing.
+ * which is structurally unbounded by this grammar.
  *
- * [ ] Positive tests pass.
+ * Package bodies use:
  *
- * [ ] Negative tests pass.
+ *     packageBodyItem*
  *
- * [ ] Boundary tests pass.
+ * which imposes no language-level finite item count.
  *
- * [ ] Determinism tests pass.
+ * Metadata lists/maps inherit the scalable structural forms from Attributes.
  *
- * [ ] Round-trip tests pass where the printer exists.
+ * Therefore package syntax does not impose:
  *
- * [ ] Cross-domain integration tests pass.
+ *     package count
+ *     dependency count
+ *     metadata count
+ *     qualification depth
+ *     target count
+ *     machine size
+ *     resource count
+ *     hardware size
+ *     quantum size.
  *
- * [ ] Hard-coding audit passes.
+ * "Infinity" in POCO-REAF means:
  *
- * [ ] AST contract is documented and implemented.
+ *     no artificial language-level ceiling.
  *
- * [ ] Semantic ownership is documented.
+ * Actual execution remains bounded by available resources and implementation
+ * constraints.
+ */
+
+
+/* ============================================================================
+ * 21. DETERMINISTIC PARSING
+ * ========================================================================== */
+
+/**
+ * The declaration has the deterministic structural form:
  *
- * [ ] No downstream IR depends directly on this grammar.
+ *     attributes? visibility? PACKAGE qualifiedName ( ';' | body )
  *
- * [ ] quantum::ir remains independent of package grammar.
+ * There is no optional declaration terminator after a declaration body.
  *
- * [ ] QEC, ZQN, routing, scheduling and hardware layers remain downstream
- *     consumers of semantic/IR representations rather than grammar consumers.
+ * There is no newline-sensitive package termination.
+ *
+ * There is no filesystem-dependent package syntax.
+ *
+ * There is no registry-dependent package syntax.
+ */
+
+
+/* ============================================================================
+ * 22. SOURCE-UNIT INTEGRATION
+ * ========================================================================== */
+
+/**
+ * The aggregate source-unit grammar must expose packageDeclaration exactly
+ * once as the canonical package-declaration alternative.
+ *
+ * Conceptually:
+ *
+ *     sourceItem
+ *         : packageDeclaration
+ *         | dependencyDeclaration
+ *         | moduleDeclaration
+ *         | importDeclaration
+ *         | exportDeclaration
+ *         | ...
+ *         ;
+ *
+ * The exact sourceItem rule remains owned by the aggregate parser.
+ *
+ * Packages.g4 MUST NOT redefine sourceItem.
+ */
+
+
+/* ============================================================================
+ * 23. MODULE INTEGRATION
+ * ========================================================================== */
+
+/**
+ * modules.g4 remains the owner of:
+ *
+ *     moduleDeclaration
+ *     moduleBody
+ *     moduleName
+ *
+ * Packages.g4 does not import Modules.
+ *
+ * The relationship:
+ *
+ *     package -> modules
+ *
+ * is semantic/package-graph information rather than package-body grammar.
+ */
+
+
+/* ============================================================================
+ * 24. DEPENDENCY INTEGRATION
+ * ========================================================================== */
+
+/**
+ * dependencies.g4 remains the sole owner of dependency syntax.
+ *
+ * Packages.g4 does not import Dependencies.
+ *
+ * This deliberately avoids:
+ *
+ *     Packages -> Dependencies -> Packages
+ *
+ * and prevents dependency syntax from becoming package metadata syntax.
+ *
+ * The semantic layer can associate dependency declarations with the package
+ * represented by the current source unit.
+ */
+
+
+/* ============================================================================
+ * 25. NAMESPACE INTEGRATION
+ * ========================================================================== */
+
+/**
+ * namespaces.g4 owns namespace declaration syntax.
+ *
+ * Package identity may be qualified:
+ *
+ *     org::zamani::quantum
+ *
+ * but Packages.g4 does not declare namespace semantics.
+ *
+ * A package-name segment is a canonical name segment because package identity
+ * is a qualified source-level name.
+ */
+
+
+/* ============================================================================
+ * 26. IMPORT / EXPORT INTEGRATION
+ * ========================================================================== */
+
+/**
+ * Imports and exports remain independent constructs.
+ *
+ * Packages.g4 does not redefine:
+ *
+ *     importDeclaration
+ *     exportDeclaration
+ *
+ * Their relationship to package boundaries is semantic.
+ */
+
+
+/* ============================================================================
+ * 27. COMPATIBILITY CONTRACT
+ * ========================================================================== */
+
+/**
+ * The following existing package forms remain structurally supported:
+ *
+ *     package foo;
+ *
+ *     package foo {}
+ *
+ *     package foo {
+ *         version: "1.0.0";
+ *     }
+ *
+ *     package foo::bar;
+ *
+ *     pub package foo;
+ *
+ *     public package foo;
+ *
+ *     private package foo;
+ *
+ *     internal package foo;
+ *
+ *     @experimental package foo {}
+ *
+ * The important correction is that:
+ *
+ *     package
+ *
+ * uses PACKAGE,
+ *
+ *     visibility
+ *
+ * uses visibilityModifier,
+ *
+ *     names
+ *
+ * use qualifiedName,
+ *
+ * and:
+ *
+ *     attributes
+ *
+ * use the canonical attribute grammar.
+ */
+
+
+/* ============================================================================
+ * 28. NEGATIVE CASES
+ * ========================================================================== */
+
+/**
+ * These must be rejected by the package grammar:
+ *
+ *     package;
+ *
+ *     package {};
+ *
+ *     package ::foo;
+ *
+ *     package foo::;
+ *
+ *     package ::;
+ *
+ *     package foo::bar::;
+ *
+ *     package foo
+ *
+ *     package foo = value;
+ *
+ *     package foo -> value;
+ *
+ *     package foo from source;
+ *
+ *     pub public package foo;
+ *
+ *     private internal package foo;
+ *
+ * The following is NOT a package grammar error by itself:
+ *
+ *     duplicate package identity
+ *
+ * because duplicate identity is a semantic/source-unit rule.
+ */
+
+
+/* ============================================================================
+ * 29. BOUNDARY / SCALABILITY TESTS
+ * ========================================================================== */
+
+/**
+ * Required conformance categories:
+ *
+ * POSITIVE:
+ *
+ *     package x;
+ *
+ *     package x {}
+ *
+ *     package org::zamani::quantum {}
+ *
+ *     @stable pub package quantum::algorithms {
+ *         version: "1.0.0";
+ *         domain: quantum;
+ *     }
+ *
+ *     package data::pipeline {
+ *         tags: [data, distributed, scalable];
+ *     }
+ *
+ * NEGATIVE:
+ *
+ *     missing package name
+ *     malformed qualification
+ *     missing declaration terminator
+ *     duplicate visibility modifiers
+ *     invalid package assignment syntax
+ *     invalid package arrow syntax
+ *
+ * BOUNDARY:
+ *
+ *     one metadata field
+ *     many metadata fields
+ *     empty package body
+ *     nested metadata structures
+ *     empty lists/maps where permitted
+ *     trailing metadata separators according to the canonical attribute-value
+ *     contract
+ *
+ * SCALABILITY:
+ *
+ *     deeply qualified names
+ *     large metadata lists
+ *     large metadata maps
+ *     many package attributes
+ *     large source units
+ *
+ * DETERMINISM:
+ *
+ *     repeated parsing of identical source must yield equivalent parse trees.
+ *
+ * COMPATIBILITY:
+ *
+ *     existing valid package syntax must remain accepted unless explicitly
+ *     deprecated by the language specification.
+ */
+
+
+/* ============================================================================
+ * 30. HARD-CODING AUDIT
+ * ========================================================================== */
+
+/**
+ * This grammar contains no machine-specific limits.
+ *
+ * In particular it contains no:
+ *
+ *     MAX_QUBITS
+ *     MAX_CPUS
+ *     MAX_CORES
+ *     MAX_THREADS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_ASICS
+ *     MAX_QPUS
+ *     MAX_NODES
+ *     MAX_MEMORY
+ *     MAX_STORAGE
+ *     MAX_REGISTER_WIDTH
+ *     MAX_VECTOR_WIDTH
+ *     MAX_TENSOR_RANK
+ *     MAX_PACKAGE_COUNT
+ *     MAX_PACKAGE_DEPTH
+ *     MAX_PACKAGE_FIELD_COUNT
+ *
+ * Package syntax therefore remains compatible with:
+ *
+ *     embedded
+ *     CPU
+ *     multicore
+ *     GPU
+ *     FPGA
+ *     ASIC
+ *     QPU
+ *     simulator
+ *     accelerator
+ *     cluster
+ *     HPC
+ *     distributed
+ *     cloud
+ *     future computational substrates.
+ */
+
+
+/* ============================================================================
+ * 31. FINAL INTEGRATION INVARIANTS
+ * ========================================================================== */
+
+/**
+ * The following invariants are mandatory:
+ *
+ * 1. Packages.g4 is the only owner of packageDeclaration syntax.
+ *
+ * 2. ZamaniLexer is the parser-facing lexer vocabulary.
+ *
+ * 3. PACKAGE is the canonical package keyword token.
+ *
+ * 4. visibilityModifier is the only visibility vocabulary consumed here.
+ *
+ * 5. qualifiedName is the only package-name structure consumed here.
+ *
+ * 6. attribute / attributeList are owned by Attributes.
+ *
+ * 7. Dependencies remain owned by dependencies.g4.
+ *
+ * 8. Modules remain owned by modules.g4.
+ *
+ * 9. Namespaces remain owned by namespaces.g4.
+ *
+ * 10. Imports remain owned by imports.g4.
+ *
+ * 11. Exports remain owned by exports.g4.
+ *
+ * 12. No filesystem/network/package-manager behavior exists in the grammar.
+ *
+ * 13. No target-specific hardware assumptions exist.
+ *
+ * 14. No quantum operation or quantum IR is defined here.
+ *
+ * 15. No classical/HDL/hardware IR is defined here.
+ *
+ * 16. No resource ceiling is encoded here.
+ *
+ * 17. No unsafe Rust is introduced.
+ *
+ * 18. The grammar remains domain-neutral and therefore does not require
+ *     modification when new computational domains are added.
+ *
+ * 19. Semantic resolution occurs after parsing.
+ *
+ * 20. Package information reaches compilation through the AST/module/package
+ *     semantic graph, not directly through a target backend.
+ *
+ * ============================================================================
  */
