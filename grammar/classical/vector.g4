@@ -6,415 +6,1045 @@
  * File:
  *     grammar/classical/vector.g4
  *
+ * Grammar:
+ *     Vector
+ *
  * Status:
- *     Production-ready classical vector-domain parser grammar.
+ *     CANONICAL CLASSICAL VECTOR VALUE GRAMMAR
  *
- * Grammar technology:
- *     ANTLR4 parser grammar
+ * Purpose:
+ *     Define target-independent source syntax for classical vector values,
+ *     vector literals, vector comprehensions, vector indexing/slicing
+ *     integration boundaries, and vector-domain classification.
  *
- * Rust integration baseline:
- *     Rust 1.97 / Rust 1.97.1
- *     Rust edition 2021
+ * ============================================================================
+ * IMPLEMENTATION BASELINE
+ * ============================================================================
+ *
+ * Rust:
+ *     1.97 / 1.97.1
+ *
+ * Edition:
+ *     2021
  *
  * Safety:
- *     - No embedded Rust actions.
- *     - No semantic predicates.
- *     - No target-specific code.
- *     - No filesystem access.
- *     - No network access.
- *     - No evaluation.
- *     - No unsafe Rust.
+ *     Safe Rust only.
+ *
+ * This grammar contains:
+ *
+ *     - no embedded Rust;
+ *     - no semantic predicates;
+ *     - no target-language actions;
+ *     - no filesystem access;
+ *     - no network access;
+ *     - no hardware discovery;
+ *     - no runtime execution;
+ *     - no unsafe Rust requirement.
  *
  * ============================================================================
- * PURPOSE
+ * ARCHITECTURAL ROLE
  * ============================================================================
  *
- * This file owns SOURCE-LEVEL CLASSICAL VECTOR VALUE SYNTAX.
+ * This file owns SOURCE-LEVEL VECTOR VALUE SYNTAX.
  *
- * It defines the syntax required to express vector values and vector
- * operations without imposing any physical machine representation.
+ * It does NOT own:
  *
- * A vector is a semantic sequence of values whose:
- *
- *     - element type;
- *     - length;
- *     - shape;
- *     - storage representation;
- *     - execution strategy;
- *     - placement;
- *     - vectorization;
- *     - accelerator realization;
- *
- * are determined by downstream semantic and compilation layers.
- *
- * This grammar therefore supports vectors ranging from the smallest useful
- * source-level vector to arbitrarily large vectors subject only to resources
- * available to later compiler/runtime stages.
- *
- * ============================================================================
- * ARCHITECTURAL POSITION
- * ============================================================================
- *
- *     Zamani source
- *          |
- *          v
- *     ZamaniLexer
- *          |
- *          v
- *     parser
- *          |
- *          +----------------------------+
- *          |                            |
- *          v                            v
- *     Expressions                    Scalar
- *          |                            |
- *          +-------------+--------------+
- *                        |
- *                        v
- *                   Vector.g4
- *                        |
- *                        v
- *                   Frontend AST
- *                        |
- *                        v
- *                 Semantic analysis
- *                        |
- *          +-------------+--------------+
- *          |                            |
- *          v                            v
- *     Classical semantic          Resource/effect
- *        representation             metadata
- *          |
- *          v
- *      Classical IR
- *          |
- *          v
- *     optimization
- *          |
- *          v
- * scheduling / lowering / placement
- *          |
- *          v
- *     target realization
- *
- * This file NEVER directly creates or references:
- *
- *     - classical IR;
- *     - quantum::ir;
- *     - QEC;
- *     - ZQN;
- *     - scheduling state;
- *     - routing state;
- *     - hardware topology;
- *     - runtime state;
- *     - backend state.
- *
- * ============================================================================
- * OWNERSHIP
- * ============================================================================
- *
- * THIS FILE OWNS:
- *
- *     - vector value entry point;
- *     - vector literal syntax;
- *     - vector element-list syntax;
- *     - vector construction syntax;
- *     - vector repetition syntax;
- *     - vector concatenation syntax where represented explicitly;
- *     - vector range/value construction syntax;
- *     - vector reference classification;
- *     - vector-domain parser integration points;
- *     - vector-specific syntactic wrappers.
- *
- * THIS FILE DOES NOT OWN:
- *
- *     - lexical token definitions;
- *     - identifier spelling;
- *     - numeric literal spelling;
+ *     - lexical tokens;
+ *     - identifiers;
  *     - general expression precedence;
- *     - arithmetic operators;
- *     - indexing semantics;
- *     - member-access semantics;
- *     - generic type syntax;
- *     - vector TYPE syntax;
- *     - matrix syntax;
- *     - tensor syntax;
- *     - scalar type definitions;
+ *     - general calls;
+ *     - general indexing semantics;
+ *     - type syntax;
+ *     - declarations;
+ *     - statements;
  *     - vector algorithms;
  *     - vector storage;
  *     - memory allocation;
- *     - SIMD lowering;
- *     - GPU lowering;
- *     - FPGA lowering;
+ *     - SIMD realization;
+ *     - GPU realization;
+ *     - FPGA realization;
  *     - accelerator selection;
+ *     - distributed placement;
  *     - scheduling;
- *     - placement;
+ *     - routing;
+ *     - optimization;
  *     - classical IR;
  *     - quantum::ir;
  *     - QEC;
  *     - ZQN;
+ *     - HAL;
  *     - runtime execution.
  *
  * ============================================================================
- * INTEGRATION OWNERSHIP
+ * AUTHORITY AND INTEGRATION
  * ============================================================================
  *
- * The authoritative owners are:
+ * Lexical authority:
  *
  *     grammar/antlr/ZamaniLexer.g4
- *         lexical tokens
+ *
+ * Canonical lexical composition:
+ *
+ *     grammar/lexer/tokens.g4
+ *
+ * General expression authority:
  *
  *     grammar/expressions/expressions.g4
- *         general expression syntax and precedence
+ *
+ * Classical scalar value authority:
  *
  *     grammar/classical/scalar.g4
- *         scalar literal/value classification
  *
- *     grammar/types/classical-types.g4
- *         classical VECTOR TYPE syntax
+ * Classical type authority:
+ *
+ *     grammar/types/classical.g4
+ *
+ * Classical domain composition:
  *
  *     grammar/classical/classical.g4
- *         classical-domain composition
  *
- *     frontend AST
- *         semantic source representation
+ * Universal parser composition:
  *
+ *     grammar/antlr/ZamaniParser.g4
+ *
+ * Universal ANTLR root:
+ *
+ *     grammar/Zamani.g4
+ *
+ * Frontend semantic representation:
+ *
+ *     domain-neutral frontend AST
+ *
+ * Canonical quantum semantic boundary:
+ *
+ *     quantum::ir
+ *
+ * Vector semantics therefore follow:
+ *
+ *     source
+ *       |
+ *       v
+ *     ZamaniLexer
+ *       |
+ *       v
+ *     ZamaniParser
+ *       |
+ *       v
+ *     Vector
+ *       |
+ *       v
+ *     domain-neutral AST
+ *       |
+ *       v
  *     semantic analysis
- *         type/shape/name/effect/resource validation
+ *       |
+ *       +----------------------+----------------------+
+ *       |                      |                      |
+ *       v                      v                      v
+ * classical semantics   resource/capability     cross-domain semantics
+ *       |                      |                      |
+ *       +----------------------+----------------------+
+ *                              |
+ *                              v
+ *                       canonical semantic model
+ *                              |
+ *                              v
+ *                         Classical IR
+ *                              |
+ *                              v
+ *                    optimization / lowering
+ *                              |
+ *                              v
+ *                  scheduling / placement / runtime
+ *                              |
+ *                              v
+ *                       target realization
  *
- *     classical IR
- *         canonical classical semantic representation
+ * ============================================================================
+ * CRITICAL DESIGN RULE
+ * ============================================================================
  *
- *     resources
- *         actual resource constraints/capabilities
+ * Vector syntax describes PORTABLE SEMANTIC DATA.
  *
- *     optimization
- *         implementation improvement
+ * It must never become a description of a particular vector processor.
  *
- *     scheduling
- *         ordering/timing/resource scheduling
+ * Therefore this grammar contains no universal limits for:
  *
- *     hardware
- *         target capabilities and realization
+ *     vector length
+ *     element count
+ *     SIMD lanes
+ *     vector register width
+ *     GPU lanes
+ *     GPU threads
+ *     FPGA pipeline width
+ *     accelerator width
+ *     memory capacity
+ *     register count
+ *     node count
+ *     device count
  *
- *     runtime
- *         execution
+ * A vector of semantic length N is not equivalent to:
+ *
+ *     N registers
+ *     N SIMD lanes
+ *     N GPU threads
+ *     N devices
+ *
+ * Those are downstream implementation decisions.
  *
  * ============================================================================
  * POCO-REAF CONTRACT
  * ============================================================================
  *
- * Vector syntax describes VECTOR SEMANTICS, not vector hardware.
+ * Zamani source describes:
  *
- * The following are deliberately NOT encoded:
+ *     WHAT the vector means.
  *
- *     MAX_VECTOR_LENGTH
- *     MAX_ELEMENTS
- *     MAX_DIMENSIONS
- *     MAX_LANES
- *     MAX_SIMD_WIDTH
- *     MAX_GPU_THREADS
- *     MAX_GPU_LANES
- *     MAX_ACCELERATORS
- *     MAX_MEMORY
- *     MAX_REGISTERS
- *     MAX_NODES
+ * It does not prescribe:
  *
- * A source-level vector may therefore be realized as:
+ *     WHERE it is stored;
+ *     HOW it is partitioned;
+ *     WHICH processor evaluates it;
+ *     WHICH accelerator evaluates it;
+ *     WHICH device owns it;
+ *     WHICH physical memory bank stores it;
+ *     WHICH SIMD width realizes it.
  *
- *     scalar sequence
- *     contiguous memory
- *     strided storage
- *     SIMD/vector registers
- *     GPU data
- *     FPGA pipeline
- *     distributed data
- *     accelerator memory
- *     quantum-classical data
- *     another future representation
+ * Consequently the same source may be lowered to:
  *
- * without changing the vector's source semantics.
+ *     scalar iteration
+ *     contiguous storage
+ *     segmented storage
+ *     SIMD/vector instructions
+ *     GPU execution
+ *     FPGA pipelines
+ *     accelerator execution
+ *     streaming execution
+ *     distributed execution
+ *     future execution models
+ *
+ * subject to semantic correctness and available resources.
  *
  * ============================================================================
- * SCALABILITY CONTRACT
+ * OPEN-WORLD VECTOR MODEL
  * ============================================================================
  *
- * No finite language-level vector length is encoded.
+ * Vector element types and vector operations are intentionally OPEN WORLD.
  *
- * These forms are all structurally legal:
+ * The grammar must not contain an exhaustive list such as:
+ *
+ *     vectorAdd
+ *     vectorSub
+ *     vectorMul
+ *     vectorFFT
+ *     vectorSVD
+ *     vectorNormalize
+ *     ...
+ *
+ * Those are operations/libraries/semantic capabilities rather than necessarily
+ * new language syntax.
+ *
+ * Likewise this grammar does not reserve:
+ *
+ *     vector
+ *     repeat
+ *     concat
+ *     generate
+ *
+ * as lexer keywords.
+ *
+ * A call such as:
+ *
+ *     vector(x, n)
+ *
+ * remains ordinary Zamani expression syntax and is resolved semantically.
+ *
+ * This prevents library evolution from requiring lexer changes.
+ *
+ * ============================================================================
+ * VECTOR VALUE SYNTAX
+ * ============================================================================
+ *
+ * This grammar owns syntax that is genuinely vector-shaped:
+ *
+ *     [a, b, c]
+ *
+ *     [x * x for x in values]
+ *
+ *     [x * x for x in values if x > 0]
+ *
+ * It does not claim ownership of generic function-call syntax.
+ *
+ * Therefore:
+ *
+ *     vector(x, n)
+ *
+ * is an ordinary expression call.
+ *
+ * Semantic analysis may recognize it as a vector constructor, but this grammar
+ * does not manufacture a second call syntax merely for that purpose.
+ *
+ * ============================================================================
+ * EMPTY VECTORS
+ * ============================================================================
+ *
+ * The following is valid syntax:
  *
  *     []
  *
- *     [x]
+ * Its semantic validity is determined downstream.
  *
- *     [x, y]
+ * An empty vector does not by itself determine its element type.
  *
- *     [x, y, z, ...]
+ * Semantic analysis may obtain that type from:
  *
- *     [expression for ...]
- *
- *     vector(value, size)
- *
- *     vector(value, symbolic_size)
- *
- * The practical maximum is determined downstream by explicit resource,
- * compiler, deployment, or runtime policies.
- *
- * A resource limitation MUST NOT be represented by a grammar maximum.
+ *     contextual typing;
+ *     explicit type annotation;
+ *     generic inference;
+ *     expected type;
+ *     construction context;
+ *     later constraints.
  *
  * ============================================================================
- * SEMANTIC BOUNDARY
+ * TRAILING COMMA
  * ============================================================================
  *
- * The parser establishes syntax only.
+ * Vector literals permit:
  *
- * Semantic analysis determines:
+ *     [a,]
+ *     [a, b,]
  *
- *     - whether all elements have compatible types;
- *     - whether the vector is homogeneous;
- *     - whether implicit conversions are legal;
- *     - whether its length is statically known;
- *     - whether its length is dynamic;
- *     - whether a symbolic dimension is valid;
- *     - whether repetition is valid;
- *     - whether an element expression is pure;
- *     - whether evaluation order matters;
- *     - whether the vector is mutable;
- *     - whether ownership/borrowing permits its use;
- *     - whether the vector can be lowered to classical IR;
- *     - whether a target can realize the vector;
- *     - whether available resources satisfy execution requirements.
+ * in addition to:
  *
- * This grammar does none of those things.
+ *     [a]
+ *     [a, b]
+ *
+ * This is a syntax convenience only.
+ *
+ * It does not change vector semantics.
+ *
+ * ============================================================================
+ * VECTOR COMPREHENSIONS
+ * ============================================================================
+ *
+ * Vector comprehensions are source-level constructs:
+ *
+ *     [expression for identifier in expression]
+ *
+ * and:
+ *
+ *     [expression for identifier in expression if expression]
+ *
+ * They do NOT imply a particular execution model.
+ *
+ * They may later be lowered to:
+ *
+ *     scalar iteration;
+ *     parallel iteration;
+ *     SIMD;
+ *     GPU execution;
+ *     accelerator execution;
+ *     distributed execution;
+ *     streaming;
+ *     another implementation.
+ *
+ * ============================================================================
+ * COMPREHENSION BINDING
+ * ============================================================================
+ *
+ * The binding variable is parsed using the canonical identifier rule supplied
+ * by Expressions.
+ *
+ * This file deliberately DOES NOT redeclare:
+ *
+ *     identifier
+ *
+ * because doing so would create a second identifier authority.
+ *
+ * ============================================================================
+ * COMPREHENSION SOURCE
+ * ============================================================================
+ *
+ * The source after `in` is an ordinary expression.
+ *
+ * Therefore it may denote:
+ *
+ *     vector
+ *     range
+ *     collection
+ *     stream
+ *     iterator
+ *     lazy sequence
+ *     distributed sequence
+ *     device-resident sequence
+ *     user-defined iterable
+ *     future sequence abstraction
+ *
+ * Semantic analysis determines whether the expression is iterable and what
+ * iteration semantics apply.
+ *
+ * ============================================================================
+ * FILTER SEMANTICS
+ * ============================================================================
+ *
+ * The optional `if` expression is ordinary expression syntax.
+ *
+ * The parser does not decide whether filtering is:
+ *
+ *     eager;
+ *     lazy;
+ *     vectorized;
+ *     parallel;
+ *     distributed;
+ *     fused;
+ *     streamed.
+ *
+ * Those are downstream decisions.
+ *
+ * ============================================================================
+ * RANGE / SLICE INTEGRATION
+ * ============================================================================
+ *
+ * The general expression grammar already owns range operators:
+ *
+ *     DOT_DOT
+ *     DOT_DOT_EQ
+ *
+ * Vector slicing therefore uses a vector-domain wrapper around range-capable
+ * selectors without redefining the range precedence hierarchy.
+ *
+ * Supported vector slice forms include:
+ *
+ *     v[start..end]
+ *     v[start..=end]
+ *     v[..end]
+ *     v[start..]
+ *     v[..]
+ *
+ * Slice semantics are NOT determined here.
+ *
+ * ============================================================================
+ * MULTI-DIMENSIONAL INDEXING
+ * ============================================================================
+ *
+ * This file does not create a separate multidimensional indexing language.
+ *
+ * A vector-domain index selector may contain one or more expressions:
+ *
+ *     v[i]
+ *     v[i, j]
+ *     v[i, j, k]
+ *
+ * The semantic layer determines whether the referenced value is:
+ *
+ *     vector;
+ *     matrix;
+ *     tensor;
+ *     multidimensional collection;
+ *     user-defined indexed value.
+ *
+ * No rank limit is imposed.
  *
  * ============================================================================
  * TYPE BOUNDARY
  * ============================================================================
  *
- * Vector VALUE syntax is separate from vector TYPE syntax.
+ * Vector VALUE syntax is distinct from vector TYPE syntax.
  *
- * Vector type syntax belongs to:
+ * Vector type syntax remains owned by:
  *
- *     grammar/types/classical-types.g4
+ *     grammar/types/classical.g4
  *
- * Examples of type syntax:
+ * Examples:
  *
  *     Vector<T>
  *     Vector<T, N>
+ *     Vector<T, shape>
  *
- * Examples of value syntax owned here:
+ * are type-level constructs.
+ *
+ * Examples:
  *
  *     [a, b, c]
- *     vector(a, n)
- *     repeat(x, n)
  *
- * The parser must never infer a vector type merely from this grammar.
+ *     [f(x) for x in values]
+ *
+ * are value-level constructs.
+ *
+ * This grammar MUST NOT infer or construct a vector type.
  *
  * ============================================================================
  * EXPRESSION BOUNDARY
  * ============================================================================
  *
- * Vector elements are ordinary Zamani expressions.
+ * Elements and comprehension expressions use the canonical:
  *
- * Therefore this grammar does not redefine:
+ *     expression
  *
- *     +
- *     -
- *     *
- *     /
- *     %
- *     **
- *     ==
- *     !=
- *     <
- *     <=
- *     >
- *     >=
- *     &&
- *     ||
- *     &
- *     |
- *     ^
- *     <<
- *     >>
+ * rule from Expressions.
  *
- * Expression precedence belongs to Expressions.
+ * This grammar therefore does not redefine:
+ *
+ *     arithmetic;
+ *     comparison;
+ *     logical operators;
+ *     bitwise operators;
+ *     calls;
+ *     member access;
+ *     unary operators;
+ *     assignment;
+ *     conditional expressions;
+ *     range precedence.
  *
  * ============================================================================
  * SCALAR INTEGRATION
  * ============================================================================
  *
- * Scalar.g4 is imported as an optional domain-specific classification layer.
+ * Scalar values remain ordinary expressions.
  *
- * Vector elements remain general expressions rather than being restricted to
- * scalar literals. This is important because a vector element may be:
+ * A vector may contain:
  *
- *     scalar value
- *     variable
- *     function result
- *     compile-time value
- *     symbolic value
- *     field/member access
- *     quantum-derived classical value
- *     hardware parameter
- *     future domain-defined value
+ *     integer values;
+ *     floating-point values;
+ *     booleans;
+ *     characters;
+ *     strings;
+ *     user-defined scalar values;
+ *     symbolic values;
+ *     function results;
+ *     compile-time values;
+ *     quantum-derived classical values;
+ *     hardware parameters;
+ *     future domain-defined values.
  *
- * Semantic analysis determines whether a particular vector element type is
- * legal.
+ * Scalar legality is determined by semantic analysis.
  *
- * ============================================================================
- * HARDWARE INDEPENDENCE
- * ============================================================================
- *
- * This grammar MUST NOT encode:
- *
- *     SIMD lane count
- *     CPU vector register width
- *     GPU warp width
- *     GPU block size
- *     FPGA pipeline width
- *     accelerator width
- *     memory alignment
- *     cache line size
- *     device identifier
- *     memory address
- *     topology
- *
- * Alignment, vectorization and layout are downstream implementation decisions
- * unless explicitly expressed as semantic source-level requirements through
- * the resource/capability system.
+ * Scalar.g4 remains the scalar-value classification boundary.
  *
  * ============================================================================
- * SECURITY CONTRACT
+ * CLASSICAL / QUANTUM INTEGRATION
  * ============================================================================
  *
- * This grammar:
+ * A vector may carry classical data produced by quantum computation, for
+ * example:
  *
- *     - performs no evaluation;
- *     - performs no allocation;
- *     - performs no I/O;
- *     - performs no device access;
- *     - performs no network access;
- *     - performs no filesystem access;
- *     - performs no dynamic execution.
+ *     measurement results;
+ *     expectation values;
+ *     probability data;
+ *     parameter sets;
+ *     classical feed-forward values.
+ *
+ * This grammar does not import or depend upon quantum::ir.
+ *
+ * Quantum semantics remain:
+ *
+ *     quantum syntax
+ *         ->
+ *     domain-neutral AST
+ *         ->
+ *     semantic analysis
+ *         ->
+ *     quantum::ir
+ *
+ * The vector grammar only accepts the resulting source-level expressions.
+ *
+ * ============================================================================
+ * CLASSICAL / HDL INTEGRATION
+ * ============================================================================
+ *
+ * Vector syntax may participate in hardware/software co-design through the
+ * shared expression and type systems.
+ *
+ * This file does not define:
+ *
+ *     ports;
+ *     wires;
+ *     buses;
+ *     registers;
+ *     clocks;
+ *     physical widths;
+ *     memory banks;
+ *     placement.
+ *
+ * HDL and hardware grammars remain authoritative for those concepts.
+ *
+ * ============================================================================
+ * RESOURCE / CAPABILITY INTEGRATION
+ * ============================================================================
+ *
+ * Vector size may be a semantic requirement.
+ *
+ * Example:
+ *
+ *     vector(data, n)
+ *
+ * means only that the resulting semantic value contains n elements if the
+ * surrounding semantics define that call as a vector constructor.
+ *
+ * It does NOT mean:
+ *
+ *     allocate n registers;
+ *     allocate n SIMD lanes;
+ *     allocate n GPU threads;
+ *     allocate n devices.
+ *
+ * Resource analysis is downstream.
+ *
+ * ============================================================================
+ * AST CONTRACT
+ * ============================================================================
+ *
+ * This grammar lowers to the existing domain-neutral frontend AST.
+ *
+ * It must not create a Vector-specific Rust AST solely because the grammar is
+ * located in the classical/vector domain.
+ *
+ * Existing generic AST concepts include:
+ *
+ *     Expression::Array
+ *     Expression::Identifier
+ *     Expression::Call
+ *     Expression::Index
+ *     Expression::Range
+ *     Expression::MemberAccess
+ *
+ * and related generic constructs.
+ *
+ * A vector literal may therefore be represented using the existing generic
+ * array/sequence expression representation, with semantic analysis deciding
+ * that it is a vector.
+ *
+ * A vector comprehension requires the frontend's canonical comprehension
+ * representation. If the current AST does not yet expose one, the parser
+ * integration layer must map the construct into the repository's canonical
+ * generic collection/comprehension representation rather than creating a
+ * competing vector-only AST.
+ *
+ * ============================================================================
+ * SEMANTIC CONTRACT
+ * ============================================================================
+ *
+ * Semantic analysis determines:
+ *
+ *     - element type;
+ *     - homogeneity;
+ *     - conversions;
+ *     - vector length;
+ *     - symbolic length;
+ *     - runtime length;
+ *     - shape;
+ *     - mutability;
+ *     - ownership;
+ *     - borrowing;
+ *     - effects;
+ *     - iteration legality;
+ *     - index legality;
+ *     - slice legality;
+ *     - resource requirements;
+ *     - capability requirements;
+ *     - target-independent vector semantics.
+ *
+ * ============================================================================
+ * IR CONTRACT
+ * ============================================================================
+ *
+ * This grammar constructs NO IR.
+ *
+ * After semantic analysis, vector semantics may lower to the repository's
+ * canonical classical/data representation and subsequently to Classical IR.
+ *
+ * There is no vector-specific IR introduced here.
+ *
+ * Quantum-derived values continue through the existing quantum semantic
+ * boundary when their semantics are quantum.
+ *
+ * ============================================================================
+ * COMPILER CONTRACT
+ * ============================================================================
+ *
+ * The compiler may realize the same source-level vector through:
+ *
+ *     scalar execution;
+ *     loops;
+ *     SIMD;
+ *     GPU;
+ *     FPGA;
+ *     accelerator;
+ *     streaming;
+ *     distributed execution;
+ *     memory-resident execution;
+ *     lazy execution;
+ *     future targets.
+ *
+ * Vector.g4 must remain unchanged when a new backend is introduced unless the
+ * new backend introduces genuinely new SOURCE LANGUAGE semantics.
+ *
+ * ============================================================================
+ * RUNTIME CONTRACT
+ * ============================================================================
+ *
+ * Runtime representation is not specified by this grammar.
+ *
+ * Runtime may select representations according to:
+ *
+ *     compiled semantics;
+ *     ownership;
+ *     lifetime;
+ *     memory availability;
+ *     target capability;
+ *     execution policy;
+ *     resource negotiation.
  *
  * ============================================================================
  * DETERMINISM
  * ============================================================================
  *
- * All alternatives are syntactic.
+ * Parsing depends only on:
  *
- * No semantic predicate or target-dependent action is used.
+ *     source token sequence;
+ *     selected grammar/language version.
  *
- * The same source token sequence therefore produces the same parse result
- * independently of:
+ * Parsing does not depend on:
  *
- *     - machine architecture;
- *     - CPU count;
- *     - GPU availability;
- *     - quantum backend;
- *     - runtime environment;
- *     - resource availability.
+ *     hardware;
+ *     runtime state;
+ *     resource availability;
+ *     filesystem state;
+ *     network state;
+ *     wall-clock time;
+ *     randomness;
+ *     backend availability.
+ *
+ * ============================================================================
+ * HARD-CODING AUDIT
+ * ============================================================================
+ *
+ * Forbidden in this grammar:
+ *
+ *     MAX_VECTOR_LENGTH
+ *     MAX_ELEMENTS
+ *     MAX_RANK
+ *     MAX_DIMENSIONS
+ *     MAX_LANES
+ *     MAX_SIMD_WIDTH
+ *     MAX_THREADS
+ *     MAX_CORES
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_ACCELERATORS
+ *     MAX_MEMORY
+ *     MAX_REGISTERS
+ *     fixed physical device identifiers
+ *     fixed hardware addresses
+ *     fixed topology
+ *
+ * No finite vector-size maximum is encoded.
+ *
+ * Structural repetition uses ANTLR repetition constructs:
+ *
+ *     *
+ *     ?
+ *     +
+ *
+ * rather than finite enumeration.
+ *
+ * ============================================================================
+ * COMPATIBILITY
+ * ============================================================================
+ *
+ * Existing canonical tokens are preserved.
+ *
+ * This grammar consumes:
+ *
+ *     ZamaniLexer
+ *
+ * and does not define replacement tokens.
+ *
+ * No new token is required for vector syntax.
+ *
+ * Existing stable token names such as:
+ *
+ *     IDENTIFIER
+ *     LBRACKET
+ *     RBRACKET
+ *     COMMA
+ *     DOT_DOT
+ *     DOT_DOT_EQ
+ *     FOR
+ *     IN
+ *     IF
+ *
+ * remain owned by the canonical lexer.
+ *
+ * If a token spelling changes in the future, the compatibility process must
+ * update the canonical lexical layer rather than creating a local alias here.
+ *
+ * ============================================================================
+ * VALIDATION CONTRACT
+ * ============================================================================
+ *
+ * grammar/validation/ must verify:
+ *
+ *     - this file is parser-only;
+ *     - tokenVocab is ZamaniLexer;
+ *     - no lexer rules occur here;
+ *     - no identifier rule is duplicated;
+ *     - no vector type grammar is duplicated;
+ *     - no expression precedence is duplicated;
+ *     - no fixed vector limit exists;
+ *     - no hardware topology is encoded;
+ *     - no backend-specific syntax is required;
+ *     - comprehension syntax uses canonical FOR/IN/IF tokens;
+ *     - range syntax uses canonical DOT_DOT/DOT_DOT_EQ tokens;
+ *     - the grammar remains deterministic;
+ *     - imported grammar dependencies resolve;
+ *     - all public rules have AST/semantic integration coverage.
+ *
+ * ============================================================================
+ * TEST CONTRACT
+ * ============================================================================
+ *
+ * POSITIVE:
+ *
+ *     []
+ *     [1]
+ *     [1, 2]
+ *     [x, y, z]
+ *     [x + y, f(z)]
+ *     [x,]
+ *     [x, y,]
+ *     [x * x for x in values]
+ *     [x * x for x in values if x > 0]
+ *     v[i]
+ *     v[i, j]
+ *     v[start..end]
+ *     v[start..=end]
+ *     v[..end]
+ *     v[start..]
+ *     v[..]
+ *
+ * VECTOR-CONSTRUCTOR INTEGRATION:
+ *
+ *     vector(x)
+ *     vector(x, n)
+ *     vector(value, symbolic_size)
+ *
+ * These are parsed by the canonical expression-call grammar, not by a
+ * vector-specific call grammar.
+ *
+ * VECTOR OPERATION INTEGRATION:
+ *
+ *     repeat(x, n)
+ *     concat(a, b)
+ *     concat(a, b, c)
+ *     generate(f, n)
+ *
+ * These are likewise ordinary expression calls whose vector meaning is
+ * determined semantically.
+ *
+ * NEGATIVE:
+ *
+ *     [,
+ *     [,]
+ *     [1 2]
+ *     [x for in values]
+ *     [x for x values]
+ *     [x for x in]
+ *     [x for x in values if]
+ *     v[]
+ *     v[1 2]
+ *     v[1..2
+ *     [1, 2
+ *
+ * BOUNDARY:
+ *
+ *     empty vector;
+ *     singleton vector;
+ *     long element sequence;
+ *     deeply nested element expressions;
+ *     symbolic vector size;
+ *     runtime vector size;
+ *     empty slice;
+ *     open-ended slice;
+ *     multi-dimensional index syntax.
+ *
+ * SCALABILITY:
+ *
+ * Verify that the grammar imposes no fixed:
+ *
+ *     element count;
+ *     vector length;
+ *     index rank;
+ *     comprehension source size;
+ *     nesting count;
+ *     machine width;
+ *     SIMD width;
+ *     accelerator count;
+ *     memory capacity.
+ *
+ * CROSS-DOMAIN:
+ *
+ *     vector + scalar;
+ *     vector + classical numerical expression;
+ *     vector + quantum-derived classical expression;
+ *     vector + data expression;
+ *     vector + distributed value;
+ *     vector + accelerator-oriented expression;
+ *     vector + resource/capability expression.
+ *
+ * DETERMINISM:
+ *
+ * Identical source/token streams must produce identical parse structures
+ * regardless of:
+ *
+ *     CPU;
+ *     GPU;
+ *     FPGA;
+ *     QPU;
+ *     memory size;
+ *     resource availability;
+ *     runtime environment.
+ *
+ * ============================================================================
+ * INDEPENDENT COMPLETION CRITERIA
+ * ============================================================================
+ *
+ * This file is independently complete when:
+ *
+ *     [x] The filename remains grammar/classical/vector.g4.
+ *
+ *     [x] The grammar name is Vector.
+ *
+ *     [x] It is parser-only.
+ *
+ *     [x] It consumes ZamaniLexer.
+ *
+ *     [x] It imports only the canonical Expressions parser grammar.
+ *
+ *     [x] It does not duplicate identifier syntax.
+ *
+ *     [x] It does not duplicate expression precedence.
+ *
+ *     [x] It does not duplicate vector type syntax.
+ *
+ *     [x] It does not define vector-specific lexer tokens.
+ *
+ *     [x] Vector literals support arbitrary syntactic element counts.
+ *
+ *     [x] Empty vectors are representable.
+ *
+ *     [x] Trailing commas are supported.
+ *
+ *     [x] Vector comprehensions are supported.
+ *
+ *     [x] Filtered comprehensions are supported.
+ *
+ *     [x] Slice syntax supports closed and open ranges.
+ *
+ *     [x] Multi-dimensional index selectors are representable.
+ *
+ *     [x] Generic vector constructors remain ordinary expressions.
+ *
+ *     [x] Generic vector operations remain ordinary expressions.
+ *
+ *     [x] No hardware limit is encoded.
+ *
+ *     [x] No resource limit is encoded.
+ *
+ *     [x] No target is selected.
+ *
+ *     [x] No IR is created.
+ *
+ *     [x] No quantum IR is duplicated.
+ *
+ *     [x] No QEC/ZQN/HAL implementation is introduced.
+ *
+ *     [x] AST ownership is explicitly downstream.
+ *
+ *     [x] Semantic ownership is explicitly downstream.
+ *
+ *     [x] Compiler/runtime ownership is explicitly downstream.
+ *
+ *     [x] Compatibility ownership is explicitly defined.
+ *
+ *     [x] Positive/negative/boundary/scalability/determinism/cross-domain
+ *         tests are specified.
+ *
+ * ============================================================================
+ * REQUIRED EXTERNAL INTEGRATION
+ * ============================================================================
+ *
+ * This file is independently complete as a vector parser grammar.
+ *
+ * The repository composition must connect it through:
+ *
+ *     grammar/classical/classical.g4
+ *          |
+ *          +--> import Vector
+ *          |
+ *          +--> classical vector-domain dispatch
+ *
+ * and then:
+ *
+ *     grammar/antlr/ZamaniParser.g4
+ *          |
+ *          +--> Classical
+ *
+ * No other file needs to modify the vector grammar to add a newly introduced
+ * backend, device, accelerator, SIMD width, memory size, or hardware topology.
+ *
+ * The semantic/frontend implementation must map:
+ *
+ *     vectorLiteral
+ *     vectorComprehension
+ *     vectorFilteredComprehension
+ *     vectorAccess
+ *     vectorSlice
+ *
+ * into the existing domain-neutral AST representation.
+ *
+ * If a generic AST comprehension node is not yet available, that is an AST
+ * implementation task; it is NOT a reason to create a competing Vector AST.
+ *
+ * ============================================================================
+ * FINAL ARCHITECTURAL INVARIANT
+ * ============================================================================
+ *
+ * This file answers:
+ *
+ *     "What source syntax expresses a classical vector value?"
+ *
+ * It does not answer:
+ *
+ *     "How is that vector stored?"
+ *
+ *     "How many hardware lanes exist?"
+ *
+ *     "Which GPU executes it?"
+ *
+ *     "Which FPGA implements it?"
+ *
+ *     "Which accelerator owns it?"
+ *
+ *     "Which machine executes it?"
+ *
+ * Those decisions belong downstream.
+ *
+ * Therefore:
+ *
+ *     Program Once
+ *          ->
+ *     Compile Once
+ *          ->
+ *     Run Everywhere
+ *          ->
+ *     Run Anywhere
+ *          ->
+ *     Forever
+ *
+ * remains compatible with vector semantics, subject to program correctness,
+ * implementation capabilities, and actual resources available at realization
+ * time.
  *
  * ============================================================================
  */
@@ -428,30 +1058,29 @@ options {
 import Expressions;
 
 
-/* ============================================================================
- * 1. PUBLIC ENTRY POINT
+/*
+ * ============================================================================
+ * 1. PUBLIC VECTOR VALUE ENTRY
  * ============================================================================
  *
- * Stable entry point for vector VALUE syntax.
+ * The public vector entry deliberately recognizes only syntax whose shape
+ * establishes a vector-domain construct.
  *
- * This is intentionally distinct from:
- *
- *     classicalVectorType
- *
- * in ClassicalTypes.g4.
+ * Ordinary identifiers and ordinary function calls are not claimed to be
+ * vectors by the parser. Semantic analysis determines whether a referenced
+ * expression has vector type.
  */
 vector
-    : vectorLiteral
-    | vectorConstructor
-    | vectorReference
+    : vectorComprehension
+    | vectorFilteredComprehension
+    | vectorLiteral
     ;
 
 
-/* ============================================================================
+/*
+ * ============================================================================
  * 2. VECTOR LITERAL
  * ============================================================================
- *
- * Bracketed vector literals provide direct source-level construction.
  *
  * Examples:
  *
@@ -459,29 +1088,25 @@ vector
  *     [x]
  *     [x, y]
  *     [x, y, z]
+ *     [x,]
+ *     [x, y,]
  *
- * There is no fixed element count.
+ * There is no finite element-count limit.
  */
 vectorLiteral
     : LBRACKET vectorElements? RBRACKET
     ;
 
 
-/* ============================================================================
+/*
+ * ============================================================================
  * 3. VECTOR ELEMENTS
  * ============================================================================
  *
- * Elements are general expressions.
+ * Every element is a canonical Zamani expression.
  *
- * This permits:
- *
- *     [1, 2, 3]
- *     [x, y, z]
- *     [a + b, c * d]
- *     [f(x), f(y)]
- *     [quantum_result, classical_result]
- *
- * without coupling the grammar to a particular element type.
+ * Consequently vector elements may themselves contain arbitrary legal
+ * expressions without this grammar duplicating expression precedence.
  */
 vectorElements
     : expression
@@ -490,251 +1115,19 @@ vectorElements
     ;
 
 
-/* ============================================================================
- * 4. VECTOR CONSTRUCTOR
+/*
  * ============================================================================
- *
- * Constructor syntax provides a scalable alternative to explicitly spelling
- * every element.
- *
- * Conceptual forms:
- *
- *     vector(value)
- *     vector(value, length)
- *
- * The identifier `vector` remains ordinary identifier syntax rather than a
- * lexer keyword. Semantic resolution determines whether it denotes the
- * canonical vector constructor, a user-defined abstraction, or another
- * callable.
- *
- * This prevents the grammar from hard-coding a single implementation.
- */
-vectorConstructor
-    : vectorConstructorCall
-    ;
-
-
-vectorConstructorCall
-    : vectorConstructorName
-      LPAREN
-      vectorConstructorArguments?
-      RPAREN
-    ;
-
-
-vectorConstructorName
-    : identifier
-    ;
-
-
-vectorConstructorArguments
-    : expression
-      (COMMA expression)*
-      COMMA?
-    ;
-
-
-/* ============================================================================
- * 5. VECTOR REFERENCE
+ * 4. VECTOR COMPREHENSION
  * ============================================================================
- *
- * A vector reference is syntactically an identifier.
- *
- * Name resolution and type checking determine whether the referenced value is
- * actually a vector.
- *
- * This is deliberately not restricted to a built-in `Vector` name.
- */
-vectorReference
-    : identifier
-    ;
-
-
-/* ============================================================================
- * 6. VECTOR ELEMENT ACCESS
- * ============================================================================
- *
- * Indexing remains owned by the general expression layer.
- *
- * This grammar therefore provides only a stable vector-domain classification
- * wrapper for semantic consumers.
- *
- * Examples:
- *
- *     v[i]
- *     v[i, j]
- *     v[index]
- *
- * The actual indexing syntax is inherited from Expressions.
- */
-vectorAccess
-    : expression
-      LBRACKET
-      expressionList
-      RBRACKET
-    ;
-
-
-/* ============================================================================
- * 7. VECTOR SLICE
- * ============================================================================
- *
- * Slicing is represented using ordinary range expressions.
- *
- * Examples:
- *
- *     v[start..end]
- *     v[start..=end]
- *     v[..end]
- *     v[start..]
- *
- * Range semantics remain owned by the expression subsystem.
- *
- * This rule exists only as a vector-domain integration boundary.
- */
-vectorSlice
-    : expression
-      LBRACKET
-      vectorSliceSelector
-      RBRACKET
-    ;
-
-
-vectorSliceSelector
-    : expression
-    ;
-
-
-/* ============================================================================
- * 8. VECTOR CONSTRUCTION FROM RANGE
- * ============================================================================
- *
- * A range is an expression-level concept.
- *
- * Vector construction from a range remains semantic rather than hardware
- * specific.
- *
- * Examples:
- *
- *     vector(range)
- *     vector(start..end)
- *
- * The grammar accepts the expression and leaves interpretation to semantic
- * analysis.
- */
-vectorFromRange
-    : vectorConstructorName
-      LPAREN
-      expression
-      RPAREN
-    ;
-
-
-/* ============================================================================
- * 9. VECTOR REPETITION
- * ============================================================================
- *
- * Repetition is a semantic construction:
- *
- *     repeat(value, count)
- *
- * Neither `repeat` nor `count` is hardware-specific.
- *
- * There is no maximum count.
- *
- * A count may be:
- *
- *     literal
- *     constant
- *     symbolic value
- *     compile-time expression
- *     runtime expression
- *
- * Semantic analysis decides whether runtime repetition is legal for the
- * particular context.
- */
-vectorRepeat
-    : vectorRepeatName
-      LPAREN
-      expression
-      COMMA
-      expression
-      RPAREN
-    ;
-
-
-vectorRepeatName
-    : identifier
-    ;
-
-
-/* ============================================================================
- * 10. VECTOR CONCATENATION
- * ============================================================================
- *
- * Concatenation is represented as a callable semantic operation rather than
- * introducing a new vector-specific operator.
- *
- * Conceptual form:
- *
- *     concat(a, b, c)
- *
- * The argument count is unbounded by the grammar.
- *
- * Semantic analysis determines:
- *
- *     - vector compatibility;
- *     - resulting element type;
- *     - resulting length;
- *     - ownership;
- *     - evaluation order;
- *     - allocation strategy.
- */
-vectorConcatenation
-    : vectorConcatenationName
-      LPAREN
-      vectorConcatenationArguments
-      RPAREN
-    ;
-
-
-vectorConcatenationName
-    : identifier
-    ;
-
-
-vectorConcatenationArguments
-    : expression
-      COMMA
-      expression
-      (COMMA expression)*
-      COMMA?
-    ;
-
-
-/* ============================================================================
- * 11. VECTOR COMPREHENSION
- * ============================================================================
- *
- * Vector comprehensions are intentionally expressed through the general
- * expression and iteration vocabulary.
- *
- * The syntax is:
- *
- *     [ expression for identifier in expression ]
  *
  * Example:
  *
  *     [x * x for x in values]
  *
- * This does not imply:
+ * The binding identifier is the canonical expression-layer identifier rule.
  *
- *     CPU loop
- *     GPU kernel
- *     SIMD loop
- *     distributed loop
- *
- * The compiler may lower it according to available capabilities.
+ * The source expression after `in` is an ordinary expression and may represent
+ * any semantically iterable value.
  */
 vectorComprehension
     : LBRACKET
@@ -747,18 +1140,14 @@ vectorComprehension
     ;
 
 
-/* ============================================================================
- * 12. FILTERED VECTOR COMPREHENSION
+/*
+ * ============================================================================
+ * 5. FILTERED VECTOR COMPREHENSION
  * ============================================================================
  *
- * Optional filtering:
+ * Example:
  *
- *     [expression for x in values if condition]
- *
- * The condition is an ordinary expression.
- *
- * The semantic layer determines whether the operation can be vectorized,
- * parallelized, fused, streamed, distributed, or otherwise optimized.
+ *     [x * x for x in values if x > 0]
  */
 vectorFilteredComprehension
     : LBRACKET
@@ -773,390 +1162,146 @@ vectorFilteredComprehension
     ;
 
 
-/* ============================================================================
- * 13. VECTOR GENERATION
+/*
+ * ============================================================================
+ * 6. VECTOR ACCESS
  * ============================================================================
  *
- * General generation form:
+ * This is a semantic-domain wrapper around canonical expression syntax.
  *
- *     generate(expression, count)
+ * Examples:
  *
- * The generated values need not correspond to a hardware loop.
+ *     v[i]
+ *     v[i, j]
+ *     v[i, j, k]
+ *
+ * No rank limit is imposed.
  */
-vectorGeneration
-    : vectorGenerationName
-      LPAREN
-      expression
-      COMMA
-      expression
-      RPAREN
+vectorAccess
+    : expression
+      LBRACKET
+      vectorIndexSelectors
+      RBRACKET
     ;
 
 
-vectorGenerationName
+vectorIndexSelectors
+    : expression
+      (COMMA expression)*
+      COMMA?
+    ;
+
+
+/*
+ * ============================================================================
+ * 7. VECTOR SLICE
+ * ============================================================================
+ *
+ * Supported forms:
+ *
+ *     v[start..end]
+ *     v[start..=end]
+ *     v[..end]
+ *     v[start..]
+ *     v[..]
+ *
+ * Slice semantics remain downstream.
+ */
+vectorSlice
+    : expression
+      LBRACKET
+      vectorSliceSelector
+      RBRACKET
+    ;
+
+
+vectorSliceSelector
+    : expression DOT_DOT expression
+    | expression DOT_DOT_EQ expression
+    | DOT_DOT expression
+    | DOT_DOT_EQ expression
+    | expression DOT_DOT
+    | expression DOT_DOT_EQ
+    | DOT_DOT
+    ;
+
+
+/*
+ * ============================================================================
+ * 8. VECTOR INDEX-OR-SLICE DOMAIN EXPRESSION
+ * ============================================================================
+ *
+ * This rule gives semantic consumers one stable vector-domain boundary without
+ * creating a second general expression grammar.
+ */
+vectorIndexedExpression
+    : vectorAccess
+    | vectorSlice
+    ;
+
+
+/*
+ * ============================================================================
+ * 9. VECTOR DOMAIN EXPRESSION
+ * ============================================================================
+ *
+ * A vector-domain expression is either an explicitly vector-shaped source
+ * construct or a vector indexing/slicing construct.
+ *
+ * A plain identifier is intentionally NOT included here.
+ *
+ * Whether:
+ *
+ *     v
+ *
+ * is a vector is determined by name/type resolution in semantic analysis.
+ *
+ * Likewise:
+ *
+ *     vector(x, n)
+ *     repeat(x, n)
+ *     concat(a, b)
+ *     generate(f, n)
+ *
+ * remain ordinary expression calls and are classified semantically.
+ */
+vectorExpression
+    : vector
+    | vectorIndexedExpression
+    ;
+
+
+/*
+ * ============================================================================
+ * 10. VECTOR REFERENCE BOUNDARY
+ * ============================================================================
+ *
+ * A vector reference is not a distinct lexical construct.
+ *
+ * This wrapper exists for domain dispatchers that need a named semantic
+ * boundary while still using the canonical identifier rule.
+ *
+ * It deliberately does not redefine identifier syntax.
+ */
+vectorReference
     : identifier
     ;
 
 
-/* ============================================================================
- * 14. VECTOR DOMAIN EXPRESSION
+/*
+ * ============================================================================
+ * 11. VECTOR VALUE BOUNDARY
  * ============================================================================
  *
- * This is the preferred bridge for semantic consumers that need to recognize
- * a vector-oriented source expression without duplicating the vector grammar.
+ * This rule is intentionally broader than `vectorExpression`.
  *
- * General expressions remain legal because vector-ness is frequently
- * established only after name/type resolution.
+ * It exists for domain composition where a vector value may already be known
+ * semantically through a reference or ordinary expression.
+ *
+ * Syntax remains canonical Zamani expression syntax.
  */
-vectorExpression
-    : vector
-    | vectorAccess
-    | vectorSlice
-    | vectorRepeat
-    | vectorConcatenation
-    | vectorComprehension
-    | vectorFilteredComprehension
-    | vectorGeneration
+vectorValue
+    : vectorExpression
+    | vectorReference
+    | expression
     ;
-
-
-/* ============================================================================
- * 15. IDENTIFIER BRIDGE
- * ============================================================================
- *
- * Identifier spelling is NOT owned here.
- *
- * Expressions.g4 already provides the canonical parser-level identifier rule.
- *
- * This rule deliberately delegates to that imported rule rather than
- * introducing:
- *
- *     IDENT
- *     IDENTIFIER
- *     VECTOR_IDENTIFIER
- *     VECTOR_NAME
- *
- * as new alternatives.
- */
-identifier
-    : IDENTIFIER
-    ;
-
-
-/* ============================================================================
- * 16. VECTOR SEMANTIC CONTRACT
- * ============================================================================
- *
- * This grammar permits vectors whose dimensions are:
- *
- *     known statically;
- *     symbolic;
- *     compile-time determined;
- *     runtime determined;
- *     resource dependent;
- *
- * Examples:
- *
- *     [1, 2, 3]
- *
- *     vector(value, N)
- *
- *     [f(x) for x in data]
- *
- * The grammar imposes no finite value of N.
- *
- * The compiler may later reject a program because:
- *
- *     - a target lacks sufficient resources;
- *     - a required capability is unavailable;
- *     - a resource constraint is violated;
- *     - an implementation policy cannot realize it;
- *
- * Such rejection is NOT a grammar failure.
- *
- * ============================================================================
- * VECTOR / MACHINE SEPARATION
- * ============================================================================
- *
- * The following source concepts remain semantic:
- *
- *     vector length
- *     element type
- *     vector operations
- *     ordering
- *     mathematical meaning
- *
- * The following remain downstream:
- *
- *     SIMD width
- *     register allocation
- *     memory layout
- *     alignment
- *     cache strategy
- *     GPU mapping
- *     accelerator mapping
- *     FPGA pipeline structure
- *     distributed partitioning
- *     scheduling
- *     placement
- *
- * ============================================================================
- * VECTOR / QUANTUM INTEGRATION
- * ============================================================================
- *
- * A vector may contain or represent values derived from quantum computation.
- *
- * Examples may include:
- *
- *     measurement result vectors
- *     probability vectors
- *     expectation-value collections
- *     parameter vectors
- *     classical control vectors
- *
- * This grammar does not import quantum::ir and does not define quantum
- * semantics.
- *
- * Quantum syntax is interpreted by the quantum frontend and lowered to the
- * canonical quantum semantic boundary.
- *
- * ============================================================================
- * VECTOR / HDL INTEGRATION
- * ============================================================================
- *
- * A vector value may participate in HDL/hardware parameterization when the
- * semantic layers permit it.
- *
- * This grammar does not define:
- *
- *     wires
- *     ports
- *     registers
- *     clocks
- *     buses
- *     physical widths
- *
- * Those concepts belong to the HDL/hardware grammar layers.
- *
- * ============================================================================
- * VECTOR / RESOURCE INTEGRATION
- * ============================================================================
- *
- * Vector size must not be interpreted as a hardware allocation by this parser.
- *
- * For example:
- *
- *     vector(x, N)
- *
- * means a vector containing N semantic elements.
- *
- * It does NOT mean:
- *
- *     allocate N registers
- *     allocate N SIMD lanes
- *     allocate N GPU threads
- *     allocate N physical devices
- *
- * Resource analysis determines the actual realization.
- *
- * ============================================================================
- * VECTOR / CLASSICAL IR INTEGRATION
- * ============================================================================
- *
- * This grammar emits parser structure only.
- *
- * The frontend is responsible for translating the parsed structure into the
- * canonical AST.
- *
- * Semantic analysis then determines the vector's:
- *
- *     element type
- *     shape
- *     length
- *     mutability
- *     ownership
- *     effects
- *     resource requirements
- *
- * The resulting semantic object may be lowered to classical IR.
- *
- * No IR node is constructed by this grammar.
- *
- * ============================================================================
- * COMPILER INTEGRATION
- * ============================================================================
- *
- * Downstream compilation may choose among:
- *
- *     scalar lowering
- *     loop lowering
- *     SIMD/vector lowering
- *     GPU lowering
- *     accelerator lowering
- *     FPGA-oriented lowering
- *     distributed lowering
- *     streaming lowering
- *     future target-specific lowering
- *
- * without changing the source grammar.
- *
- * ============================================================================
- * RUNTIME INTEGRATION
- * ============================================================================
- *
- * Runtime vector representation is outside this grammar.
- *
- * Runtime may select:
- *
- *     contiguous representation
- *     segmented representation
- *     lazy representation
- *     streamed representation
- *     distributed representation
- *     device-resident representation
- *
- * according to the compiled program and available resources.
- *
- * ============================================================================
- * HARD-CODING AUDIT
- * ============================================================================
- *
- * This file intentionally contains NO:
- *
- *     MAX_VECTOR_LENGTH
- *     MAX_ELEMENTS
- *     MAX_RANK
- *     MAX_DIMENSIONS
- *     MAX_LANES
- *     MAX_THREADS
- *     MAX_CORES
- *     MAX_GPUS
- *     MAX_ACCELERATORS
- *     MAX_MEMORY
- *     MAX_REGISTER_WIDTH
- *
- * There are no fixed hardware identifiers.
- *
- * There are no fixed machine widths.
- *
- * There are no fixed target names.
- *
- * ============================================================================
- * COMPATIBILITY
- * ============================================================================
- *
- * This grammar introduces vector VALUE syntax without changing vector TYPE
- * ownership.
- *
- * Existing vector type syntax remains owned by:
- *
- *     grammar/types/classical-types.g4
- *
- * Existing general expression syntax remains owned by:
- *
- *     grammar/expressions/expressions.g4
- *
- * Existing scalar syntax remains independently owned by:
- *
- *     grammar/classical/scalar.g4
- *
- * Future vector operations should preferably be added as semantic/library
- * constructs rather than new reserved keywords.
- *
- * ============================================================================
- * TEST CONTRACT
- * ============================================================================
- *
- * Positive tests MUST include:
- *
- *     []
- *     [1]
- *     [1, 2]
- *     [x, y, z]
- *     [x + y, f(z)]
- *     vector(x)
- *     vector(x, n)
- *     repeat(x, n)
- *     concat(a, b)
- *     [x * x for x in values]
- *     [x * x for x in values if x > 0]
- *
- * Boundary tests MUST include:
- *
- *     empty vector
- *     single-element vector
- *     very large syntactic element lists
- *     deeply nested expressions
- *     symbolic vector sizes
- *     runtime vector sizes
- *
- * Negative tests MUST include:
- *
- *     [,
- *     [,]
- *     [1 2]
- *     vector(
- *     vector(x,)
- *     repeat(x)
- *     concat(a)
- *     [x for in values]
- *
- * Cross-domain tests MUST include:
- *
- *     classical + vector
- *     vector + quantum-derived value
- *     vector + resource expression
- *     vector + compile-time expression
- *     vector + distributed expression
- *     vector + accelerator-oriented semantic annotation
- *
- * Scalability tests MUST verify that no parser rule imposes a fixed:
- *
- *     vector length
- *     element count
- *     machine width
- *     device count
- *     accelerator count
- *
- * ============================================================================
- * COMPLETION CRITERIA
- * ============================================================================
- *
- * This file is complete when:
- *
- *     1. It compiles as an ANTLR4 parser grammar.
- *
- *     2. It consumes only the canonical Zamani lexer vocabulary.
- *
- *     3. It introduces no lexer aliases.
- *
- *     4. It introduces no hardware limits.
- *
- *     5. It introduces no machine-specific assumptions.
- *
- *     6. It does not duplicate vector TYPE syntax.
- *
- *     7. It does not duplicate expression precedence.
- *
- *     8. It does not construct IR.
- *
- *     9. It does not depend on quantum::ir.
- *
- *    10. It does not depend on QEC, ZQN, scheduling, routing, or hardware
- *        discovery.
- *
- *    11. Vector values can be represented independently of target hardware.
- *
- *    12. Empty, singleton, finite, symbolic, generated, and runtime-sized
- *        vectors are syntactically representable.
- *
- *    13. Positive, negative, boundary, determinism, scalability, and
- *        cross-domain tests pass.
- *
- *    14. The grammar remains valid under Rust 1.97 / Rust 1.97.1 generated
- *        frontend integration.
- *
- *    15. No unsafe Rust is required anywhere in this grammar's integration.
- *
- * ============================================================================
- */
