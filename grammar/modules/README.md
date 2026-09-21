@@ -1,328 +1,51 @@
-Zamani Modules Grammar
+Zamani Module System
 
-Production Architecture and Integration Contract
+Production Architecture, Ownership, Integration, Scalability, and Conformance Contract
 
 Path: "grammar/modules/"
-
-Purpose: Canonical source-level grammar components for Zamani's module system.
-
 Language: Zamani
-
 Grammar technology: ANTLR4
-
-Rust implementation baseline: Rust 1.97 / Rust 1.97.1
-
-Safety requirement: Safe Rust only. No "unsafe" Rust.
-
-Primary portability objective:
-
-«Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever (POCO-REAF)»
+Rust baseline: Rust 1.97 / Rust 1.97.1
+Rust safety: "unsafe" is prohibited
+Portability objective: Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever (POCO-REAF)
 
 ---
 
-1. Purpose
+1. Status
 
-The "grammar/modules/" directory defines the syntax required for organizing Zamani programs into reusable, composable, independently compilable source-level units.
+This document is the architectural and integration contract for the Zamani module subsystem.
 
-The module system must support Zamani as a universal computational language spanning:
+It defines:
 
-- classical computing;
-- quantum computing;
-- hybrid quantum-classical computing;
-- HDL;
-- hardware/software co-design;
-- embedded computing;
-- systems programming;
-- parallel computing;
-- distributed computing;
-- HPC;
-- AI/ML;
-- scientific computing;
-- data computing;
-- accelerators;
-- networking;
-- cryptography;
-- future computational domains.
+- what "grammar/modules/" owns;
+- what every file in the directory owns;
+- what every file explicitly does not own;
+- how module syntax integrates with the canonical lexer;
+- how module syntax integrates with "grammar/Zamani.g4";
+- how modules map into the frontend AST;
+- how module semantics are resolved;
+- how packages, namespaces, imports, exports, aliases, dependencies, and versions interact;
+- how modules remain independent of machine scale;
+- how modules integrate with classical, quantum, HDL, hardware, AI, distributed, networking, and future domains;
+- how module information reaches the compiler and runtime;
+- how compatibility and diagnostics work;
+- what constitutes completion;
+- what tests are required before production status.
 
-The module system is deliberately domain-neutral.
+This document is not itself another grammar authority.
 
-A module can contain or expose declarations belonging to any supported computational domain without the module grammar needing to know whether a declaration represents:
-
-- a classical function;
-- a quantum operation;
-- a logical-qubit abstraction;
-- an HDL component;
-- a hardware interface;
-- an accelerator;
-- an AI model;
-- a distributed service;
-- a data structure;
-- or a future computational abstraction.
-
-The module system provides organization and namespace boundaries.
-
-It does not provide machine implementation semantics.
+The actual syntax is defined by the canonical grammar files and their aggregate composition.
 
 ---
 
-2. Architectural Position
+2. Architectural Principle
 
-The module grammar belongs near the beginning of the Zamani compilation pipeline:
+A Zamani module is a language-level source organization and compilation abstraction.
 
-Zamani source
-     |
-     v
-canonical lexer
-     |
-     v
-module parser components
-     |
-     +--> names
-     +--> visibility
-     +--> attributes
-     +--> imports
-     +--> exports
-     +--> namespaces
-     +--> packages
-     +--> dependencies
-     |
-     v
-frontend AST
-     |
-     v
-module / package / namespace resolution
-     |
-     v
-semantic analysis
-     |
-     +------------------------------+
-     |                              |
-     v                              v
-classical semantic model       quantum semantic model
-                                     |
-                                     v
-                                quantum::ir
-     |
-     +--> HDL / hardware semantic model
-     +--> distributed semantic model
-     +--> accelerator semantic model
-     +--> future semantic models
-     |
-     v
-canonical IR / semantic representations
-     |
-     v
-optimization
-     |
-     v
-routing
-     |
-     v
-scheduling
-     |
-     v
-target lowering
-     |
-     v
-hardware / runtime / deployment
+A module is not inherently:
 
-The module grammar is therefore a syntax-layer component.
-
-It must never become a semantic execution layer.
-
----
-
-3. Directory Ownership
-
-The directory owns the syntax of the Zamani module system as a coordinated collection of independent grammar components.
-
-grammar/modules/
-├── README.md
-├── modules.g4
-├── imports.g4
-├── exports.g4
-├── visibility.g4
-├── namespaces.g4
-├── packages.g4
-├── dependencies.g4
-└── module-attributes.g4
-
-Each file has one primary responsibility.
-
-"modules.g4"
-
-Owns:
-
-- module declarations;
-- module declaration headers;
-- module names as wrappers around canonical qualified names;
-- inline module bodies;
-- module declaration boundaries;
-- module-body composition.
-
-Does not own:
-
-- identifier syntax;
-- qualified-name syntax;
-- imports;
-- exports;
-- package syntax;
-- dependency syntax;
-- namespace syntax;
-- visibility vocabulary;
-- attributes;
-- declarations belonging to other domains.
-
----
-
-"imports.g4"
-
-Owns:
-
-- import declarations;
-- import clauses;
-- named imports;
-- wildcard imports;
-- aliases;
-- import source syntax.
-
-Does not own:
-
-- module resolution;
-- filesystem access;
-- package downloading;
-- dependency solving;
-- symbol resolution;
-- visibility semantics;
-- runtime loading.
-
----
-
-"exports.g4"
-
-Owns:
-
-- export declarations;
-- export lists;
-- export aliases;
-- re-export syntax;
-- wildcard export syntax where specified.
-
-Does not own:
-
-- visibility semantics;
-- symbol resolution;
-- ABI;
-- package publication;
-- runtime deployment.
-
----
-
-"visibility.g4"
-
-Owns the canonical visibility vocabulary.
-
-It is reusable by:
-
-- modules;
-- functions;
-- types;
-- declarations;
-- traits;
-- interfaces;
-- quantum declarations;
-- hardware declarations;
-- HDL declarations;
-- distributed declarations;
-- future domains.
-
-No other module-system file may duplicate its visibility alternatives.
-
----
-
-"namespaces.g4"
-
-Owns:
-
-- namespace declaration syntax;
-- namespace aliases;
-- namespace-specific wrappers around canonical qualified names.
-
-It does not own module semantics.
-
-A namespace is a naming/scope abstraction.
-
-A module is a source organization/compilation abstraction.
-
-They may interact semantically but must remain distinct concepts.
-
----
-
-"packages.g4"
-
-Owns:
-
-- package declaration syntax;
-- package metadata syntax;
-- package identity syntax where applicable;
-- package-level source declarations.
-
-It does not own:
-
-- package downloading;
-- package registry access;
-- dependency solving;
-- cryptographic verification;
-- installation;
-- filesystem management.
-
----
-
-"dependencies.g4"
-
-Owns:
-
-- dependency declaration syntax;
-- dependency requirement syntax;
-- dependency aliases or source qualifiers where specified.
-
-It does not own:
-
-- dependency resolution;
-- version solving;
-- network access;
-- package retrieval;
-- registry interaction;
-- lockfile generation;
-- artifact verification.
-
----
-
-"module-attributes.g4"
-
-Owns:
-
-- attributes specifically attached to modules;
-- module-specific attribute structure.
-
-It does not own:
-
-- general-purpose attribute vocabulary unless explicitly delegated to the canonical core attribute grammar;
-- semantic interpretation of attributes;
-- compiler behavior;
-- runtime behavior.
-
----
-
-4. Fundamental Principle
-
-A Zamani module is a source-level language construct.
-
-It is not inherently:
-
-- a file;
-- a directory;
-- a filesystem path;
+- a filesystem directory;
+- a filesystem file;
 - a package;
 - a process;
 - a thread;
@@ -332,11 +55,12 @@ It is not inherently:
 - an ASIC;
 - a QPU;
 - a physical qubit;
+- a memory bank;
 - a network node;
 - a cluster;
 - a container;
 - a deployment;
-- a runtime;
+- a runtime instance;
 - a hardware resource.
 
 For example:
@@ -345,351 +69,755 @@ module quantum::algorithms {
     ...
 }
 
-means that the source program contains a module named:
+defines a module named "quantum::algorithms".
 
-quantum::algorithms
+It does not itself mean:
 
-It does not mean:
+use a QPU
+allocate N qubits
+select QPU #0
+use GPU #1
+use CPU core #7
+deploy to node #3
+use a particular memory bank
+use a particular network topology
 
-- select a QPU;
-- select a quantum backend;
-- allocate a fixed number of qubits;
-- select a topology;
-- allocate a device;
-- select a calibration;
-- reserve hardware;
-- schedule execution.
-
-Those decisions belong downstream.
+Those decisions belong to downstream semantic, resource, compilation, scheduling, routing, deployment, runtime, HAL, and target infrastructure.
 
 ---
 
-5. POCO-REAF Requirement
+3. Module-System Mission
 
-The module system is a foundational part of POCO-REAF.
+The module system must allow one language to organize all Zamani computational domains without turning each domain into a separate language.
 
-The same module syntax must remain valid when the program eventually executes on:
+A module may contain or expose constructs associated with:
 
-- one processor;
-- many processors;
-- an embedded processor;
-- a GPU;
-- an FPGA;
-- an ASIC;
-- a QPU;
-- a simulator;
-- a heterogeneous accelerator;
-- a cluster;
-- a supercomputer;
-- a distributed deployment;
-- a cloud environment;
-- a future architecture.
+- classical computing;
+- systems programming;
+- embedded computing;
+- parallel computing;
+- distributed computing;
+- HPC;
+- quantum computing;
+- hybrid quantum/classical computing;
+- HDL;
+- hardware/software co-design;
+- accelerators;
+- AI/ML;
+- data processing;
+- scientific computing;
+- networking;
+- cryptography;
+- security;
+- temporal computation;
+- Sankofa concepts;
+- nano computation;
+- future computational domains.
 
-Changing execution hardware must not require changing module organization merely because the machine has different:
+The module subsystem must not need to understand the implementation semantics of each domain.
 
-- processor counts;
-- memory capacity;
-- qubit capacity;
-- accelerator counts;
-- topology;
-- communication characteristics;
-- scheduling capabilities.
-
----
-
-6. Absolute Scalability Rule
-
-The module grammar must contain no artificial finite limits.
-
-Do not introduce grammar constants or productions equivalent to:
-
-MAX_MODULES
-MAX_MODULE_DEPTH
-MAX_MODULE_SEGMENTS
-MAX_MODULE_ITEMS
-MAX_IMPORTS
-MAX_EXPORTS
-MAX_PACKAGES
-MAX_DEPENDENCIES
-MAX_NAMESPACES
-MAX_TARGETS
-
-The grammar must use structural repetition:
-
-*
-+
-?
-
-where appropriate.
-
-For example:
-
-moduleBody
-    : LBRACE item* RBRACE
-    ;
-
-means that the grammar does not impose a language-level declaration count.
-
-Actual resource limitations are implementation concerns.
-
-They may be enforced by:
-
-- compiler resource policies;
-- parser configuration;
-- memory policies;
-- execution policies;
-- build policies;
-- deployment policies.
-
-Those limits must never silently become language semantics.
+Its responsibility is to provide the organizational language infrastructure through which those constructs can coexist.
 
 ---
 
-7. No Machine-Specific Module Semantics
+4. Canonical Compilation Position
 
-Module syntax must never encode:
+The module subsystem participates in the frontend pipeline:
 
-CPU count
-core count
-thread count
-GPU count
-FPGA count
-ASIC count
-QPU count
-qubit count
-memory size
-register count
-vector width
-device ID
-device address
-topology
-network size
-cluster size
-accelerator count
+Zamani source
+    │
+    ▼
+canonical lexer
+    │
+    ▼
+canonical parser / Zamani.g4
+    │
+    ├── core
+    ├── names
+    ├── types
+    ├── expressions
+    ├── statements
+    ├── declarations
+    ├── functions
+    ├── modules
+    │     ├── modules.g4
+    │     ├── imports.g4
+    │     ├── exports.g4
+    │     ├── visibility.g4
+    │     ├── namespaces.g4
+    │     ├── aliases.g4
+    │     ├── packages.g4
+    │     ├── dependencies.g4
+    │     ├── versioning.g4
+    │     └── module-attributes.g4
+    └── other domains
+    │
+    ▼
+frontend AST
+    │
+    ▼
+module/package/namespace/name resolution
+    │
+    ▼
+semantic analysis
+    │
+    ├── type system
+    ├── effects
+    ├── capabilities
+    ├── resources
+    ├── ownership
+    ├── visibility
+    ├── dependencies
+    └── domain semantics
+    │
+    ▼
+canonical semantic representations
+    │
+    ├── classical representation
+    ├── quantum::ir
+    ├── HDL/hardware representation
+    └── other canonical domain representations
+    │
+    ▼
+optimization
+    │
+    ▼
+routing / scheduling / resilience / QEC / ZQN where applicable
+    │
+    ▼
+HAL / backend lowering
+    │
+    ▼
+target realization
+    │
+    ├── CPU
+    ├── multicore
+    ├── GPU
+    ├── FPGA
+    ├── ASIC
+    ├── QPU
+    ├── simulator
+    ├── accelerator
+    ├── cluster
+    ├── HPC
+    ├── distributed infrastructure
+    ├── cloud
+    └── future targets
 
-A module may express a semantic requirement through another language subsystem, but module syntax itself must remain independent.
+The module grammar stops at syntax.
 
-For example, these concepts are different:
-
-module organization
-resource requirement
-hardware capability
-target selection
-deployment placement
-runtime allocation
-
-They must never be conflated.
+It does not perform the downstream operations.
 
 ---
 
-8. Canonical Name Ownership
+5. Authority Model
 
-Names are not owned by the module grammar.
+The module subsystem participates in the following repository-wide authority hierarchy:
 
-The canonical ownership hierarchy is:
+grammar/DESIGN.md
+        │
+        ▼
+language specification
+        │
+        ▼
+canonical grammar
+        │
+        ▼
+lexer/parser implementation
+        │
+        ▼
+frontend AST
+        │
+        ▼
+semantic analysis
+        │
+        ▼
+canonical IR / domain IR
+        │
+        ▼
+compiler / runtime / backend
 
-grammar/lexer/
-        |
-        v
-grammar/core/names.g4
-        |
-        v
-grammar/core/qualified-names.g4
-        |
-        +--> modules
-        +--> namespaces
-        +--> imports
-        +--> exports
-        +--> declarations
-        +--> functions
-        +--> types
-        +--> quantum
-        +--> hardware
-        +--> HDL
-        +--> distributed
-        +--> future domains
+The following files have distinct purposes:
 
-Module grammar must therefore reuse the canonical:
+"grammar/DESIGN.md"
 
-identifier
-qualifiedName
+Normative architecture for the entire grammar subsystem.
 
-rules.
+"grammar/Zamani.g4"
 
-It must not independently redefine:
+Canonical ANTLR composition root.
 
-IDENTIFIER (DOUBLE_COLON IDENTIFIER)*
+"grammar/modules/*.g4"
 
-or an equivalent qualified-name grammar.
+Independent module-system grammar components.
 
-This prevents syntax divergence between:
+"grammar/grammar.md"
 
-module names
-namespace names
-type names
-function names
-quantum names
-hardware names
-resource names
+Implementation-conformance reference.
+
+It must not silently define syntax that is absent from the canonical grammar/specification.
+
+"grammar/Zamani-Grammar.md"
+
+Historical/extended/design reference.
+
+It must not silently promote proposed syntax into the implemented language.
+
+"src/lexer.rs"
+
+Actual Rust lexical implementation.
+
+"src/parser.rs"
+
+Actual Rust parser implementation.
+
+"src/ast/"
+
+Frontend AST representation.
+
+Semantic analysis
+
+Owns the meaning of modules, names, imports, exports, packages, dependencies, versions, visibility, and related constructs.
+
+Canonical IR
+
+Owns executable/compilable semantic representations.
+
+The module grammar must not become an additional IR.
 
 ---
 
-9. Visibility Ownership
+6. Directory Contents
 
-Visibility belongs to:
+The current module directory contains:
 
-grammar/modules/visibility.g4
+grammar/modules/
+├── README.md
+├── modules.g4
+├── imports.g4
+├── exports.g4
+├── visibility.g4
+├── namespaces.g4
+├── aliases.g4
+├── packages.g4
+├── dependencies.g4
+├── versioning.g4
+└── module-attributes.g4
 
-Module declarations may consume the canonical visibility rule:
+These filenames are retained.
 
-visibilityModifier?
+No rename is required.
 
-The module grammar must not redefine:
+Each file has one primary responsibility.
+
+---
+
+7. "modules.g4"
+
+Owns
+
+"modules.g4" owns the syntax of module declarations.
+
+It owns:
+
+- module declaration syntax;
+- module declaration headers;
+- module names as wrappers around canonical qualified names;
+- optional module attributes;
+- optional module visibility;
+- inline module-body boundaries;
+- declaration terminators;
+- syntactic module-body composition.
+
+Does not own
+
+It does not own:
+
+- identifier syntax;
+- qualified-name syntax;
+- imports;
+- exports;
+- aliases;
+- namespaces;
+- packages;
+- dependencies;
+- versions;
+- general attributes;
+- declarations;
+- functions;
+- types;
+- expressions;
+- statements;
+- quantum operations;
+- HDL;
+- hardware;
+- AI;
+- resources;
+- compiler behavior;
+- runtime behavior.
+
+Required integration
+
+"modules.g4" consumes canonical name, visibility, and module-attribute grammar.
+
+The module body must ultimately contain the aggregate language's canonical item/declaration structure.
+
+It must not create a second declaration language.
+
+---
+
+8. "imports.g4"
+
+Owns
+
+"imports.g4" owns import syntax.
+
+It covers the syntactic representation of:
+
+- imported module paths;
+- imported names;
+- import groups;
+- wildcard imports;
+- aliases;
+- source qualifiers;
+- import attributes where specified by the language.
+
+Does not own
+
+It does not:
+
+- read files;
+- access registries;
+- access networks;
+- download packages;
+- resolve symbols;
+- solve dependency graphs;
+- verify artifacts;
+- load runtime modules.
+
+Those are downstream operations.
+
+Integration
+
+imports.g4
+    ↓
+AST import declaration
+    ↓
+module/package/name resolver
+    ↓
+dependency graph
+    ↓
+semantic validation
+
+---
+
+9. "exports.g4"
+
+Owns
+
+"exports.g4" owns:
+
+- export declarations;
+- exported names;
+- export lists;
+- re-export syntax;
+- export aliases;
+- wildcard export syntax if part of the accepted language.
+
+Does not own
+
+It does not own:
+
+- symbol resolution;
+- visibility semantics;
+- ABI generation;
+- package publication;
+- runtime loading;
+- deployment.
+
+Important distinction
+
+Visibility and export are related but not identical.
+
+Visibility answers:
+
+«Who may access a declaration?»
+
+Export answers:
+
+«Which declarations form this module's public module interface?»
+
+The semantic layer validates their relationship.
+
+---
+
+10. "visibility.g4"
+
+Owns
+
+"visibility.g4" is the canonical owner of visibility syntax used throughout the language.
+
+The vocabulary must be reusable by:
+
+- modules;
+- functions;
+- types;
+- declarations;
+- interfaces;
+- traits;
+- classical declarations;
+- quantum declarations;
+- HDL declarations;
+- hardware declarations;
+- distributed declarations;
+- future domains.
+
+Critical rule
+
+No sibling grammar may create an independent visibility vocabulary.
+
+There must not be competing definitions such as:
 
 moduleVisibility
+functionVisibility
+quantumVisibility
+hardwareVisibility
 
-with its own copy of:
-
-pub
-public
-private
-protected
-internal
-
-The same principle applies to:
-
-- functions;
-- declarations;
-- types;
-- quantum declarations;
-- hardware declarations;
-- HDL declarations;
-- future declaration categories.
-
-One vocabulary must have one owner.
+if they are merely duplicates of the same language concept.
 
 ---
 
-10. Attributes Ownership
+11. "namespaces.g4"
 
-Module-specific attributes belong to:
+Owns
 
-grammar/modules/module-attributes.g4
+"namespaces.g4" owns namespace declaration/reference syntax.
 
-General attributes belong to the appropriate canonical core attribute grammar.
+Does not own
 
-The module grammar must not create a second annotation language.
+It does not own:
 
-For example:
+- module identity;
+- package identity;
+- filesystem identity;
+- symbol resolution;
+- deployment identity.
 
-@experimental
-module quantum::future {
-    ...
-}
+A namespace is a naming/scope concept.
 
-is syntactically divided into:
-
-@experimental
-    |
-    v
-attribute grammar
-    |
-    v
-module
-    |
-    v
-module name/body
-
-The grammar records syntax.
-
-Semantic analysis determines what "experimental" means.
-
----
-
-11. Modules Versus Namespaces
-
-Modules and namespaces must remain distinct.
-
-Module
-
-A source organization and compilation unit concept.
-
-Namespace
-
-A logical naming and scope concept.
-
-A module may establish, inhabit, or correspond to a namespace according to semantic rules.
-
-However:
-
-module == namespace
-
-must not be assumed by the grammar.
-
-Similarly:
-
-module == package
-
-must not be assumed.
-
-And:
-
-module == filesystem directory
-
-must not be assumed.
-
-These relationships belong to semantic and toolchain layers.
-
----
-
-12. Modules Versus Packages
+A module is a source organization/compilation concept.
 
 A package is a distribution/dependency concept.
 
-A module is a source organization concept.
-
-A package may contain many modules.
-
-A module may belong to a package.
-
-The grammar must preserve that distinction.
-
-The module grammar must not infer:
-
-first module-name segment == package name
-
-or:
-
-module path == filesystem path
-
-or:
-
-module path == package registry coordinate
-
-unless a separate semantic specification explicitly defines such a relationship.
+These relationships are established semantically.
 
 ---
 
-13. Module Body Ownership
+12. "aliases.g4"
 
-A module body must contain the canonical Zamani item/declaration language.
+Owns
 
-The module grammar must not create an isolated declaration universe.
+"aliases.g4" owns syntactic alias declarations and alias clauses that are explicitly part of the module system.
+
+It may support aliases for:
+
+- imported modules;
+- imported names;
+- exported names;
+- module references;
+- package references;
+- namespace references;
+
+where those constructs are specified.
+
+Does not own
+
+It does not determine:
+
+- whether two names are semantically equivalent;
+- whether an alias creates a new symbol;
+- whether an alias is legal under visibility rules;
+- whether an alias introduces ambiguity;
+- whether a dependency is valid.
+
+Those are semantic responsibilities.
+
+Integration
+
+Aliases must lower to the canonical AST name/reference representation rather than introducing a second name model.
+
+---
+
+13. "packages.g4"
+
+Owns
+
+"packages.g4" owns package-related source syntax.
+
+A package may provide:
+
+- distribution identity;
+- package metadata;
+- package declarations;
+- package-level source organization;
+- package-facing dependency information.
+
+Does not own
+
+It does not:
+
+- access a registry;
+- download packages;
+- install packages;
+- resolve dependencies;
+- verify signatures;
+- manage filesystem paths;
+- select execution hardware.
+
+A package must remain independent from target hardware.
+
+---
+
+14. "dependencies.g4"
+
+Owns
+
+"dependencies.g4" owns source-level dependency declarations.
+
+It may represent:
+
+- dependency identity;
+- dependency requirement;
+- dependency source;
+- version requirement;
+- dependency alias;
+- dependency features/options where specified by the language.
+
+Does not own
+
+It does not perform:
+
+- dependency solving;
+- network access;
+- package retrieval;
+- artifact verification;
+- lockfile generation;
+- installation;
+- compilation;
+- runtime loading.
+
+The dependency subsystem downstream constructs the actual dependency graph.
+
+---
+
+15. "versioning.g4"
+
+Owns
+
+"versioning.g4" owns the syntax necessary to express language/package/module/dependency version information where that syntax is part of Zamani source.
+
+It must distinguish, where applicable:
+
+language version
+module/package version
+dependency requirement
+compatibility declaration
+feature version
+dialect version
+
+These are different semantic concepts even if they share version syntax.
+
+Does not own
+
+It does not:
+
+- decide compatibility;
+- resolve dependency versions;
+- perform migration;
+- select package versions;
+- enforce registry policy.
+
+Those belong to compatibility, package, dependency, and semantic infrastructure.
+
+---
+
+16. "module-attributes.g4"
+
+Owns
+
+"module-attributes.g4" owns syntax specifically associated with module declarations.
+
+Examples may include attributes describing:
+
+- module status;
+- module role;
+- experimental/stable status;
+- module-level semantic properties;
+- explicit language features associated with a module.
+
+Does not own
+
+It does not own the meaning of those attributes.
+
+It does not:
+
+- execute attributes;
+- select hardware;
+- alter runtime behavior directly;
+- bypass semantic validation.
+
+General-purpose attributes remain under the canonical attribute infrastructure.
+
+---
+
+17. Canonical Names
+
+Module grammar must never independently redefine identifier or qualified-name syntax.
+
+The intended architecture is:
+
+grammar/lexer/
+        │
+        ▼
+canonical identifiers/tokens
+        │
+        ▼
+grammar/core/names.g4
+        │
+        ▼
+canonical qualified names
+        │
+        ├── modules
+        ├── imports
+        ├── exports
+        ├── aliases
+        ├── namespaces
+        ├── declarations
+        ├── functions
+        ├── types
+        ├── quantum
+        ├── hardware
+        ├── HDL
+        ├── distributed
+        └── future domains
+
+For example:
+
+quantum::algorithms::optimization
+
+must be represented using the canonical name infrastructure.
+
+"modules.g4" may wrap a qualified name as a module name, but must not redefine qualified-name syntax.
+
+---
+
+18. Module Names Are Not Paths by Default
+
+The syntax:
+
+module quantum::algorithms;
+
+does not inherently mean:
+
+filesystem/quantum/algorithms
+
+It does not inherently mean:
+
+package://quantum/algorithms
+
+It does not inherently mean:
+
+hardware://quantum/algorithms
+
+It is a language-level name.
+
+A source provider may later map that name to:
+
+- files;
+- generated sources;
+- packages;
+- archives;
+- registries;
+- virtual sources;
+- embedded sources;
+- remote sources;
+
+according to separate semantic/toolchain rules.
+
+---
+
+19. Module Identity
+
+The semantic layer must distinguish at least:
+
+module identity
+namespace identity
+package identity
+source identity
+artifact identity
+deployment identity
+runtime identity
+
+The parser records syntax.
+
+It must not collapse these identities prematurely.
+
+---
+
+20. Module Nesting
+
+Module nesting must be unbounded by language design.
+
+The grammar must not define:
+
+MAX_MODULE_DEPTH
+
+or equivalent.
+
+Valid structural forms may include:
+
+module a;
+
+module a::b;
+
+module a::b::c;
+
+and arbitrarily deeper qualified structures supported by the parser/resource implementation.
+
+No finite language-level maximum is permitted.
+
+---
+
+21. Module Contents
+
+A module body must use the canonical Zamani item/declaration architecture.
 
 Conceptually:
 
-moduleBody
-    : LBRACE item* RBRACE
-    ;
+module
+    ↓
+module body
+    ↓
+canonical items
 
-where "item" is supplied by the aggregate parser architecture.
+rather than:
 
-This allows modules to contain future and existing computational domains without changing the fundamental module grammar.
+module
+    ↓
+special module-only declarations
 
-A module may therefore eventually contain:
+This is essential because modules must be able to contain future domains without repeatedly modifying the module subsystem.
 
+A module can therefore contain, subject to semantic rules:
+
+imports
+exports
+nested modules
+functions
+types
 classical declarations
 quantum declarations
+hybrid declarations
 HDL declarations
 hardware declarations
 AI declarations
@@ -699,197 +827,266 @@ network declarations
 security declarations
 future declarations
 
-without "modules.g4" importing every domain grammar individually.
-
-This is important for extensibility.
+The module grammar does not need to know the implementation semantics of those constructs.
 
 ---
 
-14. Aggregate Parser Responsibility
+22. Aggregate Grammar Responsibility
 
-The aggregate parser is responsible for composing the individual grammar components.
+"grammar/Zamani.g4" is the composition root.
+
+The aggregate grammar is responsible for connecting the independent grammar components.
 
 Conceptually:
 
-Zamani aggregate grammar
-        |
-        +--> Lexer
-        |
-        +--> Core
-        |
-        +--> Types
-        |
-        +--> Expressions
-        |
-        +--> Statements
-        |
-        +--> Declarations
-        |
-        +--> Functions
-        |
-        +--> Modules
-        |      |
-        |      +--> Imports
-        |      +--> Exports
-        |      +--> Visibility
-        |      +--> Namespaces
-        |      +--> Packages
-        |      +--> Dependencies
-        |      +--> Module attributes
-        |
-        +--> Effects
-        +--> Classical
-        +--> Quantum
-        +--> Hybrid
-        +--> HDL
-        +--> Hardware
-        +--> Distributed
-        +--> AI
-        +--> Data
-        +--> Networking
-        +--> Security
-        +--> Resources
-        +--> Compilation
-        +--> Execution
-        +--> Interoperability
-        +--> Dialects
-        +--> Macros
-        +--> Metaprogramming
+Zamani.g4
+│
+├── core
+├── lexer vocabulary
+├── names
+├── types
+├── expressions
+├── statements
+├── declarations
+├── functions
+├── effects
+├── memory
+├── concurrency
+├── modules
+│   ├── modules.g4
+│   ├── imports.g4
+│   ├── exports.g4
+│   ├── visibility.g4
+│   ├── namespaces.g4
+│   ├── aliases.g4
+│   ├── packages.g4
+│   ├── dependencies.g4
+│   ├── versioning.g4
+│   └── module-attributes.g4
+├── classical
+├── quantum
+├── hybrid
+├── HDL
+├── hardware
+├── resources
+├── distributed
+├── AI
+├── data
+├── networking
+├── security
+├── compile
+├── execution
+├── interoperability
+├── dialects
+├── macros
+└── metaprogramming
 
-Individual module grammar components must not independently construct an alternative complete Zamani parser.
+The module files must not independently create competing complete Zamani parsers.
 
 ---
 
-15. Lexer Contract
+23. Lexer Integration
 
-The module grammar is parser-only.
+The module grammar is parser syntax.
 
-Lexer ownership belongs to:
+Lexical ownership belongs to the canonical lexer subsystem.
 
-grammar/lexer/
-
-The parser grammar must consume the canonical lexical vocabulary.
-
-The aggregate lexer must provide the tokens required by the module components, including the language's canonical spellings for:
+The module subsystem consumes canonical tokens for concepts such as:
 
 module
 import
 export
-from
-as
 package
 namespace
 dependency
+version
 visibility
 attributes
-qualification
+identifiers
+qualified names
+strings
+punctuation
 braces
 parentheses
 commas
-semicolons
-strings
-identifiers
+terminators
 
-Exact token names must be determined by the canonical lexer.
+Exact token names are determined by the canonical lexer/token contract.
 
-No module grammar should silently create competing lexer token names.
+Module grammar files must not silently introduce duplicate lexical authorities.
 
 ---
 
-16. Token Vocabulary Consistency
+24. Token-Vocabulary Rule
 
-All modular parser grammars must converge on one canonical token vocabulary.
+The repository must have one canonical parser/lexer token vocabulary.
 
-A repository-wide audit must resolve any difference between parser components that use different token vocabulary declarations.
+The module subsystem must not create a competing token universe.
 
-For example, if one grammar component uses:
+Any historical discrepancy such as different "tokenVocab" declarations must be resolved at the aggregate grammar architecture level.
 
-tokenVocab = ZamaniTokens;
+The production target is:
 
-while another uses:
+one canonical lexical vocabulary
+        ↓
+all parser components
 
-tokenVocab = ZamaniLexer;
+not:
 
-the aggregate grammar architecture must explicitly establish which generated lexer/parser vocabulary is canonical.
+modules → token vocabulary A
+quantum → token vocabulary B
+HDL → token vocabulary C
 
-This is an integration requirement, not something to hide inside "modules/".
-
-The final architecture must not contain accidental parallel lexical authorities.
-
----
-
-17. Legacy Monolithic Grammar Migration
-
-The existing monolithic:
-
-grammar/Zamani.g4
-
-contains older inline module-system productions such as:
-
-moduleDecl
-importDecl
-exportDecl
-visibilityModifier
-
-The modular grammar architecture must progressively replace those duplicated definitions with the canonical modular components.
-
-The migration must not silently remove supported language features.
-
-For every legacy rule:
-
-1. Identify the existing syntax.
-2. Identify its consumers.
-3. Compare it with the modular grammar.
-4. Preserve valid syntax.
-5. Correct invalid or ambiguous syntax.
-6. Record compatibility implications.
-7. Migrate consumers.
-8. Remove duplicate ownership only after migration.
-9. Add regression tests.
-
-The final state must have one authoritative owner for each construct.
+unless those are explicitly generated views of one authoritative vocabulary.
 
 ---
 
-18. Import Integration
+25. Frontend AST Contract
 
-"imports.g4" owns import syntax.
+The parser must provide enough structure for the frontend AST to represent module declarations without losing semantic information.
 
-"modules.g4" must not duplicate import grammar.
+At minimum, the conceptual module AST must preserve:
 
-A module body may contain imports because imports are canonical Zamani items.
+ModuleDeclaration
+├── attributes
+├── visibility
+├── name
+├── body
+└── source span
 
-Conceptually:
+The AST should preserve:
+
+- source order;
+- source spans;
+- canonical name segments;
+- explicit visibility;
+- attributes;
+- body presence;
+- child items;
+- provenance required for diagnostics;
+- information necessary for tooling.
+
+The grammar must not define Rust AST structures.
+
+---
+
+26. AST Boundary
+
+The module parser must lower into the existing domain-neutral frontend AST architecture.
+
+It must not introduce:
+
+ModuleIR
+QuantumModuleIR
+HardwareModuleIR
+PackageIR
+
+merely because a module contains a particular domain.
+
+The module AST represents source organization.
+
+Domain IR represents computation.
+
+---
+
+27. Semantic Ownership
+
+Semantic analysis owns:
+
+- module identity;
+- module uniqueness;
+- module nesting semantics;
+- namespace relationships;
+- package relationships;
+- visibility;
+- import resolution;
+- export validation;
+- alias resolution;
+- dependency graph construction;
+- dependency-cycle detection;
+- package compatibility;
+- version compatibility;
+- symbol resolution;
+- declaration accessibility;
+- module attribute interpretation;
+- source-provider resolution;
+- compilation-unit semantics.
+
+None of these should be encoded as parser-side semantic execution.
+
+---
+
+28. Dependency Graph Semantics
+
+The module system must support arbitrarily large dependency graphs subject only to actual implementation resources.
+
+The language must not impose:
+
+MAX_DEPENDENCIES
+MAX_IMPORTS
+MAX_MODULES
+MAX_PACKAGES
+MAX_GRAPH_DEPTH
+MAX_GRAPH_WIDTH
+
+The dependency graph may contain:
+
+A → B
+A → C
+B → D
+C → D
+
+and more complex structures.
+
+The semantic layer must detect invalid cycles where the language/package model prohibits them.
+
+Graph size is a resource concern, not a language semantic limit.
+
+---
+
+29. Cycles
+
+The parser must not attempt to solve dependency cycles.
+
+It merely parses the source.
+
+Semantic/package resolution must determine whether cycles are:
+
+- legal;
+- illegal;
+- conditionally legal;
+- permitted only through interfaces;
+- permitted for certain dependency classes.
+
+Diagnostics must identify the actual semantic cycle rather than reporting a syntax error.
+
+---
+
+30. Imports and Exports
+
+The conceptual relationship is:
 
 module
-  |
-  +--> import
-  +--> export
-  +--> declaration
-  +--> function
-  +--> type
-  +--> quantum declaration
-  +--> hardware declaration
-  +--> future declaration
+ │
+ ├── imports
+ │      ↓
+ │   name/module resolution
+ │
+ └── exports
+        ↓
+     public interface
 
-Import resolution occurs later.
+Import and export syntax remain separate owners.
 
-The parser must never:
+Visibility remains a separate owner.
 
-- open files;
-- access package registries;
-- contact networks;
-- resolve symbols;
-- download modules;
-- select targets.
+Aliases remain a separate owner.
 
 ---
 
-19. Export Integration
+31. Visibility Versus Export
 
-"exports.g4" owns export syntax.
-
-Visibility and export must remain separate concepts.
+These concepts must never be silently collapsed.
 
 For example:
 
@@ -901,722 +1098,1755 @@ and:
 
 export compute;
 
-are not identical concepts.
+may have related effects, but they represent different source-level concepts unless the language specification explicitly defines them as equivalent.
 
-Visibility answers:
+The grammar preserves the distinction.
 
-«Who can access the declaration?»
-
-Export answers:
-
-«Which declaration is intentionally exposed through this module interface?»
-
-Semantic analysis may later validate their interaction.
-
-The grammar must preserve the distinction.
+Semantic analysis determines the actual relationship.
 
 ---
 
-20. Dependency Integration
+32. Package Versus Module
 
-"dependencies.g4" owns dependency declaration syntax.
+The language must preserve:
 
-Dependency resolution belongs downstream.
+package ≠ module
 
-The grammar must not perform:
+A package may contain many modules.
 
-version solving
-registry access
-network access
-package downloading
-signature verification
-dependency graph solving
+A package may contain multiple computational domains.
 
-The parser only records what the source says.
+A package is not automatically:
 
-Semantic/toolchain infrastructure later constructs the dependency graph.
-
----
-
-21. Package Integration
-
-"packages.g4" owns package syntax.
-
-A package may contain many modules and computational domains.
-
-Package syntax must not impose machine-specific limits.
-
-For example, package semantics must not imply:
-
-one package == one machine
-one module == one process
-one package == one target
-
-Such assumptions violate POCO-REAF.
+- one machine;
+- one executable;
+- one process;
+- one deployment;
+- one hardware target.
 
 ---
 
-22. Namespace Integration
+33. Namespace Versus Module
 
-"namespaces.g4" owns namespace syntax.
+The language must preserve:
 
-Module names may use canonical qualified names.
+namespace ≠ module
 
-For example:
+A namespace is primarily a naming/scope abstraction.
 
-module quantum::algorithms;
+A module is a source organization/compilation abstraction.
 
-does not require "modules.g4" to redefine:
-
-quantum
-::
-algorithms
-
-The canonical name grammar owns those structures.
-
-Namespace resolution remains semantic.
+They may be associated semantically, but the grammar must not assume they are identical.
 
 ---
 
-23. Frontend AST Contract
+34. Module Versus Filesystem
 
-The grammar must provide sufficient parse-tree structure for the frontend AST to preserve at least:
+The language must preserve:
 
-ModuleDeclaration
-    attributes
-    visibility
-    name
-    body
-    source span
+module ≠ file
+module ≠ directory
 
-The AST should preserve:
+A toolchain may map modules to source files or directories, but that is a source-provider/tooling decision.
 
-- source ordering;
-- source spans;
-- module name segments;
-- explicit versus absent visibility;
-- attributes;
-- whether a body exists;
-- child items;
-- source provenance required by diagnostics and tooling.
-
-The exact Rust AST structures do not belong in ".g4" files.
-
-No Rust structures should be embedded into this grammar.
+This allows future source providers without changing the language.
 
 ---
 
-24. Semantic Contract
+35. Module Versus Deployment
 
-After parsing, semantic analysis owns:
+A module must not imply deployment.
 
-- module identity;
-- module uniqueness;
-- module nesting;
-- module relationships;
-- namespace relationships;
-- package relationships;
-- visibility checking;
-- import resolution;
-- export validation;
-- dependency resolution;
-- dependency cycle detection;
-- symbol resolution;
-- accessibility;
-- module attributes' meaning;
-- package compatibility;
-- source-provider resolution;
-- compilation-unit semantics.
+One module may eventually be:
 
-The grammar must not attempt to perform these operations.
+- inlined;
+- linked;
+- statically compiled;
+- dynamically loaded;
+- replicated;
+- partitioned;
+- distributed;
+- synthesized into hardware;
+- lowered into quantum execution;
+- embedded into firmware;
+- executed on an accelerator.
+
+Those are compiler/runtime/deployment decisions.
 
 ---
 
-25. Canonical IR Boundary
+36. POCO-REAF
 
-The module grammar must never create an IR.
+The module system is foundational to:
 
-The pipeline is:
+Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever.
 
-module syntax
-    |
-    v
-frontend AST
-    |
-    v
-semantic analysis
-    |
-    v
-canonical semantic representation
-    |
-    +--> classical IR
-    +--> quantum::ir
-    +--> HDL/hardware IR
-    +--> distributed IR
-    +--> accelerator IR
+Module organization must remain valid when the program scales across:
 
-In particular, module syntax must never introduce:
+tiny embedded system
+        ↓
+single CPU
+        ↓
+multicore CPU
+        ↓
+GPU
+        ↓
+FPGA
+        ↓
+ASIC
+        ↓
+QPU
+        ↓
+heterogeneous accelerator
+        ↓
+cluster
+        ↓
+HPC system
+        ↓
+distributed system
+        ↓
+cloud
+        ↓
+future computational architecture
 
-ModuleIR
-QuantumModuleIR
-HardwareModuleIR
-QubitModuleIR
+Changing the target must not require rewriting module structure merely because the target has different:
 
-as duplicate semantic representations merely because the module contains those domains.
+- processor counts;
+- memory capacity;
+- vector widths;
+- GPU counts;
+- FPGA resources;
+- qubit counts;
+- communication topology;
+- accelerator counts;
+- node counts.
 
-For quantum computation, semantic lowering eventually reaches the repository's canonical:
+---
+
+37. No Artificial Resource Limits
+
+The module grammar must never encode language-level limits such as:
+
+MAX_MODULES
+MAX_MODULE_DEPTH
+MAX_IMPORTS
+MAX_EXPORTS
+MAX_DEPENDENCIES
+MAX_PACKAGES
+MAX_NAMESPACES
+MAX_TARGETS
+MAX_DEVICES
+MAX_NODES
+MAX_THREADS
+MAX_GPUS
+MAX_FPGAS
+MAX_QPUS
+MAX_QUBITS
+MAX_MEMORY
+
+There must be no grammar production equivalent to:
+
+moduleCount <= 1024
+
+or:
+
+moduleDepth <= 64
+
+or:
+
+imports <= 256
+
+unless such a limit is explicitly part of an external implementation/resource policy rather than the language definition.
+
+---
+
+38. Tiny-to-Large Scalability
+
+The module system must support programs ranging from:
+
+one module
+
+to:
+
+many modules
+many packages
+many namespaces
+many dependency edges
+many computational domains
+
+subject only to available implementation resources.
+
+A tiny program must not pay for unnecessary module machinery semantically.
+
+A large program must not require a different module language.
+
+---
+
+39. Compile-Time Resource Limits
+
+Implementations may impose operational limits for:
+
+- memory;
+- parsing time;
+- dependency-resolution time;
+- recursion depth;
+- compiler workers;
+- cache size;
+- filesystem capacity.
+
+Those are implementation policies.
+
+They must be:
+
+- explicit;
+- diagnosable;
+- configurable where appropriate;
+- distinguishable from language semantics.
+
+A resource exhaustion error must not be reported as a grammar incompatibility.
+
+---
+
+40. Resource Requirements Are Not Module Semantics
+
+If a module contains:
+
+requires capability("quantum.measurement");
+
+that requirement belongs to the resource/capability subsystem.
+
+The module grammar should not interpret it as:
+
+this module requires QPU #0
+
+Likewise:
+
+requires memory(required_memory);
+
+must not imply a fixed physical memory device.
+
+The distinction is:
+
+semantic requirement
+        ≠
+physical realization
+
+---
+
+41. Module Placement
+
+Module placement is not grammar semantics.
+
+A module may later be:
+
+host
+device
+accelerator
+QPU
+FPGA
+distributed worker
+cloud service
+embedded target
+
+but the module syntax itself remains target-independent.
+
+Placement is determined downstream using:
+
+- capabilities;
+- requirements;
+- constraints;
+- preferences;
+- compiler decisions;
+- resource availability.
+
+---
+
+42. Classical Integration
+
+A module may contain classical constructs.
+
+Those constructs ultimately participate in the classical semantic/IR pipeline.
+
+The module layer must not know whether a classical function will eventually run on:
+
+- one CPU;
+- many CPUs;
+- GPU;
+- accelerator;
+- embedded processor;
+- future processor.
+
+---
+
+43. Quantum Integration
+
+A module may contain quantum constructs.
+
+The module layer must not:
+
+- enumerate quantum gates;
+- allocate qubits;
+- select physical qubits;
+- select QPU topology;
+- perform routing;
+- perform scheduling;
+- perform QEC;
+- perform calibration.
+
+Quantum constructs eventually reach the canonical:
 
 quantum::ir
 
 boundary.
 
-"modules/" remains completely independent of QEC and ZQN.
+The module system must not create a second quantum IR.
 
 ---
 
-26. Quantum Integration
+44. HDL and Hardware Integration
 
-Quantum modules may contain:
+A module may contain HDL and hardware/software co-design constructs.
 
-- quantum functions;
-- circuits;
-- gates;
-- operations;
-- measurements;
-- logical-qubit abstractions;
-- quantum-classical interactions;
-- QEC-related declarations;
-- quantum resource requirements.
+The module system must not encode:
 
-However, "modules/" does not own those constructs.
+fixed FPGA size
+fixed bus width
+fixed register count
+fixed number of logic elements
+fixed number of hardware modules
+fixed device address
+
+Hardware requirements and capabilities belong to the hardware/resource subsystems.
+
+---
+
+45. AI and Data Integration
+
+Modules may contain AI/ML/data constructs.
+
+The module grammar must not depend on:
+
+- PyTorch;
+- TensorFlow;
+- JAX;
+- CUDA;
+- vendor-specific AI runtimes;
+- a fixed tensor accelerator.
+
+Framework interoperability belongs under interoperability/dialect/toolchain infrastructure.
+
+---
+
+46. Distributed Integration
+
+A module may participate in distributed computation.
+
+The module system must not encode:
+
+MAX_NODES
+NODE_0
+NODE_1
+NODE_2
+
+or assume one module equals one distributed process.
+
+Deployment and placement are downstream.
+
+---
+
+47. Networking Integration
+
+Module imports are language dependencies.
+
+They must not be confused with runtime network communication.
+
+The same module may be compiled:
+
+locally
+
+or:
+
+distributed
+
+without changing its fundamental module identity.
+
+---
+
+48. Security Integration
+
+Module visibility and exports interact with security, but the module grammar must not become the complete security model.
+
+Semantic/security layers may later validate:
+
+- capability access;
+- authority;
+- package trust;
+- signed dependencies;
+- sandboxing;
+- FFI permissions;
+- external resource permissions.
+
+The parser only recognizes the language syntax.
+
+---
+
+49. Interoperability
+
+Foreign modules and formats must enter through the interoperability boundary.
+
+Examples may include:
+
+Rust
+C
+C++
+Python
+WASM
+OpenQASM
+QIR
+HDL
+other future formats
+
+These are interoperability concerns.
+
+They must not create a second Zamani module language.
+
+---
+
+50. Dialects
+
+A dialect may extend module syntax only through an explicit dialect mechanism.
+
+A dialect must identify:
+
+name
+version
+syntax extension
+semantic extension
+AST mapping
+IR mapping
+compatibility
+capabilities
+portability classification
+
+A dialect must never silently change the meaning of stable core module syntax.
+
+---
+
+51. Versioning
+
+Module/package/dependency version syntax belongs to "versioning.g4".
+
+Compatibility semantics belong downstream.
+
+Version handling must support:
+
+language compatibility
+module compatibility
+package compatibility
+dependency compatibility
+dialect compatibility
+
+without imposing artificial counts or limits.
+
+---
+
+52. Backward Compatibility
+
+Existing valid Zamani module syntax must not be broken merely because the module grammar is being modularized.
+
+Migration must follow:
+
+existing syntax
+    ↓
+inventory
+    ↓
+canonical ownership
+    ↓
+modular grammar
+    ↓
+AST compatibility
+    ↓
+semantic compatibility
+    ↓
+regression tests
+    ↓
+remove duplicate authority
+
+A syntax change must document:
+
+- old form;
+- new form;
+- language version;
+- compatibility status;
+- migration;
+- diagnostics;
+- AST effect;
+- semantic effect;
+- tooling effect.
+
+---
+
+53. Legacy Monolithic Grammar
+
+The current "grammar/Zamani.g4" contains historical/module-related grammar.
+
+The migration must not simply delete those rules.
+
+For every legacy module construct:
+
+1. identify its current syntax;
+2. identify its consumers;
+3. identify duplicate definitions;
+4. compare against the modular owner;
+5. preserve valid behavior;
+6. correct ambiguity;
+7. establish one owner;
+8. update aggregate composition;
+9. update parser implementation;
+10. update AST mapping;
+11. update semantic resolution;
+12. add regression tests;
+13. remove the duplicate only after migration is verified.
+
+The end state must have one authoritative syntax owner.
+
+---
+
+54. Parser Determinism
+
+Module parsing must be deterministic.
+
+The module grammar must not depend on:
+
+- filesystem state;
+- package registry state;
+- environment variables;
+- current time;
+- network responses;
+- random values;
+- hardware discovery;
+- runtime state.
+
+The same source and lexical input must produce the same syntactic interpretation.
+
+---
+
+55. Semantic Determinism
+
+Where the language promises deterministic semantic resolution, the resolver must define deterministic rules for:
+
+- module identity;
+- import resolution;
+- alias resolution;
+- export resolution;
+- dependency selection;
+- namespace lookup;
+- ambiguity diagnostics.
+
+The grammar itself does not perform these operations.
+
+---
+
+56. Source Spans and Diagnostics
+
+Every module-system AST node must preserve source location information sufficient to diagnose:
+
+- malformed module declarations;
+- invalid imports;
+- invalid exports;
+- invalid aliases;
+- invalid visibility;
+- unresolved modules;
+- ambiguous names;
+- dependency conflicts;
+- version incompatibility;
+- visibility violations.
+
+Syntax errors and semantic errors must remain distinguishable.
 
 For example:
+
+invalid module syntax
+
+must not be reported as:
+
+module dependency unavailable
+
+and:
+
+required package not found
+
+must not be reported as:
+
+invalid Zamani syntax
+
+---
+
+57. Error-Recovery Requirements
+
+The parser should support useful recovery where the underlying parser architecture permits it.
+
+A malformed module must not unnecessarily destroy diagnostics for unrelated declarations.
+
+Recovery must not alter accepted semantics.
+
+Examples worth testing include:
+
+missing module name
+missing terminator
+missing closing brace
+malformed qualified name
+malformed import
+malformed export
+malformed alias
+malformed dependency
+malformed version
+
+---
+
+58. Security Boundary
+
+The module grammar must contain no execution behavior.
+
+It must never:
+
+- execute shell commands;
+- read arbitrary files;
+- access secrets;
+- access hardware;
+- access a network;
+- mutate global compiler state;
+- invoke package registries;
+- perform dependency downloads.
+
+The parser parses.
+
+The semantic/toolchain infrastructure decides what the parsed constructs mean and what operations are permitted.
+
+---
+
+59. Rust Safety Contract
+
+The Zamani implementation must use safe Rust.
+
+Production code must contain no:
+
+unsafe
+
+including:
+
+unsafe fn
+unsafe impl
+unsafe trait
+unsafe {
+    ...
+}
+
+unless a future repository-wide policy explicitly creates a narrowly documented exception; the current module-system requirement is no unsafe Rust.
+
+The implementation baseline is:
+
+Rust 1.97
+Rust 1.97.1
+
+The grammar files themselves contain no embedded Rust actions.
+
+---
+
+60. No Embedded Semantic Actions
+
+Module ".g4" files should not perform semantic work through embedded actions or predicates that duplicate Rust semantic infrastructure.
+
+Avoid embedding:
+
+- filesystem logic;
+- symbol resolution;
+- dependency resolution;
+- resource discovery;
+- target discovery;
+- hardware selection;
+- IR construction;
+- runtime behavior.
+
+The grammar remains declarative.
+
+---
+
+61. Canonical IR Boundary
+
+The module subsystem does not create executable IR.
+
+Its information is preserved in the AST and semantic model until the compiler determines which parts affect generated computation.
+
+For example:
+
+module declaration
+    ↓
+AST module declaration
+    ↓
+semantic module environment
+    ↓
+resolved declarations
+    ↓
+canonical computation IR
+
+The module container itself should not become an artificial runtime IR object unless a downstream subsystem genuinely requires such a semantic representation.
+
+---
+
+62. Quantum IR Boundary
+
+Quantum declarations inside modules must eventually reach the existing canonical:
+
+quantum::ir
+
+pipeline.
+
+The architecture remains:
+
+Zamani source
+    ↓
+module syntax
+    ↓
+domain-neutral AST
+    ↓
+semantic analysis
+    ↓
+quantum semantic lowering
+    ↓
+quantum::ir
+    ↓
+optimization
+    ↓
+decomposition
+    ↓
+routing
+    ↓
+scheduling
+    ↓
+QEC/resilience
+    ↓
+ZQN
+    ↓
+HAL
+    ↓
+target
+
+The module grammar must never create a competing quantum IR.
+
+---
+
+63. Resource and Capability Boundary
+
+Modules may contain declarations that ultimately require capabilities.
+
+The distinction must remain:
+
+module
+    ≠
+resource requirement
+    ≠
+capability
+    ≠
+hardware
+    ≠
+deployment
+
+For example:
+
+requires capability("quantum.measurement");
+
+expresses a capability requirement.
+
+It does not encode:
+
+QPU = device 3
+
+Similarly:
+
+requires capability("gpu.compute");
+
+does not select a particular GPU.
+
+---
+
+64. Target Independence
+
+Module syntax must remain meaningful without knowing whether the eventual target is:
+
+- x86;
+- ARM;
+- RISC-V;
+- GPU;
+- FPGA;
+- ASIC;
+- QPU;
+- simulator;
+- accelerator;
+- cluster;
+- cloud;
+- future hardware.
+
+Target-specific behavior belongs downstream.
+
+---
+
+65. Module Metadata
+
+Module metadata must be represented structurally and semantically.
+
+It may eventually include information concerning:
+
+- stability;
+- version;
+- compatibility;
+- capabilities;
+- effects;
+- resource requirements;
+- provenance;
+- security;
+- domain classification.
+
+However, metadata must not silently become executable compiler behavior merely because it is syntactically present.
+
+---
+
+66. Feature Manifest Integration
+
+Where the repository adopts machine-readable feature manifests, the module feature must have a complete contract covering:
+
+feature ID
+feature name
+status
+language version
+grammar owner
+lexer requirements
+AST mapping
+semantic rules
+IR mapping
+compiler consumers
+runtime consumers
+diagnostics
+compatibility
+positive tests
+negative tests
+boundary tests
+scalability tests
+determinism tests
+hard-coding audit
+
+This ensures a module-system feature can be completed independently rather than requiring redesign after another subsystem is changed.
+
+---
+
+67. Independent Completion Contract
+
+Every file under "grammar/modules/" must be independently completable.
+
+Before a file is marked complete, its contract must answer:
+
+Purpose
+
+What exact language concept does this file define?
+
+Owns
+
+Which syntax belongs exclusively to this file?
+
+Does not own
+
+Which nearby concepts must remain elsewhere?
+
+Inputs
+
+Which canonical tokens/rules does it consume?
+
+Outputs
+
+Which parse-tree structures does it expose?
+
+Dependencies
+
+Which grammar components must already exist?
+
+AST
+
+What AST representation consumes the parse-tree result?
+
+Semantics
+
+What semantic subsystem interprets it?
+
+IR
+
+Does it affect canonical IR, and if so how?
+
+Compiler
+
+Which compiler subsystem consumes its semantic result?
+
+Runtime
+
+Which runtime subsystem may eventually consume its effects?
+
+Cross-domain
+
+How does it interact with classical, quantum, HDL, hardware, AI, distributed, and future domains?
+
+Diagnostics
+
+What errors can it produce?
+
+Compatibility
+
+What existing syntax must remain supported?
+
+Determinism
+
+What deterministic behavior is required?
+
+Scalability
+
+What happens from tiny programs to extremely large programs?
+
+Hard-coding audit
+
+Does it introduce any artificial physical/resource limit?
+
+Tests
+
+What positive, negative, boundary, scalability, determinism, and compatibility tests prove completion?
+
+---
+
+68. Dependency Order
+
+The module subsystem should be completed in dependency order.
+
+Recommended order:
+
+canonical lexical vocabulary
+        ↓
+canonical identifiers/names
+        ↓
+qualified names
+        ↓
+visibility
+        ↓
+module attributes
+        ↓
+modules
+        ↓
+aliases
+        ↓
+namespaces
+        ↓
+imports
+        ↓
+exports
+        ↓
+versioning
+        ↓
+packages
+        ↓
+dependencies
+        ↓
+aggregate Zamani composition
+        ↓
+AST
+        ↓
+semantic resolution
+        ↓
+compiler/toolchain integration
+
+This ordering minimizes later re-editing.
+
+---
+
+69. File Completion Order
+
+For the current directory, the recommended independent-first order is:
+
+1. "visibility.g4"
+2. "module-attributes.g4"
+3. "modules.g4"
+4. "aliases.g4"
+5. "namespaces.g4"
+6. "imports.g4"
+7. "exports.g4"
+8. "versioning.g4"
+9. "packages.g4"
+10. "dependencies.g4"
+11. "README.md" final conformance pass
+
+However, each file must first be checked against already-existing repository contracts rather than assuming these files are blank.
+
+---
+
+70. "visibility.g4" Completion Gate
+
+Complete only when:
+
+- one visibility vocabulary exists;
+- canonical tokens are used;
+- no duplicate visibility grammar exists elsewhere;
+- AST representation is known;
+- semantic accessibility rules are defined;
+- declaration consumers are identified;
+- module consumers are identified;
+- diagnostics are defined;
+- compatibility is defined;
+- tests exist;
+- no hardware limits exist.
+
+---
+
+71. "module-attributes.g4" Completion Gate
+
+Complete only when:
+
+- module-specific attribute syntax is defined;
+- general attributes are delegated correctly;
+- AST representation is defined;
+- semantic interpretation is identified;
+- diagnostics are defined;
+- unsupported attributes are distinguishable from malformed syntax;
+- compatibility is documented;
+- tests exist.
+
+---
+
+72. "modules.g4" Completion Gate
+
+Complete only when:
+
+- module declaration syntax is unambiguous;
+- module names use canonical names;
+- visibility is delegated;
+- attributes are delegated;
+- module bodies use canonical items;
+- module nesting is scalable;
+- no fixed module limits exist;
+- source spans are preserved;
+- AST mapping exists;
+- semantic ownership is defined;
+- parser integration exists;
+- regression tests exist;
+- scalability tests exist;
+- hard-coding audit passes.
+
+---
+
+73. "aliases.g4" Completion Gate
+
+Complete only when:
+
+- alias syntax is canonical;
+- alias targets use canonical names/references;
+- alias semantics are externalized;
+- ambiguity rules are defined;
+- AST mapping exists;
+- import/export integration is defined;
+- diagnostics exist;
+- compatibility tests exist.
+
+---
+
+74. "namespaces.g4" Completion Gate
+
+Complete only when:
+
+- namespace syntax is distinct from modules;
+- canonical names are reused;
+- nesting is scalable;
+- namespace identity is semantic;
+- AST mapping exists;
+- resolution ownership is defined;
+- module/package interaction is defined;
+- tests exist.
+
+---
+
+75. "imports.g4" Completion Gate
+
+Complete only when:
+
+- all supported import forms are specified;
+- aliases are integrated;
+- canonical names are used;
+- wildcard behavior is specified;
+- import resolution is explicitly downstream;
+- dependency graph integration is defined;
+- AST mapping exists;
+- diagnostics exist;
+- compatibility tests exist.
+
+---
+
+76. "exports.g4" Completion Gate
+
+Complete only when:
+
+- export syntax is canonical;
+- re-export semantics are defined downstream;
+- aliases integrate correctly;
+- visibility remains distinct;
+- AST mapping exists;
+- diagnostics exist;
+- compatibility tests exist.
+
+---
+
+77. "versioning.g4" Completion Gate
+
+Complete only when:
+
+- version syntax is canonical;
+- language/package/dependency versions are distinguishable;
+- semantic compatibility ownership is explicit;
+- migration ownership is explicit;
+- diagnostics are defined;
+- version limits are not artificial;
+- tests exist.
+
+---
+
+78. "packages.g4" Completion Gate
+
+Complete only when:
+
+- package identity syntax is defined;
+- package/module distinction is preserved;
+- package metadata is structurally represented;
+- dependency integration is defined;
+- registry access remains downstream;
+- package size/count limits are absent from syntax;
+- tests exist.
+
+---
+
+79. "dependencies.g4" Completion Gate
+
+Complete only when:
+
+- dependency declarations are complete;
+- dependency aliases integrate;
+- version requirements integrate;
+- dependency source information is defined;
+- graph construction is downstream;
+- cycle detection is downstream;
+- package retrieval is downstream;
+- security verification is downstream;
+- tests exist.
+
+---
+
+80. Production Tests
+
+The module subsystem requires more than happy-path parsing.
+
+The test matrix must contain:
+
+tests/
+├── modules/
+│   ├── positive/
+│   ├── negative/
+│   ├── boundary/
+│   ├── scalability/
+│   ├── determinism/
+│   └── compatibility/
+
+---
+
+81. Positive Tests
+
+At minimum, test:
+
+module math;
+
+module math::linear;
+
+module math::linear::matrix;
+
+pub module quantum::algorithms {
+    ...
+}
+
+and modules containing different domain constructs.
+
+---
+
+82. Negative Tests
+
+Test:
+
+- missing module name;
+- invalid name;
+- invalid qualified name;
+- malformed visibility;
+- malformed attributes;
+- malformed import;
+- malformed export;
+- malformed alias;
+- malformed dependency;
+- malformed version;
+- unterminated module body;
+- unexpected tokens.
+
+---
+
+83. Boundary Tests
+
+Test:
+
+- empty modules;
+- one-item modules;
+- deeply nested qualified names;
+- many imports;
+- many exports;
+- many aliases;
+- many dependencies;
+- nested modules;
+- mixed-domain modules;
+- large module bodies.
+
+No test may establish a language-level maximum merely because the test fixture uses a particular size.
+
+---
+
+84. Scalability Tests
+
+Scalability tests must verify that module semantics remain structurally valid as the source grows.
+
+Test progressively larger:
+
+module counts
+qualified-name depths
+imports
+exports
+aliases
+dependencies
+nested declarations
+package graphs
+cross-domain declarations
+
+The purpose is to verify correctness and resource behavior, not to establish artificial language limits.
+
+---
+
+85. Determinism Tests
+
+Repeatedly parse identical source and verify stable:
+
+- tokenization;
+- parse structure;
+- source spans;
+- diagnostics where ordering is specified;
+- AST structure.
+
+Semantic resolution should likewise have deterministic rules where required by the language.
+
+---
+
+86. Compatibility Tests
+
+The module subsystem must test:
+
+legacy module syntax
+current syntax
+deprecated syntax
+versioned syntax
+package/module interaction
+import/export compatibility
+alias compatibility
+namespace compatibility
+
+The compatibility matrix must identify whether each feature is:
+
+SPECIFIED
+IMPLEMENTED
+PARTIALLY IMPLEMENTED
+PLANNED
+DEPRECATED
+
+in accordance with the repository-wide "grammar.md" model.
+
+---
+
+87. Cross-Domain Tests
+
+A module should be able to organize constructs from different domains without the module subsystem needing domain-specific semantics.
+
+Test combinations such as:
+
+classical + quantum
+classical + HDL
+quantum + hardware
+AI + data
+distributed + networking
+quantum + classical + hardware
+AI + accelerator
+embedded + hardware
+future dialect + core language
+
+The module grammar must remain unchanged merely because new domains are added.
+
+---
+
+88. Hard-Coding Audit
+
+Every module grammar file must be checked for accidental limits.
+
+Reject universal language constructs equivalent to:
+
+MAX_MODULES
+MAX_IMPORTS
+MAX_EXPORTS
+MAX_DEPENDENCIES
+MAX_PACKAGES
+MAX_NAMESPACES
+MAX_MODULE_DEPTH
+MAX_MODULE_ITEMS
+
+Also reject target-specific assumptions such as:
+
+CPU_COUNT
+GPU_COUNT
+FPGA_COUNT
+QPU_COUNT
+QUBIT_COUNT
+NODE_COUNT
+MEMORY_SIZE
+DEVICE_ID
+DEVICE_ADDRESS
+
+when they are presented as universal language limits.
+
+---
+
+89. Valid Constants Versus Invalid Limits
+
+Not every numeric value is forbidden.
+
+This is valid:
+
+const package_count = 1000;
+
+because it is program data.
+
+This is not valid as a universal language constraint:
+
+MAX_MODULES = 1000
+
+Likewise, a compiler implementation may have a configurable resource budget.
+
+That does not make the budget part of Zamani language semantics.
+
+---
+
+90. No Physical Topology in Module Syntax
+
+Module syntax must not encode:
+
+GPU 0
+CPU 7
+QPU 3
+qubit 42
+node 12
+memory bank 2
+device address 0x...
+
+unless explicitly represented as a target-specific interoperability/dialect construct.
+
+Portable module syntax must remain independent of physical topology.
+
+---
+
+91. Module Resource Independence
+
+The same module graph must be usable when:
+
+resources are scarce
+
+and when:
+
+resources are abundant
+
+The compiler may choose different realizations.
+
+The source module organization remains the same.
+
+---
+
+92. Compilation and Deployment Independence
+
+A module should not have to be rewritten merely because compilation changes from:
+
+debug → release
+CPU → GPU
+single-target → cross-target
+local → distributed
+simulator → hardware
+
+Compilation profiles and deployment policies belong downstream.
+
+---
+
+93. Reproducibility
+
+Module resolution must support reproducible builds where the package/toolchain contract requires it.
+
+Reproducibility belongs to:
+
+- package metadata;
+- dependency resolution;
+- version selection;
+- lock information;
+- source provenance;
+- compiler configuration.
+
+The parser itself must remain deterministic and side-effect free.
+
+---
+
+94. Provenance
+
+The semantic/toolchain layer should preserve provenance sufficient to identify:
+
+- source module;
+- package;
+- version;
+- dependency;
+- dialect;
+- source span;
+- generated artifact;
+- external source where applicable.
+
+The module grammar only needs to preserve the source structures required to establish that provenance.
+
+---
+
+95. Tooling Integration
+
+The module AST must support tooling such as:
+
+- diagnostics;
+- go-to-definition;
+- find references;
+- import management;
+- export inspection;
+- dependency visualization;
+- module graph visualization;
+- refactoring;
+- formatting;
+- documentation generation;
+- build planning;
+- IDE/LSP integration.
+
+Tooling must consume canonical AST/semantic information rather than reparsing module syntax through a second implementation.
+
+---
+
+96. Documentation Integration
+
+The module system must be represented consistently in:
+
+grammar/DESIGN.md
+grammar/README.md
+grammar/specification/
+grammar/spec/
+grammar/reference/
+grammar/grammar.md
+
+Documentation must not invent syntax that the canonical grammar does not support.
+
+---
+
+97. "grammar.md" Integration
+
+"grammar/grammar.md" should eventually report module features using the repository-wide status model:
+
+SPECIFIED
+IMPLEMENTED
+PARTIALLY IMPLEMENTED
+PLANNED
+DEPRECATED
+
+The module README does not override implementation status.
+
+The actual status must be derived from repository evidence.
+
+---
+
+98. "Zamani-Grammar.md" Integration
+
+"Zamani-Grammar.md" may contain historical or proposed module concepts.
+
+Those concepts must not automatically become legal syntax.
+
+Promotion must follow:
+
+proposal
+   ↓
+language specification
+   ↓
+AST contract
+   ↓
+canonical grammar
+   ↓
+semantic implementation
+   ↓
+IR/compiler integration where required
+   ↓
+tests
+   ↓
+stable feature
+
+---
+
+99. No Duplicate Module Language
+
+The repository must not eventually contain:
+
+Zamani.g4 module syntax
+modules.g4 module syntax
+parser.rs module syntax
+some other module parser
+
+as independent authorities.
+
+There may be multiple implementations or generated representations, but they must implement one canonical language contract.
+
+---
+
+100. Parser Implementation Integration
+
+The actual Rust frontend currently has:
+
+src/lexer.rs
+src/parser.rs
+src/ast/
+
+The module grammar must be reconciled against those implementations.
+
+The integration process is:
+
+module grammar
+    ↓
+ANTLR parse contract
+    ↓
+Rust lexer token compatibility
+    ↓
+Rust parser compatibility
+    ↓
+frontend AST mapping
+    ↓
+semantic module resolution
+
+A grammar change is not production-complete until the Rust frontend agrees with it.
+
+---
+
+101. AST Integration With Existing Architecture
+
+The module subsystem must use the repository's existing AST architecture rather than introducing a parallel AST.
+
+The existing AST already provides generic concepts such as identifiers, spans, expressions, types, declarations, and program structure.
+
+Module integration should extend or reuse those concepts rather than creating unrelated representations.
+
+---
+
+102. No Domain-Specific Module ASTs
+
+Do not create:
+
+QuantumModule
+GpuModule
+HdlModule
+AiModule
+DistributedModule
+
+merely because a module contains a domain.
+
+The module is still a module.
+
+Its contents determine its domain semantics.
+
+---
+
+103. Quantum Example
+
+A module may contain quantum computation:
 
 module quantum::algorithms {
     ...
 }
 
-does not imply:
+The module system provides:
 
-a fixed QPU
-a fixed qubit count
-a physical topology
-a calibration
-a backend
-a scheduling policy
-a routing policy
+name
+scope
+organization
+imports
+exports
+visibility
+dependencies
 
-The module system remains independent of:
+The quantum subsystem provides:
 
-- "quantum::ir";
-- QEC;
-- ZQN;
-- routing;
-- scheduling;
-- hardware discovery;
-- calibration.
+quantum semantics
+quantum operations
+quantum types
+measurement
+resilience
+QEC intent
 
----
+The canonical quantum compiler pipeline provides:
 
-27. Classical Integration
+quantum::ir
+optimization
+routing
+scheduling
+ZQN
+HAL
+target realization
 
-Classical modules may contain:
-
-- functions;
-- types;
-- numerical operations;
-- data structures;
-- concurrency;
-- parallel computation;
-- systems abstractions.
-
-The module grammar does not need separate syntax for:
-
-CPU module
-GPU module
-HPC module
-embedded module
-
-unless the language specification establishes genuinely different source semantics.
-
-Target-specific implementation belongs downstream.
+These responsibilities must remain separate.
 
 ---
 
-28. HDL and Hardware Integration
+104. HDL Example
 
-HDL and hardware declarations may be organized into modules.
-
-For example:
+A module may contain HDL/hardware constructs:
 
 module hardware::accelerators {
     ...
 }
 
-does not itself select a physical accelerator.
+The module system does not decide:
 
-The module layer must remain separate from:
+FPGA size
+register count
+physical pin numbers
+clock frequency
+device ID
 
-- hardware topology;
-- physical placement;
-- device IDs;
-- addresses;
-- clock hardware;
-- physical resource allocation;
-- routing;
-- synthesis;
-- scheduling.
-
-Hardware semantics belong to HDL/hardware grammar and later compiler layers.
+unless explicitly expressed through a target-specific downstream construct.
 
 ---
 
-29. Distributed Integration
+105. Distributed Example
 
-Modules may contain distributed declarations and services.
+A module may contain distributed computation:
 
-A module does not inherently represent:
-
-one node
-one process
-one service instance
-one cluster
-one container
-
-Deployment semantics belong to the distributed execution and deployment layers.
-
-This preserves scalability from a single machine to arbitrarily large deployments subject to available resources.
-
----
-
-30. Resource Independence
-
-Module organization must not encode resource requirements.
-
-These are separate concepts:
-
-module
-requirement
-capability
-constraint
-preference
-hint
-resource
-target
-placement
-deployment
-
-For example:
-
-module quantum::simulation {
+module distributed::services {
     ...
 }
 
-must not implicitly mean:
+This does not mean:
 
-requires 100 qubits
-requires GPU
-requires N cores
-requires device X
+N nodes
 
-If the program has a genuine resource requirement, it must be represented through the resource/capability system.
+or:
 
----
+one module = one node
 
-31. Determinism
-
-Module grammar must be deterministic.
-
-It must perform no:
-
-- filesystem access;
-- network access;
-- environment inspection;
-- hardware inspection;
-- package lookup;
-- dependency resolution;
-- symbol lookup;
-- randomness;
-- clock access;
-- runtime execution.
-
-Given the same token stream and grammar version, syntactic interpretation must be deterministic.
-
-Semantic resolution may depend on explicit compiler inputs, but that must occur outside the grammar.
+Placement and deployment are downstream.
 
 ---
 
-32. Security Boundary
+106. AI Example
 
-The parser must be incapable of causing external side effects.
+A module may contain AI computation:
 
-The grammar must not contain:
-
-- embedded Rust actions;
-- filesystem operations;
-- network operations;
-- shell commands;
-- environment-variable access;
-- dynamic code execution;
-- package downloads;
-- registry requests;
-- hardware access;
-- runtime callbacks.
-
-The grammar must remain a pure syntax specification.
-
----
-
-33. Rust Safety Contract
-
-".g4" files contain grammar definitions only.
-
-They must contain no embedded Rust implementation.
-
-Generated and handwritten Zamani Rust code must comply with:
-
-Rust 1.97
-Rust 1.97.1
-safe Rust only
-no unsafe
-
-The module grammar must not require unsafe functionality.
-
-Parser correctness must not depend on unsafe code.
-
----
-
-34. Error Boundary
-
-The grammar reports syntax errors.
-
-Semantic analysis reports semantic errors.
-
-Syntax errors
-
-Examples:
-
-module ;
-
-module ::foo;
-
-module foo::;
-
-module foo {
-
-Semantic errors
-
-Examples:
-
-duplicate module identity
-unresolved import
-dependency cycle
-inaccessible symbol
-invalid package relationship
-invalid visibility
-module/namespace conflict
-
-The parser must not encode semantic checks through arbitrary predicates.
-
----
-
-35. Module Declaration Forms
-
-The canonical module syntax should support the language-approved forms:
-
-module math;
-
-and:
-
-module math {
+module ai::models {
     ...
 }
 
-and qualified names:
-
-module math::linear;
-
-and:
-
-module math::linear {
-    ...
-}
-
-Visibility may be composed where allowed:
-
-pub module math {
-    ...
-}
-
-Attributes may be composed where allowed:
-
-@experimental
-pub module quantum::algorithms {
-    ...
-}
-
-Exact accepted combinations are governed by the language specification and semantic validation.
+The module grammar remains independent of the AI framework or accelerator.
 
 ---
 
-36. Empty Modules
+107. Future Domain Rule
 
-The grammar may accept an empty module body when the language specification permits it:
+Adding a new computational domain must not require redesigning the fundamental module abstraction.
 
-module empty {}
+The required integration should normally be:
 
-Whether an empty module is useful, deprecated, or semantically invalid is not a parser concern.
-
-If the language decides to reject it, that policy should be represented explicitly in semantic validation unless there is a compelling syntactic reason.
-
----
-
-37. Module Declaration Without a Body
-
-A body-less module declaration:
-
-module math;
-
-must have an explicitly defined semantic interpretation.
-
-Possible semantic meanings include:
-
-- declaration of an externally defined module;
-- declaration of a separately supplied compilation unit;
-- forward declaration;
-- source-unit association.
-
-The grammar records the syntax.
-
-The semantic specification determines the meaning.
-
-The parser must not invent filesystem behavior.
-
----
-
-38. Nested Modules
-
-Nested modules must not have a fixed depth.
-
-Examples:
-
-module a {
-    ...
-}
-
-module a::b {
-    ...
-}
-
-module a::b::c {
-    ...
-}
-
-and arbitrarily longer qualified names are syntactically governed by the canonical qualified-name grammar.
-
-No:
-
-MAX_MODULE_DEPTH
-
-may exist in the grammar.
-
----
-
-39. Source Ordering
-
-The AST must preserve source ordering.
-
-This is important for:
-
-- diagnostics;
-- source mapping;
-- tooling;
-- documentation;
-- formatting;
-- semantic provenance;
-- reproducible compilation;
-- deterministic diagnostics.
-
-Semantic layers may reorder declarations internally where allowed, but that is not the responsibility of the grammar.
-
----
-
-40. Source Provenance
-
-Module parse nodes should retain source-span information through the frontend architecture.
-
-At minimum, tooling should be able to identify:
-
-module declaration start
-module name span
-each name segment span
-visibility span
-attribute spans
-body span
-declaration/item spans
-
-This enables:
-
-- precise diagnostics;
-- IDE navigation;
-- refactoring;
-- formatting;
-- source-to-source transformations;
-- dependency visualization.
-
----
-
-41. Tooling Integration
-
-The module grammar must support tooling such as:
-
-- language servers;
-- IDEs;
-- formatters;
-- documentation generators;
-- dependency analyzers;
-- symbol browsers;
-- refactoring tools;
-- go-to-definition;
-- rename operations;
-- import management;
-- module graph visualization.
-
-Tooling must consume parser/AST information rather than implement its own incompatible module parser.
-
----
-
-42. Compilation Integration
-
-The compiler should conceptually process:
-
-source
-  |
-  v
-lexer
-  |
-  v
-parser
-  |
-  v
+new domain grammar
+        ↓
+canonical item/declaration integration
+        ↓
 AST
-  |
-  v
-module resolution
-  |
-  v
-name resolution
-  |
-  v
-semantic validation
-  |
-  v
-canonical semantic representation
-  |
-  v
-domain-specific IR
-  |
-  v
-optimization
-  |
-  v
-routing / scheduling / lowering
-  |
-  v
-target realization
+        ↓
+semantic domain model
+        ↓
+domain IR
 
-"modules/" participates only in the first parser stage.
+rather than:
+
+rewrite modules.g4
+rewrite imports.g4
+rewrite exports.g4
+
+This is a central extensibility requirement.
 
 ---
 
-43. Runtime Integration
+108. Maintainability Rule
 
-There must be no direct runtime dependency on this directory.
+Do not create files merely to make the directory tree look complete.
 
-The runtime must not call the grammar to:
+Every module grammar file must have:
 
-- resolve modules;
-- load packages;
-- discover hardware;
-- select devices;
-- execute imports.
+- one clear owner;
+- a documented interface;
+- a known upstream dependency;
+- known downstream consumers;
+- tests;
+- completion criteria.
 
-Any runtime module loading mechanism must operate on compiler-produced metadata or explicitly defined runtime abstractions.
-
----
-
-44. Dependency Graph
-
-The module grammar architecture should follow this direction:
-
-Lexer
-  |
-  v
-Core names / paths / metadata
-  |
-  +--> Visibility
-  |
-  +--> Module attributes
-  |
-  +--> Namespaces
-  |
-  v
-Modules
-  |
-  +--> Imports
-  +--> Exports
-  +--> Packages
-  +--> Dependencies
-  |
-  v
-Aggregate declaration/item grammar
-  |
-  v
-Frontend AST
-  |
-  v
-Semantic analysis
-
-The reverse direction must not occur.
-
-In particular:
-
-modules -> IR
-modules -> runtime
-modules -> hardware
-modules -> scheduling
-modules -> routing
-modules -> optimization
-
-must not be direct grammar dependencies.
+If a new concept does not need a separate grammar component, it should not receive one merely for organizational symmetry.
 
 ---
 
-45. No Circular Dependencies
+109. Circular Dependency Rule
 
-The module grammar must not establish cycles such as:
+The module grammar must not create circular grammar ownership such as:
 
-modules -> AST -> modules
+modules → imports → modules → imports
 
-or:
+where both files redefine each other's syntax.
 
-modules -> semantic analysis -> modules
+Instead:
 
-or:
+modules
+imports
+exports
+aliases
+namespaces
+packages
+dependencies
+versioning
 
-modules -> quantum -> modules
+are independent components composed by the aggregate grammar.
 
-or:
+Semantic relationships may be cyclic at the model level where the language permits them, but grammar ownership must remain clear.
 
-modules -> hardware -> modules
+---
 
-or:
+110. Grammar Dependency Direction
 
-modules -> runtime -> modules
+The preferred dependency direction is:
 
-The dependency direction is:
-
-syntax
+lexer
+  ↓
+core names/tokens
+  ↓
+module components
+  ↓
+aggregate parser
   ↓
 AST
   ↓
@@ -1624,1140 +2854,644 @@ semantic analysis
   ↓
 IR
   ↓
-compiler
-  ↓
+compiler/runtime
+
+Never:
+
+grammar/modules
+        ↓
 runtime
-
----
-
-46. Compatibility Contract
-
-Module-system evolution must be versioned.
-
-Changes must be classified as:
-
-- additive;
-- compatible;
-- deprecated;
-- migration-required;
-- breaking.
-
-A grammar change must not silently redefine existing valid programs.
-
-Before removing a module feature:
-
-1. identify existing uses;
-2. determine intended semantics;
-3. determine compatibility requirements;
-4. add migration rules;
-5. update documentation;
-6. update tests;
-7. only then remove obsolete syntax.
-
----
-
-47. Legacy Compatibility
-
-The current repository contains an older monolithic module system alongside the modular grammar architecture.
-
-The final architecture must converge on one source-level module specification.
-
-The modular files become the maintainable ownership units.
-
-The monolithic grammar must not remain a second independent authority indefinitely.
-
-Compatibility tests must ensure that valid legacy programs remain valid unless a deliberate language-version change says otherwise.
-
----
-
-48. Grammar Authority
-
-The repository must establish:
-
-canonical grammar
-      |
-      +--> modular grammar components
-      |
-      +--> generated parser
-      |
-      +--> tests
-      |
-      +--> documentation
-
-Documentation must describe the canonical grammar.
-
-Generated parser artifacts must be derived from it.
-
-No generated artifact should become a hand-maintained competing grammar authority.
-
----
-
-49. Testing Requirements
-
-The module grammar requires dedicated tests.
-
-Tests belong under:
-
-grammar/tests/modules/
-
-and relevant cross-domain suites.
-
----
-
-50. Positive Tests
-
-At minimum test:
-
-module math;
-
-module math {}
-
-module math::linear;
-
-module math::linear {}
-
-pub module math {}
-
-@experimental
-module quantum::algorithms {}
-
-module quantum::algorithms {
-    ...
-}
-
-module hardware::accelerators {
-    ...
-}
-
-module distributed::services {
-    ...
-}
-
-and modules containing mixed computational domains.
-
----
-
-51. Negative Tests
-
-Test malformed module syntax including:
-
-module;
-
-module ;
-
-module ::math;
-
-module math::;
-
-module ::;
-
-module math {
-
-module math {}
-extra-invalid-token
-
-and other malformed combinations defined by the canonical grammar.
-
----
-
-52. Semantic Negative Tests
-
-Separate parser failures from semantic failures.
-
-Examples:
-
-duplicate module
-unresolved module
-duplicate namespace
-invalid visibility
-invalid import
-cyclic dependency
-invalid package relationship
-invalid export
-
-must be tested in semantic-analysis suites rather than encoded into grammar predicates.
-
----
-
-53. Cross-Domain Tests
-
-Modules must be tested with:
-
-classical
-quantum
-hybrid
-HDL
+        ↓
 hardware
+        ↓
+lexer
+
+The grammar must remain upstream.
+
+---
+
+111. Runtime Independence
+
+No module grammar construct should require the parser to know:
+
+- runtime scheduler state;
+- runtime resource availability;
+- current hardware;
+- current calibration;
+- current cluster state;
+- current network state.
+
+Those are runtime concerns.
+
+---
+
+112. Compiler Independence From Physical Topology
+
+A module graph must remain valid if the compiler changes its realization strategy.
+
+For example:
+
+one module
+
+could be:
+
+inlined
+
+or:
+
+compiled separately
+
+or:
+
 distributed
-AI
-data
-networking
-security
-accelerators
-future dialects
 
-Examples should include:
+or:
 
-classical module + quantum declaration
-quantum module + classical function
-hardware module + HDL declarations
-distributed module + quantum computation
-AI module + accelerator declarations
-classical + quantum + distributed
-classical + quantum + HDL + hardware
+lowered into accelerator code
 
-This proves that modules remain domain-neutral.
+depending on compiler decisions.
+
+The module syntax does not prescribe the realization.
 
 ---
 
-54. Scalability Tests
+113. Module Graph and POCO-REAF
 
-Tests must verify that the grammar imposes no accidental finite limits.
+The module graph is part of the portable semantic program.
 
-Generate module names and module structures containing:
-
-- many modules;
-- many declarations;
-- many qualified-name segments;
-- many imports;
-- many exports;
-- many dependencies;
-- deeply nested source structures;
-- very large compilation units.
-
-The tests must distinguish:
-
-grammar acceptance
-
-from:
-
-implementation resource exhaustion
-
-A parser implementation may have explicit operational resource policies.
-
-Those policies must not be interpreted as language-level module limits.
-
----
-
-55. Hard-Coding Audit
-
-Every module grammar review must search for:
-
-MAX_MODULE
-MAX_IMPORT
-MAX_EXPORT
-MAX_PACKAGE
-MAX_DEPENDENCY
-MAX_NAMESPACE
-MAX_DEPTH
-MAX_SEGMENTS
-MAX_ITEMS
-
-and equivalent hard-coded restrictions.
-
-Also search for:
-
-q[0]
-q[1]
-CPU
-GPU
-QPU
-device
-address
-topology
-cores
-threads
-qubits
-memory
-
-inside module-specific grammar.
-
-Any occurrence must be classified as:
-
-1. legitimate language syntax;
-2. documentation;
-3. test fixture;
-4. diagnostic text;
-5. accidental machine coupling.
-
-Accidental machine coupling must be removed.
-
----
-
-56. Resource Exhaustion Policy
-
-"Unlimited" at the language level does not mean physically infinite execution.
-
-The correct distinction is:
-
-Language semantics
-        !=
-Implementation capacity
-
-A parser may encounter:
-
-available memory
-stack limits
-input-size policies
-execution timeouts
-compiler budgets
-
-but those are implementation policies.
-
-They must not alter the meaning of valid Zamani source.
-
-Thus:
-
-scale from atom to everywhere
-
-means the language does not impose arbitrary machine-size ceilings.
-
-Actual execution remains bounded by available resources.
-
----
-
-57. Deterministic Builds
-
-Module syntax must support reproducible compilation.
-
-Module parsing must not depend on:
-
-- current time;
-- random values;
-- machine identity;
-- environment variables;
-- local filesystem state;
-- network state.
-
-Any external module resolution must be represented as an explicit compiler input and handled outside grammar parsing.
-
----
-
-58. Reproducibility
-
-The module AST and semantic module graph should preserve enough provenance to reproduce compilation decisions.
-
-Important provenance includes:
-
-- module source identity;
-- module name;
-- source span;
-- dependency declarations;
-- import/export syntax;
-- language version;
-- applicable attributes.
-
-The grammar itself does not perform reproducibility enforcement.
-
----
-
-59. Security
-
-Module syntax must not become an arbitrary code-execution mechanism.
-
-The module grammar must not allow syntax that implicitly means:
-
-execute shell command
-download code
-execute downloaded code
-inspect host filesystem
-inspect hardware
-open arbitrary network connection
-access secrets
-
-Any explicit interoperability or package mechanism must pass through separately defined security and compiler policies.
-
----
-
-60. Future Extensibility
-
-The module grammar must support future computational domains without redesigning its fundamental structure.
-
-A future declaration such as:
-
-new-domain::declaration
-
-should be able to inhabit a module through the canonical item/declaration composition.
-
-The module grammar should not require a new module syntax merely because Zamani gains:
-
-- neuromorphic computing;
-- photonic computing;
-- molecular computing;
-- biological computing;
-- optical accelerators;
-- new quantum models;
-- new AI architectures;
-- new hardware technologies;
-- future execution models.
-
-The module abstraction must remain stable.
-
----
-
-61. Dialect Integration
-
-Future dialects may introduce additional declarations.
-
-They must integrate through the aggregate parser and dialect registration mechanism.
-
-They must not modify the fundamental module abstraction merely to become module members.
-
-The relationship is:
-
-module
-  |
-  +--> canonical item
-          |
-          +--> core declaration
-          +--> quantum declaration
-          +--> HDL declaration
-          +--> hardware declaration
-          +--> dialect declaration
-          +--> future declaration
-
----
-
-62. Macro Integration
-
-Macros may appear inside modules where the language permits them.
-
-Macro syntax remains owned by:
-
-grammar/macros/
-
-The module grammar must not duplicate macro syntax.
-
-Macro expansion happens after parsing according to the language's compilation model.
-
-The module parser must preserve macro source structure sufficiently for diagnostics and tooling.
-
----
-
-63. Metaprogramming Integration
-
-Compile-time and metaprogramming constructs may be organized by modules.
-
-Module syntax remains unchanged.
-
-The module grammar does not execute compile-time code.
-
-Execution belongs to the appropriate compiler stage.
-
----
-
-64. Interoperability
-
-A module may expose:
-
-- C interoperability;
-- C++ interoperability;
-- Python interoperability;
-- OpenQASM interoperability;
-- Verilog/HDL interoperability;
-- system interfaces;
-- ABI definitions.
-
-Those constructs belong to:
-
-grammar/interoperability/
-
-The module system only provides the organizational boundary.
-
----
-
-65. Quantum "quantum::ir" Boundary
-
-A module containing quantum computation does not create a quantum IR.
-
-The flow remains:
-
-module syntax
-     |
-     v
-frontend AST
-     |
-     v
-semantic quantum analysis
-     |
-     v
-quantum::ir
-     |
-     v
-optimization
-     |
-     v
-routing
-     |
-     v
-scheduling
-     |
-     v
-hardware / runtime
-
-The module system must never redefine:
-
-QubitId
-PhysicalQubitId
-QuantumGate
-QuantumOperation
-QuantumCircuit
-
-or equivalent semantic representations.
-
-Those belong to the canonical quantum architecture.
-
----
-
-66. QEC Boundary
-
-QEC is not owned by modules.
-
-A module may contain a declaration that refers to an error-correction abstraction if the quantum language supports it.
-
-The meaning is handled downstream.
-
-The module grammar must not implement:
-
-- syndrome extraction;
-- correction;
-- decoder behavior;
-- logical qubit management;
-- code selection.
-
----
-
-67. ZQN Boundary
-
-ZQN is not owned by modules.
-
-Module syntax must not describe:
-
-- noise models;
-- fault injection;
-- noise channels;
-- correlated faults;
-- leakage;
-- loss;
-- erasure;
-- calibration noise.
-
-Those remain ZQN concerns.
-
-A module can organize source declarations that eventually use ZQN semantics, but the module grammar remains unaware of those implementation details.
-
----
-
-68. Scheduling and Routing Boundary
-
-Module structure does not determine:
-
-- operation order;
-- timing;
-- resource scheduling;
-- qubit placement;
-- physical routing;
-- pulse timing;
-- hardware topology.
-
-These belong to later compilation stages.
+The physical deployment graph is not necessarily identical to the module graph.
 
 Therefore:
 
-module
+module graph
+    ≠
+process graph
+    ≠
+hardware topology
+    ≠
+network topology
 
-must never mean:
-
-schedule
-route
-place
-allocate
-dispatch
-
----
-
-69. Hardware Abstraction Boundary
-
-Hardware capabilities are supplied by the hardware abstraction layer and compilation context.
-
-Module syntax may identify a semantic requirement through a separate resource/capability language, but:
-
-module name
-
-must not encode:
-
-device identity
-hardware address
-physical topology
-
-This distinction is necessary for POCO-REAF.
+This distinction is essential for true scalability.
 
 ---
 
-70. Resource/Capability Boundary
+114. Optimization Independence
 
-The module system must compose with:
+Compiler optimization may:
 
-grammar/resources/
+- inline modules;
+- eliminate unused declarations;
+- specialize generic code;
+- partition code;
+- fuse operations;
+- distribute computation;
+- place computations on accelerators.
 
-for explicit source-level requirements where appropriate.
+None of those transformations should require changing the source module syntax.
+
+---
+
+115. Resource Negotiation
+
+The intended architecture is:
+
+source module
+    ↓
+semantic requirements
+    ↓
+capability/resource model
+    ↓
+target capability discovery
+    ↓
+resource negotiation
+    ↓
+planning
+    ↓
+lowering
+
+The module grammar does not perform negotiation.
+
+---
+
+116. Error Categories
+
+The implementation should distinguish at least:
+
+lexical error
+syntax error
+AST construction error
+name-resolution error
+module-resolution error
+visibility error
+import error
+export error
+alias error
+namespace error
+package error
+dependency error
+version error
+capability error
+resource error
+target compatibility error
+runtime error
+
+This prevents unrelated failures from being reported as grammar failures.
+
+---
+
+117. Production Validation
+
+The module subsystem is production-ready only when all required layers agree:
+
+specification
+    ✓
+grammar
+    ✓
+lexer
+    ✓
+parser
+    ✓
+AST
+    ✓
+semantic analysis
+    ✓
+IR where applicable
+    ✓
+compiler
+    ✓
+tooling
+    ✓
+tests
+    ✓
+documentation
+    ✓
+compatibility
+    ✓
+
+A grammar file passing ANTLR generation alone is insufficient.
+
+---
+
+118. Required Repository Checks
+
+The final repository validation must include the actual project commands for:
+
+formatting
+compilation
+tests
+linting
+grammar generation/validation
+frontend conformance
+integration tests
+
+For the Rust implementation, the intended baseline is Rust 1.97/1.97.1 with no unsafe code.
+
+The repository's actual "Cargo.toml" and CI configuration determine the exact commands and version declaration.
+
+---
+
+119. No-Unsafe Validation
+
+The production pipeline must include a repository-level no-unsafe check.
+
+At minimum, production Rust must reject accidental introduction of:
+
+unsafe
+unsafe fn
+unsafe impl
+unsafe trait
+unsafe {
+
+The preferred Rust-level enforcement is:
+
+#![forbid(unsafe_code)]
+
+at applicable crate boundaries, supplemented by repository CI auditing.
+
+---
+
+120. Definition of Complete Module Grammar
+
+The module subsystem is complete only when:
+
+- every module grammar file has one owner;
+- duplicate ownership is removed;
+- canonical names are reused;
+- visibility is canonical;
+- attributes are canonical;
+- imports are independent;
+- exports are independent;
+- aliases are independent;
+- namespaces are independent;
+- packages are independent;
+- dependencies are independent;
+- versioning is independent;
+- module bodies use canonical Zamani items;
+- aggregate grammar composition is defined;
+- lexer integration is defined;
+- AST integration is defined;
+- semantic integration is defined;
+- compiler integration is defined;
+- runtime integration is defined;
+- tooling integration is defined;
+- compatibility is defined;
+- diagnostics are defined;
+- deterministic behavior is defined;
+- scalability is tested;
+- no hard-coded resource limits exist;
+- no physical topology is embedded into portable module semantics;
+- no second module language exists;
+- no second AST authority exists;
+- no second IR authority exists.
+
+---
+
+121. What This Directory Must Never Own
+
+"grammar/modules/" must never become responsible for:
+
+filesystem access
+package downloading
+dependency solving
+symbol resolution
+runtime loading
+hardware discovery
+resource allocation
+device selection
+qubit allocation
+GPU selection
+CPU selection
+FPGA selection
+routing
+scheduling
+QEC implementation
+ZQN implementation
+HAL implementation
+optimization
+execution
+
+It describes source organization.
+
+---
+
+122. What Downstream Systems Must Own
+
+Concern| Owner
+Tokens| "grammar/lexer/"
+Identifiers| canonical core/name grammar
+Module syntax| "grammar/modules/modules.g4"
+Import syntax| "grammar/modules/imports.g4"
+Export syntax| "grammar/modules/exports.g4"
+Visibility syntax| "grammar/modules/visibility.g4"
+Namespace syntax| "grammar/modules/namespaces.g4"
+Alias syntax| "grammar/modules/aliases.g4"
+Package syntax| "grammar/modules/packages.g4"
+Dependency syntax| "grammar/modules/dependencies.g4"
+Version syntax| "grammar/modules/versioning.g4"
+Module attributes| "grammar/modules/module-attributes.g4"
+Grammar composition| "grammar/Zamani.g4"
+Lexical implementation| "src/lexer.rs"
+Parsing implementation| "src/parser.rs"
+AST| "src/ast/"
+Name/module resolution| semantic layer
+Dependency resolution| package/toolchain layer
+Type semantics| type/semantic layer
+Classical IR| canonical classical IR
+Quantum IR| "quantum::ir"
+HDL/hardware representation| corresponding canonical semantic/IR layer
+Optimization| compiler
+Routing| compiler/quantum infrastructure
+Scheduling| compiler/runtime infrastructure
+QEC| quantum resilience/QEC subsystem
+ZQN| ZQN subsystem
+HAL| hardware abstraction layer
+Deployment| deployment infrastructure
+Runtime execution| runtime
+
+---
+
+123. Integration Contract With "grammar/Zamani.g4"
+
+The root grammar must eventually expose module constructs through one canonical composition.
 
 Conceptually:
 
-module
-   |
-   +--> requirements
-   +--> constraints
-   +--> preferences
-   +--> hints
+program
+    → items
+        → moduleDeclaration
+        → importDeclaration
+        → exportDeclaration
+        → package/dependency constructs
+        → other canonical items
 
-But these remain separate semantic concepts.
+The exact root-rule names must follow the actual canonical "Zamani.g4".
 
-A module name itself is not a resource requirement.
-
----
-
-71. Documentation Contract
-
-The module grammar documentation must remain synchronized with:
-
-grammar/Zamani.g4
-grammar/Zamani-Grammar.md
-grammar/grammar.md
-grammar/specification/
-grammar/modules/
-
-Documentation changes must not silently introduce syntax absent from the authoritative grammar.
-
-Likewise, new grammar syntax must have corresponding specification coverage.
+The module README must not force a duplicate root grammar.
 
 ---
 
-72. Required File-Level Completion Contracts
+124. Integration Contract With "src/parser.rs"
 
-Each module grammar file is complete only when all of the following have been established:
+The Rust parser must recognize the same accepted module language as the canonical grammar.
 
-Purpose
-Ownership
-Non-ownership
-Lexical dependencies
-Grammar dependencies
-AST expectations
-Semantic boundary
-Compiler integration
-Runtime non-dependency
-Tooling integration
-Cross-domain integration
-Compatibility behavior
-Scalability behavior
-Hard-coding audit
-Positive tests
-Negative tests
-Boundary tests
-Determinism tests
-Documentation
+Differences must be classified as:
 
-A file is not complete merely because ANTLR accepts it.
+SPECIFICATION GAP
+GRAMMAR GAP
+PARSER GAP
+LEGACY COMPATIBILITY
+PLANNED FEATURE
+
+They must not remain undocumented.
 
 ---
 
-73. "modules.g4" Completion Criteria
+125. Integration Contract With "src/ast/"
 
-"modules.g4" is complete only when:
+The AST must represent module syntax without losing:
 
-- module syntax has one authoritative owner;
-- module names reuse canonical names;
-- visibility uses canonical visibility syntax;
-- attributes use canonical attribute syntax;
-- module bodies use canonical item composition;
-- no module-specific declaration language is duplicated;
-- no machine limits exist;
-- no filesystem semantics are embedded;
-- no package resolution is performed;
-- no runtime dependency exists;
-- no IR is created;
-- no quantum representation is duplicated;
-- parser integration is deterministic;
-- positive tests pass;
-- negative tests pass;
-- boundary tests pass;
-- cross-domain tests pass;
-- compatibility tests pass.
+name
+attributes
+visibility
+body
+source spans
+source order
+
+Imports, exports, aliases, namespaces, packages, dependencies, and versions must similarly map into existing canonical AST abstractions or explicitly defined extensions.
 
 ---
 
-74. "imports.g4" Completion Criteria
+126. Integration Contract With Semantic Analysis
 
-"imports.g4" is complete only when:
-
-- import syntax has one authoritative owner;
-- qualified names are canonical;
-- aliases are canonical;
-- source literals are syntactically opaque;
-- no filesystem access is implied;
-- no package resolution is performed;
-- no dependency solving is performed;
-- no machine target is encoded;
-- semantic resolution is delegated;
-- import tests pass;
-- legacy import syntax has been audited.
-
----
-
-75. "exports.g4" Completion Criteria
-
-"exports.g4" is complete only when:
-
-- export syntax has one authoritative owner;
-- export and visibility remain distinct;
-- re-export syntax is explicitly defined;
-- wildcard behavior is specified;
-- aliases are canonical;
-- semantic accessibility is delegated;
-- no runtime export behavior is embedded;
-- tests cover all supported export forms.
-
----
-
-76. "visibility.g4" Completion Criteria
-
-"visibility.g4" is complete only when:
-
-- there is one visibility vocabulary;
-- all declaration grammars consume it;
-- no duplicate visibility rules remain;
-- explicit and absent visibility are distinguishable where required;
-- semantic access checking is delegated;
-- no domain-specific visibility duplication exists;
-- compatibility behavior is documented;
-- tests cover every supported spelling.
-
----
-
-77. "namespaces.g4" Completion Criteria
-
-"namespaces.g4" is complete only when:
-
-- canonical qualified names are reused;
-- namespace syntax is distinct from module syntax;
-- namespace aliases are explicitly defined;
-- no filesystem assumptions exist;
-- no package assumptions exist;
-- namespace resolution is semantic;
-- no namespace-depth limit exists;
-- tests cover aliases, nesting, and invalid syntax.
-
----
-
-78. "packages.g4" Completion Criteria
-
-"packages.g4" is complete only when:
-
-- package syntax is authoritative;
-- package identity is separated from module identity;
-- dependency syntax is delegated;
-- package resolution is external to grammar;
-- no registry/network behavior is embedded;
-- package metadata syntax is versioned;
-- tests cover valid and invalid package declarations.
-
----
-
-79. "dependencies.g4" Completion Criteria
-
-"dependencies.g4" is complete only when:
-
-- dependency syntax is authoritative;
-- requirements are represented structurally;
-- resolution is semantic/toolchain responsibility;
-- dependency count is unlimited at the grammar level;
-- no registry/network access exists;
-- no version-solving algorithm is embedded;
-- dependency-cycle detection remains semantic;
-- tests cover dependency forms and boundaries.
-
----
-
-80. "module-attributes.g4" Completion Criteria
-
-"module-attributes.g4" is complete only when:
-
-- module-specific attributes have clear ownership;
-- generic attributes are delegated appropriately;
-- attribute values use canonical expressions/literals where required;
-- no attribute executes code;
-- no hardware is selected;
-- no runtime action occurs;
-- attribute semantics are documented elsewhere;
-- tests cover valid, invalid, repeated, and conflicting syntax.
-
----
-
-81. Production Test Matrix
-
-The module system must ultimately be covered by:
-
-grammar/tests/
-├── modules/
-│   ├── modules_positive
-│   ├── modules_negative
-│   ├── imports_positive
-│   ├── imports_negative
-│   ├── exports_positive
-│   ├── exports_negative
-│   ├── namespaces_positive
-│   ├── namespaces_negative
-│   ├── packages_positive
-│   ├── packages_negative
-│   ├── dependencies_positive
-│   ├── dependencies_negative
-│   ├── visibility_positive
-│   └── visibility_negative
-│
-├── cross-domain/
-├── scalability/
-├── determinism/
-├── compatibility/
-└── roundtrip/
-
-The exact physical test-file layout may be consolidated where that improves maintainability, but ownership and coverage must remain explicit.
-
----
-
-82. Round-Trip Requirement
-
-Where a source printer exists:
-
-Zamani source
-    |
-    v
-lexer
-    |
-    v
-parser
-    |
-    v
-AST
-    |
-    v
-printer
-    |
-    v
-Zamani source
-
-must preserve semantics.
-
-Module tests should verify:
-
-- module names;
-- qualified-name structure;
-- visibility;
-- attributes;
-- body boundaries;
-- imports;
-- exports;
-- package declarations;
-- dependency declarations.
-
-Source formatting may change.
-
-Meaning must not.
-
----
-
-83. Determinism Test
-
-Given identical source:
-
-source A
-
-multiple parser executions must produce equivalent parse structures.
-
-No parser output may depend on:
-
-machine
-time
-randomness
-filesystem
-network
-hardware
-environment
-
----
-
-84. Repository-Wide Integration Test
-
-The final grammar integration must prove:
-
-grammar
-   |
-   v
-lexer
-   |
-   v
-parser
-   |
-   v
-AST
-   |
-   v
-semantic analysis
-   |
-   v
-canonical IR
-
-with modules participating without creating a circular dependency.
-
-The integration suite must include at least one complete program containing:
+The semantic layer must build a module environment capable of resolving:
 
 module
-imports
-exports
 namespace
-package/dependency metadata
-classical code
-quantum code
-hardware/HDL code
-resource declarations
+package
+import
+export
+alias
+dependency
+version
 
-where each domain is represented according to its canonical grammar.
-
----
-
-85. POCO-REAF Acceptance Test
-
-A module program must remain semantically identical when compiled for different target environments.
-
-The source:
-
-module application::core {
-    ...
-}
-
-must not need rewriting merely because compilation targets change from:
-
-embedded
-
-to:
-
-CPU
-
-to:
-
-GPU
-
-to:
-
-FPGA
-
-to:
-
-ASIC
-
-to:
-
-QPU
-
-to:
-
-cluster
-
-to:
-
-cloud
-
-provided the target satisfies the program's semantic requirements.
+without relying on physical deployment.
 
 ---
 
-86. What the Module Grammar Must Never Do
+127. Integration Contract With Compiler
 
-The module grammar must never:
+The compiler may use module information for:
 
-- discover hardware;
-- select hardware;
-- allocate hardware;
-- select a QPU;
-- allocate qubits;
-- select a topology;
-- schedule operations;
-- route operations;
-- optimize programs;
-- execute code;
-- resolve packages;
-- access a registry;
-- access the filesystem;
-- access the network;
-- construct IR;
-- construct "quantum::ir";
-- perform QEC;
-- model ZQN noise;
-- create runtime state;
-- impose machine-size limits.
+- compilation-unit boundaries;
+- dependency ordering;
+- visibility;
+- symbol linkage;
+- optimization;
+- specialization;
+- incremental compilation;
+- caching;
+- artifact generation;
+- provenance.
+
+It must not assume a module corresponds to a physical machine component.
 
 ---
 
-87. Implementation Order
+128. Integration Contract With Runtime
 
-The module subsystem should be completed in dependency-first order.
+Runtime systems may consume module-derived metadata for:
 
-Recommended order:
+- loading;
+- service registration;
+- observability;
+- provenance;
+- dynamic linking;
+- deployment.
 
-1. Canonical lexer/token contract
-        |
-2. core/names.g4
-        |
-3. core/qualified-names.g4
-        |
-4. core/attributes.g4
-        |
-5. modules/visibility.g4
-        |
-6. modules/module-attributes.g4
-        |
-7. modules/namespaces.g4
-        |
-8. modules/modules.g4
-        |
-9. modules/imports.g4
-        |
-10. modules/exports.g4
-        |
-11. modules/packages.g4
-        |
-12. modules/dependencies.g4
-        |
-13. aggregate parser integration
-        |
-14. frontend AST integration
-        |
-15. semantic module resolution
-        |
-16. repository-wide compatibility tests
-
-The exact order must follow the actual dependency graph if repository inspection reveals a different prerequisite.
+Runtime behavior must not be required for parsing.
 
 ---
 
-88. Definition of Done
+129. Integration Contract With Future Hardware
 
-The "grammar/modules/" subsystem is production-ready only when:
+A new hardware target must not require changing module syntax simply because the target has a different:
 
-- every grammar component has one clear owner;
-- no duplicate grammar authority remains;
-- canonical names are reused;
-- canonical visibility is reused;
-- attributes are correctly delegated;
-- module bodies compose the canonical item grammar;
-- imports are separate from exports;
-- packages are separate from modules;
-- namespaces are separate from modules;
-- dependencies are separate from packages;
-- syntax and semantics are clearly separated;
-- no runtime behavior exists in grammar;
-- no filesystem/network behavior exists in grammar;
-- no hardware assumptions exist in grammar;
-- no fixed scalability limits exist;
-- no quantum-machine assumptions exist;
-- no IR is duplicated;
-- "quantum::ir" remains the canonical quantum semantic boundary;
-- QEC remains outside module grammar;
-- ZQN remains outside module grammar;
-- optimization remains outside module grammar;
-- routing remains outside module grammar;
-- scheduling remains outside module grammar;
-- hardware discovery remains outside module grammar;
-- compiler integration is deterministic;
-- Rust 1.97/1.97.1 compatibility is maintained;
-- no unsafe Rust is required;
-- parser diagnostics have stable source boundaries;
-- AST provenance is preserved;
-- tooling integration is possible;
-- cross-domain programs parse correctly;
-- scalability tests pass;
-- determinism tests pass;
-- compatibility tests pass;
-- round-trip tests pass;
-- documentation matches the authoritative grammar.
-
----
-
-89. Final Architectural Rule
-
-The module system must embody:
-
-«A Zamani module organizes computation; it does not determine the machine on which that computation must execute.»
-
-Therefore:
-
-Module
-   ≠
-Machine
-
-Module
-   ≠
-Device
-
-Module
-   ≠
-QPU
-
-Module
-   ≠
-Qubit set
-
-Module
-   ≠
 CPU count
-
-Module
-   ≠
 GPU count
+FPGA capacity
+QPU capacity
+memory capacity
+network topology
+accelerator topology
 
-Module
-   ≠
-Filesystem directory
+This is a direct POCO-REAF requirement.
 
-Module
-   ≠
-Package
+---
 
-Module
-   ≠
-Process
+130. Production Architecture Summary
 
-Module
-   ≠
-Deployment
+The final module architecture is:
 
-The stable abstraction is:
+                         ZAMANI SOURCE
+                              │
+                              ▼
+                     CANONICAL LEXER
+                              │
+                              ▼
+                       Zamani.g4
+                     composition root
+                              │
+              ┌───────────────┴───────────────┐
+              │                               │
+              ▼                               ▼
+        CORE NAME SYSTEM               MODULE SYSTEM
+                                      │
+                 ┌────────────────────┼────────────────────┐
+                 │                    │                    │
+                 ▼                    ▼                    ▼
+             modules              imports              exports
+                 │                    │                    │
+                 ├── visibility       ├── aliases         │
+                 ├── attributes      ├── names            │
+                 ├── namespaces      └── dependencies    │
+                 ├── packages                             │
+                 └── versioning                            │
+                              │
+                              ▼
+                         FRONTEND AST
+                              │
+                              ▼
+                       SEMANTIC MODEL
+                              │
+             ┌────────────────┼─────────────────┐
+             │                │                 │
+             ▼                ▼                 ▼
+          Classical       Quantum           HDL/Hardware
+             │                │                 │
+             │          quantum::ir             │
+             └────────────────┼─────────────────┘
+                              │
+                              ▼
+                         CANONICAL IR
+                              │
+                              ▼
+                     OPTIMIZATION / LOWERING
+                              │
+             ┌────────────────┼─────────────────┐
+             │                │                 │
+             ▼                ▼                 ▼
+          Routing         Scheduling        Resilience
+                              │
+                              ▼
+                             ZQN
+                              │
+                              ▼
+                             HAL
+                              │
+                              ▼
+                       TARGET REALIZATION
 
-Zamani Source
-      |
-      v
-Module Organization
-      |
-      v
-Semantic Meaning
-      |
-      v
-Canonical IR
-      |
-      v
-Target-independent compilation
-      |
-      v
-Target realization
-      |
-      v
-Available hardware/resources
+The important invariant is:
 
-This separation is essential to:
-
-«Zamani — From Atom to Everywhere»
+MODULE ORGANIZATION
+        ≠
+PHYSICAL DEPLOYMENT
 
 and:
 
-«Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever (POCO-REAF).»
+SOURCE INTENT
+        ≠
+RESOURCE REALIZATION
 
-The module grammar must therefore remain small in semantic responsibility, strong in syntactic structure, extensible across computational domains, deterministic, safe, versionable, and completely independent of arbitrary hardware scale.
+and:
+
+GRAMMAR
+        ≠
+SEMANTIC MODEL
+        ≠
+IR
+        ≠
+HARDWARE
+
+---
+
+131. Governing POCO-REAF Rule
+
+The module subsystem exists to make source organization portable across computational scale.
+
+Therefore:
+
+«Zamani modules describe how a program is logically organized, not the accidental limits or topology of the machine on which the program eventually runs.»
+
+The same module graph must remain meaningful across:
+
+atom
+→ embedded
+→ single processor
+→ multicore
+→ GPU
+→ FPGA
+→ ASIC
+→ QPU
+→ accelerator
+→ workstation
+→ server
+→ cluster
+→ HPC
+→ distributed system
+→ cloud
+→ future architectures
+
+provided the available target resources and capabilities can satisfy the program's semantic requirements or an explicitly supported alternative realization exists.
+
+---
+
+132. Final Non-Negotiable Rules
+
+1. Preserve existing filenames unless a genuine architectural conflict requires a rename.
+2. "grammar/Zamani.g4" remains the composition root.
+3. "grammar/modules/*.g4" remains modular syntax infrastructure.
+4. "grammar/grammar.md" remains implementation-conformance documentation.
+5. "grammar/Zamani-Grammar.md" cannot silently introduce implemented syntax.
+6. Module grammar must reuse canonical identifiers and qualified names.
+7. Visibility has one canonical owner.
+8. General attributes have one canonical owner.
+9. Import syntax belongs to "imports.g4".
+10. Export syntax belongs to "exports.g4".
+11. Alias syntax belongs to "aliases.g4".
+12. Namespace syntax belongs to "namespaces.g4".
+13. Package syntax belongs to "packages.g4".
+14. Dependency syntax belongs to "dependencies.g4".
+15. Version syntax belongs to "versioning.g4".
+16. Module attributes belong to "module-attributes.g4".
+17. Module grammar must not resolve names.
+18. Module grammar must not access files.
+19. Module grammar must not access networks.
+20. Module grammar must not access package registries.
+21. Module grammar must not select hardware.
+22. Module grammar must not allocate resources.
+23. Module grammar must not perform routing.
+24. Module grammar must not perform scheduling.
+25. Module grammar must not implement QEC.
+26. Module grammar must not implement ZQN.
+27. Module grammar must not implement HAL behavior.
+28. Module grammar must not construct a second quantum IR.
+29. "quantum::ir" remains the canonical quantum semantic/IR boundary.
+30. Modules must remain independent of physical hardware topology.
+31. No fixed CPU/core/thread/GPU/FPGA/ASIC/QPU/qubit/node/memory limits may be encoded as universal language limits.
+32. No fixed module/import/export/dependency/package/nesting counts may be encoded as language limits.
+33. Resource constraints belong to resource/capability infrastructure.
+34. Target realization belongs downstream.
+35. Package identity must remain distinct from module identity.
+36. Namespace identity must remain distinct from module identity.
+37. Filesystem identity must remain distinct from module identity.
+38. Deployment identity must remain distinct from module identity.
+39. Every completed grammar feature must have an AST contract.
+40. Every completed grammar feature must have a semantic contract.
+41. Every completed grammar feature must have downstream integration defined.
+42. Every completed feature must have positive tests.
+43. Every completed feature must have negative tests.
+44. Every completed feature must have boundary tests.
+45. Every completed feature must have scalability tests.
+46. Compatibility must be tested.
+47. Determinism must be tested where required.
+48. Hard-coding audits must pass.
+49. Production Rust must use no "unsafe".
+50. Rust 1.97/1.97.1 is the implementation baseline.
+51. No empty files or directories should be created merely to make the architecture look complete.
+52. A feature is not production-ready merely because its ".g4" file parses.
+53. A feature is production-ready only when its complete specification → lexer → parser → AST → semantic → IR/compiler/tooling/test chain is accounted for.
+54. Adding a new computational domain must not require turning the module subsystem into a domain-specific grammar.
+55. The module system must remain scalable from the smallest useful program to programs constrained only by available implementation resources.
+
+---
+
+133. Definition of Done
+
+"grammar/modules/" is production-ready when:
+
+one module language
+        ↓
+one canonical grammar authority
+        ↓
+one canonical lexical vocabulary
+        ↓
+one canonical name system
+        ↓
+one domain-neutral AST
+        ↓
+one semantic module/dependency model
+        ↓
+canonical domain semantic/IR boundaries
+        ↓
+compiler/runtime/tooling integration
+        ↓
+complete conformance tests
+
+all agree.
+
+The decisive test is not whether the directory contains many grammar files.
+
+The decisive test is whether a module feature can be implemented once, traced completely through the repository, validated independently, and then remain valid when the same Zamani program is compiled for a radically different machine, accelerator, quantum processor, distributed environment, or future architecture.
+
+That is the module-system foundation required for Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever (POCO-REAF).
