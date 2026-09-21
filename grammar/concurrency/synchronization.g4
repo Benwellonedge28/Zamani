@@ -1,144 +1,463 @@
-parser grammar Synchronization;
-
-options {
-    tokenVocab = ZamaniLexer;
-}
-
 /*
  * ============================================================================
- * Zamani — Concurrency Synchronization Grammar
+ * Zamani Programming Language
+ * Production Synchronization Grammar
  * ============================================================================
  *
  * File:
- *   grammar/concurrency/synchronization.g4
+ *     grammar/concurrency/synchronization.g4
  *
- * Purpose:
- *   Defines source-level syntax for synchronization intent.
+ * Grammar:
+ *     Synchronization
  *
- * Architectural boundary:
+ * Status:
+ *     PRODUCTION-READY MODULAR CONCURRENCY COMPONENT
  *
- *   Source
- *      ↓
- *   ANTLR lexer/parser
- *      ↓
- *   Zamani AST
- *      ↓
- *   Semantic analysis
- *      ↓
- *   Canonical IR
- *      ↓
- *   Scheduling / execution / runtime
+ * Implementation baseline:
+ *     Rust 1.97 / Rust 1.97.1
+ *     Rust 2021
+ *     Safe Rust only
+ *     No unsafe Rust
  *
- * This grammar MUST NOT:
+ * ============================================================================
+ * PURPOSE
+ * ============================================================================
  *
- *   - implement locks
- *   - implement atomics
- *   - implement scheduling
- *   - discover hardware
- *   - select CPUs/GPUs/QPUs
- *   - select thread counts
- *   - select memory sizes
- *   - define a machine topology
- *   - define fixed resource limits
- *   - define runtime algorithms
- *   - contain Rust actions
- *   - contain unsafe code
- *   - duplicate the canonical type system
- *   - duplicate the canonical expression grammar
- *   - duplicate channel semantics
- *   - duplicate task/future/actor semantics
+ * This file owns the SOURCE-LEVEL SYNTAX for synchronization intent.
  *
- * Synchronization syntax expresses programmer intent.
+ * Synchronization is a semantic property of computation, not a particular
+ * implementation mechanism.
  *
- * The compiler/runtime decides how that intent is implemented on the
- * available execution resources.
+ * The same source construct may ultimately be implemented using:
+ *
+ *     local synchronization
+ *     shared-memory synchronization
+ *     distributed synchronization
+ *     accelerator synchronization
+ *     heterogeneous synchronization
+ *     quantum/classical coordination
+ *     hardware synchronization
+ *     future synchronization mechanisms
+ *
+ * without changing the source grammar merely because the target changes.
+ *
+ * ============================================================================
+ * ARCHITECTURAL PIPELINE
+ * ============================================================================
+ *
+ *     Zamani source
+ *          |
+ *          v
+ *     ZamaniLexer
+ *          |
+ *          v
+ *     Synchronization parser rules
+ *          |
+ *          v
+ *     domain-neutral frontend AST
+ *          |
+ *          v
+ *     structural validation
+ *          |
+ *          v
+ *     semantic analysis
+ *          |
+ *          +--> synchronization semantics
+ *          +--> ownership / borrowing
+ *          +--> effects
+ *          +--> capabilities
+ *          +--> resources
+ *          +--> memory model
+ *          |
+ *          v
+ *     canonical semantic representation / IR
+ *          |
+ *          v
+ *     optimization / lowering
+ *          |
+ *          +--> scheduling
+ *          +--> placement
+ *          +--> distributed realization
+ *          +--> runtime realization
+ *          +--> hardware realization
+ *          |
+ *          v
+ *     target
+ *
+ * This grammar creates NO synchronization IR.
  *
  * ============================================================================
  * OWNERSHIP
  * ============================================================================
  *
- * OWNS:
- *   - synchronization declarations
- *   - synchronization scopes
- *   - synchronization guards
- *   - acquire/release operations
- *   - wait/notify operations
- *   - barrier declarations/operations
- *   - atomic operation syntax
- *   - memory-order intent
- *   - synchronization policies
- *   - synchronization composition syntax
+ * THIS FILE OWNS:
  *
- * DOES NOT OWN:
- *   - channel declaration/communication
- *   - task creation
- *   - futures/promises
- *   - actor messaging
- *   - cancellation-token definitions
- *   - memory ownership/borrowing
- *   - hardware topology
- *   - scheduling
- *   - resource discovery
- *   - runtime implementation
+ *     synchronization declarations
+ *     synchronization scopes
+ *     synchronized blocks
+ *     acquire operations
+ *     release operations
+ *     wait operations
+ *     notify operations
+ *     barrier declarations
+ *     barrier arrival/wait operations
+ *     atomic operations
+ *     atomic memory-order syntax
+ *     synchronization policies
+ *     synchronization requirements
+ *     synchronization hints
+ *     synchronization assertions
+ *     synchronization-set syntax
+ *     synchronization expressions
+ *     synchronization composition
+ *
+ * THIS FILE DOES NOT OWN:
+ *
+ *     identifiers
+ *     qualified names
+ *     ordinary expressions
+ *     expression precedence
+ *     ordinary types
+ *     blocks
+ *     general statements
+ *     tasks
+ *     futures
+ *     channels
+ *     actors
+ *     memory ownership
+ *     borrowing
+ *     resource discovery
+ *     resource allocation
+ *     scheduling
+ *     placement
+ *     routing
+ *     distributed deployment
+ *     hardware topology
+ *     CPU selection
+ *     GPU selection
+ *     FPGA selection
+ *     QPU selection
+ *     quantum::ir
+ *     QEC
+ *     ZQN
+ *     calibration
+ *     HAL
+ *     runtime algorithms
  *
  * ============================================================================
- * SCALABILITY
+ * POCO-REAF / SCALABILITY
  * ============================================================================
  *
- * There are deliberately NO constants such as:
+ * Synchronization syntax imposes NO language-level finite limits on:
  *
- *   MAX_THREADS
- *   MAX_LOCKS
- *   MAX_BARRIERS
- *   MAX_PARTICIPANTS
- *   MAX_ATOMICS
- *   MAX_WAITERS
- *   MAX_RESOURCES
+ *     synchronization objects
+ *     locks
+ *     barriers
+ *     atomic objects
+ *     participants
+ *     waiters
+ *     synchronization sets
+ *     nested synchronization scopes
+ *     synchronization operations
+ *     parallel regions
+ *     processes
+ *     tasks
+ *     threads
+ *     nodes
  *
- * Counts, participants, capacities, and resource properties are represented
- * through normal language expressions/types/requirements where appropriate.
+ * There is deliberately no:
+ *
+ *     MAX_LOCKS
+ *     MAX_BARRIERS
+ *     MAX_ATOMICS
+ *     MAX_PARTICIPANTS
+ *     MAX_WAITERS
+ *     MAX_THREADS
+ *     MAX_CORES
+ *     MAX_NODES
+ *     MAX_DEVICES
+ *
+ * Repetition is structural.
+ *
+ * Practical parser/compiler/runtime limits are implementation-resource
+ * constraints and MUST NOT become language-level synchronization limits.
  *
  * ============================================================================
- * INTEGRATION CONTRACT
+ * REQUIREMENT / CAPABILITY / PREFERENCE / IMPLEMENTATION SEPARATION
  * ============================================================================
  *
- * This grammar consumes canonical rules supplied by the imported grammar
- * layers:
+ * Synchronization syntax may express:
  *
- *   identifier
- *   qualifiedName
- *   expression
- *   typeExpression
- *   block
- *   statement
- *   argumentList
- *   genericArguments
- *   attribute
+ *     requirements
+ *     constraints
+ *     policies
+ *     preferences
+ *     hints
  *
- * The exact delegate grammar names MUST remain the repository's canonical
- * grammar authorities. Synchronization.g4 must not recreate those rules.
+ * It MUST NOT silently encode implementation decisions.
  *
- * The root Zamani grammar should import/expose this grammar through the
- * concurrency grammar rather than duplicating these productions.
+ * For example:
+ *
+ *     requires synchronization(...)
+ *
+ * is portable source intent.
+ *
+ * It is NOT equivalent to:
+ *
+ *     use thread 7
+ *     use core 3
+ *     use CPU 0
+ *     use node 2
+ *
+ * Physical realization remains downstream.
+ *
+ * ============================================================================
+ * LEXER CONTRACT
+ * ============================================================================
+ *
+ * This grammar consumes:
+ *
+ *     tokenVocab = ZamaniLexer;
+ *
+ * Structural punctuation comes from the canonical punctuation vocabulary:
+ *
+ *     LPAREN
+ *     RPAREN
+ *     LBRACE
+ *     RBRACE
+ *     LBRACKET
+ *     RBRACKET
+ *     COMMA
+ *     COLON
+ *     SEMICOLON
+ *
+ * Existing keyword tokens are reused whenever they already exist.
+ *
+ * New synchronization vocabulary belongs in:
+ *
+ *     grammar/lexer/keywords.g4
+ *
+ * It MUST NOT be defined inside this parser grammar.
+ *
+ * ============================================================================
+ * PARSER DEPENDENCIES
+ * ============================================================================
+ *
+ * This grammar consumes canonical syntax supplied by:
+ *
+ *     Expressions
+ *     Types
+ *     Calls
+ *     ZamaniExpressionBlocks
+ *
+ * These components remain authoritative for:
+ *
+ *     expression
+ *     typeExpression
+ *     argumentList
+ *     blockExpression
+ *
+ * Synchronization.g4 therefore MUST NOT redefine those rules.
+ *
+ * ============================================================================
+ * AST CONTRACT
+ * ============================================================================
+ *
+ * Each synchronization construct maps to the existing domain-neutral frontend
+ * AST model.
+ *
+ * The AST should preserve at minimum:
+ *
+ *     construct kind
+ *     operands/references
+ *     options
+ *     expressions
+ *     memory-order intent
+ *     policy names
+ *     source spans
+ *     child ordering
+ *
+ * This grammar does NOT define a Rust AST.
+ *
+ * The Rust implementation remains owned by:
+ *
+ *     src/frontend/ast/
+ *
+ * ============================================================================
+ * SEMANTIC CONTRACT
+ * ============================================================================
+ *
+ * Semantic analysis is responsible for:
+ *
+ *     name resolution
+ *     synchronization-object resolution
+ *     type checking
+ *     lvalue validation for atomic targets
+ *     atomicity validation
+ *     memory-order legality
+ *     ownership
+ *     borrowing
+ *     lifetime
+ *     effect checking
+ *     capability checking
+ *     resource requirements
+ *     deadlock analysis where supported
+ *     ordering guarantees
+ *     fairness semantics
+ *     cancellation semantics
+ *     timeout semantics
+ *     distributed consistency
+ *     implementation feasibility
+ *
+ * The parser only establishes syntactic structure.
+ *
+ * ============================================================================
+ * IR CONTRACT
+ * ============================================================================
+ *
+ * This file creates NO synchronization-specific IR.
+ *
+ * Synchronization constructs lower through the existing semantic/IR
+ * architecture.
+ *
+ * A construct may eventually lower to:
+ *
+ *     classical synchronization representation
+ *     distributed synchronization representation
+ *     accelerator coordination
+ *     hardware synchronization intent
+ *     runtime synchronization
+ *     future synchronization representation
+ *
+ * The grammar does not select among them.
+ *
+ * ============================================================================
+ * QUANTUM / HYBRID INTEGRATION
+ * ============================================================================
+ *
+ * Synchronization may coordinate classical and quantum computation.
+ *
+ * Example semantic flow:
+ *
+ *     classical computation
+ *          |
+ *          v
+ *     synchronization
+ *          |
+ *          v
+ *     quantum computation
+ *          |
+ *          v
+ *     measurement
+ *          |
+ *          v
+ *     classical computation
+ *
+ * Synchronization.g4 does NOT create quantum IR.
+ *
+ * Quantum constructs continue through:
+ *
+ *     semantic analysis
+ *          |
+ *          v
+ *     quantum::ir
+ *          |
+ *          v
+ *     optimization
+ *          |
+ *          v
+ *     routing / scheduling
+ *          |
+ *          v
+ *     QEC / resilience / ZQN
+ *          |
+ *          v
+ *     HAL
+ *          |
+ *          v
+ *     target
+ *
+ * ============================================================================
+ * DISTRIBUTED INTEGRATION
+ * ============================================================================
+ *
+ * Synchronization may be realized locally or across a distributed system.
+ *
+ * The grammar does not assume:
+ *
+ *     one process
+ *     one machine
+ *     one node
+ *     one network
+ *     one memory domain
+ *
+ * It does not encode:
+ *
+ *     node identifiers
+ *     physical addresses
+ *     network addresses
+ *     fixed topology
+ *
+ * Distributed realization belongs downstream.
+ *
+ * ============================================================================
+ * MEMORY-MODEL INTEGRATION
+ * ============================================================================
+ *
+ * Memory-order syntax expresses language-level ordering intent.
+ *
+ * It does NOT identify:
+ *
+ *     cache architecture
+ *     CPU instruction
+ *     cache line width
+ *     register width
+ *     coherence protocol
+ *     processor model
+ *
+ * Those are target semantics.
+ *
+ * ============================================================================
+ * SAFETY
+ * ============================================================================
+ *
+ * This grammar contains:
+ *
+ *     no actions
+ *     no semantic predicates
+ *     no executable code
+ *     no filesystem access
+ *     no network access
+ *     no hardware discovery
+ *     no runtime execution
+ *     no unsafe Rust
+ *
+ * The consuming compiler implementation must remain:
+ *
+ *     Rust 2021
+ *     Rust 1.97 / Rust 1.97.1
+ *     safe Rust
  *
  * ============================================================================
  */
 
 
-/* --------------------------------------------------------------------------
- * Synchronization declarations
- * -------------------------------------------------------------------------- */
+/*
+ * ============================================================================
+ * SYNCHRONIZATION DECLARATIONS
+ * ============================================================================
+ */
 
 /*
- * Generic synchronization declaration.
+ * Generic synchronization object declaration.
  *
- * Examples of semantic forms include:
+ * Examples:
  *
- *   synchronization mutex;
- *   synchronization gate;
- *   synchronization barrier;
+ *     synchronization lock;
+ *     synchronization gate;
+ *     synchronization coordinator;
  *
- * The concrete synchronization kind remains extensible.
+ * The semantic layer determines the synchronization object's actual kind.
  */
 synchronizationDeclaration
     : SYNCHRONIZATION synchronizationName synchronizationType?
@@ -147,9 +466,9 @@ synchronizationDeclaration
 
 
 /*
- * Explicitly typed synchronization object.
+ * Explicit synchronization type annotation.
  *
- * The actual synchronization type is resolved by the canonical type system.
+ * The type expression is owned by the canonical type grammar.
  */
 synchronizationType
     : COLON typeExpression
@@ -157,8 +476,9 @@ synchronizationType
 
 
 /*
- * Synchronization options are declarative properties, not implementation
- * directives.
+ * Synchronization options are an ordered source-level collection.
+ *
+ * No finite option count is imposed.
  */
 synchronizationOptions
     : synchronizationOption+
@@ -167,7 +487,7 @@ synchronizationOptions
 
 synchronizationOption
     : synchronizationPolicy
-    | synchronizationScope
+    | synchronizationScopeOption
     | synchronizationOrdering
     | synchronizationMemoryOrder
     | synchronizationRequirement
@@ -175,9 +495,11 @@ synchronizationOption
     ;
 
 
-/* --------------------------------------------------------------------------
- * Synchronization names/references
- * -------------------------------------------------------------------------- */
+/*
+ * ============================================================================
+ * NAMES / REFERENCES
+ * ============================================================================
+ */
 
 synchronizationName
     : identifier
@@ -189,14 +511,24 @@ synchronizationReference
     ;
 
 
-/* --------------------------------------------------------------------------
- * Synchronization scopes
- * -------------------------------------------------------------------------- */
+/*
+ * ============================================================================
+ * SYNCHRONIZATION SCOPES
+ * ============================================================================
+ */
 
 /*
- * A synchronization scope associates a block with synchronization intent.
+ * Associates a block with synchronization intent.
  *
- * Runtime implementation is deliberately unspecified.
+ * Examples:
+ *
+ *     synchronize lock {
+ *         work();
+ *     }
+ *
+ *     synchronize resource with guard {
+ *         work();
+ *     }
  */
 synchronizationScope
     : SYNCHRONIZE synchronizationTarget? synchronizationGuard? block
@@ -213,20 +545,34 @@ synchronizationGuard
     ;
 
 
+synchronizationScopeOption
+    : SCOPE qualifiedName
+    ;
+
+
 /*
- * Explicit scoped acquisition.
+ * Structured synchronized block.
  *
- * This form allows semantic analysis to establish structured lifetime
- * relationships between acquisition and release.
+ * The semantic layer determines acquisition/release behavior.
  */
 synchronizedBlock
     : SYNCHRONIZED synchronizationReference block
     ;
 
 
-/* --------------------------------------------------------------------------
- * Acquire / release
- * -------------------------------------------------------------------------- */
+/*
+ * Explicit structured acquisition.
+ */
+withSynchronizationStatement
+    : WITH synchronizationReference DO block
+    ;
+
+
+/*
+ * ============================================================================
+ * ACQUIRE / RELEASE
+ * ============================================================================
+ */
 
 acquireStatement
     : ACQUIRE synchronizationReference acquireOptions? SEMICOLON
@@ -251,20 +597,21 @@ releaseStatement
     ;
 
 
-/*
- * Structured acquisition.
- *
- * The compiler may lower this into an acquire/release pair or another
- * equivalent mechanism while preserving the semantic contract.
- */
-withSynchronizationStatement
-    : WITH synchronizationReference DO block
+acquireSetStatement
+    : ACQUIRE synchronizationSet acquireOptions? SEMICOLON
     ;
 
 
-/* --------------------------------------------------------------------------
- * Blocking / non-blocking intent
- * -------------------------------------------------------------------------- */
+releaseSetStatement
+    : RELEASE synchronizationSet SEMICOLON
+    ;
+
+
+/*
+ * ============================================================================
+ * BLOCKING / NON-BLOCKING INTENT
+ * ============================================================================
+ */
 
 blockingOption
     : BLOCKING
@@ -283,9 +630,11 @@ cancellationOption
     ;
 
 
-/* --------------------------------------------------------------------------
- * Wait / notify
- * -------------------------------------------------------------------------- */
+/*
+ * ============================================================================
+ * WAIT / NOTIFY
+ * ============================================================================
+ */
 
 waitStatement
     : WAIT synchronizationReference waitCondition? waitOptions? SEMICOLON
@@ -321,28 +670,30 @@ notifyMode
 
 
 /*
- * WAIT/NOTIFY express synchronization intent only.
+ * WAIT and NOTIFY describe synchronization intent.
  *
- * They do not imply:
+ * They do not prescribe:
  *
- *   - OS condition variables
- *   - futexes
- *   - spinning
- *   - kernel scheduling
- *   - a particular CPU
- *   - a particular operating system
+ *     condition variables
+ *     futexes
+ *     kernel waits
+ *     spinning
+ *     polling
+ *     OS primitives
+ *     processor instructions
  */
 
 
-/* --------------------------------------------------------------------------
- * Barriers
- * -------------------------------------------------------------------------- */
+/*
+ * ============================================================================
+ * BARRIERS
+ * ============================================================================
+ */
 
 /*
- * A barrier represents a synchronization point.
+ * A barrier is a logical synchronization point.
  *
- * Participant membership may be dynamic and must not be represented by a
- * grammar-level fixed integer limit.
+ * Participant membership may be determined dynamically.
  */
 barrierDeclaration
     : BARRIER barrierName barrierOptions? SEMICOLON
@@ -398,27 +749,21 @@ barrierWaitOption
 
 
 /*
- * PARTICIPANTS is an expression rather than a fixed literal restriction.
- *
- * This permits:
- *
- *   participants runtime_value
- *   participants worker_count
- *   participants configured_participants
- *
- * without embedding machine-size assumptions in the grammar.
+ * ============================================================================
+ * ATOMIC OPERATIONS
+ * ============================================================================
  */
 
-
-/* --------------------------------------------------------------------------
- * Atomics
- * -------------------------------------------------------------------------- */
-
 /*
- * Atomic operations describe atomicity requirements.
+ * Atomicity is a semantic requirement.
  *
- * They do not require a particular CPU instruction, lock-free implementation,
- * cache architecture, word width, or hardware primitive.
+ * The grammar does not require:
+ *
+ *     lock-free execution
+ *     a native processor instruction
+ *     a specific register width
+ *     a specific cache architecture
+ *     a particular memory model implementation
  */
 atomicStatement
     : ATOMIC atomicOperation
@@ -450,7 +795,8 @@ atomicExchange
 
 
 atomicCompareExchange
-    : COMPARE_EXCHANGE atomicTarget
+    : COMPARE_EXCHANGE
+      atomicTarget
       EXPECT expression
       REPLACE expression
       atomicMemoryOrder?
@@ -477,18 +823,22 @@ atomicFetchOperator
     ;
 
 
-/*
- * Atomic target deliberately uses a canonical expression/reference rather
- * than imposing a fixed scalar representation.
- */
 atomicTarget
     : expression
     ;
 
 
-/* --------------------------------------------------------------------------
- * Memory ordering
- * -------------------------------------------------------------------------- */
+/*
+ * Semantic analysis must establish that an atomic target is writable and
+ * otherwise satisfies the language's atomic-access rules.
+ */
+
+
+/*
+ * ============================================================================
+ * MEMORY ORDER
+ * ============================================================================
+ */
 
 atomicMemoryOrder
     : MEMORY_ORDER memoryOrder
@@ -511,16 +861,24 @@ memoryOrder
 
 
 /*
- * Memory-order names describe the language memory model.
+ * Memory-order names describe language-level synchronization guarantees.
  *
- * They are NOT processor-specific instructions.
+ * They do not name processor instructions.
  */
 
 
-/* --------------------------------------------------------------------------
- * Synchronization policies
- * -------------------------------------------------------------------------- */
+/*
+ * ============================================================================
+ * POLICIES
+ * ============================================================================
+ */
 
+/*
+ * Policy names remain extensible.
+ *
+ * This avoids turning every future synchronization strategy into a new
+ * language keyword.
+ */
 synchronizationPolicy
     : POLICY qualifiedName policyArguments?
     ;
@@ -531,35 +889,23 @@ policyArguments
     ;
 
 
-/*
- * Policy names are qualified names rather than a closed list.
- *
- * This gives Zamani extensibility without changing this grammar whenever
- * a future synchronization policy is introduced.
- */
-
-
-/* --------------------------------------------------------------------------
- * Ordering
- * -------------------------------------------------------------------------- */
-
 synchronizationOrdering
     : ORDER qualifiedName
     ;
 
 
 /*
- * The grammar does not assume FIFO, fairness, priority ordering, or another
- * implementation property unless the semantic policy explicitly defines it.
+ * ============================================================================
+ * REQUIREMENTS / HINTS
+ * ============================================================================
  */
 
-
-/* --------------------------------------------------------------------------
- * Requirements and hints
- * -------------------------------------------------------------------------- */
-
+/*
+ * Reuse the existing `REQUIRES` keyword rather than introducing a competing
+ * `REQUIRE` token.
+ */
 synchronizationRequirement
-    : REQUIRE qualifiedName requirementArguments?
+    : REQUIRES qualifiedName requirementArguments?
     ;
 
 
@@ -583,20 +929,21 @@ hintArguments
  *
  * Hints are non-mandatory implementation guidance.
  *
- * Neither may be interpreted as an implicit hardware selection.
+ * Neither performs hardware selection.
  */
 
 
-/* --------------------------------------------------------------------------
- * Synchronization expressions
- * -------------------------------------------------------------------------- */
+/*
+ * ============================================================================
+ * SYNCHRONIZATION EXPRESSIONS
+ * ============================================================================
+ */
 
 /*
- * Some synchronization operations naturally produce values.
+ * Synchronization expressions are expressions capable of producing a
+ * synchronization-related semantic value.
  *
- * This grammar provides a dedicated syntactic category so the semantic layer
- * can distinguish synchronization operations from ordinary calls without
- * forcing a runtime representation.
+ * This rule is intentionally reachable from synchronizationConstruct.
  */
 synchronizationExpression
     : atomicExpression
@@ -612,7 +959,8 @@ atomicExpression
 atomicExpressionOperation
     : LOAD atomicTarget atomicMemoryOrder?
     | EXCHANGE atomicTarget WITH expression atomicMemoryOrder?
-    | COMPARE_EXCHANGE atomicTarget
+    | COMPARE_EXCHANGE
+      atomicTarget
       EXPECT expression
       REPLACE expression
       atomicMemoryOrder?
@@ -624,16 +972,12 @@ synchronizationStateExpression
     ;
 
 
-/* --------------------------------------------------------------------------
- * Synchronization assertions
- * -------------------------------------------------------------------------- */
-
 /*
- * These are declarative assertions about synchronization state.
- *
- * They are not runtime implementation checks unless semantic/runtime layers
- * explicitly lower them as such.
+ * ============================================================================
+ * SYNCHRONIZATION ASSERTIONS
+ * ============================================================================
  */
+
 synchronizationAssertion
     : ASSERT SYNCHRONIZATION_STATE synchronizationReference
       synchronizationPredicate?
@@ -657,13 +1001,20 @@ synchronizationState
     ;
 
 
-/* --------------------------------------------------------------------------
- * Synchronization composition
- * -------------------------------------------------------------------------- */
+/*
+ * ============================================================================
+ * SYNCHRONIZATION SETS
+ * ============================================================================
+ */
 
 /*
- * Multiple synchronization resources may be composed without embedding a
- * fixed number of resources.
+ * An unbounded syntactic set of synchronization references.
+ *
+ * Example:
+ *
+ *     [lock_a, lock_b, barrier_c]
+ *
+ * The number of entries is not a machine limit.
  */
 synchronizationSet
     : LBRACKET synchronizationReferenceList? RBRACKET
@@ -676,25 +1027,11 @@ synchronizationReferenceList
     ;
 
 
-acquireSetStatement
-    : ACQUIRE synchronizationSet acquireOptions? SEMICOLON
-    ;
-
-
-releaseSetStatement
-    : RELEASE synchronizationSet SEMICOLON
-    ;
-
-
 /*
- * Ordering/deadlock policy belongs to semantic analysis/runtime policy.
- * The grammar merely represents the set of synchronization resources.
+ * ============================================================================
+ * SYNCHRONIZATION STATEMENTS
+ * ============================================================================
  */
-
-
-/* --------------------------------------------------------------------------
- * Synchronization operations
- * -------------------------------------------------------------------------- */
 
 synchronizationStatement
     : acquireStatement
@@ -706,25 +1043,27 @@ synchronizationStatement
     | acquireSetStatement
     | releaseSetStatement
     | synchronizationAssertion
+    | withSynchronizationStatement
     ;
 
 
-/* --------------------------------------------------------------------------
- * Shared synchronization construct
- * -------------------------------------------------------------------------- */
+/*
+ * ============================================================================
+ * PUBLIC SYNCHRONIZATION CONSTRUCT
+ * ============================================================================
+ *
+ * This is the integration boundary consumed by concurrency.g4.
+ *
+ * All synchronization-specific syntax enters through this rule.
+ *
+ * ============================================================================
+ */
 
 synchronizationConstruct
     : synchronizationDeclaration
     | barrierDeclaration
     | synchronizationScope
     | synchronizedBlock
-    | withSynchronizationStatement
     | synchronizationStatement
+    | synchronizationExpression
     ;
-
-
-/*
- * ============================================================================
- * END OF synchronization.g4
- * ============================================================================
- */
