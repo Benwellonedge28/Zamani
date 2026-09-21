@@ -1,2180 +1,2621 @@
-Zamani Statement Grammar
+Zamani Statements Grammar
 
 Status
 
-Production architecture specification
+Production architecture / normative subsystem contract
 
-This directory defines the statement-level syntax of the Zamani programming language.
+This directory defines the statement-level syntax layer of the Zamani programming language.
 
-The statement grammar is part of the canonical Zamani frontend grammar and is designed for:
+It is part of the canonical grammar architecture and participates in:
 
-- classical computing;
-- quantum computing;
-- hybrid quantum-classical computing;
-- HDL;
-- hardware/software co-design;
-- embedded computing;
-- parallel computing;
-- distributed computing;
-- HPC;
-- AI/ML;
-- accelerator programming;
-- networking;
-- scientific computing;
-- systems programming;
-- future computational domains.
+Zamani source
+    ↓
+lexical analysis
+    ↓
+parser
+    ↓
+domain-neutral frontend AST
+    ↓
+semantic analysis
+    ↓
+canonical semantic models / IR
+    ↓
+optimization and lowering
+    ↓
+routing / scheduling / resilience / ZQN / HAL
+    ↓
+target realization
 
-The statement grammar is intentionally independent of the physical machine on which a program eventually executes.
+The statements grammar is therefore responsible for describing program actions and control structure, not for deciding how those actions are physically realized.
 
-The governing language objective is:
+The statements subsystem must support Zamani's:
 
 «Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever (POCO-REAF)»
 
-The source language describes computation and intent. Target realization is performed by downstream semantic, compilation, scheduling, routing, hardware, and runtime layers.
+principle.
+
+A valid Zamani program must be expressible independently of the size, topology, vendor, architecture, or physical limits of the machine on which it may eventually execute.
 
 ---
 
 1. Purpose
 
-"grammar/statements/" owns the syntactic representation of statements.
+"grammar/statements/" owns the syntax and composition contracts for Zamani statements.
 
-It answers:
+Statements are constructs that describe things such as:
 
-«What syntactic forms may occur where Zamani expects a statement?»
+- bindings;
+- declarations used in statement position;
+- assignments;
+- control flow;
+- loops;
+- pattern matching;
+- returns;
+- assertions;
+- blocks;
+- concurrency;
+- effects;
+- resource requirements;
+- quantum operations;
+- HDL actions;
+- domain-specific operations;
+- execution intent;
+- portable resource and capability requirements.
 
-It does not answer:
+The directory does not own:
 
-«How is that statement implemented on a particular machine?»
-
-Those are different architectural responsibilities.
-
-The intended pipeline is:
-
-Zamani source
-    |
-    v
-canonical lexer
-    |
-    v
-statement grammar
-    |
-    v
-parse tree
-    |
-    v
-frontend AST
-    |
-    v
-semantic analysis
-    |
-    +--> names
-    +--> types
-    +--> effects
-    +--> capabilities
-    +--> ownership
-    +--> control-flow analysis
-    +--> resource validation
-    |
-    v
-canonical semantic representation
-    |
-    +--> classical representation
-    +--> quantum::ir
-    +--> HDL representation
-    +--> hardware representation
-    +--> distributed representation
-    +--> accelerator representation
-    +--> future-domain representation
-    |
-    v
-optimization
-    |
-    v
-routing / scheduling / lowering
-    |
-    v
-target realization
-    |
-    v
-runtime / hardware
-
-The grammar must never bypass this architecture.
-
----
-
-2. Fundamental ownership rule
-
-This directory owns syntax only.
-
-It must not become a semantic execution subsystem.
-
-Statement grammar owns
-
-- statement composition;
-- statement-family dispatch;
-- block structure;
-- conditional statement syntax;
-- loop statement syntax;
-- assignment statement syntax;
-- declaration-statement syntax;
-- return syntax;
-- break syntax;
-- continue syntax;
-- exception syntax;
-- assertion syntax;
-- pattern-matching statement syntax;
-- unsafe-region syntax;
-- future statement families through explicit grammar extension.
-
-Statement grammar does not own
-
+- lexical token definitions;
+- universal expression precedence;
+- type semantics;
 - AST implementation;
 - semantic analysis;
-- type checking;
-- ownership checking;
-- borrowing;
-- capability evaluation;
-- effect execution;
-- resource allocation;
-- resource discovery;
-- hardware discovery;
-- hardware calibration;
-- quantum compilation;
+- canonical IR implementation;
 - quantum IR;
-- QEC algorithms;
-- ZQN fault/noise semantics;
-- resilience decisions;
-- optimization;
+- QEC implementation;
+- ZQN implementation;
 - routing;
 - scheduling;
-- target selection;
-- runtime execution;
-- device selection;
-- machine topology;
-- physical qubit allocation;
-- CPU/core/thread allocation;
-- GPU allocation;
-- FPGA allocation;
-- network deployment.
+- calibration;
+- HAL implementation;
+- hardware topology;
+- runtime resource discovery;
+- vendor-specific execution;
+- physical machine limits.
 
-This ownership boundary is mandatory.
+Those responsibilities remain with their respective repository subsystems.
 
 ---
 
-3. Canonical statement composition
+2. Architectural Role
 
-"grammar/statements/statements.g4" is the single composition owner for statements.
+The statements subsystem is a syntax layer, not a semantic execution engine.
 
-There must be exactly one authoritative effective "statement" rule in the assembled production parser.
+Its responsibility ends at producing a deterministic parser representation from which the frontend can construct the domain-neutral AST.
 
-Individual statement grammars must not independently redefine the canonical "statement" rule.
+The architectural boundary is:
 
-The architecture is:
+                 statements/
+                       │
+                       ▼
+              Parser statement tree
+                       │
+                       ▼
+                Frontend AST
+                       │
+                       ▼
+              Semantic analysis
+                       │
+                       ▼
+       Canonical semantic representation
+                       │
+              ┌────────┼────────┐
+              ▼        ▼        ▼
+        Classical   quantum::ir   HDL
+              │        │        │
+              └────────┼────────┘
+                       ▼
+             Optimization/lowering
+                       ▼
+       routing / scheduling / QEC / ZQN
+                       ▼
+                      HAL
+                       ▼
+               target realization
+
+The statements grammar must never bypass this architecture.
+
+---
+
+3. Authority
+
+The statements directory is governed by the repository-wide grammar authority model.
+
+The authority order is:
+
+grammar/DESIGN.md
+        ↓
+grammar/specification/
+        ↓
+grammar/spec/
+        ↓
+grammar/Zamani.g4
+        ↓
+grammar/statements/*
+        ↓
+frontend AST
+        ↓
+semantic implementation
+        ↓
+canonical IR
+
+The following files must not become competing authorities:
+
+- "grammar/Zamani-Grammar.md"
+- "grammar/grammar.md"
+- old monolithic grammar fragments
+- examples
+- tests
+- generated documentation
+
+Their roles are:
+
+"grammar/DESIGN.md"
+
+Normative architecture.
+
+"grammar/specification/"
+
+Normative language specification.
+
+"grammar/spec/"
+
+Formal feature and subsystem contracts.
+
+"grammar/Zamani.g4"
+
+Canonical ANTLR composition root.
+
+"grammar/statements/*.g4"
+
+Modular statement syntax.
+
+"grammar/grammar.md"
+
+Implementation-conformance reference.
+
+"grammar/Zamani-Grammar.md"
+
+Historical/extended language design reference. Its contents do not automatically become legal syntax.
+
+"grammar/tests/"
+
+Executable conformance evidence.
+
+---
+
+4. Directory Ownership
+
+The statement subsystem should contain the following responsibilities.
+
+statements/
+├── README.md
+├── statement.g4
+├── bindings.g4
+├── control-flow.g4
+├── loops.g4
+├── match.g4
+├── exceptions.g4
+├── returns.g4
+├── assertions.g4
+├── blocks.g4
+├── concurrency.g4
+├── resource-statements.g4
+├── effect-statements.g4
+├── domains.g4
+├── quantum-statements.g4
+└── hdl-statements.g4
+
+Existing files must be retained where they already exist.
+
+New files should only be created when a real responsibility requires them.
+
+Do not create duplicate files merely to make the directory tree look complete.
+
+---
+
+5. File Responsibility Matrix
+
+File| Owns| Must not own
+"README.md"| subsystem contract and integration rules| executable grammar
+"statement.g4"| universal statement composition| domain implementation
+"bindings.g4"| binding/assignment statement syntax| type checking
+"control-flow.g4"| conditional/control syntax| runtime scheduling
+"loops.g4"| iteration syntax| fixed iteration limits
+"match.g4"| pattern matching syntax| pattern semantics
+"exceptions.g4"| exception/error-control syntax| runtime recovery implementation
+"returns.g4"| return/yield/exit statement syntax| ABI implementation
+"assertions.g4"| assertion syntax| verification engine
+"blocks.g4"| statement blocks/scopes in statement position| scope semantics
+"concurrency.g4"| portable concurrency constructs| thread/core counts
+"resource-statements.g4"| resource requirements/preferences/constraints| resource allocation
+"effect-statements.g4"| effect-related statement syntax| effect runtime
+"domains.g4"| domain statement composition/dispatch| domain-specific semantics
+"quantum-statements.g4"| quantum statement syntax boundary| quantum IR/QEC/routing
+"hdl-statements.g4"| HDL statement syntax boundary| synthesis/physical implementation
+
+---
+
+6. Universal Statement Contract
+
+Every statement grammar file must satisfy this contract.
+
+Each statement construct must define:
+
+1. Purpose.
+2. Syntax.
+3. Accepted tokens.
+4. Precedence interaction, if applicable.
+5. Associativity, if applicable.
+6. Source-span behavior.
+7. AST mapping.
+8. Semantic validation requirements.
+9. Canonical semantic/IR mapping.
+10. Diagnostics.
+11. Positive tests.
+12. Negative tests.
+13. Boundary tests.
+14. Scalability tests.
+15. Determinism tests.
+16. Compatibility tests.
+17. Cross-domain integration.
+18. Hard-coding audit.
+19. Security implications where applicable.
+20. Performance implications where applicable.
+
+A statement feature is not complete merely because ANTLR accepts it.
+
+---
+
+7. Universal Statement Entry Point
+
+"statement.g4" is the central statement composition boundary.
+
+Conceptually:
 
 statement
-    |
-    +--> expressionStatement
-    |
-    +--> assignmentStatement
-    |
-    +--> declarationStatement
-    |
-    +--> assertionStatement
-    |
-    +--> conditionalStatement
-    |
-    +--> loopStatement
-    |
-    +--> patternMatchStatement
-    |
-    +--> returnStatement
-    |
-    +--> breakStatement
-    |
-    +--> continueStatement
-    |
-    +--> exceptionStatement
-    |
-    +--> unsafeStatement
-    |
-    +--> blockStatement
-    |
-    +--> future statement families
+    ├── binding
+    ├── control flow
+    ├── loop
+    ├── match
+    ├── exception
+    ├── return
+    ├── assertion
+    ├── block
+    ├── concurrency
+    ├── resource
+    ├── effect
+    └── domain
 
-The exact composition must correspond to the actual assembled grammar.
+The exact rule names must follow the canonical grammar already established by the repository.
 
-No statement family should become authoritative merely because it defines a rule named "statement".
+No domain grammar should silently create a second universal "statement" rule.
+
+The universal statement entry point must have one owner.
 
 ---
 
-4. Current statement components
+8. Composition Rule
 
-The production statement directory currently contains the following architectural components:
+"statement.g4" should compose specialized statement grammars.
 
-grammar/statements/
-├── README.md
-├── statements.g4
-├── blocks.g4
-├── declarations.g4
-├── assignments.g4
-├── conditionals.g4
-├── loops.g4
-├── pattern-matching.g4
-├── returns.g4
-├── breaks.g4
-├── continues.g4
-├── assertions.g4
-├── exceptions.g4
-└── unsafe.g4
+It should not duplicate their detailed rules.
 
-Each file has one primary responsibility.
+The desired architecture is:
+
+statement.g4
+    │
+    ├── bindings.g4
+    ├── control-flow.g4
+    ├── loops.g4
+    ├── match.g4
+    ├── exceptions.g4
+    ├── returns.g4
+    ├── assertions.g4
+    ├── blocks.g4
+    ├── concurrency.g4
+    ├── resource-statements.g4
+    ├── effect-statements.g4
+    └── domains.g4
+              │
+              ├── quantum-statements.g4
+              ├── hdl-statements.g4
+              └── domain-specific statement boundaries
+
+A rule must have one authoritative owner.
+
+If two files define semantically equivalent statement rules, one must be removed or converted into a composition/delegation layer.
 
 ---
 
-5. "statements.g4"
+9. "statement.g4"
 
 Purpose
 
-Canonical statement composition.
+Provide the canonical statement-level composition point.
 
 Owns
 
-- "statement";
-- statement-family dispatch;
-- generic expression-statement admission;
-- composition of statement categories.
+- universal statement dispatch;
+- statement-level composition;
+- common statement termination;
+- integration of specialized statement grammars.
 
 Does not own
 
-- concrete conditional syntax;
-- concrete loop syntax;
-- block syntax;
-- assignment syntax;
-- declaration syntax;
-- return syntax;
-- exception syntax;
-- unsafe syntax;
-- expression precedence.
+- expressions;
+- types;
+- declarations;
+- quantum operation details;
+- HDL details;
+- hardware details;
+- resource implementation;
+- runtime behavior.
+
+Inputs
+
+Lexer tokens and imported grammar rules.
+
+Outputs
+
+Statement parser contexts consumed by the frontend AST builder.
 
 Integration
 
-It integrates with:
-
 lexer
-expressions/
-statements/*
-frontend parser
-AST
+  ↓
+statement.g4
+  ↓
+frontend AST
+  ↓
 semantic analysis
 
-It must not directly depend semantically on:
+"Zamani.g4" imports/composes the statement entry point.
 
-quantum::ir
-QEC
-ZQN
-resilience
-routing
-scheduling
-hardware
-runtime
-
-The existing repository already treats this file as the canonical statement-composition boundary.
+The frontend parser must not implement an independent statement dispatcher that competes with this file.
 
 ---
 
-6. "blocks.g4"
+10. "bindings.g4"
 
 Purpose
 
-Own canonical block syntax.
+Define binding and assignment statements.
 
-Owns
+Examples of semantic categories include:
 
-- "{ ... }";
-- block composition;
-- statement sequences;
-- block-level structural recursion.
+let
+var
+const
+assignment
+destructuring
+rebinding
+pattern binding
 
-Does not own
+The grammar must not decide whether a binding is legal for a particular type.
 
-- individual statements;
-- statement semantics;
-- expression precedence;
-- control-flow analysis.
+That belongs to semantic analysis.
 
-The relationship is:
+Scalability
 
-statement
-    |
-    v
-block
-    |
-    v
-statement*
+Bindings must not impose fixed:
 
-This recursive relationship is intentional.
+- object counts;
+- variable counts;
+- array sizes;
+- register counts;
+- memory sizes.
 
-It is not a semantic dependency cycle.
-
-Blocks must not duplicate statement definitions.
+A program may contain any number of bindings supported by available compiler/runtime resources.
 
 ---
 
-7. "conditionals.g4"
+11. "control-flow.g4"
 
-Purpose
+Owns syntax for constructs such as:
 
-Own statement-level conditional control flow.
+- conditional branches;
+- structured control flow;
+- conditional execution;
+- domain-neutral branching.
 
-Owns
+It must not encode:
 
-- "if";
-- "else if";
-- "else".
+- processor branch limits;
+- fixed nesting depth;
+- hardware branch units;
+- GPU warp sizes;
+- quantum control hardware.
 
-Does not own
-
-- conditional expressions;
-- expression precedence;
-- block syntax;
-- boolean type semantics.
-
-The repository already distinguishes statement-level conditionals from expression-level conditionals. That distinction must remain permanent.
-
-Architecture:
-
-statement
-    |
-    v
-conditionalStatement
-    |
-    v
-ifStatement
-    |
-    +--> expression
-    +--> block
-    +--> else-if*
-    +--> else?
-
-No finite maximum number of "else if" clauses may be encoded.
+The semantic layer decides whether a construct can be lowered to a target.
 
 ---
 
-8. "loops.g4"
+12. "loops.g4"
 
-Purpose
+Owns iteration syntax.
 
-Own statement-level iteration syntax.
+Supported semantics should be able to represent:
 
-Owns
+- finite iteration;
+- condition-based iteration;
+- collection iteration;
+- ranges;
+- potentially unbounded/streaming iteration where the language specification permits it;
+- parallel iteration where separately defined.
 
-- "while";
-- "do while";
-- "for";
-- iterator-style "for";
-- loop control syntax specific to the loop construct.
+The grammar must not establish universal limits such as:
 
-Does not own
+MAX_ITERATIONS = 1024
 
-- "break";
-- "continue";
-- iterator implementation;
-- collection implementation;
-- concurrency;
-- scheduling;
-- parallel execution.
+or:
 
-The current loop grammar already follows the intended architecture by delegating expressions and blocks rather than defining another expression language.
+MAX_LOOP_DEPTH = 64
+
+Such values, if required by an individual target, belong to target capability negotiation.
+
+---
+
+13. "match.g4"
+
+Owns pattern-matching syntax.
+
+It should support the language's canonical pattern model without creating independent type or expression systems.
+
+Pattern semantics belong to the type/semantic subsystem.
+
+The grammar must not duplicate:
+
+- type matching;
+- exhaustiveness analysis;
+- ownership analysis;
+- reachability analysis.
+
+---
+
+14. "exceptions.g4"
+
+Owns syntax for:
+
+- throwing/raising an error;
+- catching/handling;
+- recovery constructs;
+- propagation where specified.
+
+It must not define runtime implementation.
+
+Exception semantics must integrate with:
+
+effects/
+execution/
+validation/
+diagnostics/
+
+Where Zamani's effect system represents failures explicitly, exception syntax must map to the canonical effect/error semantics rather than creating a competing error model.
+
+---
+
+15. "returns.g4"
+
+Owns:
+
+- "return";
+- expression return;
+- empty return where legal;
+- function exit;
+- generator/yield forms if those are part of the canonical language;
+- structured result propagation where specified.
+
+It must not own calling conventions or ABI layout.
+
+Those belong to:
+
+functions/
+interoperability/
+compile/
+
+---
+
+16. "assertions.g4"
+
+Assertions are statements expressing programmer-visible correctness requirements.
+
+They may be used for:
+
+- runtime assertions;
+- compile-time assertions where specified;
+- invariants;
+- contracts;
+- verification conditions.
+
+The grammar must not implement the verification engine.
+
+Integration:
+
+assertion syntax
+    ↓
+AST assertion
+    ↓
+semantic validation
+    ↓
+verification / runtime assertion / optimization
+
+Assertions must remain portable.
+
+---
+
+17. "blocks.g4"
+
+Owns statement block syntax.
+
+Blocks may contain arbitrary numbers of statements subject to available compiler/runtime resources.
+
+No universal fixed maximum shall be encoded.
+
+For example, the grammar must not impose:
+
+block contains <= 1024 statements
+
+or:
+
+nesting <= 256
+
+unless such a limit is explicitly a parser implementation safety policy and is not presented as a language semantic restriction.
+
+---
+
+18. "concurrency.g4"
+
+Concurrency syntax must describe computation and coordination without assuming a machine topology.
+
+Valid semantic concepts include:
+
+parallel
+spawn
+async
+await
+task
+actor
+channel
+pipeline
+parallel iteration
+synchronization
+collective operation
 
 The grammar must not encode:
 
-MAX_ITERATIONS
-MAX_LOOP_DEPTH
-MAX_THREADS
-MAX_CORES
-MAX_WORKERS
+8 threads
+16 cores
+32 workers
+1 GPU
+4 GPUs
+1024 nodes
 
-or equivalent constants.
+as universal language limits.
 
----
+Instead:
 
-9. "assignments.g4"
+parallel
 
-Purpose
+means the computation admits parallel realization.
 
-Own statement-level assignment syntax.
-
-Owns
-
-- assignment statement forms;
-- assignment operators where statement-level;
-- compound assignment syntax if part of the language.
-
-Does not own
-
-- assignment expression semantics;
-- mutability checking;
-- ownership;
-- borrowing;
-- type compatibility;
-- storage allocation.
-
-Assignment semantics are determined downstream.
-
-The statement grammar must not duplicate assignment-expression precedence.
+The compiler/runtime may determine the actual execution width.
 
 ---
 
-10. "declarations.g4"
+19. Resource Statements
 
-Purpose
+"resource-statements.g4" is the statement-level interface to the resource model.
 
-Own declarations that are legal in statement position.
+It must distinguish:
 
-Owns
+requirement
+constraint
+capability requirement
+preference
+hint
+budget
+negotiation
+placement intent
+scaling policy
 
-- local declaration syntax;
-- declaration-statement composition;
-- integration with declaration grammar.
-
-Does not own
-
-The full declaration ecosystem.
-
-Definitions belonging to:
-
-grammar/declarations/
-grammar/functions/
-grammar/modules/
-grammar/types/
-
-must remain owned there.
-
-"statements/declarations.g4" is an integration boundary, not a second declaration language.
-
----
-
-11. "returns.g4"
-
-Purpose
-
-Own return-statement syntax.
-
-Owns
-
-return;
-return expression;
-
-and future return syntax approved by the language specification.
-
-Does not own
-
-- function validity;
-- return-type checking;
-- control-flow completeness;
-- callable analysis.
+These are not interchangeable.
 
 For example:
 
-return;
+requires capability("quantum.measurement")
 
-may be syntactically valid while being semantically invalid inside a non-unit-returning function.
+means that a semantic capability is required.
 
-That distinction belongs to semantic analysis.
+It does not mean:
+
+use physical device 0
+
+Likewise:
+
+requires memory >= required_memory
+
+expresses a requirement.
+
+It must not establish a universal memory maximum.
 
 ---
 
-12. "breaks.g4"
+20. Requirement vs Implementation Decision
 
-Purpose
+This distinction is mandatory.
 
-Own "break" syntax.
+Portable requirement
 
-Semantic boundary
+requires qubits >= n
 
-The grammar does not determine whether a "break" is legal at its location.
+Capability
+
+requires capability("quantum.mid_circuit_measurement")
+
+Preference
+
+prefer capability("accelerator.compute")
+
+Hint
+
+hint execution.parallel
+
+Implementation decision
+
+map logical resource → physical resource
+
+The first four can participate in portable program semantics.
+
+The final category belongs downstream to compilation/deployment/target realization.
+
+---
+
+21. "effect-statements.g4"
+
+Effect statements must integrate with the canonical effect system.
+
+They must not create a second effect representation.
+
+The path is:
+
+statement syntax
+    ↓
+effect AST representation
+    ↓
+effect semantic analysis
+    ↓
+canonical effect model
+    ↓
+compiler/runtime handling
+
+Effects may represent:
+
+- IO;
+- state;
+- concurrency;
+- resource use;
+- communication;
+- quantum effects;
+- timing;
+- nondeterminism;
+- security-sensitive actions;
+- external interaction.
+
+The grammar does not implement any effect.
+
+---
+
+22. "domains.g4"
+
+"domains.g4" is the domain composition boundary.
+
+It should not become a second monolithic statement grammar.
+
+It should delegate to domain-specific statement boundaries.
+
+Conceptually:
+
+domains.g4
+    │
+    ├── classical
+    ├── quantum
+    ├── hybrid
+    ├── HDL
+    ├── distributed
+    ├── AI
+    ├── data
+    ├── networking
+    ├── security
+    ├── hardware
+    ├── resources
+    ├── compile
+    └── execution
+
+The exact imports/rule names must follow the canonical ANTLR composition architecture.
+
+No domain should silently redefine the universal statement rule.
+
+---
+
+23. Quantum Statement Integration
+
+"quantum-statements.g4" owns only quantum statement syntax.
+
+It must integrate with:
+
+grammar/quantum/
+src/quantum/frontend/
+src/quantum/ir/
+quantum semantic analysis
+optimization
+routing
+scheduling
+QEC
+resilience
+ZQN
+HAL
+
+The grammar must not duplicate "quantum::ir".
+
+The canonical path is:
+
+Zamani quantum statement
+        ↓
+domain-neutral AST
+        ↓
+quantum semantic analysis
+        ↓
+quantum::ir
+        ↓
+optimization
+        ↓
+decomposition
+        ↓
+routing
+        ↓
+scheduling
+        ↓
+QEC / resilience
+        ↓
+ZQN
+        ↓
+HAL
+        ↓
+target
+
+---
+
+24. No Fixed Quantum Gate Enumeration
+
+The statements grammar must not define a universal list such as:
+
+H
+X
+Y
+Z
+CNOT
+...
+
+as the complete language of quantum operations.
+
+Quantum operation names are semantic data.
+
+The syntax must support the canonical operation model already established by the repository.
+
+Conceptually:
+
+operation name
++
+operands
++
+parameters
++
+results
++
+attributes/modifiers
+
+This permits:
+
+apply H ...
+apply custom_operation ...
+apply vendor.operation ...
+apply parameterized_operation(...)
+
+without forcing the parser to know every possible present or future operation.
+
+This is essential for:
+
+- future quantum operations;
+- vendor operations;
+- research operations;
+- logical operations;
+- decomposed operations;
+- pulse-level intent;
+- domain extensions.
+
+---
+
+25. Quantum Scalability
+
+The grammar must not impose limits on:
+
+- number of qubits;
+- number of registers;
+- number of operations;
+- circuit depth;
+- number of controls;
+- number of measurements;
+- number of classical feed-forward operations;
+- number of quantum kernels;
+- number of quantum devices.
+
+Program values such as:
+
+n
+
+may determine resource requirements.
+
+That is different from imposing a compiler language limit.
+
+---
+
+26. HDL Statement Integration
+
+"hdl-statements.g4" owns HDL statement syntax.
+
+It integrates with:
+
+grammar/hdl/
+grammar/hardware/
+grammar/resources/
+grammar/compile/
+grammar/execution/
+
+HDL syntax describes hardware intent.
+
+It must not silently encode a particular physical implementation.
+
+Avoid universal constructs whose meaning depends on today's device limits.
+
+For example, physical width must remain parameterizable where width is part of program semantics.
+
+The grammar must not impose an arbitrary universal:
+
+[31:0]
+
+limit.
+
+---
+
+27. Hardware and Resource Separation
+
+Hardware-related statements must distinguish:
+
+hardware intent
+resource requirement
+capability
+constraint
+deployment decision
+physical realization
 
 For example:
 
-break;
+requires capability("gpu.compute")
 
-is syntactically recognizable.
+is portable.
 
-Whether it occurs inside an appropriate breakable construct is a semantic/control-flow validation issue.
+A statement that identifies a particular physical GPU belongs to a target-specific deployment layer unless the language explicitly defines physical targeting as a non-portable feature.
 
-No grammar rule should attempt to encode arbitrary nesting depth.
-
----
-
-13. "continues.g4"
-
-Purpose
-
-Own "continue" syntax.
-
-Semantic boundary
-
-The grammar recognizes the statement.
-
-Semantic analysis determines whether the current control-flow context permits "continue".
-
-No target-specific meaning is allowed.
+The distinction must be visible in the AST and semantic model.
 
 ---
 
-14. "assertions.g4"
+28. Hybrid Computing
 
-Purpose
+Statements must support programs that combine domains.
 
-Own statement-level assertion syntax.
+A valid program may conceptually contain:
 
-Owns
+classical computation
+        ↓
+quantum operation
+        ↓
+measurement
+        ↓
+classical decision
+        ↓
+quantum operation
+        ↓
+classical result
 
-- runtime/source assertions;
-- assertion message syntax where specified;
-- assertion statement structure.
+The parser must not require programmers to write separate languages for these stages.
 
-Does not own
+Hybrid semantics are integrated through:
 
-- proof;
-- theorem proving;
-- compile-time evaluation;
-- runtime policy;
-- optimization assumptions.
-
-Compile-time assertions must remain separate from runtime statement assertions.
-
----
-
-15. "exceptions.g4"
-
-Purpose
-
-Own exception/control-transfer syntax.
-
-Owns
-
-- "try";
-- "catch";
-- "finally";
-- "throw";
-- associated statement structure.
-
-Does not own
-
-- exception implementation;
-- runtime unwinding;
-- stack representation;
-- hardware exception handling;
-- recovery policy.
-
-Exception semantics must be target-independent at source level.
+hybrid/
+quantum/
+classical/
+types/
+effects/
+resources/
+execution/
 
 ---
 
-16. "pattern-matching.g4"
+29. Cross-Domain Integration
 
-Purpose
+The statements subsystem must support composition across:
 
-Own statement-level pattern matching.
+- classical;
+- quantum;
+- hybrid;
+- HDL;
+- hardware;
+- distributed;
+- AI;
+- data;
+- networking;
+- security;
+- resource;
+- compile;
+- execution domains.
 
-Owns
+The grammar must avoid creating incompatible mini-languages.
 
-- "match";
-- cases;
-- guards;
-- pattern dispatch structure.
+All domains share:
 
-Does not own
-
-- pattern type checking;
-- exhaustiveness analysis;
-- unreachable-case analysis;
-- value semantics.
-
-Pattern syntax must integrate with the canonical type and expression grammars.
-
----
-
-17. "unsafe.g4"
-
-Purpose
-
-Own Zamani's explicit unsafe-region syntax.
-
-Critical distinction
-
-Zamani's "unsafe" construct is a Zamani language feature.
-
-It is not Rust's "unsafe".
-
-The grammar implementation itself must contain:
-
-- no Rust "unsafe";
-- no embedded Rust actions;
-- no raw-pointer execution;
-- no FFI execution;
-- no host process execution.
-
-Rust 1.97 / Rust 1.97.1 is the implementation baseline, but Rust implementation safety must remain independent of whether a Zamani program contains an "unsafe" region.
-
-Therefore:
-
-Zamani unsafe syntax
-        ≠
-Rust unsafe implementation
-
-The grammar merely recognizes the source-language construct.
-
-Semantic analysis must subsequently determine:
-
-- what capability the unsafe region requests;
-- what operations it permits;
-- what restrictions apply;
-- what provenance is required;
-- whether the construct is permitted in the current compilation/security context.
+- identifiers;
+- names;
+- paths;
+- expressions;
+- types;
+- blocks;
+- attributes;
+- modifiers;
+- source locations;
+- diagnostics;
+- effects;
+- capabilities;
+- resource requirements.
 
 ---
 
-18. Expression statements
+30. AI and Data Statements
 
-A canonical expression must be allowed in statement position where the language specification permits it.
+AI and data statements must remain semantic categories rather than framework-specific parser languages.
 
-Examples include:
+The grammar should not hard-code:
 
-compute();
-value;
-measure(q);
-tensor_operation();
-hardware_operation();
-distributed_operation();
+- PyTorch;
+- TensorFlow;
+- JAX;
+- CUDA;
+- ROCm;
+- vendor model APIs;
+- specific model architectures;
 
-The statement grammar must not duplicate expression syntax.
+as universal language syntax.
 
-The architecture is:
+The statement layer may describe concepts such as:
+
+train
+infer
+transform
+pipeline
+dataset operation
+model operation
+tensor operation
+
+where these are genuine Zamani semantic constructs.
+
+Framework implementation belongs downstream.
+
+---
+
+31. Distributed Statements
+
+Distributed statements must not assume:
+
+- fixed node counts;
+- fixed cluster sizes;
+- fixed topology;
+- fixed process counts;
+- fixed network bandwidth;
+- fixed accelerator counts.
+
+A program may express:
+
+parallel
+replicate
+partition
+communicate
+collect
+synchronize
+
+without stating how many physical machines must exist.
+
+Actual placement is resolved later.
+
+---
+
+32. Networking Statements
+
+Networking syntax should describe:
+
+- communication;
+- endpoints;
+- services;
+- channels;
+- requests;
+- responses;
+- streaming;
+- protocol intent.
+
+Physical addresses and topology must remain abstract whenever possible.
+
+Network-specific realization belongs downstream.
+
+---
+
+33. Security Statements
+
+Security statements must integrate with:
+
+security/
+effects/
+capabilities/
+resources/
+interoperability/
+
+Security syntax may describe:
+
+- identity;
+- authorization;
+- policy;
+- capability;
+- trust;
+- secure computation;
+- provenance.
+
+The parser must not turn every cryptographic algorithm into a reserved keyword.
+
+---
+
+34. Expressions Are Not Statements
+
+Statement grammars must reuse the canonical expression grammar.
+
+Do not duplicate:
 
 expression
-    |
-    v
-expressionStatement
-    |
-    v
-statement
+assignment expression
+call expression
+literal
+type expression
 
-Expression precedence belongs exclusively to:
-
-grammar/expressions/
-
----
-
-19. Statement termination
-
-Ordinary statement termination must have one authoritative definition.
-
-The statement grammar must not independently invent multiple termination systems.
-
-Unless the language specification explicitly changes this rule, ordinary statement forms use the canonical semicolon-based termination where required.
-
-Automatic semicolon insertion must not be silently introduced.
-
-Any future change to termination rules requires coordinated updates to:
-
-grammar/specification/
-grammar/lexer/
-grammar/statements/
-grammar/tests/
-parser/frontend
-compatibility documentation
-
----
-
-20. No domain-specific statement forks
-
-The statement grammar must not introduce separate syntax merely because a target differs.
-
-Do not create constructs such as:
-
-cpuStatement
-gpuStatement
-fpgaStatement
-asicStatement
-qpuStatement
-clusterStatement
-cloudStatement
-embeddedStatement
-
-merely to represent target differences.
-
-A source-level operation should describe its semantic intent.
-
-Target realization occurs downstream.
+inside every statement file.
 
 For example:
 
-compute(data);
+if (expression) statement
 
-may ultimately be realized on:
+should reference the canonical expression rule.
+
+This prevents expression precedence from diverging between domains.
+
+---
+
+35. Types Are Not Statements
+
+Statement grammar must reference the canonical type system.
+
+It must not define competing versions of:
+
+type
+generic type
+function type
+quantum type
+tensor type
+resource type
+capability type
+
+Type syntax belongs under:
+
+grammar/types/
+
+Semantic type validation belongs downstream.
+
+---
+
+36. Declarations Are Not Statements
+
+Where declarations may syntactically occur in statement position, the statement layer should compose the canonical declaration rules.
+
+It must not redefine:
+
+struct
+class
+enum
+interface
+trait
+resource
+capability
+module
+
+Declarations remain owned by:
+
+grammar/declarations/
+
+---
+
+37. Source Spans
+
+Every statement construct must preserve sufficient source information for diagnostics.
+
+The parser/AST pipeline must be able to associate statements with:
+
+- source file;
+- start position;
+- end position;
+- line/column information where available;
+- relevant child spans.
+
+Source locations must not be discarded merely because a statement is domain-specific.
+
+This is required for:
+
+- compiler diagnostics;
+- semantic errors;
+- IDE tooling;
+- debugging;
+- provenance;
+- verification;
+- source-to-IR mapping.
+
+---
+
+38. Diagnostics
+
+Every statement family must define expected diagnostics for:
+
+- malformed syntax;
+- missing operands;
+- malformed delimiters;
+- invalid statement structure;
+- invalid combinations;
+- unexpected tokens;
+- unsupported syntax;
+- ambiguous syntax where ambiguity cannot be resolved;
+- deprecated syntax.
+
+Semantic errors belong downstream but should retain the original statement source span.
+
+Diagnostics must be deterministic.
+
+---
+
+39. Determinism
+
+For the same:
+
+source
++
+language version
++
+dialect configuration
++
+declared feature set
+
+the parser must produce the same parse structure.
+
+The grammar must not depend on:
+
+- machine size;
+- CPU count;
+- GPU count;
+- network topology;
+- runtime state;
+- random values;
+- physical device discovery.
+
+Hardware discovery occurs after parsing.
+
+---
+
+40. Scalability Requirements
+
+The statements grammar must scale in semantic expressiveness without imposing artificial resource limits.
+
+It must support programs containing arbitrarily many:
+
+- statements;
+- blocks;
+- bindings;
+- loops;
+- branches;
+- matches;
+- tasks;
+- channels;
+- resource requirements;
+- quantum operations;
+- HDL operations;
+- domain transitions;
+
+subject to actual implementation resources.
+
+The grammar itself must not establish artificial semantic maxima.
+
+Examples of prohibited universal language limits:
+
+MAX_STATEMENTS
+MAX_BLOCK_DEPTH
+MAX_THREADS
+MAX_CORES
+MAX_GPUS
+MAX_QUBITS
+MAX_NODES
+MAX_CHANNELS
+MAX_OPERATIONS
+MAX_TENSOR_DIMENSIONS
+
+---
+
+41. "Infinity" and Resource Availability
+
+"Infinity" means that the language does not impose a fixed architectural maximum.
+
+It does not mean that a physical machine can execute an actually infinite computation.
+
+The correct model is:
+
+language capability
+        ↓
+program requirements
+        ↓
+available resources
+        ↓
+compiler/runtime decisions
+        ↓
+actual execution
+
+If resources are insufficient, the compiler/runtime may:
+
+- reject the target;
+- report unmet requirements;
+- specialize;
+- partition;
+- distribute;
+- schedule;
+- spill;
+- lower;
+- approximate where explicitly permitted;
+- negotiate another target.
+
+The parser must not decide any of those outcomes.
+
+---
+
+42. Hard-Coding Policy
+
+Every statement grammar file must pass a hard-coding audit.
+
+The following are prohibited as universal language restrictions:
+
+MAX_CPU
+MAX_GPU
+MAX_FPGA
+MAX_QPU
+MAX_QUBIT
+MAX_CORE
+MAX_THREAD
+MAX_NODE
+MAX_MEMORY
+MAX_REGISTER
+MAX_VECTOR_WIDTH
+MAX_TENSOR_DIMENSION
+MAX_TIMELINE
+MAX_CHANNEL
+MAX_ACCELERATOR
+
+Also prohibited are fixed universal physical identifiers such as:
+
+cpu0
+gpu0
+qpu0
+qubit0
+node0
+memory_bank0
+
+unless they occur as ordinary programmer data rather than language-defined physical limits.
+
+---
+
+43. Program Data vs Language Limits
+
+The hard-coding rule does not prohibit constants.
+
+This is valid:
+
+let n = 1024;
+
+because "1024" may be program data.
+
+This is different from:
+
+MAX_QUBITS = 1024
+
+being a universal language rule.
+
+Likewise:
+
+Tensor<1024, 1024>
+
+may be valid program semantics.
+
+But the grammar must not reject:
+
+Tensor<2048, 2048>
+
+merely because the language designer selected 1024 as an implementation maximum.
+
+---
+
+44. AST Integration Contract
+
+Every statement rule must have a predetermined AST mapping.
+
+The required path is:
+
+grammar rule
+    ↓
+parser context
+    ↓
+domain-neutral AST
+    ↓
+semantic representation
+    ↓
+canonical IR
+
+No statement may be added to the grammar with the assumption:
+
+«"The AST can be figured out later."»
+
+That creates downstream rework and competing representations.
+
+---
+
+45. Generic Operation Model
+
+Where statement syntax describes operations, the frontend should use the repository's domain-neutral operation model rather than creating domain-specific parser-only operation types.
+
+The intended conceptual structure is:
+
+Operation {
+    name,
+    namespace,
+    operands,
+    parameters,
+    results,
+    attributes,
+    modifiers,
+    effects,
+    capabilities,
+    source
+}
+
+The grammar may construct the syntax required to populate this model.
+
+It must not introduce a competing semantic operation hierarchy.
+
+---
+
+46. Quantum AST / IR Boundary
+
+For quantum statements:
+
+quantum statement
+    ↓
+generic frontend operation
+    ↓
+semantic quantum operation
+    ↓
+quantum::ir
+
+Do not create:
+
+quantum statement
+    ↓
+new QuantumStatementIR
+    ↓
+quantum::ir
+
+That would duplicate the canonical quantum semantic boundary.
+
+---
+
+47. HDL AST / IR Boundary
+
+HDL statements similarly follow:
+
+HDL syntax
+    ↓
+frontend AST
+    ↓
+hardware semantic analysis
+    ↓
+canonical hardware/HDL representation
+    ↓
+synthesis/lowering/verification
+
+The parser must not perform synthesis.
+
+---
+
+48. Effects and Capabilities
+
+Statements may declare or invoke capabilities, but capability checking is semantic.
+
+For example:
+
+requires capability("quantum.measurement")
+
+is syntax.
+
+Whether the selected target provides that capability is a semantic/compiler/runtime question.
+
+Likewise:
+
+requires capability("gpu.compute")
+
+does not mean the parser selects a GPU.
+
+---
+
+49. Compile-Time and Runtime Separation
+
+Statements must distinguish:
+
+compile-time intent
+runtime behavior
+target realization
+
+Compilation constructs belong to:
+
+compile/
+
+Runtime constructs belong to:
+
+execution/
+
+The statement subsystem only provides composition points where the language specification says these constructs are legal.
+
+---
+
+50. Interoperability
+
+Statements that interact with foreign systems must use the interoperability subsystem.
+
+The grammar must not create independent language semantics for:
+
+- C;
+- C++;
+- Rust;
+- Python;
+- WebAssembly;
+- OpenQASM;
+- QIR;
+- LLVM;
+- MLIR;
+- vendor-specific HDLs.
+
+These are interoperability targets/formats.
+
+They are not alternative canonical Zamani semantic models.
+
+---
+
+51. Dialects
+
+Dialect-specific statements must remain explicitly scoped.
+
+A dialect must declare:
+
+dialect name
+version
+feature set
+syntax extension
+semantic extension
+AST mapping
+compatibility requirements
+
+A dialect must not silently modify the meaning of core statements.
+
+Core Zamani remains portable.
+
+---
+
+52. Versioning
+
+Every statement syntax extension must identify:
+
+- language version;
+- feature status;
+- compatibility status;
+- deprecation status where applicable.
+
+Feature states are:
+
+PROPOSED
+EXPERIMENTAL
+STABLE
+DEPRECATED
+REMOVED
+HISTORICAL
+
+The precise status vocabulary must remain synchronized with the repository-wide specification.
+
+---
+
+53. Feature Promotion
+
+A proposed statement cannot become stable merely because grammar syntax exists.
+
+The promotion path is:
+
+proposal
+   ↓
+specification
+   ↓
+semantic contract
+   ↓
+AST contract
+   ↓
+canonical grammar
+   ↓
+semantic implementation
+   ↓
+IR integration
+   ↓
+compiler/runtime integration
+   ↓
+tests
+   ↓
+compatibility validation
+   ↓
+STABLE
+
+---
+
+54. Feature Manifest Integration
+
+Where the repository adopts feature manifests under:
+
+grammar/specification/features/
+
+each statement feature should have a corresponding contract.
+
+The manifest should identify:
+
+feature id
+name
+status
+version
+grammar file
+grammar rule
+lexer tokens
+AST nodes
+semantic rules
+IR mapping
+compiler consumers
+runtime consumers
+capabilities
+resource requirements
+positive tests
+negative tests
+boundary tests
+scalability tests
+compatibility
+hard-coding policy
+
+This makes each statement feature independently completable.
+
+---
+
+55. Independence-First Development
+
+A file must be completed against its contracts before dependent files are changed.
+
+For each statement grammar file:
+
+1. define responsibility
+2. define dependencies
+3. define outputs
+4. define AST contract
+5. define semantic contract
+6. define IR contract
+7. define diagnostics
+8. define tests
+9. audit scalability
+10. audit hard-coding
+11. validate grammar
+12. mark complete
+
+A later file must consume the published contract rather than forcing the earlier file to be redesigned.
+
+---
+
+56. No Retroactive Semantic Drift
+
+Once a statement file is marked complete, another domain must not change its meaning merely to accommodate itself.
+
+For example, a quantum grammar must not redefine the meaning of:
+
+if
+while
+return
+parallel
+match
+
+to solve a quantum-specific problem.
+
+Instead, the quantum subsystem must integrate through the established universal semantics.
+
+---
+
+57. Domain-Specific Extensions
+
+A domain may extend the language only when:
+
+1. the syntax expresses genuine domain semantics;
+2. it has a defined AST mapping;
+3. semantic behavior is specified;
+4. the canonical IR boundary is known;
+5. diagnostics are defined;
+6. tests exist;
+7. compatibility is defined;
+8. no existing construct is unnecessarily duplicated.
+
+---
+
+58. Mathematical Operations
+
+The statement subsystem must not become a list of mathematical library functions.
+
+Operations such as:
+
+- FFT;
+- SVD;
+- gradient descent;
+- matrix decomposition;
+- optimization;
+- statistical operations;
+
+should generally be represented through:
+
+generic operation
++
+typed operands
++
+parameters
++
+capabilities
+
+when they do not require dedicated language semantics.
+
+Libraries and semantic capabilities should own the implementation.
+
+---
+
+59. AI Framework Independence
+
+The statements grammar must remain independent of particular AI frameworks.
+
+The language may describe:
+
+model
+train
+infer
+dataset
+tensor operation
+pipeline
+agent
+optimization
+
+when these are canonical Zamani concepts.
+
+The grammar must not require a specific implementation framework.
+
+---
+
+60. Resource Negotiation
+
+A statement may express a requirement or preference.
+
+For example:
+
+requires capability("tensor.compute")
+prefer accelerator
+
+The compiler/runtime may negotiate among available resources.
+
+The statement parser must not resolve the negotiation.
+
+---
+
+61. Deployment
+
+Deployment decisions belong downstream.
+
+The source program describes portable intent.
+
+The compiler/runtime may determine:
 
 CPU
 GPU
 FPGA
 ASIC
-quantum-classical accelerator
+QPU
+accelerator
 cluster
-cloud infrastructure
-future hardware
-
-without changing the source statement merely because the target changed.
-
----
-
-21. Quantum integration
-
-Statement syntax may control quantum computation.
-
-For example, a statement body may eventually contain quantum operations:
-
-if ready {
-    quantum_operation();
-}
-
-or:
-
-while condition {
-    measure();
-}
-
-The statement grammar must not know:
-
-- number of qubits;
-- physical qubit count;
-- logical qubit count;
-- topology;
-- gate inventory;
-- device identifier;
-- backend;
-- calibration;
-- QEC implementation;
-- ZQN noise model;
-- routing;
-- scheduling.
-
-The pipeline is:
-
-statement grammar
-      |
-      v
-AST
-      |
-      v
-semantic analysis
-      |
-      v
-quantum semantic representation
-      |
-      v
-quantum::ir
-      |
-      v
-optimization
-      |
-      v
-routing
-      |
-      v
-scheduling
-      |
-      v
-hardware realization
-
-The grammar must never construct "quantum::ir".
-
----
-
-22. QEC integration
-
-QEC is not statement grammar ownership.
-
-A statement may eventually invoke or control a QEC-related operation, but:
-
-grammar/statements/
-
-must not define QEC algorithms.
-
-QEC owns:
-
-- error detection;
-- syndrome processing;
-- correction;
-- decoding;
-- logical-error handling.
-
-The statement grammar only recognizes the syntactic structure necessary to express the program.
-
----
-
-23. ZQN integration
-
-ZQN owns quantum noise/fault semantics.
-
-Statement grammar must not define:
-
-- noise channels;
-- correlated faults;
-- leakage;
-- loss;
-- erasure;
-- calibration noise;
-- fault probabilities.
-
-A statement may semantically interact with ZQN-aware execution, but this is downstream.
-
----
-
-24. Resilience integration
-
-Resilience is a decision/orchestration layer.
-
-Statement grammar must not encode:
-
-retry
-restart
-rollback
-reroute
-reschedule
-recompile
-switch-backend
-quarantine
-
-as hardware recovery semantics merely because those actions exist downstream.
-
-If Zamani eventually provides explicit source-level resilience constructs, those constructs must receive a dedicated language specification and grammar owner.
-
-They must not be smuggled into generic statement rules.
-
----
-
-25. Scheduling integration
-
-Statements establish program-level ordering semantics.
-
-They do not establish:
-
-- gate timing;
-- pulse timing;
-- machine cycles;
-- physical placement;
-- resource reservations;
-- queue positions;
-- hardware schedules.
-
-The downstream relationship is:
-
-statement
-    |
-    v
-semantic control flow
-    |
-    v
-IR
-    |
-    v
-optimization
-    |
-    v
-routing
-    |
-    v
-scheduling
-
-Scheduling must preserve the semantics established by the source program.
-
----
-
-26. Hardware and HDL integration
-
-Statements may appear in hardware-oriented programs.
-
-However, statement syntax must not encode fixed:
-
-- register counts;
-- FPGA resource counts;
-- ASIC dimensions;
-- clock counts;
-- cores;
-- memory sizes;
-- buses;
-- physical addresses;
-- topology.
-
-Hardware-specific semantics belong to:
-
-grammar/hdl/
-grammar/hardware/
-grammar/resources/
-
-and their downstream semantic/compiler layers.
-
----
-
-27. Classical integration
-
-Statements must support ordinary classical control flow without restricting future computational domains.
-
-The same statement model must support:
-
-scalar computation
-vector computation
-matrix computation
-tensor computation
-symbolic computation
-numerical computation
-parallel computation
-accelerator computation
-
-without introducing separate control-flow languages for each.
-
----
-
-28. Concurrency and parallelism
-
-Statement syntax may participate in concurrency.
-
-However, statement grammar must not hard-code:
-
-MAX_THREADS
-MAX_TASKS
-MAX_WORKERS
-MAX_NODES
-MAX_CHANNELS
-
-Concurrency semantics belong to:
-
-grammar/concurrency/
-
-while execution/resource decisions belong downstream.
-
-The source program expresses semantic concurrency.
-
-The execution system decides how available resources realize it.
-
----
-
-29. Distributed computing
-
-Distributed execution must not require a separate statement grammar merely because execution crosses machines.
-
-Statements must remain portable across:
-
-local
-embedded
-single-machine
-multicore
-multi-device
-cluster
+HPC
 cloud
-distributed
-future environments
+edge
+future architecture
 
-Deployment topology belongs to resource, execution, and deployment layers.
+according to capabilities and constraints.
 
----
-
-30. Resource independence
-
-No statement grammar file may contain machine-size constants.
-
-Forbidden examples include:
-
-MAX_QUBITS = 32
-MAX_QUBITS = 64
-MAX_CORES = 128
-MAX_THREADS = 1024
-MAX_DEVICES = 16
-MAX_NODES = 1000
-
-The grammar must also avoid hidden equivalents such as:
-
-q[0]
-q[1]
-device0
-device1
-core0
-core1
-gpu0
-gpu1
-
-unless those are merely ordinary user identifiers and not language-imposed resources.
+The statements grammar remains unchanged.
 
 ---
 
-31. Resource semantics belong elsewhere
+62. Safety and Security
 
-The language must distinguish:
+Grammar changes must not create parser-level escape hatches around:
 
-requirement
-constraint
-capability
-preference
-hint
-resource
-target
-placement
+- ownership;
+- effects;
+- capabilities;
+- resource authorization;
+- security policy;
+- provenance;
+- validation.
 
-For example:
-
-requires quantum;
-
-must not inherently mean:
-
-use device X;
-use exactly N qubits;
-use topology Y;
-
-Statement syntax must remain independent of these physical choices.
+Macros and metaprogramming must also eventually pass through the same semantic validation pipeline.
 
 ---
 
-32. POCO-REAF
+63. Rust Compatibility
 
-The statement grammar is a fundamental part of POCO-REAF.
+The grammar is ANTLR grammar source, not Rust source.
 
-A statement represents source-level meaning.
-
-It must not encode transient implementation characteristics.
-
-The intended relationship is:
-
-One source program
-        |
-        v
-One semantic meaning
-        |
-        +----> CPU
-        +----> GPU
-        +----> FPGA
-        +----> ASIC
-        +----> QPU
-        +----> simulator
-        +----> cluster
-        +----> cloud
-        +----> heterogeneous system
-        +----> future architecture
-
-The program should not require syntactic rewriting merely because the available machine changes.
-
----
-
-33. AST contract
-
-The grammar produces parser contexts.
-
-It does not construct Rust AST values.
-
-The frontend AST layer must preserve, as appropriate:
-
-- statement kind;
-- source span;
-- source order;
-- child relationships;
-- labels;
-- expressions;
-- declarations;
-- block structure;
-- syntactic metadata.
-
-Every statement must map to exactly one canonical AST representation or to an explicitly documented desugaring.
-
-No statement grammar file may silently create a second AST model.
-
----
-
-34. Semantic contract
-
-The grammar establishes syntactic validity.
-
-Semantic analysis establishes semantic validity.
-
-Examples of semantic errors that do not belong in grammar:
-
-break outside loop
-continue outside loop
-return outside function
-invalid return type
-unknown variable
-invalid assignment
-immutable value modified
-invalid ownership
-invalid borrow
-invalid capability
-unavailable resource
-invalid quantum operation
-invalid hardware requirement
-invalid effect
-
-This separation must be preserved.
-
----
-
-35. IR contract
-
-The statement grammar creates no IR.
-
-The intended architecture is:
-
-source
-  ↓
-lexer
-  ↓
-parser
-  ↓
-AST
-  ↓
-semantic analysis
-  ↓
-canonical semantic representation
-  ↓
-domain IR
-  ↓
-optimization
-  ↓
-routing / scheduling / lowering
-  ↓
-target
-
-For quantum computation:
-
-AST
-  ↓
-semantic quantum analysis
-  ↓
-quantum::ir
-
-"quantum::ir" remains the canonical quantum semantic boundary.
-
-No statement grammar file may define a competing quantum representation.
-
----
-
-36. Compiler integration
-
-Statement grammar integrates with the compiler through:
-
-lexer
-parser
-AST
-semantic analysis
-type checker
-effect checker
-capability checker
-control-flow analysis
-resource validation
-IR lowering
-optimization
-routing
-scheduling
-code generation
-
-The grammar itself must remain independent from implementation-specific compiler algorithms.
-
----
-
-37. Runtime integration
-
-There must be no direct grammar-to-runtime dependency.
-
-The correct relationship is:
-
-grammar
-  ↓
-AST
-  ↓
-semantic model
-  ↓
-IR
-  ↓
-compiler/lowering
-  ↓
-runtime
-
-This prevents runtime requirements from contaminating source syntax.
-
----
-
-38. ANTLR integration
-
-The grammar uses ANTLR4-compatible grammar structure.
-
-ANTLR grammar composition must remain deterministic.
-
-Parser grammars should use the canonical lexer vocabulary.
-
-The grammar must not embed executable Rust actions.
-
-Do not use:
-
-@members
-@init
-@after
-semantic predicates
-embedded Rust
-filesystem actions
-network actions
-runtime callbacks
-
-to implement language semantics.
-
-ANTLR is responsible for syntactic recognition.
-
-The Rust compiler/frontend is responsible for interpretation of the parse tree.
-
----
-
-39. Rust 1.97 / Rust 1.97.1
-
-The surrounding Zamani implementation must support:
+Nevertheless, all generated and consuming frontend code must remain compatible with the repository's supported Rust toolchain:
 
 Rust 1.97
 Rust 1.97.1
 
-No Rust "unsafe" is permitted.
+The grammar subsystem must therefore avoid assumptions that require newer Rust functionality.
 
-This requirement applies to the implementation surrounding the grammar as well as any generated/handwritten Rust integration code.
+The generated parser/frontend must use safe Rust only.
 
-The grammar itself contains no Rust execution.
+unsafe
 
----
+is prohibited.
 
-40. Determinism
-
-Parsing must not depend on:
-
-- hardware;
-- CPU count;
-- GPU availability;
-- QPU availability;
-- filesystem state;
-- network state;
-- calibration;
-- scheduler state;
-- runtime state;
-- backend state;
-- randomness;
-- wall-clock time.
-
-Given the same:
-
-source
-lexer version
-grammar version
-parser configuration
-
-the parser must produce the same structural result.
+No grammar feature may require unsafe Rust for correctness.
 
 ---
 
-41. Diagnostics
+64. ANTLR Compatibility
 
-Syntax errors belong to the parser/frontend diagnostic system.
+The statement grammar must remain compatible with the repository's selected ANTLR Rust generation stack.
 
-Diagnostics should preserve source locations.
+The repository's existing ANTLR version/tooling is authoritative.
 
-Examples include:
+Do not introduce grammar constructs merely because they work with another ANTLR runtime if they are incompatible with the project's actual Rust target.
 
-unexpected token
-missing statement
-missing semicolon
-missing block
-unterminated block
-malformed loop
-malformed conditional
-malformed match
-malformed declaration
-malformed return
-invalid statement syntax
-unexpected EOF
-
-The grammar should not embed target-specific diagnostic logic.
-
-Semantic diagnostics are downstream.
+Grammar composition must use one consistent ANTLR architecture.
 
 ---
 
-42. Error recovery
+65. Generated Code
 
-Parser recovery must be implemented by the parser/frontend infrastructure.
+Generated parser/lexer output must not become a second source of truth.
 
-Grammar files must not contain ad-hoc error recovery actions.
+The authoritative sources are:
 
-Recovery must preserve:
+grammar/*.g4
+specification/*
+spec/*
 
-- deterministic behavior;
-- source locations;
-- useful diagnostics;
-- error ordering;
-- parser safety.
+Generated artifacts must be reproducible.
 
-A malformed statement must not cause the parser to execute user code.
+Generated files should not be manually edited.
 
 ---
 
-43. Security boundary
+66. Testing Contract
 
-The statement grammar must perform no:
-
-- filesystem access;
-- network access;
-- process spawning;
-- shell execution;
-- hardware discovery;
-- device probing;
-- calibration lookup;
-- runtime execution.
-
-Parsing source must therefore remain a pure syntactic operation.
-
----
-
-44. Scalability
-
-The language must not define arbitrary source-level machine limits.
-
-Do not hard-code maximum:
-
-- statements;
-- blocks;
-- branches;
-- loops;
-- nested statements;
-- expressions;
-- devices;
-- qubits;
-- cores;
-- threads;
-- nodes;
-- GPUs;
-- FPGAs;
-- accelerators;
-- memory;
-- program size.
-
-This does not mean that implementations can physically consume infinite memory.
-
-It means the language grammar must not impose artificial machine-specific semantic limits.
-
-Implementation resource limits, where necessary, must be explicit configuration/resource-policy concerns rather than language semantics.
-
----
-
-45. "Infinity" interpretation
-
-"Scale to infinity" means:
-
-«no artificial finite machine-size ceiling is encoded by the language.»
-
-Actual execution remains bounded by available resources.
-
-Therefore:
-
-language scalability
-        ≠
-infinite physical resources
-
-The grammar must permit programs whose scale is limited only by:
-
-- available memory;
-- compiler resources;
-- execution resources;
-- target capabilities;
-- explicitly declared user/resource constraints.
-
----
-
-46. Recursion and nesting
-
-Recursive statement structures are permitted.
-
-Examples include:
-
-if {
-    while {
-        if {
-            ...
-        }
-    }
-}
-
-No arbitrary language constant should define a maximum nesting depth.
-
-A parser implementation may enforce operational resource limits for safety, but such limits must remain external to the language's semantic grammar.
-
----
-
-47. Statement-family extension
-
-Adding a new statement family requires all of the following:
-
-1. dedicated grammar ownership;
-2. explicit syntax specification;
-3. lexer/token contract;
-4. statement-composition integration;
-5. AST mapping;
-6. semantic contract;
-7. IR/lowering contract where applicable;
-8. positive tests;
-9. negative tests;
-10. boundary tests;
-11. cross-domain tests;
-12. compatibility review;
-13. documentation.
-
-The new family must not redefine an existing statement family.
-
----
-
-48. Future computing domains
-
-The grammar must remain extensible.
-
-Future domains may include technologies that do not currently exist.
-
-The architecture must therefore avoid making today's hardware categories the permanent organizing principle of the statement language.
-
-New domain syntax should normally be added as a semantic extension rather than modifying generic control-flow constructs.
-
-For example, a future accelerator should normally reuse:
-
-if
-while
-for
-match
-return
-block
-
-rather than require:
-
-futureAcceleratorIf
-futureAcceleratorLoop
-
----
-
-49. Cross-domain compatibility
-
-The statement grammar must support combinations such as:
-
-classical + quantum
-classical + HDL
-classical + hardware
-quantum + classical
-quantum + distributed
-quantum + HDL
-quantum + hardware
-AI + quantum
-AI + hardware
-AI + distributed
-classical + quantum + distributed
-classical + quantum + HDL + hardware
-
-The statement grammar should not need to know the domain composition.
-
-The semantic layer determines whether the combination is legal.
-
----
-
-50. Ownership matrix
-
-Concern| Owner
-Statement composition| "statements.g4"
-Blocks| "blocks.g4"
-Assignment statements| "assignments.g4"
-Conditionals| "conditionals.g4"
-Loops| "loops.g4"
-Match statements| "pattern-matching.g4"
-Declarations in statement position| "declarations.g4"
-Returns| "returns.g4"
-Break| "breaks.g4"
-Continue| "continues.g4"
-Assertions| "assertions.g4"
-Exceptions| "exceptions.g4"
-Unsafe syntax| "unsafe.g4"
-Expressions| "grammar/expressions/"
-Types| "grammar/types/"
-Names| "grammar/core/"
-Functions| "grammar/functions/"
-Modules| "grammar/modules/"
-Quantum syntax| "grammar/quantum/"
-HDL syntax| "grammar/hdl/"
-Hardware syntax| "grammar/hardware/"
-Resources| "grammar/resources/"
-AST| frontend AST subsystem
-Semantic analysis| semantic-analysis subsystem
-Quantum canonical semantics| "quantum::ir"
-QEC| QEC subsystem
-Noise/fault semantics| ZQN
-Optimization| optimization subsystem
-Routing| routing subsystem
-Scheduling| scheduling subsystem
-Hardware realization| hardware HAL/compiler
-Runtime| runtime subsystem
-
----
-
-51. Dependency direction
-
-The dependency graph must remain acyclic at the semantic subsystem level.
-
-lexer
-  ↓
-core syntax
-  ↓
-types / expressions
-  ↓
-statements
-  ↓
-declarations / functions / modules
-  ↓
-semantic analysis
-  ↓
-canonical representations
-  ↓
-IR
-  ↓
-optimization
-  ↓
-routing
-  ↓
-scheduling
-  ↓
-hardware lowering
-  ↓
-runtime
-
-A grammar component must never require:
-
-runtime → grammar
-IR → grammar
-hardware → grammar
-scheduler → grammar
-
-as a semantic dependency.
-
----
-
-52. Grammar import rules
-
-ANTLR delegate grammars may import other grammar components where structurally necessary.
-
-However:
-
-«An imported grammar must not redefine the authoritative concept owned by its parent composition layer.»
-
-For example:
-
-statements.g4
-
-owns:
-
-statement
-
-Therefore a delegate grammar must not independently redefine the authoritative "statement" rule.
-
-Likewise:
-
-blocks.g4
-
-owns block syntax.
-
-No conditional/loop grammar should redefine "{ ... }".
-
----
-
-53. No duplicate language concepts
-
-The following must each have one authoritative owner:
-
-statement
-block
-expression
-assignment expression
-type
-identifier
-pattern
-return
-break
-continue
-if statement
-loop statement
-
-If the repository contains duplicates, they must be:
-
-- removed;
-- merged;
-- converted into delegates;
-- or explicitly retained as migration-only artifacts.
-
-Two grammars must never silently define different meanings for the same language construct.
-
----
-
-54. Legacy monolithic grammar
-
-The historical "grammar/Zamani.g4" contains a large monolithic statement system.
-
-The modular grammar must supersede duplicated statement definitions once the modular parser is authoritative.
-
-The migration path is:
-
-legacy Zamani.g4
-        |
-        v
-inventory existing syntax
-        |
-        v
-map syntax to modular owners
-        |
-        v
-validate compatibility
-        |
-        v
-modular grammar becomes authoritative
-        |
-        v
-legacy duplicate productions removed/deprecated
-
-No existing valid Zamani syntax should disappear silently.
-
----
-
-55. Compatibility requirements
-
-Before changing a statement construct:
-
-1. identify the old syntax;
-2. identify its consumers;
-3. identify its intended meaning;
-4. determine whether the syntax is valid;
-5. preserve it where valid;
-6. migrate it where structurally misplaced;
-7. document changed syntax;
-8. add migration tests;
-9. update compatibility documentation.
-
-Breaking changes require explicit language-version policy.
-
----
-
-56. Testing architecture
-
-Every statement grammar component requires tests.
-
-The minimum test categories are:
+Every statement feature requires:
 
 positive
 negative
 boundary
-cross-domain
-compatibility
-determinism
-round-trip
 scalability
+determinism
+compatibility
+cross-domain
+diagnostic
 
-Tests belong under:
-
-grammar/tests/
-
-and should be organized by statement family.
-
----
-
-57. Positive tests
-
-Every valid statement form requires at least one positive test.
-
-Examples:
-
-if condition {}
-if condition {} else {}
-while condition {}
-do {} while condition;
-for item in items {}
-return;
-return value;
-break;
-continue;
-try {} catch (...) {}
-match value {}
-assert condition;
-
-The exact syntax must follow the canonical grammar.
+tests as applicable.
 
 ---
 
-58. Negative tests
+67. Positive Tests
 
-Negative tests must cover malformed syntax.
+Positive tests must demonstrate legal syntax.
 
-Examples:
+Examples should cover:
 
-if {}
-if condition
-while
-for
-return (
-break malformed
-continue malformed
-try
-catch
-match
-
-Also test malformed nesting and incomplete EOF input.
+- minimal form;
+- normal form;
+- nested form;
+- generic form;
+- cross-domain form;
+- parameterized form;
+- large symbolic/resource values.
 
 ---
 
-59. Semantic-boundary tests
+68. Negative Tests
 
-Parser tests must not accidentally become semantic tests.
+Negative tests must verify rejection of malformed syntax.
+
+They should include:
+
+- missing operands;
+- malformed delimiters;
+- invalid statement structure;
+- invalid nesting;
+- malformed resource expressions;
+- malformed quantum operation syntax;
+- malformed HDL syntax;
+- ambiguous constructs where ambiguity is prohibited.
+
+Negative tests must not confuse semantic rejection with syntax rejection.
+
+---
+
+69. Boundary Tests
+
+Boundary tests should test:
+
+- empty lists where legal;
+- singleton lists;
+- large lists;
+- nested blocks;
+- nested control flow;
+- deeply composed expressions;
+- large symbolic values;
+- arbitrary operation names;
+- arbitrary resource expressions.
+
+Do not turn a test boundary into a language maximum.
+
+---
+
+70. Scalability Tests
+
+Scalability tests must verify that the grammar does not encode artificial machine-size restrictions.
+
+Test families should vary:
+
+number of statements
+number of blocks
+number of bindings
+number of operations
+number of quantum operations
+number of resources
+number of parallel tasks
+number of distributed participants
+tensor dimensions
+hardware parameters
+
+The test suite should validate that syntax remains parameterized.
+
+---
+
+71. Determinism Tests
+
+The same source must produce the same parser result repeatedly.
+
+Tests should detect:
+
+- ambiguous alternatives;
+- nondeterministic behavior;
+- accidental dependence on rule ordering;
+- inconsistent domain dispatch.
+
+---
+
+72. Compatibility Tests
+
+Every statement change must be checked against:
+
+previous language versions
+grammar/Zamani.g4
+grammar/grammar.md
+src/lexer.rs
+src/parser.rs
+frontend AST
+semantic analyzer
+canonical IR
+existing examples
+existing tests
+
+Existing legal syntax should not be broken without an explicit compatibility decision.
+
+---
+
+73. Cross-Domain Tests
+
+Required combinations include, where supported:
+
+classical + quantum
+classical + HDL
+quantum + hardware
+quantum + resources
+quantum + concurrency
+HDL + hardware
+AI + data
+AI + accelerator
+distributed + networking
+distributed + resources
+security + networking
+compile + hardware
+execution + resources
+
+The objective is to prove that domains compose rather than become isolated mini-languages.
+
+---
+
+74. Repository Integration Matrix
+
+The statements subsystem integrates with:
+
+Subsystem| Integration
+"lexer/"| tokens
+"core/"| names, attributes, blocks
+"expressions/"| statement expressions
+"types/"| type references
+"declarations/"| declaration statements
+"functions/"| returns/calls/function control
+"modules/"| module-level statements
+"effects/"| effect statements
+"memory/"| memory-related statements
+"concurrency/"| parallel/async statements
+"classical/"| classical operations
+"quantum/"| quantum operations
+"hybrid/"| classical/quantum composition
+"hdl/"| HDL statements
+"hardware/"| target-independent hardware intent
+"resources/"| requirements/capabilities
+"distributed/"| distributed operations
+"ai/"| AI/ML semantics
+"data/"| data operations
+"networking/"| communication
+"security/"| security semantics
+"compile/"| compilation intent
+"execution/"| runtime intent
+"interoperability/"| external formats
+"dialects/"| controlled extensions
+"validation/"| grammar validation
+"compatibility/"| versioning
+"tests/"| conformance
+frontend AST| syntax-to-AST
+semantic analysis| meaning
+canonical IR| lowering
+compiler| target realization
+runtime| execution
+
+---
+
+75. Relationship to "Zamani.g4"
+
+"Zamani.g4" remains the canonical top-level grammar composition root.
+
+The statement subsystem must not replace it.
+
+The intended relationship is:
+
+Zamani.g4
+   │
+   ├── declarations
+   ├── expressions
+   ├── types
+   └── statements
+          │
+          ├── universal statements
+          └── domain statements
+
+"Zamani.g4" should compose statement syntax.
+
+The statement directory owns the modular statement implementation.
+
+---
+
+76. Relationship to "grammar.md"
+
+"grammar/grammar.md" describes what the implementation actually accepts.
+
+Statement grammar status must therefore be represented using the repository's conformance vocabulary:
+
+SPECIFIED
+IMPLEMENTED
+PARTIALLY IMPLEMENTED
+PLANNED
+DEPRECATED
+
+A statement must not be documented as implemented merely because its design appears in "Zamani-Grammar.md".
+
+---
+
+77. Relationship to "Zamani-Grammar.md"
+
+"Zamani-Grammar.md" is not an automatic syntax authority.
+
+Features from that document must go through:
+
+proposal
+→ specification
+→ AST
+→ canonical grammar
+→ semantic implementation
+→ IR
+→ tests
+
+before becoming stable Zamani statements.
+
+Historical or experimental statement ideas remain clearly marked.
+
+---
+
+78. Relationship to "src/parser.rs"
+
+The Rust parser implementation must consume the canonical grammar architecture.
+
+It must not silently maintain a second statement grammar.
+
+Any discrepancy must be recorded in the compatibility/conformance layer.
+
+---
+
+79. Relationship to "src/lexer.rs"
+
+The statement grammar may consume tokens, but token definitions remain owned by the lexer layer.
+
+Known duplicate lexical concepts such as:
+
+Question / QuestionMark
+Ampersand / BitAnd
+
+must be resolved at the lexical authority level rather than patched independently in every statement grammar.
+
+---
+
+80. Relationship to Frontend AST
+
+The frontend AST is domain-neutral.
+
+Statement grammar rules must map to AST constructs without introducing:
+
+- LLVM-specific nodes;
+- QIR-specific nodes;
+- MLIR-specific nodes;
+- vendor-specific nodes;
+- physical hardware nodes.
+
+Quantum-specific semantics may be attached downstream through the established semantic boundary.
+
+---
+
+81. Relationship to Canonical Quantum IR
+
+Quantum statement syntax ultimately lowers to:
+
+quantum::ir
+
+There must be exactly one canonical quantum semantic boundary.
+
+The statements directory must never introduce another quantum IR.
+
+---
+
+82. Relationship to QEC, ZQN, Routing and Scheduling
+
+Statements express intent.
+
+They do not implement:
+
+QEC
+routing
+scheduling
+calibration
+ZQN
+HAL
+
+The downstream pipeline determines how the requested computation is physically realized.
+
+This preserves the separation:
+
+what the programmer means
+
+from:
+
+how a particular machine executes it
+
+---
+
+83. POCO-REAF Contract
+
+The statements subsystem is considered POCO-REAF compatible only if a statement's meaning remains independent of the target machine's:
+
+- CPU count;
+- core count;
+- thread count;
+- GPU count;
+- FPGA size;
+- QPU size;
+- qubit count;
+- memory capacity;
+- register width;
+- vector width;
+- accelerator count;
+- node count;
+- topology;
+- physical device identifiers.
+
+The same source may therefore be compiled for different resource configurations.
+
+---
+
+84. Scaling Model
+
+The intended model is:
+
+one source program
+        ↓
+one semantic program
+        ↓
+one compilation model
+        ↓
+many possible resource configurations
+        ↓
+many possible target realizations
 
 For example:
 
-break;
+tiny embedded machine
+        ↓
+single CPU
+        ↓
+multicore CPU
+        ↓
+GPU
+        ↓
+FPGA
+        ↓
+ASIC
+        ↓
+QPU
+        ↓
+accelerator
+        ↓
+cluster
+        ↓
+HPC
+        ↓
+cloud
+        ↓
+future architecture
 
-should be syntactically parseable.
-
-A separate semantic test should determine:
-
-break outside loop
-
-is invalid.
-
-This preserves the grammar/semantic boundary.
-
----
-
-60. Cross-domain tests
-
-Statement grammar must be tested around domain syntax.
-
-Examples:
-
-if classical_condition {
-    classical_operation();
-}
-
-if quantum_condition {
-    quantum_operation();
-}
-
-while condition {
-    hardware_operation();
-}
-
-for item in data {
-    quantum_operation();
-}
-
-if ready {
-    distributed_operation();
-}
-
-These tests verify that statement syntax is domain-neutral.
+The statement syntax does not need to change merely because the target changes.
 
 ---
 
-61. Quantum scalability tests
+85. Physical Resource Selection
 
-The grammar tests must verify that source syntax does not contain arbitrary quantum-size assumptions.
+If physical resource selection is required, it must be represented as a downstream implementation decision unless the language explicitly declares a construct as non-portable.
 
-Test programs must be able to describe semantic structures involving resource expressions without requiring:
+The portable program should prefer:
 
-q[0]
-q[1]
+capability
+requirement
+constraint
+preference
+hint
 
-as hidden grammar assumptions.
-
-There must be no parser-level maximum qubit count.
-
----
-
-62. Hardware scalability tests
-
-Verify that statement syntax does not impose:
-
-MAX_CORES
-MAX_THREADS
-MAX_GPUS
-MAX_FPGAS
-MAX_DEVICES
-MAX_NODES
-
-or equivalent constraints.
+over physical identifiers.
 
 ---
 
-63. Determinism tests
+86. Error Handling and Resource Failure
 
-Given the same source and grammar version:
+The statement grammar may express recovery policy where the language specifies such constructs.
 
-parse(source)
+Actual resource failure handling belongs to semantic/runtime systems.
 
-must produce structurally equivalent parse results.
+For example:
 
-No test may depend on:
+recover
+retry
+fallback
 
-- machine topology;
-- execution timing;
-- hardware availability;
-- random values;
-- network state.
+may describe portable policy.
+
+The runtime decides how recovery is implemented.
 
 ---
 
-64. Round-trip tests
+87. No Runtime Logic in Grammar
 
-Where a canonical formatter/printer exists:
+ANTLR grammar actions must not be used to implement:
 
-source
-  ↓
-lexer
-  ↓
-parser
-  ↓
+- scheduling;
+- allocation;
+- quantum routing;
+- QEC;
+- device selection;
+- networking;
+- hardware discovery;
+- runtime execution.
+
+The grammar should remain declarative.
+
+---
+
+88. No Vendor Lock-In
+
+The statement subsystem must not make vendor-specific hardware a requirement for understanding the core language.
+
+Vendor functionality should enter through:
+
+capabilities
+dialects
+interoperability
+target profiles
+backend extensions
+
+with explicit compatibility rules.
+
+---
+
+89. Maintainability Rule
+
+Every grammar file should be understandable in isolation.
+
+A developer opening a statement grammar file must be able to determine:
+
+Purpose
+Owns
+Does not own
+Inputs
+Outputs
+Dependencies
+Imported rules
+AST mapping
+Semantic mapping
+IR mapping
+Diagnostics
+Tests
+Compatibility
+Scalability
+Hard-coding policy
+Completion criteria
+
+without having to reverse-engineer another file.
+
+This is a mandatory maintainability requirement.
+
+---
+
+90. Completion Checklist
+
+A statement grammar file is DONE only when all applicable items below are complete.
+
+Specification
+
+- [ ] Purpose defined.
+- [ ] Scope defined.
+- [ ] Syntax specified.
+- [ ] Feature status specified.
+- [ ] Version compatibility defined.
+
+Grammar
+
+- [ ] Canonical rule names established.
+- [ ] No duplicate ownership.
+- [ ] No unintended ambiguity.
+- [ ] No unintended left recursion.
+- [ ] Correct expression integration.
+- [ ] Correct type integration.
+- [ ] Correct block integration.
+
 AST
-  ↓
-printer
-  ↓
-parser
 
-must preserve intended semantics.
+- [ ] AST mapping defined.
+- [ ] Source spans defined.
+- [ ] Attributes/modifiers mapped.
+- [ ] Error representation defined.
 
-Formatting differences alone must not be treated as semantic differences.
+Semantics
 
----
+- [ ] Semantic rules defined.
+- [ ] Invalid combinations defined.
+- [ ] Capability requirements defined.
+- [ ] Resource requirements defined.
+- [ ] Effects defined.
 
-65. Fuzz testing
-
-Statement grammar should support parser fuzzing.
-
-Fuzz tests should exercise:
-
-- random statement nesting;
-- malformed blocks;
-- malformed control flow;
-- large statement sequences;
-- long identifiers;
-- deeply nested valid structures;
-- invalid token sequences;
-- EOF boundaries.
-
-The parser must not:
-
-- execute code;
-- access the network;
-- access files;
-- probe hardware;
-- invoke runtime operations.
-
----
-
-66. Resource-exhaustion testing
-
-Scalability testing must distinguish language limits from implementation limits.
-
-Test increasingly large:
-
-- statement sequences;
-- nested blocks;
-- loop chains;
-- conditional chains;
-- match cases.
-
-The grammar must not reject a construct because of an arbitrary machine-size constant.
-
-Operational resource limits must be explicit parser/compiler policy.
-
----
-
-67. Hard-coding audit
-
-Every statement grammar file must be audited for:
-
-MAX_*
-LIMIT_*
-COUNT_*
-DEVICE_*
-CPU_*
-GPU_*
-QUBIT_*
-THREAD_*
-NODE_*
-
-and equivalent literal restrictions.
-
-Each discovered limitation must be classified as:
-
-1. language semantic requirement;
-2. parser implementation requirement;
-3. compiler resource policy;
-4. target-specific requirement;
-5. test-only limitation;
-6. documentation-only limitation;
-7. accidental hard-coding.
-
-Accidental hard-coding must be removed.
-
----
-
-68. Completion contract for every statement grammar file
-
-A statement grammar file is not complete merely because ANTLR accepts it.
-
-It is complete only when all of the following are true:
-
-- ownership is documented;
-- non-ownership is documented;
-- lexer dependencies are documented;
-- expression dependencies are documented;
-- block dependencies are documented;
-- AST contract is defined;
-- semantic boundary is defined;
-- IR boundary is defined;
-- compiler integration is defined;
-- runtime non-dependency is defined;
-- scalability has been audited;
-- hard-coding has been audited;
-- compatibility has been considered;
-- positive tests exist;
-- negative tests exist;
-- boundary tests exist;
-- cross-domain tests exist where applicable;
-- deterministic parsing is verified;
-- no Rust "unsafe" is required;
-- no embedded executable grammar actions are required;
-- no machine-specific assumptions exist;
-- no duplicate authoritative rule exists.
-
----
-
-69. Completion contract for this directory
-
-"grammar/statements/" is production-ready only when:
-
-[ ] exactly one canonical statement composition exists
-[ ] every statement family has one owner
-[ ] no duplicate statement grammar remains authoritative
-[ ] all grammar imports are deterministic
-[ ] all lexer tokens come from the canonical lexer
-[ ] expression syntax is delegated to expressions/
-[ ] type syntax is delegated to types/
-[ ] names are delegated to core/
-[ ] blocks have one owner
-[ ] declarations have one owner
-[ ] functions have one owner
-[ ] modules have one owner
-[ ] quantum syntax remains outside generic statement ownership
-[ ] HDL syntax remains outside generic statement ownership
-[ ] hardware semantics remain outside generic statement ownership
-[ ] QEC remains outside grammar ownership
-[ ] ZQN remains outside grammar ownership
-[ ] resilience remains outside grammar ownership
-[ ] routing remains outside grammar ownership
-[ ] scheduling remains outside grammar ownership
-[ ] optimization remains outside grammar ownership
-[ ] runtime remains outside grammar ownership
-[ ] no machine-size constants exist
-[ ] no hardware topology is hard-coded
-[ ] no fixed qubit count exists
-[ ] no fixed core/thread count exists
-[ ] no fixed device count exists
-[ ] no unsafe Rust is used
-[ ] no embedded executable actions exist
-[ ] diagnostics preserve source locations
-[ ] positive tests exist
-[ ] negative tests exist
-[ ] boundary tests exist
-[ ] scalability tests exist
-[ ] cross-domain tests exist
-[ ] deterministic parsing is verified
-[ ] compatibility is documented
-[ ] legacy grammar migration is complete or explicitly tracked
-
----
-
-70. Integration checklist before declaring this README complete
-
-The implementation of this directory must be checked against:
-
-grammar/README.md
-grammar/Zamani.g4
-grammar/Zamani-Grammar.md
-grammar/specification/
-grammar/lexer/
-grammar/core/
-grammar/types/
-grammar/expressions/
-grammar/declarations/
-grammar/functions/
-grammar/modules/
-grammar/effects/
-grammar/memory/
-grammar/concurrency/
-grammar/classical/
-grammar/quantum/
-grammar/hybrid/
-grammar/hdl/
-grammar/hardware/
-grammar/distributed/
-grammar/ai/
-grammar/data/
-grammar/networking/
-grammar/security/
-grammar/resources/
-grammar/compile/
-grammar/execution/
-grammar/interoperability/
-grammar/dialects/
-grammar/macros/
-grammar/metaprogramming/
-grammar/validation/
-grammar/compatibility/
-grammar/tests/
-
-The repository's existing architecture already explicitly connects the statements layer with the expression, type, quantum, HDL, hardware, and compilation layers, so this README treats those relationships as integration contracts rather than inventing another parallel architecture.
-
----
-
-71. Required implementation order
-
-The statement subsystem should be implemented in dependency order.
-
-Phase 1 — composition foundation
-
-statements.g4
-
-Establish the authoritative composition contract.
-
-Phase 2 — structural foundation
-
-blocks.g4
-
-Establish canonical block/statement recursion.
-
-Phase 3 — basic control flow
-
-conditionals.g4
-loops.g4
-breaks.g4
-continues.g4
-returns.g4
-
-Phase 4 — state-changing statements
-
-assignments.g4
-declarations.g4
-
-Phase 5 — advanced control flow
-
-pattern-matching.g4
-exceptions.g4
-assertions.g4
-
-Phase 6 — explicit safety boundary
-
-unsafe.g4
-
-Phase 7 — integration
-
-Integrate the complete statement family with:
-
-expressions/
-types/
-core/
-declarations/
-functions/
-modules/
-effects/
-memory/
-concurrency/
-quantum/
-hybrid/
-hdl/
-hardware/
-distributed/
-resources/
-compile/
-execution/
-
-Phase 8 — repository validation
-
-Validate against:
-
-legacy Zamani.g4
-canonical grammar authority
-AST
-semantic analysis
 IR
-quantum::ir
-compiler
-tests
-documentation
 
-No later subsystem should require changing the fundamental ownership model of an already completed statement grammar file.
+- [ ] Canonical IR destination identified.
+- [ ] No duplicate IR created.
+- [ ] Lowering responsibility identified.
+
+Compiler
+
+- [ ] Compiler consumer identified.
+- [ ] Optimization interaction identified.
+- [ ] Target-lowering interaction identified.
+
+Runtime
+
+- [ ] Runtime consumer identified where applicable.
+- [ ] Resource discovery boundary identified.
+- [ ] Scheduling boundary identified.
+- [ ] Deployment boundary identified.
+
+Scalability
+
+- [ ] No fixed hardware limits.
+- [ ] No fixed resource counts.
+- [ ] No fixed topology.
+- [ ] No fixed device IDs.
+- [ ] No artificial operation limits.
+- [ ] Large symbolic/program values supported.
+
+Testing
+
+- [ ] Positive tests.
+- [ ] Negative tests.
+- [ ] Boundary tests.
+- [ ] Scalability tests.
+- [ ] Determinism tests.
+- [ ] Compatibility tests.
+- [ ] Cross-domain tests where applicable.
+- [ ] Diagnostic tests.
+
+Safety
+
+- [ ] No unsafe Rust requirement.
+- [ ] No parser-side execution.
+- [ ] No semantic bypass.
+- [ ] No vendor lock-in.
+- [ ] No hidden target dependency.
 
 ---
 
-72. Architectural invariant
+91. Definition of Production Ready
 
-The following invariant must never be violated:
+The "statements/" subsystem is production-ready only when:
 
-«Statements describe source-level computation and control flow. They do not describe the physical machine that will execute them.»
+Every statement has one owner
+        AND
+Every statement has a specification
+        AND
+Every statement has an AST mapping
+        AND
+Every statement has semantic rules
+        AND
+Every statement has an IR destination
+        AND
+Every statement has diagnostics
+        AND
+Every statement has conformance tests
+        AND
+Every statement has compatibility rules
+        AND
+Every statement passes scalability audits
+        AND
+No statement encodes artificial hardware limits
+        AND
+No statement creates a competing semantic model
+        AND
+The complete subsystem composes through Zamani.g4
+
+---
+
+92. Final Architecture
+
+The finished statement architecture is:
+
+                         Zamani.g4
+                             │
+                             ▼
+                     statement.g4
+                             │
+        ┌────────────┬───────┴────────┬───────────────┐
+        ▼            ▼                ▼               ▼
+    bindings     control          loops           match
+        │            │                │               │
+        └────────────┴────────────────┴───────────────┘
+                             │
+        ┌────────────────────┼─────────────────────────┐
+        ▼                    ▼                         ▼
+   concurrency           resources                 effects
+        │                    │                         │
+        └────────────────────┼─────────────────────────┘
+                             ▼
+                         domains.g4
+                             │
+       ┌────────────┬────────┼────────┬─────────────┐
+       ▼            ▼        ▼        ▼             ▼
+   classical     quantum    hybrid    HDL       distributed
+       │            │        │        │             │
+       └────────────┴────────┴────────┴─────────────┘
+                             │
+                             ▼
+                    domain-neutral AST
+                             │
+                             ▼
+                    semantic analysis
+                             │
+             ┌───────────────┼────────────────┐
+             ▼               ▼                ▼
+       Classical IR     quantum::ir       HDL/Hardware
+             │               │                │
+             └───────────────┼────────────────┘
+                             ▼
+                   optimization/lowering
+                             │
+             ┌───────────────┼────────────────┐
+             ▼               ▼                ▼
+          routing        scheduling        resilience
+                             │
+                             ▼
+                            ZQN
+                             │
+                             ▼
+                            HAL
+                             │
+                             ▼
+                    target realization
+
+---
+
+93. Core Principle
+
+The statement grammar must describe what the program means, not what today's machine happens to look like.
 
 Therefore:
 
-Zamani statement
-        |
-        v
-semantic meaning
-        |
-        +--> classical machine
-        +--> quantum machine
-        +--> HDL implementation
-        +--> accelerator
-        +--> distributed system
-        +--> heterogeneous machine
-        +--> future architecture
+Zamani statements
+        =
+portable computational intent
 
-The statement grammar remains stable while target realization evolves.
+while:
+
+resource discovery
+capability negotiation
+optimization
+routing
+scheduling
+QEC
+ZQN
+HAL
+deployment
+physical realization
+
+remain downstream concerns.
+
+This separation is the foundation required for Zamani to scale from the smallest supported computational substrate to arbitrarily large available resources while preserving:
+
+«Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever.»
 
 ---
 
-73. Final production principle
+94. Non-Negotiable Rules
 
-"grammar/statements/" must remain:
+The following rules apply to every current and future statement grammar:
 
-syntax-first
-semantic-boundary-safe
-target-independent
-hardware-independent
-quantum-aware but quantum-IR-independent
-deterministic
-extensible
-versionable
-testable
-safe
-resource-neutral
-scalable
+1. One statement concept has one authoritative owner.
+2. No competing universal statement grammar.
+3. "Zamani.g4" remains the canonical composition root.
+4. "statement.g4" remains the statement composition boundary.
+5. "domains.g4" remains a domain dispatch/composition boundary.
+6. Detailed domain syntax remains in domain-owned grammar files.
+7. Expressions come from the canonical expression grammar.
+8. Types come from the canonical type grammar.
+9. Declarations come from the canonical declaration grammar.
+10. AST mappings are defined before implementation is considered complete.
+11. Semantic mappings are defined before implementation is considered complete.
+12. IR mappings are defined before implementation is considered complete.
+13. Quantum syntax lowers through the canonical "quantum::ir".
+14. No second quantum IR may be introduced.
+15. No fixed universal quantum-gate enumeration.
+16. No fixed machine/resource/topology limits.
+17. No physical device identifiers as universal language assumptions.
+18. No framework-specific AI language.
+19. No vendor-specific hardware dependency in core syntax.
+20. No parser-side execution.
+21. No unsafe Rust requirement.
+22. Rust consumers remain compatible with Rust 1.97/1.97.1.
+23. Every feature has positive, negative, boundary and scalability coverage.
+24. Cross-domain composition is tested.
+25. Existing filenames are retained unless there is a compelling architectural reason to change them.
+26. Historical design documents do not silently become syntax authorities.
+27. Generated documentation does not become a grammar authority.
+28. Semantic requirements remain separate from implementation decisions.
+29. Resource availability is resolved downstream.
+30. The same source program must remain meaningful across different target scales.
 
-The grammar must never become a hidden hardware description language, scheduler, optimizer, runtime, quantum compiler, or resource manager.
+---
 
-The final architectural rule is:
+95. Completion Statement
 
-«Zamani statements express what the program means, not what machine happens to execute it.»
+When this README's contract is satisfied, "grammar/statements/" is not merely a collection of ANTLR files.
 
-That is the statement-level foundation required for:
+It is a formally bounded statement-language subsystem with:
 
-From Atom to Everywhere
+clear ownership
++
+stable composition
++
+AST traceability
++
+semantic traceability
++
+IR traceability
++
+compiler integration
++
+runtime integration
++
+cross-domain integration
++
+diagnostics
++
+compatibility
++
+determinism
++
+scalability
++
+POCO-REAF portability
 
-and:
+The resulting architecture permits Zamani statements to remain stable while implementation moves from:
 
-Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
+atom
+→ embedded
+→ CPU
+→ multicore
+→ GPU
+→ FPGA
+→ ASIC
+→ QPU
+→ accelerator
+→ cluster
+→ HPC
+→ distributed/cloud
+→ future computational substrates
 
-with practical execution scale determined by available resources rather than arbitrary limits embedded in the language grammar.
+without requiring the statement grammar to encode the physical limits of any particular generation of hardware.
