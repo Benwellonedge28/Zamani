@@ -1,249 +1,582 @@
 /*
  * ============================================================================
  * Zamani Programming Language
- * Production Task-Parallel Grammar
  * ============================================================================
  *
- * File:
- *     grammar/concurrency/task-parallel.g4
+ * FILE
+ * ----
+ * grammar/concurrency/task-parallel.g4
  *
- * Purpose:
- *     Parser-level grammar for structured task parallelism.
+ * STATUS
+ * ------
+ * CANONICAL TASK-PARALLEL PARSER COMPONENT
  *
- * Language:
- *     Zamani
+ * PURPOSE
+ * -------
+ * Defines the source-level syntax for STRUCTURED TASK PARALLELISM.
  *
- * Compiler baseline:
- *     Rust 1.97 / Rust 1.97.1
- *     Edition 2021
+ * This file is deliberately a parser-domain grammar. It does not define:
  *
- * Safety:
- *     This grammar contains no target-language actions.
- *     No unsafe Rust is required.
- *     The Zamani compiler/runtime MUST be implemented using safe Rust.
+ *   - lexical vocabulary;
+ *   - ordinary expressions;
+ *   - ordinary statements;
+ *   - spawn syntax;
+ *   - await syntax;
+ *   - generic parallel syntax;
+ *   - data-parallel syntax;
+ *   - scheduling;
+ *   - resource allocation;
+ *   - hardware topology;
+ *   - worker/thread/core counts;
+ *   - device selection;
+ *   - runtime execution;
+ *   - classical IR;
+ *   - quantum IR;
+ *   - HDL IR;
+ *   - QEC;
+ *   - ZQN;
+ *   - HAL.
  *
  * ============================================================================
- * ARCHITECTURAL ROLE
+ * IMPLEMENTATION BASELINE
  * ============================================================================
  *
- * This file specializes the generic parallel-computation boundary supplied by:
+ * Compiler/runtime:
  *
- *     concurrency/parallel.g4
+ *   Rust 1.97 / Rust 1.97.1
+ *   Rust 2021
+ *   safe Rust only
  *
- * and the task-concurrency primitives supplied by:
+ * This grammar contains no target-language actions and therefore requires no
+ * unsafe Rust.
  *
- *     concurrency/tasks.g4
- *
- * It owns the syntax that combines those concepts into explicit
- * task-parallel computation.
- *
+ * ============================================================================
+ * ARCHITECTURAL OWNERSHIP
+ * ============================================================================
  *
  * THIS FILE OWNS
  * --------------
  *
- * - task-parallel regions;
- * - task-parallel task collections;
- * - structured task groups;
- * - task-parallel composition;
- * - task dependency declarations;
- * - task join/wait composition;
- * - task-parallel completion boundaries;
- * - task-parallel iteration over logical task domains;
- * - task-parallel dependency expressions;
- * - task-parallel structured nesting;
- * - task-parallel semantic intent.
- *
+ *   - the task-parallel structured-group syntax;
+ *   - task-parallel group boundaries;
+ *   - task-parallel group items;
+ *   - task-parallel task creation within a group;
+ *   - task-parallel completion/dependency boundaries;
+ *   - nested task-parallel groups;
+ *   - the stable taskParallelConstruct entry point.
  *
  * THIS FILE DOES NOT OWN
  * ----------------------
  *
- * - ordinary expressions;
- * - ordinary statements;
- * - function declarations;
- * - async function declarations;
- * - futures;
- * - generic spawn syntax;
- * - generic await syntax;
- * - generic parallel syntax;
- * - actors;
- * - channels;
- * - synchronization algorithms;
- * - cancellation;
- * - scheduling;
- * - resource allocation;
- * - worker counts;
- * - thread counts;
- * - CPU/core counts;
- * - GPU counts;
- * - accelerator counts;
- * - QPU counts;
- * - node counts;
- * - hardware topology;
- * - device IDs;
- * - placement;
- * - routing;
- * - hardware discovery;
- * - hardware calibration;
- * - quantum IR;
- * - classical IR;
- * - QEC;
- * - ZQN;
- * - resilience;
- * - runtime dispatch.
+ *   Tasks:
+ *       grammar/concurrency/tasks.g4
  *
- * Those concerns remain owned by their canonical repository subsystems.
+ *   Generic parallel computation:
+ *       grammar/concurrency/parallel.g4
+ *
+ *   Data parallelism:
+ *       grammar/concurrency/data-parallel.g4
+ *
+ *   Async expression syntax:
+ *       grammar/expressions/async.g4
+ *
+ *   Ordinary expressions:
+ *       grammar/expressions/
+ *
+ *   Ordinary blocks:
+ *       grammar/core/ and expression/block grammar
+ *
+ *   Concurrency composition:
+ *       grammar/concurrency/concurrency.g4
+ *
+ *   Statement integration:
+ *       grammar/statements/concurrency.g4
  *
  * ============================================================================
- * POCO-REAF CONTRACT
+ * SINGLE-AUTHORITY RULE
  * ============================================================================
  *
- * Task parallelism describes LOGICAL CONCURRENCY.
+ * There must be exactly one syntax owner for each construct.
  *
- * It does NOT describe physical execution width.
+ * Spawn:
  *
- * Therefore this grammar MUST NOT encode:
+ *     expressions/async.g4
+ *             |
+ *             v
+ *     tasks.g4
+ *             |
+ *             v
+ *     this file
+ *
+ * Await:
+ *
+ *     expressions/async.g4
+ *             |
+ *             v
+ *     tasks.g4
+ *             |
+ *             v
+ *     this file
+ *
+ * Generic parallel:
+ *
+ *     expressions/async.g4
+ *             |
+ *             v
+ *     parallel.g4
+ *
+ * Task parallel:
+ *
+ *     this file
+ *
+ * This file MUST NOT redefine:
+ *
+ *     spawnExpression
+ *     awaitExpression
+ *     parallelExpression
+ *
+ * ============================================================================
+ * TASK-PARALLEL SOURCE FORM
+ * ============================================================================
+ *
+ * The task-parallel construct is deliberately distinct from generic:
+ *
+ *     parallel <expression>
+ *
+ * by using the existing lexical keyword:
+ *
+ *     group
+ *
+ * Therefore the canonical task-parallel form is:
+ *
+ *     parallel group {
+ *         spawn computation_a();
+ *         spawn computation_b();
+ *     }
+ *
+ * The syntax does not require a new TASK_PARALLEL token.
+ *
+ * Existing lexical vocabulary is therefore preserved.
+ *
+ * ============================================================================
+ * WHY `parallel group`
+ * ============================================================================
+ *
+ * The repository already has:
+ *
+ *     PARALLEL
+ *     GROUP
+ *     SPAWN
+ *     AWAIT
+ *
+ * Reusing these tokens avoids unnecessary lexical expansion while still giving
+ * task-parallelism a syntactically identifiable construct.
+ *
+ * Generic:
+ *
+ *     parallel computation()
+ *
+ * remains owned by parallel.g4.
+ *
+ * Task parallel:
+ *
+ *     parallel group {
+ *         ...
+ *     }
+ *
+ * is owned here.
+ *
+ * This avoids making `task-parallel.g4` merely another spelling of
+ * `parallelExpression`.
+ *
+ * ============================================================================
+ * SEMANTIC MODEL
+ * ============================================================================
+ *
+ * A task-parallel group describes LOGICAL TASK CONCURRENCY.
+ *
+ * It does NOT specify physical execution width.
+ *
+ * For example:
+ *
+ *     parallel group {
+ *         spawn compute_a();
+ *         spawn compute_b();
+ *         spawn compute_c();
+ *     }
+ *
+ * means that the three logical computations are candidates for concurrent
+ * realization subject to:
+ *
+ *     - data dependencies;
+ *     - ownership;
+ *     - effects;
+ *     - synchronization;
+ *     - resource requirements;
+ *     - capabilities;
+ *     - correctness constraints;
+ *     - target semantics.
+ *
+ * It does NOT mean:
+ *
+ *     three threads
+ *     three cores
+ *     three CPUs
+ *     three GPUs
+ *     three QPUs
+ *     three nodes
+ *     three hardware execution units
+ *
+ * The scheduler may realize the same semantic program using:
+ *
+ *     one worker;
+ *     multiple workers;
+ *     SIMD;
+ *     GPU execution;
+ *     FPGA execution;
+ *     accelerator execution;
+ *     distributed execution;
+ *     quantum/classical orchestration;
+ *     heterogeneous execution;
+ *     future computational substrates.
+ *
+ * ============================================================================
+ * POCO-REAF
+ * ============================================================================
+ *
+ * This grammar deliberately contains no universal physical limits.
+ *
+ * It does not encode:
  *
  *     MAX_TASKS
  *     MAX_PARALLEL_TASKS
  *     MAX_WORKERS
  *     MAX_THREADS
  *     MAX_CORES
+ *     MAX_CPUS
  *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_ACCELERATORS
  *     MAX_QPUS
  *     MAX_NODES
+ *     MAX_DEVICES
  *     MAX_TASK_GROUPS
- *     MAX_PARALLELISM
+ *     MAX_DEPENDENCIES
+ *     MAX_NESTING
  *
- * It also MUST NOT imply:
+ * Repetition operators:
  *
- *     one task      == one thread
- *     one task      == one core
- *     one task      == one GPU
- *     one task      == one QPU
- *     one task      == one node
- *     one task      == one hardware execution unit
+ *     *
+ *     +
  *
- * A task-parallel program may therefore be realized using:
+ * describe grammar cardinality, not hardware capacity.
  *
- *     one execution worker;
- *     multiple CPU workers;
- *     SIMD/vector execution;
- *     GPU execution;
- *     FPGA execution;
- *     accelerator execution;
- *     quantum/classical orchestration;
- *     distributed execution;
- *     heterogeneous execution;
- *     future computational substrates.
+ * Consequently the logical task graph is limited only by the actual source,
+ * compiler, runtime, and target resources available for a particular build or
+ * execution.
  *
- * If fewer physical resources are available than logical tasks, the scheduler
- * MAY serialize, batch, tile, queue, or otherwise transform the execution.
- *
- * If more resources are available, the scheduler MAY exploit additional
- * parallelism.
- *
- * The source semantics remain unchanged.
+ * There is no artificial language-level machine ceiling.
  *
  * ============================================================================
- * SEMANTIC PRINCIPLE
+ * RESOURCE / CAPABILITY SEPARATION
  * ============================================================================
  *
- * Task parallelism means:
+ * This grammar never selects:
  *
- *     "these logical computations are candidates for independent/concurrent
- *      execution subject to dependencies, effects, synchronization, resource
- *      constraints, target capabilities, and execution policy."
+ *     worker;
+ *     thread;
+ *     CPU;
+ *     GPU;
+ *     FPGA;
+ *     accelerator;
+ *     QPU;
+ *     node;
+ *     memory bank;
+ *     device;
+ *     queue;
+ *     physical address.
  *
- * It does NOT mean:
+ * Resource requirements and capabilities are evaluated downstream through the
+ * canonical resource/capability architecture.
  *
- *     "all tasks must physically execute simultaneously."
+ * The semantic distinction remains:
  *
- * Consequently:
+ *     logical task
+ *         !=
+ *     physical execution resource
  *
- *     source
- *       |
- *       v
- *     lexer
- *       |
- *       v
- *     parser
- *       |
- *       v
- *     AST
- *       |
- *       v
+ *     capability
+ *         !=
+ *     selected device
+ *
+ *     requirement
+ *         !=
+ *     placement
+ *
+ * ============================================================================
+ * DEPENDENCY MODEL
+ * ============================================================================
+ *
+ * This file intentionally does NOT introduce a `DEPENDS` keyword.
+ *
+ * No such canonical lexer token currently exists, and introducing a new
+ * dependency keyword solely for this grammar would create unnecessary lexical
+ * coupling.
+ *
+ * Task dependencies are already expressible using the canonical `await`
+ * construct.
+ *
+ * Example:
+ *
+ *     parallel group {
+ *         let first = spawn compute_a();
+ *
+ *         spawn {
+ *             await first;
+ *             compute_b();
+ *         };
+ *     }
+ *
+ * The grammar records the source structure.
+ *
+ * Semantic analysis determines that the second computation depends on the
+ * completion of `first`.
+ *
+ * The resulting dependency graph is semantic data, not a second grammar-level
+ * graph representation.
+ *
+ * ============================================================================
+ * STRUCTURED COMPLETION
+ * ============================================================================
+ *
+ * A task-parallel group is a structured lifetime boundary.
+ *
+ * Its logical child tasks remain within the group for semantic analysis.
+ *
+ * The group boundary therefore gives downstream analysis a stable region in
+ * which to determine:
+ *
+ *     - task lifetime;
+ *     - dependency closure;
+ *     - effect closure;
+ *     - ownership;
+ *     - synchronization;
+ *     - completion;
+ *     - cancellation/recovery policy where applicable.
+ *
+ * The grammar does not itself implement joining or scheduling.
+ *
+ * ============================================================================
+ * NESTING
+ * ============================================================================
+ *
+ * Task-parallel groups may contain nested task-parallel groups.
+ *
+ * Example:
+ *
+ *     parallel group {
+ *         spawn outer_work();
+ *
+ *         parallel group {
+ *             spawn inner_a();
+ *             spawn inner_b();
+ *         };
+ *     }
+ *
+ * No finite nesting depth is encoded.
+ *
+ * Any practical parser/compiler stack or memory limitation is an implementation
+ * resource limitation, not a language-level task-parallel restriction.
+ *
+ * ============================================================================
+ * CROSS-DOMAIN SUPPORT
+ * ============================================================================
+ *
+ * A spawned computation is intentionally expressed through the canonical
+ * `spawnExpression` grammar.
+ *
+ * Therefore its computation may eventually contain:
+ *
+ *     classical computation;
+ *     quantum computation;
+ *     hybrid computation;
+ *     HDL/hardware-oriented computation;
+ *     distributed computation;
+ *     AI/ML computation;
+ *     data processing;
+ *     networking;
+ *     cryptographic computation;
+ *     accelerator computation;
+ *     future computational domains.
+ *
+ * This file does not need to know the internal grammar of those domains.
+ *
+ * The dependency is:
+ *
+ *     task-parallel syntax
+ *             |
+ *             v
+ *     domain-neutral AST
+ *             |
+ *             v
  *     semantic analysis
- *       |
- *       +--> type analysis
- *       +--> effect analysis
- *       +--> dependency analysis
- *       +--> resource analysis
- *       |
- *       v
- *     canonical program IR
- *       |
- *       +--> optimization
- *       +--> scheduling
- *       +--> routing
- *       +--> target lowering
- *       |
- *       v
- *     runtime
- *
- * This grammar participates only in the syntax stage.
- *
- * ============================================================================
- * DEPENDENCY CONTRACT
- * ============================================================================
- *
- * Canonical task primitives are owned by:
- *
- *     tasks.g4
- *
- * Generic parallel constructs are owned by:
- *
- *     parallel.g4
- *
- * This file imports those grammar domains rather than redefining their rules.
- *
- * Expected canonical parser rules include:
- *
- *     expression
- *     blockExpression
- *     statement
- *
- * from the main Zamani parser composition.
- *
- * Expected task rules supplied by Tasks include:
- *
- *     taskSpawnExpression
- *     taskAwaitExpression
- *     taskSpawnStatement
- *     taskAwaitStatement
- *     taskParallelExpression
- *
- * Expected generic parallel rules supplied by Parallel include the generic
- * parallel boundary used by the repository's parser composition.
- *
- * This file MUST NOT redefine those rules.
+ *             |
+ *             +-------------------+
+ *             |                   |
+ *             v                   v
+ *       effect/dependency     resource/capability
+ *           analysis              analysis
+ *             |                   |
+ *             +---------+---------+
+ *                       |
+ *                       v
+ *               canonical semantic IR
+ *                       |
+ *          +------------+------------+
+ *          |            |            |
+ *          v            v            v
+ *      classical     quantum       HDL/
+ *         IR         quantum::ir   hardware
+ *          |            |            |
+ *          +------------+------------+
+ *                       |
+ *                       v
+ *              optimization/lowering
+ *                       |
+ *                       v
+ *                scheduling/routing
+ *                       |
+ *                       v
+ *                  target/runtime
  *
  * ============================================================================
- * LEXICAL CONTRACT
+ * QUANTUM INTEGRATION
  * ============================================================================
  *
- * No lexer rules are declared here.
+ * This grammar has no direct quantum IR.
  *
- * Lexical ownership remains with Zamani's canonical lexer.
+ * Quantum computation appearing inside a task is eventually lowered through:
  *
- * This prevents task-parallel.g4 from silently introducing a second keyword
- * namespace.
+ *     quantum::ir
  *
- * In particular, this file MUST NOT introduce new lexer tokens merely for:
+ * and then through the existing quantum pipeline:
  *
- *     TASK_GROUP
- *     TASK_JOIN
- *     TASK_DEPENDENCY
+ *     optimization
+ *         ->
+ *     decomposition
+ *         ->
+ *     routing
+ *         ->
+ *     scheduling
+ *         ->
+ *     QEC/resilience
+ *         ->
+ *     ZQN
+ *         ->
+ *     HAL
+ *         ->
+ *     target realization
+ *
+ * Task parallelism does not create:
+ *
+ *     TaskQuantumIR
+ *     ParallelQuantumIR
+ *     TaskQubitIR
+ *
+ * or any competing quantum representation.
+ *
+ * ============================================================================
+ * HDL / HARDWARE INTEGRATION
+ * ============================================================================
+ *
+ * This file does not define:
+ *
+ *     clocks;
+ *     wires;
+ *     ports;
+ *     physical cells;
+ *     FPGA resources;
+ *     ASIC resources;
+ *     device addresses;
+ *     hardware topology.
+ *
+ * A task may contain or coordinate hardware-oriented computation through the
+ * normal Zamani domain composition.
+ *
+ * Physical realization remains downstream.
+ *
+ * ============================================================================
+ * DISTRIBUTED INTEGRATION
+ * ============================================================================
+ *
+ * A logical task may eventually execute:
+ *
+ *     locally;
+ *     remotely;
+ *     across a distributed system;
+ *     on an accelerator;
+ *     on a heterogeneous target.
+ *
+ * This grammar does not encode:
+ *
+ *     node IDs;
+ *     cluster sizes;
+ *     network topology;
+ *     placement;
+ *     routing.
+ *
+ * Those are downstream realization decisions.
+ *
+ * ============================================================================
+ * DETERMINISM
+ * ============================================================================
+ *
+ * Parsing depends only on:
+ *
+ *     - source token sequence;
+ *     - grammar version;
+ *     - imported canonical grammars.
+ *
+ * Parsing does NOT depend on:
+ *
+ *     - hardware availability;
+ *     - worker count;
+ *     - scheduler state;
+ *     - network state;
+ *     - runtime state;
+ *     - system time;
+ *     - randomness.
+ *
+ * The same source and grammar version therefore produce the same syntactic
+ * structure.
+ *
+ * ============================================================================
+ * LEXER CONTRACT
+ * ============================================================================
+ *
+ * This grammar contains NO lexer rules.
+ *
+ * Existing tokens consumed here are:
+ *
+ *     PARALLEL
+ *     GROUP
+ *     LBRACE
+ *     RBRACE
+ *     SEMICOLON
+ *
+ * Task primitives are delegated through:
+ *
+ *     Tasks
+ *
+ * No new lexical token is required by this implementation.
+ *
+ * In particular, this file does NOT introduce:
+ *
+ *     TASK
  *     TASK_PARALLEL
+ *     TASK_GROUP
+ *     DEPENDS
+ *     JOIN
  *     WORKER
  *     THREAD
  *     CORE
@@ -251,59 +584,510 @@
  *     QPU
  *     NODE
  *
- * The syntax is intentionally composed from the existing task and parallel
- * vocabulary.
- *
  * ============================================================================
- * RESOURCE INDEPENDENCE
+ * ANTLR COMPOSITION
  * ============================================================================
  *
- * There is no fixed task capacity.
+ * This grammar imports:
  *
- * There is no fixed dependency count.
+ *     Tasks
+ *     Parallel
  *
- * There is no fixed group size.
+ * `Tasks` supplies:
  *
- * There is no fixed nesting depth represented by this grammar.
+ *     taskSpawnExpression
+ *     taskAwaitExpression
+ *     taskParallelExpression
+ *     taskSpawnStatement
+ *     taskAwaitStatement
+ *     taskStatement
  *
- * Repetition is represented using ANTLR repetition operators.
+ * `Parallel` supplies the canonical generic parallel domain and its imported
+ * expression/block vocabulary.
  *
- * Therefore logical task-parallel structure is bounded only by:
+ * This file does not import individual expression/statement leaf grammars
+ * because those dependencies already belong to their canonical owners.
  *
- *     source representation;
- *     parser implementation;
- *     compiler resources;
- *     runtime resources;
- *     target capabilities;
- *     physical resources.
+ * ============================================================================
+ * IMPORTANT: NO RULE DUPLICATION
+ * ============================================================================
  *
- * Those are implementation/environment constraints, not language-level
- * task-parallel limits.
+ * The following rules MUST NOT be defined here:
+ *
+ *     expression
+ *     blockExpression
+ *     parallelExpression
+ *     spawnExpression
+ *     awaitExpression
+ *     taskSpawnExpression
+ *     taskAwaitExpression
+ *     taskParallelExpression
+ *
+ * They already have canonical owners.
+ *
+ * ============================================================================
+ * PUBLIC ENTRY POINT
+ * ============================================================================
+ *
+ * `taskParallelConstruct` is the only public domain dispatcher owned here.
+ *
+ * `taskParallel` is provided as a stable compatibility alias.
+ *
+ * ============================================================================
+ */
+
+parser grammar TaskParallel;
+
+options {
+    tokenVocab = ZamaniLexer;
+}
+
+import
+    Tasks,
+    Parallel
+;
+
+
+/*
+ * ============================================================================
+ * PUBLIC TASK-PARALLEL ENTRY
+ * ============================================================================
+ *
+ * Stable entry point used by:
+ *
+ *     grammar/concurrency/concurrency.g4
+ *
+ * and eventually:
+ *
+ *     grammar/antlr/ZamaniParser.g4
+ *
+ * The rule intentionally has exactly one task-parallel syntax family.
+ */
+
+taskParallelConstruct
+    : taskParallelGroup
+    ;
+
+
+/*
+ * ============================================================================
+ * TASK-PARALLEL GROUP
+ * ============================================================================
+ *
+ * Canonical source form:
+ *
+ *     parallel group {
+ *         spawn a();
+ *         spawn b();
+ *     }
+ *
+ * `parallel` is the existing generic parallel-intent keyword.
+ *
+ * `group` gives this construct its task-parallel-specific syntactic identity.
+ *
+ * This avoids redefining generic:
+ *
+ *     parallel <expression>
+ *
+ * from parallel.g4.
+ */
+
+taskParallelGroup
+    : PARALLEL
+      GROUP
+      LBRACE
+      taskParallelItem*
+      RBRACE
+    ;
+
+
+/*
+ * ============================================================================
+ * TASK-PARALLEL ITEM
+ * ============================================================================
+ *
+ * A group contains logical task creation, completion/dependency operations,
+ * or nested task-parallel groups.
+ *
+ * Ordinary statements are deliberately not duplicated here.
+ *
+ * Computation belongs inside the expression or block supplied to `spawn`.
+ */
+
+taskParallelItem
+    : taskParallelTask
+    | taskParallelDependency
+    | taskParallelNestedGroup
+    ;
+
+
+/*
+ * ============================================================================
+ * TASK CREATION
+ * ============================================================================
+ *
+ * `taskSpawnExpression` remains owned by Tasks.
+ *
+ * This adapter only establishes that a spawn operation is a member of a
+ * task-parallel group.
+ */
+
+taskParallelTask
+    : taskSpawnExpression
+      SEMICOLON?
+    ;
+
+
+/*
+ * ============================================================================
+ * TASK DEPENDENCY / COMPLETION
+ * ============================================================================
+ *
+ * Dependencies are expressed using the canonical `await` operation.
+ *
+ * This does NOT mean that every await is automatically a dependency in all
+ * semantic contexts. Semantic/type/effect analysis determines whether the
+ * awaited value represents an asynchronous computation and whether the await
+ * establishes a task dependency.
+ *
+ * This rule preserves that structure for downstream analysis.
+ */
+
+taskParallelDependency
+    : taskAwaitExpression
+      SEMICOLON?
+    ;
+
+
+/*
+ * ============================================================================
+ * COMPLETION ALIAS
+ * ============================================================================
+ *
+ * Named semantic boundary for tooling and diagnostics.
+ *
+ * No new syntax is introduced.
+ */
+
+taskParallelCompletion
+    : taskParallelDependency
+    ;
+
+
+/*
+ * ============================================================================
+ * TASK-PARALLEL JOIN
+ * ============================================================================
+ *
+ * A structured join is represented by one or more canonical await operations.
+ *
+ * No fixed number of tasks or dependencies is encoded.
+ *
+ * Semantic analysis determines the actual dependency relationships.
+ */
+
+taskParallelJoin
+    : taskParallelDependency+
+    ;
+
+
+/*
+ * ============================================================================
+ * NESTED TASK-PARALLEL GROUP
+ * ============================================================================
+ *
+ * Nested structured parallelism is legal.
+ */
+
+taskParallelNestedGroup
+    : taskParallelGroup
+    ;
+
+
+/*
+ * ============================================================================
+ * NAMED ITEM LIST
+ * ============================================================================
+ *
+ * Stable list boundary for tooling and semantic analysis.
+ *
+ * The list is unbounded by language-level resource constants.
+ */
+
+taskParallelItemList
+    : taskParallelItem*
+    ;
+
+
+/*
+ * ============================================================================
+ * NON-EMPTY ITEM LIST
+ * ============================================================================
+ *
+ * Useful where a downstream grammar wants to require at least one logical
+ * operation without modifying the core group rule.
+ */
+
+taskParallelNonEmptyItemList
+    : taskParallelItem+
+    ;
+
+
+/*
+ * ============================================================================
+ * STABLE COMPATIBILITY ALIAS
+ * ============================================================================
+ *
+ * Existing consumers may use `taskParallel`.
+ *
+ * It remains a pure adapter.
+ */
+
+taskParallel
+    : taskParallelConstruct
+    ;
+
+
+/*
+ * ============================================================================
+ * EXPRESSION-LEVEL DOMAIN BOUNDARY
+ * ============================================================================
+ *
+ * The task-parallel group is a structured computation.
+ *
+ * It is intentionally NOT named `taskParallelExpression`, because that rule is
+ * already owned by tasks.g4 as the adapter for generic `parallelExpression`.
+ *
+ * Keeping these names distinct prevents two grammar files from claiming the
+ * same rule.
+ */
+
+taskParallelGroupExpression
+    : taskParallelGroup
+    ;
+
+
+/*
+ * ============================================================================
+ * SEMANTIC CONTRACT
+ * ============================================================================
+ *
+ * The parser establishes:
+ *
+ *     group
+ *       |
+ *       +--> logical task creation
+ *       |
+ *       +--> logical completion/dependency
+ *       |
+ *       +--> nested group
+ *
+ * Semantic analysis establishes:
+ *
+ *     - task identity;
+ *     - dependency graph;
+ *     - effect compatibility;
+ *     - ownership/borrowing legality;
+ *     - lifetime relationships;
+ *     - cancellation semantics;
+ *     - determinism requirements;
+ *     - resource requirements;
+ *     - capability requirements;
+ *     - cross-domain legality.
+ *
+ * The grammar performs none of these semantic operations.
+ *
+ * ============================================================================
+ * RESOURCE CONTRACT
+ * ============================================================================
+ *
+ * No resource quantity is represented by this grammar.
+ *
+ * In particular, this grammar does not decide:
+ *
+ *     number of workers;
+ *     number of threads;
+ *     number of cores;
+ *     number of CPUs;
+ *     number of GPUs;
+ *     number of FPGAs;
+ *     number of accelerators;
+ *     number of QPUs;
+ *     number of nodes;
+ *     amount of memory;
+ *     topology;
+ *     placement.
+ *
+ * Those decisions belong to:
+ *
+ *     semantic resource analysis
+ *     compiler target selection
+ *     scheduler
+ *     runtime
+ *     HAL
+ *     deployment
+ *
+ * ============================================================================
+ * SCHEDULING CONTRACT
+ * ============================================================================
+ *
+ * This grammar does not select a scheduler.
+ *
+ * It does not specify:
+ *
+ *     worker assignment;
+ *     work stealing;
+ *     queue policy;
+ *     priority policy;
+ *     affinity;
+ *     placement;
+ *     time slots;
+ *     physical execution order.
+ *
+ * It merely preserves the logical task structure from which those decisions
+ * can later be derived.
+ *
+ * ============================================================================
+ * MEMORY / OWNERSHIP CONTRACT
+ * ============================================================================
+ *
+ * Task captures follow the canonical Zamani type, ownership, borrowing,
+ * lifetime, and memory systems.
+ *
+ * This grammar introduces no second ownership model.
+ *
+ * Example:
+ *
+ *     parallel group {
+ *         spawn {
+ *             use_value();
+ *         };
+ *     }
+ *
+ * Whether `use_value()` may legally capture surrounding state is a semantic
+ * question, not a grammar question.
+ *
+ * ============================================================================
+ * EFFECT CONTRACT
+ * ============================================================================
+ *
+ * Spawn and await participate in the existing effect system.
+ *
+ * The semantic layer determines effects such as:
+ *
+ *     asynchronous execution;
+ *     suspension;
+ *     synchronization;
+ *     communication;
+ *     mutation;
+ *     external resource access;
+ *     cancellation;
+ *     distributed execution.
+ *
+ * ============================================================================
+ * QUANTUM CONTRACT
+ * ============================================================================
+ *
+ * A task body may contain quantum computation where permitted by the canonical
+ * language composition.
+ *
+ * This grammar does not define:
+ *
+ *     gates;
+ *     qubits;
+ *     circuits;
+ *     physical qubits;
+ *     QEC;
+ *     noise;
+ *     calibration;
+ *     routing.
+ *
+ * The quantum pipeline remains:
+ *
+ *     source
+ *       ->
+ *     domain-neutral AST
+ *       ->
+ *     quantum semantic analysis
+ *       ->
+ *     quantum::ir
+ *       ->
+ *     optimization
+ *       ->
+ *     routing
+ *       ->
+ *     scheduling
+ *       ->
+ *     QEC / resilience / ZQN
+ *       ->
+ *     HAL
+ *       ->
+ *     target
+ *
+ * ============================================================================
+ * HDL / HARDWARE CONTRACT
+ * ============================================================================
+ *
+ * Task bodies may coordinate hardware-oriented computations, but this grammar
+ * does not encode physical hardware.
+ *
+ * No:
+ *
+ *     core IDs;
+ *     accelerator IDs;
+ *     FPGA resources;
+ *     ASIC cells;
+ *     device addresses;
+ *     physical topology
+ *
+ * are introduced here.
+ *
+ * ============================================================================
+ * DISTRIBUTED CONTRACT
+ * ============================================================================
+ *
+ * A logical task may eventually be realized locally or remotely.
+ *
+ * The source grammar remains unchanged when deployment changes from:
+ *
+ *     embedded
+ *     CPU
+ *     multicore
+ *     GPU
+ *     FPGA
+ *     accelerator
+ *     cluster
+ *     cloud
+ *     heterogeneous system
+ *     future target.
+ *
+ * Placement and topology remain downstream.
  *
  * ============================================================================
  * AST CONTRACT
  * ============================================================================
  *
- * The frontend AST should preserve enough structure to distinguish:
+ * The parser output must retain enough information for the domain-neutral
+ * frontend AST to represent:
  *
- *     TaskParallelRegion
  *     TaskParallelGroup
- *     TaskParallelItem
- *     TaskDependency
- *     TaskJoin
- *     TaskParallelIteration
- *     TaskParallelComposition
+ *     TaskParallelTask
+ *     TaskParallelDependency
+ *     TaskParallelNestedGroup
  *
- * The AST MUST preserve:
+ * where those are the semantic categories selected by the frontend AST
+ * architecture.
  *
- *     source order;
- *     source locations;
+ * The AST must preserve:
+ *
+ *     source span;
+ *     source ordering;
  *     nesting;
- *     dependency expressions;
+ *     child parse structure;
  *     task operands;
- *     structured-region boundaries.
+ *     await operands.
  *
- * The AST MUST NOT manufacture:
+ * The AST must NOT invent:
  *
  *     worker IDs;
  *     thread IDs;
@@ -315,878 +1099,284 @@
  *     scheduler IDs.
  *
  * ============================================================================
- * SEMANTIC CONTRACT
- * ============================================================================
- *
- * Semantic analysis is responsible for determining:
- *
- *     whether task operands are valid;
- *     whether dependencies refer to valid computations;
- *     whether task ordering is legal;
- *     whether effects permit concurrency;
- *     whether shared state creates conflicts;
- *     whether synchronization is required;
- *     whether cancellation semantics apply;
- *     whether resource requirements can be satisfied;
- *     whether a task-parallel transformation preserves observable semantics.
- *
- * This grammar does not perform those checks.
- *
- * ============================================================================
  * IR CONTRACT
  * ============================================================================
  *
- * task-parallel.g4 MUST NOT define an IR.
+ * This grammar defines NO IR.
  *
- * The frontend lowers parsed structures into the repository's canonical
- * semantic representation.
+ * Task-parallel semantics must lower into the repository's existing canonical
+ * semantic/IR architecture.
  *
- * The resulting semantic representation may subsequently be lowered into:
+ * There must not be:
  *
- *     classical execution;
- *     quantum/classical execution;
- *     accelerator execution;
- *     distributed execution;
- *     hardware execution.
+ *     TaskParallelIR
+ *     ParallelTaskIR
+ *     QuantumTaskIR
  *
- * Quantum computation MUST ultimately use the canonical quantum semantic
- * boundary rather than a task-parallel quantum representation.
+ * as competing universal intermediate representations created by this file.
+ *
+ * If the canonical compiler IR already has a representation for structured
+ * concurrency/dependencies, that representation is the sole downstream owner.
+ *
+ * ============================================================================
+ * COMPILER CONTRACT
+ * ============================================================================
+ *
+ * The compiler consumes semantic information derived from this grammar for:
+ *
+ *     type checking;
+ *     effect checking;
+ *     dependency analysis;
+ *     ownership analysis;
+ *     resource analysis;
+ *     capability checking;
+ *     optimization;
+ *     scheduling;
+ *     target lowering.
+ *
+ * This grammar itself does none of those operations.
  *
  * ============================================================================
  * RUNTIME CONTRACT
  * ============================================================================
  *
- * The runtime receives a compiled semantic/execution representation.
+ * The runtime receives compiled semantic/execution artifacts.
  *
- * The runtime decides:
+ * It may realize a task-parallel group using:
  *
- *     how many workers to use;
- *     whether work is local or remote;
- *     whether tasks are queued;
- *     whether work is batched;
- *     whether execution is serialized;
- *     how resources are shared.
+ *     serialization;
+ *     cooperative execution;
+ *     worker pools;
+ *     OS threads;
+ *     accelerator queues;
+ *     distributed workers;
+ *     heterogeneous resources;
+ *     other future mechanisms.
  *
- * None of those decisions belong to this grammar.
+ * None of those mechanisms affect this grammar.
  *
  * ============================================================================
- * DETERMINISM
+ * COMPATIBILITY CONTRACT
  * ============================================================================
  *
- * Parsing MUST be deterministic.
+ * Existing lexical tokens are preserved.
  *
- * Task ordering expressed in source MUST remain observable to semantic analysis.
+ * No new token is required for this file.
  *
- * The grammar MUST NOT use semantic predicates or target-language actions to
- * inspect runtime state.
+ * The following existing tokens are consumed:
  *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 1. PUBLIC DOMAIN ENTRY POINT
- * ============================================================================
- *
- * Stable entry point for the task-parallel grammar.
- *
- * Parser composition should normally integrate this rule rather than depending
- * directly on internal productions.
- */
-
-taskParallelConstruct
-    : taskParallelRegion
-    | taskParallelGroup
-    | taskParallelIteration
-    | taskParallelComposition
-    | taskParallelDependency
-    | taskParallelJoin
-    ;
-
-
-/*
- * ============================================================================
- * 2. TASK-PARALLEL REGION
- * ============================================================================
- *
- * A task-parallel region establishes a structured scope in which task work may
- * be exposed for concurrent realization.
- *
- * Generic parallel ownership remains in parallel.g4.
- *
- * This rule specializes the contents of the region for task-oriented work.
- */
-
-taskParallelRegion
-    : PARALLEL
-      LBRACE
-      taskParallelElement*
-      RBRACE
-    ;
-
-
-/*
- * ============================================================================
- * 3. TASK-PARALLEL ELEMENT
- * ============================================================================
- *
- * A task-parallel region may contain:
- *
- *     task creation;
- *     task completion dependencies;
- *     ordinary computation;
- *     explicit dependency relations;
- *     nested task-parallel structures.
- *
- * Ordinary statements remain owned by the canonical statement grammar.
- */
-
-taskParallelElement
-    : taskParallelWork
-    | taskParallelDependency
-    | taskParallelJoin
-    | taskParallelComposition
-    ;
-
-
-/*
- * ============================================================================
- * 4. TASK-PARALLEL WORK
- * ============================================================================
- *
- * Generic task creation is imported from tasks.g4.
- *
- * This rule does not redefine spawn.
- */
-
-taskParallelWork
-    : taskSpawnExpression
-    | taskParallelExpression
-    ;
-
-
-/*
- * ============================================================================
- * 5. TASK-PARALLEL EXPRESSION
- * ============================================================================
- *
- * A task-parallel expression is a task-oriented computation exposed to the
- * parallel semantic layer.
- *
- * The underlying computation remains an ordinary Zamani expression.
- */
-
-taskParallelExpression
-    : PARALLEL
-      taskParallelBody
-    ;
-
-
-taskParallelBody
-    : blockExpression
-    | expression
-    ;
-
-
-/*
- * ============================================================================
- * 6. TASK-PARALLEL GROUP
- * ============================================================================
- *
- * A group provides a structural boundary for a collection of task operations.
- *
- * It does not define a runtime task-group object.
- *
- * The AST may represent this as a logical TaskParallelGroup.
- */
-
-taskParallelGroup
-    : PARALLEL
-      LBRACE
-      taskParallelGroupElement*
-      RBRACE
-    ;
-
-
-taskParallelGroupElement
-    : taskParallelTask
-    | taskParallelDependency
-    | taskParallelJoin
-    | taskParallelNestedGroup
-    ;
-
-
-taskParallelNestedGroup
-    : taskParallelGroup
-    ;
-
-
-/*
- * ============================================================================
- * 7. TASK-PARALLEL TASK
- * ============================================================================
- *
- * Reuses the canonical spawn expression.
- *
- * This is important:
- *
- *     task-parallel.g4
- *         DOES NOT own spawn.
- *
- *     tasks.g4
- *         OWNS spawn.
- */
-
-taskParallelTask
-    : taskSpawnExpression
-    ;
-
-
-/*
- * ============================================================================
- * 8. TASK-PARALLEL TASK STATEMENT
- * ============================================================================
- *
- * Statement-level adapter for task creation.
- */
-
-taskParallelTaskStatement
-    : taskSpawnStatement
-    ;
-
-
-/*
- * ============================================================================
- * 9. TASK-PARALLEL AWAIT
- * ============================================================================
- *
- * Await remains owned by tasks.g4.
- *
- * This adapter allows it to participate in a task-parallel region.
- */
-
-taskParallelAwait
-    : taskAwaitExpression
-    ;
-
-
-taskParallelAwaitStatement
-    : taskAwaitStatement
-    ;
-
-
-/*
- * ============================================================================
- * 10. TASK-PARALLEL JOIN
- * ============================================================================
- *
- * A join is represented through one or more existing await operations.
- *
- * The grammar deliberately does not create a fixed-size join construct.
- *
- * An arbitrary number of dependencies may be represented by repetition.
- *
- * Semantic analysis determines whether the resulting dependencies form a
- * valid completion boundary.
- */
-
-taskParallelJoin
-    : taskParallelAwait+
-    ;
-
-
-/*
- * ============================================================================
- * 11. TASK-PARALLEL DEPENDENCY
- * ============================================================================
- *
- * A dependency expresses that one task computation depends upon another
- * computation.
- *
- * The operands remain ordinary expressions.
- *
- * No runtime task identifier is embedded in the grammar.
- */
-
-taskParallelDependency
-    : taskParallelDependencyExpression
-    ;
-
-
-taskParallelDependencyExpression
-    : taskParallelDependencySource
-      taskParallelDependencyOperator
-      taskParallelDependencyTarget
-    ;
-
-
-taskParallelDependencySource
-    : expression
-    ;
-
-
-taskParallelDependencyTarget
-    : expression
-    ;
-
-
-/*
- * ============================================================================
- * 12. DEPENDENCY OPERATOR
- * ============================================================================
- *
- * Dependency syntax is deliberately represented using the existing comparison/
- * relation vocabulary rather than introducing target-specific dependency
- * objects.
- *
- * The semantic layer determines the exact dependency meaning.
- */
-
-taskParallelDependencyOperator
-    : DEPENDS
-    ;
-
-
-/*
- * ============================================================================
- * 13. TASK-PARALLEL COMPOSITION
- * ============================================================================
- *
- * Composition permits multiple logical task computations to participate in
- * one structured task-parallel expression.
- *
- * The number of tasks is unbounded by the grammar.
- */
-
-taskParallelComposition
-    : PARALLEL
-      LBRACE
-      taskParallelCompositionElement+
-      RBRACE
-    ;
-
-
-taskParallelCompositionElement
-    : taskParallelTask
-    | taskParallelAwait
-    | taskParallelDependency
-    | taskParallelGroup
-    | taskParallelIteration
-    ;
-
-
-/*
- * ============================================================================
- * 14. TASK-PARALLEL ITERATION
- * ============================================================================
- *
- * Task parallelism may be expressed over a logical iteration domain.
- *
- * The domain remains an ordinary expression.
- *
- * Therefore the grammar does not assume:
- *
- *     array size;
- *     task count;
- *     worker count;
- *     partition count;
- *     thread count;
- *     processor count.
- *
- * The actual decomposition is downstream.
- */
-
-taskParallelIteration
-    : PARALLEL
-      FOR
-      pattern
-      IN
-      expression
-      taskParallelIterationBody
-    ;
-
-
-taskParallelIterationBody
-    : blockExpression
-    ;
-
-
-/*
- * ============================================================================
- * 15. TASK-PARALLEL ITERATION TASK
- * ============================================================================
- *
- * Each logical iteration may expose work to the task-parallel semantic layer.
- *
- * This does not mean one physical runtime task must be created per iteration.
- */
-
-taskParallelIterationTask
-    : taskParallelIteration
-    ;
-
-
-/*
- * ============================================================================
- * 16. TASK-PARALLEL NESTING
- * ============================================================================
- *
- * Nested task parallelism is legal.
- *
- * No finite nesting depth is encoded.
- *
- * Resource realization remains a scheduler/runtime concern.
- */
-
-taskParallelNested
-    : taskParallelConstruct
-    ;
-
-
-/*
- * ============================================================================
- * 17. TASK-PARALLEL REGION ELEMENT WITH NESTING
- * ============================================================================
- */
-
-taskParallelNestedElement
-    : taskParallelTask
-    | taskParallelAwait
-    | taskParallelDependency
-    | taskParallelNested
-    ;
-
-
-/*
- * ============================================================================
- * 18. TASK-PARALLEL SEQUENCE
- * ============================================================================
- *
- * Source order is preserved.
- *
- * Whether two operations can actually execute concurrently is determined by
- * semantic dependency/effect analysis.
- */
-
-taskParallelSequence
-    : taskParallelElement+
-    ;
-
-
-/*
- * ============================================================================
- * 19. TASK-PARALLEL WORK SET
- * ============================================================================
- *
- * An arbitrary number of logical tasks can be represented.
+ *     PARALLEL
+ *     GROUP
+ *     LBRACE
+ *     RBRACE
+ *     SEMICOLON
  *
- * There is deliberately no fixed maximum.
- */
-
-taskParallelWorkSet
-    : taskParallelTask+
-    ;
-
-
-/*
- * ============================================================================
- * 20. TASK-PARALLEL DEPENDENCY SET
- * ============================================================================
- *
- * Dependency expressions are repeatable and therefore scalable.
- */
-
-taskParallelDependencySet
-    : taskParallelDependency+
-    ;
-
-
-/*
- * ============================================================================
- * 21. TASK-PARALLEL COMPLETION BOUNDARY
- * ============================================================================
- *
- * A structured completion boundary consists of zero or more await operations.
- *
- * The semantic layer determines whether an empty boundary is meaningful.
- */
-
-taskParallelCompletion
-    : taskParallelAwait*
-    ;
-
-
-/*
- * ============================================================================
- * 22. TASK-PARALLEL BODY
- * ============================================================================
- *
- * This is the canonical body integration boundary.
- */
-
-taskParallelTaskBody
-    : blockExpression
-    ;
-
-
-/*
- * ============================================================================
- * 23. TASK-PARALLEL OPERAND
- * ============================================================================
- *
- * The operand remains open-ended so future Zamani computation domains can
- * participate without modifying this grammar.
- *
- * Possible semantic operands include:
- *
- *     classical computation;
- *     quantum computation;
- *     hybrid computation;
- *     hardware operation;
- *     accelerator computation;
- *     distributed computation;
- *     AI computation;
- *     data transformation.
- *
- * None of those domains become grammar dependencies here.
- */
-
-taskParallelOperand
-    : expression
-    | blockExpression
-    ;
-
-
-/*
- * ============================================================================
- * 24. TASK-PARALLEL NESTED BODY
- * ============================================================================
- */
-
-taskParallelNestedBody
-    : taskParallelOperand
-    | taskParallelGroup
-    | taskParallelIteration
-    ;
-
-
-/*
- * ============================================================================
- * 25. TASK-PARALLEL ROOT EXPRESSION
- * ============================================================================
+ * Existing task syntax remains owned by Tasks.
  *
- * Stable expression-level integration point.
- */
-
-taskParallelRootExpression
-    : taskParallelConstruct
-    ;
-
-
-/*
- * ============================================================================
- * 26. TASK-PARALLEL ROOT STATEMENT
- * ============================================================================
+ * Existing generic parallel syntax remains owned by Parallel.
  *
- * Stable statement-level integration point.
+ * The file therefore does not require a token rename or lexer migration.
  *
- * The optional semicolon follows the existing Zamani statement convention.
- */
-
-taskParallelRootStatement
-    : taskParallelConstruct
-      SEMI?
-    ;
-
-
-/*
  * ============================================================================
- * 27. TASK-PARALLEL TASK COLLECTION
+ * ERROR / DIAGNOSTIC CONTRACT
  * ============================================================================
- *
- * A collection is logical.
  *
- * It does not imply a particular runtime collection implementation.
- */
-
-taskParallelTaskCollection
-    : taskParallelTask+
-    ;
-
-
-/*
- * ============================================================================
- * 28. TASK-PARALLEL DEPENDENCY COLLECTION
- * ============================================================================
- */
-
-taskParallelDependencyCollection
-    : taskParallelDependency+
-    ;
-
-
-/*
- * ============================================================================
- * 29. TASK-PARALLEL STRUCTURED REGION
- * ============================================================================
+ * Syntax errors remain parser errors.
  *
- * Named boundary for AST and semantic tooling.
- */
-
-taskParallelStructuredRegion
-    : PARALLEL
-      LBRACE
-      taskParallelStructuredElement*
-      RBRACE
-    ;
-
-
-taskParallelStructuredElement
-    : taskParallelTask
-    | taskParallelAwait
-    | taskParallelDependency
-    | taskParallelGroup
-    | taskParallelIteration
-    | taskParallelStructuredRegion
-    ;
-
-
-/*
- * ============================================================================
- * 30. TASK-PARALLEL COMPLETION GROUP
- * ============================================================================
+ * Examples:
  *
- * A completion group can contain arbitrary completion dependencies.
- */
-
-taskParallelCompletionGroup
-    : taskParallelAwait+
-    ;
-
-
-/*
- * ============================================================================
- * 31. TASK-PARALLEL DEPENDENCY CHAIN
- * ============================================================================
+ *     parallel group
+ *     parallel group {
+ *     parallel group { spawn }
+ *     parallel group { await }
  *
- * A dependency chain is structural syntax only.
+ * are syntactically incomplete.
  *
- * The semantic layer determines whether the chain is acyclic, meaningful, and
- * compatible with the effects of the referenced computations.
- */
-
-taskParallelDependencyChain
-    : taskParallelDependency
-      (
-          taskParallelDependency
-      )*
-    ;
-
-
-/*
- * ============================================================================
- * 32. TASK-PARALLEL DAG INPUT
- * ============================================================================
+ * Semantic errors remain downstream.
  *
- * The grammar does not construct a graph directly.
+ * Examples:
  *
- * It merely preserves enough structure for semantic analysis to construct the
- * canonical dependency graph.
- */
-
-taskParallelDagInput
-    : taskParallelTaskCollection
-      taskParallelDependencyCollection?
-    ;
-
-
-/*
- * ============================================================================
- * 33. TASK-PARALLEL SCOPE
- * ============================================================================
+ *     awaiting a non-awaitable value
+ *     spawning an invalid computation
+ *     illegal ownership capture
+ *     unsatisfied capability
+ *     conflicting effects
  *
- * Named semantic boundary for scope analysis.
- */
-
-taskParallelScope
-    : PARALLEL
-      blockExpression
-    ;
-
-
-/*
- * ============================================================================
- * 34. TASK-PARALLEL REGION ITEM
- * ============================================================================
- */
-
-taskParallelRegionItem
-    : taskParallelTask
-    | taskParallelAwait
-    | taskParallelDependency
-    | taskParallelScope
-    | taskParallelIteration
-    ;
-
-
-/*
- * ============================================================================
- * 35. FINAL PUBLIC COMPOSITION RULE
- * ============================================================================
+ * must NOT be converted into grammar rules merely to improve diagnostics.
  *
- * Parser composition should use this rule when a single stable task-parallel
- * entry point is required.
- */
-
-taskParallel
-    : taskParallelConstruct
-    ;
-
-
-/*
  * ============================================================================
- * ARCHITECTURAL INVARIANTS
+ * SCALABILITY CONTRACT
  * ============================================================================
- *
- * The following invariants are mandatory:
- *
- * 1. This grammar contains no Rust actions.
- *
- * 2. This grammar contains no unsafe code.
- *
- * 3. This grammar contains no fixed resource counts.
- *
- * 4. This grammar contains no hardware IDs.
- *
- * 5. This grammar contains no physical topology.
- *
- * 6. This grammar contains no scheduler implementation.
- *
- * 7. This grammar contains no runtime implementation.
- *
- * 8. This grammar contains no quantum IR.
- *
- * 9. This grammar contains no QEC implementation.
- *
- * 10. This grammar contains no ZQN implementation.
- *
- * 11. This grammar contains no resource discovery.
- *
- * 12. This grammar reuses task syntax from tasks.g4.
  *
- * 13. This grammar specializes, rather than replaces, parallel.g4.
+ * The grammar uses repetition rather than finite enumeration.
  *
- * 14. Ordinary expressions remain owned by the canonical expression grammar.
+ * Therefore:
  *
- * 15. Ordinary blocks remain owned by the canonical block grammar.
+ *     taskParallelItem*
  *
- * 16. Function declarations remain owned by the functions grammar.
+ * supports arbitrary source-level group cardinality.
  *
- * 17. Async/future semantics remain owned by functions/futures grammar layers.
+ * Nested:
  *
- * 18. Scheduling remains outside grammar/.
+ *     taskParallelGroup
  *
- * 19. Hardware realization remains outside grammar/.
+ * supports arbitrary structural nesting subject only to actual parser/compiler
+ * resources.
  *
- * 20. The semantic meaning of a program remains independent of the physical
- *     number of execution resources.
+ * There is no language-level task or worker ceiling.
  *
  * ============================================================================
  * HARD-CODING AUDIT
  * ============================================================================
  *
- * Forbidden in this file:
+ * This file contains no:
  *
- *     numeric resource limits;
- *     worker-count literals used as language limits;
- *     thread-count limits;
- *     processor-count limits;
- *     GPU-count limits;
- *     QPU-count limits;
- *     node-count limits;
- *     fixed task capacities;
- *     fixed dependency capacities;
- *     fixed nesting limits;
- *     fixed topology;
- *     physical device identifiers.
+ *     MAX_TASKS
+ *     MAX_THREADS
+ *     MAX_WORKERS
+ *     MAX_CORES
+ *     MAX_CPUS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_ACCELERATORS
+ *     MAX_QPUS
+ *     MAX_NODES
+ *     MAX_DEVICES
+ *     MAX_MEMORY
+ *     MAX_PARALLELISM
  *
- * Repetition operators:
+ * It contains no:
  *
- *     *
- *     +
+ *     worker IDs;
+ *     device IDs;
+ *     hardware addresses;
+ *     physical topology.
  *
- * are semantic grammar repetition and are NOT resource limits.
- *
- * ============================================================================
- * CROSS-DOMAIN INTEGRATION
- * ============================================================================
- *
- * Classical:
- *     Task operands may contain ordinary classical computation.
- *
- * Quantum:
- *     Task operands may eventually contain quantum constructs, but this file
- *     does not define quantum semantics. Quantum lowering remains owned by the
- *     canonical quantum semantic boundary.
- *
- * Hybrid:
- *     A task may contain hybrid computation without requiring this grammar to
- *     understand the internal hybrid representation.
- *
- * HDL:
- *     Hardware-oriented computations may participate through ordinary semantic
- *     expressions/blocks where the language permits them.
- *
- * Distributed:
- *     Distributed realization is selected downstream from the logical task
- *     representation.
- *
- * AI/data:
- *     AI and data computations may become task operands without special
- *     task-parallel grammar dependencies.
- *
- * Hardware:
- *     Hardware capability selection belongs to resources/hardware/target
- *     layers, not this file.
- *
- * Resilience:
- *     Runtime recovery may adapt execution after compilation; resilience does
- *     not become a grammar dependency.
+ * Any finite limitation encountered during compilation or execution must be
+ * reported by the subsystem that owns that limitation.
  *
  * ============================================================================
- * EXPECTED COMPILER PIPELINE
+ * VALIDATION CONTRACT
  * ============================================================================
  *
- *     task-parallel.g4
- *             |
- *             v
- *     Frontend AST
- *             |
- *             v
- *     Name/type/effect analysis
- *             |
- *             v
- *     Dependency analysis
- *             |
- *             v
- *     Resource/capability analysis
- *             |
- *             v
- *     Canonical semantic IR
- *             |
- *       +-----+------+----------------+
- *       |            |                |
- *       v            v                v
- *   optimize     schedule          route
- *       |            |                |
- *       +------------+----------------+
- *                    |
- *                    v
- *              target lowering
- *                    |
- *                    v
- *                 runtime
+ * Validation for this grammar must cover:
  *
+ * POSITIVE
+ * --------
+ *
+ *     parallel group {}
+ *     parallel group {
+ *         spawn work();
+ *     }
+ *     parallel group {
+ *         spawn work_a();
+ *         spawn work_b();
+ *     }
+ *     parallel group {
+ *         spawn {
+ *             compute();
+ *         };
+ *         await task_handle;
+ *     }
+ *
+ * NESTED
+ * ------
+ *
+ *     parallel group {
+ *         spawn outer();
+ *         parallel group {
+ *             spawn inner_a();
+ *             spawn inner_b();
+ *         };
+ *     }
+ *
+ * NEGATIVE
+ * --------
+ *
+ *     parallel group
+ *     parallel group {
+ *     parallel group { spawn }
+ *     parallel group { await }
+ *     parallel group ( ... )
+ *     parallel group [ ... ]
+ *
+ * NON-TASK PARALLEL
+ * -----------------
+ *
+ *     parallel compute()
+ *
+ * must remain owned by the generic parallel grammar and must not be silently
+ * reclassified as a task-parallel group.
+ *
+ * SCALABILITY
+ * -----------
+ *
+ * Tests must generate task-parallel groups containing varying numbers of
+ * logical task items without establishing a language-level maximum.
+ *
+ * CROSS-DOMAIN
+ * ------------
+ *
+ * Task bodies must be tested with:
+ *
+ *     classical computation;
+ *     quantum computation;
+ *     hybrid computation;
+ *     HDL/hardware-related computation;
+ *     distributed computation;
+ *     AI/data computation;
+ *     accelerator-oriented computation.
+ *
+ * These tests verify composition, not hardware allocation.
+ *
+ * DETERMINISM
+ * -----------
+ *
+ * Identical source and grammar version must yield equivalent parse structure.
+ *
+ * ============================================================================
+ * INTEGRATION CHECKLIST
+ * ============================================================================
+ *
+ * This file is complete when:
+ *
+ * [x] Existing filename preserved.
+ * [x] Existing canonical tokens preserved.
+ * [x] No new lexer token required.
+ * [x] No Rust actions.
+ * [x] No unsafe Rust dependency.
+ * [x] No fixed hardware limits.
+ * [x] No fixed worker/thread/core/device counts.
+ * [x] No duplicate spawn grammar.
+ * [x] No duplicate await grammar.
+ * [x] No duplicate generic parallel grammar.
+ * [x] No DEPENDS pseudo-token.
+ * [x] No SEMI pseudo-token.
+ * [x] No duplicate task-parallel expression rule.
+ * [x] Task-parallel has a unique syntactic boundary.
+ * [x] Dependencies remain semantic data derived from await/task structure.
+ * [x] Nested task groups are supported.
+ * [x] Logical task count is unbounded by grammar constants.
+ * [x] Quantum remains downstream through `quantum::ir`.
+ * [x] Resource/capability analysis remains downstream.
+ * [x] Scheduling remains downstream.
+ * [x] Runtime realization remains downstream.
+ *
+ * Remaining repository integration requirement:
+ *
+ *     grammar/concurrency/concurrency.g4
+ *
+ * must import `TaskParallel` as a delegate grammar so that its existing
+ * `concurrencyTaskParallelConstruct` rule resolves:
+ *
+ *     taskParallelConstruct
+ *
+ * Likewise, the canonical parser composition must reach the `Concurrency`
+ * domain through its normal domain-dispatch path.
+ *
+ * No change to the lexical vocabulary is required.
+ *
+ * ============================================================================
+ * END
  * ============================================================================
  */
