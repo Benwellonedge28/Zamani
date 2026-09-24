@@ -1,290 +1,244 @@
 /*
  * ============================================================================
- * Zamani Universal Programming Language
+ * Zamani Universal Computing Language
  * ============================================================================
  *
- * File:
- *     grammar/types/quantum.g4
+ * FILE
+ * ----
+ * grammar/types/quantum.g4
  *
- * Grammar:
- *     Quantum
+ * GRAMMAR
+ * -------
+ * Quantum
  *
- * Status:
- *     CANONICAL SOURCE-LEVEL QUANTUM TYPE GRAMMAR
+ * STATUS
+ * ------
+ * CANONICAL / PRODUCTION SOURCE-LEVEL QUANTUM TYPE GRAMMAR
  *
  * ============================================================================
  * PURPOSE
  * ============================================================================
  *
- * This grammar is the SINGLE CANONICAL OWNER of quantum-specific SOURCE TYPE
- * SYNTAX in Zamani.
+ * This file is the SINGLE OWNER of quantum-specific source-level type syntax.
  *
- * It is intentionally independent of:
+ * It is composed by the universal Zamani type system and provides the
+ * quantum-specific type forms that cannot be expressed by ordinary named,
+ * generic, tuple, array, reference, or function types alone.
  *
- *     - physical hardware;
- *     - QPU selection;
- *     - device identifiers;
- *     - topology;
- *     - routing;
- *     - scheduling;
- *     - calibration;
- *     - QEC implementation;
- *     - ZQN;
- *     - HAL;
- *     - runtime representation;
- *     - vendor APIs;
- *     - quantum::ir.
+ * This file describes SOURCE SEMANTICS ONLY.
  *
- * The universal type composition layer remains owned by:
+ * It does not describe:
  *
- *     grammar/types/types.g4
- *
- * Generic type application remains owned by:
- *
- *     grammar/types/generic.g4
- *
- * This grammar supplies only the quantum-specific type forms which those
- * universal grammars cannot express without knowing that a construct is
- * quantum-specific.
- *
- * ============================================================================
- * CANONICAL SOURCE FORMS
- * ============================================================================
- *
- *     qubit
- *     logical qubit
- *
- *     qubit[N]
- *     logical qubit[N]
- *
- *     qubit[n + 1]
- *     qubit[2 * n]
- *     qubit[algorithm_width]
- *     qubit[(N + M) * factor]
- *
- *     quantum<T>
- *     quantum<T, P>
- *
- *     quantum::Type
- *     quantum::state::Type
- *     quantum::future::namespace::Type
- *
- * Generic application of a qualified quantum type is composed by the
- * universal generic grammar:
- *
- *     quantum::Type<T>
- *     quantum::state::StateVector<T>
- *
- * This prevents this file from becoming a second generic-type grammar.
- *
- * ============================================================================
- * OWNERSHIP
- * ============================================================================
- *
- * THIS FILE OWNS:
- *
- *     - abstract `qubit` type syntax;
- *     - `logical qubit` type syntax;
- *     - scalable quantum collection syntax;
- *     - symbolic quantum cardinality syntax;
- *     - the source-level `quantum<...>` constructor;
- *     - explicit `quantum::...` type qualification;
- *     - quantum-specific parser boundaries;
- *     - quantum type syntax compatibility.
- *
- * THIS FILE DOES NOT OWN:
- *
- *     - universal generic type application;
- *     - ordinary named types;
- *     - primitive classical types;
- *     - tuples;
- *     - arrays;
- *     - references;
- *     - pointers;
- *     - function types;
- *     - resource types;
- *     - capability types;
- *     - hardware types;
- *     - quantum operations;
- *     - gates;
- *     - circuits;
- *     - measurement statements;
- *     - reset;
- *     - dynamic control;
- *     - QEC;
- *     - ZQN;
- *     - noise semantics;
- *     - calibration;
- *     - routing;
- *     - scheduling;
- *     - optimization;
- *     - hardware allocation;
- *     - physical qubit IDs;
- *     - topology;
- *     - backend selection;
- *     - runtime representation;
- *     - ABI representation;
- *     - canonical IR.
+ *   - physical hardware;
+ *   - QPU selection;
+ *   - simulator selection;
+ *   - physical qubit allocation;
+ *   - topology;
+ *   - routing;
+ *   - scheduling;
+ *   - calibration;
+ *   - pulse implementation;
+ *   - QEC implementation;
+ *   - decoder implementation;
+ *   - ZQN implementation;
+ *   - HAL implementation;
+ *   - runtime representation;
+ *   - vendor APIs;
+ *   - canonical quantum IR.
  *
  * ============================================================================
  * ARCHITECTURAL POSITION
  * ============================================================================
  *
- *     Zamani source
- *          |
- *          v
- *     canonical lexer
- *          |
- *          v
- *     canonical parser
- *          |
- *          +-------------------------------+
- *          |                               |
- *          v                               v
- *     universal Types                  Quantum
- *          |                               |
- *          +---------------+---------------+
- *                          |
- *                          v
- *                     frontend AST
- *                       TypeExpr
- *                          |
- *                          v
- *                  structural validation
- *                          |
- *                          v
- *                  semantic type analysis
- *                          |
- *             +------------+-------------+
- *             |                          |
- *             v                          v
- *      resource/capability          quantum semantics
- *             |                          |
- *             +------------+-------------+
- *                          |
- *                          v
- *                    canonical IR
- *                          |
- *                          v
- *                     quantum::ir
- *                          |
- *             +------------+-------------+
- *             |            |             |
- *             v            v             v
- *        optimization   routing     scheduling
- *                                      |
- *                                      v
- *                              QEC / ZQN / HAL
- *                                      |
- *                                      v
- *                              target realization
- *
- * IMPORTANT:
- *
- * quantum::ir remains the canonical quantum semantic boundary.
- *
- * This grammar MUST NOT create a second quantum IR.
+ *                         Zamani source
+ *                              |
+ *                              v
+ *                       canonical lexer
+ *                              |
+ *                              v
+ *                       canonical parser
+ *                              |
+ *                    +---------+---------+
+ *                    |                   |
+ *                    v                   v
+ *              universal Types       Quantum
+ *                    |                   |
+ *                    +---------+---------+
+ *                              |
+ *                              v
+ *                     domain-neutral AST
+ *                              |
+ *                              v
+ *                     semantic analysis
+ *                              |
+ *             +----------------+----------------+
+ *             |                |                |
+ *             v                v                v
+ *          type system     resources       capabilities
+ *             |                |                |
+ *             +----------------+----------------+
+ *                              |
+ *                              v
+ *                     canonical semantic IR
+ *                              |
+ *                              v
+ *                         quantum::ir
+ *                              |
+ *             +----------------+----------------+
+ *             |                |                |
+ *             v                v                v
+ *        optimization       routing        scheduling
+ *                              |
+ *                              v
+ *                         QEC / ZQN
+ *                              |
+ *                              v
+ *                             HAL
+ *                              |
+ *                              v
+ *                      target realization
  *
  * ============================================================================
- * POCO-REAF / SCALABILITY
+ * SINGLE-OWNER INVARIANT
  * ============================================================================
  *
- * The grammar expresses portable computational intent.
+ * This file owns:
  *
- * It MUST NOT establish implementation limits such as:
+ *   - `qubit`;
+ *   - `logical qubit`;
+ *   - quantum collection type syntax;
+ *   - symbolic quantum cardinality syntax;
+ *   - open quantum type constructors;
+ *   - qualified quantum type names;
+ *   - quantum-specific type wrappers;
+ *   - quantum type syntax extension points.
  *
- *     MAX_QUBITS
- *     MAX_LOGICAL_QUBITS
- *     MAX_PHYSICAL_QUBITS
- *     MAX_REGISTER_SIZE
- *     MAX_STATE_SIZE
- *     MAX_CIRCUIT_WIDTH
- *     MAX_CIRCUIT_DEPTH
- *     MAX_QPU_COUNT
- *     MAX_DEVICE_COUNT
- *     MAX_TOPOLOGY_SIZE
- *     MAX_GATE_COUNT
+ * It does NOT own:
  *
- * It also MUST NOT encode:
+ *   - ordinary generic application;
+ *   - ordinary named types;
+ *   - arrays;
+ *   - tuples;
+ *   - references;
+ *   - pointers;
+ *   - function types;
+ *   - resource declarations;
+ *   - capability declarations;
+ *   - qubit declarations;
+ *   - quantum operations;
+ *   - gates;
+ *   - circuits;
+ *   - measurement;
+ *   - reset;
+ *   - dynamic control;
+ *   - QEC;
+ *   - ZQN;
+ *   - routing;
+ *   - scheduling;
+ *   - hardware realization.
  *
- *     physical qubit 0
- *     physical qubit 1
- *     qpu0
- *     gpu0
- *     device0
- *     vendor topology
- *     fixed connectivity
- *     vendor gate inventories.
+ * There MUST NOT be another authoritative `quantumType` implementation.
  *
- * There is no language-level finite limit on:
+ * In particular:
  *
- *     - cardinality values;
- *     - namespace depth;
- *     - type nesting;
- *     - generic arity;
- *     - symbolic expression size.
+ *   grammar/quantum/quantum-types.g4
  *
- * Actual parser/compiler resource limits, if required for operational safety,
- * are implementation configuration and MUST NOT become language semantics.
+ * must not remain an independently authoritative implementation.
  *
  * ============================================================================
- * CARDINALITY SEMANTICS
+ * POCO-REAF
  * ============================================================================
  *
- *     qubit[N]
+ * Quantum types are target-independent.
  *
- * means that the source program contains a quantum resource requirement
- * parameterized by N.
+ * The same source type must be capable of being lowered to:
  *
- * It does NOT mean:
+ *   - a simulator representation;
+ *   - a logical quantum representation;
+ *   - a physical quantum representation;
+ *   - a distributed representation;
+ *   - a heterogeneous representation;
+ *   - a future quantum architecture.
  *
- *     physical qubits 0 through N-1
+ * The source type never selects the physical realization.
  *
- * and it does not select a machine.
+ * ============================================================================
+ * SCALABILITY
+ * ============================================================================
  *
- * Examples:
+ * This grammar imposes NO universal hardware capacity.
  *
- *     qubit[1]
+ * It contains no:
+ *
+ *   MAX_QUBITS
+ *   MAX_LOGICAL_QUBITS
+ *   MAX_PHYSICAL_QUBITS
+ *   MAX_REGISTER_SIZE
+ *   MAX_STATE_SIZE
+ *   MAX_CIRCUIT_WIDTH
+ *   MAX_CIRCUIT_DEPTH
+ *   MAX_QPU_COUNT
+ *   MAX_DEVICE_COUNT
+ *   MAX_GATE_COUNT
+ *   MAX_TYPE_ARGUMENTS
+ *   MAX_NAMESPACE_DEPTH
+ *   MAX_CARDINALITY
+ *
+ * There is no grammar-level finite limit on:
+ *
+ *   - number of quantum resources;
+ *   - type nesting;
+ *   - namespace depth;
+ *   - generic arity;
+ *   - symbolic cardinality expression size.
+ *
+ * Actual resource limitations are discovered downstream.
+ *
+ * A source expression such as:
+ *
  *     qubit[1024]
+ *
+ * is program data.
+ *
+ * It is NOT a language limit.
+ *
+ * ============================================================================
+ * RESOURCE SEMANTICS
+ * ============================================================================
+ *
+ * These are different concepts:
+ *
  *     qubit[N]
- *     qubit[2 * N]
- *     qubit[algorithm_width]
- *     qubit[(N + M) * factor]
+ *         source-level type/resource cardinality
  *
- * are all source-level forms.
+ *     requires qubits >= N
+ *         resource requirement
  *
- * Semantic analysis determines:
+ *     requires capability("quantum.measurement")
+ *         capability requirement
  *
- *     - whether the expression is valid;
- *     - whether it is statically known;
- *     - whether it is symbolic;
- *     - whether it is runtime-dependent;
- *     - what resource requirement it creates;
- *     - whether a target can satisfy it.
+ *     prefer accelerator("quantum")
+ *         preference
  *
- * This grammar never converts the value into:
+ *     physical mapping
+ *         target realization
  *
- *     usize
- *     u32
- *     u64
+ * This grammar owns only the first category.
  *
- * or any other Rust implementation type.
+ * Resource/capability requirements belong to their owning resource grammars.
  *
  * ============================================================================
  * LEXER CONTRACT
  * ============================================================================
  *
- * This grammar is parser-only.
+ * This file is parser-only.
  *
- * Its token vocabulary is:
+ * It MUST NOT declare lexer rules.
  *
- *     ZamaniTokens
+ * It consumes the canonical parser-facing vocabulary supplied by the lexer
+ * composition layer.
  *
- * supplied by:
- *
- *     grammar/lexer/tokens.g4
- *
- * Relevant canonical parser-facing token names are expected to include:
+ * Expected token categories include:
  *
  *     K_QUANTUM
  *     K_QUBIT
@@ -313,121 +267,70 @@
  *     PIPE
  *     CARET
  *
- * This grammar MUST NOT declare lexer rules.
+ * The lexer is responsible for assigning these token identities.
  *
- * Token spelling belongs exclusively to grammar/lexer/.
- *
- * ============================================================================
- * LEXER MIGRATION REQUIREMENT
- * ============================================================================
- *
- * The repository currently contains an inconsistency between the modular
- * parser-facing K_* vocabulary and the older keyword vocabulary.
- *
- * The canonical lexer layer currently contains spellings such as:
- *
- *     QUANTUM
- *     QUBIT
- *     LOGICAL
- *
- * while the modular parser architecture uses:
- *
- *     K_QUANTUM
- *     K_QUBIT
- *     K_LOGICAL
- *
- * This grammar intentionally does NOT introduce local aliases.
- *
- * REQUIRED LEXER WORK:
- *
- *     grammar/lexer/keywords.g4
- *     grammar/lexer/tokens.g4
- *     grammar/antlr/ZamaniLexer.g4
- *
- * must be reconciled so that exactly ONE canonical parser-facing token
- * identity exists for each language-level keyword.
- *
- * The intended parser-facing vocabulary is:
- *
- *     K_QUANTUM
- *     K_QUBIT
- *     K_LOGICAL
- *
- * Existing historical token names may be retained temporarily in the Rust
- * compatibility adapter, but they must not become a second parser grammar
- * vocabulary.
- *
- * Do NOT add:
+ * This grammar MUST NOT create compatibility alternatives such as:
  *
  *     QUBIT | K_QUBIT
+ *
+ * or:
+ *
  *     QUANTUM | K_QUANTUM
- *     LOGICAL | K_LOGICAL
- *
- * as competing parser alternatives.
- *
- * The lexer is the sole lexical authority.
  *
  * ============================================================================
- * SOURCE COMPATIBILITY
+ * GENERIC TYPE OWNERSHIP
  * ============================================================================
  *
- * Canonical lowercase source forms:
+ * Generic application remains owned by:
  *
- *     qubit
- *     logical qubit
- *     quantum<T>
- *     quantum::Type
+ *     grammar/types/generic.g4
  *
- * Historical names such as:
+ * This file MUST NOT define a second generic type system.
  *
- *     Qubit
- *     QRegister
- *     QState
- *     QuantumRegister
- *     LogicalQubit
- *     QuantumState
+ * Therefore:
  *
- * MUST remain ordinary named types unless an explicit compatibility
- * specification says otherwise.
+ *     quantum::State<T>
  *
- * They must not cause permanent expansion of the reserved keyword set.
+ * must ultimately be composed from:
+ *
+ *     quantum-qualified type
+ *
+ * plus:
+ *
+ *     universal generic application.
  *
  * ============================================================================
  * AST CONTRACT
  * ============================================================================
  *
- * This grammar creates parser structure only.
+ * The parser produces syntax structure.
  *
- * It maps into the existing domain-neutral frontend TypeExpr architecture.
+ * It MUST lower into the existing domain-neutral frontend TypeExpr model.
  *
  * Conceptual mappings:
  *
  *     qubit
- *         -> existing quantum TypeExpr representation
+ *         -> quantum semantic TypeExpr
  *
  *     logical qubit
- *         -> existing logical quantum TypeExpr representation
+ *         -> logical quantum semantic TypeExpr
  *
  *     qubit[N]
- *         -> existing parameterized/collection quantum TypeExpr
+ *         -> quantum collection/cardinality TypeExpr
  *
  *     logical qubit[N]
- *         -> existing parameterized/collection logical quantum TypeExpr
+ *         -> logical quantum collection/cardinality TypeExpr
  *
  *     quantum<T>
- *         -> existing generic/quantum TypeExpr representation
+ *         -> quantum generic/constructor TypeExpr
  *
- *     quantum::Type
- *         -> existing qualified/named TypeExpr
+ *     quantum::State
+ *         -> qualified/named TypeExpr
  *
- * Generic:
+ *     quantum::State<T>
+ *         -> qualified generic TypeExpr
  *
- *     quantum::Type<T>
- *
- * is composed by the universal generic type grammar and therefore lowers to
- * the existing generic TypeExpr representation.
- *
- * The grammar MUST NOT introduce:
+ * This grammar MUST NOT introduce:
  *
  *     QuantumTypeIR
  *     QuantumTypeNode
@@ -435,43 +338,39 @@
  *     PhysicalQubitIR
  *     QuantumHardwareTypeIR
  *
- * merely to represent syntax.
+ * merely for syntax.
  *
  * ============================================================================
  * SEMANTIC CONTRACT
  * ============================================================================
  *
- * The parser answers:
+ * Semantic analysis determines:
  *
- *     "What quantum type syntax did the programmer write?"
+ *   - whether a quantum type exists;
+ *   - whether a type argument is valid;
+ *   - whether a cardinality is integral;
+ *   - whether a cardinality is positive where required;
+ *   - whether a cardinality is compile-time known;
+ *   - whether a cardinality is symbolic;
+ *   - whether a cardinality depends on runtime values;
+ *   - whether a type is linear/affine where required;
+ *   - whether resource requirements can be satisfied;
+ *   - whether capabilities exist;
+ *   - whether the type can be lowered to the selected target.
  *
- * Semantic analysis answers:
- *
- *     "What does that type mean in this program?"
- *
- * The parser therefore does NOT decide:
- *
- *     - physical implementation;
- *     - logical encoding;
- *     - QEC code;
- *     - code distance;
- *     - decoder;
- *     - simulator representation;
- *     - vendor;
- *     - QPU;
- *     - topology;
- *     - calibration;
- *     - routing;
- *     - scheduling.
+ * None of these decisions belong in this grammar.
  *
  * ============================================================================
  * QUANTUM::IR CONTRACT
  * ============================================================================
  *
- * This grammar has no dependency on quantum::ir.
+ * This file has NO dependency on `quantum::ir`.
  *
- * The required pipeline is:
+ * The required direction is:
  *
+ *     source
+ *       |
+ *       v
  *     parser
  *       |
  *       v
@@ -483,61 +382,33 @@
  *       v
  *     quantum::ir
  *
- * QEC, ZQN, routing, scheduling, optimization and HAL remain downstream
- * consumers.
+ * There must be no reverse dependency:
+ *
+ *     grammar -> quantum::ir
  *
  * ============================================================================
- * GENERIC-TYPE CONTRACT
+ * RUST CONTRACT
  * ============================================================================
  *
- * Universal generic application is owned by:
+ * This grammar contains no embedded Rust actions.
  *
- *     grammar/types/generic.g4
+ * Repository integration is required to support:
  *
- * Therefore this grammar MUST NOT duplicate:
+ *     Rust 1.97
+ *     Rust 1.97.1
+ *     Rust 2021
  *
- *     genericType
- *     genericTypeArguments
- *     genericArgumentList
+ * Generated/integrating Rust MUST use safe Rust only.
  *
- * Examples:
+ * No `unsafe` implementation is required or permitted.
  *
- *     quantum::State<T>
- *     quantum::Register<Qubit>
- *     quantum::State<SomeType>
+ * Repository-level enforcement belongs to Rust source crates/modules, for
+ * example:
  *
- * are composed as:
- *
- *     quantum-qualified type
- *          +
- *     universal generic application
- *
- * This avoids a second generic type system.
- *
- * ============================================================================
- * DETERMINISM
- * ============================================================================
- *
- * The grammar contains:
- *
- *     - no actions;
- *     - no predicates;
- *     - no filesystem access;
- *     - no network access;
- *     - no hardware queries;
- *     - no runtime queries;
- *     - no randomness.
- *
- * The same token stream under the same grammar version must produce the same
- * parse structure.
+ *     #![forbid(unsafe_code)]
  *
  * ============================================================================
  */
-
-
-/* ============================================================================
- * GRAMMAR DECLARATION
- * ========================================================================== */
 
 parser grammar Quantum;
 
@@ -547,16 +418,16 @@ options {
 
 
 /* ============================================================================
- * 1. PUBLIC ENTRY POINT
+ * 1. PUBLIC QUANTUM TYPE ENTRY
  * ========================================================================== */
 
 /**
- * Canonical quantum-specific type syntax.
+ * Quantum-specific type syntax.
  *
- * Ordinary identifiers are intentionally excluded.
+ * Ordinary identifiers are deliberately NOT accepted here.
  *
- * This prevents Quantum from stealing every named type from the universal
- * Types grammar.
+ * That prevents the quantum grammar from stealing every named type from the
+ * universal type grammar.
  */
 quantumType
     : quantumPrimitiveType
@@ -572,11 +443,17 @@ quantumType
  * ========================================================================== */
 
 /**
- * Abstract quantum resource.
+ * Abstract physical-realization-independent quantum resource.
  *
  *     qubit
  *
- * This does not select a physical qubit.
+ * The type does not identify:
+ *
+ *     - a physical qubit;
+ *     - a QPU;
+ *     - a topology;
+ *     - a simulator;
+ *     - a vendor.
  */
 quantumPrimitiveType
     : K_QUBIT
@@ -588,17 +465,17 @@ quantumPrimitiveType
  * ========================================================================== */
 
 /**
- * Logical-level quantum resource.
+ * Logical quantum resource.
  *
  *     logical qubit
  *
- * This does not select:
+ * This does not choose:
  *
- *     - a QEC code;
+ *     - QEC code;
  *     - code distance;
  *     - decoder;
  *     - physical overhead;
- *     - topology.
+ *     - physical topology.
  */
 logicalQubitType
     : K_LOGICAL
@@ -607,16 +484,22 @@ logicalQubitType
 
 
 /* ============================================================================
- * 4. SCALABLE QUANTUM COLLECTION
+ * 4. QUANTUM COLLECTION
  * ========================================================================== */
 
 /**
- * Parameterized quantum resource collection.
+ * Parameterized collection of quantum resources.
+ *
+ * Examples:
  *
  *     qubit[N]
+ *     qubit[n + 1]
  *     logical qubit[N]
+ *     logical qubit[algorithm::width]
  *
- * The cardinality remains a source expression.
+ * The cardinality is an expression.
+ *
+ * It is never interpreted as a machine capacity.
  */
 quantumCollectionType
     : quantumCollectionElementType
@@ -626,9 +509,6 @@ quantumCollectionType
     ;
 
 
-/**
- * Collection element must itself be a source-level quantum resource type.
- */
 quantumCollectionElementType
     : quantumPrimitiveType
     | logicalQubitType
@@ -636,20 +516,23 @@ quantumCollectionElementType
 
 
 /* ============================================================================
- * 5. QUANTUM TYPE CONSTRUCTOR
+ * 5. OPEN QUANTUM CONSTRUCTOR
  * ========================================================================== */
 
 /**
- * Open quantum constructor.
+ * Open semantic quantum constructor.
  *
  * Examples:
  *
- *     quantum<T>
- *     quantum<T, P>
+ *     quantum<State>
+ *     quantum<Observable>
+ *     quantum<Register>
+ *     quantum<State, N>
  *
- * Arguments are quantum/type arguments only.
+ * The constructor is intentionally open.
  *
- * General generic applications remain owned by Generic.
+ * New quantum abstractions do not require adding another keyword merely to
+ * become representable by source syntax.
  */
 quantumConstructorType
     : K_QUANTUM
@@ -659,19 +542,6 @@ quantumConstructorType
     ;
 
 
-/**
- * One or more quantum constructor arguments.
- *
- * A trailing comma is supported consistently with the repository's generic
- * type grammar.
- *
- *     quantum<T,>
- *     quantum<T, P,>
- *
- * is therefore syntactically valid.
- *
- * Semantic validation determines whether the argument list is meaningful.
- */
 quantumConstructorArgumentList
     : quantumConstructorArgument
       (COMMA quantumConstructorArgument)*
@@ -679,61 +549,39 @@ quantumConstructorArgumentList
     ;
 
 
-/**
- * Quantum constructor arguments.
- *
- * This grammar intentionally accepts:
- *
- *     quantum types;
- *     qualified/named type references;
- *     symbolic integer type-level values.
- *
- * The distinction between a named type and a symbolic semantic name is made
- * during semantic type analysis, not by introducing another AST.
- */
 quantumConstructorArgument
+    : quantumConstructorTypeArgument
+    | quantumConstructorValueArgument
+    ;
+
+
+/**
+ * Type-valued constructor argument.
+ *
+ * The first branch permits the quantum-specific forms owned by this file.
+ *
+ * Named/qualified types are also accepted as open semantic type references.
+ */
+quantumConstructorTypeArgument
     : quantumType
-    | quantumConstructorNamedType
-    | quantumConstructorValue
+    | quantumQualifiedTypeName
+    | IDENTIFIER
     ;
 
 
 /**
- * Named/qualified type argument.
+ * Value-level type argument.
  *
- * Examples:
- *
- *     quantum<State>
- *     quantum<Observable>
- *     quantum<custom::State>
- *
- * Generic application of such a type is handled by the universal generic
- * grammar when it occurs as a complete type expression.
+ * Values are restricted to the source-level cardinality expression language
+ * below. Floating-point values are intentionally excluded.
  */
-quantumConstructorNamedType
-    : IDENTIFIER
-      (DOUBLE_COLON IDENTIFIER)*
-    ;
-
-
-/**
- * Symbolic integer type-level value.
- *
- * This remains deliberately restricted.
- *
- * Floating-point values are not accepted as quantum cardinality/type values.
- * TypeExpr currently represents generic arguments as types, while quantum
- * cardinalities have their own semantic representation.
- *
- * A future dependent type/value model may extend this boundary centrally.
- */
-quantumConstructorValue
+quantumConstructorValueArgument
     : quantumCardinalityExpression
     ;
 
 
 /* ============================================================================
- * 6. EXPLICIT QUANTUM NAMESPACE
+ * 6. QUALIFIED QUANTUM TYPE
  * ========================================================================== */
 
 /**
@@ -742,186 +590,164 @@ quantumConstructorValue
  * Examples:
  *
  *     quantum::State
- *     quantum::Observable
- *     quantum::Register
  *     quantum::state::StateVector
- *     quantum::future::namespace::Type
+ *     quantum::observable::Observable
+ *     quantum::future::deep::Type
  *
- * Name resolution is semantic.
+ * Namespace resolution is semantic.
  */
 quantumQualifiedType
     : K_QUANTUM
       DOUBLE_COLON
-      quantumQualifiedName
+      quantumQualifiedTypeName
     ;
 
 
-/**
- * Arbitrarily deep qualified quantum name.
- *
- * There is no grammar-level namespace-depth limit.
- */
-quantumQualifiedName
+quantumQualifiedTypeName
     : IDENTIFIER
       (DOUBLE_COLON IDENTIFIER)*
     ;
 
 
 /* ============================================================================
- * 7. QUANTUM CARDINALITY EXPRESSIONS
+ * 7. QUANTUM CARDINALITY
  * ========================================================================== */
 
 /**
- * Quantum cardinality expression.
+ * Source-level cardinality expression.
  *
- * Examples:
+ * The expression is deliberately independent from Rust integer widths.
  *
- *     N
- *     n + 1
- *     2 * n
- *     width * factor
- *     algorithm::width
- *     (N + M) * factor
+ * The grammar does not convert it to:
  *
- * Operator precedence is explicitly represented so that the parse tree
- * preserves the intended structure.
+ *     usize
+ *     u32
+ *     u64
+ *
+ * or any other implementation representation.
  */
 quantumCardinalityExpression
     : quantumCardinalityBitwiseOrExpression
     ;
 
 
-/* ---------------------------------------------------------------------------
- * Bitwise OR
- * ------------------------------------------------------------------------- */
+/* ============================================================================
+ * 8. BITWISE OR
+ * ========================================================================== */
 
 quantumCardinalityBitwiseOrExpression
     : quantumCardinalityBitwiseXorExpression
       (
-          PIPE
-          quantumCardinalityBitwiseXorExpression
+          PIPE quantumCardinalityBitwiseXorExpression
       )*
     ;
 
 
-/* ---------------------------------------------------------------------------
- * Bitwise XOR
- * ------------------------------------------------------------------------- */
+/* ============================================================================
+ * 9. BITWISE XOR
+ * ========================================================================== */
 
 quantumCardinalityBitwiseXorExpression
     : quantumCardinalityBitwiseAndExpression
       (
-          CARET
-          quantumCardinalityBitwiseAndExpression
+          CARET quantumCardinalityBitwiseAndExpression
       )*
     ;
 
 
-/* ---------------------------------------------------------------------------
- * Bitwise AND
- * ------------------------------------------------------------------------- */
+/* ============================================================================
+ * 10. BITWISE AND
+ * ========================================================================== */
 
 quantumCardinalityBitwiseAndExpression
     : quantumCardinalityShiftExpression
       (
-          AMPERSAND
-          quantumCardinalityShiftExpression
+          AMPERSAND quantumCardinalityShiftExpression
       )*
     ;
 
 
-/* ---------------------------------------------------------------------------
- * Shift
- * ------------------------------------------------------------------------- */
+/* ============================================================================
+ * 11. SHIFTS
+ * ========================================================================== */
 
 quantumCardinalityShiftExpression
     : quantumCardinalityAdditiveExpression
       (
-          LEFT_SHIFT
-          quantumCardinalityAdditiveExpression
-        | RIGHT_SHIFT
-          quantumCardinalityAdditiveExpression
+          LEFT_SHIFT quantumCardinalityAdditiveExpression
+        | RIGHT_SHIFT quantumCardinalityAdditiveExpression
       )*
     ;
 
 
-/* ---------------------------------------------------------------------------
- * Addition / subtraction
- * ------------------------------------------------------------------------- */
+/* ============================================================================
+ * 12. ADDITION / SUBTRACTION
+ * ========================================================================== */
 
 quantumCardinalityAdditiveExpression
     : quantumCardinalityMultiplicativeExpression
       (
-          PLUS
-          quantumCardinalityMultiplicativeExpression
-        | MINUS
-          quantumCardinalityMultiplicativeExpression
+          PLUS quantumCardinalityMultiplicativeExpression
+        | MINUS quantumCardinalityMultiplicativeExpression
       )*
     ;
 
 
-/* ---------------------------------------------------------------------------
- * Multiplication / division / modulo
- * ------------------------------------------------------------------------- */
+/* ============================================================================
+ * 13. MULTIPLICATION / DIVISION / MODULO
+ * ========================================================================== */
 
 quantumCardinalityMultiplicativeExpression
     : quantumCardinalityUnaryExpression
       (
-          STAR
-          quantumCardinalityUnaryExpression
-        | SLASH
-          quantumCardinalityUnaryExpression
-        | PERCENT
-          quantumCardinalityUnaryExpression
+          STAR quantumCardinalityUnaryExpression
+        | SLASH quantumCardinalityUnaryExpression
+        | PERCENT quantumCardinalityUnaryExpression
       )*
     ;
 
 
-/* ---------------------------------------------------------------------------
- * Unary operators
- * ------------------------------------------------------------------------- */
+/* ============================================================================
+ * 14. UNARY
+ * ========================================================================== */
 
 quantumCardinalityUnaryExpression
-    : PLUS
-      quantumCardinalityUnaryExpression
-    | MINUS
-      quantumCardinalityUnaryExpression
+    : PLUS quantumCardinalityUnaryExpression
+    | MINUS quantumCardinalityUnaryExpression
     | quantumCardinalityPrimary
     ;
 
 
-/* ---------------------------------------------------------------------------
- * Primary
- * ------------------------------------------------------------------------- */
+/* ============================================================================
+ * 15. CARDINALITY PRIMARY
+ * ========================================================================== */
 
+/**
+ * Primary cardinality values.
+ *
+ * IDENTIFIER permits symbolic values.
+ *
+ * Qualified identifiers permit values such as:
+ *
+ *     algorithm::qubits
+ *     configuration::width
+ *     module::parameter::N
+ */
 quantumCardinalityPrimary
     : INTEGER_LITERAL
-    | quantumQualifiedCardinalityName
     | IDENTIFIER
+    | quantumQualifiedCardinalityName
     | quantumCardinalityParenthesized
     ;
 
 
-/**
- * Qualified symbolic cardinality.
- *
- * Examples:
- *
- *     configuration::width
- *     algorithm::qubits
- *     module::parameter::N
- */
 quantumQualifiedCardinalityName
     : IDENTIFIER
-      DOUBLE_COLON
-      IDENTIFIER
+      DOUBLE_COLON IDENTIFIER
       (DOUBLE_COLON IDENTIFIER)*
     ;
 
 
-/**
- * Parenthesized cardinality.
- */
 quantumCardinalityParenthesized
     : LPAREN
       quantumCardinalityExpression
@@ -930,14 +756,19 @@ quantumCardinalityParenthesized
 
 
 /* ============================================================================
- * 8. EXPLICIT COMPATIBILITY BOUNDARY
+ * 16. EXPLICIT EXTENT BOUNDARY
  * ========================================================================== */
 
 /**
- * Compatibility spelling for tooling that wants a named rule for a quantum
- * resource cardinality.
+ * Reusable extent syntax.
  *
- * It delegates directly to the canonical expression.
+ * Examples:
+ *
+ *     [N]
+ *     [2 * N]
+ *     [(N + M) * factor]
+ *
+ * This is a syntactic helper only.
  */
 quantumExtent
     : LBRACKET
@@ -947,71 +778,81 @@ quantumExtent
 
 
 /* ============================================================================
- * 9. SEMANTIC CATEGORY BOUNDARY
+ * 17. QUALIFIED SEMANTIC TYPES
  * ========================================================================== */
 
 /**
- * These concepts intentionally remain qualified names rather than dedicated
- * keyword inventories:
+ * The following are deliberately represented as names instead of hard-coded
+ * productions:
  *
  *     quantum::state::StateVector
  *     quantum::state::DensityMatrix
  *     quantum::observable::Observable
  *     quantum::measurement::Result
- *     quantum::qec::LogicalQubit
- *     quantum::qec::Syndrome
  *     quantum::noise::Channel
- *     quantum::noise::Model
+ *     quantum::qec::Syndrome
  *     quantum::resource::Register
  *     quantum::photonic::Mode
  *     quantum::bosonic::Mode
  *     quantum::topological::Qubit
  *
- * No rules are created for these individual semantic categories.
- *
- * This keeps the language open to future quantum technologies without
- * repeatedly changing the core grammar or lexer.
+ * This allows future quantum technologies to be introduced without changing
+ * the core grammar solely because a new semantic type was invented.
  */
 
 
 /* ============================================================================
- * 10. PHYSICAL / LOGICAL SEPARATION
+ * 18. TYPE-LEVEL PHYSICAL / LOGICAL SEPARATION
  * ========================================================================== */
 
 /**
- * `logical qubit` is intentionally a source-level abstraction.
+ * `logical qubit` is an abstraction.
  *
- * A physical realization such as:
+ * A physical resource type, if needed, must be introduced through the
+ * target-independent hardware/resource type system rather than through a
+ * hard-coded physical-ID syntax here.
  *
- *     physical qubit 17
- *
- * is NOT a quantum type production.
- *
- * Physical mapping belongs to:
- *
- *     hardware/
- *     resources/
- *     compile/
- *     routing/
- *     scheduling/
- *     HAL
- *
- * A physical-oriented quantum type, if required by the language specification,
- * should normally be represented through an open qualified semantic type such
- * as:
+ * Examples of semantic names that may be resolved downstream:
  *
  *     quantum::physical::Qubit
+ *     quantum::logical::Qubit
  *
- * rather than introducing a hard-coded physical-ID grammar.
+ * The grammar does not assign physical identity.
  */
 
 
 /* ============================================================================
- * 11. NO FIXED GATE SET
+ * 19. LINEAR / AFFINE COMPOSITION
  * ========================================================================== */
 
 /**
- * This grammar deliberately does NOT contain:
+ * Quantum resources commonly participate in linear or affine ownership
+ * semantics.
+ *
+ * The universal type system owns the `linear` and `affine` constructors.
+ *
+ * This file deliberately does not create duplicate constructors.
+ *
+ * Consequently forms such as:
+ *
+ *     Linear<qubit>
+ *     Affine<qubit>
+ *
+ * belong to the universal type composition path.
+ *
+ * Semantic analysis determines whether a particular quantum resource is
+ * required to satisfy linear/affine constraints.
+ */
+
+
+/* ============================================================================
+ * 20. NO GATE INVENTORY
+ * ========================================================================== */
+
+/**
+ * No operation is a type-level keyword here.
+ *
+ * In particular this grammar does NOT enumerate:
  *
  *     H
  *     X
@@ -1027,134 +868,93 @@ quantumExtent
  *     RY
  *     RZ
  *
- * Gate and operation syntax belongs to the quantum operation grammar.
- *
- * Gate availability is a semantic capability question.
+ * Gate/operation names belong to the operation grammar and semantic operation
+ * registry.
  */
 
 
 /* ============================================================================
- * 12. NO QEC IMPLEMENTATION
+ * 21. NO PHYSICAL RESOURCE ASSIGNMENT
  * ========================================================================== */
 
 /**
- * This grammar does NOT encode:
+ * This grammar does not contain productions for:
  *
- *     - QEC code;
+ *     physical qubit 0
+ *     qpu0
+ *     device0
+ *     vendor0
+ *
+ * A physical realization is downstream.
+ */
+
+
+/* ============================================================================
+ * 22. NO QEC IMPLEMENTATION
+ * ========================================================================== */
+
+/**
+ * `logical qubit` does not imply any particular:
+ *
+ *     - error-correcting code;
  *     - code distance;
  *     - decoder;
- *     - syndrome extraction;
- *     - physical-to-logical ratio;
- *     - correction schedule;
- *     - fault threshold.
+ *     - physical overhead;
+ *     - syndrome extraction schedule.
  *
- * A logical qubit expresses logical-level intent.
- *
- * QEC selection remains downstream.
+ * QEC is a downstream semantic/compiler responsibility.
  */
 
 
 /* ============================================================================
- * 13. NO ZQN IMPLEMENTATION
+ * 23. NO ZQN IMPLEMENTATION
  * ========================================================================== */
 
 /**
- * This grammar does NOT implement:
+ * This grammar does not implement:
  *
- *     - noise models;
- *     - fault classification;
+ *     - noise;
+ *     - faults;
  *     - leakage;
  *     - erasure;
  *     - correlated noise;
- *     - calibration;
- *     - reliability thresholds.
+ *     - reliability thresholds;
+ *     - calibration.
  *
- * Qualified semantic types may refer to ZQN concepts, but ZQN owns their
- * meaning.
+ * These remain downstream ZQN/resilience/HAL responsibilities.
  */
 
 
 /* ============================================================================
- * 14. NO HARDWARE OWNERSHIP
+ * 24. DETERMINISM
  * ========================================================================== */
 
 /**
- * The grammar never:
+ * Parsing depends only on:
  *
- *     - queries hardware;
- *     - selects a device;
- *     - allocates a QPU;
- *     - assigns physical qubit IDs;
- *     - inspects topology;
- *     - selects a simulator;
- *     - selects a vendor backend.
+ *     - source token stream;
+ *     - selected grammar version;
+ *     - parser configuration explicitly supplied by the compiler.
+ *
+ * It MUST NOT depend on:
+ *
+ *     - hardware;
+ *     - target availability;
+ *     - network state;
+ *     - filesystem state;
+ *     - environment variables;
+ *     - wall-clock time;
+ *     - randomness;
+ *     - runtime state.
  */
 
 
 /* ============================================================================
- * 15. RESOURCE INTEGRATION
+ * 25. SOURCE-SPAN CONTRACT
  * ========================================================================== */
 
 /**
- * Example:
- *
- *     qubit[N]
- *
- * may produce a semantic resource requirement equivalent to:
- *
- *     quantum-resource-cardinality = N
- *
- * after semantic analysis.
- *
- * The grammar itself does not allocate N resources.
- */
-
-
-/* ============================================================================
- * 16. COMPILER INTEGRATION
- * ========================================================================== */
-
-/**
- * Compiler responsibilities after parsing include:
- *
- *     - name resolution;
- *     - type resolution;
- *     - cardinality validation;
- *     - resource analysis;
- *     - capability checking;
- *     - target feasibility;
- *     - specialization;
- *     - optimization;
- *     - quantum lowering.
- *
- * None of those operations belong in this grammar.
- */
-
-
-/* ============================================================================
- * 17. RUNTIME INTEGRATION
- * ========================================================================== */
-
-/**
- * A source-level `qubit` may ultimately be represented as:
- *
- *     - an abstract runtime handle;
- *     - a simulator resource;
- *     - a logical resource;
- *     - a provider resource;
- *     - a distributed resource;
- *     - another target-specific representation.
- *
- * The grammar does not choose among these representations.
- */
-
-
-/* ============================================================================
- * 18. TOOLING / SOURCE-SPAN CONTRACT
- * ========================================================================== */
-
-/**
- * Parser/AST tooling must preserve source spans for:
+ * The frontend AST builder must preserve source spans for at least:
  *
  *     quantumType
  *     quantumPrimitiveType
@@ -1163,10 +963,12 @@ quantumExtent
  *     quantumConstructorType
  *     quantumQualifiedType
  *     quantumCardinalityExpression
+ *     quantumExtent
  *
  * This supports:
  *
  *     - diagnostics;
+ *     - LSP;
  *     - IDE navigation;
  *     - formatting;
  *     - refactoring;
@@ -1176,11 +978,11 @@ quantumExtent
 
 
 /* ============================================================================
- * 19. ERROR / NEGATIVE CONTRACT
+ * 26. ERROR CONTRACT
  * ========================================================================== */
 
 /**
- * These must be rejected structurally:
+ * Structurally invalid examples include:
  *
  *     logical
  *     qubit[
@@ -1188,332 +990,580 @@ quantumExtent
  *     qubit[N
  *     qubit[N +]
  *     qubit[*]
+ *     logical qubit[
  *     quantum<
  *     quantum<>
  *     quantum<T
- *     quantum:::
  *     quantum::
+ *     quantum:::
  *
- * The semantic layer must additionally reject invalid meanings such as:
+ * The semantic layer, rather than this grammar, determines whether:
  *
- *     negative cardinality;
- *     zero cardinality where the type system forbids it;
- *     non-integral cardinality;
- *     unknown quantum type;
- *     invalid quantum generic arguments.
- *
- * Those semantic constraints must NOT become parser hard limits.
+ *     - a cardinality is negative;
+ *     - zero is permitted;
+ *     - an expression is integral;
+ *     - a symbol is defined;
+ *     - a type argument is valid;
+ *     - a resource is available.
  */
 
 
 /* ============================================================================
- * 20. BOUNDARY / SCALABILITY CONTRACT
+ * 27. POSITIVE CONFORMANCE CONTRACT
  * ========================================================================== */
 
 /**
- * Positive boundary examples:
+ * The following forms MUST be representable:
+ *
+ * Primitive:
+ *
+ *     qubit
+ *
+ * Logical:
+ *
+ *     logical qubit
+ *
+ * Static cardinality:
  *
  *     qubit[1]
  *     qubit[1024]
+ *
+ * Symbolic cardinality:
+ *
  *     qubit[N]
- *     qubit[2 * N]
+ *     qubit[n + 1]
+ *     qubit[2 * n]
+ *     qubit[width]
+ *     qubit[algorithm::width]
  *     qubit[(N + M) * factor]
+ *
+ * Logical collections:
+ *
  *     logical qubit[N]
  *
- * Namespace examples:
+ * Constructors:
+ *
+ *     quantum<State>
+ *     quantum<Observable>
+ *     quantum<Register>
+ *     quantum<State, N>
+ *
+ * Qualified names:
  *
  *     quantum::State
  *     quantum::state::State
- *     quantum::future::deep::namespace::Type
- *
- * Constructor examples:
- *
- *     quantum<Qubit>
- *     quantum<LogicalQubit>
- *     quantum<State>
- *     quantum<T, P>
- *
- * No source-level upper bound is encoded.
+ *     quantum::future::deep::Type
  */
 
 
 /* ============================================================================
- * 21. COMPATIBILITY CONTRACT
+ * 28. SCALABILITY CONFORMANCE CONTRACT
  * ========================================================================== */
 
 /**
- * The old:
+ * The following are architectural requirements:
  *
- *     grammar/types/quantum-types.g4
+ *     qubit[1]
+ *     qubit[N]
+ *     qubit[2 * N]
+ *     qubit[(N + M) * factor]
  *
- * MUST NOT remain a second authoritative implementation.
+ * must all use the same source grammar.
  *
- * Migration:
+ * There MUST NOT be separate grammar paths such as:
  *
- *     QuantumTypes consumers
- *          |
- *          v
- *     Quantum.quantumType
+ *     smallQubitRegister
+ *     mediumQubitRegister
+ *     largeQubitRegister
  *
- * After all references are migrated, `quantum-types.g4` should be removed.
+ * and there MUST NOT be source syntax such as:
  *
- * This file retains the canonical filename:
+ *     qubit64
+ *     qubit128
+ *     qubit1024
  *
- *     grammar/types/quantum.g4
+ * to represent machine-size classes.
  *
- * No unnecessary rename is required.
+ * Cardinality is data, not grammar structure.
  */
 
 
 /* ============================================================================
- * 22. INTEGRATION WITH TYPES
+ * 29. RESOURCE AVAILABILITY BOUNDARY
  * ========================================================================== */
 
 /**
- * grammar/types/types.g4 remains the universal type composition owner.
+ * This grammar does not answer:
  *
- * It must expose one canonical type-expression entry point and delegate the
- * quantum-specific branch to:
+ *     "Can this machine provide N qubits?"
+ *
+ * That question belongs to:
+ *
+ *     semantic resource analysis
+ *             |
+ *             v
+ *     capability analysis
+ *             |
+ *             v
+ *     target discovery
+ *             |
+ *             v
+ *     compilation / scheduling / routing
+ *
+ * Example:
+ *
+ *     qubit[N]
+ *
+ * may create a semantic resource requirement.
+ *
+ * The grammar itself creates no allocation.
+ */
+
+
+/* ============================================================================
+ * 30. GENERIC INTEGRATION
+ * ========================================================================== */
+
+/**
+ * The universal generic grammar remains the owner of generic application.
+ *
+ * Therefore:
+ *
+ *     quantum::State<T>
+ *
+ * MUST NOT require a duplicate quantum-specific generic grammar.
+ *
+ * Integration direction:
+ *
+ *     Types
+ *       |
+ *       +--> quantumType
+ *       |
+ *       +--> genericType
+ *       |
+ *       +--> ordinaryType
+ *
+ * The universal type layer decides how these branches compose.
+ */
+
+
+/* ============================================================================
+ * 31. FRONTEND AST INTEGRATION
+ * ========================================================================== */
+
+/**
+ * Existing repository frontend type representation:
+ *
+ *     TypeExpr
+ *
+ * remains authoritative.
+ *
+ * This grammar MUST NOT require a new quantum-specific AST merely to represent
+ * syntax.
+ *
+ * Required semantic lowering is conceptually:
  *
  *     quantumType
- *
- * It must NOT copy these rules into types.g4.
- *
- * It must also compose Generic independently so that:
- *
- *     quantum::Type<T>
- *
- * is parsed as:
- *
- *     quantumQualifiedType
- *          +
- *     genericType
- *
- * rather than by duplicating generic syntax here.
- */
-
-
-/* ============================================================================
- * 23. INTEGRATION WITH GENERIC
- * ========================================================================== */
-
-/**
- * grammar/types/generic.g4 already owns:
- *
- *     genericType
- *     genericTypeArguments
- *     genericArgumentList
- *
- * Therefore this grammar intentionally does not redefine those rules.
- *
- * The combined type grammar must make the following possible:
- *
- *     quantum::Type<T>
- *     quantum::State<StateVector>
- *     quantum::Register<Qubit>
- *     quantum::Register<LogicalQubit>
- *
- * through the canonical universal generic grammar.
- */
-
-
-/* ============================================================================
- * 24. INTEGRATION WITH FRONTEND AST
- * ========================================================================== */
-
-/**
- * The frontend must map this grammar into the existing TypeExpr hierarchy.
- *
- * Required rule-to-AST mapping must be documented and tested before the
- * grammar is marked complete.
- *
- * No grammar rule may require creation of a second quantum-specific AST.
- */
-
-
-/* ============================================================================
- * 25. INTEGRATION WITH QUANTUM IR
- * ========================================================================== */
-
-/**
- * No quantum::ir types are referenced here.
- *
- * Required downstream path:
- *
- *     Quantum parser rule
  *          |
  *          v
  *     TypeExpr
  *          |
  *          v
  *     semantic quantum type
- *          |
- *          v
+ *
+ * Existing TypeExpr currently contains a `Quantum(...)` semantic constructor.
+ *
+ * If future quantum cardinality information cannot be represented losslessly
+ * by the existing TypeExpr, the AST/type contract must be expanded at the
+ * universal type boundary rather than creating a parser-only QuantumTypeNode.
+ *
+ * Such an AST change is a separate implementation contract and is NOT hidden
+ * inside this grammar.
+ */
+
+
+/* ============================================================================
+ * 32. QUANTUM IR INTEGRATION
+ * ========================================================================== */
+
+/**
+ * This grammar does not import or reference Rust quantum IR types.
+ *
+ * Canonical path:
+ *
+ *     source
+ *       |
+ *       v
+ *     TypeExpr
+ *       |
+ *       v
+ *     semantic type/resource model
+ *       |
+ *       v
  *     quantum::ir
  *
- * quantum::ir remains the single canonical quantum semantic boundary.
+ * The canonical quantum IR remains the repository's existing:
+ *
+ *     quantum::ir
+ *
+ * There is no second quantum type IR introduced here.
  */
 
 
 /* ============================================================================
- * 26. RUST CONTRACT
+ * 33. QUANTUM DOMAIN INTEGRATION
  * ========================================================================== */
 
 /**
- * This grammar contains no Rust implementation code.
+ * Other quantum grammar files own:
  *
- * Generated/integrating Rust must remain compatible with:
+ *     grammar/quantum/qubits.g4
+ *     grammar/quantum/quantum-registers.g4
+ *     grammar/quantum/quantum-states.g4
+ *     grammar/quantum/operations.g4
+ *     grammar/quantum/measurement.g4
+ *     grammar/quantum/error-correction.g4
+ *     grammar/quantum/quantum-resources.g4
+ *     grammar/quantum/quantum-capabilities.g4
  *
- *     Rust 1.97
- *     Rust 1.97.1
+ * Their relationship to this file is:
+ *
+ *     TYPE
+ *       |
+ *       +---- qubit
+ *       +---- logical qubit
+ *       +---- quantum collection
+ *
+ *     RESOURCE DECLARATION
+ *       |
+ *       +---- qubit variable/register declarations
+ *
+ *     OPERATION
+ *       |
+ *       +---- operation over typed quantum operands
+ *
+ *     RESOURCE ANALYSIS
+ *       |
+ *       +---- cardinality/capability requirements
+ *
+ * No file may redefine the meaning of `quantumType`.
+ */
+
+
+/* ============================================================================
+ * 34. HARDWARE INTEGRATION
+ * ========================================================================== */
+
+/**
+ * Hardware-specific realization belongs to:
+ *
+ *     grammar/hardware/
+ *     grammar/resources/
+ *     grammar/compile/
+ *     grammar/execution/
+ *
+ * This file therefore cannot contain:
+ *
+ *     device IDs
+ *     QPU IDs
+ *     physical qubit numbers
+ *     coupling maps
+ *     topology
+ *     calibration values
+ *     native gate sets
+ */
+
+
+/* ============================================================================
+ * 35. COMPILER INTEGRATION
+ * ========================================================================== */
+
+/**
+ * After parsing, the compiler is responsible for:
+ *
+ *     1. name resolution;
+ *     2. generic resolution;
+ *     3. type checking;
+ *     4. cardinality analysis;
+ *     5. resource analysis;
+ *     6. capability analysis;
+ *     7. effect/ownership analysis;
+ *     8. target feasibility;
+ *     9. specialization;
+ *    10. canonical semantic lowering;
+ *    11. quantum::ir construction;
+ *    12. optimization;
+ *    13. routing;
+ *    14. scheduling;
+ *    15. resilience/QEC/ZQN processing;
+ *    16. target lowering.
+ *
+ * None of these operations are performed by the grammar.
+ */
+
+
+/* ============================================================================
+ * 36. COMPATIBILITY
+ * ========================================================================== */
+
+/**
+ * Existing source forms remain stable:
+ *
+ *     qubit
+ *     logical qubit
+ *     qubit[N]
+ *     logical qubit[N]
+ *     quantum<T>
+ *     quantum::Type
+ *
+ * Historical names such as:
+ *
+ *     Qubit
+ *     QRegister
+ *     QState
+ *     QuantumRegister
+ *     LogicalQubit
+ *     QuantumState
+ *
+ * remain ordinary identifiers unless a separately versioned compatibility
+ * specification explicitly gives them another meaning.
+ *
+ * They MUST NOT become permanent lexer keywords merely for compatibility.
+ */
+
+
+/* ============================================================================
+ * 37. DUPLICATE-GRAMMAR MIGRATION
+ * ========================================================================== */
+
+/**
+ * CURRENT REPOSITORY STATE
+ * ------------------------
+ *
+ * The repository currently contains:
+ *
+ *     grammar/quantum/quantum-types.g4
+ *
+ * and:
+ *
+ *     grammar/types/quantum.g4
+ *
+ * Both historically define quantum type syntax.
+ *
+ * This is not acceptable as a production architecture.
+ *
+ * CANONICAL OWNER
+ * ---------------
+ *
+ * This file:
+ *
+ *     grammar/types/quantum.g4
+ *
+ * is the canonical owner because quantum types are part of the universal
+ * `Types` composition boundary.
+ *
+ * MIGRATION
+ * ---------
+ *
+ *     grammar/quantum/quantum-types.g4
+ *                 |
+ *                 v
+ *          deprecated compatibility
+ *                 |
+ *                 v
+ *             removal
+ *
+ * No new feature may be added to the old duplicate grammar.
+ *
+ * `QuantumTypes` must not be imported by the production parser after migration.
+ *
+ * The canonical parser path is:
+ *
+ *     ZamaniParser
+ *         |
+ *         v
+ *       Types
+ *         |
+ *         v
+ *       Quantum
+ */
+
+
+/* ============================================================================
+ * 38. ROOT INTEGRATION
+ * ========================================================================== */
+
+/**
+ * grammar/Zamani.g4
+ *
+ * remains the root composition grammar.
+ *
+ * It must NOT import this file directly.
+ *
+ * Correct composition:
+ *
+ *     Zamani.g4
+ *          |
+ *          v
+ *     ZamaniParser.g4
+ *          |
+ *          v
+ *         Types
+ *          |
+ *          +--> Quantum
+ *
+ * This preserves the single root grammar architecture.
+ */
+
+
+/* ============================================================================
+ * 39. LEXER INTEGRATION
+ * ========================================================================== */
+
+/**
+ * The lexer composition hierarchy remains responsible for:
+ *
+ *     K_QUANTUM
+ *     K_QUBIT
+ *     K_LOGICAL
+ *     INTEGER_LITERAL
+ *     IDENTIFIER
+ *     DOUBLE_COLON
+ *     brackets
+ *     generic delimiters
+ *     arithmetic operators
+ *     bitwise operators
+ *
+ * This grammar must never compensate for lexical inconsistencies by adding
+ * local token definitions.
+ */
+
+
+/* ============================================================================
+ * 40. NO UNSAFE RUST
+ * ========================================================================== */
+
+/**
+ * This file contains no Rust code.
+ *
+ * The downstream Rust implementation must remain:
+ *
+ *     Rust 1.97 / 1.97.1
  *     Rust 2021
+ *     safe Rust
  *
- * The Rust implementation must remain safe Rust.
+ * Repository enforcement belongs to the Rust crate.
  *
- * The repository-level Rust contract must enforce:
- *
- *     #![deny(unsafe_code)]
- *
- * No `unsafe` code is required by this grammar.
+ * No quantum type feature defined here requires `unsafe`.
  */
 
 
 /* ============================================================================
- * 27. HARD-CODING AUDIT
+ * 41. SECURITY
  * ========================================================================== */
 
 /**
- * This grammar contains no:
+ * This grammar:
  *
- *     MAX_QUBITS
- *     MAX_LOGICAL_QUBITS
- *     MAX_PHYSICAL_QUBITS
- *     MAX_REGISTER_SIZE
- *     MAX_STATE_SIZE
- *     MAX_QPU_COUNT
- *     MAX_DEVICE_COUNT
- *     MAX_TOPOLOGY_SIZE
- *     MAX_GATE_COUNT
- *     fixed namespace depth
- *     fixed generic arity
- *     fixed cardinality
+ *     - performs no I/O;
+ *     - accesses no filesystem;
+ *     - accesses no network;
+ *     - reads no environment variables;
+ *     - accesses no credentials;
+ *     - discovers no hardware;
+ *     - executes no programs;
+ *     - invokes no backend;
+ *     - contains no embedded target-language actions.
  *
- * Numeric literals are ordinary source values.
- *
- * A value such as:
- *
- *     qubit[1024]
- *
- * is program semantics, not a language limit.
+ * It is a declarative parsing boundary.
  */
 
 
 /* ============================================================================
- * 28. SECURITY / DETERMINISM AUDIT
+ * 42. COMPLETION CRITERIA
  * ========================================================================== */
 
 /**
- * No:
+ * This file is DONE only when:
  *
- *     - embedded actions;
- *     - semantic predicates;
- *     - filesystem access;
- *     - network access;
- *     - environment access;
- *     - hardware access;
- *     - randomness;
- *     - backend queries.
+ * [x] It is the sole canonical quantum source-type owner.
  *
- * The grammar is declarative and deterministic.
- */
-
-
-/* ============================================================================
- * 29. COMPLETION CRITERIA
- * ========================================================================== */
-
-/**
- * This file is complete when ALL of the following are true:
+ * [x] `qubit` is supported.
  *
- * [ ] grammar name is Quantum;
+ * [x] `logical qubit` is supported.
  *
- * [ ] filename remains grammar/types/quantum.g4;
+ * [x] `qubit[N]` is supported.
  *
- * [ ] tokenVocab is ZamaniTokens;
+ * [x] `logical qubit[N]` is supported.
  *
- * [ ] no lexer rules are declared;
+ * [x] Symbolic cardinalities are supported.
  *
- * [ ] `qubit` parses;
+ * [x] Qualified symbolic cardinalities are supported.
  *
- * [ ] `logical qubit` parses;
+ * [x] Cardinality precedence is explicit.
  *
- * [ ] `qubit[N]` parses;
+ * [x] Open `quantum<T>` constructors are supported.
  *
- * [ ] `logical qubit[N]` parses;
+ * [x] Qualified quantum types are supported.
  *
- * [ ] symbolic cardinalities parse;
+ * [x] Arbitrary namespace depth is supported.
  *
- * [ ] cardinality operator precedence is preserved;
+ * [x] Generic ownership remains universal.
  *
- * [ ] arbitrary qualified quantum names parse;
+ * [x] No fixed gate inventory exists.
  *
- * [ ] `quantum<T>` parses;
+ * [x] No physical qubit IDs exist.
  *
- * [ ] `quantum<T, P>` parses;
+ * [x] No hardware limits exist.
  *
- * [ ] nested quantum constructors are supported where syntactically valid;
+ * [x] No QEC implementation exists.
  *
- * [ ] generic application remains owned by Generic;
+ * [x] No ZQN implementation exists.
  *
- * [ ] `quantum::Type<T>` is composed through the universal generic grammar;
+ * [x] No routing exists.
  *
- * [ ] no fixed gate set exists here;
+ * [x] No scheduling exists.
  *
- * [ ] no physical qubit IDs exist here;
+ * [x] No HAL dependency exists.
  *
- * [ ] no device IDs exist here;
+ * [x] No quantum::ir dependency exists.
  *
- * [ ] no vendor topology exists here;
+ * [x] No Rust actions exist.
  *
- * [ ] no QEC implementation exists here;
+ * [x] No unsafe Rust is required.
  *
- * [ ] no ZQN implementation exists here;
+ * [x] Source spans are part of the downstream contract.
  *
- * [ ] no routing exists here;
+ * [x] Resource availability is explicitly downstream.
  *
- * [ ] no scheduling exists here;
+ * [x] Type semantics are explicitly downstream.
  *
- * [ ] no HAL dependency exists here;
+ * [x] The universal TypeExpr remains authoritative.
  *
- * [ ] no quantum::ir dependency exists here;
+ * [ ] The duplicate `grammar/quantum/quantum-types.g4` has been deprecated and
+ *     removed from production composition.
  *
- * [ ] no artificial resource limits exist;
+ * [ ] `grammar/types/types.g4` imports/composes this grammar exactly once.
  *
- * [ ] frontend TypeExpr mapping is documented;
+ * [ ] `grammar/types/generic.g4` remains the sole generic-application owner.
  *
- * [ ] quantum::ir mapping is documented downstream;
+ * [ ] Lexer token identity has been reconciled.
  *
- * [ ] positive tests exist;
+ * [ ] Positive tests exist.
  *
- * [ ] negative tests exist;
+ * [ ] Negative tests exist.
  *
- * [ ] boundary tests exist;
+ * [ ] Boundary tests exist.
  *
- * [ ] scalability tests exist;
+ * [ ] Scalability tests exist.
  *
- * [ ] determinism tests exist;
+ * [ ] Compatibility tests exist.
  *
- * [ ] compatibility tests exist;
+ * [ ] ANTLR generation passes.
  *
- * [ ] lexer token migration is complete;
+ * [ ] Rust frontend conformance passes.
  *
- * [ ] all consumers of QuantumTypes have migrated;
+ * [ ] Semantic TypeExpr conformance passes.
  *
- * [ ] grammar/types/quantum-types.g4 can then be deleted;
- *
- * [ ] the grammar compiles under the repository's ANTLR build;
- *
- * [ ] generated Rust remains compatible with Rust 1.97/1.97.1;
- *
- * [ ] no unsafe Rust is introduced.
+ * [ ] End-to-end quantum::ir lowering passes.
  */
