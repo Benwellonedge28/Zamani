@@ -1,413 +1,174 @@
 /*
  * ============================================================================
- * Zamani Universal Quantum Grammar
+ * Zamani Universal Programming Language
  * ============================================================================
  *
  * File:
  *     grammar/quantum/error-correction.g4
  *
- * Purpose:
- *     Canonical reusable parser fragment for source-level quantum
- *     error-correction (QEC) intent.
+ * Grammar:
+ *     QuantumErrorCorrection
  *
- * Language:
- *     Zamani
+ * Status:
+ *     CANONICAL / PRODUCTION QUANTUM ERROR-CORRECTION SYNTAX COMPONENT
  *
- * Grammar technology:
- *     ANTLR4 parser grammar fragment
- *
- * Rust integration baseline:
+ * Baseline:
  *     Rust 1.97 / Rust 1.97.1
  *     Rust 2021
  *     safe Rust only
  *     no unsafe Rust
  *
  * ============================================================================
- * ARCHITECTURAL ROLE
+ * PURPOSE
  * ============================================================================
  *
- * This file defines SOURCE SYNTAX for declaring and expressing QEC intent.
+ * Single syntax owner for quantum error-correction (QEC) intent.
  *
- * It does NOT implement quantum error correction.
+ * This grammar describes portable semantic intent. It does not implement
+ * codes, decoders, syndrome extraction, correction, simulation, QEC runtime,
+ * ZQN, routing, scheduling, calibration, HAL, or physical hardware mapping.
  *
- * The architectural direction is:
+ * Canonical pipeline:
  *
- *     Zamani source
- *          |
- *          v
- *     lexer
- *          |
- *          v
- *     canonical parser
- *          |
- *          v
- *     frontend AST
- *          |
- *          v
- *     semantic analysis
- *          |
- *          +----------------------+
- *          |                      |
- *          v                      v
- *     quantum::ir          QEC semantic model
- *                                 |
- *                                 v
- *                         src/quantum/error_correction/
- *                                 |
- *              +------------------+-------------------+
- *              |                  |                   |
- *              v                  v                   v
- *          encoding           syndrome            decoding
- *          correction         extraction          correction
+ *   source -> ZamaniLexer -> parser -> domain-neutral AST
+ *          -> semantic analysis -> canonical quantum::ir
+ *          -> QEC/ZQN/resilience/optimization/routing/scheduling
+ *          -> HAL/target lowering -> runtime
  *
  * ============================================================================
  * OWNERSHIP
  * ============================================================================
  *
- * THIS FILE OWNS:
+ * OWNS:
+ *   - symbolic QEC/code declarations and configuration;
+ *   - QEC operation/intent syntax;
+ *   - encoding, syndrome, decoding and correction intent;
+ *   - logical-error and logical-observable intent;
+ *   - QEC requirements, capabilities, constraints, preferences and hints;
+ *   - distance, rounds, accuracy and logical-error-rate property syntax;
+ *   - verification/checkpoint/resume intent;
+ *   - open-world QEC extension points.
  *
- *     - QEC declaration syntax;
- *     - QEC policy/intent syntax;
- *     - code-family references;
- *     - encoding intent;
- *     - decoding intent;
- *     - correction intent;
- *     - syndrome intent;
- *     - logical-error detection intent;
- *     - logical-observable intent;
- *     - code-distance requirements;
- *     - measurement-round requirements;
- *     - QEC strategy references;
- *     - decoder strategy references;
- *     - QEC capability requirements;
- *     - QEC constraints and preferences;
- *     - QEC verification intent;
- *     - QEC checkpoint/resume intent;
- *     - QEC semantic extension points.
- *
- * THIS FILE DOES NOT OWN:
- *
- *     - QEC algorithms;
- *     - decoder implementations;
- *     - MWPM;
- *     - union-find;
- *     - stabilizer simulation;
- *     - surface-code construction;
- *     - code construction;
- *     - syndrome extraction implementation;
- *     - physical-qubit allocation;
- *     - routing;
- *     - scheduling;
- *     - calibration;
- *     - noise models;
- *     - ZQN;
- *     - hardware discovery;
- *     - resource accounting;
- *     - QecLimits;
- *     - runtime memory allocation;
- *     - runtime workers;
- *     - checkpoint serialization implementation;
- *     - canonical quantum IR;
- *     - backend selection;
- *     - QPU I/O.
+ * DOES NOT OWN:
+ *   - lexer vocabulary;
+ *   - identifiers/names/expressions/types;
+ *   - generic quantum operation invocation;
+ *   - measurement/reset/feed-forward;
+ *   - channel/noise syntax;
+ *   - QEC algorithms or decoder implementations;
+ *   - resource accounting or QecLimits;
+ *   - physical qubits, topology, routing, scheduling or calibration;
+ *   - ZQN or canonical quantum::ir implementation.
  *
  * ============================================================================
- * CRITICAL BOUNDARY
+ * LEXICAL COMPATIBILITY
  * ============================================================================
  *
- * A source-level statement such as:
+ * The previous file used non-canonical K_* names. This version uses the
+ * canonical ZamaniLexer vocabulary. No lexer rules or aliases are introduced.
  *
- *     code Surface;
+ * Canonical tokens used here:
+ *   CODE, REQUIRES, CAPABILITY, WITH,
+ *   ASSIGN, LPAREN, RPAREN, LBRACE, RBRACE, COMMA, SEMICOLON.
  *
- * means:
- *
- *     "the program has QEC/code semantics associated with the symbolic
- *      code named Surface"
- *
- * It MUST NOT mean:
- *
- *     "use a particular physical topology"
- *
- *     "allocate exactly N physical qubits"
- *
- *     "use device X"
- *
- *     "use a particular vendor"
- *
- *     "use a particular decoder implementation"
- *
- *     "use a particular schedule"
- *
- *     "use a particular calibration"
- *
- * Those decisions belong downstream.
+ * SURFACE, PARITY and FIDELITY are intentionally retained as expression
+ * entry points because they are existing Zamani lexer tokens.
  *
  * ============================================================================
- * SCALABILITY / POCO-REAF
+ * POCO-REAF / UNBOUNDED GRAMMAR CARDINALITY
  * ============================================================================
  *
- * There are deliberately NO grammar-level constants for:
+ * No language-level maximum is encoded for logical/physical qubits, code
+ * distance, syndrome rounds, stabilizers, checks, decoder data, shots,
+ * workers, memory, targets, parameters, nesting or QEC declarations.
  *
- *     - maximum logical qubits;
- *     - maximum physical qubits;
- *     - maximum code distance;
- *     - maximum syndrome rounds;
- *     - maximum stabilizers;
- *     - maximum decoder nodes;
- *     - maximum decoder edges;
- *     - maximum shots;
- *     - maximum workers;
- *     - maximum memory;
- *     - maximum QEC depth.
+ * The grammar MUST NOT introduce universal limits such as:
  *
- * Numeric values, where meaningful, are expressions.
+ *   MAX_QUBITS, MAX_CPUS, MAX_GPUS, MAX_FPGAS, MAX_NODES, MAX_MEMORY,
+ *   MAX_THREADS, MAX_TENSOR_RANK, MAX_REGISTER_WIDTH, MAX_NETWORK_SIZE,
+ *   MAX_DEVICE_COUNT, MAX_CODE_DISTANCE, MAX_SYNDROME_ROUNDS.
  *
- * For example:
- *
- *     distance = d;
- *
- * is syntactically valid regardless of the eventual value of d.
- *
- * Whether that value is:
- *
- *     valid;
- *     representable;
- *     available;
- *     affordable;
- *     supported;
- *     safe;
- *
- * is determined by semantic analysis, QecLimits, resource management,
- * capability checking, compilation, scheduling, and runtime.
- *
- * ============================================================================
- * IMPORTANT EXISTING-REPOSITORY INTEGRATION
- * ============================================================================
- *
- * The current quantum grammar already contains:
- *
- *     quantumCodeDeclaration
- *     quantumParityExpression
- *     quantumFidelityExpression
- *     quantumSurfaceExpression
- *
- * The canonical ownership of those QEC-related constructs belongs here.
- *
- * `quantum.g4` MUST delegate to this file rather than define duplicate
- * productions.
+ * Values such as distance or rounds are expressions and therefore may be
+ * symbolic. Physical feasibility is decided downstream from source parsing.
  *
  * ============================================================================
  */
 
+parser grammar QuantumErrorCorrection;
 
-/* ============================================================================
- * 1. TOP-LEVEL QEC DECLARATION
- * ========================================================================== */
+options {
+    tokenVocab = ZamaniLexer;
+}
+
+import Names, Expressions, Types;
+
 
 /*
- * A QEC declaration introduces a reusable semantic QEC specification.
+ * ============================================================================
+ * 1. CODE DECLARATION
+ * ============================================================================
  *
  * Examples:
  *
- *     code Surface;
+ *   code Surface;
+ *   code vendor::logical_code with { distance = d; rounds = r; };
  *
- *     code Surface {
- *         ...
- *     }
- *
- *     code MyCode<T> {
- *         ...
- *     }
- *
- * The name is symbolic.
- *
- * It is not a hardware identifier.
+ * The referenced code is semantic data, not a device selection.
  */
 quantumErrorCorrectionDeclaration
-    : K_CODE
-      identifier
-      genericParameters?
-      quantumParameterList?
-      quantumErrorCorrectionBody?
+    : CODE quantumErrorCorrectionCodeReference
+      quantumErrorCorrectionConfiguration?
       SEMICOLON?
     ;
 
 
-/*
- * QEC declaration body.
- *
- * The body contains declarative QEC properties and semantic extensions.
- */
-quantumErrorCorrectionBody
-    : blockExpression
-    ;
-
-
-/* ============================================================================
- * 2. CANONICAL CODE DECLARATION
- * ========================================================================== */
-
-/*
- * This rule becomes the canonical owner of the existing quantumCodeDeclaration
- * construct currently present in quantum.g4.
- *
- * DO NOT maintain a second implementation of this rule in quantum.g4.
- */
-quantumCodeDeclaration
-    : quantumErrorCorrectionDeclaration
-    ;
-
-
-/* ============================================================================
- * 3. QEC CODE REFERENCE
- * ========================================================================== */
-
-/*
- * A code reference is symbolic.
- *
- * Examples:
- *
- *     Surface
- *     Steane
- *     MyLogicalCode
- *     vendor.namespace.Code
- *
- * The grammar does not embed a fixed code catalogue.
- */
 quantumErrorCorrectionCodeReference
     : qualifiedName
+      genericArgumentSuffix?
     ;
 
 
-/* ============================================================================
- * 4. QEC CODE SELECTION
- * ========================================================================== */
-
-/*
- * Selects a semantic QEC code.
- *
- * Example:
- *
- *     code Surface;
- *
- * The selected code remains an abstract semantic object until lowering.
- */
-quantumErrorCorrectionCodeSelection
-    : K_CODE
-      quantumErrorCorrectionCodeReference
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 5. QEC CODE CONFIGURATION
- * ========================================================================== */
-
-/*
- * A QEC configuration is a set of declarative properties.
- *
- * Example:
- *
- *     code Surface {
- *         distance = d;
- *         rounds = rounds;
- *         decoder = decoder;
- *     }
- *
- * Property interpretation belongs to semantic analysis.
- */
 quantumErrorCorrectionConfiguration
-    : K_CODE
-      quantumErrorCorrectionCodeReference
-      quantumErrorCorrectionBody
+    : WITH LBRACE
+      quantumErrorCorrectionConfigurationEntry*
+      RBRACE
     ;
 
 
-/* ============================================================================
- * 6. QEC PROPERTY
- * ========================================================================== */
-
-/*
- * Generic property form:
- *
- *     property = expression;
- *
- * This provides forward compatibility without requiring a grammar edit for
- * every new QEC research concept.
- *
- * The semantic layer MUST validate which properties are legal for a particular
- * code, execution model, dialect, or compiler phase.
- */
-quantumErrorCorrectionProperty
-    : identifier
-      ASSIGN
-      expression
-      SEMICOLON
-    ;
-
-
-/*
- * Function-like semantic property:
- *
- *     decoder(strategy);
- *
- *     verification(mode);
- *
- *     checkpoint(policy);
- *
- * The grammar records syntax only.
- */
-quantumErrorCorrectionPropertyCall
-    : identifier
-      LPAREN
-      argumentList?
-      RPAREN
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 7. QEC BODY ELEMENT
- * ========================================================================== */
-
-quantumErrorCorrectionBodyElement
-    : attributes*
-      quantumErrorCorrectionElement
-    ;
-
-
-quantumErrorCorrectionElement
+quantumErrorCorrectionConfigurationEntry
     : quantumErrorCorrectionProperty
     | quantumErrorCorrectionPropertyCall
-    | quantumErrorCorrectionOperation
-    | quantumErrorCorrectionRequirement
-    | quantumErrorCorrectionCapability
-    | quantumErrorCorrectionConstraint
-    | quantumErrorCorrectionPreference
-    | quantumErrorCorrectionHint
-    | statement
     ;
 
 
-/* ============================================================================
- * 8. QEC OPERATION
- * ========================================================================== */
+quantumErrorCorrectionProperty
+    : identifier ASSIGN expression SEMICOLON?
+    ;
+
+
+quantumErrorCorrectionPropertyCall
+    : identifier LPAREN argumentList? RPAREN SEMICOLON?
+    ;
+
 
 /*
- * QEC operations are semantic requests rather than implementations.
+ * ============================================================================
+ * 2. QEC INTENT
+ * ============================================================================
+ *
+ * QEC action names remain ordinary identifiers. This avoids a closed list of
+ * algorithms and allows future research and dialect extensions without
+ * changing the base grammar.
  *
  * Example:
  *
- *     error_correct q;
+ *   encode on logical_state;
+ *   syndrome_extract on code;
+ *   decode on syndrome;
+ *   correct on logical_state;
  *
- * The concrete implementation may involve:
- *
- *     syndrome extraction;
- *     decoding;
- *     correction;
- *     logical-frame updates;
- *     measurement processing;
- *     another supported mechanism.
+ * The target introducer is intentionally structural rather than a new QEC
+ * keyword.
  */
 quantumErrorCorrectionOperation
     : identifier
@@ -417,489 +178,327 @@ quantumErrorCorrectionOperation
 
 
 quantumErrorCorrectionTargetClause
-    : K_ON
+    : identifier
       quantumErrorCorrectionTargetList
     ;
 
 
 quantumErrorCorrectionTargetList
-    : quantumErrorCorrectionTarget
-      (COMMA quantumErrorCorrectionTarget)*
-    ;
-
-
-quantumErrorCorrectionTarget
     : expression
+      (COMMA expression)*
     ;
 
 
-/* ============================================================================
- * 9. ENCODING INTENT
- * ========================================================================== */
-
 /*
- * Encoding is intentionally represented as semantic intent.
+ * ============================================================================
+ * 3. SEMANTIC QEC INTENT CATEGORIES
+ * ============================================================================
  *
- * The physical realization is downstream.
+ * These provide stable parser/AST boundaries while leaving the actual
+ * operation meaning open to semantic resolution.
  */
-quantumEncodingDeclaration
-    : identifier
-      quantumEncodingTargetClause
-      SEMICOLON
+quantumEncodingIntent
+    : identifier quantumErrorCorrectionTargetClause? SEMICOLON
     ;
 
 
-quantumEncodingTargetClause
-    : K_ON
-      quantumErrorCorrectionTargetList
+quantumSyndromeIntent
+    : identifier quantumErrorCorrectionTargetClause? SEMICOLON
     ;
 
 
-/* ============================================================================
- * 10. DECODING INTENT
- * ========================================================================== */
+quantumDecodingIntent
+    : identifier quantumErrorCorrectionTargetClause? SEMICOLON
+    ;
+
+
+quantumCorrectionIntent
+    : identifier quantumErrorCorrectionTargetClause? SEMICOLON
+    ;
+
+
+quantumLogicalErrorDetectionIntent
+    : identifier quantumErrorCorrectionTargetClause? SEMICOLON
+    ;
+
+
+quantumLogicalObservableIntent
+    : identifier quantumErrorCorrectionTargetClause? SEMICOLON
+    ;
+
 
 /*
- * Decoder selection is symbolic.
+ * ============================================================================
+ * 4. REQUIREMENTS / CAPABILITIES
+ * ============================================================================
  *
- * The grammar MUST NOT contain a fixed list such as:
- *
- *     mwpm
- *     union_find
- *     decoder_1
- *
- * because new decoders must be addable without changing the core grammar.
- */
-quantumDecodingDeclaration
-    : identifier
-      quantumDecodingTargetClause
-      SEMICOLON
-    ;
-
-
-quantumDecodingTargetClause
-    : K_ON
-      quantumErrorCorrectionTargetList
-    ;
-
-
-/* ============================================================================
- * 11. CORRECTION INTENT
- * ========================================================================== */
-
-/*
- * Correction may eventually be realized through:
- *
- *     physical correction;
- *     Pauli-frame update;
- *     logical-frame update;
- *     feed-forward;
- *     deferred correction;
- *     another backend-supported mechanism.
- *
- * The grammar intentionally does not choose among them.
- */
-quantumCorrectionDeclaration
-    : identifier
-      quantumCorrectionTargetClause
-      SEMICOLON
-    ;
-
-
-quantumCorrectionTargetClause
-    : K_ON
-      quantumErrorCorrectionTargetList
-    ;
-
-
-/* ============================================================================
- * 12. SYNDROME INTENT
- * ========================================================================== */
-
-/*
- * Syndrome information is a semantic artifact.
- *
- * Its concrete representation belongs to the QEC implementation.
- */
-quantumSyndromeDeclaration
-    : identifier
-      quantumSyndromeTargetClause?
-      SEMICOLON
-    ;
-
-
-quantumSyndromeTargetClause
-    : K_ON
-      quantumErrorCorrectionTargetList
-    ;
-
-
-/* ============================================================================
- * 13. CODE DISTANCE
- * ========================================================================== */
-
-/*
- * Distance is a semantic/code property.
+ * These are source contracts. They do not perform capability discovery or
+ * allocate resources.
  *
  * Examples:
  *
- *     distance = d;
- *
- *     distance = code_distance;
- *
- * The grammar imposes no maximum.
- */
-quantumCodeDistanceRequirement
-    : identifier
-      ASSIGN
-      expression
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 14. MEASUREMENT ROUNDS
- * ========================================================================== */
-
-/*
- * Measurement-round counts are expressions.
- *
- * Examples:
- *
- *     rounds = r;
- *
- *     rounds = syndrome_rounds;
- *
- * No fixed upper bound exists in the grammar.
- */
-quantumSyndromeRoundRequirement
-    : identifier
-      ASSIGN
-      expression
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 15. LOGICAL ERROR DETECTION
- * ========================================================================== */
-
-/*
- * Logical-error detection is an intent.
- *
- * It does not define a decoder or detector implementation.
- */
-quantumLogicalErrorDetection
-    : identifier
-      quantumLogicalErrorTargetClause?
-      SEMICOLON
-    ;
-
-
-quantumLogicalErrorTargetClause
-    : K_ON
-      quantumErrorCorrectionTargetList
-    ;
-
-
-/* ============================================================================
- * 16. LOGICAL OBSERVABLES
- * ========================================================================== */
-
-/*
- * Logical observables are semantic objects.
- *
- * Their physical realization belongs to QEC lowering.
- */
-quantumLogicalObservableDeclaration
-    : identifier
-      quantumLogicalObservableTargetClause?
-      SEMICOLON
-    ;
-
-
-quantumLogicalObservableTargetClause
-    : K_ON
-      quantumErrorCorrectionTargetList
-    ;
-
-
-/* ============================================================================
- * 17. PARITY
- * ========================================================================== */
-
-/*
- * This becomes the canonical owner of parity-related QEC syntax currently
- * present in quantum.g4.
- */
-quantumParityExpression
-    : K_PARITY
-      LPAREN
-      quantumErrorCorrectionTargetList
-      RPAREN
-    ;
-
-
-/* ============================================================================
- * 18. FIDELITY
- * ========================================================================== */
-
-/*
- * Fidelity is an expression/measurement concept.
- *
- * No threshold is embedded here.
- *
- * INVALID:
- *
- *     fidelity > 0.95
- *
- * as a grammar-level policy.
- *
- * VALID:
- *
- *     fidelity(...)
- *
- * with policy handled downstream.
- */
-quantumFidelityExpression
-    : K_FIDELITY
-      LPAREN
-      expression
-      RPAREN
-    ;
-
-
-/* ============================================================================
- * 19. SURFACE / CODE FAMILY INTENT
- * ========================================================================== */
-
-/*
- * Surface-code-like concepts may be named symbolically.
- *
- * This does NOT define physical topology.
- */
-quantumSurfaceExpression
-    : K_SURFACE
-      LPAREN
-      expression
-      RPAREN
-    ;
-
-
-/* ============================================================================
- * 20. QEC REQUIREMENTS
- * ========================================================================== */
-
-/*
- * QEC requirements express what the program needs.
- *
- * They do not grant capability.
- *
- * They do not select a physical machine.
+ *   requires qubits >= n;
+ *   requires capability("quantum.error_correction");
  */
 quantumErrorCorrectionRequirement
-    : K_REQUIRES
-      expression
-      SEMICOLON
+    : REQUIRES expression SEMICOLON?
     ;
 
 
-/* ============================================================================
- * 21. QEC CAPABILITIES
- * ========================================================================== */
+quantumErrorCorrectionCapabilityRequirement
+    : REQUIRES CAPABILITY LPAREN argumentList? RPAREN SEMICOLON?
+    ;
 
-/*
- * Capability syntax describes required/declared semantic capability.
- *
- * Actual capability authority belongs to the capability subsystem.
- */
+
 quantumErrorCorrectionCapability
-    : K_CAPABILITY
-      expression
-      SEMICOLON
+    : CAPABILITY LPAREN argumentList? RPAREN SEMICOLON?
     ;
 
 
-/* ============================================================================
- * 22. QEC CONSTRAINTS
- * ========================================================================== */
-
 /*
- * Constraints are distinct from requirements and preferences.
+ * ============================================================================
+ * 5. CONSTRAINTS / PREFERENCES / HINTS
+ * ============================================================================
+ *
+ * Keep these semantically distinct:
+ *
+ *   requirement = mandatory program condition;
+ *   constraint  = condition on a valid realization;
+ *   preference  = advisory ordering/choice preference;
+ *   hint        = advisory implementation information.
+ *
+ * None is allowed to silently become a physical device selection.
  */
 quantumErrorCorrectionConstraint
-    : identifier
-      expression
-      SEMICOLON
+    : identifier expression SEMICOLON?
     ;
 
 
-/* ============================================================================
- * 23. QEC PREFERENCES
- * ========================================================================== */
-
-/*
- * Preferences must never silently become requirements.
- */
 quantumErrorCorrectionPreference
-    : identifier
-      expression
-      SEMICOLON
+    : identifier expression SEMICOLON?
     ;
 
 
-/* ============================================================================
- * 24. QEC HINTS
- * ========================================================================== */
-
-/*
- * Hints are advisory only.
- *
- * Compiler/runtime components may ignore them when necessary.
- */
 quantumErrorCorrectionHint
-    : identifier
-      expression
-      SEMICOLON
+    : identifier expression SEMICOLON?
     ;
 
 
-/* ============================================================================
- * 25. QEC VERIFICATION INTENT
- * ========================================================================== */
+/*
+ * ============================================================================
+ * 6. CODE DISTANCE / ROUNDS / ACCURACY
+ * ============================================================================
+ *
+ * These are semantic property forms, not compiler limits.
+ *
+ * Examples:
+ *
+ *   distance = d;
+ *   rounds = syndrome_rounds;
+ *   accuracy = target_accuracy;
+ *   logical_error_rate = epsilon;
+ */
+quantumCodeDistanceRequirement
+    : identifier ASSIGN expression SEMICOLON?
+    ;
+
+
+quantumSyndromeRoundRequirement
+    : identifier ASSIGN expression SEMICOLON?
+    ;
+
+
+quantumErrorCorrectionAccuracyRequirement
+    : identifier ASSIGN expression SEMICOLON?
+    ;
+
+
+quantumLogicalErrorRateRequirement
+    : identifier ASSIGN expression SEMICOLON?
+    ;
+
+
+quantumErrorCorrectionAssertion
+    : identifier ASSIGN expression SEMICOLON?
+    ;
+
 
 /*
- * Verification requests semantic verification.
+ * ============================================================================
+ * 7. STRATEGY / DECODER / CODE REFERENCES
+ * ============================================================================
  *
- * It does not implement verification.
+ * No MWPM, union-find, surface code, repetition code, or vendor
+ * implementation is enumerated.
+ *
+ * New algorithms remain ordinary semantic references.
+ */
+quantumErrorCorrectionStrategyReference
+    : qualifiedName
+      genericArgumentSuffix?
+    ;
+
+
+quantumErrorCorrectionDecoderReference
+    : qualifiedName
+      genericArgumentSuffix?
+    ;
+
+
+quantumErrorCorrectionCodeFamilyReference
+    : qualifiedName
+      genericArgumentSuffix?
+    ;
+
+
+quantumErrorCorrectionNoiseModelReference
+    : qualifiedName
+      genericArgumentSuffix?
+    ;
+
+
+/*
+ * ============================================================================
+ * 8. VERIFICATION / CHECKPOINT / RESUME
+ * ============================================================================
+ *
+ * These describe semantic boundaries.
+ *
+ * They do not guarantee that an arbitrary quantum state is serializable or
+ * that a target supports a particular checkpoint mechanism.
  */
 quantumErrorCorrectionVerification
-    : identifier
-      LPAREN
-      argumentList?
-      RPAREN
-      SEMICOLON
+    : identifier LPAREN argumentList? RPAREN SEMICOLON?
     ;
 
 
-/* ============================================================================
- * 26. CHECKPOINT / RESUME INTENT
- * ========================================================================== */
-
-/*
- * QEC checkpoint syntax records a semantic request.
- *
- * It MUST NOT imply that an arbitrary unknown quantum state can always be
- * serialized.
- *
- * Valid checkpoint semantics may depend on:
- *
- *     - classical execution state;
- *     - compiled program state;
- *     - logical checkpoint state;
- *     - measurement boundaries;
- *     - QEC-supported state;
- *     - provider-supported checkpoint semantics.
- */
 quantumErrorCorrectionCheckpoint
-    : identifier
-      LPAREN
-      argumentList?
-      RPAREN
-      SEMICOLON
+    : identifier LPAREN argumentList? RPAREN SEMICOLON?
     ;
 
 
-/* ============================================================================
- * 27. QEC POLICY EXPRESSION
- * ========================================================================== */
+quantumErrorCorrectionResume
+    : identifier LPAREN argumentList? RPAREN SEMICOLON?
+    ;
+
 
 /*
- * Policy expressions remain symbolic and composable.
+ * ============================================================================
+ * 9. POLICY / EXTENSION
+ * ============================================================================
  */
 quantumErrorCorrectionPolicyExpression
     : expression
     ;
 
 
-/* ============================================================================
- * 28. QEC TARGET
- * ========================================================================== */
-
-/*
- * QEC can target:
- *
- *     logical qubits;
- *     logical registers;
- *     encoded states;
- *     syndrome streams;
- *     observables;
- *     execution regions;
- *     another semantic QEC object.
- *
- * The target is intentionally an expression.
- */
-quantumErrorCorrectionSemanticTarget
-    : expression
+quantumErrorCorrectionPolicy
+    : identifier ASSIGN
+      quantumErrorCorrectionPolicyExpression
+      SEMICOLON?
     ;
 
 
-/* ============================================================================
- * 29. QEC REGION
- * ========================================================================== */
-
-/*
- * A QEC region groups QEC intent without fixing implementation strategy.
- *
- * Example conceptual form:
- *
- *     code Surface {
- *         ...
- *     }
- */
-quantumErrorCorrectionRegion
-    : quantumErrorCorrectionDeclaration
-    ;
-
-
-/* ============================================================================
- * 30. QEC EXTENSION POINT
- * ========================================================================== */
-
-/*
- * Future QEC dialects may introduce additional constructs through registered
- * semantic extensions.
- *
- * The grammar does not create a vendor-specific QEC namespace.
- */
 quantumErrorCorrectionExtension
     : qualifiedName
-      LPAREN
-      argumentList?
-      RPAREN
-      SEMICOLON
+      LPAREN argumentList? RPAREN
+      quantumErrorCorrectionTargetClause?
+      SEMICOLON?
     ;
 
 
-/* ============================================================================
- * 31. QEC SOURCE ELEMENT
- * ========================================================================== */
+/*
+ * ============================================================================
+ * 10. EXISTING QEC EXPRESSIONS
+ * ============================================================================
+ *
+ * These preserve the existing Zamani surface while replacing obsolete K_*
+ * aliases with canonical lexer tokens.
+ */
+quantumParityExpression
+    : PARITY
+      LPAREN
+      quantumErrorCorrectionTargetList
+      RPAREN
+    ;
+
+
+quantumFidelityExpression
+    : FIDELITY
+      LPAREN
+      expression
+      RPAREN
+    ;
+
+
+quantumSurfaceExpression
+    : SURFACE
+      LPAREN
+      expression
+      RPAREN
+    ;
+
 
 /*
- * This is the integration point for quantum.g4.
+ * ============================================================================
+ * 11. DECLARATION BODY
+ * ============================================================================
+ *
+ * Deliberately declarative.
+ *
+ * Generic full-language statements are not admitted here because the
+ * universal statement grammar owns general statement composition.
  */
-quantumErrorCorrectionElementRoot
-    : quantumErrorCorrectionDeclaration
-    | quantumErrorCorrectionCodeSelection
-    | quantumErrorCorrectionConfiguration
-    | quantumEncodingDeclaration
-    | quantumDecodingDeclaration
-    | quantumCorrectionDeclaration
-    | quantumSyndromeDeclaration
-    | quantumLogicalErrorDetection
-    | quantumLogicalObservableDeclaration
+quantumErrorCorrectionBody
+    : LBRACE
+      quantumErrorCorrectionBodyElement*
+      RBRACE
+    ;
+
+
+quantumErrorCorrectionBodyElement
+    : quantumErrorCorrectionProperty
+    | quantumErrorCorrectionPropertyCall
+    | quantumErrorCorrectionRequirement
+    | quantumErrorCorrectionCapabilityRequirement
+    | quantumErrorCorrectionCapability
+    | quantumCodeDistanceRequirement
+    | quantumSyndromeRoundRequirement
+    | quantumErrorCorrectionAccuracyRequirement
+    | quantumLogicalErrorRateRequirement
+    | quantumErrorCorrectionAssertion
+    | quantumErrorCorrectionPolicy
     | quantumErrorCorrectionVerification
     | quantumErrorCorrectionCheckpoint
+    | quantumErrorCorrectionResume
+    | quantumErrorCorrectionOperation
+    ;
+
+
+/*
+ * ============================================================================
+ * 12. PUBLIC STANDALONE ENTRY
+ * ============================================================================
+ *
+ * Intended for isolated grammar/conformance tests.
+ *
+ * quantum.g4 should import this grammar and dispatch only the productions
+ * that it owns at the composition boundary.
+ */
+quantumErrorCorrection
+    : quantumErrorCorrectionDeclaration
+    | quantumErrorCorrectionBody
+    | quantumEncodingIntent
+    | quantumSyndromeIntent
+    | quantumDecodingIntent
+    | quantumCorrectionIntent
+    | quantumLogicalErrorDetectionIntent
+    | quantumLogicalObservableIntent
+    | quantumErrorCorrectionRequirement
+    | quantumErrorCorrectionCapabilityRequirement
+    | quantumErrorCorrectionVerification
+    | quantumErrorCorrectionCheckpoint
+    | quantumErrorCorrectionResume
     | quantumErrorCorrectionExtension
     | quantumParityExpression
     | quantumFidelityExpression
@@ -907,217 +506,237 @@ quantumErrorCorrectionElementRoot
     ;
 
 
-/* ============================================================================
- * 32. SEMANTIC OWNERSHIP MARKERS
- * ========================================================================== */
-
 /*
- * The following concepts intentionally remain symbolic:
+ * ============================================================================
+ * AST CONTRACT
+ * ============================================================================
  *
- *     code family
- *     decoder
- *     syndrome representation
- *     correction strategy
- *     logical observable
- *     verification strategy
- *     checkpoint strategy
+ * Parser contexts MUST map into the existing domain-neutral frontend AST.
  *
- * Semantic analysis resolves these against:
+ * Do not create a parser-specific QEC AST hierarchy.
  *
- *     QEC subsystem
- *     capabilities
- *     resource policy
- *     target hardware
- *     ZQN
- *     scheduling
- *     routing
- *     resilience
+ * Minimum semantic payload:
  *
- * No implementation-specific meaning is encoded here.
- */
-
-
-/* ============================================================================
- * 33. NON-OWNERSHIP GUARANTEE
- * ========================================================================== */
-
-/*
- * This grammar MUST NOT introduce:
+ *   - source span;
+ *   - symbolic code/strategy/decoder references;
+ *   - ordered arguments/properties;
+ *   - target expressions;
+ *   - intent kind;
+ *   - requirement/constraint/preference/hint class.
  *
- *     MAX_QUBITS
- *     MAX_CODE_DISTANCE
- *     MAX_ROUNDS
- *     MAX_SYNDROME_EVENTS
- *     MAX_DECODER_NODES
- *     MAX_DECODER_EDGES
- *     MAX_MEMORY
- *     MAX_PARALLELISM
- *     MAX_SHOTS
+ * Semantic analysis owns:
  *
- * Those are runtime/configuration policy concerns.
+ *   - name resolution;
+ *   - type/parameter checking;
+ *   - code/decoder compatibility;
+ *   - syndrome/correction validity;
+ *   - noise/channel compatibility;
+ *   - resource requirements;
+ *   - capability requirements;
+ *   - satisfiability;
+ *   - target feasibility.
  *
- * The repository's canonical QecLimits remains the sole production QEC
- * resource-limit authority.
- */
-
-
-/* ============================================================================
- * 34. IR LOWERING CONTRACT
- * ========================================================================== */
-
-/*
- * Parser output:
+ * ============================================================================
+ * CANONICAL IR CONTRACT
+ * ============================================================================
  *
- *     parse tree
- *         |
- *         v
- *     frontend AST
- *         |
- *         v
- *     semantic QEC model
- *         |
- *         v
+ * QEC syntax lowers through:
+ *
  *     canonical quantum::ir
  *
- * This grammar MUST NOT create:
+ * This file MUST NOT introduce:
  *
- *     QecLimits
- *     Decoder
- *     Backend
- *     PhysicalQubit
- *     Schedule
- *     NoiseModel
- *     RoutingPlan
+ *     QecIr
+ *     QuantumErrorCorrectionIR
+ *     DecoderIR
+ *     SyndromeIR
+ *     CodeIR
  *
- * or equivalent runtime objects.
- */
-
-
-/* ============================================================================
- * 35. HARDWARE INDEPENDENCE
- * ========================================================================== */
-
-/*
- * QEC syntax MUST NOT identify:
+ * or another competing quantum intermediate representation.
  *
- *     physical qubit numbers;
- *     chip coordinates;
- *     coupling maps;
- *     backend IDs;
- *     calibration IDs;
- *     pulse IDs;
- *     device addresses;
- *     topology sizes.
+ * QEC-specific semantic information may be represented by the canonical
+ * semantic model and consumed by the existing QEC lowering pipeline.
  *
- * Such information belongs to hardware/routing/resource lowering.
- */
-
-
-/* ============================================================================
- * 36. DETERMINISM
- * ========================================================================== */
-
-/*
- * Parsing is deterministic.
+ * ============================================================================
+ * INTEGRATION CONTRACT
+ * ============================================================================
  *
- * No semantic action is permitted in this grammar.
+ * quantum.g4:
+ *   Import QuantumErrorCorrection and delegate QEC productions here.
+ *   Do not redefine QEC productions already owned by this file.
  *
- * No:
+ * operations.g4:
+ *   Owns ordinary "apply operation(...)" syntax.
+ *   This file does not duplicate it.
  *
- *     Rust action;
- *     filesystem access;
- *     network access;
- *     runtime lookup;
- *     hardware discovery;
- *     random selection
+ * channels.g4 / noise.g4:
+ *   Own channel/noise syntax.
+ *   This file only permits symbolic references to models when needed by QEC
+ *   semantic analysis.
  *
- * is permitted here.
- */
-
-
-/* ============================================================================
- * 37. EXTENSIBILITY
- * ========================================================================== */
-
-/*
- * New QEC algorithms should NOT require modifying this grammar merely because
- * an implementation was added.
+ * measurement.g4 / reset.g4:
+ *   Own measurement/reset syntax.
  *
- * For example, adding:
+ * classical-feedforward.g4:
+ *   Owns classical feed-forward syntax.
  *
- *     a new decoder;
- *     a new code family;
- *     a new syndrome representation;
- *     a new verification backend;
+ * resource/capability grammars:
+ *   Remain canonical for general resource/capability contracts.
  *
- * should normally require semantic registration rather than a new parser rule.
- */
-
-
-/* ============================================================================
- * 38. FINAL ARCHITECTURAL CONTRACT
- * ========================================================================== */
-
-/*
- * Zamani source describes:
+ * semantic QEC subsystem:
+ *   Resolves codes, strategies, decoders, parameters, targets, capabilities,
+ *   resources, noise compatibility and satisfiability.
  *
- *     WHAT computation requires.
+ * QEC implementation:
+ *   Performs encoding, syndrome extraction, decoding, correction and logical
+ *   state management.
  *
- * QEC determines:
+ * ZQN:
+ *   Owns fault/noise semantics and concrete channel representations.
  *
- *     HOW errors are detected/corrected.
+ * routing/scheduling/HAL:
+ *   Determine physical realization only after semantic lowering.
  *
- * ZQN determines:
+ * ============================================================================
+ * DIAGNOSTIC CONTRACT
+ * ============================================================================
  *
- *     WHAT faults/noise exist.
+ * Syntax failures are parser diagnostics with source spans.
  *
- * Hardware determines:
+ * Semantic failures should distinguish:
  *
- *     WHAT resources/capabilities are available.
+ *   - unresolved QEC code;
+ *   - unresolved strategy/decoder;
+ *   - invalid property;
+ *   - invalid parameter;
+ *   - invalid target;
+ *   - unsatisfied capability;
+ *   - unsatisfied resource requirement;
+ *   - incompatible code/decoder;
+ *   - incompatible code/noise model;
+ *   - unsatisfiable constraint;
+ *   - unsupported target realization;
+ *   - unsupported dialect extension.
  *
- * Routing determines:
+ * Semantic failures MUST NOT be disguised as grammar failures.
  *
- *     WHERE computation is physically realized.
+ * ============================================================================
+ * HARD-CODING AUDIT
+ * ============================================================================
  *
- * Scheduling determines:
+ * PASS:
  *
- *     WHEN operations execute.
+ *   - no K_* aliases;
+ *   - no fixed code-family enumeration;
+ *   - no fixed decoder enumeration;
+ *   - no fixed QEC algorithm enumeration;
+ *   - no fixed noise/channel enumeration;
+ *   - no hardware identifiers;
+ *   - no physical topology;
+ *   - no physical qubit mapping;
+ *   - no resource maxima;
+ *   - no finite target/parameter/depth limits;
+ *   - no second expression language;
+ *   - no second type language;
+ *   - no second quantum IR;
+ *   - no embedded Rust actions;
+ *   - no unsafe requirement.
  *
- * Resilience determines:
+ * A programmer may write:
  *
- *     WHETHER and HOW the computation adapts/recoveries.
+ *     distance = 17;
  *
- * Optimization determines:
+ * because that is program data.
  *
- *     WHICH semantically equivalent implementation is preferable.
+ * The compiler MUST NOT interpret 17 as a universal maximum or minimum.
  *
- * quantum::ir remains the canonical quantum semantic boundary.
+ * ============================================================================
+ * TEST CONTRACT
+ * ============================================================================
  *
- * Therefore:
+ * POSITIVE:
  *
- *     grammar
- *        -> syntax
- *        -> AST
- *        -> semantic analysis
- *        -> quantum::ir
- *        -> QEC / ZQN / routing / scheduling / optimization /
- *           resilience / hardware
+ *   code Surface;
+ *   code vendor::logical_code;
+ *   code custom::code with { distance = d; rounds = r; };
+ *   encode on logical_state;
+ *   syndrome_extract on code;
+ *   decode on syndrome;
+ *   correct on logical_state;
+ *   requires qubits >= n;
+ *   requires capability("quantum.error_correction");
  *
- * and NEVER:
+ * NEGATIVE:
  *
- *     grammar
- *        -> QEC implementation
+ *   malformed qualified name;
+ *   malformed configuration;
+ *   missing delimiters;
+ *   malformed argument list;
+ *   malformed assignment;
+ *   malformed target list.
  *
- * or:
+ * SEMANTIC-NEGATIVE:
  *
- *     grammar
- *        -> hardware-specific QEC
+ *   unknown code;
+ *   incompatible decoder;
+ *   invalid distance/round value;
+ *   unsupported capability;
+ *   unsatisfied resource requirement;
+ *   incompatible noise model.
  *
- * This preserves:
+ * BOUNDARY / SCALABILITY:
  *
- *     Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
+ *   - symbolic quantities;
+ *   - very large representable quantities;
+ *   - arbitrarily long property lists;
+ *   - arbitrarily long target lists;
+ *   - arbitrarily long argument lists;
+ *   - deeply qualified names;
+ *   - nested expressions;
+ *   - many QEC declarations;
+ *   - large mixed quantum/classical programs.
  *
- * and:
+ * No test establishes an artificial universal maximum.
  *
- *     Zamani: From Atom to Everywhere.
+ * DETERMINISM:
+ *
+ *   Identical source plus identical semantic environment produces identical
+ *   parse structure and diagnostics.
+ *
+ * COMPATIBILITY:
+ *
+ *   Canonical CODE/SURFACE/PARITY/FIDELITY spellings remain lexer-owned.
+ *   K_* aliases are not part of this grammar.
+ *
+ * ============================================================================
+ * COMPLETION CRITERIA
+ * ============================================================================
+ *
+ * FILE-LOCAL:
+ *
+ *   [x] one canonical parser grammar declaration;
+ *   [x] tokenVocab = ZamaniLexer;
+ *   [x] canonical token names only;
+ *   [x] open-world code/decoder/strategy references;
+ *   [x] no hardware limits;
+ *   [x] no QEC implementation;
+ *   [x] no competing quantum IR;
+ *   [x] reusable semantic boundaries;
+ *   [x] cross-domain ownership documented;
+ *   [x] safe-Rust integration documented.
+ *
+ * REPOSITORY-LEVEL:
+ *
+ *   [ ] quantum.g4 imports and dispatches this component without duplicate
+ *       QEC productions;
+ *   [ ] frontend AST mapping exists;
+ *   [ ] semantic QEC validation exists;
+ *   [ ] canonical quantum::ir lowering exists;
+ *   [ ] QEC implementation consumes the semantic contract;
+ *   [ ] positive/negative/boundary/scalability/determinism tests exist;
+ *   [ ] ANTLR generation and repository-wide grammar validation pass.
+ *
+ * ============================================================================
+ * END OF FILE
+ * ============================================================================
  */
