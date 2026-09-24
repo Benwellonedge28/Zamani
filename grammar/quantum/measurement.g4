@@ -1,14 +1,16 @@
 /*
  * ============================================================================
  * Zamani Universal Programming Language
- * Quantum Measurement Grammar
  * ============================================================================
  *
  * File:
  *     grammar/quantum/measurement.g4
  *
- * Role:
- *     Canonical reusable PARSER fragment for quantum measurement syntax.
+ * Grammar:
+ *     QuantumMeasurement
+ *
+ * Status:
+ *     CANONICAL / PRODUCTION QUANTUM MEASUREMENT GRAMMAR
  *
  * Language:
  *     Zamani
@@ -20,103 +22,213 @@
  *     no unsafe Rust
  *
  * ============================================================================
- * ARCHITECTURAL PURPOSE
+ * PURPOSE
  * ============================================================================
  *
- * This file owns SOURCE-LEVEL MEASUREMENT SYNTAX.
+ * This file is the SINGLE GRAMMAR OWNER for source-level quantum
+ * measurement syntax.
  *
  * It describes:
  *
- *     WHAT a Zamani program asks to measure.
+ *     WHAT a Zamani program requests to measure.
  *
  * It does NOT describe:
  *
- *     HOW a backend performs the measurement.
+ *     HOW the measurement is physically or computationally realized.
  *
- * The source-level measurement is subsequently lowered through:
+ * Canonical pipeline:
  *
- *     source
- *       |
- *       v
- *     lexer
- *       |
- *       v
- *     canonical parser
- *       |
- *       v
- *     frontend AST
- *       |
- *       v
+ *     Zamani source
+ *          |
+ *          v
+ *     ZamaniLexer
+ *          |
+ *          v
+ *     QuantumMeasurement
+ *          |
+ *          v
+ *     domain-neutral frontend AST
+ *          |
+ *          v
  *     semantic/type/effect/resource analysis
- *       |
- *       v
+ *          |
+ *          v
+ *     canonical semantic representation
+ *          |
+ *          v
  *     quantum::ir
- *       |
- *       +--> optimization
- *       +--> routing
- *       +--> scheduling
- *       +--> QEC
- *       +--> ZQN
- *       +--> resilience
- *       +--> hardware HAL
- *       +--> simulator
- *       |
- *       v
+ *          |
+ *          +--> optimization
+ *          +--> decomposition
+ *          +--> routing
+ *          +--> scheduling
+ *          +--> QEC
+ *          +--> ZQN
+ *          +--> resilience
+ *          +--> HAL
+ *          +--> simulator
+ *          |
+ *          v
  *     target realization
  *
+ * The grammar never bypasses the AST, semantic, or canonical IR boundaries.
+ *
  * ============================================================================
- * OWNERSHIP
+ * GRAMMAR OWNERSHIP
  * ============================================================================
  *
  * THIS FILE OWNS:
  *
- *     - measurement statements;
- *     - measurement target lists;
- *     - measurement result destinations;
- *     - measurement option blocks;
- *     - measurement option names;
- *     - measurement option values;
- *     - measurement source-level observables/bases;
- *     - measurement kind intent;
- *     - destructive/non-destructive intent;
- *     - reset-after-measurement intent;
- *     - measurement grouping syntax;
- *     - extensible measurement metadata syntax.
+ *     - quantumMeasurementStatement
+ *     - quantumMeasurementTargetList
+ *     - quantumMeasurementTarget
+ *     - quantumMeasurementDestination
+ *     - quantumMeasurementOptions
+ *     - quantumMeasurementOptionList
+ *     - quantumMeasurementOption
  *
  * THIS FILE DOES NOT OWN:
  *
  *     - lexer tokens;
  *     - identifiers;
+ *     - qualified names;
  *     - general expressions;
  *     - general types;
  *     - qubit declarations;
  *     - quantum registers;
- *     - quantum operation syntax;
- *     - reset statements outside measurement options;
- *     - observable implementation;
- *     - measurement probabilities;
- *     - result sampling;
- *     - detector implementation;
- *     - readout hardware;
- *     - ADC/DAC configuration;
- *     - calibration;
- *     - measurement pulses;
- *     - measurement timing;
+ *     - quantum operations;
+ *     - operation parameters;
+ *     - controls;
+ *     - adjoints;
+ *     - reset statements;
+ *     - observables;
+ *     - dynamic classical control;
+ *     - QEC;
+ *     - ZQN;
+ *     - resilience;
  *     - routing;
  *     - scheduling;
  *     - optimization;
- *     - QEC decoding;
- *     - ZQN noise models;
- *     - resilience decisions;
- *     - backend selection;
+ *     - hardware topology;
  *     - physical qubit allocation;
- *     - canonical quantum IR.
+ *     - backend selection;
+ *     - runtime execution;
+ *     - canonical quantum::ir types.
+ *
+ * Every production owned here must have exactly one canonical owner.
+ *
+ * ============================================================================
+ * DEPENDENCY DIRECTION
+ * ============================================================================
+ *
+ *     ZamaniLexer
+ *          |
+ *          v
+ *     Names + Expressions
+ *          |
+ *          v
+ *     QuantumMeasurement
+ *          |
+ *          v
+ *     quantum.g4
+ *          |
+ *          v
+ *     frontend AST
+ *          |
+ *          v
+ *     semantic analysis
+ *          |
+ *          v
+ *     quantum::ir
+ *
+ * This grammar MUST NOT import Operations, Controls, Reset, Observables,
+ * Hardware, Resources, QEC, ZQN, or Runtime grammars merely to validate
+ * semantic properties.
+ *
+ * Keeping this dependency direction prevents grammar cycles.
+ *
+ * ============================================================================
+ * CANONICAL ANTLR CONTRACT
+ * ============================================================================
+ *
+ * This is a parser grammar.
+ *
+ * The production lexer is:
+ *
+ *     grammar/antlr/ZamaniLexer.g4
+ *
+ * Therefore this file consumes:
+ *
+ *     tokenVocab = ZamaniLexer;
+ *
+ * It MUST NOT consume:
+ *
+ *     tokenVocab = ZamaniTokens;
+ *
+ * directly.
+ *
+ * ZamaniTokens is a lexical composition vocabulary. ZamaniLexer is the
+ * production lexer boundary consumed by parser grammars.
+ *
+ * ============================================================================
+ * IMPORT CONTRACT
+ * ============================================================================
+ *
+ * Names supplies:
+ *
+ *     identifier
+ *     qualified-name infrastructure where applicable
+ *
+ * Expressions supplies:
+ *
+ *     expression
+ *
+ * No quantum-specific target grammar is imported here.
+ *
+ * A measurement target is deliberately represented as an ordinary expression.
+ *
+ * Semantic analysis determines whether that expression denotes a valid
+ * measurable quantum resource.
+ *
+ * ============================================================================
+ * LEXICAL CONTRACT
+ * ============================================================================
+ *
+ * This grammar consumes canonical lexical tokens.
+ *
+ * Required tokens:
+ *
+ *     MEASURE
+ *     WITH
+ *     THIN_ARROW
+ *     LPAREN
+ *     RPAREN
+ *     LBRACE
+ *     RBRACE
+ *     COMMA
+ *     ASSIGN
+ *     SEMICOLON
+ *
+ * This file introduces NO lexer tokens.
+ *
+ * In particular, it does not introduce:
+ *
+ *     K_MEASURE
+ *     K_WITH
+ *     MEASUREMENT_TOKEN
+ *     BASIS_TOKEN
+ *     OBSERVABLE_TOKEN
+ *     MODE_TOKEN
+ *     KIND_TOKEN
+ *     RESULT_TOKEN
+ *
+ * Measurement option names remain ordinary identifiers.
  *
  * ============================================================================
  * POCO-REAF CONTRACT
  * ============================================================================
  *
- * Measurement syntax MUST remain independent of machine scale.
+ * Measurement syntax is target-independent.
  *
  * This file MUST NOT encode:
  *
@@ -132,105 +244,84 @@
  *     MAX_RESULT_BUFFER
  *     MAX_DEVICES
  *     MAX_READOUT_CHANNELS
- *     DEVICE_ID
- *     QPU_ID
- *     PHYSICAL_QUBIT_ID
+ *
+ * It MUST NOT encode:
+ *
+ *     qpu0
+ *     qpu1
+ *     physical_qubit_0
+ *     physical_qubit_1
+ *     readout_channel_0
+ *     device_0
+ *
+ * It MUST NOT encode:
+ *
  *     READOUT_FREQUENCY
  *     READOUT_DURATION
  *     HARDWARE_TOPOLOGY
  *     VENDOR
  *     BACKEND
  *
- * Any practical limits are determined later by:
+ * A measurement program may therefore scale from a single quantum resource
+ * to arbitrarily large source-level resource collections, subject only to
+ * actual compiler, runtime, semantic, and target resources.
  *
- *     semantic analysis;
- *     resource analysis;
- *     QuantumIrLimits;
- *     scheduling;
- *     hardware capability negotiation;
- *     runtime resources.
+ * "Unbounded by grammar" does not mean physically infinite.
  *
- * These are not grammar limits.
+ * It means the language does not establish an artificial universal ceiling.
  *
  * ============================================================================
- * LEXICAL INTEGRATION
+ * CORE SOURCE FORMS
  * ============================================================================
  *
- * This file consumes the canonical Zamani lexer vocabulary.
- *
- * Canonical tokens used here include:
- *
- *     MEASURE
- *     WITH
- *     THIN_ARROW
- *     LPAREN
- *     RPAREN
- *     LBRACE
- *     RBRACE
- *     COMMA
- *     COLON
- *     ASSIGN
- *     SEMICOLON
- *
- * IMPORTANT:
- *
- * Do NOT introduce duplicate tokens such as:
- *
- *     K_MEASURE
- *     K_WITH
- *     SEMI
- *     MEASUREMENT_TOKEN
- *     BASIS_TOKEN
- *     MODE_TOKEN
- *
- * Measurement option names remain identifiers.
- *
- * This intentionally allows the language to evolve without continually
- * expanding the lexer keyword inventory.
- *
- * ============================================================================
- * CORE SYNTAX
- * ============================================================================
- *
- * The canonical minimal form is:
+ * Minimal:
  *
  *     measure q;
- *
- * A result may be assigned:
- *
- *     measure q -> result;
  *
  * Multiple targets:
  *
  *     measure q0, q1, q2;
  *
- * Multiple targets may also be selected through expressions:
+ * Indexed target:
  *
  *     measure register[i];
- *     measure register[start .. end];
- *     measure selection;
  *
- * Measurement semantics may be explicitly described:
+ * Slice/range target where supported by the expression grammar:
+ *
+ *     measure register[start .. end];
+ *
+ * Result destination:
+ *
+ *     measure q -> result;
+ *
+ * Multiple targets to one semantic destination:
+ *
+ *     measure q0, q1 -> result;
+ *
+ * Semantic options:
  *
  *     measure q with {
  *         basis = X
  *     };
  *
- * Result destination plus options:
+ * Destination plus options:
  *
  *     measure q -> result with {
  *         basis = X,
  *         mode = destructive
  *     };
  *
- * The option block is deliberately key/value based rather than keyword based.
+ * Empty options:
  *
- * Therefore future semantic concepts can be added without requiring a new
- * lexer keyword for every measurement feature.
+ *     measure q with {};
+ *
+ * No option vocabulary is hard-coded into the grammar.
  *
  * ============================================================================
- * SEMANTIC SEPARATION
+ * MEASUREMENT SEMANTICS
  * ============================================================================
+ *
+ * This grammar represents measurement INTENT.
  *
  * For example:
  *
@@ -238,87 +329,26 @@
  *         basis = X
  *     };
  *
- * means:
- *
- *     "measure q using the semantic X basis"
- *
- * It does NOT mean:
- *
- *     "apply a particular physical X rotation pulse"
- *
- * The backend decides how the semantic request is realized.
- *
- * Similarly:
- *
- *     mode = destructive
- *
- * describes semantic measurement behavior.
+ * means that the program requests an X-basis measurement semantically.
  *
  * It does NOT specify:
  *
- *     detector technology;
- *     pulse sequence;
- *     readout channel;
- *     hardware duration;
- *     physical qubit.
+ *     - a physical pulse;
+ *     - a detector;
+ *     - an ADC;
+ *     - a readout channel;
+ *     - a physical qubit;
+ *     - a calibration;
+ *     - a sampling device;
+ *     - a vendor instruction.
+ *
+ * Such realization belongs downstream.
  *
  * ============================================================================
- * CANONICAL IR INTEGRATION
+ * MEASUREMENT TARGET CONTRACT
  * ============================================================================
  *
- * The grammar must eventually lower into:
- *
- *     quantum::ir
- *
- * The existing canonical quantum measurement model owns:
- *
- *     Measurement
- *     MeasurementKind
- *     MeasurementMode
- *     MeasurementObservable
- *     MeasurementBasis
- *     PauliProduct
- *     ClassicalBitId
- *     QubitId
- *
- * This grammar MUST NOT define any of those semantic Rust types.
- *
- * It only preserves source structure needed by the frontend AST.
- *
- * ============================================================================
- * RESULT DESTINATION CONTRACT
- * ============================================================================
- *
- * The destination after:
- *
- *     ->
- *
- * is an ordinary Zamani expression.
- *
- * Examples:
- *
- *     measure q -> result;
- *     measure q -> classical_bit;
- *     measure q -> result[index];
- *     measure q0, q1 -> result;
- *
- * The grammar deliberately does NOT determine whether the destination is:
- *
- *     one bit;
- *     a bit vector;
- *     a register;
- *     a tuple;
- *     an array;
- *     a structured result;
- *     a future measurement-result type.
- *
- * Semantic/type analysis determines whether the destination shape is valid.
- *
- * ============================================================================
- * TARGET CONTRACT
- * ============================================================================
- *
- * Measurement targets are ordinary Zamani expressions.
+ * A target is an ordinary Zamani expression.
  *
  * Examples:
  *
@@ -328,19 +358,80 @@
  *     register[i]
  *     register[start .. end]
  *     logical_qubit
- *     expression-derived selection
+ *     selected
+ *     selection[index]
+ *     quantum_expression
  *
- * The parser does not decide whether an expression is actually quantum.
+ * The parser does NOT decide whether the expression is quantum.
  *
- * Semantic analysis performs that validation.
+ * Semantic analysis determines:
+ *
+ *     - whether the target resolves;
+ *     - whether it has a measurable quantum type;
+ *     - whether it is initialized;
+ *     - whether its ownership/lifetime is valid;
+ *     - whether measurement is permitted in the current effect context;
+ *     - whether target overlap is legal;
+ *     - whether the target is compatible with the measurement semantics.
+ *
+ * ============================================================================
+ * TARGET CARDINALITY
+ * ============================================================================
+ *
+ * Target cardinality is structural.
+ *
+ * This:
+ *
+ *     quantumMeasurementTargetList
+ *
+ * uses repetition rather than a fixed-size alternative.
+ *
+ * There is intentionally no:
+ *
+ *     measurement2
+ *     measurement4
+ *     measurement8
+ *     measurement32
+ *
+ * and no finite target-count ceiling.
+ *
+ * ============================================================================
+ * RESULT DESTINATION CONTRACT
+ * ============================================================================
+ *
+ * The optional destination is an ordinary expression:
+ *
+ *     measure q -> result;
+ *
+ *     measure q -> result[index];
+ *
+ *     measure q -> register;
+ *
+ *     measure q -> destination;
+ *
+ * The grammar does not determine the destination's type or cardinality.
+ *
+ * Semantic/type analysis determines whether the destination can receive the
+ * measurement result.
+ *
+ * This preserves portability across:
+ *
+ *     single-bit results;
+ *     bit collections;
+ *     registers;
+ *     tuples;
+ *     arrays;
+ *     structured result objects;
+ *     observable results;
+ *     future result representations.
  *
  * ============================================================================
  * OPTION CONTRACT
  * ============================================================================
  *
- * Options have the form:
+ * Measurement options use an open key/value form:
  *
- *     name = expression
+ *     identifier = expression
  *
  * Examples:
  *
@@ -349,99 +440,212 @@
  *     kind = projective
  *     mode = destructive
  *     reset = true
+ *     grouping = group
+ *     result_type = bit
  *
- * The grammar does NOT hard-code a closed list of option names.
+ * The grammar intentionally does NOT enumerate these names.
  *
- * This is intentional.
+ * The semantic layer owns the authoritative measurement-option registry.
  *
- * The semantic layer owns the authoritative option registry.
+ * This permits future measurement semantics without requiring a new lexer
+ * keyword or grammar production for every new concept.
  *
- * Unknown options are therefore syntax-valid but semantically diagnosable.
+ * ============================================================================
+ * UNKNOWN OPTIONS
+ * ============================================================================
  *
- * This prevents the grammar from becoming the source of machine-specific
- * assumptions.
+ * Unknown options are syntactically valid:
+ *
+ *     measure q with {
+ *         future_measurement_feature = value
+ *     };
+ *
+ * Semantic analysis decides whether the option:
+ *
+ *     - is stable;
+ *     - is experimental;
+ *     - belongs to an active dialect;
+ *     - is deprecated;
+ *     - is unsupported;
+ *     - requires a capability;
+ *     - requires a language version.
+ *
+ * The parser must not silently discard the option.
  *
  * ============================================================================
  * DUPLICATE OPTIONS
  * ============================================================================
  *
- * Duplicate option names are syntactically valid:
+ * Duplicate option names remain syntactically representable:
  *
  *     measure q with {
  *         basis = X,
  *         basis = Z
  *     };
  *
- * The grammar does not silently choose one.
+ * The parser preserves both options.
  *
- * Semantic validation MUST reject conflicting/duplicate options according to
- * the measurement semantic contract.
+ * Semantic validation MUST determine whether:
  *
- * This preserves source information and produces better diagnostics.
+ *     - duplicates are forbidden;
+ *     - duplicates are mergeable;
+ *     - later values override earlier values;
+ *     - a dialect defines a legal repeated option.
+ *
+ * The grammar must not silently choose one.
+ *
+ * ============================================================================
+ * OPTION ORDER
+ * ============================================================================
+ *
+ * Option order is source information.
+ *
+ * The AST should preserve option order until semantic normalization.
+ *
+ * This supports:
+ *
+ *     diagnostics;
+ *     formatting;
+ *     source mapping;
+ *     provenance;
+ *     IDE tooling;
+ *     compatibility diagnostics.
+ *
+ * Semantic normalization may later canonicalize equivalent option sets.
+ *
+ * ============================================================================
+ * TRAILING COMMAS
+ * ============================================================================
+ *
+ * A trailing comma is accepted in:
+ *
+ *     quantumMeasurementTargetList
+ *     quantumMeasurementOptionList
+ *
+ * Examples:
+ *
+ *     measure q0, q1,;
+ *
+ *     measure q with {
+ *         basis = X,
+ *     };
+ *
+ * The policy is intentionally explicit and deterministic.
+ *
+ * If the repository-wide syntax policy later forbids trailing commas, that
+ * change must be made through the canonical syntax/compatibility process,
+ * rather than independently changing this file.
  *
  * ============================================================================
  * EMPTY OPTION BLOCK
  * ============================================================================
  *
- * The following is syntactically valid:
+ * This is syntactically valid:
  *
  *     measure q with {};
  *
- * Semantic analysis may normalize it to the default measurement semantics.
- *
- * This keeps parsing deterministic and avoids special grammar branches.
+ * Semantic analysis may normalize it to default measurement semantics.
  *
  * ============================================================================
- * EXTENSIBILITY
+ * MEASUREMENT BASIS
  * ============================================================================
  *
- * New measurement concepts can be expressed through options without requiring
- * a new keyword.
+ * Basis values are expressions rather than lexer-level keywords.
  *
- * Examples include future concepts such as:
+ * Therefore all of the following can be represented structurally:
  *
- *     observable
- *     basis
- *     kind
- *     mode
- *     reset
- *     grouping
- *     result_type
- *     confidence
- *     annotation
- *     semantic_precision
+ *     basis = X
+ *     basis = Y
+ *     basis = Z
+ *     basis = my_basis
+ *     basis = custom_basis
+ *     basis = basis_expression
  *
- * Their meaning belongs to semantic analysis and canonical IR.
+ * The grammar does not define:
+ *
+ *     XBasis
+ *     YBasis
+ *     ZBasis
+ *     PauliBasis
+ *
+ * as special syntax.
+ *
+ * Semantic analysis maps recognized values into the canonical quantum
+ * semantic model.
  *
  * ============================================================================
- * QEC / ZQN / RESILIENCE BOUNDARY
+ * OBSERVABLES
  * ============================================================================
  *
- * This grammar does NOT implement:
+ * Measurement may reference an observable through an option:
  *
- *     QEC;
- *     syndrome extraction;
- *     decoding;
- *     noise channels;
- *     measurement error models;
- *     readout mitigation;
- *     retry policy;
- *     backend switching;
- *     recovery.
+ *     measure q with {
+ *         observable = my_observable
+ *     };
  *
- * A measurement may later be consumed by:
+ * This file does NOT own observable declaration syntax.
  *
- *     QEC
- *     ZQN
- *     resilience
+ * Observable declarations remain owned by:
  *
- * but those subsystems remain downstream consumers.
+ *     grammar/quantum/observables.g4
+ *
+ * This file only preserves the source-level reference/expression.
+ *
+ * ============================================================================
+ * MEASUREMENT KIND
+ * ============================================================================
+ *
+ * Measurement kind is semantic data.
+ *
+ * Examples may include:
+ *
+ *     kind = projective
+ *     kind = generalized
+ *     kind = weak
+ *     kind = continuous
+ *
+ * The grammar does not restrict the universe of future kinds.
+ *
+ * Semantic analysis determines which kinds are supported and what they mean.
+ *
+ * ============================================================================
+ * MEASUREMENT MODE
+ * ============================================================================
+ *
+ * Mode is semantic data.
+ *
+ * Examples:
+ *
+ *     mode = destructive
+ *     mode = non_destructive
+ *
+ * The grammar does not specify how a backend implements the mode.
+ *
+ * ============================================================================
+ * RESET-AFTER-MEASUREMENT
+ * ============================================================================
+ *
+ * A measurement option may express semantic reset intent:
+ *
+ *     measure q with {
+ *         reset = true
+ *     };
+ *
+ * This does NOT redefine the standalone reset syntax.
+ *
+ * Standalone reset remains owned by:
+ *
+ *     grammar/quantum/reset.g4
+ *
+ * Semantic analysis determines whether the measurement-plus-reset request
+ * lowers to one semantic operation, a measurement followed by reset, or
+ * another valid canonical representation.
  *
  * ============================================================================
  * DYNAMIC CIRCUITS
  * ============================================================================
  *
- * A measurement result may participate in later classical control:
+ * A measurement result may feed subsequent classical control:
  *
  *     measure q -> result;
  *
@@ -449,67 +653,716 @@
  *         ...
  *     }
  *
- * This file only owns the measurement operation.
+ * This file owns only:
  *
- * The general control-flow grammar owns:
+ *     measurement
  *
- *     if;
- *     match;
- *     loops;
- *     classical control.
+ * It does not own:
  *
- * Therefore this file must not create a second conditional grammar.
+ *     if
+ *     match
+ *     loops
+ *     branching
+ *     classical control flow
+ *
+ * Dynamic-circuit semantics remain downstream and in their dedicated grammar
+ * components.
+ *
+ * ============================================================================
+ * QUANTUM/CLASSICAL BOUNDARY
+ * ============================================================================
+ *
+ * Measurement creates a semantic boundary between quantum information and
+ * classical information.
+ *
+ * The grammar preserves that boundary structurally through:
+ *
+ *     quantumMeasurementTarget
+ *     quantumMeasurementDestination
+ *
+ * Semantic analysis determines:
+ *
+ *     quantum input type
+ *     classical result type
+ *     ownership/lifetime effects
+ *     synchronization requirements
+ *     feed-forward requirements
+ *     effect annotations
+ *
+ * ============================================================================
+ * AST CONTRACT
+ * ============================================================================
+ *
+ * This grammar must map into the existing domain-neutral frontend AST.
+ *
+ * The parser must preserve at least:
+ *
+ *     - source span;
+ *     - measurement keyword span where supported;
+ *     - ordered target expressions;
+ *     - optional destination expression;
+ *     - ordered measurement options;
+ *     - option-name source span;
+ *     - option-value expression;
+ *     - delimiters/spans needed for diagnostics and tooling.
+ *
+ * It MUST NOT introduce:
+ *
+ *     QuantumMeasurementIr
+ *     QuantumMeasurementNodeWithHardware
+ *     PhysicalMeasurementNode
+ *     BackendMeasurementNode
+ *
+ * unless such a representation is already part of the canonical domain-neutral
+ * AST contract.
+ *
+ * The preferred semantic flow is:
+ *
+ *     syntax
+ *       |
+ *       v
+ *     generic/domain-neutral AST
+ *       |
+ *       v
+ *     semantic quantum measurement
+ *       |
+ *       v
+ *     quantum::ir
+ *
+ * ============================================================================
+ * SEMANTIC CONTRACT
+ * ============================================================================
+ *
+ * Semantic analysis owns:
+ *
+ *     - target resolution;
+ *     - target quantum typing;
+ *     - result destination typing;
+ *     - option resolution;
+ *     - option duplication rules;
+ *     - basis validation;
+ *     - observable validation;
+ *     - measurement-kind validation;
+ *     - measurement-mode validation;
+ *     - reset semantics;
+ *     - effect checking;
+ *     - ownership/lifetime checking;
+ *     - resource requirements;
+ *     - capability requirements;
+ *     - dynamic-circuit legality;
+ *     - measurement ordering constraints;
+ *     - language-version compatibility.
+ *
+ * Syntax-valid source is not necessarily semantically valid source.
+ *
+ * ============================================================================
+ * RESOURCE / CAPABILITY CONTRACT
+ * ============================================================================
+ *
+ * This grammar does not decide resource availability.
+ *
+ * Semantic/resource analysis may derive requirements such as:
+ *
+ *     capability("quantum.measurement")
+ *
+ *     capability("quantum.mid_circuit_measurement")
+ *
+ *     capability("quantum.observable_measurement")
+ *
+ *     capability("quantum.non_destructive_measurement")
+ *
+ *     requires memory >= required_memory
+ *
+ *     requires capability("classical.feedforward")
+ *
+ * The grammar does not contain resource limits.
+ *
+ * ============================================================================
+ * QUANTUM::IR CONTRACT
+ * ============================================================================
+ *
+ * The canonical quantum semantic boundary remains:
+ *
+ *     quantum::ir
+ *
+ * This grammar must not define a second quantum IR.
+ *
+ * Semantic lowering may construct the existing canonical measurement
+ * representation containing whatever the repository's quantum::ir contract
+ * requires, such as:
+ *
+ *     measurement kind
+ *     measurement mode
+ *     observable/basis
+ *     logical operands
+ *     result destination
+ *     effects
+ *     resource requirements
+ *     source provenance
+ *
+ * Exact Rust types belong to the canonical quantum::ir implementation,
+ * not this grammar.
+ *
+ * ============================================================================
+ * QEC / ZQN / RESILIENCE
+ * ============================================================================
+ *
+ * Measurement may be consumed by:
+ *
+ *     QEC
+ *     ZQN
+ *     resilience
+ *
+ * but none of those systems are implemented here.
+ *
+ * This file does NOT define:
+ *
+ *     syndrome extraction
+ *     decoding
+ *     readout error models
+ *     noise channels
+ *     mitigation algorithms
+ *     retry policies
+ *     recovery policies
+ *     backend switching
+ *
+ * Those systems consume semantic/IR information downstream.
+ *
+ * ============================================================================
+ * HARDWARE BOUNDARY
+ * ============================================================================
+ *
+ * This grammar does not select:
+ *
+ *     CPU
+ *     GPU
+ *     FPGA
+ *     ASIC
+ *     QPU
+ *     physical qubit
+ *     physical readout channel
+ *     ADC
+ *     detector
+ *     topology
+ *     vendor
+ *     backend
+ *
+ * Hardware realization occurs only after semantic analysis and canonical IR.
  *
  * ============================================================================
  * DETERMINISM
  * ============================================================================
  *
- * Parsing must be deterministic.
+ * Parsing is deterministic.
  *
- * There must be exactly one syntactic interpretation for:
+ * The parser must not inspect:
  *
- *     measure <targets>;
+ *     hardware;
+ *     available QPUs;
+ *     CPU count;
+ *     GPU count;
+ *     memory capacity;
+ *     filesystem state;
+ *     network state;
+ *     environment variables;
+ *     randomness;
+ *     wall-clock time.
  *
- *     measure <targets> -> <destination>;
- *
- *     measure <targets> with { <options> };
- *
- *     measure <targets> -> <destination> with { <options> };
- *
- * ============================================================================
- * SOURCE PRESERVATION
- * ============================================================================
- *
- * The frontend AST should preserve:
- *
- *     source span;
- *     target expressions;
- *     optional destination;
- *     option order;
- *     option names;
- *     option expressions;
- *     trailing comma presence where the AST policy preserves it.
- *
- * Semantic normalization belongs after parsing.
+ * Identical source token streams under the same language/dialect configuration
+ * must produce equivalent parse structures.
  *
  * ============================================================================
  * SECURITY
  * ============================================================================
  *
- * This grammar performs no:
+ * This grammar contains:
  *
- *     filesystem access;
- *     network access;
- *     process execution;
- *     backend communication;
- *     hardware access;
- *     dynamic code execution.
+ *     no embedded Rust actions;
+ *     no semantic predicates;
+ *     no filesystem access;
+ *     no network access;
+ *     no process execution;
+ *     no hardware access;
+ *     no runtime calls;
+ *     no dynamic code execution.
  *
- * A malicious measurement source must therefore be handled entirely as syntax
- * until downstream validation.
+ * Safe Rust requirements therefore remain downstream implementation
+ * requirements:
+ *
+ *     Rust 1.97 / Rust 1.97.1
+ *     Rust 2021
+ *     no unsafe Rust
+ *
+ * ============================================================================
+ * PERFORMANCE / SCALABILITY
+ * ============================================================================
+ *
+ * The grammar uses structural repetition:
+ *
+ *     *
+ *     +
+ *
+ * rather than fixed-size alternatives.
+ *
+ * The language therefore has no grammar-level maximum for:
+ *
+ *     measurement targets;
+ *     measurement options;
+ *     source-level measurement statements.
+ *
+ * Practical parser/compiler limits are implementation/resource limits, not
+ * language semantics.
+ *
+ * Generated source may therefore represent very large target collections
+ * provided the implementation has sufficient resources.
+ *
+ * ============================================================================
+ * DIAGNOSTIC CONTRACT
+ * ============================================================================
+ *
+ * Structural syntax errors include:
+ *
+ *     measure
+ *     measure ;
+ *     measure ,
+ *     measure q ->
+ *     measure q with
+ *     measure q with {
+ *     measure q with { basis }
+ *     measure q with { = X }
+ *     measure q with { basis = }
+ *
+ * Semantic errors are NOT parser errors.
+ *
+ * Examples:
+ *
+ *     measure classical_value;
+ *     measure unresolved_name;
+ *     measure non_quantum_expression;
+ *
+ * may be syntactically valid and must reach semantic analysis.
+ *
+ * Semantic diagnostics may include:
+ *
+ *     invalid measurement target;
+ *     invalid result destination;
+ *     unsupported measurement kind;
+ *     unsupported measurement mode;
+ *     invalid basis;
+ *     invalid observable;
+ *     conflicting options;
+ *     unavailable capability;
+ *     insufficient resources;
+ *     invalid dynamic-circuit context.
+ *
+ * ============================================================================
+ * COMPATIBILITY
+ * ============================================================================
+ *
+ * Existing canonical source form:
+ *
+ *     measure <targets>;
+ *
+ * remains supported.
+ *
+ * Existing result form:
+ *
+ *     measure <targets> -> <destination>;
+ *
+ * remains supported.
+ *
+ * Existing option form:
+ *
+ *     measure <targets> with { ... };
+ *
+ * remains supported.
+ *
+ * This file does not rename the existing measurement grammar.
+ *
+ * Compatibility-affecting syntax changes must go through:
+ *
+ *     grammar/compatibility/
+ *
+ *     grammar/spec/compatibility.md
+ *
+ *     grammar/grammar.md
+ *
+ * and the language-version policy.
+ *
+ * ============================================================================
+ * INTEGRATION WITH quantum.g4
+ * ============================================================================
+ *
+ * quantum.g4 is the quantum composition/orchestration layer.
+ *
+ * It must import this parser grammar and route:
+ *
+ *     quantumMeasurementStatement
+ *
+ * through:
+ *
+ *     quantumMeasurementElement
+ *
+ * as already established by the quantum grammar architecture.
+ *
+ * quantum.g4 MUST NOT redefine:
+ *
+ *     quantumMeasurementStatement
+ *     quantumMeasurementTargetList
+ *     quantumMeasurementTarget
+ *     quantumMeasurementDestination
+ *     quantumMeasurementOptions
+ *     quantumMeasurementOptionList
+ *     quantumMeasurementOption
+ *
+ * ============================================================================
+ * INTEGRATION WITH reset.g4
+ * ============================================================================
+ *
+ * reset.g4 owns standalone reset syntax.
+ *
+ * It must not import this file merely to implement reset.
+ *
+ * Measurement reset intent is represented only as a measurement option.
+ *
+ * ============================================================================
+ * INTEGRATION WITH observables.g4
+ * ============================================================================
+ *
+ * observables.g4 owns observable declarations and observable-specific syntax.
+ *
+ * This file accepts an observable expression through:
+ *
+ *     measurement option
+ *
+ * and leaves observable resolution to semantic analysis.
+ *
+ * ============================================================================
+ * INTEGRATION WITH operations.g4
+ * ============================================================================
+ *
+ * operations.g4 owns operation invocation.
+ *
+ * A measurement is NOT represented as:
+ *
+ *     apply measure(...)
+ *
+ * in the canonical grammar.
+ *
+ * `MEASURE` has dedicated measurement-statement syntax because measurement
+ * has a semantic quantum/classical boundary.
+ *
+ * ============================================================================
+ * INTEGRATION WITH controls.g4
+ * ============================================================================
+ *
+ * controls.g4 owns quantum operation control modifiers.
+ *
+ * Measurement does not import controls.g4.
+ *
+ * If a future measurement feature needs control semantics, it must be added
+ * through a separate semantic contract or a deliberately specified extension,
+ * not by creating a circular grammar dependency.
+ *
+ * ============================================================================
+ * INTEGRATION WITH adjoints.g4
+ * ============================================================================
+ *
+ * Measurement is generally non-unitary and therefore is not an ordinary
+ * adjointable quantum operation.
+ *
+ * This grammar does not encode that semantic restriction.
+ *
+ * If source syntax attempts to place measurement under an adjoint modifier,
+ * the appropriate semantic layer must reject it unless the language formally
+ * defines a reversible measurement construct.
+ *
+ * ============================================================================
+ * INTEGRATION WITH quantum types
+ * ============================================================================
+ *
+ * This file does not define:
+ *
+ *     Qubit
+ *     Qubit[n]
+ *     LogicalQubit
+ *     QuantumRegister
+ *     MeasurementResult
+ *
+ * Type syntax remains owned by the canonical type grammars.
+ *
+ * ============================================================================
+ * INTEGRATION WITH HYBRID COMPUTATION
+ * ============================================================================
+ *
+ * A measurement can produce classical information consumed by subsequent
+ * classical computation.
+ *
+ * Example:
+ *
+ *     measure q -> result;
+ *
+ *     if result {
+ *         ...
+ *     }
+ *
+ * The measurement grammar only creates the measurement boundary.
+ *
+ * Hybrid semantics are handled downstream.
+ *
+ * ============================================================================
+ * INTEGRATION WITH RESOURCES
+ * ============================================================================
+ *
+ * Measurement resource requirements are semantic facts.
+ *
+ * They may be derived from:
+ *
+ *     target cardinality;
+ *     measurement kind;
+ *     measurement mode;
+ *     observable;
+ *     result shape;
+ *     dynamic-circuit requirements.
+ *
+ * No resource limit is encoded here.
+ *
+ * ============================================================================
+ * INTEGRATION WITH HARDWARE
+ * ============================================================================
+ *
+ * Hardware-specific measurement realization is downstream.
+ *
+ * Examples include:
+ *
+ *     readout method;
+ *     physical channel;
+ *     timing;
+ *     calibration;
+ *     native instruction;
+ *     topology;
+ *     detector configuration.
+ *
+ * None belong in this grammar.
+ *
+ * ============================================================================
+ * INTEGRATION WITH INTEROPERABILITY
+ * ============================================================================
+ *
+ * OpenQASM, QIR, vendor formats, simulator formats, and other external
+ * representations may map to the canonical measurement semantic model.
+ *
+ * They are interoperability formats.
+ *
+ * They are not alternative canonical Zamani measurement grammars.
+ *
+ * ============================================================================
+ * TEST CONTRACT
+ * ============================================================================
+ *
+ * Required positive syntax tests:
+ *
+ *     measure q;
+ *
+ *     measure q0, q1;
+ *
+ *     measure q0, q1, q2;
+ *
+ *     measure register[i];
+ *
+ *     measure register[start .. end];
+ *
+ *     measure q -> result;
+ *
+ *     measure q -> result[index];
+ *
+ *     measure q0, q1 -> result;
+ *
+ *     measure q with {};
+ *
+ *     measure q with {
+ *         basis = X
+ *     };
+ *
+ *     measure q with {
+ *         basis = X,
+ *         mode = destructive
+ *     };
+ *
+ *     measure q -> result with {
+ *         basis = X,
+ *         reset = true
+ *     };
+ *
+ *     measure q with {
+ *         observable = my_observable
+ *     };
+ *
+ *     measure q with {
+ *         future_option = future_value
+ *     };
+ *
+ * Required boundary tests:
+ *
+ *     one target;
+ *     multiple targets;
+ *     symbolic/indexed target;
+ *     sliced target;
+ *     one option;
+ *     many options;
+ *     empty option block;
+ *     trailing target comma;
+ *     trailing option comma;
+ *     destination;
+ *     destination plus options;
+ *     nested expression target;
+ *     nested expression option value.
+ *
+ * Required negative parser tests:
+ *
+ *     measure;
+ *     measure ;
+ *     measure ,
+ *     measure q ,
+ *     measure q ->
+ *     measure q with
+ *     measure q with {
+ *     measure q with }
+ *     measure q with { basis }
+ *     measure q with { = X }
+ *     measure q with { basis = }
+ *     measure q -> ;
+ *
+ * Required semantic tests:
+ *
+ *     classical target;
+ *     unresolved target;
+ *     invalid target type;
+ *     invalid result destination;
+ *     unknown semantic option;
+ *     duplicate/conflicting option;
+ *     unsupported measurement kind;
+ *     unsupported measurement mode;
+ *     unsupported basis;
+ *     invalid observable;
+ *     insufficient capability;
+ *     insufficient resources.
+ *
+ * Required scalability tests:
+ *
+ *     generated target lists of increasing cardinality;
+ *     generated option lists of increasing cardinality;
+ *     large source files;
+ *     symbolic target collections;
+ *     large-but-valid expressions.
+ *
+ * No scalability test may define a universal maximum.
+ *
+ * ============================================================================
+ * COMPLETION CRITERIA
+ * ============================================================================
+ *
+ * This file is complete as the independent measurement grammar contract when:
+ *
+ * [x] It has a parser grammar declaration.
+ *
+ * [x] It consumes the canonical ZamaniLexer vocabulary.
+ *
+ * [x] It imports reusable Names/Expressions grammar components.
+ *
+ * [x] It has a single ownership boundary.
+ *
+ * [x] It owns measurement statement syntax.
+ *
+ * [x] It owns measurement target-list syntax.
+ *
+ * [x] It owns measurement destination syntax.
+ *
+ * [x] It owns measurement option syntax.
+ *
+ * [x] It does not own general expression syntax.
+ *
+ * [x] It does not own identifier syntax.
+ *
+ * [x] It does not own quantum type syntax.
+ *
+ * [x] It does not own operation syntax.
+ *
+ * [x] It does not own reset syntax.
+ *
+ * [x] It does not own observable declarations.
+ *
+ * [x] It does not own dynamic control-flow syntax.
+ *
+ * [x] It does not own hardware realization.
+ *
+ * [x] It does not own resource availability.
+ *
+ * [x] It does not own QEC.
+ *
+ * [x] It does not own ZQN.
+ *
+ * [x] It does not own resilience.
+ *
+ * [x] It does not own routing.
+ *
+ * [x] It does not own scheduling.
+ *
+ * [x] It does not define a second quantum IR.
+ *
+ * [x] It contains no hardware-size constants.
+ *
+ * [x] It contains no embedded Rust.
+ *
+ * [x] It requires no unsafe Rust.
+ *
+ * [x] It supports arbitrary source-level target cardinality.
+ *
+ * [x] It supports arbitrary source-level option cardinality.
+ *
+ * [x] It preserves source structure for AST construction.
+ *
+ * [x] It preserves option ordering.
+ *
+ * [x] It keeps semantic validation downstream.
+ *
+ * [x] It preserves the quantum::ir boundary.
+ *
+ * [x] It has explicit integration contracts.
+ *
+ * [x] It has explicit positive/negative/boundary/scalability tests.
+ *
+ * [ ] quantum.g4 imports this grammar in the canonical composition build.
+ *
+ * [ ] The generated ANTLR parser accepts the positive corpus.
+ *
+ * [ ] The generated ANTLR parser rejects the structural negative corpus.
+ *
+ * [ ] Rust lexer tokenization conforms to the canonical lexer.
+ *
+ * [ ] Frontend AST lowering conforms to the AST contract.
+ *
+ * [ ] Semantic measurement validation conforms to the semantic contract.
+ *
+ * [ ] canonical quantum::ir lowering conforms to the IR contract.
+ *
+ * [ ] Cross-domain/hybrid tests pass.
  *
  * ============================================================================
  */
+
+
+/* ============================================================================
+ * PARSER DECLARATION
+ * ========================================================================== */
+
+parser grammar QuantumMeasurement;
+
+options {
+    tokenVocab = ZamaniLexer;
+}
+
+import Names, Expressions;
 
 
 /* ============================================================================
@@ -517,11 +1370,12 @@
  * ========================================================================== */
 
 /*
- * Canonical minimal form:
+ * Canonical forms:
  *
  *     measure q;
- *
- * The parser records measurement intent.
+ *     measure q -> result;
+ *     measure q with { basis = X };
+ *     measure q -> result with { basis = X };
  */
 quantumMeasurementStatement
     : MEASURE
@@ -533,18 +1387,13 @@ quantumMeasurementStatement
 
 
 /* ============================================================================
- * 2. MEASUREMENT TARGET LIST
+ * 2. TARGET LIST
  * ========================================================================== */
 
 /*
- * Examples:
+ * Target cardinality is intentionally unbounded by grammar.
  *
- *     measure q;
- *     measure q0, q1;
- *     measure register[i];
- *     measure register[start .. end];
- *
- * No target-count limit is encoded.
+ * The optional trailing comma is part of the explicit source syntax policy.
  */
 quantumMeasurementTargetList
     : quantumMeasurementTarget
@@ -554,21 +1403,13 @@ quantumMeasurementTargetList
 
 
 /* ============================================================================
- * 3. MEASUREMENT TARGET
+ * 3. TARGET
  * ========================================================================== */
 
 /*
- * The target is an ordinary Zamani expression.
+ * A target is an ordinary expression.
  *
- * This intentionally avoids defining another:
- *
- *     QubitId
- *     PhysicalQubitId
- *     RegisterId
- *
- * in the grammar.
- *
- * Canonical identity belongs to semantic analysis and quantum::ir.
+ * Semantic analysis determines whether it is measurable.
  */
 quantumMeasurementTarget
     : expression
@@ -579,45 +1420,15 @@ quantumMeasurementTarget
  * 4. RESULT DESTINATION
  * ========================================================================== */
 
-/*
- * Canonical form:
- *
- *     measure q -> result;
- *
- * The destination remains an expression so semantic analysis can determine
- * whether it represents:
- *
- *     a classical bit;
- *     a classical register;
- *     a result collection;
- *     a structured destination;
- *     another valid measurement sink.
- */
 quantumMeasurementDestination
     : THIN_ARROW expression
     ;
 
 
 /* ============================================================================
- * 5. MEASUREMENT OPTIONS
+ * 5. OPTIONS
  * ========================================================================== */
 
-/*
- * Optional semantic configuration:
- *
- *     measure q with {
- *         basis = X
- *     };
- *
- *     measure q -> result with {
- *         mode = destructive,
- *         reset = true
- *     };
- *
- * `WITH` is already a canonical Zamani keyword.
- *
- * No new lexer keyword is introduced.
- */
 quantumMeasurementOptions
     : WITH
       LBRACE
@@ -630,11 +1441,6 @@ quantumMeasurementOptions
  * 6. OPTION LIST
  * ========================================================================== */
 
-/*
- * Options are comma-separated.
- *
- * No fixed number of options is permitted or required by the grammar.
- */
 quantumMeasurementOptionList
     : quantumMeasurementOption
       (COMMA quantumMeasurementOption)*
@@ -647,686 +1453,12 @@ quantumMeasurementOptionList
  * ========================================================================== */
 
 /*
- * Generic form:
+ * The option namespace is deliberately open.
  *
- *     name = expression
- *
- * Examples:
- *
- *     basis = X
- *     mode = destructive
- *     kind = projective
- *     reset = true
- *
- * The semantic layer owns the authoritative option vocabulary.
+ * Semantic analysis owns the authoritative option registry.
  */
 quantumMeasurementOption
     : identifier
       ASSIGN
       expression
     ;
-
-
-/* ============================================================================
- * 8. EXPLICIT STANDARD MEASUREMENT OPTION NAMES
- * ============================================================================
- *
- * IMPORTANT:
- *
- * These rules are NOT used to restrict the option vocabulary.
- *
- * They exist as named parser contracts for semantic consumers and future
- * AST builders that need to distinguish the canonical standard options from
- * extension options.
- *
- * The actual option spelling is still represented by the normal identifier
- * grammar.
- * ========================================================================== */
-
-quantumMeasurementStandardOptionName
-    : identifier
-    ;
-
-
-/* ============================================================================
- * 9. BASIS OPTION CONTRACT
- * ========================================================================== */
-
-/*
- * The grammar intentionally does not reserve:
- *
- *     X
- *     Y
- *     Z
- *
- * as lexer keywords.
- *
- * Therefore:
- *
- *     basis = X
- *     basis = Y
- *     basis = Z
- *
- * remain ordinary expressions.
- *
- * Semantic analysis maps them to the canonical IR basis representation where
- * appropriate.
- *
- * Named/custom observables remain possible.
- */
-
-
-/* ============================================================================
- * 10. MEASUREMENT KIND CONTRACT
- * ========================================================================== */
-
-/*
- * Semantic examples:
- *
- *     kind = projective
- *     kind = generalized
- *     kind = weak
- *     kind = continuous
- *
- * These values are intentionally not lexer keywords.
- *
- * The grammar preserves them as expressions.
- *
- * The canonical IR owns MeasurementKind.
- */
-
-
-/* ============================================================================
- * 11. MEASUREMENT MODE CONTRACT
- * ========================================================================== */
-
-/*
- * Semantic examples:
- *
- *     mode = destructive
- *     mode = non_destructive
- *
- * Again, these remain expressions.
- *
- * The canonical IR owns MeasurementMode.
- */
-
-
-/* ============================================================================
- * 12. RESET-AFTER-MEASUREMENT CONTRACT
- * ========================================================================== */
-
-/*
- * Semantic example:
- *
- *     measure q with {
- *         reset = true
- *     };
- *
- * This is NOT equivalent to the standalone:
- *
- *     reset q;
- *
- * The distinction remains available to semantic lowering.
- */
-
-
-/* ============================================================================
- * 13. OBSERVABLE CONTRACT
- * ========================================================================== */
-
-/*
- * Semantic examples:
- *
- *     measure q with {
- *         observable = X
- *     };
- *
- *     measure q with {
- *         observable = my_observable
- *     };
- *
- *     measure q0, q1 with {
- *         observable = parity
- *     };
- *
- * The grammar does not implement observable mathematics.
- *
- * Canonical observable semantics belong to quantum::ir.
- */
-
-
-/* ============================================================================
- * 14. RESULT TYPE CONTRACT
- * ========================================================================== */
-
-/*
- * A semantic consumer may use:
- *
- *     result_type = bit
- *
- *     result_type = bit_vector
- *
- *     result_type = probability
- *
- *     result_type = observable
- *
- * The grammar does not define a finite result-type universe.
- *
- * Type analysis owns result compatibility.
- */
-
-
-/* ============================================================================
- * 15. GROUPING CONTRACT
- * ========================================================================== */
-
-/*
- * Measurement grouping is represented semantically through an option:
- *
- *     grouping = ...
- *
- * This allows multiple measurement targets to remain one source operation
- * without forcing a hardware-specific grouping representation.
- */
-
-
-/* ============================================================================
- * 16. EXTENSION OPTIONS
- * ========================================================================== */
-
-/*
- * Future language versions may define additional measurement options.
- *
- * For example:
- *
- *     measure q with {
- *         future_option = value
- *     };
- *
- * Such syntax remains parseable without changing this grammar.
- *
- * Semantic version/capability checking decides whether the option is supported.
- */
-
-
-/* ============================================================================
- * 17. ATTRIBUTE INTEGRATION
- * ========================================================================== */
-
-/*
- * Attributes remain owned by the canonical attribute grammar.
- *
- * An attributed measurement can therefore be represented by the surrounding
- * quantum-block grammar:
- *
- *     #[attribute]
- *     measure q -> result;
- *
- * This file deliberately does not duplicate attribute syntax.
- *
- * If the canonical AST attaches attributes directly to statements, the
- * frontend should wrap quantumMeasurementStatement accordingly.
- */
-
-
-/* ============================================================================
- * 18. QUANTUM BLOCK INTEGRATION
- * ========================================================================== */
-
-/*
- * quantum/quantum.g4 must reference:
- *
- *     quantumMeasurementStatement
- *
- * as one of its quantum elements.
- *
- * This file becomes the sole owner of that rule.
- */
-
-
-/* ============================================================================
- * 19. GENERAL STATEMENT INTEGRATION
- * ========================================================================== */
-
-/*
- * The canonical parser must route measurement statements through the quantum
- * statement boundary rather than treating `measure` as a generic function call.
- *
- * This preserves:
- *
- *     quantum measurement intent
- *
- * as a distinct AST node.
- */
-
-
-/* ============================================================================
- * 20. SEMANTIC VALIDATION CONTRACT
- * ========================================================================== */
-
-/*
- * Parsing succeeds for syntactically valid forms.
- *
- * Semantic analysis MUST subsequently validate:
- *
- *     1. Every target denotes a valid quantum resource.
- *
- *     2. Every target is accessible in the current scope.
- *
- *     3. Every target has a valid quantum type.
- *
- *     4. Destination expressions have a compatible classical/result type.
- *
- *     5. Destination shape is compatible with target/result shape.
- *
- *     6. Measurement options are recognized or explicitly permitted by the
- *        active language/dialect version.
- *
- *     7. Duplicate/conflicting options are rejected.
- *
- *     8. The selected observable is valid for the selected targets.
- *
- *     9. Measurement kind is compatible with the observable.
- *
- *    10. Measurement mode is semantically valid.
- *
- *    11. Reset-after-measurement semantics are valid.
- *
- *    12. Dynamic-circuit dependencies are valid.
- *
- *    13. Resource requirements are satisfiable by the selected compilation
- *        context.
- *
- *    14. Any target-specific restriction is reported as a target/resource
- *        diagnostic rather than a grammar failure.
- */
-
-
-/* ============================================================================
- * 21. CANONICAL IR LOWERING CONTRACT
- * ========================================================================== */
-
-/*
- * The frontend lowering layer should transform the parsed structure into the
- * canonical measurement representation owned by:
- *
- *     src/quantum/ir/quantum/measurement.rs
- *
- * The lowering layer is responsible for mapping source options such as:
- *
- *     basis
- *     observable
- *     kind
- *     mode
- *     reset
- *
- * into canonical semantic fields.
- *
- * This grammar MUST NOT instantiate or import Rust IR structures.
- */
-
-
-/* ============================================================================
- * 22. RESOURCE LIMIT CONTRACT
- * ========================================================================== */
-
-/*
- * This grammar performs NO resource-limit validation.
- *
- * In particular, it must not reject a program because it contains:
- *
- *     many targets;
- *     many measurements;
- *     large symbolic registers;
- *     large result structures;
- *     many option entries.
- *
- * Downstream resource analysis may impose explicit policy limits supplied by
- * the compilation/execution context.
- *
- * Therefore:
- *
- *     language capacity
- *
- * is distinct from:
- *
- *     available execution capacity.
- */
-
-
-/* ============================================================================
- * 23. HARD-CODING AUDIT
- * ========================================================================== */
-
-/*
- * Forbidden examples:
- *
- *     q[0]
- *     q[1]
- *     q[31]
- *
- * as special grammar cases.
- *
- * Forbidden:
- *
- *     MAX_MEASUREMENTS
- *     MAX_QUBITS
- *     MAX_RESULTS
- *     MAX_TARGETS
- *     MAX_SHOTS
- *
- * Forbidden:
- *
- *     IBM
- *     Rigetti
- *     IonQ
- *     Quantinuum
- *     device identifiers
- *     physical readout channel identifiers
- *
- * Forbidden:
- *
- *     fixed measurement duration
- *     fixed readout frequency
- *     fixed detector count
- *
- * This grammar contains none of these machine-specific assumptions.
- */
-
-
-/* ============================================================================
- * 24. ERROR-RECOVERY CONTRACT
- * ========================================================================== */
-
-/*
- * The generated ANTLR parser may recover from malformed source according to
- * the canonical parser error strategy.
- *
- * This grammar must not contain semantic actions.
- *
- * Diagnostics should identify:
- *
- *     missing target;
- *     malformed destination;
- *     malformed option;
- *     missing assignment;
- *     malformed option block;
- *     missing closing delimiter;
- *     malformed target list.
- *
- * Semantic errors such as:
- *
- *     invalid qubit;
- *     invalid classical destination;
- *     unsupported basis;
- *     unsupported measurement kind;
- *
- * belong to semantic analysis.
- */
-
-
-/* ============================================================================
- * 25. VALID EXAMPLES
- * ========================================================================== */
-
-/*
- * Minimal:
- *
- *     measure q;
- *
- * Destination:
- *
- *     measure q -> result;
- *
- * Multiple targets:
- *
- *     measure q0, q1, q2;
- *
- * Indexed target:
- *
- *     measure q[i];
- *
- * Range target:
- *
- *     measure q[start .. end];
- *
- * Basis:
- *
- *     measure q with {
- *         basis = X
- *     };
- *
- * Destination plus basis:
- *
- *     measure q -> result with {
- *         basis = X
- *     };
- *
- * Destructive:
- *
- *     measure q with {
- *         mode = destructive
- *     };
- *
- * Reset:
- *
- *     measure q with {
- *         reset = true
- *     };
- *
- * Generalized semantic measurement:
- *
- *     measure q with {
- *         kind = generalized,
- *         observable = observable_name
- *     };
- *
- * Multiple options:
- *
- *     measure q0, q1 -> result with {
- *         basis = Z,
- *         mode = non_destructive,
- *         reset = false
- *     };
- */
-
-
-/* ============================================================================
- * 26. INVALID EXAMPLES
- * ========================================================================== */
-
-/*
- * Missing target:
- *
- *     measure;
- *
- * Missing destination expression:
- *
- *     measure q ->;
- *
- * Missing option assignment:
- *
- *     measure q with {
- *         basis
- *     };
- *
- * Missing option value:
- *
- *     measure q with {
- *         basis =
- *     };
- *
- * Malformed option:
- *
- *     measure q with {
- *         = X
- *     };
- *
- * Malformed target list:
- *
- *     measure q,;
- *
- * Missing closing brace:
- *
- *     measure q with {
- *         basis = X;
- *
- * These are syntax errors.
- *
- * Semantic invalidity is intentionally not encoded here.
- */
-
-
-/* ============================================================================
- * 27. ROUND-TRIP CONTRACT
- * ========================================================================== */
-
-/*
- * The parser/AST/printer pipeline should preserve the semantic structure of:
- *
- *     measure targets -> destination with { options };
- *
- * Option order may be preserved by the AST where source fidelity is required.
- *
- * Canonical formatting may normalize:
- *
- *     whitespace;
- *     line breaks;
- *     comma placement;
- *
- * without changing measurement semantics.
- */
-
-
-/* ============================================================================
- * 28. COMPATIBILITY CONTRACT
- * ========================================================================== */
-
-/*
- * Existing syntax:
- *
- *     measure q;
- *
- *     measure q -> result;
- *
- * remains valid.
- *
- * The grammar therefore provides a backwards-compatible expansion of the
- * existing measurement surface rather than replacing it with a machine-specific
- * representation.
- *
- * Existing consumers of `quantumMeasurementStatement` continue to use the same
- * rule name.
- *
- * The important migration is lexical-token normalization:
- *
- *     K_MEASURE  -> MEASURE
- *     SEMI       -> SEMICOLON
- *
- * because the canonical lexer owns those token names.
- */
-
-
-/* ============================================================================
- * 29. DEPENDENCY CONTRACT
- * ========================================================================== */
-
-/*
- * Direct grammar dependencies:
- *
- *     MEASURE
- *     WITH
- *     THIN_ARROW
- *     LPAREN/RPAREN
- *     LBRACE/RBRACE
- *     COMMA
- *     ASSIGN
- *     SEMICOLON
- *     identifier
- *     expression
- *
- * Indirect semantic consumers:
- *
- *     frontend AST
- *     semantic analyzer
- *     type checker
- *     effect checker
- *     capability checker
- *     resource checker
- *     quantum::ir
- *     QEC
- *     ZQN
- *     scheduling
- *     routing
- *     optimization
- *     resilience
- *     hardware HAL
- *     simulator
- *     runtime
- *
- * This file must NOT directly depend on any Rust implementation module.
- */
-
-
-/* ============================================================================
- * 30. COMPLETION CRITERIA
- * ========================================================================== */
-
-/*
- * This file is complete when:
- *
- *     [x] It owns measurement syntax exclusively.
- *
- *     [x] It uses canonical lexer token names.
- *
- *     [x] It imposes no machine-size limit.
- *
- *     [x] It supports single and multiple targets.
- *
- *     [x] It supports expression-based targets.
- *
- *     [x] It supports result destinations.
- *
- *     [x] It supports extensible semantic options.
- *
- *     [x] It supports basis/observable intent without hard-coded gate syntax.
- *
- *     [x] It supports measurement-kind intent.
- *
- *     [x] It supports destructive/non-destructive intent.
- *
- *     [x] It supports reset-after-measurement intent.
- *
- *     [x] It remains independent of hardware.
- *
- *     [x] It remains independent of QEC.
- *
- *     [x] It remains independent of ZQN.
- *
- *     [x] It remains independent of scheduling.
- *
- *     [x] It remains independent of routing.
- *
- *     [x] It remains independent of optimization.
- *
- *     [x] It remains independent of runtime execution.
- *
- *     [x] It lowers conceptually into the existing quantum::ir measurement
- *         model.
- *
- *     [x] It does not define a second measurement IR.
- *
- *     [x] It contains no Rust.
- *
- *     [x] It requires no unsafe Rust.
- *
- *     [x] It is deterministic.
- *
- *     [x] It has explicit positive and negative test requirements.
- *
- *     [x] It preserves existing `measure q;` and `measure q -> result;`
- *         source forms.
- *
- * ============================================================================
- */
