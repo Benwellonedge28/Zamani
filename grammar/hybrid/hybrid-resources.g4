@@ -6,122 +6,39 @@
  * File:
  *     grammar/hybrid/hybrid-resources.g4
  *
+ * ANTLR grammar identity:
+ *     HybridResources
+ *
+ * NOTE:
+ *     ANTLR requires a standalone grammar named `HybridResources` to be stored
+ *     as `HybridResources.g4`. The existing hyphenated filename may be retained
+ *     as a repository source artifact only if the build system stages/aliases
+ *     it to the valid ANTLR filename.
+ *
  * Status:
- *     Production hybrid-resource composition grammar.
+ *     Production-ready hybrid resource adapter.
  *
- * Grammar:
- *     ANTLR4 parser grammar
- *
- * Implementation baseline:
+ * Baseline:
  *     Rust 1.97 / Rust 1.97.1
  *     Rust 2021
- *
- * Safety:
- *     No embedded Rust.
- *     No semantic predicates.
- *     No unsafe implementation.
+ *     Safe Rust only.
+ *     No unsafe Rust.
  *
  * ============================================================================
  * PURPOSE
  * ============================================================================
  *
- * This file owns SOURCE-LEVEL RESOURCE REQUIREMENTS for HYBRID COMPUTATION.
+ * This grammar is the HYBRID DOMAIN ADAPTER for the canonical resource
+ * language.
  *
- * Hybrid computation may combine:
+ * It does NOT create a second resource language.
  *
- *     classical computation
- *     quantum computation
- *     accelerators
- *     HDL/hardware computation
- *     distributed computation
- *     future computational domains
+ * Universal resource syntax is owned by:
  *
- * This grammar expresses what a hybrid program:
+ *     grammar/resources/resources.g4
  *
- *     requires
- *     constrains
- *     prefers
- *     hints
- *     targets
- *     exposes as a capability
- *
- * without selecting a particular physical machine.
- *
- * ============================================================================
- * FUNDAMENTAL RULE
- * ============================================================================
- *
- * Zamani describes:
- *
- *     computation
- *     semantics
- *     intent
- *     requirements
- *     constraints
- *     capabilities
- *     preferences
- *     hints
- *
- * It does NOT make temporary hardware characteristics part of permanent
- * source semantics.
- *
- * Therefore this grammar MUST NOT encode universal:
- *
- *     CPU counts
- *     core counts
- *     thread counts
- *     GPU counts
- *     FPGA counts
- *     ASIC counts
- *     QPU counts
- *     qubit counts
- *     memory capacities
- *     device IDs
- *     topology
- *     addresses
- *     deployment locations
- *     network inventories
- *     accelerator inventories
- *
- * unless a specific hardware dialect explicitly makes such information part
- * of the programmer's intended hardware semantics.
- *
- * ============================================================================
- * POCO-REAF
- * ============================================================================
- *
- * The language model is:
- *
- *     Program Once
- *          |
- *          v
- *     Stable semantic meaning
- *          |
- *          v
- *     Compile Once
- *          |
- *          v
- *     Target realization
- *          |
- *          v
- *     Available capabilities/resources
- *          |
- *          v
- *     Execute Everywhere / Anywhere
- *
- * "Forever" means the semantic representation remains versionable and
- * extensible as implementations evolve.
- *
- * It does NOT mean that a compiled binary is literally executable on every
- * future architecture without recompilation.
- *
- * This distinction is important:
- *
- *     source semantic portability
- *
- * is different from:
- *
- *     binary portability.
+ * This file only exposes that canonical resource model through a stable
+ * hybrid-domain boundary.
  *
  * ============================================================================
  * OWNERSHIP
@@ -129,94 +46,229 @@
  *
  * THIS FILE OWNS:
  *
- *     - hybrid resource requirement expressions;
- *     - hybrid capability requirements;
- *     - hybrid resource constraints;
- *     - hybrid resource preferences;
- *     - hybrid implementation hints;
- *     - hybrid target-class requirements;
- *     - hybrid resource-property requirements;
- *     - hybrid resource composition;
- *     - resource requirement grouping;
- *     - logical hybrid placement intent;
- *     - hybrid scalability intent.
+ *     hybridResourceConstruct
+ *     hybridResourceDeclaration
+ *     hybridRequirementDeclaration
+ *     hybridConstraintDeclaration
+ *     hybridPreferenceDeclaration
+ *     hybridHintDeclaration
+ *     hybridCapabilityDeclaration
+ *     hybridTargetDeclaration
+ *     hybridResourceReference
+ *
+ * These are HYBRID ADAPTER RULES.
+ *
+ * They provide stable names for the hybrid grammar without creating new
+ * resource syntax.
  *
  * THIS FILE DOES NOT OWN:
  *
- *     - physical hardware discovery;
- *     - hardware inventory;
- *     - device selection;
- *     - physical allocation;
- *     - scheduling;
- *     - routing;
- *     - calibration;
- *     - optimization;
- *     - QEC;
- *     - ZQN;
- *     - resilience;
- *     - runtime dispatch;
- *     - canonical quantum IR;
- *     - classical IR;
- *     - quantum gate syntax;
- *     - general type syntax;
- *     - general expression precedence;
- *     - general statement syntax;
- *     - lexer token definitions.
+ *     identifiers
+ *     qualified names
+ *     expressions
+ *     types
+ *     resource declarations
+ *     resource requirements
+ *     resource constraints
+ *     resource preferences
+ *     resource hints
+ *     resource capabilities
+ *     resource targets
+ *     resource quantities
+ *     capacities
+ *     availability
+ *     performance
+ *     latency
+ *     throughput
+ *     bandwidth
+ *     energy
+ *     power
+ *     reliability
+ *     resilience
+ *     cost
+ *     reservation
+ *     acquisition
+ *     release
+ *     derivation
+ *     resource groups
+ *     resource contracts
+ *     resource profiles
+ *
+ * All of those remain owned by `Resources` and its subordinate canonical
+ * resource grammars.
  *
  * ============================================================================
- * ARCHITECTURAL POSITION
+ * SINGLE-AUTHORITY RULE
  * ============================================================================
  *
- *     Source
- *       |
- *       v
- *     Lexer
- *       |
- *       v
- *     Grammar
- *       |
- *       v
- *     Frontend AST
- *       |
- *       v
- *     Semantic analysis
- *       |
- *       +-----------------------------+
- *       |                             |
- *       v                             v
- *     Requirements                 Capabilities
- *       |                             |
- *       +-------------+---------------+
- *                     |
- *                     v
- *               Canonical semantic IR
- *                     |
- *        +------------+-------------+
- *        |            |             |
- *        v            v             v
- *      Quantum     Classical      Hardware
- *       IR          IR/model       model
- *        |            |             |
- *        +------------+-------------+
- *                     |
- *                     v
- *              Optimization
- *                     |
- *                  Routing
- *                     |
- *                 Scheduling
- *                     |
- *             Runtime / deployment
+ * There is exactly one universal source-level resource grammar:
+ *
+ *     Resources
+ *
+ * Hybrid does not fork or specialize that grammar syntactically.
+ *
+ * The architecture is:
+ *
+ *     Zamani source
+ *          |
+ *          v
+ *     ZamaniParser
+ *          |
+ *          v
+ *     Hybrid
+ *          |
+ *          v
+ *     HybridResources
+ *          |
+ *          v
+ *     Resources
+ *          |
+ *          v
+ *     domain-neutral AST
+ *          |
+ *          v
+ *     semantic resource model
+ *
+ * This prevents:
+ *
+ *     hybrid resource syntax
+ *     quantum resource syntax
+ *     classical resource syntax
+ *     hardware resource syntax
+ *
+ * from becoming competing resource languages.
+ *
+ * ============================================================================
+ * POCO-REAF
+ * ============================================================================
+ *
+ * This adapter introduces NO finite hardware limits.
+ *
+ * It does not define:
+ *
+ *     MAX_QUBITS
+ *     MAX_CPUS
+ *     MAX_CORES
+ *     MAX_THREADS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_ASICS
+ *     MAX_QPUS
+ *     MAX_NODES
+ *     MAX_DEVICES
+ *     MAX_MEMORY
+ *     MAX_STORAGE
+ *     MAX_ACCELERATORS
+ *     MAX_REGISTER_WIDTH
+ *     MAX_TENSOR_RANK
+ *     MAX_NETWORK_SIZE
+ *
+ * Nor does it define finite counts of:
+ *
+ *     resource declarations
+ *     capabilities
+ *     requirements
+ *     constraints
+ *     preferences
+ *     targets
+ *     resources
+ *
+ * The canonical `Resources` grammar is responsible for those syntactic
+ * categories, and it uses unbounded grammar repetition rather than artificial
+ * machine capacities.
+ *
+ * ============================================================================
+ * SEMANTIC DISTINCTIONS
+ * ============================================================================
+ *
+ * The frontend semantic model MUST preserve the distinction between:
+ *
+ *     requirement
+ *     constraint
+ *     preference
+ *     hint
+ *     capability
+ *     target
+ *     resource
+ *
+ * For example:
+ *
+ *     requires capability("quantum.measurement");
+ *
+ * is not the same semantic object as:
+ *
+ *     prefer capability("quantum.measurement");
+ *
+ * and neither is equivalent to selecting a physical QPU.
+ *
+ * This grammar performs no such semantic resolution.
+ *
+ * ============================================================================
+ * TARGET INDEPENDENCE
+ * ============================================================================
+ *
+ * Hybrid resources describe PROGRAM INTENT.
+ *
+ * They do not select:
+ *
+ *     cpu0
+ *     gpu0
+ *     fpga0
+ *     qpu0
+ *     physical_qubit0
+ *     node0
+ *     memory_bank0
+ *
+ * They also do not encode:
+ *
+ *     fixed topology
+ *     physical addresses
+ *     fixed device inventories
+ *     fixed memory capacities
+ *     fixed register widths
+ *     fixed accelerator counts
+ *
+ * Target realization is downstream.
+ *
+ * ============================================================================
+ * HYBRID DOMAIN MODEL
+ * ============================================================================
+ *
+ * Hybrid computation may combine:
+ *
+ *     classical
+ *     quantum
+ *     HDL
+ *     hardware
+ *     accelerator
+ *     distributed
+ *     AI
+ *     data
+ *     networking
+ *     security
+ *     future domains
+ *
+ * The resource contract is therefore intentionally domain-neutral.
+ *
+ * A hybrid program can express requirements such as:
+ *
+ *     requires capability("quantum.measurement");
+ *
+ *     requires capability("tensor.compute");
+ *
+ *     requires memory >= required_memory;
+ *
+ *     requires qubits >= required_qubits;
+ *
+ * without changing the grammar when a new hardware class appears.
  *
  * ============================================================================
  * CANONICAL QUANTUM BOUNDARY
  * ============================================================================
  *
- * Quantum resource semantics MUST eventually integrate with:
+ * Quantum resource meaning is resolved downstream.
  *
- *     quantum::ir
- *
- * This file MUST NOT define:
+ * This grammar MUST NOT create:
  *
  *     QubitId
  *     PhysicalQubitId
@@ -225,81 +277,128 @@
  *     QuantumCircuit
  *     QuantumRegister
  *
- * The existing quantum resource grammar remains responsible for quantum-
- * specific resource syntax. This file composes the hybrid meaning around it.
+ * Quantum semantic lowering remains:
+ *
+ *     source
+ *       |
+ *       v
+ *     domain-neutral AST
+ *       |
+ *       v
+ *     semantic analysis
+ *       |
+ *       v
+ *     quantum::ir
+ *       |
+ *       v
+ *     optimization
+ *       |
+ *       v
+ *     routing
+ *       |
+ *       v
+ *     scheduling
+ *       |
+ *       v
+ *     QEC / resilience / ZQN
+ *       |
+ *       v
+ *     HAL
+ *       |
+ *       v
+ *     target realization
  *
  * ============================================================================
- * RESOURCE TAXONOMY
+ * RESOURCE / HARDWARE SEPARATION
  * ============================================================================
  *
- * This grammar deliberately distinguishes:
+ * This grammar describes:
  *
- *     resource
- *     capability
- *     requirement
- *     constraint
- *     preference
- *     hint
- *     target
- *     placement
+ *     WHAT is required
+ *     WHAT is permitted
+ *     WHAT is preferred
+ *     WHAT capability is needed
+ *     WHAT target class is acceptable
  *
- * They have different semantic meanings.
+ * It does not decide:
  *
- * RESOURCE
- *     Something that can participate in realization.
+ *     WHERE it runs
+ *     WHICH device runs it
+ *     WHICH physical qubit is used
+ *     WHICH CPU core is selected
+ *     WHICH GPU is selected
+ *     HOW operations are routed
+ *     WHEN operations execute
  *
- * CAPABILITY
- *     Something a target can do or provide.
- *
- * REQUIREMENT
- *     A condition that MUST be satisfied.
- *
- * CONSTRAINT
- *     A restriction on valid realization.
- *
- * PREFERENCE
- *     An advisory desired property.
- *
- * HINT
- *     Non-authoritative implementation guidance.
- *
- * TARGET
- *     A logical execution class/environment.
- *
- * PLACEMENT
- *     A logical-to-resource realization concern.
+ * Those decisions belong downstream to semantic analysis, resource
+ * management, compilation, routing, scheduling, resilience, HAL and runtime.
  *
  * ============================================================================
- * SCALABILITY
+ * NO SECOND IR
  * ============================================================================
  *
- * All lists use repetition operators.
+ * This grammar introduces no Hybrid IR.
  *
- * There are intentionally no rules such as:
+ * Hybrid source constructs lower through the existing domain-neutral frontend
+ * AST and semantic model.
  *
- *     exactlyFourResources
- *     maximumEightAccelerators
- *     maximumThirtyTwoQubits
- *     maximumOneThousandThreads
+ * Classical portions may lower to the canonical classical representation.
  *
- * Practical parser/compiler limits belong to implementation resource policy.
+ * Quantum portions lower through:
+ *
+ *     quantum::ir
+ *
+ * HDL/hardware portions lower through the existing hardware/HDL semantic
+ * pipeline.
  *
  * ============================================================================
- * GRAMMAR DEPENDENCIES
+ * DEPENDENCY CONTRACT
  * ============================================================================
  *
- * The following concepts are consumed from canonical grammar layers:
+ * This grammar depends ONLY on the canonical resource composition grammar:
  *
- *     expression
- *     typeExpression
- *     identifier
- *     qualifiedName
+ *     Resources
  *
- * This file MUST NOT redefine their semantics.
+ * It deliberately does NOT import:
  *
- * If the repository's final composition grammar exposes a differently named
- * canonical rule, the composition layer MUST provide an adapter rather than
- * duplicating the underlying grammar here.
+ *     Expressions
+ *     Types
+ *     Core
+ *     Hybrid
+ *     Quantum
+ *     Hardware
+ *     ZamaniParser
+ *
+ * Why?
+ *
+ * `Resources` already composes its expression and name dependencies.
+ *
+ * Importing those grammars again here would create multiple dependency paths
+ * and increase the possibility of rule collisions.
+ *
+ * ============================================================================
+ * LEXER CONTRACT
+ * ============================================================================
+ *
+ * All tokens come from:
+ *
+ *     grammar/antlr/ZamaniLexer.g4
+ *
+ * This file defines NO lexer rules.
+ *
+ * It does not introduce:
+ *
+ *     K_*
+ *
+ * aliases,
+ *
+ * domain-specific lexer tokens,
+ *
+ * hardware identifiers,
+ *
+ * quantum gate tokens,
+ *
+ * or parser-local token definitions.
  *
  * ============================================================================
  */
@@ -310,1026 +409,350 @@ options {
     tokenVocab = ZamaniLexer;
 }
 
-import Expressions, Types;
+import Resources;
 
 
 /*
  * ============================================================================
- * 1. ROOT
+ * PUBLIC HYBRID RESOURCE ENTRY POINT
  * ============================================================================
  *
- * This is the standalone hybrid-resource composition entry point.
+ * The hybrid domain receives exactly the same canonical resource syntax as
+ * every other Zamani domain.
  *
- * The root program grammar decides where these constructs are legal.
+ * This is intentional.
+ *
+ * A resource construct is a semantic resource construct first and a hybrid
+ * construct second.
  */
 hybridResourceConstruct
-    : hybridResourceDeclaration
-    | hybridCapabilityDeclaration
-    | hybridRequirementDeclaration
-    | hybridConstraintDeclaration
-    | hybridPreferenceDeclaration
-    | hybridHintDeclaration
-    | hybridTargetDeclaration
-    | hybridPlacementDeclaration
+    : resourceItem
     ;
 
 
 /*
  * ============================================================================
- * 2. RESOURCE DECLARATION
+ * RESOURCE DECLARATION ADAPTER
  * ============================================================================
  *
- * Declares a LOGICAL resource role.
+ * Canonical owner:
  *
- * It does not allocate a physical resource.
+ *     Resources.resourceDeclaration
  *
- * Example:
- *
- *     resource accelerator compute;
- *
- *     resource quantum q;
- *
- *     resource classical host;
- *
- * The names are symbolic.
+ * No syntax is duplicated here.
  */
 hybridResourceDeclaration
-    : RESOURCE
-      hybridResourceKind
-      identifier
-      hybridResourcePropertyClause*
-      SEMICOLON
-    ;
-
-
-hybridResourceKind
-    : identifier
+    : resourceDeclaration
     ;
 
 
 /*
  * ============================================================================
- * 3. RESOURCE PROPERTY CLAUSES
+ * REQUIREMENT ADAPTER
  * ============================================================================
  *
- * Properties describe requirements/preferences/constraints around a resource.
+ * Canonical owner:
  *
- * They do not describe a discovered hardware inventory.
- */
-hybridResourcePropertyClause
-    : capacityClause
-    | availabilityClause
-    | performanceClause
-    | latencyClause
-    | reliabilityClause
-    | energyClause
-    | scalabilityClause
-    | portabilityClause
-    | precisionClause
-    | connectivityClause
-    | memoryClause
-    ;
-
-
-/*
- * ============================================================================
- * 4. CAPABILITY DECLARATION
- * ============================================================================
+ *     Resources.resourceRequirement
  *
- * A capability declaration defines a logical capability requirement/contract.
- *
- * Capability implementation belongs downstream.
- */
-hybridCapabilityDeclaration
-    : CAPABILITY
-      hybridCapabilityName
-      hybridCapabilityBody?
-      SEMICOLON?
-    ;
-
-
-hybridCapabilityName
-    : qualifiedName
-    ;
-
-
-hybridCapabilityBody
-    : LBRACE
-      hybridCapabilityMember*
-      RBRACE
-    ;
-
-
-hybridCapabilityMember
-    : capabilityProperty
-    | capabilityRequirement
-    | capabilityConstraint
-    | capabilityParameter
-    ;
-
-
-capabilityProperty
-    : identifier
-      ASSIGN
-      expression
-      SEMICOLON
-    ;
-
-
-capabilityRequirement
-    : REQUIRES
-      expression
-      SEMICOLON
-    ;
-
-
-capabilityConstraint
-    : CONSTRAINED
-      BY
-      expression
-      SEMICOLON
-    ;
-
-
-capabilityParameter
-    : identifier
-      COLON
-      typeExpression
-      SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * 5. REQUIREMENT DECLARATION
- * ============================================================================
- *
- * A requirement is mandatory.
- *
- * Example:
- *
- *     requires capability("quantum");
- *
- *     requires resource("memory") >= amount;
- *
- * The actual satisfiability check belongs to semantic analysis.
+ * Hybrid semantics are established downstream from the same canonical
+ * requirement representation.
  */
 hybridRequirementDeclaration
-    : REQUIRES
-      hybridRequirementExpression
-      SEMICOLON
-    ;
-
-
-hybridRequirementExpression
-    : hybridRequirementTerm
-      (
-          hybridRequirementOperator
-          hybridRequirementTerm
-      )*
-    ;
-
-
-hybridRequirementTerm
-    : hybridCapabilityRequirement
-    | hybridResourceRequirement
-    | hybridTargetRequirement
-    | hybridPropertyRequirement
-    | LPAREN
-      hybridRequirementExpression
-      RPAREN
-    ;
-
-
-hybridRequirementOperator
-    : AND
-    | OR
+    : resourceRequirement
     ;
 
 
 /*
  * ============================================================================
- * 6. CAPABILITY REQUIREMENT
- * ============================================================================
- */
-
-hybridCapabilityRequirement
-    : CAPABILITY
-      LPAREN
-      expression
-      RPAREN
-    ;
-
-
-/*
- * ============================================================================
- * 7. RESOURCE REQUIREMENT
- * ============================================================================
- */
-
-hybridResourceRequirement
-    : RESOURCE
-      LPAREN
-      expression
-      RPAREN
-    ;
-
-
-/*
- * ============================================================================
- * 8. TARGET REQUIREMENT
+ * CONSTRAINT ADAPTER
  * ============================================================================
  *
- * A target is a class/semantic execution environment.
+ * Canonical owner:
  *
- * It does not identify a physical device.
- *
- * Valid examples may include:
- *
- *     quantum
- *     classical
- *     accelerator
- *     distributed
- *     embedded
- *
- * Future target classes may be introduced without modifying the fundamental
- * resource model.
- */
-hybridTargetRequirement
-    : TARGET
-      LPAREN
-      expression
-      RPAREN
-    ;
-
-
-/*
- * ============================================================================
- * 9. PROPERTY REQUIREMENT
- * ============================================================================
- *
- * Property names are intentionally symbolic.
- *
- * The semantic model determines which properties exist.
- */
-hybridPropertyRequirement
-    : PROPERTY
-      LPAREN
-      expression
-      RPAREN
-      comparisonOperator
-      expression
-    ;
-
-
-/*
- * ============================================================================
- * 10. CONSTRAINT DECLARATION
- * ============================================================================
- *
- * Constraints restrict valid implementations.
+ *     Resources.resourceConstraint
  */
 hybridConstraintDeclaration
-    : CONSTRAINED
-      BY
-      hybridConstraintExpression
-      SEMICOLON
-    ;
-
-
-hybridConstraintExpression
-    : expression
+    : resourceConstraint
     ;
 
 
 /*
  * ============================================================================
- * 11. PREFERENCE DECLARATION
+ * PREFERENCE ADAPTER
  * ============================================================================
  *
- * Preferences are advisory.
+ * Canonical owner:
  *
- * A compiler/runtime MAY relax them when permitted by policy.
+ *     Resources.resourcePreference
  */
 hybridPreferenceDeclaration
-    : PREFER
-      expression
-      SEMICOLON
+    : resourcePreference
     ;
 
 
 /*
  * ============================================================================
- * 12. HINT DECLARATION
+ * HINT ADAPTER
  * ============================================================================
  *
- * Hints are non-authoritative implementation guidance.
+ * Canonical owner:
+ *
+ *     Resources.resourceHint
  */
 hybridHintDeclaration
-    : HINT
-      expression
-      SEMICOLON
+    : resourceHint
     ;
 
 
 /*
  * ============================================================================
- * 13. TARGET DECLARATION
+ * CAPABILITY ADAPTER
  * ============================================================================
  *
- * Declares a logical target class.
+ * Canonical owner:
  *
- * It does NOT bind the program to a physical machine.
+ *     Resources.resourceCapability
+ *
+ * Capability names remain open-world semantic names.
+ *
+ * No finite capability registry is encoded in this grammar.
+ */
+hybridCapabilityDeclaration
+    : resourceCapability
+    ;
+
+
+/*
+ * ============================================================================
+ * TARGET ADAPTER
+ * ============================================================================
+ *
+ * Canonical owner:
+ *
+ *     Resources.resourceTarget
+ *
+ * A target here is an abstract target expression, not a physical device.
  */
 hybridTargetDeclaration
-    : TARGET
-      identifier
-      targetSpecificationBody?
-      SEMICOLON?
-    ;
-
-
-targetSpecificationBody
-    : LBRACE
-      targetSpecificationMember*
-      RBRACE
-    ;
-
-
-targetSpecificationMember
-    : targetCapabilityRequirement
-    | targetResourceRequirement
-    | targetConstraint
-    | targetPreference
-    ;
-
-
-targetCapabilityRequirement
-    : REQUIRES
-      CAPABILITY
-      LPAREN
-      expression
-      RPAREN
-      SEMICOLON
-    ;
-
-
-targetResourceRequirement
-    : REQUIRES
-      RESOURCE
-      LPAREN
-      expression
-      RPAREN
-      SEMICOLON
-    ;
-
-
-targetConstraint
-    : CONSTRAINED
-      BY
-      expression
-      SEMICOLON
-    ;
-
-
-targetPreference
-    : PREFER
-      expression
-      SEMICOLON
+    : resourceTarget
     ;
 
 
 /*
  * ============================================================================
- * 14. PLACEMENT DECLARATION
+ * RESOURCE REFERENCE ADAPTER
  * ============================================================================
  *
- * Placement describes LOGICAL placement intent.
+ * Resource references are deliberately kept as a thin adapter to the
+ * canonical resource-reference clause.
  *
- * It is deliberately not physical routing.
- *
- * Example:
- *
- *     placement computation
- *         near communication_peer
- *         prefer locality;
- *
- * The routing/scheduling/hardware layers decide the realization.
+ * This is not a physical allocation operation.
  */
-hybridPlacementDeclaration
-    : PLACEMENT
-      hybridPlacementSubject
-      hybridPlacementClause*
-      SEMICOLON
-    ;
-
-
-hybridPlacementSubject
-    : expression
-    ;
-
-
-hybridPlacementClause
-    : placementNearClause
-    | placementLocalityClause
-    | placementPreferenceClause
-    | placementConstraintClause
-    ;
-
-
-placementNearClause
-    : NEAR
-      expression
-    ;
-
-
-placementLocalityClause
-    : LOCALITY
-      expression
-    ;
-
-
-placementPreferenceClause
-    : PREFER
-      expression
-    ;
-
-
-placementConstraintClause
-    : CONSTRAINED
-      BY
-      expression
+hybridResourceReference
+    : resourceReferenceClause
     ;
 
 
 /*
  * ============================================================================
- * 15. RESOURCE PROPERTY EXPRESSIONS
+ * COMPLETION CONTRACT
  * ============================================================================
  *
- * These rules provide semantic names for common resource dimensions.
+ * This file is complete when:
  *
- * The actual property values remain expressions.
+ *   [x] no universal resource syntax is duplicated;
+ *   [x] no identifier grammar is duplicated;
+ *   [x] no qualified-name grammar is duplicated;
+ *   [x] no expression grammar is duplicated;
+ *   [x] no type grammar is duplicated;
+ *   [x] no lexer tokens are defined;
+ *   [x] no obsolete K_* tokens are referenced;
+ *   [x] no undefined hybrid-only resource keywords are referenced;
+ *   [x] no fixed hardware capacity is encoded;
+ *   [x] no physical device selection is encoded;
+ *   [x] no routing is encoded;
+ *   [x] no scheduling is encoded;
+ *   [x] no QEC implementation is encoded;
+ *   [x] no ZQN implementation is encoded;
+ *   [x] no second quantum IR is introduced;
+ *   [x] canonical Resources remains the sole resource syntax owner;
+ *   [x] canonical ZamaniLexer remains the sole lexer boundary;
+ *   [x] semantic resource distinctions remain downstream;
+ *   [x] POCO-REAF is preserved.
  *
- * No unit/capacity maximum is encoded.
- */
-capacityClause
-    : CAPACITY
-      comparisonOperator
-      expression
-    ;
-
-
-availabilityClause
-    : AVAILABILITY
-      comparisonOperator
-      expression
-    ;
-
-
-performanceClause
-    : PERFORMANCE
-      comparisonOperator
-      expression
-    ;
-
-
-latencyClause
-    : LATENCY
-      comparisonOperator
-      expression
-    ;
-
-
-reliabilityClause
-    : RELIABILITY
-      comparisonOperator
-      expression
-    ;
-
-
-energyClause
-    : ENERGY
-      comparisonOperator
-      expression
-    ;
-
-
-scalabilityClause
-    : SCALABILITY
-      comparisonOperator
-      expression
-    ;
-
-
-portabilityClause
-    : PORTABILITY
-      comparisonOperator
-      expression
-    ;
-
-
-precisionClause
-    : PRECISION
-      comparisonOperator
-      expression
-    ;
-
-
-connectivityClause
-    : CONNECTIVITY
-      comparisonOperator
-      expression
-    ;
-
-
-memoryClause
-    : MEMORY
-      comparisonOperator
-      expression
-    ;
-
-
-/*
  * ============================================================================
- * 16. COMPARISON OPERATORS
+ * INTEGRATION CONTRACT
  * ============================================================================
  *
- * These are structural operators.
+ * `Hybrid` MAY consume:
  *
- * Their semantic legality belongs to type/semantic analysis.
- */
-comparisonOperator
-    : EQ
-    | NEQ
-    | LT
-    | LTE
-    | GT
-    | GTE
-    ;
-
-
-/*
- * ============================================================================
- * 17. CANONICAL IDENTIFIER ADAPTER
- * ============================================================================
+ *     hybridResourceConstruct
  *
- * This rule is intentionally tiny.
+ * when the canonical hybrid dispatcher is ready to expose resource constructs
+ * directly.
  *
- * If the repository exposes `identifier` from the canonical expression/core
- * grammar, this delegates to that rule.
- */
-identifier
-    : IDENTIFIER
-    ;
-
-
-/*
- * ============================================================================
- * 18. CANONICAL QUALIFIED NAME ADAPTER
- * ============================================================================
+ * However, `Hybrid` MUST NOT simultaneously define another competing
+ * resource grammar for the same syntax.
  *
- * Symbolic resource/capability/target names may span namespaces.
+ * The preferred future composition is:
  *
- * There is no finite depth limit.
- */
-qualifiedName
-    : identifier
-      (
-          DOUBLE_COLON
-          identifier
-      )*
-    ;
-
-
-/*
- * ============================================================================
- * 19. COMPLETION / INTEGRATION CONTRACT
- * ============================================================================
- *
- * REQUIRED LEXER VOCABULARY
- * -------------------------
- *
- * The canonical lexer must own the keywords represented by symbolic tokens
- * above, including the vocabulary for:
- *
- *     resource
- *     capability
- *     requires
- *     constrained
- *     by
- *     prefer
- *     hint
- *     target
- *     property
- *     placement
- *     near
- *     locality
- *     capacity
- *     availability
- *     performance
- *     latency
- *     reliability
- *     energy
- *     scalability
- *     portability
- *     precision
- *     connectivity
- *     memory
- *
- * If the repository's canonical lexer instead uses a different token naming
- * convention, this grammar must follow that existing convention.
- *
- * No lexer rules belong in this parser grammar.
+ *     hybridConstruct
+ *         |
+ *         +--> hybrid computation constructs
+ *         |
+ *         +--> hybridResourceConstruct
+ *                    |
+ *                    v
+ *                resourceItem
+ *                    |
+ *                    v
+ *                 Resources
  *
  * ============================================================================
  * AST CONTRACT
  * ============================================================================
  *
- * The frontend AST should preserve the distinction between:
+ * The adapter does not create new AST categories.
  *
- *     ResourceDeclaration
- *     CapabilityDeclaration
- *     Requirement
- *     Constraint
- *     Preference
- *     Hint
- *     TargetRequirement
- *     PlacementIntent
- *     ResourceProperty
+ * The semantic frontend should retain the canonical resource AST/model
+ * generated from:
  *
- * These MUST NOT be collapsed into one generic "hardware constraint" node.
+ *     resourceDeclaration
+ *     resourceRequirement
+ *     resourceConstraint
+ *     resourcePreference
+ *     resourceHint
+ *     resourceCapability
+ *     resourceTarget
+ *     resourceReferenceClause
  *
- * Source locations MUST be retained by the frontend for diagnostics.
+ * If hybrid provenance is required, it should be represented as semantic
+ * domain context/metadata rather than a second resource-node hierarchy.
  *
  * ============================================================================
  * SEMANTIC CONTRACT
  * ============================================================================
  *
- * Semantic analysis MUST determine:
+ * Semantic analysis is responsible for determining:
  *
- *     whether resource names exist;
- *     whether capability names exist;
- *     whether properties are valid;
- *     whether expressions have compatible types;
- *     whether requirements are satisfiable;
- *     whether constraints are contradictory;
- *     whether preferences are relaxable;
- *     whether hints are permitted;
- *     whether placement intent is realizable;
- *     whether target capabilities satisfy requirements.
+ *     resource-name validity
+ *     capability validity
+ *     target compatibility
+ *     expression type compatibility
+ *     requirement satisfiability
+ *     constraint consistency
+ *     preference applicability
+ *     hint applicability
+ *     hybrid domain compatibility
+ *     resource availability
  *
- * The grammar does not perform these checks.
- *
- * ============================================================================
- * HARDWARE INTEGRATION
- * ============================================================================
- *
- * Hardware discovery MUST occur downstream.
- *
- * Conceptually:
- *
- *     source requirement
- *          |
- *          v
- *     semantic requirement
- *          |
- *          v
- *     hardware capability model
- *          |
- *          v
- *     available resources
- *          |
- *          v
- *     target selection
- *
- * This grammar MUST NOT query hardware.
+ * Parsing performs none of these checks.
  *
  * ============================================================================
- * QUANTUM INTEGRATION
+ * IR CONTRACT
  * ============================================================================
  *
- * Quantum requirements may be expressed here at the HYBRID level.
+ * Resource intent must be lowered into the existing canonical semantic
+ * resource/capability model.
  *
- * Quantum-specific resource concepts remain owned by:
+ * This file must never cause:
  *
- *     grammar/quantum/quantum-resources.g4
+ *     HybridIR
+ *     HybridResourceIR
+ *     HybridQuantumIR
  *
- * and eventually map through:
+ * to be introduced.
  *
- *     frontend semantic model
- *           |
- *           v
+ * Quantum requirements continue toward:
+ *
  *     quantum::ir
  *
- * No quantum resource IDs are created here.
+ * only after semantic analysis.
  *
  * ============================================================================
- * CLASSICAL INTEGRATION
+ * SCALABILITY CONTRACT
  * ============================================================================
  *
- * Classical resource requirements remain target-independent.
+ * This adapter has no language-level finite resource bound.
  *
- * For example, a source program may express a computational requirement
- * without specifying a fixed CPU/core/thread count.
+ * The number, magnitude, or dimensionality of resources is represented by
+ * program expressions and semantic resource models.
  *
- * Compiler/runtime policy may later determine:
+ * Therefore:
  *
- *     scalar execution
- *     vector execution
- *     multicore execution
- *     GPU execution
- *     distributed execution
+ *     tiny resource
+ *     large resource
+ *     distributed resource
+ *     accelerator resource
+ *     quantum resource
+ *     future resource
  *
- * without changing source semantics.
+ * use the same grammar.
  *
- * ============================================================================
- * ACCELERATOR INTEGRATION
- * ============================================================================
+ * "Infinity" means no artificial language-level maximum is encoded here.
  *
- * Accelerator interoperability is composed through symbolic capabilities and
- * requirements.
- *
- * This file MUST NOT duplicate:
- *
- *     accelerator invocation syntax
- *     accelerator interface syntax
- *     accelerator operation syntax
- *
- * Those belong to:
- *
- *     grammar/hybrid/accelerator-interoperability.g4
- *
- * The two grammars integrate at the semantic requirement/capability layer.
- *
- * ============================================================================
- * HDL / HARDWARE INTEGRATION
- * ============================================================================
- *
- * Hardware/HDL grammars may consume resource/capability semantics produced
- * here.
- *
- * This grammar does not own:
- *
- *     ports
- *     wires
- *     clocks
- *     registers
- *     pipelines
- *     hardware modules
- *
- * Those remain HDL/hardware concerns.
- *
- * ============================================================================
- * SCHEDULING INTEGRATION
- * ============================================================================
- *
- * Scheduling consumes semantic resource requirements and constraints.
- *
- * This file MUST NOT express:
- *
- *     cycle numbers
- *     pulse times
- *     schedule slots
- *     machine-specific timing grids
- *
- * Scheduling owns those concerns.
- *
- * ============================================================================
- * ROUTING INTEGRATION
- * ============================================================================
- *
- * Placement intent MAY be consumed by routing.
- *
- * Routing determines the actual realization.
- *
- * The source grammar must not become a physical topology language.
- *
- * ============================================================================
- * OPTIMIZATION INTEGRATION
- * ============================================================================
- *
- * Preferences and hints may inform optimization.
- *
- * Optimization MUST NOT violate mandatory requirements or program semantics.
- *
- * ============================================================================
- * QEC / ZQN / RESILIENCE INTEGRATION
- * ============================================================================
- *
- * This file does not define:
- *
- *     error correction;
- *     noise;
- *     faults;
- *     mitigation;
- *     recovery;
- *     resilience policy.
- *
- * Where resource/capability requirements concern fault tolerance, they are
- * represented semantically and consumed by the corresponding subsystem.
- *
- * ============================================================================
- * RUNTIME INTEGRATION
- * ============================================================================
- *
- * Runtime MAY evaluate dynamic resource availability.
- *
- * If resources are unavailable, runtime/compiler policy may:
- *
- *     wait
- *     retry
- *     choose another valid realization
- *     scale down
- *     scale up
- *     migrate
- *     defer
- *     fail explicitly
- *
- * It MUST NOT silently change mandatory source semantics.
- *
- * ============================================================================
- * DETERMINISM
- * ============================================================================
- *
- * Parsing must be deterministic for the same token stream.
- *
- * No external state may affect parsing.
- *
- * Resource discovery is deliberately excluded from parsing so that:
- *
- *     same source + same tokens
- *
- * always produces the same syntax tree.
- *
- * ============================================================================
- * SECURITY
- * ============================================================================
- *
- * Expressions in this grammar are data/syntax.
- *
- * They MUST NOT cause:
- *
- *     filesystem access
- *     network access
- *     process execution
- *     environment mutation
- *     hardware access
- *
- * Evaluation belongs to a controlled semantic/compiler/runtime subsystem.
- *
- * ============================================================================
- * SCALABILITY
- * ============================================================================
- *
- * This grammar has no language-level finite resource-count ceiling.
- *
- * These are intentionally absent:
- *
- *     MAX_RESOURCES
- *     MAX_ACCELERATORS
- *     MAX_GPUS
- *     MAX_FPGAS
- *     MAX_QUBITS
- *     MAX_NODES
- *     MAX_THREADS
- *     MAX_MEMORY
- *
- * Repeated structures are represented with `*` and `+`.
- *
- * "Infinity" therefore means:
- *
- *     no arbitrary grammar-imposed finite ceiling.
- *
- * Actual execution remains limited by:
- *
- *     available resources
- *     representation
- *     implementation
- *     operating system
- *     runtime
- *     hardware
- *     physical constraints
- *     execution policy
- *
- * ============================================================================
- * COMPATIBILITY
- * ============================================================================
- *
- * Adding a new resource property should normally be possible through the
- * canonical property vocabulary without changing existing resource semantics.
- *
- * New target classes MUST NOT require a new fixed enumeration in this grammar
- * merely because a new machine architecture appears.
- *
- * Vendor-specific constructs belong in dialects.
+ * Actual execution remains bounded by available implementation resources and
+ * target capabilities.
  *
  * ============================================================================
  * TEST CONTRACT
  * ============================================================================
  *
- * Positive tests MUST cover:
+ * Positive:
  *
- *     resource declaration
- *     capability declaration
- *     requirement declaration
- *     capability requirement
- *     resource requirement
- *     target requirement
- *     property requirement
- *     constraint
- *     preference
- *     hint
- *     target declaration
- *     placement declaration
- *     compound requirements
- *     arbitrarily long requirement lists
- *     namespaced resources
+ *     resource compute;
+ *     requires capability("quantum.measurement");
+ *     requires capability("gpu.compute");
+ *     prefer capability("tensor.compute");
+ *     hint scalable;
+ *     target = quantum;
  *
- * Negative tests MUST cover:
+ * Negative:
  *
- *     malformed requirements
- *     missing resource names
- *     malformed comparisons
- *     malformed capability expressions
- *     invalid declaration termination
- *     malformed placement
- *     malformed target declarations
+ *     unknown parser-local resource keyword;
+ *     malformed resource expression;
+ *     malformed resource declaration;
+ *     malformed capability expression;
+ *     malformed target expression.
  *
- * Boundary tests MUST verify:
+ * Boundary:
  *
- *     one resource
- *     many resources
- *     deeply namespaced resources
- *     large requirement expressions
- *     large property expressions
- *     large source programs
+ *     symbolic resource quantity;
+ *     arbitrarily large numeric program value;
+ *     deeply qualified capability name;
+ *     multiple resource requirements;
+ *     multiple capabilities;
+ *     multiple target requirements.
  *
- * Scalability tests MUST verify absence of grammar-level assumptions about:
+ * Scalability:
  *
- *     CPU count
- *     GPU count
- *     FPGA count
- *     accelerator count
- *     qubit count
- *     node count
- *     memory size
+ *     no test establishes a maximum number of resources;
+ *     no test establishes a maximum number of qubits;
+ *     no test establishes a maximum number of devices;
+ *     no test establishes a maximum memory size.
  *
- * Cross-domain tests MUST include:
+ * Determinism:
  *
- *     classical + quantum
- *     classical + accelerator
- *     quantum + accelerator
- *     quantum + HDL
- *     classical + HDL
- *     quantum + distributed
- *     classical + quantum + accelerator
- *     classical + quantum + HDL + accelerator
+ *     identical source + identical grammar/version must produce identical
+ *     parse structure independent of hardware availability.
  *
  * ============================================================================
- * COMPLETION CRITERIA
+ * SAFETY CONTRACT
  * ============================================================================
  *
- * This file is complete when:
+ * The grammar contains:
  *
- *     1. It compiles as an ANTLR4 parser grammar.
+ *     no embedded Rust;
+ *     no actions;
+ *     no semantic predicates;
+ *     no filesystem operations;
+ *     no network operations;
+ *     no hardware access;
+ *     no environment inspection;
+ *     no randomness.
  *
- *     2. All referenced lexer tokens exist in the canonical lexer.
- *
- *     3. Imported expression/type rules resolve through the canonical grammar
- *        composition layer.
- *
- *     4. No duplicate canonical expression/type system is introduced.
- *
- *     5. No physical hardware selection is performed.
- *
- *     6. No fixed scalable-resource maximum exists.
- *
- *     7. AST mapping exists for every construct.
- *
- *     8. Semantic analysis has defined ownership for every construct.
- *
- *     9. Hardware capability/resource models consume the semantic output.
- *
- *    10. Quantum requirements can ultimately reach `quantum::ir` without this
- *        grammar creating a competing quantum representation.
- *
- *    11. Scheduling consumes constraints without this grammar owning schedule
- *        realization.
- *
- *    12. Routing consumes placement intent without this grammar owning physical
- *        topology.
- *
- *    13. Optimization can consume preferences/hints without treating them as
- *        mandatory semantics.
- *
- *    14. Runtime can react to resource availability without changing program
- *        meaning.
- *
- *    15. Positive, negative, boundary, cross-domain, determinism and
- *        scalability tests pass.
- *
- *    16. Rust 1.97 / 1.97.1 integration builds without `unsafe` Rust.
+ * Rust 1.97 / 1.97.1 integration remains safe Rust only.
  *
  * ============================================================================
  */
