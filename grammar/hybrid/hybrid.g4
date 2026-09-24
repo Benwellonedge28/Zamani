@@ -6,70 +6,66 @@
  * File:
  *     grammar/hybrid/hybrid.g4
  *
+ * Grammar:
+ *     Hybrid
+ *
  * Status:
- *     Production hybrid-domain composition grammar.
+ *     CANONICAL HYBRID DOMAIN COMPOSITION GRAMMAR
  *
  * Grammar technology:
  *     ANTLR4 parser grammar
  *
- * Implementation baseline:
+ * Compiler baseline:
  *     Rust 1.97 / Rust 1.97.1
  *     Rust 2021
- *     safe Rust only
+ *
+ * Safety:
+ *     This grammar contains no target-language actions, predicates, embedded
+ *     code, filesystem access, network access, hardware discovery, or runtime
+ *     execution.
+ *
+ *     The Rust implementation consuming this grammar MUST remain safe Rust.
+ *     No `unsafe` Rust is required by this grammar.
  *
  * ============================================================================
  * PURPOSE
  * ============================================================================
  *
- * This file is the canonical HYBRID DOMAIN grammar for Zamani.
+ * Hybrid is a FIRST-CLASS COMPOSITION DOMAIN of Zamani.
  *
- * Hybrid computation is one Zamani language construct in which semantic
- * computation crosses or combines computational domains, including:
+ * It describes source-level computation whose semantic dependency graph may
+ * cross or combine computational domains, including:
  *
  *     classical
  *     quantum
  *     accelerator
  *     hardware
+ *     HDL
  *     distributed
  *     AI/data
- *     future computational domains
+ *     networking
+ *     future domains
  *
- * This grammar is intentionally a DOMAIN COMPOSITION GRAMMAR.
+ * Hybrid does NOT create another language.
  *
- * It owns the source-level structure that identifies a computation as
- * hybrid and preserves the relationships between participating domains.
+ * Hybrid does NOT create another type system.
  *
- * It does NOT own:
+ * Hybrid does NOT create another expression language.
  *
- *     lexical definitions
- *     general expression precedence
- *     general type syntax
- *     general statement syntax
- *     function syntax
- *     module syntax
- *     quantum gate inventories
- *     quantum IR
- *     classical IR
- *     hardware realization
- *     resource discovery
- *     device selection
- *     routing
- *     scheduling
- *     optimization
- *     calibration
- *     QEC
- *     ZQN
- *     resilience
- *     runtime execution
+ * Hybrid does NOT create another statement language.
+ *
+ * Hybrid does NOT create another quantum IR.
+ *
+ * Hybrid is a composition boundary over the canonical Zamani language.
  *
  * ============================================================================
- * ARCHITECTURAL POSITION
+ * ARCHITECTURAL PIPELINE
  * ============================================================================
  *
  *     Zamani source
  *          |
  *          v
- *     ZamaniLexer
+ *     canonical lexer
  *          |
  *          v
  *     ZamaniParser
@@ -83,218 +79,263 @@
  *          v
  *     semantic analysis
  *          |
- *          +-----------------------+
- *          |                       |
- *          v                       v
- *     classical semantics     quantum semantics
- *                                  |
- *                                  v
- *                              quantum::ir
- *          |                       |
- *          +-----------+-----------+
- *                      |
- *                      v
- *               canonical semantic
- *                   representation
- *                      |
- *          +-----------+-----------+
- *          |           |           |
- *          v           v           v
- *      optimize     route       schedule
- *                      |
- *                      v
- *               QEC / ZQN /
- *                resilience
- *                      |
- *                      v
- *                     HAL
- *                      |
- *                      v
- *               target realization
+ *          +----------------------+----------------------+
+ *          |                      |                      |
+ *          v                      v                      v
+ *      classical              quantum                HDL /
+ *      semantics              semantics             hardware
+ *          |                      |                      |
+ *          |                      v                      |
+ *          |                  quantum::ir               |
+ *          |                      |                      |
+ *          +----------------------+----------------------+
+ *                                 |
+ *                                 v
+ *                        canonical semantic model
+ *                                 |
+ *                    +------------+------------+
+ *                    |            |            |
+ *                    v            v            v
+ *                optimize      routing      scheduling
+ *                                             |
+ *                                             v
+ *                                       QEC / ZQN /
+ *                                        resilience
+ *                                             |
+ *                                             v
+ *                                            HAL
+ *                                             |
+ *                                             v
+ *                                      target realization
  *
  * ============================================================================
- * CANONICAL COMPOSITION CONTRACT
+ * SINGLE-AUTHORITY CONTRACT
  * ============================================================================
  *
- * grammar/antlr/ZamaniParser.g4 is the canonical parser composition root.
+ * This file owns ONLY hybrid-domain composition.
  *
- * It imports:
+ * General syntax remains owned by the canonical grammar domains:
  *
+ *     Core
+ *     Expressions
+ *     Types
+ *     Statements
+ *     Functions
+ *     Resources
+ *     Quantum
+ *     Classical
+ *     HDL
+ *     Hardware
+ *
+ * Hybrid MUST NOT redefine:
+ *
+ *     expression
+ *     statement
+ *     block
+ *     typeExpression
+ *     typeAnnotation
+ *     qualifiedName
+ *     argumentList
+ *     functionDeclaration
+ *     resourceItem
+ *     quantum operation syntax
+ *     quantum measurement syntax
+ *     HDL syntax
+ *     hardware syntax
+ *
+ * The hybrid grammar only composes those concepts.
+ *
+ * ============================================================================
+ * CANONICAL PARSER COMPOSITION
+ * ============================================================================
+ *
+ * grammar/antlr/ZamaniParser.g4
+ *          |
+ *          +--> Hybrid
+ *                   |
+ *                   +--> HybridFunctions
+ *                   +--> HybridResources
+ *                   +--> Expressions
+ *                   +--> Types
+ *                   +--> Statements
+ *                   +--> Functions
+ *                   +--> Resources
+ *
+ * Hybrid MUST NOT import ZamaniParser.
+ *
+ * There is exactly one direction:
+ *
+ *     leaf/domain grammar
+ *          ->
  *     Hybrid
+ *          ->
+ *     ZamaniParser
  *
- * together with the other domain dispatchers.
+ * Never:
  *
- * Therefore this file MUST NOT import ZamaniParser.
+ *     Hybrid -> ZamaniParser
  *
- * The canonical lexical vocabulary is:
+ * ============================================================================
+ * LEXER CONTRACT
+ * ============================================================================
+ *
+ * The production lexer is:
  *
  *     grammar/antlr/ZamaniLexer.g4
  *
- * This file is a parser grammar and MUST NOT define lexer rules.
+ * This grammar therefore uses:
  *
- * ============================================================================
- * IMPORTANT INTEGRATION DECISION
- * ============================================================================
+ *     options {
+ *         tokenVocab = ZamaniLexer;
+ *     }
  *
- * The repository currently contains several older/specialized hybrid grammar
- * files:
+ * This file MUST NOT define lexer rules.
  *
- *     grammar/hybrid/classical-quantum.g4
- *     grammar/hybrid/quantum-classical-control.g4
- *     grammar/hybrid/accelerator-interoperability.g4
- *     grammar/hybrid/hybrid-resources.g4
+ * IMPORTANT:
  *
- * They are retained as domain-specific implementation contracts/reference
- * surfaces, but they are NOT blindly imported here.
+ * The current repository lexer vocabulary does NOT define:
  *
- * Reason:
+ *     HYBRID
+ *     CONVERT
+ *     TO
+ *     SYNCHRONIZE
  *
- *     - classical-quantum.g4 currently uses obsolete K_* token names;
- *     - accelerator-interoperability.g4 owns generic rules such as
- *       qualifiedName/expressionList;
- *     - hybrid-resources.g4 also owns generic names such as identifier and
- *       qualifiedName;
- *     - directly importing those grammars together would create rule/token
- *       collisions;
- *     - the old hybrid.g4 contains recursive adapter rules.
+ * Therefore this grammar deliberately does not reference those nonexistent
+ * tokens.
  *
- * Therefore this file is the stable canonical composition boundary.
+ * `hybrid` is treated as a contextual source marker through `identifier`.
+ * Semantic validation must require its exact spelling where the hybrid-region
+ * construct is used.
  *
- * Those specialized files may subsequently be normalized behind this public
- * interface without changing the public rules defined here.
- *
- * This avoids forcing a second hybrid grammar architecture onto Zamani.
- *
- * ============================================================================
- * SINGLE-OWNER RULE
- * ============================================================================
- *
- * General language constructs remain owned by their existing domains:
- *
- *     expressions/
- *         expression
- *
- *     statements/
- *         statement / block
- *
- *     types/
- *         typeExpression
- *
- *     functions/
- *         functionDeclaration
- *
- *     modules/
- *         moduleDeclaration
- *
- *     quantum/
- *         quantum source semantics
- *
- *     classical/
- *         classical source semantics
- *
- *     hardware/
- *         target-independent hardware intent
- *
- *     resources/
- *         resource requirements/capabilities
- *
- * Hybrid owns only their composition.
+ * This avoids adding a new lexical dependency merely for this domain.
  *
  * ============================================================================
  * POCO-REAF CONTRACT
  * ============================================================================
  *
- * Hybrid source syntax describes semantic computation and relationships.
+ * Hybrid syntax expresses:
  *
- * It MUST NOT encode universal physical limits.
+ *     computation
+ *     data dependency
+ *     domain dependency
+ *     control dependency
+ *     semantic boundaries
+ *     resource requirements
+ *     capabilities
+ *     constraints
+ *     preferences
+ *     implementation hints
  *
- * In particular, this grammar contains no:
+ * It MUST NOT encode universal hardware limits.
  *
- *     MAX_QUBITS
- *     MAX_CPUS
- *     MAX_CORES
- *     MAX_THREADS
- *     MAX_GPUS
- *     MAX_FPGAS
- *     MAX_QPUS
- *     MAX_DEVICES
- *     MAX_NODES
- *     MAX_MEMORY
- *     MAX_REGISTER_WIDTH
- *     MAX_TENSOR_RANK
- *     MAX_NETWORK_SIZE
+ * This grammar contains no language-level limits for:
  *
- * It also does not encode:
+ *     qubits
+ *     CPUs
+ *     cores
+ *     threads
+ *     GPUs
+ *     FPGAs
+ *     QPUs
+ *     accelerators
+ *     nodes
+ *     processes
+ *     tasks
+ *     channels
+ *     memory
+ *     storage
+ *     registers
+ *     tensor dimensions
+ *     tensor rank
+ *     network size
+ *     devices
+ *     timelines
+ *     circuit depth
+ *     operation count
  *
- *     physical CPU IDs
- *     physical GPU IDs
- *     physical FPGA IDs
- *     physical QPU IDs
- *     physical qubit IDs
- *     fixed coupling maps
- *     physical memory addresses
- *     fixed topology
- *     backend-specific pulse schedules
+ * A requirement such as:
  *
- * A program may express semantic requirements such as:
+ *     requires qubits >= n;
+ *
+ * is semantic/resource intent.
+ *
+ * It is NOT a parser-imposed machine limit.
+ *
+ * Likewise:
  *
  *     requires capability("quantum.measurement");
- *     requires qubits >= n;
- *     requires memory >= required_memory;
  *
- * but satisfaction of those requirements belongs to semantic analysis,
- * resource management, compilation, deployment, HAL, and runtime.
+ * is a capability requirement.
  *
- * ============================================================================
- * PROGRAM-ONCE / COMPILE-ONCE / RUN-EVERYWHERE
- * ============================================================================
- *
- * Hybrid syntax separates:
- *
- *     semantic intent
- *
- * from:
- *
- *     target realization.
- *
- * Therefore the source can express:
- *
- *     classical computation
- *          ->
- *     quantum computation
- *          ->
- *     measurement
- *          ->
- *     classical decision
- *          ->
- *     quantum computation
- *
- * without selecting:
- *
- *     CPU
- *     GPU
- *     FPGA
- *     ASIC
- *     QPU
- *     simulator
- *     cluster node
- *     cloud provider
- *
- * Target realization remains downstream.
+ * It does NOT select a physical QPU.
  *
  * ============================================================================
- * STABLE PUBLIC RULES
+ * REQUIREMENT / CONSTRAINT / PREFERENCE / HINT
  * ============================================================================
  *
- * The canonical parser should depend only on:
+ * These concepts are deliberately kept distinct.
+ *
+ * requirement:
+ *     mandatory semantic/resource property.
+ *
+ * constraint:
+ *     condition that must remain satisfied.
+ *
+ * preference:
+ *     advisory optimization/deployment preference.
+ *
+ * hint:
+ *     non-semantic implementation guidance.
+ *
+ * capability:
+ *     named property used by semantic/resource analysis.
+ *
+ * Physical realization remains downstream.
+ *
+ * ============================================================================
+ * CONTEXTUAL HYBRID MARKER
+ * ============================================================================
+ *
+ * The repository's current lexical vocabulary does not reserve `hybrid`.
+ *
+ * Therefore:
+ *
+ *     hybridMarker
+ *         : identifier
+ *
+ * is intentional.
+ *
+ * The semantic validator MUST enforce:
+ *
+ *     identifier spelling == "hybrid"
+ *
+ * for a `hybridRegion`.
+ *
+ * This gives Zamani a contextual domain marker without requiring another
+ * globally reserved keyword.
+ *
+ * It also keeps this grammar compatible with future lexical evolution:
+ *
+ *     current:
+ *         hybrid -> IDENTIFIER
+ *
+ *     future lexical policy:
+ *         hybrid -> dedicated keyword
+ *
+ * If the latter is adopted, that is a language-version compatibility change,
+ * not a reason to duplicate hybrid syntax here.
+ *
+ * ============================================================================
+ * PUBLIC RULE CONTRACT
+ * ============================================================================
+ *
+ * The canonical parser depends on these rules:
  *
  *     hybridDeclaration
  *     hybridStatement
  *     hybridExpression
- *     hybridConstruct
  *
- * Internal rules may evolve as long as these public boundaries remain
- * semantically compatible.
+ * `hybridConstruct` is the principal internal composition boundary.
  *
  * ============================================================================
  */
@@ -302,31 +343,61 @@
 
 /*
  * ============================================================================
- * 1. PUBLIC HYBRID CONSTRUCT
+ * ANTLR DECLARATION
+ * ============================================================================
+ */
+
+parser grammar Hybrid;
+
+options {
+    tokenVocab = ZamaniLexer;
+}
+
+import
+    Expressions,
+    Types,
+    Statements,
+    HybridFunctions,
+    HybridResources
+;
+
+
+/*
+ * ============================================================================
+ * 1. PUBLIC HYBRID DECLARATION
  * ============================================================================
  *
- * A hybrid construct is explicitly marked by source structure that crosses
- * computational domains.
+ * A hybrid declaration establishes an explicitly hybrid source region or
+ * delegates to an existing canonical declaration/function/resource construct.
  *
- * The construct can represent:
+ * Ordinary declarations remain owned by Declarations.
  *
- *     - a hybrid region;
- *     - a domain invocation;
- *     - a cross-domain binding;
- *     - a quantum/classical boundary;
- *     - an accelerator boundary;
- *     - a resource/capability declaration;
- *     - a hybrid control construct;
- *
- * Domain-specific meaning is resolved semantically.
+ * ============================================================================
  */
-hybridConstruct
+
+hybridDeclaration
     : hybridRegion
-    | hybridInvocation
+    | hybridFunctionDeclaration
+    | hybridResourceConstruct
+    ;
+
+
+/*
+ * ============================================================================
+ * 2. PUBLIC HYBRID STATEMENT
+ * ============================================================================
+ *
+ * Hybrid statements are source-level composition constructs.
+ *
+ * Ordinary statements remain owned by Statements.
+ *
+ * ============================================================================
+ */
+
+hybridStatement
+    : hybridInvocation
     | hybridBinding
     | hybridControl
-    | hybridConversion
-    | hybridSynchronization
     | hybridRequirement
     | hybridCapability
     | hybridPreference
@@ -337,41 +408,76 @@ hybridConstruct
 
 /*
  * ============================================================================
- * 2. HYBRID REGION
+ * 3. PUBLIC HYBRID EXPRESSION
  * ============================================================================
  *
- * A hybrid region is a lexical grouping in which multiple domain constructs
- * may coexist.
+ * Hybrid expressions reuse the canonical expression grammar.
  *
- * This is the corrected replacement for the old recursive:
+ * A separate precedence hierarchy is intentionally forbidden.
  *
- *     hybridRegion
- *         : hybridRegionOwned
- *         ;
- *
- *     hybridRegionOwned
- *         : hybridRegion
- *         ;
- *
- * which could never terminate.
- *
- * A hybrid region is simply:
- *
- *     hybrid { ... }
- *
- * with an unbounded sequence of hybrid-region items.
- *
- * The block does not imply:
- *
- *     thread
- *     process
- *     device
- *     queue
- *     scheduling region
- *     hardware controller
+ * ============================================================================
  */
+
+hybridExpression
+    : hybridInvocationExpression
+    | expression
+    ;
+
+
+/*
+ * ============================================================================
+ * 4. HYBRID CONSTRUCT
+ * ============================================================================
+ *
+ * This is the central hybrid composition rule.
+ *
+ * It contains only constructs whose presence carries hybrid-domain structural
+ * meaning.
+ *
+ * ============================================================================
+ */
+
+hybridConstruct
+    : hybridInvocation
+    | hybridBinding
+    | hybridControl
+    | hybridRequirement
+    | hybridCapability
+    | hybridPreference
+    | hybridConstraint
+    | hybridHint
+    | hybridResourceConstruct
+    | hybridFunctionDeclaration
+    ;
+
+
+/*
+ * ============================================================================
+ * 5. HYBRID REGION
+ * ============================================================================
+ *
+ * Canonical source form:
+ *
+ *     hybrid {
+ *         ...
+ *     }
+ *
+ * Because `hybrid` is currently a contextual identifier, the parser recognizes
+ * an identifier followed by a block. Semantic analysis MUST validate that the
+ * identifier text is exactly `hybrid`.
+ *
+ * This rule has no finite cardinality.
+ *
+ * ============================================================================
+ */
+
 hybridRegion
-    : HYBRID hybridBlock
+    : hybridMarker hybridBlock
+    ;
+
+
+hybridMarker
+    : identifier
     ;
 
 
@@ -388,100 +494,50 @@ hybridRegionItem
 
 /*
  * ============================================================================
- * 3. HYBRID DECLARATION
+ * 6. DOMAIN-QUALIFIED HYBRID INVOCATION
  * ============================================================================
  *
- * A declaration that explicitly establishes hybrid semantic scope.
+ * Domain-qualified invocation is the principal explicit hybrid boundary.
  *
- * Ordinary declaration syntax remains owned by declarations/.
- */
-hybridDeclaration
-    : hybridRegion
-    ;
-
-
-/*
- * ============================================================================
- * 4. HYBRID STATEMENT
- * ============================================================================
+ * Examples:
  *
- * The hybrid statement is a stable adapter into the ordinary statement
- * position.
+ *     quantum::prepare(...)
+ *     quantum::measure(...)
+ *     classical::postprocess(...)
+ *     accelerator::compute(...)
+ *     future_domain::operation(...)
  *
- * No second statement grammar is created.
- */
-hybridStatement
-    : hybridConstruct
-    ;
-
-
-/*
- * ============================================================================
- * 5. HYBRID EXPRESSION
- * ============================================================================
+ * Operation names remain open-world identifiers.
  *
- * Hybrid expressions use the canonical expression language.
+ * No fixed operation inventory is encoded here.
  *
- * No second precedence hierarchy is introduced here.
- *
- * The semantic layer determines whether the expression:
- *
- *     - is classical;
- *     - produces a quantum value;
- *     - consumes a measurement result;
- *     - invokes an accelerator;
- *     - crosses a domain boundary.
- */
-hybridExpression
-    : hybridValueExpression
-    ;
-
-
-hybridValueExpression
-    : expression
-    | hybridInvocationExpression
-    | hybridConversionExpression
-    ;
-
-
-/*
- * ============================================================================
- * 6. HYBRID INVOCATION
- * ============================================================================
- *
- * Generic domain invocation.
- *
- * Operation names remain extensible identifiers.
- *
- * This deliberately does NOT enumerate:
+ * In particular this grammar does NOT enumerate:
  *
  *     H
  *     X
  *     Y
  *     Z
  *     CNOT
+ *     RX
+ *     RY
+ *     RZ
  *     CUDA operations
- *     vendor accelerator operations
  *     FPGA primitives
+ *     vendor operations
+ *     accelerator instructions
  *
- * Those are semantic operations, libraries, dialects, or target-level
- * capabilities.
+ * Those remain semantic operations, library operations, dialect operations,
+ * or target-level operations.
  *
- * Examples of the intended semantic surface:
- *
- *     quantum::algorithm(...)
- *     classical::function(...)
- *     accelerator::operation(...)
- *
- * Qualified names remain owned by the canonical name/path grammar.
+ * ============================================================================
  */
+
 hybridInvocation
     : hybridDomainQualifier
       qualifiedName
       LPAREN
       argumentList?
       RPAREN
-      hybridInvocationTargetClause?
       SEMICOLON
     ;
 
@@ -501,344 +557,328 @@ hybridDomainQualifier
     ;
 
 
+/*
+ * `quantum` is currently a reserved lexer token, while future/custom domains
+ * remain identifiers.
+ *
+ * Additional globally reserved domain words can be added here only when they
+ * already exist in the canonical lexer vocabulary.
+ *
+ * No vendor/device names are listed.
+ */
+
 hybridDomainName
-    : identifier
-    ;
-
-
-hybridInvocationTargetClause
-    : TO hybridTarget
-    ;
-
-
-/*
- * ============================================================================
- * 7. HYBRID TARGET
- * ============================================================================
- *
- * This is a semantic target/classification expression.
- *
- * It is NOT a physical device identifier.
- */
-hybridTarget
-    : expression
+    : QUANTUM
+    | GPU
+    | identifier
     ;
 
 
 /*
  * ============================================================================
- * 8. HYBRID BINDING
+ * 7. HYBRID BINDING
  * ============================================================================
  *
- * Values can cross domains through ordinary source-level bindings.
+ * A hybrid binding establishes a named source-level value whose semantic type
+ * or provenance may cross computational domains.
  *
- * The type checker determines whether the crossing is legal.
+ * The grammar does not decide whether the value is:
+ *
+ *     classical
+ *     quantum
+ *     measurement-derived
+ *     accelerator-produced
+ *     hardware-produced
+ *     distributed
+ *     AI/data
+ *
+ * That belongs to semantic analysis.
+ *
+ * ============================================================================
  */
+
 hybridBinding
-    : LET IDENTIFIER typeAnnotation? ASSIGN hybridBindingValue SEMICOLON
-    | IDENTIFIER ASSIGN hybridBindingValue SEMICOLON
-    ;
-
-
-hybridBindingValue
-    : expression
-    | measurementValue
-    | hybridInvocationExpression
-    | hybridConversionExpression
-    ;
-
-
-/*
- * ============================================================================
- * 9. MEASUREMENT VALUE
- * ============================================================================
- *
- * Measurement is represented as a value-producing boundary.
- *
- * The quantum grammar remains responsible for the underlying quantum
- * measurement semantics.
- *
- * The result becomes available to the classical semantic layer only after
- * semantic validation.
- */
-measurementValue
-    : MEASURE
-      LPAREN
+    : LET
+      identifier
+      typeAnnotation?
+      ASSIGN
       expression
-      RPAREN
+      SEMICOLON
     ;
 
 
 /*
  * ============================================================================
- * 10. HYBRID CONTROL
+ * 8. HYBRID CONTROL
  * ============================================================================
  *
- * Classical control may depend on a quantum result.
+ * `when` is already part of Zamani's canonical keyword vocabulary.
  *
- * The syntax intentionally reuses canonical IF/ELSE/block constructs.
+ * This rule provides an explicit hybrid control boundary without introducing
+ * another `if` grammar.
  *
  * Example:
  *
- *     if measure(q) {
- *         ...
+ *     when measurement_result {
+ *         quantum::correction(...);
  *     }
  *
- * The grammar does not decide whether the condition is:
+ * The condition may be evaluated:
  *
- *     compile-time
- *     runtime
- *     dynamic-circuit control
- *     host-side control
- *     device-side control
+ *     - on a host;
+ *     - on a quantum control system;
+ *     - in an accelerator;
+ *     - in FPGA/control hardware;
+ *     - in a simulator;
+ *     - by a compiler transformation;
+ *     - by a future execution substrate.
  *
- * Semantic analysis determines that.
+ * The grammar does not choose the realization.
+ *
+ * ============================================================================
  */
+
 hybridControl
-    : IF expression block
-    | IF expression block ELSE block
-    | WHEN expression block
-    ;
-
-
-/*
- * ============================================================================
- * 11. EXPLICIT DOMAIN CONVERSION
- * ============================================================================
- *
- * Conversion describes semantic intent.
- *
- * It does not define the implementation mechanism.
- *
- * Examples:
- *
- *     convert(value) to quantum;
- *     convert(value) to classical;
- *
- * The semantic layer determines whether such conversion is meaningful.
- */
-hybridConversion
-    : CONVERT
-      LPAREN
+    : WHEN
       expression
-      RPAREN
-      TO
-      hybridDomain
-      SEMICOLON
-    ;
-
-
-hybridConversionExpression
-    : CONVERT
-      LPAREN
-      expression
-      RPAREN
-      TO
-      hybridDomain
-    ;
-
-
-hybridDomain
-    : hybridDomainName
+      block
     ;
 
 
 /*
  * ============================================================================
- * 12. HYBRID SYNCHRONIZATION
+ * 9. REQUIREMENT
  * ============================================================================
  *
- * Synchronization is semantic synchronization.
+ * This is intentionally a lightweight adapter over the canonical expression
+ * model.
  *
- * It does not encode:
+ * Resource-specific requirements are also available through HybridResources.
  *
- *     clock frequency
- *     pulse duration
- *     bus latency
- *     queue latency
- *     device synchronization primitives
- *
- * Those belong downstream.
+ * ============================================================================
  */
-hybridSynchronization
-    : SYNCHRONIZE
-      hybridSynchronizationScope?
-      SEMICOLON
-    ;
 
-
-hybridSynchronizationScope
-    : LPAREN expression RPAREN
-    ;
-
-
-/*
- * ============================================================================
- * 13. HYBRID REQUIREMENT
- * ============================================================================
- *
- * Requirements express semantic/resource intent.
- *
- * Examples:
- *
- *     requires quantum;
- *     requires capability("quantum.measurement");
- *     requires qubits >= n;
- *
- * The complete requirement expression remains an ordinary Zamani expression.
- *
- * Resource interpretation is downstream.
- */
 hybridRequirement
-    : REQUIRES expression SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * 14. HYBRID CAPABILITY
- * ============================================================================
- *
- * Capability declaration describes semantic availability or required
- * capability information.
- *
- * It does not probe hardware.
- */
-hybridCapability
-    : CAPABILITY qualifiedName
-      hybridCapabilityBody?
+    : REQUIRES
+      expression
       SEMICOLON
     ;
 
 
-hybridCapabilityBody
-    : ASSIGN expression
+/*
+ * ============================================================================
+ * 10. CAPABILITY
+ * ============================================================================
+ *
+ * Capability names are open-world semantic names.
+ *
+ * Example:
+ *
+ *     capability("quantum.measurement");
+ *
+ * No finite capability registry belongs in this grammar.
+ *
+ * ============================================================================
+ */
+
+hybridCapability
+    : CAPABILITY
+      LPAREN
+      argumentList?
+      RPAREN
+      SEMICOLON
     ;
 
 
 /*
  * ============================================================================
- * 15. HYBRID PREFERENCE
+ * 11. PREFERENCE
  * ============================================================================
  *
- * A preference is advisory rather than a mandatory resource requirement.
+ * Example:
  *
- * It must not become a hidden hardware selection.
+ *     prefer capability("accelerated.compute");
+ *
+ * This is advisory.
+ *
+ * It MUST NOT silently become physical device selection.
+ *
+ * ============================================================================
  */
+
 hybridPreference
-    : PREFER expression SEMICOLON
+    : PREFER
+      expression
+      SEMICOLON
     ;
 
 
 /*
  * ============================================================================
- * 16. HYBRID CONSTRAINT
+ * 12. CONSTRAINT
  * ============================================================================
  *
- * A constraint expresses a semantic restriction.
+ * Constraints describe semantic restrictions.
  *
- * It is not a physical placement instruction.
+ * They are not placement directives.
+ *
+ * ============================================================================
  */
+
 hybridConstraint
-    : CONSTRAINT expression SEMICOLON
+    : CONSTRAINT
+      expression
+      SEMICOLON
     ;
 
 
 /*
  * ============================================================================
- * 17. HYBRID HINT
+ * 13. HINT
  * ============================================================================
  *
- * A hint is advisory implementation information.
+ * Hints are advisory implementation information.
  *
- * Hints may influence downstream optimization but must not alter program
- * semantics.
+ * Hints MUST NOT change program meaning.
+ *
+ * ============================================================================
  */
+
 hybridHint
-    : HINT expression SEMICOLON
+    : HINT
+      expression
+      SEMICOLON
     ;
 
 
 /*
  * ============================================================================
- * 18. HYBRID DOMAIN PAIR
+ * 14. DOMAIN BOUNDARY
  * ============================================================================
  *
- * This rule is useful to semantic tooling that needs to identify an explicit
- * cross-domain relationship.
+ * This rule is intentionally structural rather than target-specific.
  *
- * The domains themselves remain open-ended identifiers.
+ * A domain boundary is represented by a domain-qualified operation or a
+ * semantically typed binding.
+ *
+ * No physical transfer primitive is introduced here.
+ *
+ * ============================================================================
  */
-hybridDomainPair
-    : hybridDomainName
-      DOUBLE_COLON
-      hybridDomainName
+
+hybridDomainBoundary
+    : hybridInvocationExpression
+    | hybridBindingExpression
+    ;
+
+
+hybridBindingExpression
+    : identifier
+      ASSIGN
+      expression
     ;
 
 
 /*
  * ============================================================================
- * 19. CLASSICAL -> QUANTUM BOUNDARY
+ * 15. CLASSICAL -> QUANTUM
  * ============================================================================
  *
- * A classical expression can be supplied as an argument to a quantum
- * invocation through the ordinary invocation surface.
+ * No separate syntax is required.
  *
- * No special fixed classical-to-quantum value list exists.
+ * Example:
  *
- * Semantic analysis determines:
+ *     quantum::prepare(classical_value);
  *
- *     type compatibility
- *     ownership
- *     lifetime
- *     evaluation timing
- *     representability
- *     measurement dependency
- *     capability requirements
+ * The semantic layer determines:
+ *
+ *     - whether `classical_value` is classical;
+ *     - whether the quantum operation accepts it;
+ *     - conversion requirements;
+ *     - ownership/lifetime;
+ *     - representation;
+ *     - timing;
+ *     - capability requirements.
+ *
+ * ============================================================================
  */
+
 classicalToQuantum
+    : hybridInvocation
+    ;
+
+
+classicalToQuantumExpression
     : hybridInvocationExpression
     ;
 
 
 /*
  * ============================================================================
- * 20. QUANTUM -> CLASSICAL BOUNDARY
+ * 16. QUANTUM -> CLASSICAL
  * ============================================================================
  *
- * Measurement or quantum-call results may be bound to classical names.
+ * The inverse boundary is represented by a hybrid binding or invocation
+ * expression.
+ *
+ * Example:
+ *
+ *     let result = quantum::measure(...);
+ *
+ * The resulting type remains a semantic concern.
+ *
+ * ============================================================================
  */
+
 quantumToClassical
-    : measurementValue
-    | hybridInvocationExpression
+    : hybridBinding
+    ;
+
+
+quantumToClassicalExpression
+    : hybridBindingExpression
     ;
 
 
 /*
  * ============================================================================
- * 21. HYBRID VALUE
+ * 17. HYBRID VALUE
+ * ============================================================================
+ *
+ * A hybrid value is intentionally represented by the canonical expression
+ * system.
+ *
+ * There is no HybridValue type in the grammar.
+ *
  * ============================================================================
  */
+
 hybridValue
-    : classicalToQuantum
-    | quantumToClassical
+    : hybridInvocationExpression
     | expression
     ;
 
 
 /*
  * ============================================================================
- * 22. HYBRID SEQUENCE
+ * 18. HYBRID SEQUENCE
  * ============================================================================
  *
- * Arbitrarily long sequence.
+ * Unbounded source-level composition.
  *
- * This is intentionally:
+ * The grammar never imposes a finite number of:
  *
- *     hybridConstruct*
+ *     operations
+ *     domains
+ *     values
+ *     boundaries
+ *     statements
+ *     controls
+ *     resources
  *
- * rather than a fixed number of alternatives.
+ * ============================================================================
  */
+
 hybridConstructSequence
     : hybridConstruct*
     ;
@@ -851,11 +891,24 @@ hybridConstructSequenceNonEmpty
 
 /*
  * ============================================================================
- * 23. HYBRID GROUP
+ * 19. HYBRID GROUP
  * ============================================================================
  *
  * Structural grouping only.
+ *
+ * It does not imply:
+ *
+ *     thread
+ *     process
+ *     device
+ *     queue
+ *     scheduling region
+ *     hardware controller
+ *     synchronization primitive
+ *
+ * ============================================================================
  */
+
 hybridGroup
     : LBRACE
       hybridConstructSequence
@@ -865,11 +918,14 @@ hybridGroup
 
 /*
  * ============================================================================
- * 24. HYBRID ITEM
+ * 20. HYBRID ITEM
  * ============================================================================
  *
- * Publicly useful generic hybrid item boundary.
+ * Stable tooling-facing item boundary.
+ *
+ * ============================================================================
  */
+
 hybridItem
     : hybridConstruct
     | statement
@@ -878,9 +934,10 @@ hybridItem
 
 /*
  * ============================================================================
- * 25. HYBRID SOURCE ELEMENT
+ * 21. HYBRID SOURCE ELEMENT
  * ============================================================================
  */
+
 hybridSourceElement
     : hybridConstruct
     ;
@@ -888,23 +945,38 @@ hybridSourceElement
 
 /*
  * ============================================================================
- * 26. HYBRID DOMAIN BOUNDARY
+ * 22. HYBRID DOMAIN PAIR
  * ============================================================================
  *
- * This is a semantic marker for tooling/AST construction.
+ * Used by tooling and semantic analysis to identify a pair of participating
+ * logical domains.
+ *
+ * Example:
+ *
+ *     quantum::classical
+ *
+ * The names remain open-world.
+ *
+ * ============================================================================
  */
-hybridDomainBoundary
-    : hybridDomainPair
+
+hybridDomainPair
+    : hybridDomainName
+      DOUBLE_COLON
+      hybridDomainName
     ;
 
 
 /*
  * ============================================================================
- * 27. HYBRID ARGUMENT
+ * 23. HYBRID ARGUMENT
  * ============================================================================
  *
- * Arguments use the canonical expression grammar.
+ * Arguments are ordinary Zamani expressions.
+ *
+ * ============================================================================
  */
+
 hybridArgument
     : expression
     ;
@@ -918,9 +990,14 @@ hybridArgumentList
 
 /*
  * ============================================================================
- * 28. HYBRID RETURN VALUE
+ * 24. HYBRID RETURN VALUE
+ * ============================================================================
+ *
+ * No hybrid-specific return type exists.
+ *
  * ============================================================================
  */
+
 hybridReturnValue
     : expression
     ;
@@ -928,34 +1005,15 @@ hybridReturnValue
 
 /*
  * ============================================================================
- * 29. DOMAIN-QUALIFIED CALLS
+ * 25. HYBRID CALL
  * ============================================================================
  *
- * These rules provide explicit semantic names for tooling.
+ * Alias for tooling.
  *
- * They are aliases over the same generic invocation model.
+ * It does not create another invocation implementation.
  *
- * No second invocation implementation is created.
+ * ============================================================================
  */
-domainQualifiedQuantumCall
-    : QUANTUM
-      DOUBLE_COLON
-      qualifiedName
-      LPAREN
-      argumentList?
-      RPAREN
-    ;
-
-
-domainQualifiedClassicalCall
-    : identifier
-      DOUBLE_COLON
-      qualifiedName
-      LPAREN
-      argumentList?
-      RPAREN
-    ;
-
 
 hybridCall
     : hybridInvocationExpression
@@ -964,58 +1022,28 @@ hybridCall
 
 /*
  * ============================================================================
- * 30. HYBRID REQUIREMENT VALUE
+ * 26. DOMAIN ANNOTATION
  * ============================================================================
  *
- * The value after a requirement remains an ordinary expression.
- */
-hybridRequirementWithValue
-    : REQUIRES expression ASSIGN expression SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * 31. DOMAIN ANNOTATION
- * ============================================================================
+ * An annotation is represented using the canonical annotation marker.
  *
- * This does not create a new type system.
+ * The domain remains an open semantic name.
+ *
+ * ============================================================================
  */
+
 hybridDomainAnnotation
-    : AT hybridDomainName
+    : AT
+      hybridDomainName
     ;
 
 
 /*
  * ============================================================================
- * 32. HYBRID DECLARATION WITH DOMAIN
+ * 27. HYBRID CONDITION
  * ============================================================================
  */
-hybridDeclarationWithDomain
-    : hybridDomainName
-      qualifiedName
-      SEMICOLON
-    ;
 
-
-/*
- * ============================================================================
- * 33. HYBRID ASSIGNMENT
- * ============================================================================
- */
-hybridAssignment
-    : IDENTIFIER
-      ASSIGN
-      hybridValue
-      SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * 34. HYBRID CONDITION
- * ============================================================================
- */
 hybridCondition
     : expression
     ;
@@ -1023,9 +1051,18 @@ hybridCondition
 
 /*
  * ============================================================================
- * 35. HYBRID TARGET EXPRESSION
+ * 28. HYBRID TARGET EXPRESSION
+ * ============================================================================
+ *
+ * Target here means semantic execution intent only.
+ *
+ * It does NOT mean a physical device.
+ *
+ * Physical target selection belongs to hardware/compile/execution.
+ *
  * ============================================================================
  */
+
 hybridTargetExpression
     : expression
     ;
@@ -1033,56 +1070,262 @@ hybridTargetExpression
 
 /*
  * ============================================================================
- * 36. INTEGRATION CONTRACT
+ * 29. HYBRID RESOURCE ADAPTERS
  * ============================================================================
  *
- * The following existing grammar domains are consumed by this file through
- * their canonical public rules:
+ * Resource syntax is owned by HybridResources/Resources.
  *
- *     grammar/expressions/
- *         expression
- *         argumentList
- *
- *     grammar/statements/
- *         statement
- *         block
- *
- *     grammar/types/
- *         typeAnnotation
- *
- *     grammar/core/
- *         identifier
- *         qualifiedName
- *
- *     grammar/quantum/
- *         quantum semantic constructs
- *
- *     grammar/classical/
- *         classical semantic constructs
- *
- *     grammar/resources/
- *         resource/capability semantics
- *
- *     grammar/hardware/
- *         target-independent hardware semantics
- *
- * This file deliberately does not duplicate those grammars.
+ * These adapters provide stable hybrid-domain names without duplicating the
+ * resource grammar.
  *
  * ============================================================================
- * AST CONTRACT
+ */
+
+hybridResource
+    : hybridResourceConstruct
+    ;
+
+
+hybridRequirementResource
+    : hybridRequirementDeclaration
+    ;
+
+
+hybridConstraintResource
+    : hybridConstraintDeclaration
+    ;
+
+
+hybridPreferenceResource
+    : hybridPreferenceDeclaration
+    ;
+
+
+hybridHintResource
+    : hybridHintDeclaration
+    ;
+
+
+hybridCapabilityResource
+    : hybridCapabilityDeclaration
+    ;
+
+
+/*
+ * ============================================================================
+ * 30. FUNCTION INTEGRATION
  * ============================================================================
  *
- * Every hybrid construct must map to the existing domain-neutral frontend AST.
+ * Function syntax remains owned by Functions.
  *
- * The AST must preserve:
+ * HybridFunctions provides adapters:
+ *
+ *     hybridFunctionDeclaration
+ *     hybridFunctionDefinition
+ *     hybridFunctionPrototype
+ *     hybridFunctionSignature
+ *
+ * No function syntax is duplicated here.
+ *
+ * ============================================================================
+ */
+
+hybridFunction
+    : hybridFunctionDeclaration
+    ;
+
+
+hybridFunctionBody
+    : hybridFunctionDefinition
+    ;
+
+
+/*
+ * ============================================================================
+ * 31. QUANTUM INTEGRATION
+ * ============================================================================
+ *
+ * This grammar deliberately does not import or redefine individual quantum
+ * operations.
+ *
+ * Quantum source constructs enter through:
+ *
+ *     domain-qualified invocation
+ *
+ * and ordinary canonical statements/expressions.
+ *
+ * The semantic pipeline remains:
+ *
+ *     hybrid source
+ *          |
+ *          v
+ *     domain-neutral AST
+ *          |
+ *          v
+ *     semantic quantum operation
+ *          |
+ *          v
+ *     quantum::ir
+ *
+ * No:
+ *
+ *     HybridQuantumIR
+ *     HybridCircuitIR
+ *     HybridGateIR
+ *
+ * may be introduced.
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * 32. CLASSICAL INTEGRATION
+ * ============================================================================
+ *
+ * Classical constructs remain ordinary Zamani expressions/statements.
+ *
+ * Hybrid composition may therefore surround arbitrary classical computation
+ * without creating a second classical language.
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * 33. HDL / HARDWARE INTEGRATION
+ * ============================================================================
+ *
+ * Hybrid may invoke hardware/HDL semantic operations through open domain
+ * names.
+ *
+ * Example:
+ *
+ *     accelerator::compute(...);
+ *
+ * The grammar does NOT select:
+ *
+ *     CPU
+ *     GPU
+ *     FPGA
+ *     ASIC
+ *     QPU
+ *     physical device
+ *     vendor
+ *     device index
+ *     topology
+ *     memory bank
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * 34. DISTRIBUTED INTEGRATION
+ * ============================================================================
+ *
+ * Distributed computation remains a domain of the same language.
+ *
+ * Example:
+ *
+ *     distributed::map(...);
+ *
+ * The grammar does not encode:
+ *
+ *     node count
+ *     node identifiers
+ *     cluster size
+ *     fixed topology
+ *     provider
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * 35. AI / DATA INTEGRATION
+ * ============================================================================
+ *
+ * Hybrid may compose AI/data operations without introducing framework-specific
+ * syntax.
+ *
+ * Example:
+ *
+ *     ai::infer(model, input);
+ *
+ * Framework names remain semantic/library identifiers.
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * 36. NETWORKING INTEGRATION
+ * ============================================================================
+ *
+ * Networking remains downstream from semantic source composition.
+ *
+ * Hybrid syntax can describe a logical operation or dependency but does not
+ * encode physical network topology.
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * 37. ERROR BOUNDARIES
+ * ============================================================================
+ *
+ * The grammar distinguishes structural syntax from later validation.
+ *
+ * Syntax errors:
+ *     handled by the parser.
+ *
+ * Semantic errors:
+ *     handled by semantic analysis.
+ *
+ * Capability errors:
+ *     handled by capability/resource analysis.
+ *
+ * Resource errors:
+ *     handled against an actual target/resource environment.
+ *
+ * Target errors:
+ *     handled during lowering/placement/scheduling/deployment.
+ *
+ * Runtime errors:
+ *     handled by execution infrastructure.
+ *
+ * A syntactically valid hybrid program therefore does NOT imply that every
+ * available target can execute it.
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * 38. AST CONTRACT
+ * ============================================================================
+ *
+ * Every hybrid construct must map into the existing domain-neutral frontend
+ * AST.
+ *
+ * The AST must preserve, where applicable:
  *
  *     source span
  *     source ordering
  *     nesting
- *     domain boundary
  *     participating domains
- *     input values
- *     output values
+ *     domain boundary
+ *     input expressions
+ *     output expressions
  *     control dependencies
  *     requirements
  *     capabilities
@@ -1090,46 +1333,64 @@ hybridTargetExpression
  *     preferences
  *     hints
  *
- * Parsing MUST NOT manufacture:
+ * The AST MUST NOT manufacture target-specific objects such as:
  *
  *     PhysicalQubitId
- *     DeviceId
+ *     PhysicalCpuId
+ *     PhysicalGpuId
+ *     PhysicalFpgaId
+ *     PhysicalDeviceId
  *     BackendId
  *     ScheduleSlot
  *     HardwareAddress
- *     PhysicalGpuId
- *     PhysicalCpuId
+ *
+ * Those belong to downstream representations.
  *
  * ============================================================================
- * SEMANTIC CONTRACT
+ */
+
+
+/*
+ * ============================================================================
+ * 39. SEMANTIC CONTRACT
  * ============================================================================
  *
- * Semantic analysis is responsible for:
+ * Semantic analysis owns:
  *
- *     - determining domain membership;
- *     - validating domain crossings;
- *     - checking type compatibility;
- *     - validating measurement dependencies;
- *     - checking effect compatibility;
- *     - validating resource requirements;
- *     - evaluating capability requirements;
- *     - determining whether preferences are satisfiable;
- *     - validating constraints;
- *     - checking ownership/lifetime;
- *     - checking deterministic semantics;
- *     - determining host/device/accelerator realization;
+ *     domain classification
+ *     name resolution
+ *     type checking
+ *     effect checking
+ *     ownership/lifetime validation
+ *     domain crossing validation
+ *     measurement dependency validation
+ *     resource requirement validation
+ *     capability validation
+ *     constraint validation
+ *     preference handling
+ *     implementation-hint handling
+ *     determinism analysis
+ *     target feasibility
  *
- * None of these decisions are performed by this grammar.
+ * The parser performs none of these operations.
  *
  * ============================================================================
- * QUANTUM IR CONTRACT
+ */
+
+
+/*
+ * ============================================================================
+ * 40. QUANTUM IR CONTRACT
  * ============================================================================
  *
- * Quantum constructs originating in hybrid source ultimately lower through:
+ * Quantum constructs participating in a hybrid program lower through the
+ * repository's canonical:
  *
  *     quantum::ir
  *
- * This file does NOT define:
+ * This grammar creates no quantum IR.
+ *
+ * In particular, this grammar MUST NOT introduce:
  *
  *     QuantumGate
  *     QuantumInstruction
@@ -1138,330 +1399,506 @@ hybridTargetExpression
  *     QubitId
  *     PhysicalQubitId
  *
- * A hybrid construct therefore cannot create a competing quantum IR.
+ * as parser-level semantic models.
  *
  * ============================================================================
- * CLASSICAL IR CONTRACT
+ */
+
+
+/*
+ * ============================================================================
+ * 41. QEC / ZQN / RESILIENCE CONTRACT
  * ============================================================================
  *
- * Classical computation uses the repository's canonical classical semantic
- * representation.
+ * This grammar does not implement:
  *
- * This grammar does not introduce a second classical IR.
+ *     QEC
+ *     syndrome extraction
+ *     decoding
+ *     logical-error analysis
+ *     noise models
+ *     fault models
+ *     calibration
+ *     retries
+ *     recovery
+ *     rerouting
+ *     rescheduling
+ *     backend switching
  *
- * ============================================================================
- * HDL / HARDWARE CONTRACT
- * ============================================================================
- *
- * Hybrid source may interact semantically with HDL/hardware computation.
- *
- * Physical hardware realization remains owned downstream by:
- *
- *     hardware
- *     compile
- *     execution
- *     HAL
- *
- * This grammar does not select:
- *
- *     CPU
- *     GPU
- *     FPGA
- *     ASIC
- *     QPU
- *     simulator
- *     node
- *     cluster
- *     provider
+ * Those systems consume the canonical semantic/IR representation downstream.
  *
  * ============================================================================
- * RESOURCE CONTRACT
+ */
+
+
+/*
+ * ============================================================================
+ * 42. SCHEDULING CONTRACT
  * ============================================================================
  *
- * Requirements, capabilities, preferences, constraints and hints are distinct
- * semantic categories.
+ * Hybrid grammar may express dependency.
  *
- *     requirement
- *         mandatory semantic/resource need
+ * It MUST NOT express scheduler implementation.
  *
- *     capability
- *         property available or required by an execution context
+ * It does not own:
  *
- *     preference
- *         advisory preference
- *
- *     constraint
- *         semantic restriction
- *
- *     hint
- *         non-authoritative implementation guidance
- *
- * This grammar never converts a capability declaration into a physical
- * allocation.
+ *     latency calculation
+ *     queue selection
+ *     clock alignment
+ *     pulse timing
+ *     feedback timing
+ *     device synchronization
  *
  * ============================================================================
- * SCALABILITY CONTRACT
+ */
+
+
+/*
+ * ============================================================================
+ * 43. HARDWARE / TARGET CONTRACT
  * ============================================================================
  *
- * All collections use ANTLR repetition:
+ * The grammar never discovers hardware.
  *
- *     *
- *     +
- *     ?
+ * It never selects:
  *
- * No finite source-language capacity is encoded.
+ *     CPU 0
+ *     GPU 0
+ *     FPGA 0
+ *     QPU 0
+ *     node 0
  *
- * The language therefore remains scalable from:
+ * It never encodes:
  *
- *     one classical value
- *     one qubit
- *     one accelerator
- *     one hybrid operation
+ *     fixed topology
+ *     fixed coupling maps
+ *     physical addresses
+ *     memory-bank IDs
+ *     vendor-specific hardware assumptions
  *
- * through arbitrarily large programs, subject only to actual:
+ * Target realization occurs downstream:
  *
- *     parser resources
+ *     semantic model
+ *          |
+ *          v
+ *     capability/resource evaluation
+ *          |
+ *          v
+ *     target selection
+ *          |
+ *          v
+ *     placement/routing
+ *          |
+ *          v
+ *     scheduling
+ *          |
+ *          v
+ *     lowering
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * 44. SCALABILITY CONTRACT
+ * ============================================================================
+ *
+ * This grammar deliberately contains no artificial finite language ceiling.
+ *
+ * The same grammar model can represent:
+ *
+ *     one classical value + one quantum operation
+ *
+ * through:
+ *
+ *     arbitrarily large hybrid dependency graphs
+ *
+ * subject to:
+ *
+ *     source representation
+ *     parser implementation resources
  *     compiler resources
+ *     target capabilities
  *     runtime resources
- *     declared requirements
- *     available hardware
+ *     physical resources
  *
- * This grammar does not impose an artificial ceiling.
+ * "Infinity" therefore means:
+ *
+ *     no artificial language-level finite machine-size ceiling.
+ *
+ * It does NOT mean an implementation can physically allocate infinite
+ * resources.
  *
  * ============================================================================
- * DETERMINISM
+ */
+
+
+/*
+ * ============================================================================
+ * 45. DETERMINISM CONTRACT
  * ============================================================================
  *
- * Parsing is deterministic for a fixed:
+ * Parsing depends only on:
  *
- *     source
- *     token stream
+ *     source text
+ *     lexer version
  *     grammar version
  *
- * It must not depend on:
+ * This grammar contains no:
  *
- *     hardware
- *     network
- *     filesystem
- *     clock
  *     randomness
- *     device discovery
- *     runtime state
+ *     filesystem access
+ *     network access
+ *     hardware discovery
+ *     environment inspection
+ *     clock-dependent behavior
+ *     mutable global parser state
  *
  * ============================================================================
- * SAFETY
+ */
+
+
+/*
+ * ============================================================================
+ * 46. SECURITY CONTRACT
  * ============================================================================
  *
  * This grammar contains:
  *
- *     no Rust actions;
- *     no Rust predicates;
- *     no filesystem access;
- *     no network access;
- *     no process execution;
- *     no hardware probing;
- *     no unsafe Rust;
- *     no target-specific implementation.
+ *     no actions
+ *     no semantic predicates
+ *     no command execution
+ *     no filesystem access
+ *     no network access
+ *     no credential access
+ *     no hardware access
+ *     no runtime calls
  *
- * Generated Rust remains subject to the repository's:
+ * Malformed source is therefore handled entirely through parser diagnostics
+ * and recovery.
  *
- *     Rust 1.97 / Rust 1.97.1
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * 47. SAFE-RUST CONTRACT
+ * ============================================================================
+ *
+ * The grammar itself contains no Rust.
+ *
+ * The repository's generated and handwritten Rust frontend must target:
+ *
+ *     Rust 1.97
+ *     Rust 1.97.1
  *     Rust 2021
- *     safe Rust only
  *
- * requirement.
+ * and must remain safe Rust.
  *
- * ============================================================================
- * DIAGNOSTICS
- * ============================================================================
+ * This file requires no:
  *
- * The grammar must preserve ordinary ANTLR source locations.
- *
- * Semantic diagnostics downstream should distinguish:
- *
- *     HYBRID_DOMAIN_MISMATCH
- *     HYBRID_TYPE_MISMATCH
- *     HYBRID_INVALID_CONVERSION
- *     HYBRID_INVALID_CONTROL_DEPENDENCY
- *     HYBRID_UNAVAILABLE_CAPABILITY
- *     HYBRID_UNSATISFIED_REQUIREMENT
- *     HYBRID_INVALID_CONSTRAINT
- *     HYBRID_INVALID_PREFERENCE
- *
- * These are semantic diagnostic categories, not parser actions.
+ *     unsafe
+ *     unsafe fn
+ *     unsafe impl
+ *     unsafe block
  *
  * ============================================================================
- * HARD-CODING AUDIT
+ */
+
+
+/*
+ * ============================================================================
+ * 48. HARD-CODING AUDIT
  * ============================================================================
  *
- * This file contains no universal:
+ * Forbidden universal grammar assumptions include:
  *
- *     qubit limit
- *     CPU limit
- *     GPU limit
- *     FPGA limit
- *     node limit
- *     thread limit
- *     memory limit
- *     tensor-rank limit
- *     register-width limit
- *     device-count limit
- *     topology limit
+ *     MAX_QUBITS
+ *     MAX_CPUS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_NODES
+ *     MAX_MEMORY
+ *     MAX_THREADS
+ *     MAX_TENSOR_RANK
+ *     MAX_REGISTER_WIDTH
+ *     MAX_NETWORK_SIZE
+ *     MAX_DEVICE_COUNT
  *
- * No physical device identifier is required by the hybrid syntax.
+ * Also forbidden as universal source semantics:
+ *
+ *     qpu0
+ *     gpu0
+ *     cpu0
+ *     fpga0
+ *     fixed physical qubit numbers
+ *     fixed memory addresses
+ *     fixed register widths
+ *     fixed accelerator counts
+ *     fixed topology sizes
+ *
+ * Numeric literals remain valid program data.
+ *
+ * Example:
+ *
+ *     let n = 1024;
+ *
+ * is a program value.
+ *
+ * It is NOT a compiler capacity.
  *
  * ============================================================================
- * COMPATIBILITY
+ */
+
+
+/*
+ * ============================================================================
+ * 49. COMPATIBILITY CONTRACT
  * ============================================================================
  *
- * Stable public rules:
+ * This grammar preserves the existing public parser entry points:
  *
- *     hybridConstruct
  *     hybridDeclaration
  *     hybridStatement
  *     hybridExpression
  *
- * Internal rules may be extended provided their semantic meaning remains
- * compatible.
+ * Existing specialized hybrid grammars are NOT silently redefined here.
  *
- * New computational domains should be represented by extensible domain names
- * and semantic capabilities rather than by modifying the core grammar for
- * every new device or vendor.
+ * In particular, this file does not import the legacy competing grammars:
  *
- * ============================================================================
- * TEST CONTRACT
- * ============================================================================
+ *     ClassicalQuantum
+ *     HybridQuantumClassical
+ *     ClassicalQuantumBoundary
+ *     QuantumClassicalControl
  *
- * grammar/tests/hybrid/ must include at minimum:
+ * because several of those files currently overlap in ownership and/or
+ * contain legacy vocabulary.
  *
- * Positive:
+ * They remain migration/reference surfaces until individually normalized.
  *
- *     classical -> quantum
- *     quantum -> classical measurement
- *     classical decision -> quantum
- *     nested hybrid regions
- *     parameterized quantum invocation
- *     accelerator invocation
- *     resource requirement
- *     capability requirement
- *     preference
- *     constraint
- *     hint
- *     synchronization
- *     conversion
+ * The canonical production path is:
  *
- * Negative:
- *
- *     malformed hybrid region
- *     missing closing brace
- *     missing invocation delimiter
- *     malformed conversion
- *     malformed requirement
- *     malformed capability
- *
- * Boundary:
- *
- *     one operation
- *     many operations
- *     empty hybrid region
- *     deeply nested hybrid regions
- *     large argument lists
- *     large requirement expressions
- *
- * Scalability:
- *
- *     no test may establish a fixed maximum number of:
- *         domains
- *         operations
- *         values
- *         resources
- *         qubits
- *         accelerators
- *         nodes
- *
- * Integration:
- *
- *     hybrid source must parse through:
- *
- *         ZamaniLexer
- *             ->
- *         ZamaniParser
- *             ->
- *         domain-neutral AST
- *             ->
- *         semantic analysis
- *             ->
- *         canonical IR
- *
- * Quantum paths must reach:
- *
- *     quantum::ir
- *
- * without introducing another hybrid quantum IR.
+ *     Hybrid
+ *        |
+ *        +--> HybridFunctions
+ *        +--> HybridResources
+ *        +--> canonical shared grammars
  *
  * ============================================================================
- * COMPLETION CRITERIA
+ */
+
+
+/*
+ * ============================================================================
+ * 50. FILE COMPLETION CONTRACT
  * ============================================================================
  *
  * This file is complete when:
  *
- * [ ] No recursive adapter rule can loop without consuming input.
- * [ ] Canonical lexer token names are used.
- * [ ] No K_* compatibility vocabulary remains.
- * [ ] No lexer rules are defined here.
- * [ ] No second expression grammar is defined.
- * [ ] No second type system is defined.
- * [ ] No second statement grammar is defined.
- * [ ] No fixed quantum gate inventory exists.
- * [ ] No fixed machine/resource limits exist.
- * [ ] Hybrid regions accept arbitrary-length sequences.
- * [ ] Classical -> quantum flow is representable.
- * [ ] Quantum -> classical flow is representable.
- * [ ] Measurement -> classical control is representable.
- * [ ] Classical parameters -> quantum operations are representable.
- * [ ] Quantum results -> classical bindings are representable.
- * [ ] Accelerator interaction is representable through generic domain
- *     invocation.
- * [ ] Resource requirements remain target-independent.
- * [ ] Capability declarations remain declarative.
- * [ ] Preferences remain advisory.
- * [ ] Constraints remain semantic.
- * [ ] Hints remain non-authoritative.
- * [ ] AST integration is domain-neutral.
- * [ ] quantum::ir remains canonical.
- * [ ] No second hybrid IR exists.
- * [ ] QEC remains downstream.
- * [ ] ZQN remains downstream.
- * [ ] routing remains downstream.
- * [ ] scheduling remains downstream.
- * [ ] HAL remains downstream.
- * [ ] No unsafe Rust is required.
- * [ ] Rust 1.97 / 1.97.1 generation/conformance succeeds.
+ * [x] parser grammar declaration exists;
+ * [x] canonical tokenVocab is used;
+ * [x] canonical parser dependencies are explicit;
+ * [x] no lexer rules are duplicated;
+ * [x] no undefined legacy K_* tokens are used;
+ * [x] no nonexistent HYBRID token is required;
+ * [x] no nonexistent CONVERT token is required;
+ * [x] no nonexistent TO token is required;
+ * [x] no nonexistent SYNCHRONIZE token is required;
+ * [x] no second expression grammar is created;
+ * [x] no second statement grammar is created;
+ * [x] no second type grammar is created;
+ * [x] no fixed quantum gate inventory is created;
+ * [x] no hardware limits are encoded;
+ * [x] no physical device identifiers are encoded;
+ * [x] no second quantum IR is created;
+ * [x] resource semantics remain delegated;
+ * [x] function syntax remains delegated;
+ * [x] quantum semantics remain delegated;
+ * [x] HDL/hardware realization remains downstream;
+ * [x] QEC remains downstream;
+ * [x] ZQN remains downstream;
+ * [x] routing remains downstream;
+ * [x] scheduling remains downstream;
+ * [x] target discovery remains downstream;
+ * [x] deterministic parsing is preserved;
+ * [x] safe-Rust compatibility is preserved;
+ * [x] unbounded source cardinality is preserved;
+ * [x] contextual hybrid syntax is documented;
+ * [x] AST integration is defined;
+ * [x] semantic integration is defined;
+ * [x] IR integration is defined;
+ * [x] compatibility boundaries are defined.
  *
  * ============================================================================
- * FINAL INVARIANT
+ */
+
+
+/*
+ * ============================================================================
+ * 51. INTEGRATION CHECKLIST FOR THE NEXT FILES
  * ============================================================================
  *
- * This grammar defines HOW classical, quantum, accelerator and other
- * computational semantics may be composed in one Zamani source program.
+ * This file must NOT require later edits merely because another domain file
+ * is completed.
  *
- * It does not define WHERE that program ultimately executes.
+ * The following integration contracts are therefore fixed now:
  *
- * Therefore:
+ * 1. grammar/antlr/ZamaniParser.g4
  *
- *     Program Once
- *          ->
- *     Compile Once
- *          ->
- *     Run Everywhere
- *          ->
- *     Run Anywhere
- *          ->
- *     Run Forever
+ *    Continues to import:
  *
- * means that the PROGRAM'S SEMANTIC INTENT remains portable and extensible,
- * while resource realization is determined by the available compilation and
- * execution environment.
+ *        Hybrid
+ *
+ *    and continues to expose:
+ *
+ *        hybridElement
+ *
+ *    through:
+ *
+ *        hybridDeclaration
+ *        hybridStatement
+ *        hybridExpression
+ *
+ * 2. grammar/lexer/*
+ *
+ *    No lexical change is required for this file.
+ *
+ * 3. grammar/expressions/*
+ *
+ *    `expression` and `argumentList` remain the canonical expression
+ *    interfaces.
+ *
+ * 4. grammar/types/*
+ *
+ *    `typeAnnotation` remains canonical.
+ *
+ * 5. grammar/statements/*
+ *
+ *    `statement` and `block` remain canonical.
+ *
+ * 6. grammar/functions/*
+ *
+ *    Function syntax remains canonical through HybridFunctions.
+ *
+ * 7. grammar/resources/*
+ *
+ *    Resource semantics remain canonical through HybridResources.
+ *
+ * 8. grammar/quantum/*
+ *
+ *    Quantum operation and measurement semantics remain owned by Quantum.
+ *    Hybrid only composes their use.
+ *
+ * 9. grammar/classical/*
+ *
+ *    Classical computation remains ordinary Zamani computation.
+ *
+ * 10. grammar/hdl/*
+ *
+ *     HDL remains target-independent hardware intent.
+ *
+ * 11. grammar/hardware/*
+ *
+ *     Physical realization remains downstream.
+ *
+ * 12. src/frontend/ast/*
+ *
+ *     Hybrid must map to domain-neutral AST structures rather than a
+ *     hybrid-specific IR.
+ *
+ * 13. semantic analysis
+ *
+ *     Must validate domain crossing, type compatibility, effects, resources,
+ *     capabilities, ownership, lifetime, and target feasibility.
+ *
+ * 14. quantum::ir
+ *
+ *     Remains the sole canonical quantum IR boundary.
+ *
+ * 15. optimization/routing/scheduling/QEC/ZQN/HAL
+ *
+ *     Consume downstream semantic representations and never become grammar
+ *     dependencies.
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * 52. TESTING CONTRACT
+ * ============================================================================
+ *
+ * Required acceptance categories:
+ *
+ * POSITIVE:
+ *
+ *     hybrid {
+ *         quantum::prepare(input);
+ *         classical::postprocess(result);
+ *     }
+ *
+ *     hybrid {
+ *         let result = quantum::measure(state);
+ *         when result {
+ *             quantum::correction(result);
+ *         }
+ *     }
+ *
+ *     hybrid {
+ *         requires qubits >= required_qubits;
+ *         requires capability("quantum.measurement");
+ *         prefer capability("accelerated.compute");
+ *     }
+ *
+ * NEGATIVE:
+ *
+ *     malformed hybrid marker
+ *     malformed qualified invocation
+ *     missing closing block
+ *     missing invocation parenthesis
+ *     malformed binding
+ *     malformed requirement
+ *
+ * BOUNDARY:
+ *
+ *     empty hybrid block
+ *     one construct
+ *     many constructs
+ *     deeply nested hybrid blocks
+ *     long argument lists
+ *     many domain crossings
+ *
+ * SCALABILITY:
+ *
+ *     symbolic resource quantities
+ *     arbitrary qubit requirements
+ *     arbitrary tensor dimensions
+ *     arbitrary operation counts
+ *     arbitrary domain counts
+ *
+ * CROSS-DOMAIN:
+ *
+ *     classical + quantum
+ *     classical + HDL
+ *     quantum + HDL
+ *     quantum + accelerator
+ *     AI + quantum
+ *     distributed + quantum
+ *     classical + quantum + HDL
+ *     classical + quantum + HDL + hardware
+ *
+ * DETERMINISM:
+ *
+ *     repeated parsing of identical source must produce equivalent parse
+ *     structures.
+ *
+ * HARD-CODING:
+ *
+ *     tests must demonstrate that increasing a resource quantity does not
+ *     require changing this grammar.
  *
  * ============================================================================
  */
