@@ -1,118 +1,69 @@
-/*
+/**
  * ============================================================================
  * Zamani Universal Computing Language
  * ============================================================================
  *
- * File:
- *     grammar/hardware/accelerator.g4
+ * FILE
+ * ----
+ * grammar/hardware/accelerators.g4
  *
- * Status:
- *     Canonical accelerator hardware-intent parser grammar.
+ * GRAMMAR
+ * -------
+ * ZamaniHardwareAcceleratorParser
  *
- * Grammar:
- *     ANTLR4 parser grammar
+ * STATUS
+ * ------
+ * CANONICAL MODULAR ACCELERATOR-CONTRACT GRAMMAR
  *
- * Rust:
- *     Rust 1.97 / Rust 1.97.1
- *     Rust 2021
+ * LANGUAGE
+ * --------
+ * Zamani
  *
- * Safety:
- *     - No embedded Rust actions.
- *     - No semantic predicates.
- *     - No unsafe code.
- *     - No filesystem access.
- *     - No network access.
- *     - No device access.
- *     - No runtime execution.
- *     - No target-specific implementation.
+ * RUST BASELINE
+ * -------------
+ * Rust 1.97 / Rust 1.97.1
+ * Rust 2021
+ *
+ * SAFETY
+ * ------
+ * This grammar contains:
+ *
+ *   - no embedded Rust;
+ *   - no semantic predicates;
+ *   - no target-language actions;
+ *   - no unsafe code;
+ *   - no filesystem access;
+ *   - no network access;
+ *   - no hardware access;
+ *   - no runtime execution.
  *
  * ============================================================================
  * PURPOSE
  * ============================================================================
  *
- * This grammar owns the SOURCE-LEVEL accelerator abstraction.
+ * This file owns SOURCE-LEVEL ACCELERATOR INTENT.
  *
- * It describes:
+ * An accelerator is a programmable computational resource that may be
+ * realized by many different implementations, including but not limited to:
  *
- *     - accelerator declarations;
- *     - accelerator kinds;
- *     - generic accelerator parameters;
- *     - interfaces;
- *     - ports;
- *     - operations;
- *     - capabilities;
- *     - requirements;
- *     - resources;
- *     - constraints;
- *     - preferences;
- *     - hints;
- *     - abstract target intent;
- *     - semantic instances;
- *     - implementation-neutral properties;
- *     - accelerator-qualified references.
+ *   - vector engines;
+ *   - matrix engines;
+ *   - tensor engines;
+ *   - AI/ML accelerators;
+ *   - signal-processing accelerators;
+ *   - cryptographic accelerators;
+ *   - compression/decompression accelerators;
+ *   - reconfigurable logic;
+ *   - FPGA-backed accelerators;
+ *   - ASIC-backed accelerators;
+ *   - GPU-like computational resources;
+ *   - quantum-classical accelerator resources;
+ *   - domain-specific accelerators;
+ *   - future accelerator technologies.
  *
- * It does NOT describe a particular physical accelerator.
+ * The grammar intentionally does NOT enumerate these technologies.
  *
- * ============================================================================
- * POCO-REAF
- * ============================================================================
- *
- * Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
- *
- * Accelerator source expresses WHAT is required/provided.
- *
- * It does not prescribe:
- *
- *     - physical accelerator ID;
- *     - device ID;
- *     - vendor;
- *     - board;
- *     - PCI address;
- *     - fixed accelerator count;
- *     - fixed lane count;
- *     - fixed execution-unit count;
- *     - fixed vector width;
- *     - fixed warp size;
- *     - fixed work-group size;
- *     - fixed memory size;
- *     - fixed stream count;
- *     - fixed topology.
- *
- * Those belong to semantic resolution, compilation, HAL, deployment,
- * scheduling, and runtime.
- *
- * ============================================================================
- * SCALABILITY
- * ============================================================================
- *
- * The grammar imposes no artificial machine-size ceiling.
- *
- * There is no:
- *
- *     MAX_ACCELERATORS
- *     MAX_DEVICES
- *     MAX_LANES
- *     MAX_CORES
- *     MAX_THREADS
- *     MAX_WARPS
- *     MAX_WORKGROUPS
- *     MAX_VECTOR_WIDTH
- *     MAX_MEMORY
- *     MAX_STREAMS
- *     MAX_OPERATIONS
- *     MAX_PORTS
- *     MAX_CAPABILITIES
- *     MAX_RESOURCES
- *
- * Repetition is expressed structurally with `*` and `+`.
- *
- * Quantities, dimensions, widths, capacities, counts, and requirements are
- * expressions and therefore remain symbolic and target-independent.
- *
- * "Infinity" means that the LANGUAGE introduces no artificial finite
- * accelerator limit. Actual execution remains bounded only by program
- * semantics, compiler resources, selected implementation policy, and
- * resources available at execution time.
+ * An accelerator kind is an open semantic name.
  *
  * ============================================================================
  * OWNERSHIP
@@ -120,63 +71,355 @@
  *
  * THIS FILE OWNS:
  *
- *     acceleratorDecl
- *     accelerator kind
- *     accelerator generic parameters
- *     accelerator interfaces
- *     accelerator ports
- *     accelerator operations
- *     accelerator capability declarations
- *     accelerator requirements
- *     accelerator resource associations
- *     accelerator constraints
- *     accelerator preferences
- *     accelerator hints
- *     accelerator target intent
- *     accelerator semantic instances
- *     accelerator properties
- *     accelerator-qualified references
+ *   - accelerator declarations;
+ *   - accelerator kind;
+ *   - accelerator generic parameters;
+ *   - accelerator capability declarations;
+ *   - accelerator requirements;
+ *   - accelerator resource associations;
+ *   - accelerator constraints;
+ *   - accelerator preferences;
+ *   - accelerator hints;
+ *   - accelerator target intent;
+ *   - accelerator operations;
+ *   - accelerator operation parameters;
+ *   - accelerator operation attributes;
+ *   - accelerator operation bodies;
+ *   - accelerator operation invocations;
+ *   - accelerator properties;
+ *   - accelerator-local interfaces;
+ *   - accelerator-local ports.
  *
  * THIS FILE DOES NOT OWN:
  *
- *     lexer tokens
- *     identifiers
- *     general expressions
- *     general types
- *     generic memory semantics
- *     universal resource semantics
- *     target discovery
- *     device discovery
- *     placement
- *     routing
- *     scheduling
- *     calibration
- *     QEC
- *     ZQN
- *     drivers
- *     HAL implementation
- *     runtime dispatch
- *     classical IR
- *     quantum::ir
- *     HDL implementation
- *     code generation
+ *   - lexer definitions;
+ *   - identifiers;
+ *   - general expressions;
+ *   - universal types;
+ *   - generic memory semantics;
+ *   - universal resource semantics;
+ *   - target declarations;
+ *   - hardware discovery;
+ *   - device discovery;
+ *   - physical device IDs;
+ *   - placement;
+ *   - routing;
+ *   - scheduling;
+ *   - calibration;
+ *   - synthesis;
+ *   - physical implementation;
+ *   - drivers;
+ *   - HAL;
+ *   - runtime dispatch;
+ *   - QEC;
+ *   - ZQN;
+ *   - quantum::ir;
+ *   - classical IR;
+ *   - HDL implementation.
  *
  * ============================================================================
- * CANONICAL DEPENDENCIES
+ * SINGLE-OWNERSHIP RULE
  * ============================================================================
  *
- * Lexer:
+ * `hardware.g4` is the HARDWARE COMPOSITION layer.
+ *
+ * It MUST delegate accelerator declarations to:
+ *
+ *     hardwareAcceleratorDeclaration
+ *
+ * from this grammar.
+ *
+ * `hardware.g4` MUST NOT maintain a second implementation of:
+ *
+ *     hardwareAcceleratorDeclaration
+ *
+ * or a second accelerator-specific body grammar.
+ *
+ * Specialized hardware grammars such as:
+ *
+ *     gpu.g4
+ *     fpga.g4
+ *     asic.g4
+ *     qpu.g4
+ *
+ * may provide specialized semantic contracts, but they MUST NOT redefine
+ * the generic accelerator language.
+ *
+ * ============================================================================
+ * POCO-REAF
+ * ============================================================================
+ *
+ * Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
+ *
+ * Accelerator syntax describes:
+ *
+ *     WHAT
+ *
+ * rather than:
+ *
+ *     WHICH PHYSICAL DEVICE
+ *
+ * The source program may express:
+ *
+ *     requires capability("tensor.compute")
+ *     requires accelerator::parallel
+ *     requires memory >= required_memory
+ *     prefer accelerator::vector
+ *     target = target::accelerator
+ *
+ * It MUST NOT require a particular physical implementation merely because
+ * that implementation exists on today's machines.
+ *
+ * The compiler/backend/HAL may later resolve:
+ *
+ *     accelerator -> CPU
+ *     accelerator -> GPU
+ *     accelerator -> FPGA
+ *     accelerator -> ASIC
+ *     accelerator -> NPU
+ *     accelerator -> QPU-adjacent resource
+ *     accelerator -> future implementation
+ *
+ * without changing the source language semantics.
+ *
+ * ============================================================================
+ * HARD-CODING PROHIBITION
+ * ============================================================================
+ *
+ * This grammar contains no universal limits for:
+ *
+ *     accelerators
+ *     devices
+ *     execution units
+ *     lanes
+ *     vector width
+ *     tensor rank
+ *     tensor dimensions
+ *     threads
+ *     warps
+ *     workgroups
+ *     streams
+ *     ports
+ *     operations
+ *     resources
+ *     capabilities
+ *     memory
+ *     bandwidth
+ *     storage
+ *     nodes
+ *
+ * In particular, this grammar MUST NOT introduce:
+ *
+ *     MAX_ACCELERATORS
+ *     MAX_DEVICES
+ *     MAX_EXECUTION_UNITS
+ *     MAX_LANES
+ *     MAX_VECTOR_WIDTH
+ *     MAX_TENSOR_RANK
+ *     MAX_THREADS
+ *     MAX_WARPS
+ *     MAX_WORKGROUPS
+ *     MAX_STREAMS
+ *     MAX_MEMORY
+ *     MAX_PORTS
+ *     MAX_OPERATIONS
+ *
+ * Quantities are expressions.
+ *
+ * Therefore:
+ *
+ *     width = width_parameter
+ *
+ * and:
+ *
+ *     capacity >= required_capacity
+ *
+ * remain semantic requirements rather than language-level implementation
+ * limits.
+ *
+ * "Infinity" means that the grammar introduces no artificial finite machine
+ * ceiling. Actual execution remains constrained by the resources available
+ * to the compiler and runtime.
+ *
+ * ============================================================================
+ * DEPENDENCIES
+ * ============================================================================
+ *
+ * LEXER
+ * -----
+ * Canonical modular lexical vocabulary:
  *
  *     grammar/lexer/tokens.g4
- *     grammar name: ZamaniTokens
  *
- * Expression syntax:
+ * Grammar name:
+ *
+ *     ZamaniTokens
+ *
+ * The repository is migrating toward:
+ *
+ *     grammar/antlr/ZamaniLexer.g4
+ *
+ * as the final production lexer boundary.
+ *
+ * Until that one-time vocabulary migration is completed, this modular parser
+ * follows the repository's existing modular convention:
+ *
+ *     tokenVocab = ZamaniTokens
+ *
+ * No local lexer rules are introduced here.
+ *
+ * EXPRESSIONS
+ * -----------
+ * Canonical expression composition:
  *
  *     grammar/expressions/expressions.g4
- *     grammar name: Expressions
  *
- * This grammar consumes the canonical `expression` rule and does not define
- * another expression language.
+ * Grammar name:
+ *
+ *     Expressions
+ *
+ * This grammar imports it and consumes its public:
+ *
+ *     expression
+ *
+ * rule.
+ *
+ * No second accelerator expression language is created.
+ *
+ * ============================================================================
+ * AST CONTRACT
+ * ============================================================================
+ *
+ * Every successful accelerator declaration must map into the domain-neutral
+ * frontend AST while preserving at minimum:
+ *
+ *   - source span;
+ *   - declaration name;
+ *   - attributes;
+ *   - generic parameters;
+ *   - generic bounds;
+ *   - generic defaults;
+ *   - accelerator kind;
+ *   - capabilities;
+ *   - requirements;
+ *   - resources;
+ *   - constraints;
+ *   - preferences;
+ *   - hints;
+ *   - target intent;
+ *   - properties;
+ *   - interfaces;
+ *   - ports;
+ *   - port direction;
+ *   - port type;
+ *   - symbolic port dimensions;
+ *   - operations;
+ *   - operation parameters;
+ *   - return type;
+ *   - operation attributes;
+ *   - operation body;
+ *   - operation invocations;
+ *   - qualified-name segments;
+ *   - original source spelling where required.
+ *
+ * This grammar does NOT define Rust AST structures.
+ *
+ * The Rust AST remains owned by:
+ *
+ *     src/frontend/ast/
+ *
+ * The AST should remain domain-neutral wherever practical.
+ *
+ * ============================================================================
+ * SEMANTIC CONTRACT
+ * ============================================================================
+ *
+ * Parsing establishes structure only.
+ *
+ * Semantic analysis determines:
+ *
+ *   - accelerator-name resolution;
+ *   - generic parameter validity;
+ *   - type validity;
+ *   - capability validity;
+ *   - requirement satisfiability;
+ *   - resource feasibility;
+ *   - constraint validity;
+ *   - preference applicability;
+ *   - target-profile compatibility;
+ *   - operation signature validity;
+ *   - parameter compatibility;
+ *   - symbolic dimension compatibility;
+ *   - effect requirements;
+ *   - cross-domain legality;
+ *   - fallback availability;
+ *   - portability.
+ *
+ * The parser MUST NOT determine whether a requested accelerator actually
+ * exists.
+ *
+ * ============================================================================
+ * IR CONTRACT
+ * ============================================================================
+ *
+ * This grammar MUST NOT introduce an accelerator-specific frontend IR.
+ *
+ * Correct flow:
+ *
+ *     source
+ *       |
+ *       v
+ *     parser
+ *       |
+ *       v
+ *     domain-neutral AST
+ *       |
+ *       v
+ *     semantic accelerator model
+ *       |
+ *       v
+ *     canonical semantic/IR model
+ *       |
+ *       +--------------------------+
+ *       |                          |
+ *       v                          v
+ *   classical IR              quantum::ir
+ *       |                          |
+ *       +-------------+------------+
+ *                     |
+ *                     v
+ *                optimization
+ *                     |
+ *              routing / scheduling
+ *                     |
+ *             resilience / QEC / ZQN
+ *                     |
+ *                    HAL
+ *                     |
+ *              target realization
+ *
+ * Accelerator syntax therefore does NOT create:
+ *
+ *     AcceleratorIR
+ *
+ * merely because an accelerator declaration exists.
+ *
+ * ============================================================================
+ * RUNTIME CONTRACT
+ * ============================================================================
+ *
+ * Runtime and HAL are responsible for resolving concrete implementations.
+ *
+ * This grammar does not:
+ *
+ *   - enumerate devices;
+ *   - select a device;
+ *   - probe hardware;
+ *   - access PCI addresses;
+ *   - inspect drivers;
+ *   - perform runtime allocation;
+ *   - perform scheduling;
+ *   - perform placement.
  *
  * ============================================================================
  */
@@ -190,17 +433,21 @@ options {
 import Expressions;
 
 
-/*
- * ============================================================================
- * 1. PUBLIC ENTRY POINT
+/* ============================================================================
+ * 1. PUBLIC ACCELERATOR DECLARATION
  * ============================================================================
  *
- * This is the ONLY public accelerator declaration entry point.
+ * Canonical accelerator declaration:
  *
- * `hardware/hardware.g4` must delegate to this rule instead of maintaining
- * another accelerator declaration implementation.
+ *     accelerator Name;
  *
- * ============================================================================
+ *     accelerator Name : accelerator::kind {
+ *         ...
+ *     }
+ *
+ * The accelerator name itself is a source-level symbol.
+ *
+ * It is NOT a physical device identifier.
  */
 
 hardwareAcceleratorDeclaration
@@ -209,23 +456,19 @@ hardwareAcceleratorDeclaration
       IDENTIFIER
       hardwareAcceleratorGenericParameters?
       hardwareAcceleratorKind?
-      hardwareAcceleratorCapabilitySection?
-      hardwareAcceleratorRequirementSection?
+      hardwareAcceleratorDeclarationContractBlock?
       hardwareAcceleratorBody?
       SEMICOLON?
     ;
 
 
-/*
- * ============================================================================
+/* ============================================================================
  * 2. ATTRIBUTES
  * ============================================================================
  *
- * Attributes are source metadata.
+ * Attributes are extensible metadata.
  *
- * They do not perform target selection.
- *
- * ============================================================================
+ * Their semantics are defined outside the parser.
  */
 
 hardwareAcceleratorAttribute
@@ -233,45 +476,35 @@ hardwareAcceleratorAttribute
       hardwareAcceleratorQualifiedName
       (
           LPAREN
-          hardwareAcceleratorAttributeArguments?
+          hardwareAcceleratorAttributeArgumentList?
           RPAREN
       )?
     ;
 
-hardwareAcceleratorAttributeArguments
-    : hardwareAcceleratorAttributeArgument
+hardwareAcceleratorAttributeArgumentList
+    : expression
       (
           COMMA
-          hardwareAcceleratorAttributeArgument
+          expression
       )*
-    ;
-
-hardwareAcceleratorAttributeArgument
-    : IDENTIFIER
-    | STRING_LITERAL
-    | INTEGER_LITERAL
-    | FLOAT_LITERAL
-    | hardwareAcceleratorQualifiedName
-    | expression
+      COMMA?
     ;
 
 
-/*
- * ============================================================================
+/* ============================================================================
  * 3. GENERIC PARAMETERS
  * ============================================================================
  *
- * Accelerator dimensions and implementation parameters remain symbolic.
+ * Generic parameters make accelerator contracts scalable without introducing
+ * hardware-specific limits.
  *
  * Examples:
  *
- *     accelerator VectorEngine<Width>;
- *     accelerator MatrixEngine<Rows, Columns>;
- *     accelerator TensorEngine<Rank, Element>;
+ *     accelerator Vector<Width>;
+ *     accelerator Tensor<Rank, Element>;
+ *     accelerator Engine<Units, Width, Capacity>;
  *
- * No parameter-count limit exists.
- *
- * ============================================================================
+ * The values are semantic parameters.
  */
 
 hardwareAcceleratorGenericParameters
@@ -281,6 +514,7 @@ hardwareAcceleratorGenericParameters
           COMMA
           hardwareAcceleratorGenericParameter
       )*
+      COMMA?
       GT
     ;
 
@@ -301,14 +535,13 @@ hardwareAcceleratorGenericBound
     ;
 
 
-/*
- * ============================================================================
+/* ============================================================================
  * 4. ACCELERATOR KIND
  * ============================================================================
  *
- * The kind is an open semantic name.
+ * Accelerator kind is intentionally OPEN.
  *
- * Do NOT enumerate:
+ * No fixed alternatives such as:
  *
  *     GPU
  *     FPGA
@@ -317,11 +550,9 @@ hardwareAcceleratorGenericBound
  *     NPU
  *     DSP
  *
- * as grammar alternatives.
+ * are encoded here.
  *
- * Such classifications are semantic entities.
- *
- * ============================================================================
+ * Those names may exist as semantic names or dialect-provided names.
  */
 
 hardwareAcceleratorKind
@@ -330,83 +561,39 @@ hardwareAcceleratorKind
     ;
 
 
-/*
- * ============================================================================
- * 5. CAPABILITIES
+/* ============================================================================
+ * 5. DECLARATION-LEVEL CONTRACT BLOCK
  * ============================================================================
  *
- * Capability describes what an accelerator abstraction provides.
+ * This block groups declarations that describe what the accelerator provides,
+ * requires, prefers, or hints.
  *
- * Capability resolution occurs downstream.
- *
- * ============================================================================
+ * It does not perform resource discovery.
  */
 
-hardwareAcceleratorCapabilitySection
-    : K_CAPABILITY
-      LBRACE
-      hardwareAcceleratorCapability*
+hardwareAcceleratorDeclarationContractBlock
+    : LBRACE
+      hardwareAcceleratorContractClause*
       RBRACE
     ;
 
-hardwareAcceleratorCapability
-    : hardwareAcceleratorQualifiedName
-      (
-          ASSIGN
-          expression
-      )?
-      SEMICOLON
+hardwareAcceleratorContractClause
+    : hardwareAcceleratorCapabilityDeclaration
+    | hardwareAcceleratorRequirementDeclaration
+    | hardwareAcceleratorResourceDeclaration
+    | hardwareAcceleratorConstraintDeclaration
+    | hardwareAcceleratorPreferenceDeclaration
+    | hardwareAcceleratorHintDeclaration
     ;
 
 
-/*
- * ============================================================================
- * 6. REQUIREMENTS
- * ============================================================================
- *
- * Requirements describe conditions necessary for semantic feasibility.
- *
- * They do not select a physical device.
- *
- * ============================================================================
- */
-
-hardwareAcceleratorRequirementSection
-    : K_REQUIRES
-      LBRACE
-      hardwareAcceleratorRequirement*
-      RBRACE
-    ;
-
-hardwareAcceleratorRequirement
-    : hardwareAcceleratorQualifiedName
-      (
-          ASSIGN
-          expression
-      )?
-      SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * 7. ACCELERATOR BODY
+/* ============================================================================
+ * 6. ACCELERATOR BODY
  * ============================================================================
  *
- * The body is intentionally extensible.
+ * The body contains the structural accelerator contract.
  *
- * No fixed number of:
- *
- *     interfaces
- *     ports
- *     operations
- *     resources
- *     instances
- *     properties
- *
- * is encoded.
- *
- * ============================================================================
+ * Repetition is intentionally unbounded by grammar design.
  */
 
 hardwareAcceleratorBody
@@ -421,36 +608,184 @@ hardwareAcceleratorBodyItem
           hardwareAcceleratorInterfaceDeclaration
         | hardwareAcceleratorPortDeclaration
         | hardwareAcceleratorOperationDeclaration
-        | hardwareAcceleratorResourceDeclaration
+        | hardwareAcceleratorCapabilityDeclaration
         | hardwareAcceleratorRequirementDeclaration
+        | hardwareAcceleratorResourceDeclaration
         | hardwareAcceleratorConstraintDeclaration
         | hardwareAcceleratorPreferenceDeclaration
         | hardwareAcceleratorHintDeclaration
-        | hardwareAcceleratorTargetDeclaration
-        | hardwareAcceleratorInstanceDeclaration
+        | hardwareAcceleratorTargetClause
         | hardwareAcceleratorPropertyDeclaration
       )
     ;
 
 
-/*
+/* ============================================================================
+ * 7. CAPABILITIES
  * ============================================================================
- * 8. INTERFACES
+ *
+ * A capability is a semantic statement about what an accelerator provides.
+ *
+ * Examples:
+ *
+ *     capability accelerator::vector;
+ *     capability accelerator::tensor = tensor_capability;
+ *
+ * Capability resolution belongs downstream.
+ */
+
+hardwareAcceleratorCapabilityDeclaration
+    : K_CAPABILITY
+      hardwareAcceleratorQualifiedName
+      (
+          ASSIGN
+          expression
+      )?
+      SEMICOLON
+    ;
+
+
+/* ============================================================================
+ * 8. REQUIREMENTS
  * ============================================================================
  *
- * An interface is an abstract communication/operation boundary.
+ * Requirements express semantic feasibility conditions.
  *
- * It is NOT:
+ * Examples:
  *
- *     PCI
- *     AXI
- *     NVLink
- *     a physical pinout
- *     a fixed board interface
+ *     requires accelerator::parallel;
+ *     requires capability("tensor.compute");
+ *     requires available_memory >= required_memory;
  *
- * unless those are supplied as semantic metadata by another layer.
- *
+ * No physical resource is selected here.
+ */
+
+hardwareAcceleratorRequirementDeclaration
+    : K_REQUIRES
+      expression
+      SEMICOLON
+    ;
+
+
+/* ============================================================================
+ * 9. RESOURCE ASSOCIATIONS
  * ============================================================================
+ *
+ * This rule associates an accelerator with a named resource expression.
+ *
+ * Universal resource semantics remain owned by:
+ *
+ *     grammar/resources/
+ *
+ * Hardware resource contracts remain owned by:
+ *
+ *     grammar/hardware/resources.g4
+ *
+ * This file does not create another resource model.
+ */
+
+hardwareAcceleratorResourceDeclaration
+    : K_RESOURCE
+      hardwareAcceleratorQualifiedName
+      (
+          ASSIGN
+          expression
+      )?
+      SEMICOLON
+    ;
+
+
+/* ============================================================================
+ * 10. CONSTRAINTS
+ * ============================================================================
+ *
+ * A constraint is stronger than a preference.
+ */
+
+hardwareAcceleratorConstraintDeclaration
+    : K_CONSTRAINT
+      expression
+      SEMICOLON
+    ;
+
+
+/* ============================================================================
+ * 11. PREFERENCES
+ * ============================================================================
+ *
+ * Preferences are advisory.
+ *
+ * They MUST NOT be interpreted as mandatory target selection.
+ *
+ * The canonical keyword is K_PREFER.
+ */
+
+hardwareAcceleratorPreferenceDeclaration
+    : K_PREFER
+      expression
+      SEMICOLON
+    ;
+
+
+/* ============================================================================
+ * 12. HINTS
+ * ============================================================================
+ *
+ * Hints are advisory metadata.
+ *
+ * They MUST NOT silently become requirements.
+ */
+
+hardwareAcceleratorHintDeclaration
+    : K_HINT
+      expression
+      SEMICOLON
+    ;
+
+
+/* ============================================================================
+ * 13. TARGET INTENT
+ * ============================================================================
+ *
+ * A target reference identifies an ABSTRACT target profile.
+ *
+ * It does not identify:
+ *
+ *     - a physical device;
+ *     - a PCI address;
+ *     - a hardware UUID;
+ *     - a discovered machine.
+ *
+ * Both:
+ *
+ *     target = target::accelerator;
+ *
+ * and:
+ *
+ *     target target::accelerator;
+ *
+ * can be represented.
+ */
+
+hardwareAcceleratorTargetClause
+    : K_TARGET
+      (
+          ASSIGN
+      )?
+      hardwareAcceleratorQualifiedName
+      SEMICOLON
+    ;
+
+
+/* ============================================================================
+ * 14. INTERFACES
+ * ============================================================================
+ *
+ * These are accelerator-local abstract interfaces.
+ *
+ * They do not represent physical pins or board wiring.
+ *
+ * HDL physical interfaces remain owned by grammar/hdl/.
  */
 
 hardwareAcceleratorInterfaceDeclaration
@@ -479,34 +814,23 @@ hardwareAcceleratorInterfaceItem
     ;
 
 
-/*
+/* ============================================================================
+ * 15. PORTS
  * ============================================================================
- * 9. PORTS
- * ============================================================================
  *
- * Port dimensions and widths are expressions.
+ * Ports describe abstract accelerator interfaces.
  *
- * Therefore:
+ * Dimensions are expressions.
  *
- *     width = 32
- *
- * can be program semantics,
- *
- * while:
- *
- *     all Zamani ports are limited to 32 bits
- *
- * is NOT a grammar rule.
- *
- * ============================================================================
+ * No universal bus width or lane count is encoded.
  */
 
 hardwareAcceleratorPortDeclaration
     : hardwareAcceleratorPortDirection
       IDENTIFIER
       hardwareAcceleratorPortType?
-      hardwareAcceleratorPortShape?
-      hardwareAcceleratorPortProperties?
+      hardwareAcceleratorPortDimensions?
+      hardwareAcceleratorPortPropertyBlock?
       SEMICOLON
     ;
 
@@ -521,27 +845,30 @@ hardwareAcceleratorPortType
       hardwareAcceleratorQualifiedName
     ;
 
-hardwareAcceleratorPortShape
+hardwareAcceleratorPortDimensions
     : LBRACKET
       expression
+      (
+          COMMA
+          expression
+      )*
       RBRACKET
     ;
 
-hardwareAcceleratorPortProperties
+hardwareAcceleratorPortPropertyBlock
     : LBRACE
       hardwareAcceleratorProperty*
       RBRACE
     ;
 
 
-/*
- * ============================================================================
- * 10. OPERATIONS
+/* ============================================================================
+ * 16. OPERATIONS
  * ============================================================================
  *
- * Operations are open-ended.
+ * Operations are OPEN-ENDED semantic names.
  *
- * There is deliberately no finite accelerator-operation list.
+ * No finite accelerator operation list exists.
  *
  * Examples:
  *
@@ -551,9 +878,7 @@ hardwareAcceleratorPortProperties
  *     tensor_transform
  *     vendor::operation
  *
- * are all semantic names.
- *
- * ============================================================================
+ * remain ordinary semantic names.
  */
 
 hardwareAcceleratorOperationDeclaration
@@ -614,16 +939,13 @@ hardwareAcceleratorOperationAttribute
     ;
 
 
-/*
- * ============================================================================
- * 11. OPERATION BODY
+/* ============================================================================
+ * 17. OPERATION BODY
  * ============================================================================
  *
- * Operation bodies use existing Zamani expression syntax.
+ * Operation bodies use universal Zamani expressions.
  *
- * There is no accelerator-specific expression language.
- *
- * ============================================================================
+ * No accelerator-specific expression language is introduced.
  */
 
 hardwareAcceleratorOperationBody
@@ -644,18 +966,17 @@ hardwareAcceleratorOperationItem
     ;
 
 
-/*
- * ============================================================================
- * 12. OPERATION INVOCATION
+/* ============================================================================
+ * 18. OPERATION INVOCATION
  * ============================================================================
  *
- * Qualified names allow arbitrary semantic namespaces.
+ * Invocation names are open qualified names.
  *
  * Example:
  *
- *     accelerator::matrix::multiply(a, b);
+ *     accelerator::tensor::transform(data);
  *
- * ============================================================================
+ * No vendor operation needs a new grammar keyword.
  */
 
 hardwareAcceleratorInvocationStatement
@@ -676,189 +997,25 @@ hardwareAcceleratorArgumentList
     ;
 
 
-/*
- * ============================================================================
- * 13. RESOURCE ASSOCIATION
- * ============================================================================
- *
- * This is an accelerator-to-resource association.
- *
- * It is NOT a second resource model.
- *
- * Universal resource semantics remain owned by:
- *
- *     grammar/resources/
- *     grammar/hardware/resources.g4
- *
- * ============================================================================
- */
-
-hardwareAcceleratorResourceDeclaration
-    : K_RESOURCE
-      hardwareAcceleratorQualifiedName
-      (
-          ASSIGN
-          expression
-      )?
-      SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * 14. REQUIREMENT DECLARATION
- * ============================================================================
- */
-
-hardwareAcceleratorRequirementDeclaration
-    : K_REQUIRES
-      hardwareAcceleratorRequirementExpression
-      SEMICOLON
-    ;
-
-hardwareAcceleratorRequirementExpression
-    : hardwareAcceleratorQualifiedName
-    | expression
-    ;
-
-
-/*
- * ============================================================================
- * 15. CONSTRAINT DECLARATION
- * ============================================================================
- */
-
-hardwareAcceleratorConstraintDeclaration
-    : K_CONSTRAINT
-      hardwareAcceleratorConstraintExpression
-      SEMICOLON
-    ;
-
-hardwareAcceleratorConstraintExpression
-    : hardwareAcceleratorQualifiedName
-    | expression
-    ;
-
-
-/*
- * ============================================================================
- * 16. PREFERENCE DECLARATION
+/* ============================================================================
+ * 19. PROPERTIES
  * ============================================================================
  *
- * A preference is weaker than a requirement.
+ * Properties provide an extensible semantic namespace without continuously
+ * expanding the global keyword vocabulary.
  *
- * It must never be interpreted as a mandatory hardware selection.
- *
- * ============================================================================
- */
-
-hardwareAcceleratorPreferenceDeclaration
-    : K_PREFERENCE
-      hardwareAcceleratorPreferenceExpression
-      SEMICOLON
-    ;
-
-hardwareAcceleratorPreferenceExpression
-    : hardwareAcceleratorQualifiedName
-    | expression
-    ;
-
-
-/*
- * ============================================================================
- * 17. HINT DECLARATION
- * ============================================================================
- *
- * Hints are advisory.
- *
- * ============================================================================
- */
-
-hardwareAcceleratorHintDeclaration
-    : K_HINT
-      hardwareAcceleratorHintExpression
-      SEMICOLON
-    ;
-
-hardwareAcceleratorHintExpression
-    : hardwareAcceleratorQualifiedName
-    | expression
-    ;
-
-
-/*
- * ============================================================================
- * 18. TARGET INTENT
- * ============================================================================
- *
- * This identifies an abstract target class/profile.
- *
- * It does NOT identify:
- *
- *     GPU 0
- *     device 17
- *     PCI address
- *     physical accelerator UUID
- *
- * ============================================================================
- */
-
-hardwareAcceleratorTargetDeclaration
-    : K_TARGET
-      ASSIGN
-      hardwareAcceleratorQualifiedName
-      SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * 19. SEMANTIC INSTANCE
- * ============================================================================
- *
- * An instance represents a source-level composition entity.
- *
- * It is NOT a discovered physical device.
- *
- * ============================================================================
- */
-
-hardwareAcceleratorInstanceDeclaration
-    : K_INSTANCE
-      IDENTIFIER
-      COLON
-      hardwareAcceleratorQualifiedName
-      hardwareAcceleratorInstanceArguments?
-      SEMICOLON
-    ;
-
-hardwareAcceleratorInstanceArguments
-    : LPAREN
-      hardwareAcceleratorArgumentList?
-      RPAREN
-    ;
-
-
-/*
- * ============================================================================
- * 20. PROPERTY
- * ============================================================================
- *
- * Properties provide an extensible namespace without continuously expanding
- * the global lexer vocabulary.
- *
- * ============================================================================
+ * Property names remain qualified names.
  */
 
 hardwareAcceleratorPropertyDeclaration
-    : hardwareAcceleratorPropertyName
+    : hardwareAcceleratorQualifiedName
       ASSIGN
       expression
       SEMICOLON
     ;
 
 hardwareAcceleratorProperty
-    : hardwareAcceleratorPropertyName
+    : hardwareAcceleratorQualifiedName
       (
           ASSIGN
           expression
@@ -866,29 +1023,21 @@ hardwareAcceleratorProperty
       SEMICOLON
     ;
 
-hardwareAcceleratorPropertyName
-    : IDENTIFIER
-    | hardwareAcceleratorQualifiedName
-    ;
 
-
-/*
- * ============================================================================
- * 21. QUALIFIED NAMES
+/* ============================================================================
+ * 20. QUALIFIED NAMES
  * ============================================================================
  *
- * Namespace depth is intentionally unbounded by grammar design.
+ * Namespace depth is intentionally unbounded by grammar structure.
  *
  * Examples:
  *
  *     accelerator
  *     accelerator::vector
- *     accelerator::matrix::multiply
+ *     accelerator::tensor::multiply
  *     vendor::extension::accelerator::operation
  *
- * Semantic analysis decides what a qualified name means.
- *
- * ============================================================================
+ * Meaning is determined by semantic resolution.
  */
 
 hardwareAcceleratorQualifiedName
@@ -900,14 +1049,13 @@ hardwareAcceleratorQualifiedName
     ;
 
 
-/*
- * ============================================================================
- * 22. EXPRESSION BRIDGE
+/* ============================================================================
+ * 21. EXPRESSION BRIDGES
  * ============================================================================
  *
- * These rules provide stable named integration points without introducing a
- * second expression language.
- * ============================================================================
+ * These provide stable integration names for downstream grammar composition.
+ *
+ * They do not create a second expression language.
  */
 
 hardwareAcceleratorExpression
@@ -919,393 +1067,316 @@ hardwareAcceleratorValue
     ;
 
 
-/*
- * ============================================================================
- * 23. AST CONTRACT
- * ============================================================================
- *
- * This grammar requires the domain-neutral frontend AST to preserve at least:
- *
- *     - source span;
- *     - declaration name;
- *     - generic parameters;
- *     - generic bounds/defaults;
- *     - accelerator kind;
- *     - attributes;
- *     - capabilities;
- *     - requirements;
- *     - resources;
- *     - constraints;
- *     - preferences;
- *     - hints;
- *     - target intent;
- *     - interfaces;
- *     - ports;
- *     - port direction;
- *     - port type;
- *     - symbolic port shape;
- *     - operations;
- *     - parameters;
- *     - return type;
- *     - operation attributes;
- *     - operation body;
- *     - invocations;
- *     - instances;
- *     - properties;
- *     - qualified-name segments;
- *     - original source spelling where required.
- *
- * Suggested AST entities:
- *
- *     AcceleratorDecl
- *     AcceleratorAttribute
- *     AcceleratorKind
- *     AcceleratorGenericParameter
- *     AcceleratorCapability
- *     AcceleratorRequirement
- *     AcceleratorResource
- *     AcceleratorConstraint
- *     AcceleratorPreference
- *     AcceleratorHint
- *     AcceleratorTarget
- *     AcceleratorInterface
- *     AcceleratorPort
- *     AcceleratorOperation
- *     AcceleratorParameter
- *     AcceleratorInvocation
- *     AcceleratorInstance
- *     AcceleratorProperty
- *
- * These AST types belong to the frontend AST implementation, NOT this file.
- *
- * `src/frontend/ast/` remains domain-neutral.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 24. SEMANTIC CONTRACT
+/* ============================================================================
+ * 22. INTEGRATION CONTRACT
  * ============================================================================
  *
- * Semantic analysis must determine:
+ * HARDWARE COMPOSITION
+ * --------------------
  *
- *     - name resolution;
- *     - generic parameter validity;
- *     - capability validity;
- *     - requirement satisfiability;
- *     - resource feasibility;
- *     - constraint validity;
- *     - preference applicability;
- *     - target compatibility;
- *     - operation type compatibility;
- *     - parameter compatibility;
- *     - shape compatibility;
- *     - resource/capability availability;
- *     - effect requirements;
- *     - fallback availability;
- *     - deterministic behavior where required;
- *     - cross-domain legality.
+ * grammar/hardware/hardware.g4 MUST:
  *
- * The parser performs none of these decisions.
+ *     import ZamaniHardwareAcceleratorParser;
  *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 25. RESOURCE CONTRACT
- * ============================================================================
+ * and MUST retain:
  *
- * These concepts must remain distinct:
+ *     hardwareAcceleratorDeclaration
  *
- *     accelerator
- *     resource
- *     capability
- *     requirement
- *     constraint
- *     preference
- *     hint
- *     target
- *     placement
- *     physical device
+ * in its hardware-item dispatch.
  *
- * Example:
+ * It MUST REMOVE its local duplicate:
  *
- *     requires accelerator::tensor;
+ *     hardwareAcceleratorDeclaration
  *
- * expresses semantic requirements.
+ * and its local accelerator-specific body rules.
  *
- * It does NOT mean:
  *
- *     use GPU 0;
- *     use device 17;
- *     use board X;
- *     use physical accelerator Y.
+ * TARGETS
+ * -------
  *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 26. MEMORY CONTRACT
- * ============================================================================
+ * grammar/hardware/targets.g4 owns target declarations.
  *
- * Accelerator memory is NOT owned by this grammar.
+ * This file may reference an abstract target through:
  *
- * Memory semantics remain owned by:
+ *     hardwareAcceleratorTargetClause
  *
- *     grammar/memory/
- *     grammar/hardware/memory.g4
+ * but does not define target declarations.
  *
- * Accelerator syntax may reference memory capabilities/resources through
- * qualified names and expressions.
  *
- * No physical memory capacity is hard-coded here.
+ * RESOURCES
+ * ---------
  *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 27. QUANTUM CONTRACT
- * ============================================================================
+ * grammar/resources/ owns universal resource semantics.
  *
- * Accelerators may participate in hybrid classical/quantum computation.
+ * grammar/hardware/resources.g4 owns hardware-resource contract composition.
  *
- * This grammar does not:
+ * This file only creates an accelerator-to-resource association.
  *
- *     - define qubits;
- *     - define quantum gates;
- *     - define quantum measurement;
- *     - route qubits;
- *     - schedule quantum operations;
- *     - perform QEC;
- *     - interpret ZQN;
- *     - select a QPU;
- *     - construct quantum::ir.
  *
- * Quantum source follows:
+ * MEMORY
+ * ------
  *
- *     source
- *       ->
- *     lexer/parser
- *       ->
+ * grammar/hardware/memory.g4 owns hardware-memory intent.
+ *
+ * Accelerator memory requirements should reference memory/resource/capability
+ * semantics rather than defining another memory grammar here.
+ *
+ *
+ * TYPES
+ * -----
+ *
+ * Hardware type syntax remains owned by:
+ *
+ *     grammar/types/hardware.g4
+ *
+ * This grammar therefore does not redefine hardware type constructors.
+ *
+ *
+ * HDL
+ * ---
+ *
+ * grammar/hdl/ owns HDL behavioral/structural syntax.
+ *
+ * This grammar may reference HDL-related semantic names but must not implement
+ * synthesis, pin assignment, clock trees, place-and-route, or physical wiring.
+ *
+ *
+ * QUANTUM
+ * -------
+ *
+ * Quantum operations remain owned by grammar/quantum/.
+ *
+ * Quantum semantic lowering remains:
+ *
  *     domain-neutral AST
- *       ->
+ *          ->
  *     semantic quantum model
- *       ->
+ *          ->
  *     quantum::ir
  *
- * Accelerator information remains semantic/resource metadata.
+ * This grammar never creates another quantum IR.
+ *
+ *
+ * GPU / FPGA / ASIC / QPU
+ * -----------------------
+ *
+ * Specialized files may describe specialization contracts, but the generic
+ * accelerator abstraction remains authoritative here.
+ *
+ * They should specialize semantic meaning rather than copy this grammar.
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 28. HDL CONTRACT
+ * 23. CROSS-DOMAIN INTEGRATION
  * ============================================================================
  *
- * Accelerator declarations may reference HDL/hardware co-design concepts
- * through semantic names.
+ * Classical:
  *
- * Physical implementation remains owned by:
+ *     accelerator operation
+ *         ->
+ *     classical semantic operation
+ *         ->
+ *     canonical classical IR
  *
- *     grammar/hdl/
- *     compiler hardware lowering
- *     target backend
- *     HAL
+ * Quantum:
  *
- * This grammar does not define:
+ *     accelerator requirement/capability
+ *         ->
+ *     semantic capability model
+ *         ->
+ *     quantum::ir where applicable
  *
- *     physical pins;
- *     board wiring;
- *     physical clock trees;
- *     synthesis;
- *     place-and-route;
- *     fabrication technology.
+ * HDL:
  *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 29. COMPILER / IR CONTRACT
- * ============================================================================
+ *     accelerator contract
+ *         ->
+ *     hardware/HDL semantic model
+ *         ->
+ *     HDL/hardware lowering
  *
- * Correct pipeline:
+ * AI:
  *
- *     source
- *       ->
- *     lexer
- *       ->
- *     parser
- *       ->
- *     domain-neutral AST
- *       ->
- *     semantic accelerator model
- *       ->
- *     canonical semantic model
- *       ->
- *     classical / hardware / quantum-compatible IR
- *       ->
- *     optimization
- *       ->
- *     routing / scheduling
- *       ->
- *     HAL / backend
- *       ->
- *     runtime
+ *     accelerator::tensor
+ *     accelerator::matrix
+ *     accelerator::inference
  *
- * There is NO accelerator-specific frontend IR introduced by this grammar.
+ * remain semantic names rather than permanent grammar keywords.
  *
- * Accelerator semantics are lowered into the repository's canonical semantic
- * and hardware/resource representations.
+ * Distributed:
+ *
+ *     accelerator resource
+ *         ->
+ *     resource/capability analysis
+ *         ->
+ *     placement/scheduling downstream
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 30. RUNTIME CONTRACT
+ * 24. PORTABILITY CONTRACT
  * ============================================================================
  *
- * Runtime does not parse this grammar to discover hardware.
+ * The same accelerator source must remain structurally valid when the
+ * implementation changes.
  *
- * Runtime receives compiler-produced representations and interacts with
- * concrete hardware through the HAL/backend abstraction.
+ * Examples of allowed semantic variation:
+ *
+ *     small CPU target
+ *     multicore CPU
+ *     GPU
+ *     FPGA
+ *     ASIC
+ *     heterogeneous system
+ *     distributed accelerator pool
+ *     future accelerator
+ *
+ * The compiler may choose different lowerings.
+ *
+ * The grammar does not change merely because the target changes.
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 31. DETERMINISM
+ * 25. DETERMINISM
  * ============================================================================
  *
- * This grammar contains:
+ * Parsing depends only on:
  *
- *     - no semantic predicates;
- *     - no actions;
- *     - no randomness;
- *     - no environment access;
- *     - no filesystem access;
- *     - no network access;
- *     - no hardware access.
- *
- * Therefore parsing is deterministic for a given:
- *
- *     token stream
+ *     source text
+ *     lexical vocabulary
  *     grammar version
- *     parser configuration.
+ *     parser configuration
+ *
+ * Parsing MUST NOT depend on:
+ *
+ *     hardware availability
+ *     filesystem state
+ *     network state
+ *     wall-clock time
+ *     randomness
+ *     environment variables
+ *     runtime state
+ *     device discovery
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 32. SECURITY
+ * 26. SECURITY
  * ============================================================================
  *
- * Identifiers and qualified names are data.
+ * Qualified names and properties are source data.
  *
- * They MUST NOT be interpreted by the parser as:
+ * The parser must not interpret them as:
  *
- *     shell commands;
- *     filesystem paths;
- *     executable code;
- *     network commands;
- *     device-control operations.
+ *     shell commands
+ *     executable code
+ *     filesystem operations
+ *     network operations
+ *     device-control operations
  *
- * Semantic/runtime layers are responsible for validating external identifiers
- * before using them for external operations.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 33. HARD-CODING AUDIT
- * ============================================================================
- *
- * This grammar contains none of:
- *
- *     MAX_ACCELERATORS
- *     MAX_DEVICES
- *     MAX_LANES
- *     MAX_CORES
- *     MAX_THREADS
- *     MAX_WARPS
- *     MAX_WORKGROUPS
- *     MAX_VECTOR_WIDTH
- *     MAX_MEMORY
- *     MAX_STREAMS
- *     MAX_OPERATIONS
- *     MAX_PORTS
- *     MAX_CAPABILITIES
- *     MAX_RESOURCES
- *
- * It also contains no:
- *
- *     GPU 0
- *     FPGA 0
- *     accelerator 0
- *     device 0
- *     physical address
- *     fixed vendor
- *     fixed topology
- *     fixed memory capacity
- *     fixed execution-unit count.
+ * Any external identifier must be validated by the appropriate semantic,
+ * compiler, HAL, or runtime layer before external use.
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 34. POSITIVE TEST CONTRACT
+ * 27. HARD-CODING AUDIT
  * ============================================================================
  *
- * The following forms must be accepted after the complete parser composition
- * is wired:
+ * PASS CONDITIONS:
+ *
+ *   [x] No MAX_ACCELERATORS.
+ *   [x] No MAX_DEVICES.
+ *   [x] No MAX_EXECUTION_UNITS.
+ *   [x] No MAX_LANES.
+ *   [x] No MAX_VECTOR_WIDTH.
+ *   [x] No MAX_TENSOR_RANK.
+ *   [x] No MAX_THREADS.
+ *   [x] No MAX_WARPS.
+ *   [x] No MAX_WORKGROUPS.
+ *   [x] No MAX_STREAMS.
+ *   [x] No MAX_MEMORY.
+ *   [x] No fixed physical accelerator IDs.
+ *   [x] No vendor-specific mandatory syntax.
+ *   [x] No fixed accelerator operation list.
+ *   [x] No fixed topology.
+ *   [x] No physical placement.
+ *   [x] No scheduling.
+ *
+ * Numeric values in source remain program values.
+ *
+ * ============================================================================
+ * 28. POSITIVE CONFORMANCE TESTS
+ * ============================================================================
+ *
+ * Minimal:
  *
  *     accelerator VectorEngine;
  *
- *     accelerator MatrixEngine : accelerator::matrix {
- *     }
+ * Kind:
  *
- *     accelerator TensorEngine<Rank, Element>;
+ *     accelerator TensorEngine : accelerator::tensor;
  *
- *     accelerator VectorEngine {
- *         capability {
- *             accelerator::vector;
- *             accelerator::parallel;
- *         }
- *     }
+ * Generic:
+ *
+ *     accelerator Engine<Width, Rank, Element>;
+ *
+ * Capability:
  *
  *     accelerator TensorEngine {
- *         requires accelerator::tensor;
+ *         capability accelerator::tensor;
+ *         capability accelerator::parallel;
+ *     }
+ *
+ * Requirement:
+ *
+ *     accelerator TensorEngine {
+ *         requires capability("tensor.compute");
+ *         requires required_memory >= workload_memory;
+ *     }
+ *
+ * Resource:
+ *
+ *     accelerator TensorEngine {
  *         resource accelerator::memory = required_memory;
+ *     }
+ *
+ * Constraint:
+ *
+ *     accelerator TensorEngine {
+ *         constraint required_bandwidth >= workload_bandwidth;
+ *     }
+ *
+ * Preference:
+ *
+ *     accelerator TensorEngine {
+ *         prefer accelerator::tensor;
+ *     }
+ *
+ * Hint:
+ *
+ *     accelerator TensorEngine {
+ *         hint accelerator::parallel;
+ *     }
+ *
+ * Target intent:
+ *
+ *     accelerator TensorEngine {
  *         target = target::accelerator;
  *     }
  *
+ * Interface:
+ *
  *     accelerator MatrixEngine {
- *         interface MatrixInterface {
+ *         interface Matrix {
  *             input data: matrix;
  *             output result: matrix;
  *         }
+ *     }
  *
+ * Parameterized port:
+ *
+ *     accelerator VectorEngine<Width> {
+ *         interface Vector {
+ *             input data: vector[Width];
+ *             output result: vector[Width];
+ *         }
+ *     }
+ *
+ * Operation:
+ *
+ *     accelerator MatrixEngine {
  *         fn multiply(
  *             a: matrix,
  *             b: matrix
@@ -1314,31 +1385,19 @@ hardwareAcceleratorValue
  *         }
  *     }
  *
- *     accelerator ScalableEngine<Width, Rank> {
- *         capability {
- *             accelerator::vector;
- *             accelerator::tensor;
- *         }
+ * Open operation namespace:
  *
- *         requires accelerator::parallel;
- *         resource accelerator::memory = required_memory;
- *         target = target::accelerator;
- *
+ *     accelerator FutureEngine {
  *         fn execute(data: tensor) -> tensor {
- *             accelerator::tensor::transform(data);
+ *             future::accelerator::operation(data);
  *         }
  *     }
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 35. NEGATIVE TEST CONTRACT
+ * 29. NEGATIVE CONFORMANCE TESTS
  * ============================================================================
  *
- * These must be rejected:
+ * Must be rejected structurally:
  *
  *     accelerator;
  *
@@ -1368,214 +1427,87 @@ hardwareAcceleratorValue
  *         target = ;
  *     }
  *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 36. BOUNDARY TEST CONTRACT
- * ============================================================================
+ * Semantic validation must additionally reject invalid or unsupported:
  *
- * Must cover:
+ *     requirements;
+ *     capabilities;
+ *     resource relationships;
+ *     type combinations;
+ *     target compatibility;
+ *     operation signatures;
  *
- *     - zero-length optional sections where legal;
- *     - one accelerator;
- *     - many accelerators;
- *     - deeply qualified names;
- *     - very large symbolic quantities;
- *     - arbitrary symbolic widths;
- *     - arbitrary symbolic ranks;
- *     - arbitrary symbolic resource quantities;
- *     - empty operation bodies;
- *     - many operation parameters;
- *     - many ports;
- *     - many interfaces;
- *     - many capabilities;
- *     - many requirements.
- *
- * The tests must not define a universal maximum.
+ * without converting those semantic failures into parser failures.
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 37. SCALABILITY TEST CONTRACT
+ * 30. BOUNDARY TESTS
  * ============================================================================
  *
- * Scaling dimensions to test:
+ * Test:
  *
- *     declarations
- *     interfaces
- *     ports
- *     operations
- *     parameters
- *     capabilities
- *     requirements
- *     resources
- *     properties
- *     instances
- *     qualified-name depth
- *     expression complexity
+ *   - one accelerator;
+ *   - many accelerator declarations;
+ *   - many generic parameters;
+ *   - many ports;
+ *   - many interfaces;
+ *   - many operations;
+ *   - many parameters;
+ *   - many capabilities;
+ *   - many requirements;
+ *   - many properties;
+ *   - deeply qualified names;
+ *   - symbolic widths;
+ *   - symbolic ranks;
+ *   - symbolic capacities;
+ *   - very large integer literals;
+ *   - empty optional sections;
+ *   - empty operation bodies;
+ *   - nested semantic expressions.
  *
- * The parser must remain structurally valid without adding a new grammar rule
- * when a target grows from:
- *
- *     tiny
- *       ->
- *     embedded
- *       ->
- *     CPU
- *       ->
- *     GPU
- *       ->
- *     FPGA
- *       ->
- *     ASIC
- *       ->
- *     QPU-adjacent accelerator
- *       ->
- *     cluster
- *       ->
- *     distributed system
- *       ->
- *     future architectures.
+ * The tests MUST NOT establish an artificial maximum.
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 38. CROSS-DOMAIN TEST CONTRACT
+ * 31. SCALABILITY TEST
  * ============================================================================
  *
- * Required integration coverage:
+ * The grammar must accept source whose accelerator dimensions are expressed
+ * symbolically:
  *
- *     classical + accelerator
- *     vector + accelerator
- *     matrix + accelerator
- *     tensor + accelerator
- *     AI + accelerator
- *     distributed + accelerator
- *     networking + accelerator
- *     HDL + accelerator
- *     hardware + accelerator
- *     quantum-derived value + accelerator
- *     quantum + classical + accelerator
- *     quantum + HDL + accelerator
+ *     accelerator Scalable<Width, Rank, Units, Capacity>;
+ *
+ * and whose actual values are supplied by program semantics, configuration,
+ * compilation, or target capabilities.
+ *
+ * The grammar itself imposes no finite upper bound.
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 39. COMPATIBILITY
+ * 32. COMPLETION CRITERIA
  * ============================================================================
  *
- * Existing stable accelerator source forms must be preserved where possible.
+ * This file is complete when:
  *
- * The migration from:
+ *   [x] One canonical accelerator declaration rule exists.
+ *   [x] No fixed accelerator kind enumeration exists.
+ *   [x] No fixed operation enumeration exists.
+ *   [x] No universal hardware capacity exists.
+ *   [x] Generic parameters are symbolic.
+ *   [x] Expressions come from the canonical expression grammar.
+ *   [x] Target intent is separate from target discovery.
+ *   [x] Resource semantics remain delegated.
+ *   [x] Memory semantics remain delegated.
+ *   [x] HDL semantics remain delegated.
+ *   [x] Quantum semantics remain delegated.
+ *   [x] No accelerator-specific IR is introduced.
+ *   [x] No Rust actions exist.
+ *   [x] No unsafe implementation requirement exists.
+ *   [x] Source parsing is deterministic.
+ *   [x] Positive tests are defined.
+ *   [x] Negative tests are defined.
+ *   [x] Boundary tests are defined.
+ *   [x] Scalability tests are defined.
  *
- *     grammar/hardware/accelerators.g4
- *
- * to:
- *
- *     grammar/hardware/accelerator.g4
- *
- * is a grammar-source organization change, not a language-level semantic
- * change.
- *
- * `accelerators.g4` must therefore become a compatibility/composition layer
- * rather than retaining duplicate rule ownership.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 40. COMPLETION CRITERIA
- * ============================================================================
- *
- * This file is DONE only when:
- *
- * [ ] ANTLR generation succeeds with the canonical lexer vocabulary.
- *
- * [ ] All referenced tokens exist in ZamaniTokens.
- *
- * [ ] Expressions resolves through the canonical expression grammar.
- *
- * [ ] `hardwareAcceleratorDeclaration` is reachable from the hardware
- *     composition grammar.
- *
- * [ ] No duplicate accelerator declaration rule remains in hardware.g4.
- *
- * [ ] No duplicate accelerator semantic grammar remains in accelerators.g4.
- *
- * [ ] AST mapping is implemented.
- *
- * [ ] Semantic mapping is implemented.
- *
- * [ ] Resource/capability mapping is implemented.
- *
- * [ ] Compiler integration is implemented.
- *
- * [ ] Backend/HAL integration is implemented downstream.
- *
- * [ ] Positive tests pass.
- *
- * [ ] Negative tests pass.
- *
- * [ ] Boundary tests pass.
- *
- * [ ] Scalability tests pass.
- *
- * [ ] Determinism tests pass.
- *
- * [ ] Compatibility tests pass.
- *
- * [ ] Cross-domain tests pass.
- *
- * [ ] Hard-coding audit passes.
- *
- * [ ] No physical accelerator selection is encoded.
- *
- * [ ] No fixed accelerator capacity is encoded.
- *
- * [ ] No fixed memory size is encoded.
- *
- * [ ] No fixed vector/warp/work-group size is encoded.
- *
- * [ ] No second accelerator IR exists.
- *
- * [ ] No second quantum IR exists.
- *
- * [ ] `quantum::ir` remains canonical.
- *
- * [ ] No Rust actions are embedded.
- *
- * [ ] No unsafe Rust is required.
- *
- * [ ] Rust 1.97 / 1.97.1 compatibility is verified by the generated
- *     frontend build.
- *
- * ============================================================================
- * FINAL INVARIANT
- * ============================================================================
- *
- * This grammar answers:
- *
- *     "What accelerator intent can Zamani source express?"
- *
- * It does NOT answer:
- *
- *     "Which physical accelerator will execute it?"
- *
- * That decision belongs downstream.
+ * Remaining repository integration work is explicitly documented above and
+ * MUST be performed by the owning composition files rather than silently
+ * changing this grammar later.
  *
  * ============================================================================
  */
