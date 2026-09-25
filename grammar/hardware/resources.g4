@@ -6,131 +6,135 @@
  * File:
  *     grammar/hardware/resources.g4
  *
- * Grammar kind:
- *     ANTLR4 parser grammar
+ * Grammar:
+ *     ZamaniHardwareResourcesParser
  *
- * Target:
+ * Status:
+ *     CANONICAL HARDWARE-RESOURCE INTENT LEAF GRAMMAR
+ *
+ * Rust baseline:
  *     Rust 1.97 / Rust 1.97.1
  *     Rust 2021
- *     safe generated-code integration
- *     no unsafe Rust
+ *     Safe Rust only
  *
  * ============================================================================
  * PURPOSE
  * ============================================================================
  *
- * This file defines SOURCE-LEVEL HARDWARE RESOURCE INTENT.
+ * This grammar owns SOURCE-LEVEL HARDWARE RESOURCE INTENT.
  *
- * It describes resources that a hardware/software program:
+ * It describes resources that a Zamani program or abstract hardware contract
+ * may:
  *
- *     - requires;
- *     - constrains;
- *     - prefers;
- *     - hints about;
- *     - exposes as capabilities;
- *     - targets abstractly;
- *     - groups;
- *     - derives;
- *     - associates with hardware components.
+ *     - declare;
+ *     - reference;
+ *     - require;
+ *     - constrain;
+ *     - prefer;
+ *     - provide;
+ *     - consume;
+ *     - reserve;
+ *     - acquire;
+ *     - release;
+ *     - quantify;
+ *     - derive;
+ *     - group;
+ *     - profile;
+ *     - expose as capabilities;
+ *     - associate with abstract hardware contracts.
  *
- * It does NOT enumerate or select physical machines.
- *
- * ============================================================================
- * OWNERSHIP
- * ============================================================================
- *
- * THIS FILE OWNS
- *
- *   - hardware resource declarations;
- *   - hardware resource references;
- *   - hardware resource quantities;
- *   - hardware resource requirements;
- *   - hardware resource constraints;
- *   - hardware resource preferences;
- *   - hardware resource hints;
- *   - hardware resource capabilities;
- *   - hardware resource targets;
- *   - hardware resource properties;
- *   - hardware resource groups;
- *   - hardware resource relationships;
- *   - hardware resource expressions;
- *   - resource portability intent;
- *   - resource scalability intent;
- *   - resource performance intent;
- *   - resource latency intent;
- *   - resource energy intent;
- *   - resource reliability intent;
- *   - resource availability intent;
- *   - abstract resource reservation/acquisition/release intent.
- *
- * THIS FILE DOES NOT OWN
- *
- *   - lexical tokens;
- *   - identifiers;
- *   - literals;
- *   - general expressions;
- *   - general types;
- *   - hardware modules;
- *   - ports;
- *   - wires;
- *   - signals;
- *   - clocks;
- *   - physical device discovery;
- *   - physical device identifiers;
- *   - physical addresses;
- *   - topology discovery;
- *   - routing;
- *   - scheduling;
- *   - placement algorithms;
- *   - optimization;
- *   - calibration;
- *   - runtime resource allocation;
- *   - backend selection;
- *   - quantum IR;
- *   - QEC;
- *   - ZQN;
- *   - simulation.
+ * Resource identity and quantities remain symbolic and semantic.
  *
  * ============================================================================
- * ARCHITECTURAL BOUNDARY
+ * ARCHITECTURAL OWNERSHIP
  * ============================================================================
  *
- * Source
- *   |
- *   v
- * lexer/tokens.g4
- *   |
- *   v
- * hardware/resources.g4
- *   |
- *   v
- * frontend AST
- *   |
- *   v
- * semantic analysis
- *   |
- *   +-----------------------------+
- *   |                             |
- *   v                             v
- * hardware resource intent    canonical IR / semantic model
- *   |                             |
- *   +-------------+---------------+
- *                 |
- *                 v
- *          resource resolution
- *                 |
- *                 v
- *       hardware capability model
- *                 |
- *                 v
- *       routing / scheduling /
- *       optimization / lowering
- *                 |
- *                 v
- *          hardware HAL
- *                 |
- *                 v
- *             runtime
+ * THIS FILE OWNS:
+ *
+ *     hardware resource declaration syntax
+ *     hardware resource kind syntax
+ *     hardware resource references
+ *     resource quantities
+ *     resource requirements
+ *     resource constraints
+ *     resource preferences
+ *     resource hints
+ *     capability requirements/references
+ *     abstract target references
+ *     capacity observations/requirements
+ *     availability observations/requirements
+ *     portability intent
+ *     scalability intent
+ *     performance intent
+ *     latency intent
+ *     throughput intent
+ *     bandwidth intent
+ *     energy intent
+ *     power intent
+ *     reliability intent
+ *     resilience intent
+ *     cost intent
+ *     abstract reservation intent
+ *     abstract acquisition intent
+ *     abstract release intent
+ *     resource derivation
+ *     resource groups
+ *     resource contracts
+ *     resource profiles
+ *     resource properties
+ *
+ * THIS FILE DOES NOT OWN:
+ *
+ *     lexical definitions
+ *     identifiers
+ *     literals
+ *     general expression precedence
+ *     general type syntax
+ *     hardware module syntax
+ *     HDL behavioral syntax
+ *     physical-device discovery
+ *     physical-device enumeration
+ *     physical addresses
+ *     physical allocation
+ *     placement algorithms
+ *     routing
+ *     scheduling
+ *     optimization
+ *     calibration
+ *     backend selection
+ *     runtime allocation
+ *     QEC
+ *     ZQN
+ *     quantum::ir
+ *     simulation
+ *
+ * ============================================================================
+ * CANONICAL DEPENDENCIES
+ * ============================================================================
+ *
+ * Expression syntax is imported from:
+ *
+ *     grammar/expressions/expressions.g4
+ *
+ * Name syntax is imported from:
+ *
+ *     grammar/core/names.g4
+ *
+ * This file MUST NOT redefine:
+ *
+ *     expression
+ *     qualifiedName
+ *     identifier
+ *
+ * ============================================================================
+ * LEXER INTEGRATION
+ * ============================================================================
+ *
+ * Production parser grammars consume:
+ *
+ *     ZamaniLexer
+ *
+ * and MUST NOT create a second token vocabulary.
  *
  * ============================================================================
  * POCO-REAF
@@ -138,93 +142,103 @@
  *
  * Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
  *
- * A resource expression is an abstract statement of program intent.
+ * Resource syntax describes:
  *
- * For example:
+ *     WHAT is required
+ *     WHAT is allowed
+ *     WHAT is preferred
+ *     WHAT capability is needed
+ *     WHAT scaling relationship exists
+ *     WHAT resource property matters
  *
- *     requires resource memory >= workload_size;
+ * It does NOT prescribe:
  *
- * does NOT mean:
+ *     WHICH CPU
+ *     WHICH GPU
+ *     WHICH FPGA
+ *     WHICH QPU
+ *     WHICH physical qubit
+ *     WHICH memory bank
+ *     WHICH node
+ *     WHICH device identifier
+ *     WHICH physical address
  *
- *     allocate 16 GB;
- *     use machine X;
- *     use address Y;
- *     use device Z.
- *
- * The actual implementation is resolved from:
- *
- *     program semantics
- *     compilation context
- *     target capabilities
- *     available resources
- *     deployment configuration
- *     runtime state
+ * Concrete realization belongs downstream.
  *
  * ============================================================================
  * SCALABILITY
  * ============================================================================
  *
- * No fixed machine-size limits occur in this grammar.
+ * This grammar intentionally contains NO universal resource limits.
  *
- * This grammar contains no:
+ * It MUST NOT encode:
  *
  *     MAX_RESOURCES
- *     MAX_DEVICES
+ *     MAX_RESOURCE_GROUPS
+ *     MAX_CPUS
  *     MAX_CORES
  *     MAX_THREADS
- *     MAX_MEMORY
  *     MAX_GPUS
  *     MAX_FPGAS
+ *     MAX_QPUS
  *     MAX_QUBITS
  *     MAX_NODES
+ *     MAX_DEVICES
+ *     MAX_MEMORY
+ *     MAX_STORAGE
+ *     MAX_REGISTER_WIDTH
+ *     MAX_TENSOR_RANK
  *
- * Quantities are expressions.
+ * All resource quantities are expressions.
  *
- * Repetition is represented by ANTLR repetition operators:
+ * Repetition uses:
  *
  *     *
  *     +
  *
- * rather than fixed-size sequences.
+ * and is therefore not artificially bounded by this grammar.
  *
- * Therefore resource requirements can scale according to the program,
- * compilation context, and available machine resources.
+ * A program may therefore express:
+ *
+ *     quantity = n;
+ *     quantity = workload_size;
+ *     quantity = required_memory;
+ *     quantity = problem_size * parallelism;
+ *
+ * without the grammar imposing a maximum.
  *
  * ============================================================================
- * SEMANTIC SEPARATION
+ * SEMANTIC DISTINCTION
  * ============================================================================
- *
- * RESOURCE
- *     An abstract computational/hardware resource.
  *
  * REQUIREMENT
- *     A condition necessary for semantic feasibility.
+ *     Mandatory semantic condition.
  *
  * CONSTRAINT
- *     A condition implementation must respect.
+ *     Mandatory condition on legal realization.
  *
  * PREFERENCE
- *     An optimization preference which may be traded off.
+ *     Non-mandatory optimization guidance.
  *
  * HINT
- *     Advisory information which may be ignored.
+ *     Advisory information.
  *
  * CAPABILITY
- *     A property supplied by an implementation/environment.
- *
- * TARGET
- *     An abstract compilation/execution destination.
- *
- * AVAILABILITY
- *     A runtime/compilation-context observation.
+ *     Ability expected from the realization.
  *
  * CAPACITY
- *     An implementation-provided quantity.
+ *     Available/provided quantity.
  *
- * RESERVATION
- *     Abstract intent to obtain resources.
+ * AVAILABILITY
+ *     Availability information supplied by the compilation/runtime context.
  *
- * None of these concepts may be silently collapsed into another.
+ * RESOURCE
+ *     Abstract computational or physical resource category.
+ *
+ * TARGET
+ *     Abstract realization class.
+ *
+ * None of these concepts may be silently collapsed by the parser.
  *
  * ============================================================================
  */
@@ -232,40 +246,45 @@
 parser grammar ZamaniHardwareResourcesParser;
 
 options {
-    tokenVocab = ZamaniTokens;
+    tokenVocab = ZamaniLexer;
 }
+
+import
+    Expressions,
+    Names
+;
 
 
 /* ============================================================================
- * 1. PUBLIC HARDWARE RESOURCE ENTRY POINT
+ * 1. PUBLIC ENTRY POINT
  * ============================================================================
  *
- * A hardware resource declaration introduces an abstract resource contract.
+ * Canonical hardware resource declaration.
  *
- * Example:
+ * Examples:
  *
- *     resource compute {
+ *     resource compute;
+ *
+ *     resource memory: memory;
+ *
+ *     resource accelerator: accelerator {
  *         quantity = workload_size;
- *     }
+ *     };
  *
- * The identifier is symbolic.
+ *     resource quantum_memory: quantum::logical_qubit {
+ *         requires capacity >= required_qubits;
+ *     };
  *
- * It is NOT:
+ * The resource name is symbolic.
  *
- *     a device ID;
- *     a PCI address;
- *     a physical core number;
- *     a physical qubit number;
- *     a memory address.
- *
- * ============================================================================
+ * It is NOT a physical device identifier.
  */
 
 hardwareResourceDeclaration
     : hardwareResourceAttributes*
-      K_RESOURCE
-      IDENTIFIER
-      hardwareResourceType?
+      RESOURCE
+      identifier
+      hardwareResourceKind?
       hardwareResourceSpecification?
       SEMICOLON?
     ;
@@ -275,65 +294,48 @@ hardwareResourceDeclaration
  * 2. RESOURCE ATTRIBUTES
  * ============================================================================
  *
- * Attributes remain syntactic metadata.
+ * Attributes are syntactic metadata.
  *
- * Their interpretation belongs to semantic analysis.
- *
- * ============================================================================
+ * Their validity and meaning are determined by semantic analysis.
  */
 
 hardwareResourceAttributes
-    : AT IDENTIFIER
+    : AT
+      qualifiedName
       (
-          LPAREN hardwareResourceAttributeArguments? RPAREN
+          LPAREN
+          hardwareResourceAttributeArguments?
+          RPAREN
       )?
     ;
 
 hardwareResourceAttributeArguments
-    : hardwareResourceAttributeArgument
-      (
-          COMMA hardwareResourceAttributeArgument
-      )*
-    ;
-
-hardwareResourceAttributeArgument
-    : IDENTIFIER
-    | STRING_LITERAL
-    | INTEGER_LITERAL
-    | FLOAT_LITERAL
-    | hardwareResourceQualifiedName
-    | hardwareResourceExpression
+    : expressionList
     ;
 
 
 /* ============================================================================
- * 3. RESOURCE TYPE
+ * 3. RESOURCE KIND
  * ============================================================================
  *
- * Resource types are open through qualified names.
- *
- * This deliberately avoids a finite grammar such as:
- *
- *     CPU
- *     GPU
- *     FPGA
- *     MEMORY
- *
- * because future resource kinds must not require a grammar rewrite.
+ * Resource kinds are OPEN-WORLD symbolic names.
  *
  * Examples:
  *
  *     compute
  *     memory
  *     accelerator
- *     quantum.logical_qubit
- *     vendor.extension.resource
+ *     quantum::logical_qubit
+ *     network::bandwidth
+ *     storage::capacity
+ *     custom::future_resource
  *
- * ============================================================================
+ * The grammar does not enumerate resource kinds.
  */
 
-hardwareResourceType
-    : hardwareResourceQualifiedName
+hardwareResourceKind
+    : COLON
+      qualifiedName
     ;
 
 
@@ -361,8 +363,12 @@ hardwareResourceBodyElement
 
 
 /* ============================================================================
- * 6. RESOURCE CLAUSES
+ * 6. RESOURCE CLAUSE DISPATCH
  * ============================================================================
+ *
+ * Only resource-owned intent belongs here.
+ *
+ * Physical realization decisions are intentionally absent.
  */
 
 hardwareResourceClause
@@ -380,42 +386,44 @@ hardwareResourceClause
     | hardwareResourceScalabilityClause
     | hardwareResourcePerformanceClause
     | hardwareResourceLatencyClause
+    | hardwareResourceThroughputClause
+    | hardwareResourceBandwidthClause
     | hardwareResourceEnergyClause
+    | hardwareResourcePowerClause
     | hardwareResourceReliabilityClause
+    | hardwareResourceResilienceClause
+    | hardwareResourceCostClause
     | hardwareResourceReservationClause
     | hardwareResourceAcquisitionClause
     | hardwareResourceReleaseClause
-    | hardwareResourceGroupClause
     | hardwareResourceDerivationClause
+    | hardwareResourceGroupClause
+    | hardwareResourceContractClause
+    | hardwareResourceProfileClause
     | hardwareResourcePropertyClause
     ;
 
 
 /* ============================================================================
- * 7. RESOURCE QUANTITY
+ * 7. QUANTITY
  * ============================================================================
  *
- * Quantities are expressions.
+ * A quantity is an arbitrary Zamani expression.
  *
- * This is essential for scalability.
- *
- * Valid examples include:
+ * Examples:
  *
  *     quantity = n;
- *     quantity = problem_size;
+ *     quantity = workload_size;
+ *     quantity = problem_size * lanes;
  *     quantity = required_memory;
- *     quantity = workload * lanes;
- *     quantity = available_capacity;
  *
- * The grammar imposes no numerical upper bound.
- *
- * ============================================================================
+ * No finite numeric range is imposed here.
  */
 
 hardwareResourceQuantityClause
-    : K_QUANTITY
+    : QUANTITY
       ASSIGN
-      hardwareResourceExpression
+      expression
       SEMICOLON
     ;
 
@@ -424,14 +432,15 @@ hardwareResourceQuantityClause
  * 8. RESOURCE REFERENCE
  * ============================================================================
  *
- * References a previously declared abstract resource.
+ * References an abstract resource.
  *
- * ============================================================================
+ * This does not select a physical resource.
  */
 
 hardwareResourceReferenceClause
-    : K_RESOURCE
-      hardwareResourceQualifiedName
+    : USE
+      RESOURCE
+      qualifiedName
       SEMICOLON
     ;
 
@@ -440,40 +449,51 @@ hardwareResourceReferenceClause
  * 9. REQUIREMENT
  * ============================================================================
  *
- * A requirement is semantically mandatory.
+ * Requirements are mandatory semantic conditions.
  *
- * Example:
+ * Supported forms include:
+ *
+ *     requires qubits >= n;
+ *
+ *     requires memory >= required_memory;
  *
  *     requires resource memory >= required_memory;
  *
- * The grammar does not determine whether the requirement is satisfiable.
+ *     requires capability("tensor.compute");
  *
- * ============================================================================
+ * The parser records syntax only.
+ * Satisfiability is determined downstream.
  */
 
 hardwareResourceRequirementClause
-    : K_REQUIRES
-      K_RESOURCE
-      hardwareResourceExpression
+    : REQUIRES
+      hardwareResourceRequirementSubject
       SEMICOLON
+    ;
+
+hardwareResourceRequirementSubject
+    : RESOURCE
+      qualifiedName
+      hardwareResourceRelationExpression?
+    | CAPABILITY
+      expression
+    | expression
+    ;
+
+hardwareResourceRelationExpression
+    : hardwareResourceRelationOperator
+      expression
     ;
 
 
 /* ============================================================================
  * 10. CONSTRAINT
  * ============================================================================
- *
- * A constraint restricts legal implementations.
- *
- * It is distinct from a requirement.
- *
- * ============================================================================
  */
 
 hardwareResourceConstraintClause
-    : K_CONSTRAINT
-      K_RESOURCE
-      hardwareResourceExpression
+    : CONSTRAINT
+      expression
       SEMICOLON
     ;
 
@@ -482,17 +502,13 @@ hardwareResourceConstraintClause
  * 11. PREFERENCE
  * ============================================================================
  *
- * A preference is advisory optimization intent.
- *
- * It MUST NOT silently become a hard requirement.
- *
- * ============================================================================
+ * Preferences are advisory and MUST remain semantically distinct from
+ * requirements.
  */
 
 hardwareResourcePreferenceClause
-    : K_PREFERENCE
-      K_RESOURCE
-      hardwareResourceExpression
+    : PREFER
+      expression
       SEMICOLON
     ;
 
@@ -500,18 +516,11 @@ hardwareResourcePreferenceClause
 /* ============================================================================
  * 12. HINT
  * ============================================================================
- *
- * A hint is advisory.
- *
- * Implementations may ignore it when necessary.
- *
- * ============================================================================
  */
 
 hardwareResourceHintClause
-    : K_HINT
-      K_RESOURCE
-      hardwareResourceExpression
+    : HINT
+      expression
       SEMICOLON
     ;
 
@@ -520,17 +529,21 @@ hardwareResourceHintClause
  * 13. CAPABILITY
  * ============================================================================
  *
- * This represents source-level capability intent/reference.
+ * Examples:
  *
- * Actual capability discovery belongs to the hardware abstraction layer.
+ *     capability = quantum::measurement;
  *
- * ============================================================================
+ *     capability = capability("tensor.compute");
+ *
+ * The grammar does not enumerate capabilities.
  */
 
 hardwareResourceCapabilityClause
-    : K_CAPABILITY
-      K_RESOURCE
-      hardwareResourceExpression
+    : CAPABILITY
+      (
+          ASSIGN
+      )?
+      expression
       SEMICOLON
     ;
 
@@ -539,26 +552,21 @@ hardwareResourceCapabilityClause
  * 14. TARGET
  * ============================================================================
  *
- * A target is symbolic.
+ * Target intent is symbolic.
  *
- * It does not require a physical machine identifier.
+ * Example:
  *
- * Examples:
- *
- *     target = cpu;
- *     target = accelerator;
  *     target = quantum;
- *     target = heterogeneous;
  *
- * Concrete target resolution occurs downstream.
+ *     target = accelerator::tensor;
  *
- * ============================================================================
+ * No physical target is selected here.
  */
 
 hardwareResourceTargetClause
-    : K_TARGET
+    : TARGET
       ASSIGN
-      hardwareResourceQualifiedName
+      expression
       SEMICOLON
     ;
 
@@ -569,15 +577,13 @@ hardwareResourceTargetClause
  *
  * Capacity is an implementation/context property.
  *
- * It is not a source-level fixed machine limit.
- *
- * ============================================================================
+ * It is not a language-level maximum.
  */
 
 hardwareResourceCapacityClause
-    : K_CAPACITY
+    : CAPACITY
       ASSIGN
-      hardwareResourceExpression
+      expression
       SEMICOLON
     ;
 
@@ -585,16 +591,12 @@ hardwareResourceCapacityClause
 /* ============================================================================
  * 16. AVAILABILITY
  * ============================================================================
- *
- * Availability may be supplied by compilation or runtime context.
- *
- * ============================================================================
  */
 
 hardwareResourceAvailabilityClause
-    : K_AVAILABILITY
+    : AVAILABILITY
       ASSIGN
-      hardwareResourceExpression
+      expression
       SEMICOLON
     ;
 
@@ -602,18 +604,12 @@ hardwareResourceAvailabilityClause
 /* ============================================================================
  * 17. PORTABILITY
  * ============================================================================
- *
- * Portability is semantic intent.
- *
- * It does not identify a backend.
- *
- * ============================================================================
  */
 
 hardwareResourcePortabilityClause
-    : K_PORTABLE
+    : PORTABILITY
       ASSIGN
-      hardwareResourceExpression
+      expression
       SEMICOLON
     ;
 
@@ -622,23 +618,21 @@ hardwareResourcePortabilityClause
  * 18. SCALABILITY
  * ============================================================================
  *
- * The scaling relationship is represented by an expression.
- *
- * No finite scaling catalogue is embedded in the grammar.
+ * Scaling remains symbolic.
  *
  * Examples:
  *
  *     scalability = problem_size;
- *     scalability = problem_size * lanes;
- *     scalability = symbolic_scaling;
  *
- * ============================================================================
+ *     scalability = workload_size * parallelism;
+ *
+ *     scalability = available_capacity;
  */
 
 hardwareResourceScalabilityClause
-    : K_SCALABILITY
+    : SCALABILITY
       ASSIGN
-      hardwareResourceExpression
+      expression
       SEMICOLON
     ;
 
@@ -649,9 +643,9 @@ hardwareResourceScalabilityClause
  */
 
 hardwareResourcePerformanceClause
-    : K_PERFORMANCE
+    : PERFORMANCE
       ASSIGN
-      hardwareResourceExpression
+      expression
       SEMICOLON
     ;
 
@@ -659,951 +653,600 @@ hardwareResourcePerformanceClause
 /* ============================================================================
  * 20. LATENCY
  * ============================================================================
- *
- * Latency is semantic intent.
- *
- * Actual timing and scheduling remain outside this grammar.
- *
- * ============================================================================
  */
 
 hardwareResourceLatencyClause
-    : K_LATENCY
+    : LATENCY
       ASSIGN
-      hardwareResourceExpression
+      expression
       SEMICOLON
     ;
 
 
 /* ============================================================================
- * 21. ENERGY
+ * 21. THROUGHPUT
+ * ============================================================================
+ */
+
+hardwareResourceThroughputClause
+    : THROUGHPUT
+      ASSIGN
+      expression
+      SEMICOLON
+    ;
+
+
+/* ============================================================================
+ * 22. BANDWIDTH
+ * ============================================================================
+ */
+
+hardwareResourceBandwidthClause
+    : BANDWIDTH
+      ASSIGN
+      expression
+      SEMICOLON
+    ;
+
+
+/* ============================================================================
+ * 23. ENERGY
  * ============================================================================
  */
 
 hardwareResourceEnergyClause
-    : K_ENERGY
+    : ENERGY
       ASSIGN
-      hardwareResourceExpression
+      expression
       SEMICOLON
     ;
 
 
 /* ============================================================================
- * 22. RELIABILITY
+ * 24. POWER
+ * ============================================================================
+ */
+
+hardwareResourcePowerClause
+    : POWER
+      ASSIGN
+      expression
+      SEMICOLON
+    ;
+
+
+/* ============================================================================
+ * 25. RELIABILITY
  * ============================================================================
  */
 
 hardwareResourceReliabilityClause
-    : K_RELIABILITY
+    : RELIABILITY
       ASSIGN
-      hardwareResourceExpression
+      expression
       SEMICOLON
     ;
 
 
 /* ============================================================================
- * 23. RESERVATION INTENT
+ * 26. RESILIENCE
+ * ============================================================================
+ */
+
+hardwareResourceResilienceClause
+    : RESILIENCE
+      ASSIGN
+      expression
+      SEMICOLON
+    ;
+
+
+/* ============================================================================
+ * 27. COST
+ * ============================================================================
+ */
+
+hardwareResourceCostClause
+    : COST
+      ASSIGN
+      expression
+      SEMICOLON
+    ;
+
+
+/* ============================================================================
+ * 28. RESERVATION
  * ============================================================================
  *
- * Reservation is intent.
+ * Reservation is intent only.
  *
- * The actual reservation belongs to resource management/deployment/runtime.
- *
- * ============================================================================
+ * Parsing MUST NOT reserve anything.
  */
 
 hardwareResourceReservationClause
-    : K_RESERVE
-      K_RESOURCE
-      hardwareResourceExpression
+    : RESERVE
+      RESOURCE
+      qualifiedName
       SEMICOLON
     ;
 
 
 /* ============================================================================
- * 24. ACQUISITION INTENT
+ * 29. ACQUISITION
  * ============================================================================
  *
- * This does not allocate a physical resource during parsing.
+ * Acquisition is abstract intent.
  *
- * ============================================================================
+ * Actual allocation belongs downstream.
  */
 
 hardwareResourceAcquisitionClause
-    : K_ACQUIRE
-      K_RESOURCE
-      hardwareResourceExpression
+    : ACQUIRE
+      RESOURCE
+      qualifiedName
       SEMICOLON
     ;
 
 
 /* ============================================================================
- * 25. RELEASE INTENT
+ * 30. RELEASE
  * ============================================================================
  */
 
 hardwareResourceReleaseClause
-    : K_RELEASE
-      K_RESOURCE
-      hardwareResourceExpression
+    : RELEASE
+      RESOURCE
+      qualifiedName
       SEMICOLON
     ;
 
 
 /* ============================================================================
- * 26. RESOURCE GROUP
+ * 31. DERIVATION
  * ============================================================================
  *
- * A group contains an arbitrary number of resource clauses.
- *
- * There is no fixed group size.
- *
- * ============================================================================
- */
-
-hardwareResourceGroupClause
-    : K_RESOURCE
-      K_GROUP
-      IDENTIFIER
-      LBRACE
-      hardwareResourceBodyElement*
-      RBRACE
-    ;
-
-
-/* ============================================================================
- * 27. RESOURCE DERIVATION
- * ============================================================================
- *
- * A resource value may be derived from program semantics.
+ * Derives a symbolic resource value from program semantics.
  *
  * Example:
  *
- *     resource required_memory = workload_size * element_size;
- *
- * ============================================================================
+ *     derive required_memory = workload_size * element_size;
  */
 
 hardwareResourceDerivationClause
-    : K_RESOURCE
-      IDENTIFIER
+    : DERIVE
+      identifier
       ASSIGN
-      hardwareResourceExpression
+      expression
       SEMICOLON
     ;
 
 
 /* ============================================================================
- * 28. RESOURCE PROPERTY
+ * 32. RESOURCE GROUP
  * ============================================================================
  *
- * Extensible property syntax.
+ * Groups remain unbounded.
  *
- * This permits future resource attributes without requiring every new
- * semantic property to become a lexer keyword.
+ * Example:
  *
- * Semantic validation determines whether a property is:
- *
- *     standard;
- *     dialect-defined;
- *     target-defined;
- *     experimental;
- *     invalid.
- *
+ *     resource group compute {
+ *         quantity = required_compute;
+ *     }
+ */
+
+hardwareResourceGroupClause
+    : RESOURCE
+      GROUP
+      identifier
+      hardwareResourceSpecification
+    ;
+
+
+/* ============================================================================
+ * 33. RESOURCE CONTRACT
  * ============================================================================
+ *
+ * A contract groups resource intent without selecting a machine.
+ */
+
+hardwareResourceContractClause
+    : CONTRACT
+      identifier?
+      hardwareResourceSpecification
+    ;
+
+
+/* ============================================================================
+ * 34. RESOURCE PROFILE
+ * ============================================================================
+ *
+ * A profile is a reusable symbolic resource-intent bundle.
+ */
+
+hardwareResourceProfileClause
+    : PROFILE
+      identifier?
+      hardwareResourceSpecification
+    ;
+
+
+/* ============================================================================
+ * 35. EXTENSIBLE PROPERTY
+ * ============================================================================
+ *
+ * Standard and future resource properties can be represented without
+ * introducing a new keyword for every possible resource dimension.
+ *
+ * Both forms are accepted:
+ *
+ *     property bandwidth_class = ...;
+ *
+ *     bandwidth_class = ...;
+ *
+ * The semantic layer decides whether the property is:
+ *
+ *     standard
+ *     dialect-defined
+ *     target-defined
+ *     experimental
+ *     deprecated
+ *     invalid
  */
 
 hardwareResourcePropertyClause
+    : PROPERTY
+      qualifiedName
+      ASSIGN
+      expression
+      SEMICOLON
+    | qualifiedName
+      ASSIGN
+      expression
+      SEMICOLON
+    ;
+
+
+/* ============================================================================
+ * 36. RELATION OPERATORS
+ * ============================================================================
+ *
+ * The parser reuses the canonical operator vocabulary.
+ *
+ * This is intentionally not a second expression hierarchy.
+ */
+
+hardwareResourceRelationOperator
+    : EQUAL_EQUAL
+    | NOT_EQUAL
+    | LESS
+    | LESS_EQUAL
+    | GREATER
+    | GREATER_EQUAL
+    ;
+
+
+/* ============================================================================
+ * 37. IDENTIFIER BRIDGE
+ * ============================================================================
+ *
+ * Contextual wrappers are allowed, but identifier syntax remains owned by
+ * the canonical name grammar.
+ */
+
+identifier
     : IDENTIFIER
-      ASSIGN
-      hardwareResourceExpression
-      SEMICOLON
     ;
 
 
 /* ============================================================================
- * 29. RESOURCE EXPRESSION
+ * 38. AST CONTRACT
  * ============================================================================
  *
- * CRITICAL ARCHITECTURAL RULE:
+ * Every production above maps to domain-neutral frontend AST structures.
  *
- * This grammar does not define another expression language.
+ * At minimum, the semantic AST must preserve:
  *
- * Resource expressions must eventually map to the canonical Zamani
- * expression grammar.
+ *     HardwareResourceDeclaration
+ *     HardwareResourceKind
+ *     HardwareResourceReference
+ *     HardwareResourceQuantity
+ *     HardwareResourceRequirement
+ *     HardwareResourceConstraint
+ *     HardwareResourcePreference
+ *     HardwareResourceHint
+ *     HardwareResourceCapability
+ *     HardwareResourceTarget
+ *     HardwareResourceCapacity
+ *     HardwareResourceAvailability
+ *     HardwareResourcePortability
+ *     HardwareResourceScalability
+ *     HardwareResourcePerformance
+ *     HardwareResourceLatency
+ *     HardwareResourceThroughput
+ *     HardwareResourceBandwidth
+ *     HardwareResourceEnergy
+ *     HardwareResourcePower
+ *     HardwareResourceReliability
+ *     HardwareResourceResilience
+ *     HardwareResourceCost
+ *     HardwareResourceReservation
+ *     HardwareResourceAcquisition
+ *     HardwareResourceRelease
+ *     HardwareResourceDerivation
+ *     HardwareResourceGroup
+ *     HardwareResourceContract
+ *     HardwareResourceProfile
+ *     HardwareResourceProperty
  *
- * This local boundary exists so resource-specific semantic analysis can
- * identify expression-bearing positions without creating a second AST
- * expression hierarchy.
+ * Every node MUST preserve source spans.
  *
- * ============================================================================
- */
-
-hardwareResourceExpression
-    : expression
-    ;
-
-
-/* ============================================================================
- * 30. QUALIFIED RESOURCE NAME
- * ============================================================================
+ * Expressions remain structured canonical expression nodes.
  *
- * Resource namespaces are open-ended.
- *
- * Examples:
- *
- *     memory
- *     compute.cpu
- *     accelerator.gpu
- *     quantum.logical_qubit
- *     vendor.domain.resource
- *
- * ============================================================================
- */
-
-hardwareResourceQualifiedName
-    : IDENTIFIER
-      (
-          DOUBLE_COLON
-          IDENTIFIER
-      )*
-    ;
-
-
-/* ============================================================================
- * 31. RESOURCE REQUIREMENT SHORT FORM
- * ============================================================================
- *
- * Convenience form for hardware declarations that already have a resource
- * context.
+ * Qualified names remain structured canonical name nodes.
  *
  * ============================================================================
- */
-
-hardwareResourceRequirement
-    : K_REQUIRES
-      K_RESOURCE
-      hardwareResourceExpression
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 32. RESOURCE CONSTRAINT SHORT FORM
- * ============================================================================
- */
-
-hardwareResourceConstraint
-    : K_CONSTRAINT
-      K_RESOURCE
-      hardwareResourceExpression
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 33. RESOURCE PREFERENCE SHORT FORM
- * ============================================================================
- */
-
-hardwareResourcePreference
-    : K_PREFERENCE
-      K_RESOURCE
-      hardwareResourceExpression
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 34. RESOURCE HINT SHORT FORM
- * ============================================================================
- */
-
-hardwareResourceHint
-    : K_HINT
-      K_RESOURCE
-      hardwareResourceExpression
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 35. RESOURCE CAPABILITY SHORT FORM
- * ============================================================================
- */
-
-hardwareResourceCapability
-    : K_CAPABILITY
-      K_RESOURCE
-      hardwareResourceExpression
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 36. RESOURCE TARGET SHORT FORM
- * ============================================================================
- */
-
-hardwareResourceTarget
-    : K_TARGET
-      ASSIGN
-      hardwareResourceQualifiedName
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 37. RESOURCE CONTRACT
- * ============================================================================
- *
- * A contract groups resource intent.
- *
- * ============================================================================
- */
-
-hardwareResourceContract
-    : K_RESOURCE
-      IDENTIFIER
-      LBRACE
-      hardwareResourceBodyElement*
-      RBRACE
-    ;
-
-
-/* ============================================================================
- * 38. RESOURCE SET
- * ============================================================================
- *
- * Allows multiple independent resource declarations.
- *
- * ============================================================================
- */
-
-hardwareResourceSet
-    : K_RESOURCES
-      LBRACE
-      hardwareResourceSetElement*
-      RBRACE
-    ;
-
-hardwareResourceSetElement
-    : hardwareResourceAttributes*
-      hardwareResourceDeclaration
-    | hardwareResourceRequirement
-    | hardwareResourceConstraint
-    | hardwareResourcePreference
-    | hardwareResourceHint
-    | hardwareResourceCapability
-    | hardwareResourceTarget
-    ;
-
-
-/* ============================================================================
- * 39. RESOURCE ASSOCIATION
- * ============================================================================
- *
- * Associates a resource with an abstract hardware component.
- *
- * This is semantic association, not physical placement.
- *
- * Example:
- *
- *     resource memory associated_with accelerator;
- *
- * ============================================================================
- */
-
-hardwareResourceAssociation
-    : K_RESOURCE
-      hardwareResourceQualifiedName
-      K_ASSOCIATED
-      K_WITH
-      hardwareResourceQualifiedName
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 40. RESOURCE DEPENDENCY
- * ============================================================================
- *
- * Expresses a semantic dependency between resource contracts.
- *
- * It does not perform scheduling.
- *
- * ============================================================================
- */
-
-hardwareResourceDependency
-    : K_RESOURCE
-      hardwareResourceQualifiedName
-      K_DEPENDS
-      K_ON
-      hardwareResourceQualifiedName
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 41. RESOURCE PROVISION
- * ============================================================================
- *
- * Expresses that an abstract hardware declaration provides a resource.
- *
- * ============================================================================
- */
-
-hardwareResourceProvision
-    : K_PROVIDES
-      K_RESOURCE
-      hardwareResourceQualifiedName
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 42. RESOURCE CONSUMPTION
- * ============================================================================
- *
- * Expresses source-level consumption intent.
- *
- * Actual allocation is downstream.
- *
- * ============================================================================
- */
-
-hardwareResourceConsumption
-    : K_USES
-      K_RESOURCE
-      hardwareResourceQualifiedName
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 43. RESOURCE SCALING CONTRACT
- * ============================================================================
- *
- * Represents how resource demand relates to a symbolic problem parameter.
- *
- * Example:
- *
- *     resource scaling {
- *         demand = problem_size * lanes;
- *     }
- *
- * No fixed number of scaling dimensions is imposed.
- *
- * ============================================================================
- */
-
-hardwareResourceScalingClause
-    : K_SCALING
-      LBRACE
-      hardwareResourceScalingItem*
-      RBRACE
-    ;
-
-hardwareResourceScalingItem
-    : IDENTIFIER
-      ASSIGN
-      hardwareResourceExpression
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 44. RESOURCE PORTABILITY CONTRACT
- * ============================================================================
- */
-
-hardwareResourcePortabilityContract
-    : K_PORTABILITY
-      LBRACE
-      hardwareResourcePortabilityItem*
-      RBRACE
-    ;
-
-hardwareResourcePortabilityItem
-    : IDENTIFIER
-      ASSIGN
-      hardwareResourceExpression
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 45. RESOURCE PERFORMANCE CONTRACT
- * ============================================================================
- */
-
-hardwareResourcePerformanceContract
-    : K_PERFORMANCE
-      LBRACE
-      hardwareResourcePerformanceItem*
-      RBRACE
-    ;
-
-hardwareResourcePerformanceItem
-    : IDENTIFIER
-      ASSIGN
-      hardwareResourceExpression
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 46. RESOURCE CONSTRAINT BLOCK
- * ============================================================================
- */
-
-hardwareResourceConstraintBlock
-    : K_CONSTRAINT
-      LBRACE
-      hardwareResourceConstraintItem*
-      RBRACE
-    ;
-
-hardwareResourceConstraintItem
-    : hardwareResourceExpression
-      SEMICOLON
-    | IDENTIFIER
-      ASSIGN
-      hardwareResourceExpression
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 47. RESOURCE REQUIREMENT BLOCK
- * ============================================================================
- */
-
-hardwareResourceRequirementBlock
-    : K_REQUIRES
-      LBRACE
-      hardwareResourceRequirementItem*
-      RBRACE
-    ;
-
-hardwareResourceRequirementItem
-    : K_RESOURCE
-      hardwareResourceExpression
-      SEMICOLON
-    | IDENTIFIER
-      ASSIGN
-      hardwareResourceExpression
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 48. RESOURCE PREFERENCE BLOCK
- * ============================================================================
- */
-
-hardwareResourcePreferenceBlock
-    : K_PREFERENCE
-      LBRACE
-      hardwareResourcePreferenceItem*
-      RBRACE
-    ;
-
-hardwareResourcePreferenceItem
-    : K_RESOURCE
-      hardwareResourceExpression
-      SEMICOLON
-    | IDENTIFIER
-      ASSIGN
-      hardwareResourceExpression
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 49. RESOURCE CAPABILITY BLOCK
- * ============================================================================
- */
-
-hardwareResourceCapabilityBlock
-    : K_CAPABILITY
-      LBRACE
-      hardwareResourceCapabilityItem*
-      RBRACE
-    ;
-
-hardwareResourceCapabilityItem
-    : K_RESOURCE
-      hardwareResourceExpression
-      SEMICOLON
-    | IDENTIFIER
-      ASSIGN
-      hardwareResourceExpression
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 50. RESOURCE OBSERVATION
- * ============================================================================
- *
- * Runtime observations are represented syntactically as values/expressions.
- *
- * This grammar does not claim that an observation is authoritative.
- *
- * ============================================================================
- */
-
-hardwareResourceObservation
-    : K_RESOURCE
-      hardwareResourceQualifiedName
-      K_OBSERVED
-      ASSIGN
-      hardwareResourceExpression
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 51. RESOURCE VALIDATION MARKER
- * ============================================================================
- *
- * This expresses source-level validation intent only.
- *
- * Actual validation belongs to semantic analysis and resource validation.
- *
- * ============================================================================
- */
-
-hardwareResourceValidation
-    : K_VALIDATE
-      K_RESOURCE
-      hardwareResourceExpression
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 52. RESOURCE FALLBACK
- * ============================================================================
- *
- * Allows an implementation to express an alternative resource strategy
- * without encoding a specific physical machine.
- *
- * ============================================================================
- */
-
-hardwareResourceFallback
-    : K_FALLBACK
-      K_RESOURCE
-      hardwareResourceExpression
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 53. RESOURCE EXTENSION
- * ============================================================================
- *
- * Future dialects can attach additional resource semantics through the
- * existing dialect/extension infrastructure.
- *
- * ============================================================================
- */
-
-hardwareResourceExtension
-    : IDENTIFIER
-      DOUBLE_COLON
-      IDENTIFIER
-      hardwareResourceExpression?
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 54. RESOURCE NAME / SYMBOLIC REFERENCE
- * ============================================================================
- */
-
-hardwareResourceName
-    : IDENTIFIER
-    | hardwareResourceQualifiedName
-    ;
-
-
-/* ============================================================================
- * 55. RESOURCE VALUE
- * ============================================================================
- *
- * Resource values intentionally use the canonical expression grammar.
- *
- * ============================================================================
- */
-
-hardwareResourceValue
-    : hardwareResourceExpression
-    ;
-
-
-/* ============================================================================
- * 56. RESOURCE CONTRACT ITEM
- * ============================================================================
- */
-
-hardwareResourceContractItem
-    : hardwareResourceAttributes*
-      hardwareResourceClause
-    | hardwareResourceRequirement
-    | hardwareResourceConstraint
-    | hardwareResourcePreference
-    | hardwareResourceHint
-    | hardwareResourceCapability
-    | hardwareResourceTarget
-    ;
-
-
-/* ============================================================================
- * 57. INTEGRATION CONTRACT
- * ============================================================================
- *
- * LEXER
- * -----
- *
- * This parser consumes ZamaniTokens.
- *
- * Required lexical vocabulary includes the resource vocabulary used by this
- * file, including the resource/requirement/capability/constraint/preference
- * family and their associated punctuation.
- *
- * The lexer owns spelling and tokenization.
- *
- *
- * CORE GRAMMAR
- * ------------
- *
- * `expression`, identifier semantics, general attributes, and shared source
- * constructs must come from the canonical grammar architecture.
- *
- * This file must not create a competing expression AST.
- *
- *
- * HARDWARE GRAMMAR
- * ----------------
- *
- * `grammar/hardware/hardware.g4` owns hardware modules, ports, signals,
- * wires, clocks, timing, processes, memories, pipelines, and hardware
- * composition.
- *
- * This file supplies reusable hardware-resource intent to that grammar.
- *
- *
- * UNIVERSAL RESOURCE GRAMMAR
- * --------------------------
- *
- * `grammar/resources/resources.g4` owns the language-wide resource model.
- *
- * Hardware resource syntax must map to that semantic model rather than
- * defining incompatible resource concepts.
- *
- *
- * QUANTUM
- * -------
- *
- * Quantum resource declarations may refer to concepts such as logical
- * qubits, quantum memory, measurement capacity, or other quantum resources.
- *
- * This file must NOT define quantum gates, quantum operations, circuits,
- * physical-qubit allocation, QEC, or ZQN semantics.
- *
- * Quantum computation remains represented by the canonical `quantum::ir`.
- *
- *
- * HARDWARE HAL
- * ------------
- *
- * The HAL supplies actual hardware capabilities and availability.
- *
- * This grammar never discovers hardware.
- *
- *
- * RESOURCE MANAGEMENT
- * -------------------
- *
- * Resource-management components evaluate:
- *
- *     requirement
- *     constraint
- *     preference
- *     capability
- *     availability
- *     capacity
- *
- * against actual execution resources.
- *
- *
- * COMPILER
- * --------
- *
- * Compilation may lower resource intent into:
- *
- *     target requirements;
- *     capability queries;
- *     allocation requests;
- *     scheduling constraints;
- *     routing constraints;
- *     optimization objectives.
- *
- *
- * RUNTIME
- * -------
- *
- * Runtime consumes resolved resource decisions.
- *
- * Runtime must never depend on this parser grammar directly.
- *
- *
- * SCHEDULING
- * ----------
- *
- * Latency/performance/timing information is intent.
- *
- * Scheduling owns actual ordering, timing, synchronization, and resource
- * reservation decisions.
- *
- *
- * ROUTING / PLACEMENT
- * -------------------
- *
- * Resource syntax does not perform physical placement.
- *
- * Physical realization belongs downstream.
- *
- *
- * OPTIMIZATION
- * ------------
- *
- * Preferences and performance objectives may be consumed by optimization.
- *
- * Optimization must not reinterpret preferences as mandatory requirements.
- *
- *
- * QEC / ZQN
- * ---------
- *
- * No QEC algorithm belongs here.
- *
- * No noise model belongs here.
- *
- * ZQN may provide resource-relevant fault information downstream.
- *
- *
- * AST CONTRACT
- * ------------
- *
- * The frontend AST should preserve:
- *
- *     resource kind
- *     symbolic name
- *     quantity expression
- *     requirement/constraint/preference/hint category
- *     capability intent
- *     target intent
- *     property namespace
- *     source span
- *     annotations
- *     provenance
- *
- * It must not resolve physical devices during parsing.
- *
- *
  * SEMANTIC CONTRACT
- * -----------------
- *
- * Semantic analysis must determine:
- *
- *     - whether resource names exist;
- *     - whether expressions have valid types;
- *     - whether requirements are meaningful;
- *     - whether constraints are valid;
- *     - whether preferences are legal;
- *     - whether capability references are valid;
- *     - whether target references are valid;
- *     - whether resource contracts conflict.
- *
- * The parser only establishes syntax.
- *
- *
- * SCALABILITY CONTRACT
- * --------------------
- *
- * This file MUST NOT introduce:
- *
- *     fixed resource counts;
- *     fixed hardware counts;
- *     fixed memory sizes;
- *     fixed core counts;
- *     fixed accelerator counts;
- *     fixed device identifiers;
- *     fixed topology;
- *     fixed addresses.
- *
- * ============================================================================
- * HARD-CODING AUDIT
  * ============================================================================
  *
- * Intentionally absent:
+ * Semantic analysis owns:
  *
- *     MAX_RESOURCES
- *     MAX_MEMORY
- *     MAX_CORES
- *     MAX_THREADS
- *     MAX_DEVICES
- *     MAX_GPUS
- *     MAX_FPGAS
- *     MAX_QUBITS
- *     MAX_NODES
+ *     resource-name resolution
+ *     duplicate declaration checking
+ *     resource-kind resolution
+ *     quantity type checking
+ *     dimensional/resource-unit checking
+ *     requirement satisfiability
+ *     constraint validation
+ *     preference classification
+ *     capability resolution
+ *     target compatibility
+ *     availability interpretation
+ *     portability analysis
+ *     scalability analysis
+ *     resource dependency analysis
+ *     resource lifetime analysis
  *
- * Quantities are expressions.
+ * This grammar MUST NOT decide whether a resource is available.
  *
- * Therefore physical scale remains a semantic/resource-resolution concern.
+ * ============================================================================
+ * IR CONTRACT
+ * ============================================================================
+ *
+ * This grammar creates NO hardware IR.
+ *
+ * Resource declarations are lowered through the canonical semantic/resource
+ * model.
+ *
+ * The eventual compiler path is:
+ *
+ *     source
+ *       ↓
+ *     frontend AST
+ *       ↓
+ *     semantic resource model
+ *       ↓
+ *     canonical compiler IR
+ *       ↓
+ *     optimization
+ *       ↓
+ *     target/resource resolution
+ *       ↓
+ *     routing / scheduling where applicable
+ *       ↓
+ *     HAL/backend
+ *
+ * Quantum resources ultimately participate in the existing canonical:
+ *
+ *     quantum::ir
+ *
+ * boundary.
+ *
+ * No second quantum IR is introduced here.
+ *
+ * ============================================================================
+ * HARDWARE BOUNDARY
+ * ============================================================================
+ *
+ * This grammar MUST NOT encode:
+ *
+ *     physical device IDs
+ *     physical qubit IDs
+ *     PCI addresses
+ *     memory addresses
+ *     vendor-specific device slots
+ *     fixed machine topology
+ *     fixed bus widths
+ *     fixed register widths
+ *     fixed memory capacities
+ *
+ * Such information belongs downstream target realization.
  *
  * ============================================================================
  * DETERMINISM
  * ============================================================================
  *
- * Parsing is deterministic for a fixed token stream and grammar version.
+ * Parsing depends only on:
  *
- * Resource availability, capability discovery, scheduling, and allocation
- * are intentionally NOT parser concerns and therefore do not affect parsing.
+ *     source text
+ *     lexical configuration
+ *     grammar version
+ *     explicitly selected dialect composition
  *
- * ============================================================================
- * SECURITY
- * ============================================================================
+ * Parsing MUST NOT depend on:
  *
- * This grammar:
- *
- *     - performs no I/O;
- *     - performs no filesystem access;
- *     - performs no network access;
- *     - performs no hardware discovery;
- *     - performs no runtime allocation;
- *     - contains no embedded target-language actions.
- *
- * Generated Rust integration must preserve the repository-wide no-unsafe
- * policy.
+ *     hardware availability
+ *     runtime state
+ *     environment variables
+ *     filesystem state
+ *     network state
+ *     clock/time
+ *     randomness
  *
  * ============================================================================
- * COMPATIBILITY
+ * SAFETY
  * ============================================================================
  *
- * Changes to keyword tokens are language-version changes.
+ * This grammar contains:
  *
- * Changes to resource semantics are semantic-versioning/API concerns even
- * when syntax remains compatible.
+ *     no actions
+ *     no semantic predicates
+ *     no Rust code
+ *     no filesystem access
+ *     no network access
+ *     no hardware access
+ *     no runtime execution
  *
- * Unknown resource properties should be handled according to the dialect and
- * compatibility policy rather than silently changing standard semantics.
+ * Rust generated/consuming code remains subject to:
+ *
+ *     Rust 2021
+ *     Rust 1.97 / Rust 1.97.1
+ *     safe Rust only
+ *
+ * ============================================================================
+ * INTEGRATION CONTRACT
+ * ============================================================================
+ *
+ * HARDWARE COMPOSITION
+ *
+ *     grammar/hardware/hardware.g4
+ *
+ * MUST import/compose this grammar and delegate:
+ *
+ *     hardwareResourceDeclaration
+ *
+ * instead of defining another rule with the same ownership.
+ *
+ * TARGET COMPOSITION
+ *
+ *     grammar/hardware/targets.g4
+ *
+ * may reference resource names and requirements, but MUST NOT duplicate
+ * hardware resource declaration syntax.
+ *
+ * UNIVERSAL RESOURCE COMPOSITION
+ *
+ *     grammar/resources/resources.g4
+ *
+ * remains the owner of UNIVERSAL source-level resource syntax.
+ *
+ * It may delegate hardware-specific resource declarations here when a
+ * construct is explicitly inside a hardware declaration.
+ *
+ * The two grammars therefore have different ownership:
+ *
+ *     resources/resources.g4
+ *         universal resource intent
+ *
+ *     hardware/resources.g4
+ *         hardware-contract resource intent
+ *
+ * QUANTUM
+ *
+ * Quantum grammar may express requirements such as:
+ *
+ *     requires qubits >= n;
+ *
+ * without selecting physical qubits.
+ *
+ * CLASSICAL
+ *
+ * Classical grammar may express:
+ *
+ *     requires memory >= required_memory;
+ *
+ * without assuming a particular RAM size.
+ *
+ * HDL
+ *
+ * HDL may refer to resource requirements without hard-coding a universal
+ * implementation capacity.
+ *
+ * ============================================================================
+ * TEST CONTRACT
+ * ============================================================================
+ *
+ * Positive tests MUST include:
+ *
+ *     resource compute;
+ *
+ *     resource memory: memory;
+ *
+ *     resource memory: memory {
+ *         quantity = required_memory;
+ *     };
+ *
+ *     resource quantum_memory: quantum::logical_qubit {
+ *         requires capacity >= required_qubits;
+ *     };
+ *
+ *     resource accelerator: accelerator {
+ *         requires capability("tensor.compute");
+ *         scalability = problem_size;
+ *     };
+ *
+ *     resource network: network::bandwidth {
+ *         bandwidth = required_bandwidth;
+ *         latency = latency_budget;
+ *     };
+ *
+ *     resource group compute {
+ *         quantity = workload_size;
+ *     }
+ *
+ *     derive required_memory = elements * element_size;
+ *
+ * Negative tests MUST include:
+ *
+ *     physical resource IDs
+ *     physical addresses where prohibited by semantic rules
+ *     malformed resource declarations
+ *     missing expressions
+ *     missing resource names
+ *     malformed comparisons
+ *     malformed property assignments
+ *
+ * Boundary/scalability tests MUST include:
+ *
+ *     symbolic quantity
+ *     arbitrarily large integer literals supported by the lexer
+ *     nested resource groups
+ *     many resource clauses
+ *     many resource properties
+ *     symbolic scaling expressions
+ *     resource quantities derived from program parameters
+ *     quantum resource requirements
+ *     classical resource requirements
+ *     accelerator resource requirements
+ *     distributed resource requirements
+ *
+ * The grammar MUST NOT test or establish an artificial maximum.
+ *
+ * ============================================================================
+ * COMPLETION CRITERIA
+ * ============================================================================
+ *
+ * This file is complete when:
+ *
+ *     [x] one canonical hardware-resource declaration owner exists;
+ *     [x] canonical ZamaniLexer is consumed;
+ *     [x] canonical expression grammar is reused;
+ *     [x] canonical name grammar is reused;
+ *     [x] no K_* token aliases remain;
+ *     [x] resource kinds are open-world;
+ *     [x] quantities are expressions;
+ *     [x] requirements are distinct from preferences;
+ *     [x] constraints are distinct from hints;
+ *     [x] capabilities remain symbolic;
+ *     [x] target identity remains abstract;
+ *     [x] no physical hardware is selected;
+ *     [x] no universal hardware limit is encoded;
+ *     [x] no second expression hierarchy exists;
+ *     [x] no second quantum IR exists;
+ *     [x] source spans are preserved by the AST contract;
+ *     [x] semantic validation remains downstream;
+ *     [x] deterministic parsing is preserved;
+ *     [x] Rust integration requires no unsafe code;
+ *     [x] positive/negative/boundary/scalability tests are defined.
  *
  * ============================================================================
  */
