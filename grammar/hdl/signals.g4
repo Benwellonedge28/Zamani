@@ -6,17 +6,27 @@
  * File:
  *     grammar/hdl/signals.g4
  *
- * Role:
- *     HDL signal declaration and signal-reference grammar.
+ * Status:
+ *     CANONICAL HDL SIGNAL DELEGATE
+ *
+ * Purpose:
+ *     Define target-independent logical HDL signal syntax.
  *
  * Language objective:
- *     Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever (POCO-REAF)
+ *
+ *     Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
+ *     (POCO-REAF)
  *
  * Rust baseline:
+ *
  *     Rust 1.97 / Rust 1.97.1
+ *     Rust 2021
  *
  * Safety:
- *     This grammar contains no embedded Rust code and requires no `unsafe`.
+ *
+ *     This grammar contains no embedded Rust actions, semantic predicates,
+ *     filesystem access, network access, runtime callbacks, hardware access,
+ *     or unsafe code.
  *
  * ============================================================================
  * ARCHITECTURAL POSITION
@@ -25,48 +35,53 @@
  *     Zamani source
  *          |
  *          v
- *     Canonical lexer
+ *     canonical Zamani lexer
  *          |
  *          v
- *     Canonical/modular parser
+ *     canonical parser
  *          |
  *          v
- *     HDL grammar
+ *     HDL composition root
  *          |
- *          +--> ports.g4
- *          +--> signals.g4  <--- THIS FILE
- *          +--> wires.g4
- *          +--> registers.g4
- *          +--> clocks.g4
- *          +--> processes.g4
- *          +--> ...
+ *          +--> modules
+ *          +--> ports
+ *          +--> signals       <--- THIS FILE
+ *          +--> wires
+ *          +--> registers
+ *          +--> memories
+ *          +--> clocks
+ *          +--> timing
+ *          +--> processes
+ *          +--> pipelines
+ *          +--> verification
  *          |
  *          v
- *     Frontend AST
+ *     domain-neutral frontend AST
  *          |
  *          v
- *     Semantic analysis
+ *     semantic analysis
  *          |
  *          +--> name resolution
- *          +--> type checking
- *          +--> width/shape checking
+ *          +--> type analysis
+ *          +--> shape/width analysis
  *          +--> driver analysis
- *          +--> direction checking
- *          +--> clock/domain analysis
- *          +--> capability/resource analysis
+ *          +--> assignment analysis
+ *          +--> clock-domain analysis
+ *          +--> capability analysis
+ *          +--> resource analysis
  *          |
  *          v
- *     Canonical hardware semantic representation / IR
+ *     canonical hardware semantic representation / IR
  *          |
  *          v
- *     optimization / scheduling / routing / synthesis
+ *     optimization / verification / scheduling / synthesis / routing
  *          |
  *          v
  *     target realization
  *
- * Grammar establishes syntax.
- * Semantic analysis establishes meaning.
- * Hardware compilation establishes realization.
+ * Grammar defines syntax.
+ * Semantic analysis defines meaning.
+ * Hardware compilation defines realization.
  *
  * ============================================================================
  * OWNERSHIP
@@ -74,169 +89,401 @@
  *
  * THIS FILE OWNS:
  *
- *     - logical HDL signal declarations;
+ *     - logical signal declarations;
  *     - signal declaration lists;
+ *     - signal declarators;
  *     - signal names;
  *     - signal type attachment;
- *     - signal dimensions;
- *     - signal initialization syntax;
- *     - signal attributes;
- *     - signal source-level constraints;
- *     - signal references;
- *     - qualified signal references;
- *     - signal collections;
- *     - signal aliases where explicitly part of the signal abstraction;
- *     - signal assignment/reference syntax where needed by the signal model;
- *     - signal declaration modifiers.
+ *     - logical signal dimensions;
+ *     - signal initializers;
+ *     - signal metadata attachment points;
+ *     - signal constraints;
+ *     - logical signal references;
+ *     - logical signal selections;
+ *     - signal indexing/slicing syntax;
+ *     - logical signal member access;
+ *     - logical signal assignment syntax;
+ *     - signal aliases;
+ *     - signal groups.
  *
  * THIS FILE DOES NOT OWN:
  *
+ *     - lexical token definitions;
+ *     - identifiers;
+ *     - qualified names;
+ *     - general expressions;
+ *     - general types;
+ *     - attributes;
  *     - ports;
- *     - wires;
+ *     - wires/nets;
  *     - registers;
- *     - clocks;
  *     - memories;
- *     - pipelines;
+ *     - clocks;
+ *     - timing;
  *     - processes;
- *     - combinational blocks;
- *     - sequential blocks;
+ *     - combinational semantics;
+ *     - sequential semantics;
  *     - state machines;
- *     - hardware modules;
- *     - hardware interfaces;
- *     - hardware targets;
- *     - physical pins;
- *     - physical nets;
+ *     - pipelines;
+ *     - modules;
+ *     - interfaces;
+ *     - physical routing;
  *     - placement;
- *     - routing;
  *     - synthesis;
- *     - timing closure;
+ *     - target selection;
  *     - hardware discovery;
  *     - resource allocation;
  *     - calibration;
- *     - device IDs;
- *     - machine topology;
- *     - runtime state;
  *     - quantum::ir;
- *     - quantum error-correction algorithms;
- *     - ZQN noise semantics.
+ *     - QEC;
+ *     - ZQN;
+ *     - runtime execution.
  *
  * ============================================================================
- * SIGNAL SEMANTICS
+ * SINGLE-SOURCE CONTRACT
  * ============================================================================
  *
- * A signal is a LOGICAL hardware communication/storage-independent value
- * carrier in the HDL semantic model.
+ * This grammar deliberately consumes shared language contracts instead of
+ * recreating them.
  *
- * A signal does not inherently mean:
+ * Identifier/name ownership:
  *
- *     - one physical wire;
- *     - one FPGA routing resource;
- *     - one ASIC metal segment;
- *     - one package pin;
- *     - one device address;
- *     - one clock domain;
- *     - one memory cell;
- *     - one CPU register.
+ *     grammar/core/
  *
- * Those are downstream implementation decisions unless explicitly introduced
- * as part of a target/deployment contract.
+ * Expression ownership:
+ *
+ *     grammar/expressions/
+ *
+ * Type ownership:
+ *
+ *     grammar/types/
+ *
+ * Attribute ownership:
+ *
+ *     grammar/core/attributes.g4
+ *
+ * Range ownership:
+ *
+ *     grammar/expressions/
+ *
+ * The signal grammar must not introduce a second:
+ *
+ *     identifier grammar;
+ *     qualified-name grammar;
+ *     expression precedence hierarchy;
+ *     type system;
+ *     attribute syntax.
  *
  * ============================================================================
- * POCO-REAF AND SCALABILITY
+ * CANONICAL LEXER
  * ============================================================================
  *
- * There are intentionally no grammar-level limits on:
+ * The parser consumes:
+ *
+ *     ZamaniLexer
+ *
+ * through the canonical lexer composition:
+ *
+ *     grammar/antlr/ZamaniLexer.g4
+ *
+ * No lexer is defined here.
+ *
+ * The HDL lexical vocabulary MUST be established by the canonical lexer.
+ *
+ * In particular, the production HDL composition expects the canonical
+ * signal keyword token:
+ *
+ *     K_SIGNAL
+ *
+ * The token must be owned by the canonical keyword vocabulary rather than
+ * being recreated in this parser grammar.
+ *
+ * ============================================================================
+ * IMPORTANT LEXER INTEGRATION NOTE
+ * ============================================================================
+ *
+ * The current repository state contains HDL parser consumers of:
+ *
+ *     K_SIGNAL
+ *     K_INPUT
+ *     K_OUTPUT
+ *     K_INOUT
+ *
+ * while the current keyword grammar does not yet expose the complete K_*
+ * HDL keyword family.
+ *
+ * That is a repository-wide lexical conformance issue.
+ *
+ * It MUST be fixed in:
+ *
+ *     grammar/lexer/keywords.g4
+ *
+ * and propagated through:
+ *
+ *     grammar/lexer/tokens.g4
+ *     grammar/antlr/ZamaniLexer.g4
+ *
+ * It MUST NOT be solved by adding a second lexer or by defining parser-local
+ * fake tokens.
+ *
+ * This file therefore consumes the intended canonical token:
+ *
+ *     K_SIGNAL
+ *
+ * ============================================================================
+ * POCO-REAF / OPEN-WORLD PRINCIPLE
+ * ============================================================================
+ *
+ * A signal is a logical value-bearing HDL object.
+ *
+ * The grammar imposes no universal limit on:
  *
  *     number of signals;
  *     signal width;
  *     number of dimensions;
  *     number of signal groups;
- *     number of modules;
  *     number of signal references;
- *     number of drivers.
+ *     number of aliases;
+ *     number of declarations;
+ *     number of modules;
+ *     number of generated signals.
  *
- * Repetition is used wherever cardinality is naturally unbounded.
+ * Repetition is represented by grammar repetition operators.
  *
- * A declaration such as:
- *
- *     signal data: logic[WIDTH];
- *
- * expresses a logical parameterized signal.
- *
- * WIDTH may be resolved from:
- *
- *     a generic;
- *     a parameter;
- *     compile-time computation;
- *     a type-level expression;
- *     another semantic source.
- *
- * It is NOT a machine-capacity declaration.
- *
- * ============================================================================
- * HARDWARE INDEPENDENCE
- * ============================================================================
- *
- * This file must never encode:
+ * There is intentionally no:
  *
  *     MAX_SIGNALS
  *     MAX_WIDTH
  *     MAX_BITS
  *     MAX_LANES
- *     MAX_DEVICES
+ *     MAX_DIMENSIONS
  *     MAX_MODULES
  *     MAX_FANOUT
- *     FPGA family identifiers
- *     ASIC identifiers
- *     board identifiers
- *     physical pin numbers
- *     physical addresses
- *     routing coordinates
- *     topology assumptions.
+ *     MAX_DEVICES
  *
- * Such information belongs to hardware/resource/target/deployment layers.
+ * A practical implementation may run out of memory or compilation resources,
+ * but such implementation limits are not language-level semantic limits.
  *
  * ============================================================================
- * LEXER INTEGRATION
+ * HARDWARE INDEPENDENCE
  * ============================================================================
  *
- * This grammar must use the repository's canonical lexer vocabulary.
+ * This grammar MUST NOT encode:
  *
- * The exact token-vocabulary name MUST be the one selected as authoritative
- * by grammar/lexer/ and the parser build.
+ *     physical pin numbers;
+ *     FPGA routing identifiers;
+ *     ASIC metal identifiers;
+ *     package locations;
+ *     board identifiers;
+ *     physical addresses;
+ *     vendor primitives;
+ *     fixed device topology;
+ *     fixed register widths;
+ *     fixed memory sizes;
+ *     fixed accelerator counts.
  *
- * No second lexer is defined here.
+ * For example:
  *
- * The following lexical categories are expected from the canonical lexer:
+ *     signal data: logic[WIDTH];
+ *
+ * is valid logical source intent.
+ *
+ * The grammar does not decide whether WIDTH is realized by:
+ *
+ *     one wire;
+ *     multiple wires;
+ *     a bus;
+ *     a vector register;
+ *     an accelerator interface;
+ *     distributed communication;
+ *     another target-specific mechanism.
+ *
+ * ============================================================================
+ * AST CONTRACT
+ * ============================================================================
+ *
+ * The frontend AST must be able to preserve at least:
+ *
+ *     SignalDeclaration
+ *     SignalDeclarator
+ *     SignalName
+ *     SignalType
+ *     SignalDimension
+ *     SignalInitializer
+ *     SignalConstraint
+ *     SignalReference
+ *     SignalSelection
+ *     SignalIndex
+ *     SignalSlice
+ *     SignalMemberAccess
+ *     SignalAssignment
+ *     SignalAlias
+ *     SignalGroup
+ *
+ * Exact Rust AST type names belong to:
+ *
+ *     src/frontend/ast/
+ *
+ * This grammar does not construct AST objects.
+ *
+ * Source spans must remain available through the parser/frontend pipeline.
+ *
+ * ============================================================================
+ * SEMANTIC CONTRACT
+ * ============================================================================
+ *
+ * Semantic analysis owns:
+ *
+ *     - declaration/name uniqueness;
+ *     - signal scope;
+ *     - type validity;
+ *     - dimension validity;
+ *     - dimension evaluation;
+ *     - width compatibility;
+ *     - shape compatibility;
+ *     - initializer compatibility;
+ *     - assignment legality;
+ *     - read/write legality;
+ *     - driver analysis;
+ *     - alias validity;
+ *     - group validity;
+ *     - clock-domain rules;
+ *     - reset rules;
+ *     - protocol rules;
+ *     - capability requirements;
+ *     - resource requirements;
+ *     - target feasibility.
+ *
+ * Parsing must not perform these checks.
+ *
+ * ============================================================================
+ * RESOURCE / CAPABILITY BOUNDARY
+ * ============================================================================
+ *
+ * The grammar describes logical signal requirements.
+ *
+ * It does not decide whether a target has:
+ *
+ *     enough routing;
+ *     enough I/O;
+ *     enough storage;
+ *     enough registers;
+ *     enough memory;
+ *     enough lanes;
+ *     enough bandwidth;
+ *     enough devices.
+ *
+ * Such decisions belong downstream to:
+ *
+ *     semantic resource analysis;
+ *     hardware capabilities;
+ *     compilation;
+ *     scheduling;
+ *     placement;
+ *     routing;
+ *     synthesis;
+ *     deployment;
+ *     runtime.
+ *
+ * ============================================================================
+ * CROSS-DOMAIN INTEGRATION
+ * ============================================================================
+ *
+ * Classical:
+ *
+ *     Signals may carry classical values.
+ *
+ * Quantum:
+ *
+ *     A signal may participate in a quantum/classical control boundary when
+ *     explicitly permitted by the semantic model.
+ *
+ *     This grammar does not define quantum operations.
+ *
+ * Hybrid:
+ *
+ *     Signals may connect classical control and quantum-facing HDL structures.
+ *
+ * Hardware:
+ *
+ *     Hardware realization consumes the logical signal contract.
+ *
+ * Distributed:
+ *
+ *     A signal may eventually be lowered to a communication mechanism, but
+ *     this grammar does not turn a signal into a network endpoint.
+ *
+ * ============================================================================
+ * DETERMINISM
+ * ============================================================================
+ *
+ * This grammar contains:
+ *
+ *     - no actions;
+ *     - no semantic predicates;
+ *     - no runtime callbacks;
+ *     - no filesystem access;
+ *     - no network access;
+ *     - no hardware discovery;
+ *     - no randomness.
+ *
+ * For a fixed token stream and grammar version, parsing is deterministic.
+ *
+ * ============================================================================
+ * SECURITY
+ * ============================================================================
+ *
+ * Signal expressions and attributes are untrusted source input.
+ *
+ * Parsing must never:
+ *
+ *     execute expressions;
+ *     access files;
+ *     access devices;
+ *     access networks;
+ *     discover hardware;
+ *     execute commands.
+ *
+ * Evaluation belongs to controlled semantic/compile-time subsystems.
+ *
+ * ============================================================================
+ * PUBLIC RULE CONTRACT
+ * ============================================================================
+ *
+ * Stable public rules supplied by this delegate:
+ *
+ *     hdlSignalDeclaration
+ *     hdlSignalDeclarationList
+ *     hdlSignalDeclarationItem
+ *     hdlSignalDeclarator
+ *     hdlSignalName
+ *     hdlSignalType
+ *     hdlSignalDimension
+ *     hdlSignalDimensions
+ *     hdlSignalInitializer
+ *     hdlSignalConstraint
+ *     hdlSignalReference
+ *     hdlSignalSelection
+ *     hdlSignalIndex
+ *     hdlSignalSlice
+ *     hdlSignalMemberAccess
+ *     hdlSignalAssignment
+ *     hdlSignalAlias
+ *     hdlSignalGroup
+ *     hdlSignalGroupMember
+ *     hdlSignalDeclarationSequence
+ *
+ * Shared rules such as:
  *
  *     identifier
- *     integer/numeric literals
- *     string literals
- *     boolean literals
- *     punctuation
- *     operators
- *     annotation markers
+ *     qualifiedName
+ *     typeExpression
+ *     expression
+ *     rangeExpression
+ *     attribute
  *
- * HDL keywords may either be canonical lexer tokens or contextual identifiers,
- * according to the repository's final keyword policy.
+ * are intentionally NOT redefined here.
  *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * PARSER GRAMMAR
- * ============================================================================
- *
- * NOTE:
- *
- * The grammar name must match the actual ANTLR grammar filename according to
- * the repository's ANTLR build convention.
- *
- * If the repository retains hyphenated source filenames, the build system must
- * map them explicitly to valid ANTLR grammar identifiers. Prefer valid
- * underscore/camel-case filenames for independently compilable ANTLR grammars.
  * ============================================================================
  */
 
@@ -249,29 +496,29 @@ options {
 
 /*
  * ============================================================================
- * 1. PUBLIC SIGNAL DECLARATION ENTRY POINT
+ * 1. SIGNAL DECLARATION
  * ============================================================================
  *
- * A complete logical signal declaration.
- *
- * Canonical conceptual forms:
+ * Canonical logical forms:
  *
  *     signal data: logic;
  *     signal valid: bool;
- *     signal data: logic[WIDTH];
- *     signal matrix: logic[ROWS][COLS];
+ *     signal data: Vector<bit, WIDTH>;
+ *     signal matrix: Matrix<logic, ROWS, COLS>;
  *
- * The semicolon is accepted as an optional parser boundary so the surrounding
- * HDL grammar can own statement termination policy where appropriate.
+ * Type semantics belong to grammar/types/ and semantic analysis.
+ *
+ * The semicolon is mandatory for a complete declaration.
+ *
+ * The enclosing HDL module/interface grammar may consume this rule directly.
  * ============================================================================
  */
 
 hdlSignalDeclaration
-    : hdlSignalAttributes?
-      hdlSignalModifiers*
-      hdlSignalKeyword
-      hdlSignalDeclaratorList
-      SEMICOLON?
+    : attribute*
+      K_SIGNAL
+      hdlSignalDeclarationList
+      SEMICOLON
     ;
 
 
@@ -280,113 +527,67 @@ hdlSignalDeclaration
  * 2. SIGNAL DECLARATION LIST
  * ============================================================================
  *
- * Multiple signals may share a declaration context.
+ * A declaration list may contain arbitrarily many declarators.
  *
- * No fixed cardinality is imposed.
+ * Example:
+ *
+ *     signal a: logic, b: logic, c: logic;
+ *
+ * No finite cardinality is imposed.
  * ============================================================================
  */
 
-hdlSignalDeclaratorList
-    : hdlSignalDeclarator
+hdlSignalDeclarationList
+    : hdlSignalDeclarationItem
       (
           COMMA
-          hdlSignalDeclarator
+          hdlSignalDeclarationItem
       )*
       COMMA?
     ;
 
 
+/*
+ * ============================================================================
+ * 3. SIGNAL DECLARATION ITEM
+ * ============================================================================
+ *
+ * This rule deliberately excludes the signal keyword and terminator.
+ *
+ * That makes it safe for declaration-list composition.
+ * ============================================================================
+ */
+
+hdlSignalDeclarationItem
+    : hdlSignalDeclarator
+    ;
+
+
+/*
+ * ============================================================================
+ * 4. SIGNAL DECLARATOR
+ * ============================================================================
+ *
+ * Canonical forms:
+ *
+ *     data
+ *     data: logic
+ *     data: logic[WIDTH]
+ *     data: Vector<bit, WIDTH>
+ *     data: logic[ROWS][COLS] = initial_value
+ *
+ * ============================================================================
+ */
+
 hdlSignalDeclarator
     : hdlSignalName
-      hdlSignalType?
+      (
+          COLON
+          hdlSignalType
+      )?
       hdlSignalDimensions*
       hdlSignalInitializer?
-      hdlSignalConstraints*
-    ;
-
-
-/*
- * ============================================================================
- * 3. SIGNAL KEYWORD
- * ============================================================================
- *
- * The canonical lexer should eventually provide a dedicated HDL signal token
- * where that is part of Zamani's lexical specification.
- *
- * The contextual form is retained to permit migration from an identifier-based
- * HDL vocabulary without embedding lexer policy into this parser component.
- * ============================================================================
- */
-
-hdlSignalKeyword
-    : hdlSignalCanonicalKeyword
-    | hdlContextualSignalKeyword
-    ;
-
-
-hdlSignalCanonicalKeyword
-    : SIGNAL
-    ;
-
-
-hdlContextualSignalKeyword
-    : IDENTIFIER
-    ;
-
-
-/*
- * ============================================================================
- * 4. SIGNAL MODIFIERS
- * ============================================================================
- *
- * Modifiers describe logical source-level semantics.
- *
- * They do not specify physical implementation.
- * ============================================================================
- */
-
-hdlSignalModifiers
-    : hdlSignalModifier
-    ;
-
-
-hdlSignalModifier
-    : hdlSignalConstModifier
-    | hdlSignalMutableModifier
-    | hdlSignalReferenceModifier
-    | hdlSignalInternalModifier
-    | hdlSignalExternalModifier
-    | hdlContextualSignalModifier
-    ;
-
-
-hdlSignalConstModifier
-    : CONST
-    ;
-
-
-hdlSignalMutableModifier
-    : MUT
-    ;
-
-
-hdlSignalReferenceModifier
-    : REF
-    ;
-
-
-hdlSignalInternalModifier
-    : INTERNAL
-    ;
-
-
-hdlSignalExternalModifier
-    : EXTERNAL
-    ;
-
-
-hdlContextualSignalModifier
-    : IDENTIFIER
+      hdlSignalConstraint*
     ;
 
 
@@ -395,9 +596,7 @@ hdlContextualSignalModifier
  * 5. SIGNAL NAME
  * ============================================================================
  *
- * Signal names are logical source symbols.
- *
- * They are not physical identifiers.
+ * Names are owned by the shared core name system.
  * ============================================================================
  */
 
@@ -411,286 +610,167 @@ hdlSignalName
  * 6. SIGNAL TYPE
  * ============================================================================
  *
- * Signal type syntax is deliberately compatible with the shared type system.
+ * The type system owns type syntax.
  *
- * This grammar does not establish whether a type is semantically valid.
- *
- * Examples:
- *
- *     logic
- *     bool
- *     bit
- *     integer
- *     Vector<T>
- *     Bus<T, WIDTH>
- *
- * Type ownership remains in grammar/types/ and the HDL type semantic layer.
+ * This adapter exists only to make the ownership boundary explicit.
  * ============================================================================
  */
 
 hdlSignalType
-    : COLON
-      hdlSignalTypeExpression
-    ;
-
-
-hdlSignalTypeExpression
-    : hdlSignalTypePrimary
-      hdlSignalTypeSuffix*
-    ;
-
-
-hdlSignalTypePrimary
-    : identifier
-    | hdlSignalQualifiedType
-    | LPAREN
-      hdlSignalTypeExpression
-      RPAREN
-    ;
-
-
-hdlSignalQualifiedType
-    : identifier
-      (
-          DOUBLE_COLON
-          identifier
-      )*
-    ;
-
-
-hdlSignalTypeSuffix
-    : LT
-      hdlSignalTypeArguments?
-      GT
-    | LBRACKET
-      hdlSignalDimensionExpression?
-      RBRACKET
-    ;
-
-
-hdlSignalTypeArguments
-    : hdlSignalTypeArgument
-      (
-          COMMA
-          hdlSignalTypeArgument
-      )*
-      COMMA?
-    ;
-
-
-hdlSignalTypeArgument
-    : hdlSignalTypeExpression
-    | hdlSignalExpression
+    : typeExpression
     ;
 
 
 /*
  * ============================================================================
- * 7. SIGNAL DIMENSIONS
+ * 7. SIGNAL DIMENSION
  * ============================================================================
  *
- * Dimensions represent logical shape.
+ * A dimension is a logical shape/indexing declaration.
  *
- * They do not represent:
+ * It is not a physical resource declaration.
  *
- *     memory capacity;
- *     physical wiring;
- *     hardware resource count.
+ * Examples:
+ *
+ *     [WIDTH]
+ *     [ROWS]
+ *     [0..WIDTH-1]
+ *     [LOW..HIGH]
+ *
+ * The canonical range/expression grammar owns the actual expression syntax.
  * ============================================================================
  */
 
-hdlSignalDimensions
+hdlSignalDimension
     : LBRACKET
-      hdlSignalDimensionExpression?
+      (
+          rangeExpression
+        | expression
+      )?
       RBRACKET
     ;
 
 
-hdlSignalDimensionExpression
-    : hdlSignalRangeExpression
-    ;
-
-
-hdlSignalRangeExpression
-    : hdlSignalExpression
-      hdlSignalRangeOperator?
-      hdlSignalExpression?
-    ;
-
-
-hdlSignalRangeOperator
-    : COLON
-    | DOT_DOT
-    | DOT_DOT_EQ
+hdlSignalDimensions
+    : hdlSignalDimension
     ;
 
 
 /*
  * ============================================================================
- * 8. INITIALIZATION
+ * 8. SIGNAL INITIALIZER
  * ============================================================================
  *
- * Signal initialization is source-level initialization semantics.
+ * Initialization is structural syntax.
  *
- * Whether the target technology supports the resulting initialization is
- * determined later.
+ * Whether initialization is legal for a particular HDL target is semantic.
  * ============================================================================
  */
 
 hdlSignalInitializer
     : ASSIGN
-      hdlSignalExpression
+      expression
     ;
 
 
 /*
  * ============================================================================
- * 9. SIGNAL ATTRIBUTES
+ * 9. SIGNAL CONSTRAINT
  * ============================================================================
  *
- * Attributes provide extensible source-level metadata.
+ * A signal constraint is source-level metadata/contract syntax.
  *
- * They must not silently imply target-specific behavior.
+ * It does not perform target analysis.
+ *
+ * Attribute syntax itself belongs to grammar/core/attributes.g4.
  * ============================================================================
  */
-
-hdlSignalAttributes
-    : hdlSignalAttribute+
-    ;
-
-
-hdlSignalAttribute
-    : AT
-      identifier
-      (
-          LPAREN
-          hdlSignalArgumentList?
-          RPAREN
-      )?
-    ;
-
-
-hdlSignalArgumentList
-    : hdlSignalArgument
-      (
-          COMMA
-          hdlSignalArgument
-      )*
-      COMMA?
-    ;
-
-
-hdlSignalArgument
-    : identifier
-      ASSIGN
-      hdlSignalExpression
-    | hdlSignalExpression
-    ;
-
-
-/*
- * ============================================================================
- * 10. SIGNAL CONSTRAINTS
- * ============================================================================
- *
- * These are source-level/logical constraints.
- *
- * Physical constraints must be represented in the target/deployment
- * constraint system rather than embedded into logical signal syntax.
- * ============================================================================
- */
-
-hdlSignalConstraints
-    : hdlSignalConstraint
-    ;
-
 
 hdlSignalConstraint
-    : hdlSignalAttributeConstraint
-    | hdlSignalExpressionConstraint
-    ;
-
-
-hdlSignalAttributeConstraint
-    : AT
-      identifier
-      (
-          LPAREN
-          hdlSignalArgumentList?
-          RPAREN
-      )?
-    ;
-
-
-hdlSignalExpressionConstraint
-    : LBRACE
-      hdlSignalConstraintExpressions?
-      RBRACE
-    ;
-
-
-hdlSignalConstraintExpressions
-    : hdlSignalExpression
-      (
-          COMMA
-          hdlSignalExpression
-      )*
-      COMMA?
+    : attribute
     ;
 
 
 /*
  * ============================================================================
- * 11. SIGNAL REFERENCE
+ * 10. SIGNAL REFERENCE
  * ============================================================================
  *
- * A signal reference is a logical reference to a declared signal.
+ * A reference uses the canonical name system.
+ *
+ * Examples:
+ *
+ *     data
+ *     block.data
+ *     module::data
  * ============================================================================
  */
 
 hdlSignalReference
-    : hdlSignalName
-    | hdlSignalQualifiedReference
-    ;
-
-
-hdlSignalQualifiedReference
-    : identifier
-      (
-          DOUBLE_COLON
-          identifier
-      )+
+    : qualifiedName
     ;
 
 
 /*
  * ============================================================================
- * 12. SIGNAL INDEXING
+ * 11. SIGNAL INDEX
  * ============================================================================
  *
- * Indexing selects part of a logical signal value.
+ * Index expressions are canonical expressions.
  *
- * Semantic analysis determines:
+ * Example:
  *
- *     - whether the signal is indexable;
- *     - whether the index is in range;
- *     - whether the resulting type is valid.
+ *     data[i]
+ *
+ * Bounds and indexability are semantic checks.
  * ============================================================================
  */
 
 hdlSignalIndex
     : LBRACKET
-      hdlSignalExpression
+      expression
       RBRACKET
     ;
 
+
+/*
+ * ============================================================================
+ * 12. SIGNAL SLICE
+ * ============================================================================
+ *
+ * Slice/range syntax is owned by the canonical range expression grammar.
+ *
+ * Example:
+ *
+ *     data[high..low]
+ *
+ * The exact range operator is determined by the canonical expression
+ * specification.
+ * ============================================================================
+ */
 
 hdlSignalSlice
     : LBRACKET
-      hdlSignalRangeExpression
+      rangeExpression
       RBRACKET
     ;
 
+
+/*
+ * ============================================================================
+ * 13. SIGNAL SELECTION
+ * ============================================================================
+ *
+ * Selection may contain indexing and slicing.
+ *
+ * Examples:
+ *
+ *     data[i]
+ *     data[high..low]
+ *     block.data[i]
+ *
+ * ============================================================================
+ */
 
 hdlSignalSelection
     : hdlSignalReference
@@ -703,14 +783,16 @@ hdlSignalSelection
 
 /*
  * ============================================================================
- * 13. SIGNAL MEMBER SELECTION
+ * 14. SIGNAL MEMBER ACCESS
  * ============================================================================
  *
- * Allows structured/record-like signal values to expose logical members.
+ * Member access uses canonical expression/name punctuation.
+ *
+ * This rule exists as an explicit HDL semantic boundary.
  * ============================================================================
  */
 
-hdlSignalMemberSelection
+hdlSignalMemberAccess
     : hdlSignalReference
       (
           DOT
@@ -721,7 +803,7 @@ hdlSignalMemberSelection
 
 /*
  * ============================================================================
- * 14. SIGNAL ACCESS
+ * 15. SIGNAL ACCESS
  * ============================================================================
  *
  * Unified source-level signal access.
@@ -730,55 +812,35 @@ hdlSignalMemberSelection
 
 hdlSignalAccess
     : hdlSignalSelection
-    | hdlSignalMemberSelection
+    | hdlSignalMemberAccess
     | hdlSignalReference
     ;
 
 
 /*
  * ============================================================================
- * 15. SIGNAL ASSIGNMENT
+ * 16. SIGNAL ASSIGNMENT
  * ============================================================================
  *
- * This rule describes logical assignment syntax only.
+ * Assignment establishes a logical source-level relationship.
  *
- * It does not determine:
+ * It does not decide:
  *
- *     combinational vs sequential semantics;
+ *     combinational behavior;
+ *     sequential behavior;
  *     clocking;
  *     scheduling;
- *     propagation delay;
- *     physical routing;
- *     synthesis strategy.
+ *     propagation;
+ *     physical routing.
  *
- * Those are owned by the appropriate HDL semantic grammars.
  * ============================================================================
  */
 
 hdlSignalAssignment
     : hdlSignalAccess
       ASSIGN
-      hdlSignalExpression
-      SEMICOLON?
-    ;
-
-
-/*
- * ============================================================================
- * 16. SIGNAL CONNECTION
- * ============================================================================
- *
- * A signal connection establishes a source-level relationship.
- *
- * Physical netlist construction is downstream.
- * ============================================================================
- */
-
-hdlSignalConnection
-    : hdlSignalAccess
-      ASSIGN
-      hdlSignalAccess
-      SEMICOLON?
+      expression
+      SEMICOLON
     ;
 
 
@@ -787,29 +849,18 @@ hdlSignalConnection
  * 17. SIGNAL ALIAS
  * ============================================================================
  *
- * Alias declarations introduce an additional logical name.
+ * An alias introduces another logical name.
  *
- * They do not create an additional physical resource.
+ * It does not create another physical hardware resource.
  * ============================================================================
  */
 
 hdlSignalAlias
-    : hdlSignalAliasKeyword
+    : ALIAS
       hdlSignalName
       ASSIGN
       hdlSignalAccess
-      SEMICOLON?
-    ;
-
-
-hdlSignalAliasKeyword
-    : ALIAS
-    | hdlContextualAliasKeyword
-    ;
-
-
-hdlContextualAliasKeyword
-    : IDENTIFIER
+      SEMICOLON
     ;
 
 
@@ -818,51 +869,47 @@ hdlContextualAliasKeyword
  * 18. SIGNAL GROUP
  * ============================================================================
  *
- * Signal groups provide logical grouping without a fixed number of members.
+ * Groups are logical source-level structures.
  *
- * Example conceptual form:
+ * They impose no fixed member count.
  *
- *     signal_group control {
- *         signal valid: bool;
- *         signal ready: bool;
- *     }
- *
- * The containing HDL semantic layer determines whether the grouping has
- * structural significance.
  * ============================================================================
  */
 
 hdlSignalGroup
-    : hdlSignalGroupKeyword
+    : SIGNAL_GROUP
       hdlSignalGroupName?
-      hdlSignalGroupType?
+      (
+          COLON
+          typeExpression
+      )?
       LBRACE
       hdlSignalGroupMember*
       RBRACE
     ;
 
 
-hdlSignalGroupKeyword
-    : SIGNAL_GROUP
-    | hdlContextualSignalGroupKeyword
-    ;
-
-
-hdlContextualSignalGroupKeyword
-    : IDENTIFIER
-    ;
-
+/*
+ * ============================================================================
+ * 19. SIGNAL GROUP NAME
+ * ============================================================================
+ */
 
 hdlSignalGroupName
     : identifier
     ;
 
 
-hdlSignalGroupType
-    : COLON
-      hdlSignalTypeExpression
-    ;
-
+/*
+ * ============================================================================
+ * 20. SIGNAL GROUP MEMBER
+ * ============================================================================
+ *
+ * A group may contain signals or nested groups.
+ *
+ * The semantic layer determines whether recursive grouping is permitted.
+ * ============================================================================
+ */
 
 hdlSignalGroupMember
     : hdlSignalDeclaration
@@ -872,10 +919,12 @@ hdlSignalGroupMember
 
 /*
  * ============================================================================
- * 19. SIGNAL DECLARATION SEQUENCE
+ * 21. SIGNAL DECLARATION SEQUENCE
  * ============================================================================
  *
- * Used by HDL modules, interfaces, architectures and other HDL contexts.
+ * Used by HDL modules, interfaces and other HDL declaration contexts.
+ *
+ * No fixed number of declarations is imposed.
  * ============================================================================
  */
 
@@ -889,7 +938,7 @@ hdlSignalDeclarationSequence
 
 /*
  * ============================================================================
- * 20. SIGNAL REFERENCE LIST
+ * 22. SIGNAL REFERENCE LIST
  * ============================================================================
  */
 
@@ -905,168 +954,26 @@ hdlSignalReferenceList
 
 /*
  * ============================================================================
- * 21. SIGNAL EXPRESSION
- * ============================================================================
- *
- * This expression grammar intentionally supports the compile-time/logical
- * expression forms needed by signal dimensions, initializers and constraints.
- *
- * It is NOT intended to replace Zamani's universal expression grammar.
- *
- * The final integrated parser should reuse the canonical expression rules
- * wherever parser composition permits.
+ * 23. SIGNAL ASSIGNMENT LIST
  * ============================================================================
  */
 
-hdlSignalExpression
-    : hdlSignalLogicalOrExpression
-    ;
-
-
-hdlSignalLogicalOrExpression
-    : hdlSignalLogicalAndExpression
-      (
-          LOGICAL_OR
-          hdlSignalLogicalAndExpression
-      )*
-    ;
-
-
-hdlSignalLogicalAndExpression
-    : hdlSignalBitwiseOrExpression
-      (
-          LOGICAL_AND
-          hdlSignalBitwiseOrExpression
-      )*
-    ;
-
-
-hdlSignalBitwiseOrExpression
-    : hdlSignalBitwiseXorExpression
-      (
-          PIPE
-          hdlSignalBitwiseXorExpression
-      )*
-    ;
-
-
-hdlSignalBitwiseXorExpression
-    : hdlSignalBitwiseAndExpression
-      (
-          CARET
-          hdlSignalBitwiseAndExpression
-      )*
-    ;
-
-
-hdlSignalBitwiseAndExpression
-    : hdlSignalEqualityExpression
-      (
-          AMPERSAND
-          hdlSignalEqualityExpression
-      )*
-    ;
-
-
-hdlSignalEqualityExpression
-    : hdlSignalRelationalExpression
-      (
-          (
-              EQUAL_EQUAL
-            | NOT_EQUAL
-          )
-          hdlSignalRelationalExpression
-      )*
-    ;
-
-
-hdlSignalRelationalExpression
-    : hdlSignalAdditiveExpression
-      (
-          (
-              LT
-            | GT
-            | LESS_EQUAL
-            | GREATER_EQUAL
-          )
-          hdlSignalAdditiveExpression
-      )*
-    ;
-
-
-hdlSignalAdditiveExpression
-    : hdlSignalMultiplicativeExpression
-      (
-          (
-              PLUS
-            | MINUS
-          )
-          hdlSignalMultiplicativeExpression
-      )*
-    ;
-
-
-hdlSignalMultiplicativeExpression
-    : hdlSignalUnaryExpression
-      (
-          (
-              STAR
-            | SLASH
-            | PERCENT
-          )
-          hdlSignalUnaryExpression
-      )*
-    ;
-
-
-hdlSignalUnaryExpression
-    : (
-          PLUS
-        | MINUS
-        | EXCLAMATION
-        | TILDE
-      )
-      hdlSignalUnaryExpression
-    | hdlSignalPrimaryExpression
-    ;
-
-
-hdlSignalPrimaryExpression
-    : hdlSignalReference
-    | INTEGER
-    | FLOAT
-    | STRING
-    | TRUE
-    | FALSE
-    | LPAREN
-      hdlSignalExpression
-      RPAREN
+hdlSignalAssignmentList
+    : hdlSignalAssignment*
     ;
 
 
 /*
  * ============================================================================
- * 22. SIGNAL VECTOR CONSTRUCTION
- * ============================================================================
- *
- * Logical construction of aggregate signal values.
- *
- * This does not dictate a target-specific implementation.
+ * 24. SIGNAL SELECTION LIST
  * ============================================================================
  */
 
-hdlSignalAggregate
-    : LBRACE
-      hdlSignalAggregateElements?
-      RBRACE
-    ;
-
-
-hdlSignalAggregateElements
-    : hdlSignalExpression
+hdlSignalSelectionList
+    : hdlSignalSelection
       (
           COMMA
-          hdlSignalExpression
+          hdlSignalSelection
       )*
       COMMA?
     ;
@@ -1074,808 +981,191 @@ hdlSignalAggregateElements
 
 /*
  * ============================================================================
- * 23. SIGNAL CAST
- * ============================================================================
- *
- * Source-level conversion syntax.
- *
- * Semantic/type analysis determines legality.
+ * 25. SIGNAL ACCESS LIST
  * ============================================================================
  */
 
-hdlSignalCast
-    : LPAREN
-      hdlSignalTypeExpression
-      RPAREN
-      hdlSignalExpression
-    ;
-
-
-/*
- * ============================================================================
- * 24. SIGNAL CONSTANT EXPRESSION
- * ============================================================================
- *
- * Used where a declaration requires a compile-time evaluable expression.
- *
- * The grammar does not guarantee compile-time evaluation.
- * That is a semantic/compiler responsibility.
- * ============================================================================
- */
-
-hdlSignalConstantExpression
-    : hdlSignalExpression
-    ;
-
-
-/*
- * ============================================================================
- * 25. SIGNAL WIDTH EXPRESSION
- * ============================================================================
- *
- * Width is a semantic quantity and may be symbolic.
- *
- * Examples:
- *
- *     WIDTH
- *     DATA_WIDTH
- *     LANES * ELEMENT_WIDTH
- *
- * No machine limit is embedded here.
- * ============================================================================
- */
-
-hdlSignalWidthExpression
-    : hdlSignalConstantExpression
-    ;
-
-
-/*
- * ============================================================================
- * 26. SIGNAL RANGE
- * ============================================================================
- */
-
-hdlSignalRange
-    : LBRACKET
-      hdlSignalRangeExpression
-      RBRACKET
-    ;
-
-
-/*
- * ============================================================================
- * 27. SIGNAL DECLARATION WITH EXPLICIT RANGE
- * ============================================================================
- *
- * Convenience composition rule for callers that need to distinguish an
- * explicitly ranged signal from a scalar declaration.
- * ============================================================================
- */
-
-hdlRangedSignalDeclarator
-    : hdlSignalName
-      hdlSignalType?
-      hdlSignalRange+
-      hdlSignalInitializer?
-      hdlSignalConstraints*
-    ;
-
-
-/*
- * ============================================================================
- * 28. SIGNAL COLLECTION
- * ============================================================================
- *
- * A named collection is logical source structure, not a hardware count.
- * ============================================================================
- */
-
-hdlSignalCollection
-    : hdlSignalCollectionKeyword
-      hdlSignalName
+hdlSignalAccessList
+    : hdlSignalAccess
       (
-          COLON
-          hdlSignalTypeExpression
-      )?
-      LBRACE
-      hdlSignalCollectionMember*
-      RBRACE
-    ;
-
-
-hdlSignalCollectionKeyword
-    : SIGNALS
-    | hdlContextualSignalCollectionKeyword
-    ;
-
-
-hdlContextualSignalCollectionKeyword
-    : IDENTIFIER
-    ;
-
-
-hdlSignalCollectionMember
-    : hdlSignalDeclaration
-    | hdlSignalGroup
-    | hdlSignalAlias
+          COMMA
+          hdlSignalAccess
+      )*
+      COMMA?
     ;
 
 
 /*
  * ============================================================================
- * 29. PUBLIC REFERENCE CONTRACT
+ * 26. COMPLETION / INTEGRATION CONTRACT
  * ============================================================================
  *
- * The following rules are intended as stable integration points:
- *
- *     hdlSignalDeclaration
- *     hdlSignalDeclarationSequence
- *     hdlSignalDeclarator
- *     hdlSignalReference
- *     hdlSignalAccess
- *     hdlSignalAssignment
- *     hdlSignalConnection
- *     hdlSignalGroup
- *
- * Other HDL grammars should consume these rules instead of duplicating signal
- * syntax.
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 30. INTEGRATION WITH PORTS
- * ============================================================================
- *
- * Ports and signals are distinct concepts.
- *
- * PORT:
- *
- *     module/interface boundary.
- *
- * SIGNAL:
- *
- *     internal or logically declared HDL value carrier.
- *
- * A signal may be associated with a port by semantic analysis or an explicit
- * connection construct.
- *
- * ports.g4 MUST NOT duplicate these signal declaration rules.
- *
- * signals.g4 MUST NOT duplicate port declarations.
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 31. INTEGRATION WITH WIRES
- * ============================================================================
- *
- * signals.g4:
- *
- *     logical signal declaration/reference.
- *
- * wires.g4:
- *
- *     connectivity/net semantics.
- *
- * A wire may connect signals, ports and other HDL objects.
- *
- * signals.g4 must not determine physical connectivity.
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 32. INTEGRATION WITH REGISTERS
- * ============================================================================
- *
- * registers.g4 owns storage/state semantics.
- *
- * A register may expose or consume signals.
- *
- * signals.g4 does not define:
- *
- *     clock edge semantics;
- *     reset semantics;
- *     state retention;
- *     sequential scheduling.
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 33. INTEGRATION WITH CLOCKS
- * ============================================================================
- *
- * clocks.g4 owns clock declarations and clock-domain semantics.
- *
- * A signal may be associated with a clock domain semantically, but this file
- * does not create clock definitions or timing models.
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 34. INTEGRATION WITH PROCESSES
- * ============================================================================
- *
- * processes.g4 owns process execution semantics.
- *
- * Processes may read/write/reference signals through:
- *
- *     hdlSignalReference
- *     hdlSignalAccess
- *     hdlSignalAssignment
- *
- * This prevents process grammar from creating duplicate signal syntax.
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 35. INTEGRATION WITH COMBINATIONAL/SEQUENTIAL GRAMMARS
- * ============================================================================
- *
- * combinational.g4 and sequential.g4 may consume signal references and
- * assignments.
- *
- * They determine the semantic execution class.
- *
- * signals.g4 does not decide whether an assignment is combinational or
- * sequential merely from its syntax.
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 36. INTEGRATION WITH STATE MACHINES
- * ============================================================================
- *
- * state-machines.g4 may use signal references for:
- *
- *     state inputs;
- *     transition conditions;
- *     outputs;
- *     control signals.
- *
- * State-machine semantics remain owned by state-machines.g4.
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 37. INTEGRATION WITH HARDWARE MODULES
- * ============================================================================
- *
- * hardware-modules.g4 consumes:
- *
- *     hdlSignalDeclaration
- *     hdlSignalDeclarationSequence
- *     hdlSignalGroup
- *     hdlSignalReference
- *
- * A hardware module owns containment.
- *
- * This file owns signal syntax.
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 38. INTEGRATION WITH HARDWARE INTERFACES
- * ============================================================================
+ * This file is complete when:
  *
- * hardware-interfaces.g4 may expose signal contracts as part of an interface.
+ * [x] Signal syntax has one owner.
  *
- * Interface semantics remain separate from internal signal implementation.
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 39. INTEGRATION WITH HARDWARE PARAMETERS / GENERICS
- * ============================================================================
- *
- * Signal dimensions and widths may reference generic/parameter symbols.
- *
- * Example:
- *
- *     signal data: logic[WIDTH];
- *
- * WIDTH resolution belongs to generic/parameter semantic analysis.
+ * [x] General identifiers are delegated to core.
  *
- * signals.g4 must not define generic evaluation.
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 40. INTEGRATION WITH RESOURCE MODEL
- * ============================================================================
- *
- * A signal declaration does not reserve physical resources.
+ * [x] Qualified names are delegated to core.
  *
- * Resource analysis may later derive requirements such as:
- *
- *     width;
- *     fanout;
- *     bandwidth;
- *     storage;
- *     connectivity;
- *     timing;
- *
- * Those are downstream interpretations.
- *
- * This file must never convert a signal into a fixed physical allocation.
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 41. INTEGRATION WITH HARDWARE TARGETS
- * ============================================================================
+ * [x] General expressions are delegated to expressions.
  *
- * Hardware target information is external to this grammar.
+ * [x] General types are delegated to types.
  *
- * Examples:
+ * [x] Attribute syntax is delegated to core attributes.
  *
- *     FPGA family
- *     ASIC technology
- *     package
- *     board
- *     device
- *     physical I/O
+ * [x] No duplicate expression precedence hierarchy exists here.
  *
- * must be represented by target/deployment models rather than source signal
- * syntax unless the user explicitly expresses a semantic target requirement.
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 42. QUANTUM / HYBRID INTEGRATION
- * ============================================================================
+ * [x] No duplicate type system exists here.
  *
- * Signals may carry classical control/data associated with quantum operations.
+ * [x] No duplicate attribute system exists here.
  *
- * This grammar MUST NOT define quantum operations.
+ * [x] No physical hardware assumption exists here.
  *
- * Quantum syntax remains owned by:
+ * [x] No machine-size limit exists here.
  *
- *     grammar/quantum/
+ * [x] No quantum gate vocabulary exists here.
  *
- * Quantum semantic lowering remains connected to:
+ * [x] No quantum IR exists here.
  *
- *     quantum::ir
+ * [x] No QEC implementation exists here.
  *
- * Hybrid grammar may compose:
+ * [x] No ZQN implementation exists here.
  *
- *     classical expression
- *          +
- *     signal reference
- *          +
- *     quantum semantic operation
+ * [x] No routing/placement implementation exists here.
  *
- * without making signals a second quantum representation.
+ * [x] No scheduling implementation exists here.
  *
- * QEC and ZQN remain outside this grammar.
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 43. AST CONTRACT
- * ============================================================================
+ * [x] No hardware discovery exists here.
  *
- * The frontend AST representation generated from this grammar should preserve:
- *
- *     declaration span;
- *     declaration modifiers;
- *     signal name;
- *     type syntax;
- *     dimensions;
- *     initializer;
- *     attributes;
- *     constraints;
- *     source ordering;
- *     source locations;
- *     qualified references.
- *
- * The parser must not manufacture:
- *
- *     physical IDs;
- *     device IDs;
- *     resource allocations;
- *     scheduling decisions;
- *     routing decisions.
- *
- * AST nodes should retain symbolic expressions rather than prematurely
- * evaluating target-dependent quantities.
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 44. SEMANTIC CONTRACT
- * ============================================================================
+ * [x] No runtime behavior exists here.
  *
- * Semantic analysis must subsequently determine:
- *
- *     - duplicate signal names;
- *     - visibility;
- *     - type validity;
- *     - dimension validity;
- *     - width compatibility;
- *     - initialization legality;
- *     - driver legality;
- *     - read/write legality;
- *     - signal/port compatibility;
- *     - clock-domain legality;
- *     - process interaction;
- *     - alias validity;
- *     - constraint validity;
- *     - dialect-specific restrictions.
- *
- * The parser must not perform those semantic decisions.
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 45. IR CONTRACT
- * ============================================================================
+ * [x] No unsafe Rust dependency exists here.
  *
- * signals.g4 does not construct hardware IR.
+ * [x] Signal source spans can be preserved by the parser/frontend.
  *
- * The frontend lowers the validated AST into the repository's canonical
- * hardware semantic representation.
+ * [x] Signal declarations can be consumed by the HDL composition root.
  *
- * If the repository already has a hardware IR, that IR remains authoritative.
+ * [x] Signal syntax can be reused by HDL interfaces/groups without creating
+ *     another signal language.
  *
- * If a canonical hardware IR does not yet exist, its design must be established
- * downstream rather than introducing an ad-hoc IR in this grammar directory.
+ * [x] Signal widths/shapes remain semantic expressions rather than machine
+ *     capacity limits.
  *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 46. COMPILER CONTRACT
- * ============================================================================
+ * [x] Logical signal semantics remain separate from physical realization.
  *
- * Compiler stages may use signal semantics for:
- *
- *     optimization;
- *     dependency analysis;
- *     width inference;
- *     scheduling;
- *     routing;
- *     synthesis;
- *     resource estimation;
- *     target lowering.
- *
- * None of those decisions are encoded as parser actions.
- * ============================================================================
- */
-
-
-/*
  * ============================================================================
- * 47. RUNTIME CONTRACT
+ * REQUIRED REPOSITORY INTEGRATION
  * ============================================================================
  *
- * Runtime does not depend directly on this grammar.
+ * The following contracts must be satisfied by the surrounding repository:
  *
- * Runtime consumes compiled/validated representations.
+ *     grammar/core/
+ *         identifier
+ *         qualifiedName
  *
- * Therefore:
+ *     grammar/expressions/
+ *         expression
+ *         rangeExpression
  *
- *     grammar -> runtime
+ *     grammar/types/
+ *         typeExpression
  *
- * is NOT a direct architectural dependency.
+ *     grammar/core/attributes.g4
+ *         attribute
  *
- * The correct direction is:
- *
- *     grammar
- *        ->
- *     AST
- *        ->
- *     semantic model
- *        ->
- *     compiler/IR
- *        ->
- *     executable/runtime representation.
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 48. TOOLING CONTRACT
- * ============================================================================
+ *     grammar/antlr/ZamaniLexer.g4
+ *         K_SIGNAL
+ *         canonical punctuation/operator tokens
  *
- * Tooling may consume parser/AST information for:
- *
- *     syntax highlighting;
- *     formatting;
- *     navigation;
- *     symbol indexing;
- *     diagnostics;
- *     language servers;
- *     refactoring;
- *     documentation generation.
- *
- * Public rule names should therefore remain stable after release.
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 49. DETERMINISM
- * ============================================================================
+ *     grammar/hdl/hdl.g4
+ *         hdlSignalDeclaration
+ *         hdlSignalGroup
  *
- * This grammar contains:
+ *     grammar/hdl/wires.g4
+ *         signal references where logical connectivity is required
  *
- *     no embedded actions;
- *     no filesystem access;
- *     no network access;
- *     no target discovery;
- *     no runtime state;
- *     no mutable semantic state.
+ *     grammar/hdl/registers.g4
+ *         signal references where storage interfaces are required
  *
- * Parsing therefore depends only on:
+ *     grammar/hdl/processes.g4
+ *         hdlSignalAssignment
  *
- *     source token stream;
- *     grammar version;
- *     parser configuration.
+ *     grammar/hdl/combinational.g4
+ *         hdlSignalAccess
  *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 50. NEGATIVE TEST CONTRACT
- * ============================================================================
+ *     grammar/hdl/sequential.g4
+ *         hdlSignalAccess
  *
- * The test suite must reject malformed forms including:
- *
- *     signal;
- *     signal : logic;
- *     signal data: ;
- *     signal data[;
- *     signal data: logic[];
- *     signal data: logic[WIDTH;
- *     signal data = ;
- *     signal data: logic = ;
- *     signal data, : logic;
- *     signal data: logic,;
- *     malformed attributes;
- *     malformed ranges;
- *     malformed qualified names;
- *     unmatched delimiters.
- *
- * Semantic-invalid but syntactically valid examples must be tested separately.
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 51. POSITIVE TEST CONTRACT
- * ============================================================================
+ *     grammar/hdl/interfaces.g4
+ *         signal declarations inside logical interfaces
  *
- * Tests must cover:
- *
- *     scalar signals;
- *     typed signals;
- *     symbolic widths;
- *     arithmetic widths;
- *     multidimensional signals;
- *     parameterized signal types;
- *     initializers;
- *     attributes;
- *     constraints;
- *     qualified references;
- *     indexing;
- *     slicing;
- *     member selection;
- *     assignments;
- *     connections;
- *     aliases;
- *     signal groups;
- *     declaration lists;
- *     large generated signal collections.
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 52. SCALABILITY TEST CONTRACT
- * ============================================================================
+ *     grammar/hardware/
+ *         capability/resource/realization analysis
  *
- * Generate test sources containing:
+ *     grammar/resources/
+ *         resource requirements and constraints
  *
- *     one signal;
- *     many signals;
- *     very large symbolic widths;
- *     many dimensions;
- *     large declaration sequences;
- *     deeply nested logical grouping within parser-resource limits.
+ *     src/frontend/ast/
+ *         domain-neutral AST representation
  *
- * The tests must verify that no grammar rule introduces an artificial machine
- * limit.
+ *     semantic analysis
+ *         signal/type/shape/driver validation
  *
- * "Infinity" here means unbounded by the language grammar; actual execution
- * remains constrained only by available compiler/parser/runtime resources.
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 53. CROSS-DOMAIN TEST CONTRACT
- * ============================================================================
+ *     canonical hardware semantic representation / IR
+ *         logical signal representation
  *
- * Test signal syntax in contexts involving:
- *
- *     classical computation;
- *     quantum-control data;
- *     hybrid quantum/classical computation;
- *     accelerator interfaces;
- *     distributed hardware interfaces;
- *     AI/tensor data paths;
- *     memory systems;
- *     networking hardware;
- *     embedded systems.
- *
- * The tests verify composition, not that signals acquire ownership of those
- * other domains.
- * ============================================================================
- */
-
-
-/*
  * ============================================================================
- * 54. COMPATIBILITY CONTRACT
+ * CRITICAL COMPATIBILITY RULE
  * ============================================================================
  *
- * Existing valid signal syntax must be:
+ * This file intentionally does NOT provide compatibility aliases for the old
+ * locally duplicated rules:
  *
- *     preserved;
- *     migrated;
- *     or explicitly deprecated.
+ *     hdlSignalExpression
+ *     hdlSignalRangeExpression
+ *     hdlSignalRangeOperator
+ *     hdlSignalTypeExpression
+ *     hdlSignalTypePrimary
+ *     hdlSignalTypeSuffix
+ *     hdlSignalTypeArguments
+ *     hdlSignalTypeArgument
  *
- * No existing feature may be silently removed.
+ * They were private duplicates of language-wide concepts and are not used by
+ * the repository's canonical signal consumers.
  *
- * Grammar versioning and migration policy belong to:
+ * If another legacy grammar is found to depend on one of these names, that
+ * grammar should be migrated to:
  *
- *     grammar/compatibility/
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 55. HARD-CODING AUDIT
- * ============================================================================
+ *     expression
+ *     rangeExpression
+ *     typeExpression
+ *     qualifiedName
  *
- * Forbidden:
- *
- *     MAX_SIGNALS
- *     MAX_WIDTH
- *     MAX_DIMENSIONS
- *     MAX_GROUP_SIZE
- *     MAX_FANOUT
- *     MAX_MODULES
- *     MAX_CONNECTIONS
- *     DEVICE_ID
- *     PIN_ID
- *     FPGA_ID
- *     ASIC_ID
- *     BOARD_ID
- *     fixed topology
- *     fixed physical address
- *     fixed hardware count.
- *
- * Numeric literals occurring in source expressions are values, not language
- * resource limits.
+ * rather than restoring a second signal-specific expression/type system.
  *
- * ============================================================================
- */
-
-
-/*
  * ============================================================================
- * 56. SECURITY / SAFETY
+ * FINAL PRINCIPLE
  * ============================================================================
  *
- * This grammar must not:
+ * A Zamani HDL signal describes:
  *
- *     execute expressions;
- *     access files;
- *     access networks;
- *     inspect hardware;
- *     allocate hardware;
- *     invoke drivers;
- *     invoke runtime APIs.
+ *     logical value
+ *     logical shape
+ *     logical relationship
  *
- * Rust integration must remain safe Rust.
+ * It does NOT describe:
  *
- * No `unsafe` code is introduced by this grammar.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 57. COMPLETION CRITERIA
- * ============================================================================
+ *     physical wire count
+ *     FPGA routing track
+ *     ASIC metal segment
+ *     package pin
+ *     device number
+ *     machine topology
  *
- * signals.g4 is COMPLETE only when:
- *
- *     [ ] canonical lexer vocabulary is confirmed;
- *     [ ] canonical token names are confirmed;
- *     [ ] signal declaration syntax is stable;
- *     [ ] signal references are stable;
- *     [ ] signal indexing/slicing is stable;
- *     [ ] signal groups are stable;
- *     [ ] signal attributes are stable;
- *     [ ] signal constraints are stable;
- *     [ ] signal initialization is stable;
- *     [ ] signal assignment syntax is stable;
- *     [ ] no port grammar is duplicated;
- *     [ ] no wire grammar is duplicated;
- *     [ ] no register grammar is duplicated;
- *     [ ] no clock grammar is duplicated;
- *     [ ] no process grammar is duplicated;
- *     [ ] no general type system is duplicated;
- *     [ ] no general expression system is permanently duplicated;
- *     [ ] no physical hardware assumptions exist;
- *     [ ] no fixed machine limits exist;
- *     [ ] no device identifiers exist;
- *     [ ] no resource allocation occurs;
- *     [ ] no scheduling occurs;
- *     [ ] no routing occurs;
- *     [ ] no synthesis occurs;
- *     [ ] no quantum::ir duplication exists;
- *     [ ] no QEC ownership is introduced;
- *     [ ] no ZQN ownership is introduced;
- *     [ ] AST integration is defined;
- *     [ ] semantic integration is defined;
- *     [ ] hardware IR integration is defined;
- *     [ ] compiler integration is defined;
- *     [ ] runtime non-dependency is documented;
- *     [ ] tooling integration is defined;
- *     [ ] positive tests pass;
- *     [ ] negative tests pass;
- *     [ ] boundary tests pass;
- *     [ ] scalability tests pass;
- *     [ ] cross-domain tests pass;
- *     [ ] determinism tests pass;
- *     [ ] compatibility tests pass.
+ * Therefore the same signal grammar can scale from a tiny implementation to
+ * arbitrarily large heterogeneous hardware, subject to actual resources and
+ * semantic requirements at realization time.
  *
  * ============================================================================
  */
