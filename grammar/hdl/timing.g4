@@ -6,69 +6,58 @@
  * File:
  *     grammar/hdl/timing.g4
  *
+ * Status:
+ *     CANONICAL HDL TIMING SYNTAX COMPONENT
+ *
  * Purpose:
- *     Production parser grammar for source-level HDL timing intent.
+ *     Defines portable, source-level timing intent for HDL and
+ *     hardware/software co-design.
  *
  * Grammar technology:
  *     ANTLR4 parser grammar
  *
- * Rust integration baseline:
+ * Rust baseline:
  *     Rust 1.97 / Rust 1.97.1
+ *     Rust edition 2021
  *
  * Safety:
- *     This grammar contains no embedded Rust actions, semantic predicates,
- *     filesystem access, network access, process execution, or unsafe code.
+ *     No embedded Rust.
+ *     No actions.
+ *     No semantic predicates.
+ *     No I/O.
+ *     No hardware access.
+ *     No unsafe implementation.
  *
  * ============================================================================
- * ARCHITECTURAL POSITION
+ * AUTHORITY
  * ============================================================================
  *
- *     Zamani source
+ * Normative architecture:
+ *
+ *     grammar/DESIGN.md
  *          |
  *          v
+ *     grammar/spec/hdl.md
+ *          |
+ *          v
+ *     grammar/hdl/timing.g4
+ *          |
+ *          v
+ *     grammar/hdl/hdl.g4
+ *          |
+ *          v
+ *     grammar/Zamani.g4
+ *
+ * Canonical lexical authority:
+ *
  *     grammar/lexer/tokens.g4
- *          |
- *          |  lexer grammar ZamaniTokens
- *          v
- *     canonical HDL parser
- *          |
- *          +--> hdl.g4
- *          |
- *          +--> clocks.g4
- *          |
- *          +--> timing.g4  <--- THIS FILE
- *          |
- *          +--> combinational.g4
- *          +--> sequential.g4
- *          +--> processes.g4
- *          +--> state-machines.g4
- *          +--> pipelines.g4
- *          |
- *          v
- *     frontend AST
- *          |
- *          v
- *     semantic analysis
- *          |
- *          +--> timing analysis
- *          +--> clock-domain analysis
- *          +--> capability analysis
- *          +--> resource analysis
- *          +--> constraint validation
- *          |
- *          v
- *     canonical HDL / hardware semantic representation
- *          |
- *          +--> optimization
- *          +--> scheduling
- *          +--> synthesis
- *          +--> placement
- *          +--> routing
- *          +--> verification
- *          +--> target lowering
- *          |
- *          v
- *     target realization
+ *
+ * Canonical HDL composition root:
+ *
+ *     grammar/hdl/hdl.g4
+ *
+ * This file is a parser component, not a lexer and not an independent
+ * language root.
  *
  * ============================================================================
  * OWNERSHIP
@@ -76,226 +65,212 @@
  *
  * THIS FILE OWNS:
  *
- *   - HDL timing declaration syntax;
- *   - timing intent;
- *   - timing constraints;
+ *   - timing declarations;
+ *   - timing properties;
  *   - timing requirements;
- *   - timing preferences;
+ *   - timing constraints;
+ *   - timing relations;
  *   - timing windows;
- *   - latency declarations;
- *   - setup/hold intent;
- *   - recovery/removal intent;
- *   - skew/jitter/uncertainty intent;
- *   - propagation/transition intent;
- *   - timing relationships;
+ *   - timing paths;
  *   - timing exceptions;
- *   - timing metadata;
- *   - source-level timing assertions.
+ *   - timing assertions;
+ *   - timing budgets;
+ *   - timing requirements/preferences/hints;
+ *   - timing analysis intent;
+ *   - source-level timing metadata.
  *
  * THIS FILE DOES NOT OWN:
  *
- *   - clock declaration syntax;
+ *   - clock declarations;
  *   - clock generation;
- *   - physical clock-tree construction;
+ *   - clock domains as physical objects;
+ *   - clock-tree construction;
  *   - PLL/DLL selection;
- *   - oscillator selection;
+ *   - oscillators;
  *   - clock routing;
- *   - physical pins;
- *   - physical addresses;
- *   - FPGA resources;
- *   - ASIC cells;
+ *   - clock pins;
+ *   - CDC implementation;
+ *   - synchronizer implementation;
  *   - synthesis;
  *   - placement;
  *   - routing;
  *   - scheduling algorithms;
- *   - hardware discovery;
+ *   - physical timing closure;
  *   - target selection;
+ *   - hardware discovery;
  *   - calibration;
- *   - runtime clock control;
- *   - simulation implementation;
- *   - vendor APIs;
+ *   - vendor primitives;
+ *   - runtime implementation;
  *   - canonical IR construction.
  *
- * Clock semantics remain owned by clocks.g4 / the HDL semantic layer.
- * This file may REFER to clocks but must not redefine clock declarations.
+ * Clock declarations belong to clocks.g4.
+ *
+ * Clocking/CDC context belongs to clocking.g4.
  *
  * ============================================================================
- * POCO-REAF PRINCIPLE
+ * POCO-REAF
  * ============================================================================
  *
- * Timing syntax describes requirements and intent.
+ * Timing syntax expresses WHAT timing properties are required.
  *
- * It MUST NOT encode:
+ * It must not encode WHICH physical implementation satisfies them.
  *
- *   - a fixed FPGA;
- *   - a fixed ASIC;
- *   - a fixed process node;
- *   - a fixed clock-tree topology;
- *   - a fixed routing fabric;
- *   - a fixed number of timing domains;
- *   - a fixed number of modules;
- *   - a fixed number of paths;
- *   - a fixed machine size;
- *   - a fixed device;
- *   - a fixed vendor;
- *   - a fixed timing-analysis engine.
+ * Therefore this grammar contains no:
  *
- * A source program may say:
- *
- *     period = 10ns;
- *     latency <= 20ns;
- *     setup >= 2ns;
- *
- * These are semantic requirements.
- *
- * They do not select a physical implementation.
- *
- * ============================================================================
- * SCALABILITY
- * ============================================================================
- *
- * No finite grammar-level limits are imposed.
- *
- * There is deliberately no:
- *
- *     MAX_TIMING_CONSTRAINTS
- *     MAX_TIMING_PATHS
- *     MAX_CLOCK_DOMAINS
  *     MAX_CLOCKS
- *     MAX_LATENCY
+ *     MAX_TIMING_PATHS
+ *     MAX_TIMING_CONSTRAINTS
  *     MAX_FREQUENCY
  *     MAX_PERIOD
- *     MAX_SKEW
- *     MAX_JITTER
+ *     MAX_LATENCY
  *     MAX_MODULES
- *     MAX_PATHS
+ *     MAX_DOMAINS
+ *     MAX_DEVICES
+ *     MAX_RESOURCES
  *
- * Repetition is represented using ANTLR repetition operators.
+ * Nor does it encode:
  *
- * Practical limits belong to:
+ *     FPGA family limits
+ *     ASIC process limits
+ *     physical clock-tree limits
+ *     vendor timing-engine limits
+ *     CPU/GPU/QPU limits
+ *     machine-size limits
  *
- *     parser resource policy
- *     compiler resource policy
- *     semantic analysis
- *     timing-analysis engines
- *     target capabilities
- *     synthesis
- *     scheduling
- *     deployment
- *     runtime
+ * A timing value is program intent.
  *
- * ============================================================================
- * LEXER CONTRACT
- * ============================================================================
- *
- * The authoritative lexical grammar is:
- *
- *     grammar/lexer/tokens.g4
- *
- * whose grammar name is:
- *
- *     ZamaniTokens
- *
- * This file therefore uses:
- *
- *     tokenVocab = ZamaniTokens;
- *
- * Timing words such as:
- *
- *     timing
- *     period
- *     frequency
- *     latency
- *     setup
- *     hold
- *     skew
- *     jitter
- *     uncertainty
- *     deadline
- *     window
- *     path
- *     false_path
- *     multicycle
- *
- * remain contextual HDL identifiers.
- *
- * This is intentional.
- *
- * A timing concept must not become a language-wide reserved keyword merely
- * because it is meaningful inside an HDL timing declaration.
- *
- * If a future language revision promotes a timing word to a reserved keyword,
- * the compatibility process must update this parser and its tests together.
+ * A target's ability to satisfy that intent is a downstream semantic/resource
+ * question.
  *
  * ============================================================================
- * SHARED HDL CONTRACT
+ * LEXICAL CONTRACT
  * ============================================================================
  *
- * This parser component is intended to be composed with the HDL parser layer.
+ * All tokens come from the canonical Zamani lexer vocabulary.
  *
- * It consumes shared parser rules supplied by the HDL parser composition:
+ * The timing component MUST NOT define lexer rules.
+ *
+ * Structural timing syntax uses the canonical TIMING token.
+ *
+ * Timing property names remain contextual where possible so that the language
+ * does not require a new lexer keyword for every future timing concept.
+ *
+ * Existing canonical lexical concepts such as:
+ *
+ *     LATENCY
+ *     THROUGHPUT
+ *
+ * may therefore be accepted as timing property names in addition to ordinary
+ * identifiers.
+ *
+ * If a future timing concept becomes a globally reserved keyword, that change
+ * belongs in grammar/lexer/keywords.g4 and grammar/compatibility/.
+ *
+ * ============================================================================
+ * SHARED PARSER CONTRACT
+ * ============================================================================
+ *
+ * This file consumes shared parser rules supplied by the HDL composition root,
+ * including:
  *
  *     identifier
- *     hdlKeyword
+ *     hdlQualifiedName
  *     hdlExpression
  *     hdlAttribute
+ *     hdlAttributeList
  *
- * It MUST NOT redefine them.
- *
- * This prevents:
- *
- *     timing -> expression -> timing
- *
- * dependency cycles and prevents timing.g4 from becoming a second expression
- * grammar.
+ * This file MUST NOT redefine those rules.
  *
  * ============================================================================
  * SEMANTIC BOUNDARY
  * ============================================================================
  *
- * This grammar answers:
+ * Parser responsibility:
  *
- *     "What timing intent did the programmer write?"
+ *     recognize valid timing intent syntax.
  *
- * It does NOT answer:
+ * Semantic responsibility:
  *
- *     "Can the selected device realize that timing?"
+ *     resolve names;
+ *     validate dimensions;
+ *     validate units;
+ *     validate relationships;
+ *     determine whether constraints are compatible;
+ *     determine whether requirements are satisfiable;
+ *     distinguish requirements from preferences and hints;
+ *     construct the domain-neutral semantic timing model.
  *
- * The latter belongs downstream.
+ * Compiler/backend responsibility:
  *
+ *     timing analysis;
+ *     optimization;
+ *     scheduling;
+ *     synthesis;
+ *     placement;
+ *     routing;
+ *     timing closure;
+ *     target realization.
+ *
+ * ============================================================================
+ * RESOURCE MODEL
+ * ============================================================================
+ *
+ * Timing values are expressions.
+ *
+ * Examples:
+ *
+ *     period = 10ns;
+ *     frequency = 100MHz;
+ *     latency <= 20ns;
+ *     setup >= 2ns;
+ *
+ * Dimensional correctness belongs to semantic analysis.
+ *
+ * The grammar does not impose a finite numeric range.
+ *
+ * ============================================================================
+ */
+
+/*
+ * ============================================================================
+ * PARSER DECLARATION
  * ============================================================================
  */
 
 parser grammar HdlTiming;
 
 options {
-    tokenVocab = ZamaniTokens;
+    tokenVocab = ZamaniLexer;
 }
 
 
-/* ============================================================================
- * 1. PUBLIC ENTRY POINT
+/*
+ * ============================================================================
+ * 1. PUBLIC TIMING DECLARATION
  * ============================================================================
  *
- * The canonical HDL composition already expects:
- *
- *     hdlTimingDeclaration
- *
- * This is therefore the stable integration rule.
- *
- * Canonical structural form:
+ * Canonical form:
  *
  *     timing name {
  *         ...
  *     }
  *
- * The word `timing` is contextual through hdlKeyword.
+ * Anonymous timing declarations are deliberately not accepted here.
  *
- * Semantic analysis MUST verify that the declaration's leading contextual
- * keyword denotes a timing declaration.
+ * Giving timing intent a logical name improves:
+ *
+ *     diagnostics
+ *     references
+ *     tooling
+ *     semantic identity
+ *     reproducibility
+ *
+ * It does NOT impose any limit on the number of timing declarations.
+ * ============================================================================
  */
+
 hdlTimingDeclaration
-    : hdlKeyword
+    : TIMING
       identifier
       hdlTimingTargetClause?
       hdlTimingBody
@@ -303,37 +278,39 @@ hdlTimingDeclaration
     ;
 
 
-/* ============================================================================
- * 2. OPTIONAL TIMING TARGET
+/*
+ * ============================================================================
+ * 2. OPTIONAL TARGET
  * ============================================================================
  *
- * A timing declaration may identify the semantic object to which the timing
- * requirements apply.
- *
  * Examples:
- *
- *     timing datapath {
- *         ...
- *     }
  *
  *     timing datapath for module_name {
  *         ...
  *     }
  *
- * `for` remains contextual and is represented by hdlKeyword.
+ *     timing interface_timing for interface_name {
+ *         ...
+ *     }
+ *
+ * The target is a logical source-level name.
+ *
+ * It is not a physical device.
+ * ============================================================================
  */
+
 hdlTimingTargetClause
-    : hdlKeyword
-      identifier
+    : FOR
+      hdlQualifiedName
     ;
 
 
-/* ============================================================================
+/*
+ * ============================================================================
  * 3. TIMING BODY
  * ============================================================================
- *
- * An arbitrary number of timing items is allowed.
  */
+
 hdlTimingBody
     : LBRACE
       hdlTimingItem*
@@ -341,142 +318,202 @@ hdlTimingBody
     ;
 
 
-/* ============================================================================
+/*
+ * ============================================================================
  * 4. TIMING ITEM
  * ============================================================================
  *
- * Timing declarations intentionally use a property-oriented model.
+ * The alternatives are intentionally structurally distinct.
  *
- * This keeps the grammar extensible without requiring every future timing
- * concept to become a new language-wide keyword.
+ * This avoids the previous design in which multiple constructs were simply:
+ *
+ *     hdlKeyword ...
+ *
+ * causing substantial ambiguity.
+ * ============================================================================
  */
+
 hdlTimingItem
-    : hdlTimingAttribute
-    | hdlTimingAssignment
+    : hdlTimingProperty
+    | hdlTimingConstraint
+    | hdlTimingRequirement
+    | hdlTimingPreference
+    | hdlTimingHint
     | hdlTimingRelation
     | hdlTimingWindow
+    | hdlTimingPath
     | hdlTimingException
     | hdlTimingAssertion
-    | hdlTimingNestedBlock
+    | hdlTimingBudget
+    | hdlTimingAnalysis
+    | hdlTimingBlock
+    | hdlAttribute
     ;
 
 
-/* ============================================================================
- * 5. TIMING ATTRIBUTES
+/*
+ * ============================================================================
+ * 5. PROPERTY NAME
  * ============================================================================
  *
- * Attributes are metadata.
+ * Most timing properties remain contextual identifiers.
  *
- * They do not themselves select a device, clock, implementation technology,
- * synthesis primitive, or backend.
+ * LATENCY and THROUGHPUT already exist in the canonical lexical vocabulary,
+ * so they are accepted explicitly.
+ *
+ * Future timing properties can remain identifiers without expanding the
+ * global lexer vocabulary.
+ * ============================================================================
  */
-hdlTimingAttribute
-    : hdlAttribute
+
+hdlTimingPropertyName
+    : identifier
+    | LATENCY
+    | THROUGHPUT
     ;
 
 
-/* ============================================================================
- * 6. GENERIC TIMING ASSIGNMENT
+/*
+ * ============================================================================
+ * 6. GENERIC TIMING PROPERTY
  * ============================================================================
  *
  * Examples:
  *
  *     period = 10ns;
  *     frequency = 100MHz;
- *     latency = 20ns;
- *     setup = 2ns;
- *     hold = 1ns;
- *     jitter = 5ps;
- *     uncertainty = 1ps;
- *     skew = 100ps;
+ *     phase = phase_offset;
+ *     jitter = allowed_jitter;
+ *     skew = allowed_skew;
+ *     uncertainty = timing_uncertainty;
  *
- * The property name is contextual.
- *
- * The value can be:
- *
- *     - an ordinary HDL expression;
- *     - a symbolic expression;
- *     - a numeric quantity followed by a unit identifier.
- *
- * This avoids requiring a fixed list of timing quantities.
+ * The property name is semantic data.
+ * ============================================================================
  */
-hdlTimingAssignment
-    : hdlKeyword
+
+hdlTimingProperty
+    : hdlTimingPropertyName
       ASSIGN
-      hdlTimingValue
-      SEMICOLON?
+      hdlExpression
+      SEMICOLON
     ;
 
 
-/* ============================================================================
- * 7. TIMING VALUE
+/*
+ * ============================================================================
+ * 7. TIMING CONSTRAINT
  * ============================================================================
  *
- * The parser accepts both semantic expressions and compact physical-quantity
- * spellings.
+ * Constraints can use relational operators rather than only assignment.
  *
  * Examples:
  *
- *     period = 10 ns;
- *     period = 10ns;
- *     period = base_period;
- *     period = base_period / divisor;
- *     frequency = target_frequency;
+ *     latency <= 20ns;
+ *     setup >= 2ns;
+ *     hold >= 1ns;
+ *     frequency >= minimum_frequency;
+ *     period <= maximum_period;
  *
- * The lexical layer currently represents `10ns` as a numeric token followed
- * by an identifier. This grammar therefore deliberately does not require a
- * dedicated DURATION_LITERAL token.
- *
- * Quantity dimensionality belongs to semantic analysis.
+ * This is critical because timing intent is fundamentally relational.
+ * ============================================================================
  */
-hdlTimingValue
-    : hdlTimingQuantity
+
+hdlTimingConstraint
+    : hdlTimingPropertyName
+      hdlTimingComparisonOperator
+      hdlExpression
+      SEMICOLON
+    ;
+
+
+/*
+ * ============================================================================
+ * 8. COMPARISON OPERATORS
+ * ============================================================================
+ */
+
+hdlTimingComparisonOperator
+    : ASSIGN
+    | EQUAL_EQUAL
+    | NOT_EQUAL
+    | LESS_THAN
+    | LESS_EQUAL
+    | GREATER_THAN
+    | GREATER_EQUAL
+    ;
+
+
+/*
+ * ============================================================================
+ * 9. REQUIREMENT
+ * ============================================================================
+ *
+ * A requirement is binding semantic intent.
+ *
+ * It is distinct from a preference or implementation hint.
+ *
+ * Example:
+ *
+ *     require latency <= 20ns;
+ *
+ * The semantic layer determines whether the target can satisfy it.
+ * ============================================================================
+ */
+
+hdlTimingRequirement
+    : REQUIRE
+      hdlTimingRequirementExpression
+      SEMICOLON
+    ;
+
+
+hdlTimingRequirementExpression
+    : hdlTimingPropertyName
+      hdlTimingComparisonOperator
+      hdlExpression
     | hdlExpression
     ;
 
 
-/* ============================================================================
- * 8. TIMING QUANTITY
+/*
+ * ============================================================================
+ * 10. PREFERENCE
  * ============================================================================
  *
- * Numeric magnitude plus contextual unit.
- *
- * This is deliberately not limited to a predefined unit list.
- *
- * Therefore future units can be introduced without changing the parser.
- *
- * Semantic analysis validates whether the unit is recognized and whether it
- * is dimensionally appropriate for the property being assigned.
- *
- * Examples:
- *
- *     10 ns
- *     10ns
- *     2 ps
- *     100 MHz
- *     1 GHz
- *
- * A unit is an identifier, not a hardware/device name.
+ * A preference is non-binding optimization guidance.
+ * ============================================================================
  */
-hdlTimingQuantity
-    : INTEGER_LITERAL
-      identifier
-    | FLOAT_LITERAL
-      identifier
-    | HEX_INTEGER
-      identifier
-    | BINARY_INTEGER
-      identifier
-    | OCTAL_INTEGER
-      identifier
+
+hdlTimingPreference
+    : PREFER
+      hdlTimingRequirementExpression
+      SEMICOLON
     ;
 
 
-/* ============================================================================
- * 9. TIMING RELATION
+/*
+ * ============================================================================
+ * 11. HINT
  * ============================================================================
  *
- * Relations express timing between named semantic objects.
+ * A hint is implementation guidance and must not silently become a semantic
+ * requirement.
+ * ============================================================================
+ */
+
+hdlTimingHint
+    : HINT
+      hdlExpression
+      SEMICOLON
+    ;
+
+
+/*
+ * ============================================================================
+ * 12. TIMING RELATION
+ * ============================================================================
+ *
+ * Relates two logical timing objects.
  *
  * Examples:
  *
@@ -484,54 +521,88 @@ hdlTimingQuantity
  *         latency <= 20ns;
  *     }
  *
- *     relation producer consumer {
+ *     relation producer to consumer {
  *         setup >= 2ns;
  *     }
  *
- * The actual meaning of the names is resolved semantically.
+ * These are logical relationships, not physical routing paths.
+ * ============================================================================
  */
+
 hdlTimingRelation
-    : hdlKeyword
-      identifier
-      hdlKeyword
-      identifier
-      hdlTimingBody
+    : RELATION
+      hdlQualifiedName
+      TO
+      hdlQualifiedName
+      hdlTimingRelationBody
       SEMICOLON?
     ;
 
 
-/* ============================================================================
- * 10. TIMING WINDOW
+hdlTimingRelationBody
+    : LBRACE
+      hdlTimingItem*
+      RBRACE
+    ;
+
+
+/*
+ * ============================================================================
+ * 13. TIMING WINDOW
  * ============================================================================
  *
- * Timing windows allow a constraint to describe an interval rather than a
- * single scalar.
+ * Represents a semantic interval.
  *
- * Examples:
+ * Example:
  *
  *     window transaction {
  *         minimum = 5ns;
  *         maximum = 20ns;
  *     }
- *
- *     window acquisition {
- *         start = lower_bound;
- *         end = upper_bound;
- *     }
+ * ============================================================================
  */
+
 hdlTimingWindow
-    : hdlKeyword
+    : WINDOW
       identifier
       hdlTimingBody
       SEMICOLON?
     ;
 
 
-/* ============================================================================
- * 11. TIMING EXCEPTIONS
+/*
+ * ============================================================================
+ * 14. TIMING PATH
  * ============================================================================
  *
- * Timing exceptions express semantic exceptions to ordinary path analysis.
+ * A timing path is a semantic path.
+ *
+ * It is NOT a physical routing path.
+ *
+ * Example:
+ *
+ *     path datapath {
+ *         from = producer;
+ *         to = consumer;
+ *         latency <= 20ns;
+ *     }
+ * ============================================================================
+ */
+
+hdlTimingPath
+    : PATH
+      identifier
+      hdlTimingBody
+      SEMICOLON?
+    ;
+
+
+/*
+ * ============================================================================
+ * 15. TIMING EXCEPTION
+ * ============================================================================
+ *
+ * Timing exceptions alter semantic timing analysis.
  *
  * Examples:
  *
@@ -540,578 +611,412 @@ hdlTimingWindow
  *         to = destination;
  *     }
  *
- *     exception multicycle {
+ *     exception multicycle_path {
  *         factor = cycles;
  *     }
  *
- * The grammar does not prescribe how the backend realizes the exception.
+ * The exception does not directly control a timing-analysis engine.
+ * ============================================================================
  */
+
 hdlTimingException
-    : hdlKeyword
-      identifier
+    : EXCEPTION
+      identifier?
       hdlTimingBody
       SEMICOLON?
     ;
 
 
-/* ============================================================================
- * 12. TIMING ASSERTIONS
+/*
+ * ============================================================================
+ * 16. TIMING ASSERTION
  * ============================================================================
  *
- * Assertions express source-level timing expectations.
+ * Assertions are source-level verification intent.
  *
- * Examples:
+ * Example:
  *
- *     assert_timing {
- *         latency <= 20ns;
- *     }
+ *     assert_timing latency <= 20ns;
  *
- *     assert_timing {
- *         setup >= 2ns;
- *     }
- *
- * The semantic layer decides whether the assertion is:
- *
- *     - statically provable;
- *     - target-dependent;
- *     - simulation-only;
- *     - formal-verification-only;
- *     - unsatisfied.
+ * The exact verification mode is determined downstream.
+ * ============================================================================
  */
+
 hdlTimingAssertion
-    : hdlKeyword
-      hdlTimingBody
-      SEMICOLON?
+    : ASSERT_TIMING
+      hdlTimingAssertionExpression
+      SEMICOLON
     ;
 
 
-/* ============================================================================
- * 13. NESTED TIMING BLOCK
- * ============================================================================
- *
- * A nested block is useful for namespacing related timing properties without
- * requiring the grammar to know every future timing-analysis concept.
- *
- * Example:
- *
- *     clock_domain {
- *         setup = 2ns;
- *         hold = 1ns;
- *     }
- */
-hdlTimingNestedBlock
-    : hdlKeyword
-      hdlTimingBody
-    ;
-
-
-/* ============================================================================
- * 14. TIMING CONSTRAINT SET
- * ============================================================================
- *
- * This rule provides a stable parser boundary for consumers that need to
- * recognize a sequence of timing constraints independently of a declaration.
- *
- * It does not impose a finite number of constraints.
- */
-hdlTimingConstraintSet
-    : hdlTimingConstraint+
-    ;
-
-
-hdlTimingConstraint
-    : hdlKeyword
-      (
-          ASSIGN
-          hdlTimingValue
-      )?
-      SEMICOLON?
-    ;
-
-
-/* ============================================================================
- * 15. TIMING PROPERTY VALUE
- * ============================================================================
- *
- * Named timing values are intentionally generic.
- *
- * The semantic layer maps property names to canonical timing concepts.
- *
- * This supports future timing concepts without requiring a grammar rewrite.
- */
-hdlTimingPropertyName
-    : hdlKeyword
-    ;
-
-
-/* ============================================================================
- * 16. COMMON SEMANTIC TIMING FIELDS
- * ============================================================================
- *
- * These rules are parser-facing named boundaries.
- *
- * They do not reserve the names as lexer keywords.
- *
- * They provide stable locations for semantic tooling and AST mapping.
- * ============================================================================
- */
-
-hdlTimingPeriod
-    : hdlKeyword
-      ASSIGN
-      hdlTimingValue
-      SEMICOLON?
-    ;
-
-
-hdlTimingFrequency
-    : hdlKeyword
-      ASSIGN
-      hdlTimingValue
-      SEMICOLON?
-    ;
-
-
-hdlTimingLatency
-    : hdlKeyword
-      ASSIGN
-      hdlTimingValue
-      SEMICOLON?
-    ;
-
-
-hdlTimingSetup
-    : hdlKeyword
-      ASSIGN
-      hdlTimingValue
-      SEMICOLON?
-    ;
-
-
-hdlTimingHold
-    : hdlKeyword
-      ASSIGN
-      hdlTimingValue
-      SEMICOLON?
-    ;
-
-
-hdlTimingSkew
-    : hdlKeyword
-      ASSIGN
-      hdlTimingValue
-      SEMICOLON?
-    ;
-
-
-hdlTimingJitter
-    : hdlKeyword
-      ASSIGN
-      hdlTimingValue
-      SEMICOLON?
-    ;
-
-
-hdlTimingUncertainty
-    : hdlKeyword
-      ASSIGN
-      hdlTimingValue
-      SEMICOLON?
-    ;
-
-
-/* ============================================================================
- * 17. MINIMUM / MAXIMUM TIMING VALUES
- * ============================================================================
- *
- * No fixed numeric range is encoded here.
- */
-hdlTimingMinimum
-    : hdlKeyword
-      ASSIGN
-      hdlTimingValue
-      SEMICOLON?
-    ;
-
-
-hdlTimingMaximum
-    : hdlKeyword
-      ASSIGN
-      hdlTimingValue
-      SEMICOLON?
-    ;
-
-
-/* ============================================================================
- * 18. DEADLINE
- * ============================================================================
- */
-hdlTimingDeadline
-    : hdlKeyword
-      ASSIGN
-      hdlTimingValue
-      SEMICOLON?
-    ;
-
-
-/* ============================================================================
- * 19. TIMING EDGE / EVENT RELATIONSHIP
- * ============================================================================
- *
- * Timing may refer to semantic events without defining their hardware
- * implementation.
- *
- * Example:
- *
- *     edge source to destination {
- *         latency <= 10ns;
- *     }
- */
-hdlTimingEventRelation
-    : hdlKeyword
-      identifier
-      hdlKeyword
-      identifier
-      hdlTimingBody
-      SEMICOLON?
-    ;
-
-
-/* ============================================================================
- * 20. TIMING PATH
- * ============================================================================
- *
- * Timing paths are semantic paths.
- *
- * They are not physical routing paths.
- *
- * This distinction is critical for POCO-REAF.
- */
-hdlTimingPath
-    : hdlKeyword
-      identifier
-      hdlTimingPathEndpointClause?
-      hdlTimingBody
-      SEMICOLON?
-    ;
-
-
-hdlTimingPathEndpointClause
-    : hdlKeyword
-      identifier
-      (
-          hdlKeyword
-          identifier
-      )?
-    ;
-
-
-/* ============================================================================
- * 21. TIMING DOMAIN
- * ============================================================================
- *
- * A timing domain is a semantic analysis domain.
- *
- * It is not a physical clock-tree domain.
- */
-hdlTimingDomain
-    : hdlKeyword
-      identifier
-      hdlTimingBody
-      SEMICOLON?
-    ;
-
-
-/* ============================================================================
- * 22. TIMING MODE
- * ============================================================================
- *
- * Timing modes permit source-level intent such as:
- *
- *     functional
- *     test
- *     debug
- *     low_power
- *     verification
- *
- * without reserving these names globally.
- */
-hdlTimingMode
-    : hdlKeyword
-      identifier
-      hdlTimingBody
-      SEMICOLON?
-    ;
-
-
-/* ============================================================================
- * 23. TIMING PARAMETERIZATION
- * ============================================================================
- *
- * Timing values may depend on symbolic program parameters.
- *
- * Examples:
- *
- *     period = base_period;
- *     latency = stages * stage_latency;
- *
- * This grammar does not limit parameter count or expression complexity.
- */
-hdlTimingParameter
-    : hdlKeyword
-      ASSIGN
-      hdlExpression
-      SEMICOLON?
-    ;
-
-
-/* ============================================================================
- * 24. TIMING RELATIONSHIP BODY
- * ============================================================================
- *
- * Kept as a separate stable rule so future semantic tooling can distinguish
- * timing relationships from ordinary property blocks.
- */
-hdlTimingRelationshipBody
-    : hdlTimingBody
-    ;
-
-
-/* ============================================================================
- * 25. TIMING METADATA
- * ============================================================================
- *
- * Metadata is deliberately syntax-only.
- */
-hdlTimingMetadata
-    : hdlAttribute
-    ;
-
-
-/* ============================================================================
- * 26. TIMING RESOURCE / CAPABILITY REFERENCES
- * ============================================================================
- *
- * A timing declaration may refer to semantic capabilities or resources.
- *
- * It must not directly select physical hardware.
- *
- * Example:
- *
- *     requires timing_capability;
- *
- * Interpretation belongs to capability/resource analysis.
- */
-hdlTimingCapabilityReference
-    : hdlKeyword
-      identifier
-      SEMICOLON?
-    ;
-
-
-/* ============================================================================
- * 27. TIMING CONSTRAINT EXPRESSION
- * ============================================================================
- *
- * This rule provides a stable semantic boundary for downstream timing
- * constraint extraction.
- */
-hdlTimingConstraintExpression
-    : hdlTimingValue
-    ;
-
-
-/* ============================================================================
- * 28. TIMING COMPARISON
- * ============================================================================
- *
- * Comparison operators are already owned by the canonical lexer.
- *
- * Examples:
- *
- *     latency <= 20ns
- *     setup >= 2ns
- *     skew < maximum_skew
- */
-hdlTimingComparison
-    : hdlTimingValue
+hdlTimingAssertionExpression
+    : hdlTimingPropertyName
       hdlTimingComparisonOperator
-      hdlTimingValue
+      hdlExpression
+    | hdlExpression
     ;
 
 
-hdlTimingComparisonOperator
-    : LESS_THAN
-    | LESS_EQUAL
-    | GREATER_THAN
-    | GREATER_EQUAL
-    | EQUAL_EQUAL
-    | NOT_EQUAL
-    ;
-
-
-/* ============================================================================
- * 29. EXPLICIT TIMING CONDITION
+/*
+ * ============================================================================
+ * 17. TIMING BUDGET
  * ============================================================================
  *
- * Conditions remain expressions and are not interpreted by this grammar.
- */
-hdlTimingCondition
-    : hdlExpression
-    ;
-
-
-/* ============================================================================
- * 30. TIMING CONDITIONAL
- * ============================================================================
+ * A budget expresses an allowed timing resource envelope.
  *
  * Example:
  *
- *     when condition {
+ *     budget datapath {
  *         latency <= 20ns;
+ *         skew <= 100ps;
  *     }
  *
- * The condition remains semantic HDL expression syntax.
- */
-hdlTimingConditional
-    : hdlKeyword
-      hdlTimingCondition
-      hdlTimingBody
-    ;
-
-
-/* ============================================================================
- * 31. TIMING SCENARIO
+ * A budget is not a hardware allocation.
  * ============================================================================
- *
- * A scenario groups timing requirements for a named semantic situation.
  */
-hdlTimingScenario
-    : hdlKeyword
+
+hdlTimingBudget
+    : BUDGET
       identifier
       hdlTimingBody
       SEMICOLON?
     ;
 
 
-/* ============================================================================
- * 32. TIMING REQUIREMENT
+/*
+ * ============================================================================
+ * 18. TIMING ANALYSIS INTENT
  * ============================================================================
  *
- * Requirements express conditions that must be satisfied by a realization.
- *
- * They do not directly select an implementation.
- */
-hdlTimingRequirement
-    : hdlKeyword
-      hdlTimingComparison
-      SEMICOLON?
-    ;
-
-
-/* ============================================================================
- * 33. TIMING PREFERENCE
- * ============================================================================
- *
- * Preferences differ semantically from hard requirements.
- *
- * A backend may trade a preference against other constraints.
- */
-hdlTimingPreference
-    : hdlKeyword
-      hdlTimingComparison
-      SEMICOLON?
-    ;
-
-
-/* ============================================================================
- * 34. TIMING HINT
- * ============================================================================
- *
- * Hints are advisory and must never silently become hard constraints.
- */
-hdlTimingHint
-    : hdlKeyword
-      hdlTimingValue
-      SEMICOLON?
-    ;
-
-
-/* ============================================================================
- * 35. TIMING RESOURCE CONSTRAINT
- * ============================================================================
- *
- * Timing/resource coupling is represented symbolically.
- *
- * Physical resource availability is evaluated downstream.
- */
-hdlTimingResourceConstraint
-    : hdlKeyword
-      identifier
-      hdlTimingBody
-      SEMICOLON?
-    ;
-
-
-/* ============================================================================
- * 36. END-TO-END TIMING CONTRACT
- * ============================================================================
- *
- * This rule represents a semantic contract over a source-to-destination
- * relationship.
+ * This declares analysis intent, not an analysis implementation.
  *
  * Example:
  *
- *     contract source destination {
- *         latency <= 20ns;
- *         setup >= 2ns;
+ *     analysis timing {
+ *         ...
  *     }
+ *
+ * The compiler may map this to:
+ *
+ *     static analysis
+ *     dynamic analysis
+ *     formal analysis
+ *     statistical analysis
+ *
+ * without making those engines part of the source grammar.
+ * ============================================================================
  */
-hdlTimingContract
-    : hdlKeyword
-      identifier
-      hdlKeyword
-      identifier
+
+hdlTimingAnalysis
+    : ANALYSIS
+      TIMING
       hdlTimingBody
       SEMICOLON?
     ;
 
 
-/* ============================================================================
- * 37. TIMING ITEM GROUP
+/*
+ * ============================================================================
+ * 19. TIMING NAMESPACE/BLOCK
  * ============================================================================
  *
- * This stable composition rule is useful for AST consumers that need to
- * process timing items without depending on the concrete declaration form.
+ * Allows future timing concepts to be grouped without creating another
+ * top-level timing grammar.
+ *
+ * Example:
+ *
+ *     timing_group constraints {
+ *         ...
+ *     }
+ *
+ * `identifier` remains open-ended.
+ * ============================================================================
  */
-hdlTimingItemGroup
-    : LBRACE
+
+hdlTimingBlock
+    : identifier
+      LBRACE
       hdlTimingItem*
       RBRACE
     ;
 
 
-/* ============================================================================
- * 38. SEMANTICALLY EMPTY / MARKER TIMING DECLARATION
+/*
+ * ============================================================================
+ * 20. STANDALONE TIMING CONSTRAINT SET
  * ============================================================================
  *
- * An empty timing body is syntactically legal:
- *
- *     timing example {}
- *
- * It carries no timing requirement and therefore cannot impose target
- * constraints by itself.
- *
- * This is useful for generated/intermediate source and forward-compatible
- * tooling.
- *
- * Semantic analysis may warn when an empty declaration has no observable
- * purpose, but the grammar must not reject it.
+ * This rule is available to HDL composition and tooling that need to parse a
+ * sequence of constraints without a complete timing declaration.
+ * ============================================================================
  */
-hdlEmptyTimingDeclaration
-    : hdlKeyword
+
+hdlTimingConstraintSet
+    : hdlTimingConstraint+
+    ;
+
+
+/*
+ * ============================================================================
+ * 21. TIMING PROPERTY LIST
+ * ============================================================================
+ *
+ * Reusable list boundary for semantic tooling.
+ * ============================================================================
+ */
+
+hdlTimingPropertyList
+    : hdlTimingProperty+
+    ;
+
+
+/*
+ * ============================================================================
+ * 22. TIMING VALUE
+ * ============================================================================
+ *
+ * Timing values deliberately delegate completely to hdlExpression.
+ *
+ * Therefore the grammar can support:
+ *
+ *     10ns
+ *     10 ns
+ *     base_period
+ *     2 * base_period
+ *     1 / frequency
+ *     required_latency
+ *     symbolic expressions
+ *     parameterized values
+ *     compile-time values
+ *
+ * without creating a second numeric-expression grammar.
+ *
+ * Dimensional/unit checking belongs to semantic analysis.
+ * ============================================================================
+ */
+
+hdlTimingValue
+    : hdlExpression
+    ;
+
+
+/*
+ * ============================================================================
+ * 23. TIMING REQUIREMENT LIST
+ * ============================================================================
+ */
+
+hdlTimingRequirementList
+    : hdlTimingRequirement+
+    ;
+
+
+/*
+ * ============================================================================
+ * 24. TIMING PREFERENCE LIST
+ * ============================================================================
+ */
+
+hdlTimingPreferenceList
+    : hdlTimingPreference+
+    ;
+
+
+/*
+ * ============================================================================
+ * 25. TIMING ASSERTION LIST
+ * ============================================================================
+ */
+
+hdlTimingAssertionList
+    : hdlTimingAssertion+
+    ;
+
+
+/*
+ * ============================================================================
+ * 26. TIMING DECLARATION LIST
+ * ============================================================================
+ *
+ * No fixed number of timing declarations exists.
+ * ============================================================================
+ */
+
+hdlTimingDeclarationList
+    : hdlTimingDeclaration+
+    ;
+
+
+/*
+ * ============================================================================
+ * 27. TIMING REFERENCE
+ * ============================================================================
+ *
+ * Timing references are logical names.
+ *
+ * They do not imply physical clock pins, cells, resources, or routes.
+ * ============================================================================
+ */
+
+hdlTimingReference
+    : hdlQualifiedName
+    ;
+
+
+/*
+ * ============================================================================
+ * 28. TIMING RELATION REFERENCE
+ * ============================================================================
+ */
+
+hdlTimingRelationReference
+    : hdlTimingReference
+    ;
+
+
+/*
+ * ============================================================================
+ * 29. TIMING PATH REFERENCE
+ * ============================================================================
+ */
+
+hdlTimingPathReference
+    : hdlTimingReference
+    ;
+
+
+/*
+ * ============================================================================
+ * 30. TIMING DOMAIN REFERENCE
+ * ============================================================================
+ *
+ * A timing-domain reference is semantic.
+ *
+ * Physical clock-domain implementation remains downstream.
+ * ============================================================================
+ */
+
+hdlTimingDomainReference
+    : hdlTimingReference
+    ;
+
+
+/*
+ * ============================================================================
+ * 31. TIMING PROPERTY TARGET
+ * ============================================================================
+ *
+ * Allows a property to identify the logical object to which it applies.
+ *
+ * Example:
+ *
+ *     latency datapath <= 20ns;
+ *
+ * The semantic layer determines whether this form is meaningful.
+ * ============================================================================
+ */
+
+hdlTimingPropertyTarget
+    : hdlTimingReference
+    ;
+
+
+/*
+ * ============================================================================
+ * 32. TIMING METADATA
+ * ============================================================================
+ *
+ * Metadata remains attached to source-level intent.
+ * ============================================================================
+ */
+
+hdlTimingMetadata
+    : hdlAttribute
+    ;
+
+
+/*
+ * ============================================================================
+ * 33. TIMING METADATA LIST
+ * ============================================================================
+ */
+
+hdlTimingMetadataList
+    : hdlAttribute+
+    ;
+
+
+/*
+ * ============================================================================
+ * 34. TIMING CONTRACT
+ * ============================================================================
+ *
+ * A contract groups requirements and optional preferences.
+ *
+ * Example:
+ *
+ *     contract datapath_timing {
+ *         require latency <= 20ns;
+ *         prefer frequency >= target_frequency;
+ *     }
+ *
+ * Contract semantics are downstream.
+ * ============================================================================
+ */
+
+hdlTimingContract
+    : CONTRACT
       identifier
-      LBRACE
-      RBRACE
+      hdlTimingBody
       SEMICOLON?
     ;
+
+
+/*
+ * ============================================================================
+ * 35. TIMING CONTRACT LIST
+ * ============================================================================
+ */
+
+hdlTimingContractList
+    : hdlTimingContract+
+    ;
+
+
+/*
+ * ============================================================================
+ * 36. TIMING SCALABILITY CONTRACT
+ * ============================================================================
+ *
+ * This rule intentionally contains no numeric bounds.
+ *
+ * Any number of timing items is legal subject to parser/compiler resources.
+ * ============================================================================
+ */
+
+hdlTimingItemList
+    : hdlTimingItem*
+    ;
+
+
+/*
+ * ============================================================================
+ * END OF TIMING GRAMMAR
+ * ============================================================================
+ *
+ * Architectural invariant:
+ *
+ *     timing syntax
+ *          ->
+ *     domain-neutral AST
+ *          ->
+ *     semantic timing model
+ *          ->
+ *     canonical hardware semantic representation / IR
+ *          ->
+ *     timing analysis / optimization / scheduling / synthesis / realization
+ *
+ * This grammar never selects a physical implementation.
+ *
+ * ============================================================================
+ */
