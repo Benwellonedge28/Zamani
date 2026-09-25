@@ -1,176 +1,226 @@
 /*
  * ============================================================================
- * Zamani Programming Language
+ * Zamani Universal Computing Language
  * ============================================================================
  *
  * File:
  *     grammar/hdl/memories.g4
  *
- * Grammar:
+ * Status:
+ *     Canonical HDL memory-declaration parser component.
+ *
+ * Grammar technology:
  *     ANTLR4 parser grammar
  *
- * Status:
- *     Production HDL memory-declaration grammar.
- *
- * Language role:
- *     Defines SOURCE-LEVEL HDL MEMORY STRUCTURE and MEMORY INTERFACE INTENT.
- *
- * Compiler baseline:
+ * Implementation baseline:
  *     Rust 1.97 / Rust 1.97.1
- *     Edition 2021
+ *     Rust 2021
  *     Safe Rust only
- *     No unsafe Rust.
+ *     No unsafe Rust
  *
  * ============================================================================
+ * PURPOSE
+ * ============================================================================
  *
+ * This file owns SOURCE-LEVEL HDL MEMORY STRUCTURE AND MEMORY INTERFACE INTENT.
+ *
+ * It describes logical memory declarations that may be lowered to:
+ *
+ *     - FPGA memories;
+ *     - ASIC memories;
+ *     - SRAM;
+ *     - DRAM;
+ *     - HBM;
+ *     - distributed memory;
+ *     - accelerator memory;
+ *     - embedded memory;
+ *     - future memory technologies;
+ *     - heterogeneous memory systems.
+ *
+ * The grammar does NOT select a physical memory technology.
+ *
+ * ============================================================================
  * ARCHITECTURAL POSITION
  * ============================================================================
  *
  *     Zamani source
  *          |
  *          v
- *     ZamaniTokens
+ *     canonical lexer
  *          |
  *          v
  *     canonical parser
  *          |
  *          v
- *     HDL parser
+ *     HDL dispatcher
  *          |
  *          v
  *     hdlMemoryDeclaration
  *          |
- *          +-------------------------------+
- *          |                               |
- *          v                               v
- *     frontend AST                 semantic analysis
- *                                          |
- *                                          +--> type analysis
- *                                          +--> resource analysis
- *                                          +--> capability analysis
- *                                          +--> memory legality
- *                                          +--> timing analysis
- *                                          +--> ownership/alias analysis
- *                                          +--> target-independent HDL model
- *                                          |
- *                                          v
- *                               canonical HDL/hardware IR
- *                                          |
- *                     +--------------------+--------------------+
- *                     |                    |                    |
- *                     v                    v                    v
- *                 optimization        scheduling            routing
- *                     |                    |                    |
- *                     +--------------------+--------------------+
- *                                          |
- *                                          v
- *                                   target lowering
- *                                          |
- *                     +--------------------+--------------------+
- *                     |                    |                    |
- *                     v                    v                    v
- *                   FPGA                 ASIC             other targets
+ *          v
+ *     domain-neutral frontend AST
+ *          |
+ *          +-----------------------------+
+ *          |                             |
+ *          v                             v
+ *     type analysis              resource/capability analysis
+ *          |                             |
+ *          +-------------+---------------+
+ *                        |
+ *                        v
+ *              semantic memory model
+ *                        |
+ *                        v
+ *              canonical hardware/HDL IR
+ *                        |
+ *          +-------------+-------------+
+ *          |             |             |
+ *          v             v             v
+ *     optimization   scheduling     verification
+ *          |             |             |
+ *          +-------------+-------------+
+ *                        |
+ *                        v
+ *                 target lowering
+ *                        |
+ *          +-------------+-------------+
+ *          |             |             |
+ *          v             v             v
+ *        FPGA          ASIC        other targets
  *
  * ============================================================================
- *
  * OWNERSHIP
  * ============================================================================
  *
  * THIS FILE OWNS:
  *
- *     - HDL memory declarations;
- *     - logical memory identity;
- *     - memory element type reference;
- *     - symbolic memory dimensions;
- *     - memory declaration dimensions;
- *     - source-level memory interface declarations;
- *     - logical read/write access descriptions;
- *     - memory initialization intent;
- *     - memory access-property syntax;
- *     - memory layout-property syntax;
- *     - memory banking/partitioning intent syntax;
- *     - memory latency intent syntax;
- *     - memory persistence/coherence intent syntax;
- *     - memory resource/capability requirement syntax;
- *     - memory declaration attributes;
- *     - memory-local structural metadata.
- *
- * ============================================================================
+ *   - HDL memory declaration syntax;
+ *   - logical memory identity;
+ *   - memory element/storage type syntax;
+ *   - symbolic dimensions;
+ *   - memory generic parameters;
+ *   - logical memory ports;
+ *   - logical access intent;
+ *   - initialization intent;
+ *   - memory-local properties;
+ *   - memory-local requirements;
+ *   - memory-local constraints;
+ *   - memory-local preferences;
+ *   - memory-local hints;
+ *   - memory-local capability requirements;
+ *   - nested logical memories where the HDL composition permits them;
+ *   - source-level memory metadata.
  *
  * THIS FILE DOES NOT OWN:
  *
- *     - general memory semantics;
- *     - general allocation;
- *     - ownership;
- *     - borrowing;
- *     - lifetimes;
- *     - virtual memory;
- *     - physical addresses;
- *     - cache implementation;
- *     - NUMA discovery;
- *     - DMA implementation;
- *     - allocator implementation;
- *     - garbage collection;
- *     - memory management runtime;
- *     - physical memory banks;
- *     - fixed BRAM count;
- *     - fixed SRAM count;
- *     - fixed DRAM count;
- *     - fixed memory capacity;
- *     - fixed address width;
- *     - physical placement;
- *     - physical routing;
- *     - synthesis;
- *     - timing closure;
- *     - target selection;
- *     - hardware discovery;
- *     - vendor APIs;
- *     - runtime allocation;
- *     - classical IR;
- *     - quantum::ir;
- *     - QEC;
- *     - ZQN;
- *     - resilience.
- *
- * Generic memory semantics remain owned by:
- *
- *     grammar/memory/memory.g4
- *
- * Specialized software-memory semantics remain owned by:
- *
- *     grammar/memory/ownership.g4
- *     grammar/memory/borrowing.g4
- *     grammar/memory/lifetimes.g4
- *     grammar/memory/allocation.g4
- *     grammar/memory/deallocation.g4
- *     grammar/memory/shared-memory.g4
- *     grammar/memory/distributed-memory.g4
- *     grammar/memory/memory-constraints.g4
+ *   - lexical definitions;
+ *   - identifiers;
+ *   - general expressions;
+ *   - general types;
+ *   - general memory semantics;
+ *   - ownership;
+ *   - borrowing;
+ *   - lifetimes;
+ *   - allocation;
+ *   - virtual memory;
+ *   - physical addresses;
+ *   - physical banks;
+ *   - physical ports;
+ *   - cache implementation;
+ *   - DMA;
+ *   - NUMA;
+ *   - allocator implementation;
+ *   - memory controllers;
+ *   - synthesis;
+ *   - placement;
+ *   - routing;
+ *   - timing closure;
+ *   - target selection;
+ *   - hardware discovery;
+ *   - vendor APIs;
+ *   - quantum::ir;
+ *   - QEC;
+ *   - ZQN;
+ *   - HAL;
+ *   - runtime allocation.
  *
  * ============================================================================
- *
- * POCO-REAF PRINCIPLE
+ * CANONICAL DEPENDENCIES
  * ============================================================================
  *
- * An HDL memory declaration describes WHAT memory structure and interface
- * semantics are required.
+ * This grammar is a parser component.
  *
- * It does not select:
+ * It consumes the canonical lexer vocabulary:
+ *
+ *     ZamaniLexer
+ *
+ * It reuses parser rules supplied by the canonical HDL/parser composition:
+ *
+ *     identifier
+ *     qualifiedName
+ *     expression
+ *     typeExpression
+ *     rangeExpression
+ *     argumentList
+ *     attribute
+ *
+ * No duplicate lexer or general-purpose expression/type grammar is created.
+ *
+ * ============================================================================
+ * IMPORTANT TOKEN CORRECTION
+ * ============================================================================
+ *
+ * The repository's canonical parser uses:
+ *
+ *     tokenVocab = ZamaniLexer
+ *
+ * Therefore this file MUST NOT use:
+ *
+ *     tokenVocab = ZamaniTokens
+ *
+ * `ZamaniTokens` is not the canonical parser-facing vocabulary.
+ *
+ * ============================================================================
+ * POCO-REAF
+ * ============================================================================
+ *
+ * A memory declaration expresses WHAT storage semantics are required.
+ *
+ * It does not encode:
  *
  *     - a particular FPGA;
  *     - a particular ASIC;
  *     - a particular SRAM;
  *     - a particular DRAM;
- *     - a particular BRAM;
  *     - a particular HBM stack;
- *     - a particular memory controller;
+ *     - a particular bank;
  *     - a particular physical address;
- *     - a particular bank number;
- *     - a particular vendor;
+ *     - a particular memory controller;
  *     - a particular board;
- *     - a particular machine.
+ *     - a particular vendor.
  *
- * Therefore this grammar contains no:
+ * The same source declaration may therefore be lowered differently on:
+ *
+ *     embedded hardware
+ *     CPU systems
+ *     multicore systems
+ *     GPU systems
+ *     FPGA systems
+ *     ASIC systems
+ *     accelerator systems
+ *     quantum-classical systems
+ *     HPC systems
+ *     distributed systems
+ *     cloud systems
+ *     future architectures
+ *
+ * subject to the actual semantic requirements and available resources.
+ *
+ * ============================================================================
+ * HARD-CODING PROHIBITION
+ * ============================================================================
+ *
+ * This file MUST NOT encode universal limits such as:
  *
  *     MAX_MEMORY
  *     MAX_DEPTH
@@ -181,157 +231,158 @@
  *     MAX_WRITE_PORTS
  *     MAX_ENTRIES
  *     MAX_ADDRESS_BITS
+ *     MAX_DIMENSIONS
  *     MAX_INSTANCES
  *
- * and no equivalent hidden parser limitation.
+ * Nor may it encode assumptions such as:
  *
- * Repetition is represented using ANTLR repetition operators.
+ *     memory<64GB>
+ *     address<32>
+ *     bank_count <= 8
+ *     width <= 32
  *
- * Symbolic dimensions and expressions are accepted without imposing a
- * language-level numerical maximum.
+ * unless such values occur explicitly as PROGRAM SEMANTICS.
  *
- * Physical realizability is determined later by:
+ * For example:
  *
- *     semantic analysis;
- *     resource analysis;
- *     capability analysis;
- *     target analysis;
- *     synthesis;
- *     scheduling;
- *     placement;
- *     routing;
- *     deployment;
- *     runtime.
+ *     memory data: Word [DEPTH];
+ *
+ * is portable.
+ *
+ * Likewise:
+ *
+ *     memory data: Word [1024];
+ *
+ * is valid program data.
+ *
+ * But the language MUST NOT define:
+ *
+ *     MAX_DEPTH = 1024
+ *
+ * as a universal parser limitation.
  *
  * ============================================================================
- *
- * ANTLR COMPOSITION CONTRACT
+ * REQUIREMENT / CONSTRAINT / PREFERENCE / HINT
  * ============================================================================
  *
- * This file is a PARSER grammar.
+ * These concepts are intentionally distinct.
  *
- * It consumes:
+ * REQUIREMENT:
+ *     Must be satisfied.
  *
- *     grammar/...
+ * CONSTRAINT:
+ *     Restricts the legal realization space.
  *
- * through the canonical ZamaniTokens vocabulary.
+ * PREFERENCE:
+ *     Non-binding optimization guidance.
  *
- * The HDL parser supplies/reuses:
+ * HINT:
+ *     Non-binding implementation guidance.
+ *
+ * Capability requirements identify required capabilities rather than devices.
+ *
+ * Physical realization remains downstream.
+ *
+ * ============================================================================
+ * MEMORY MODEL
+ * ============================================================================
+ *
+ * A logical HDL memory consists of:
+ *
+ *     identity
+ *     optional generic arguments
+ *     element/storage type
+ *     one or more dimensions
+ *     optional attributes
+ *     optional properties
+ *     optional interfaces
+ *     optional initialization intent
+ *     optional requirements
+ *     optional constraints
+ *     optional preferences
+ *     optional hints
+ *     optional capability requirements
+ *
+ * Dimensions are expressions.
+ *
+ * Dimensions may therefore be:
+ *
+ *     constants
+ *     identifiers
+ *     parameters
+ *     generic parameters
+ *     symbolic expressions
+ *     derived expressions
+ *     ranges
+ *
+ * The grammar does not evaluate them.
+ *
+ * ============================================================================
+ * MEMORY PORT MODEL
+ * ============================================================================
+ *
+ * A memory interface is LOGICAL.
+ *
+ * The source language describes:
+ *
+ *     direction
+ *     logical name
+ *     bindings
+ *     address/data/control intent
+ *     optional metadata
+ *
+ * It does not assert that a physical target has the same number of ports.
+ *
+ * Downstream lowering may:
+ *
+ *     preserve ports;
+ *     merge ports;
+ *     split ports;
+ *     serialize accesses;
+ *     replicate memory;
+ *     partition memory;
+ *     infer banking;
+ *     introduce arbitration;
+ *     introduce buffering;
+ *     introduce caches;
+ *     introduce controllers.
+ *
+ * Those are implementation decisions.
+ *
+ * ============================================================================
+ * CONTEXTUAL MEMORY MEMBERS
+ * ============================================================================
+ *
+ * The canonical lexer deliberately does not contain separate universal tokens
+ * for every possible memory property such as:
+ *
+ *     read
+ *     write
+ *     init
+ *     banking
+ *     latency
+ *     coherence
+ *
+ * Consequently this grammar does NOT invent duplicate lexer tokens.
+ *
+ * Contextual memory property names are represented by:
  *
  *     identifier
- *     hdlKeyword
- *     hdlExpression
- *     hdlTypeExpression
- *     hdlRangeExpression
- *     hdlAttribute
- *     hdlArgumentList
- *     hdlConnectionList
  *
- * where those rules are available through the composed parser.
+ * and interpreted by semantic analysis.
  *
- * IMPORTANT:
- *
- * This file MUST NOT create a second lexer.
- *
- * Existing canonical token:
- *
- *     K_MEMORY
- *
- * is used for the memory declaration boundary.
- *
- * This is important because the current hardware type grammar already treats
- * K_MEMORY as the canonical hardware-memory type constructor.
+ * This keeps the language open-world while avoiding a second keyword registry.
  *
  * ============================================================================
- *
- * INTEGRATION WITH EXISTING HDL GRAMMAR
+ * PUBLIC RULE
  * ============================================================================
- *
- * grammar/hdl/hdl.g4 currently exposes:
  *
  *     hdlMemoryDeclaration
  *
- * as an HDL module member.
+ * is the only public memory-declaration integration boundary.
  *
- * That rule MUST be delegated to this grammar component.
- *
- * The old generic implementation:
- *
- *     hdlKeyword identifier COLON hdlTypeExpression
- *     hdlMemoryDimension+
- *     SEMICOLON
- *
- * is intentionally superseded by the more precise K_MEMORY-based rule here.
- *
- * ============================================================================
- *
- * INTEGRATION WITH HARDWARE MODULES
- * ============================================================================
- *
- * grammar/hdl/hardware-modules.g4 already composes:
- *
- *     hdlMemoryDeclaration
- *
- * as a module member.
- *
- * This file therefore provides the canonical implementation of that rule.
- *
- * ============================================================================
- *
- * INTEGRATION WITH HARDWARE TYPES
- * ============================================================================
- *
- * grammar/types/hardware-types.g4 owns hardware memory TYPE syntax:
- *
- *     K_MEMORY typeArgumentList
- *
- * This file does NOT redefine that type.
- *
- * A declaration such as:
- *
- *     memory storage: Memory<Word> [DEPTH];
- *
- * uses the type system for the element/storage semantic type while this file
- * owns the structural memory declaration.
- *
- * ============================================================================
- *
- * INTEGRATION WITH GENERAL MEMORY
- * ============================================================================
- *
- * grammar/memory/memory.g4 remains the canonical generic memory-domain
- * foundation.
- *
- * This file does not redefine:
- *
- *     memoryPlace
- *     memorySpace
- *     memoryLifetime
- *     memoryQualifiedName
- *     memoryOperation
- *     memoryOperationArgument
- *
- * HDL memory syntax describes hardware structure and interface intent.
- *
- * General memory semantics are resolved by semantic analysis against the
- * canonical memory model.
- *
- * ============================================================================
- *
- * SAFETY
- * ============================================================================
- *
- * This grammar contains:
- *
- *     - no Rust actions;
- *     - no Rust predicates;
- *     - no filesystem access;
- *     - no network access;
- *     - no process execution;
- *     - no mutable global state;
- *     - no unsafe code;
- *     - no target-specific code;
- *     - no hardware discovery.
+ * The HDL composition root must delegate to this rule rather than maintain a
+ * second implementation.
  *
  * ============================================================================
  */
@@ -339,36 +390,42 @@
 parser grammar Memories;
 
 options {
-    tokenVocab = ZamaniTokens;
+    tokenVocab = ZamaniLexer;
 }
 
 
 /*
  * ============================================================================
- * 1. PUBLIC ENTRY POINT
+ * 1. MEMORY DECLARATION
  * ============================================================================
  *
- * The canonical HDL parser entry point for a memory declaration.
- *
- * Examples:
+ * Canonical forms:
  *
  *     memory data: Word [DEPTH];
  *
  *     memory data: Word [ROWS][COLS];
  *
- *     memory data: Word [ROWS][COLS]
- *         read ...
- *         write ...;
- *
  *     memory data: Memory<Word> [DEPTH];
  *
- * Dimensions are symbolic expressions and therefore do not establish a fixed
- * machine capacity.
+ *     memory data<T, DEPTH>: T [DEPTH];
+ *
+ *     memory data: Word [DEPTH] {
+ *         ...
+ *     }
+ *
+ * The declaration is intentionally open with respect to:
+ *
+ *     dimensions
+ *     members
+ *     generic parameters
+ *
+ * ============================================================================
  */
+
 hdlMemoryDeclaration
     : hdlMemoryHeader
       hdlMemoryBody?
-      SEMICOLON
+      SEMICOLON?
     ;
 
 
@@ -377,41 +434,57 @@ hdlMemoryDeclaration
  * 2. MEMORY HEADER
  * ============================================================================
  *
- * The header establishes logical memory identity, element/storage type and
- * dimensions.
+ * A header contains:
  *
- * The declaration is deliberately target-independent.
+ *     memory
+ *     logical identity
+ *     optional generic arguments
+ *     element/storage type
+ *     one or more dimensions
+ *     optional declaration attributes
+ *
+ * The type remains delegated to the canonical type system.
+ *
+ * ============================================================================
  */
+
 hdlMemoryHeader
     : K_MEMORY
       identifier
       hdlMemoryGenericArguments?
       COLON
-      hdlTypeExpression
+      typeExpression
       hdlMemoryDimension+
-      hdlMemoryModifier*
+      attribute*
     ;
 
 
 /*
  * ============================================================================
- * 3. MEMORY GENERIC SPECIALIZATION
+ * 3. GENERIC MEMORY ARGUMENTS
  * ============================================================================
  *
- * Generic parameters are structural abstractions.
+ * Generic arguments are semantic parameters.
  *
- * No finite number of parameters is imposed.
+ * There is no fixed parameter count.
  *
- * Example:
+ * Examples:
  *
  *     memory tile<T, DEPTH>: T [DEPTH];
  *
- * Concrete realizability is a semantic/compiler concern.
+ *     memory matrix<T, ROWS, COLS>: T [ROWS][COLS];
+ *
+ *     memory buffer<T, EXTENT = N>: T [EXTENT];
+ *
+ * The exact validity of a generic argument is semantic.
+ *
+ * ============================================================================
  */
+
 hdlMemoryGenericArguments
-    : LT
+    : LESS_THAN
       hdlMemoryGenericArgumentList
-      GT
+      GREATER_THAN
     ;
 
 
@@ -427,65 +500,71 @@ hdlMemoryGenericArgumentList
 
 hdlMemoryGenericArgument
     : identifier
-    | identifier ASSIGN hdlExpression
-    | hdlExpression
+      (
+          COLON
+          typeExpression
+      )?
+      (
+          ASSIGN
+          expression
+      )?
     ;
 
 
 /*
  * ============================================================================
- * 4. MEMORY DIMENSIONS
+ * 4. MEMORY DIMENSION
  * ============================================================================
  *
- * A memory may have one or more dimensions.
+ * Every memory must declare at least one dimension.
  *
- * There is intentionally no maximum dimension count.
+ * There is intentionally no fixed dimension count.
  *
  * Examples:
  *
  *     [DEPTH]
  *     [ROWS][COLS]
  *     [BATCH][ROWS][COLS]
- *     [symbolic_extent]
- *     [lower .. upper]
  *
- * The meaning of the range is determined semantically.
+ * Range interpretation belongs to the canonical range-expression semantics.
+ *
+ * ============================================================================
  */
+
 hdlMemoryDimension
     : LBRACKET
-      hdlRangeExpression
+      rangeExpression
       RBRACKET
     ;
 
 
-/*
- * ============================================================================
- * 5. MEMORY MODIFIERS
- * ============================================================================
- *
- * Modifiers provide declaration-level semantic intent.
- *
- * The grammar deliberately keeps modifiers extensible.
- *
- * The semantic layer determines which modifier names are valid.
- *
- * This prevents every new memory technology from requiring a grammar rewrite.
- */
-hdlMemoryModifier
-    : hdlMemoryProperty
-    | hdlAttribute
+hdlMemoryDimensionList
+    : hdlMemoryDimension+
     ;
 
 
 /*
  * ============================================================================
- * 6. MEMORY BODY
+ * 5. MEMORY BODY
  * ============================================================================
  *
- * A memory body contains optional structural/interface declarations.
+ * The body is an unbounded sequence of memory-local members.
  *
- * There is no fixed number of ports, declarations or properties.
+ * No fixed number of:
+ *
+ *     ports
+ *     properties
+ *     accesses
+ *     requirements
+ *     constraints
+ *     preferences
+ *     hints
+ *
+ * is imposed.
+ *
+ * ============================================================================
  */
+
 hdlMemoryBody
     : LBRACE
       hdlMemoryMember*
@@ -494,385 +573,396 @@ hdlMemoryBody
 
 
 hdlMemoryMember
-    : hdlMemoryAttribute
+    : attribute*
+      hdlMemoryMemberCore
+    ;
+
+
+hdlMemoryMemberCore
+    : hdlMemoryPortDeclaration
+    | hdlMemoryInitialization
+    | hdlMemoryAccessDeclaration
     | hdlMemoryProperty
-    | hdlMemoryReadPort
-    | hdlMemoryWritePort
-    | hdlMemoryReadWritePort
-    | hdlMemoryInit
-    | hdlMemoryAccess
     | hdlMemoryRequirement
     | hdlMemoryConstraint
     | hdlMemoryPreference
+    | hdlMemoryHint
     | hdlMemoryCapabilityRequirement
-    | hdlMemoryDeclaration
+    | hdlMemoryNestedDeclaration
     ;
 
 
 /*
  * ============================================================================
- * 7. MEMORY ATTRIBUTES
+ * 6. LOGICAL MEMORY PORT
  * ============================================================================
  *
- * Attributes remain generic metadata.
+ * Port syntax is deliberately structural rather than tied to physical
+ * memory-port technology.
  *
- * They must not become hidden physical-target selectors.
- */
-hdlMemoryAttribute
-    : hdlAttribute
-    ;
-
-
-/*
- * ============================================================================
- * 8. GENERIC MEMORY PROPERTY
- * ============================================================================
+ * The canonical HDL direction tokens are reused:
  *
- * Property syntax is intentionally extensible.
+ *     K_INPUT
+ *     K_OUTPUT
+ *     K_INOUT
  *
- * Examples:
+ * A port therefore has the general form:
  *
- *     latency = expr;
- *     banking = expr;
- *     layout = expr;
- *     coherence = expr;
- *     persistence = expr;
+ *     input  read_port  : AddressType;
+ *     output write_port : DataType;
+ *     inout  shared_port : SomeType;
  *
- * Semantic validation determines the vocabulary and meaning.
- */
-hdlMemoryProperty
-    : hdlKeyword
-      (
-          ASSIGN
-          hdlExpression
-        | LPAREN
-          hdlArgumentList?
-          RPAREN
-        | hdlExpression
-      )?
-      SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * 9. READ PORT
- * ============================================================================
+ * Optional bindings/properties remain expressions and metadata.
  *
- * A read port is a LOGICAL interface.
- *
- * It does not imply a physical memory port.
- *
- * Example:
- *
- *     read r:
- *         address = addr,
- *         data = value;
- *
- * The exact semantic names are validated downstream.
- */
-hdlMemoryReadPort
-    : hdlMemoryAccessKeyword
-      hdlMemoryPortName?
-      COLON
-      hdlMemoryPortBindingList?
-      SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * 10. WRITE PORT
- * ============================================================================
- */
-hdlMemoryWritePort
-    : hdlMemoryAccessKeyword
-      hdlMemoryPortName?
-      COLON
-      hdlMemoryPortBindingList?
-      SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * 11. READ/WRITE PORT
- * ============================================================================
- *
- * A bidirectional logical interface.
- */
-hdlMemoryReadWritePort
-    : hdlMemoryAccessKeyword
-      hdlMemoryPortName?
-      COLON
-      hdlMemoryPortBindingList?
-      SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * 12. ACCESS KEYWORD
- * ============================================================================
- *
- * Access-classification words remain contextual HDL vocabulary.
- *
- * The semantic layer distinguishes:
+ * The semantic layer determines whether a port is:
  *
  *     read
  *     write
- *     readwrite
- *     atomic
+ *     read/write
+ *     address
+ *     data
+ *     enable
+ *     mask
+ *     control
  *     streaming
+ *     atomic
  *     etc.
  *
- * This rule intentionally accepts the canonical HDL keyword abstraction rather
- * than introducing duplicate lexer tokens.
+ * ============================================================================
  */
-hdlMemoryAccessKeyword
-    : hdlKeyword
-    ;
 
-
-hdlMemoryPortName
-    : identifier
-    ;
-
-
-hdlMemoryPortBindingList
-    : hdlMemoryPortBinding
+hdlMemoryPortDeclaration
+    : hdlMemoryPortDirection
+      identifier
       (
-          COMMA
-          hdlMemoryPortBinding
-      )*
-      COMMA?
+          COLON
+          typeExpression
+      )?
+      hdlMemoryPortRange*
+      hdlMemoryPortClause*
+      SEMICOLON
     ;
 
 
-hdlMemoryPortBinding
+hdlMemoryPortDirection
+    : K_INPUT
+    | K_OUTPUT
+    | K_INOUT
+    ;
+
+
+hdlMemoryPortRange
+    : LBRACKET
+      rangeExpression
+      RBRACKET
+    ;
+
+
+hdlMemoryPortClause
+    : attribute
+    | hdlMemoryNamedBinding
+    | hdlMemoryPropertyClause
+    ;
+
+
+hdlMemoryNamedBinding
     : identifier
       ASSIGN
-      hdlExpression
+      expression
+    ;
+
+
+hdlMemoryPropertyClause
+    : identifier
+      (
+          ASSIGN
+          expression
+        | LPAREN
+          argumentList?
+          RPAREN
+      )?
     ;
 
 
 /*
  * ============================================================================
- * 13. MEMORY INITIALIZATION
+ * 7. INITIALIZATION
  * ============================================================================
  *
- * Initialization is SOURCE-LEVEL INITIALIZATION INTENT.
+ * Initialization expresses source-level initialization intent.
  *
- * It does not determine:
+ * It does not select:
  *
- *     ROM technology;
- *     FPGA initialization mechanism;
- *     boot-loader format;
- *     physical image placement;
- *     physical memory address.
+ *     ROM
+ *     BRAM initialization
+ *     boot image format
+ *     flash
+ *     physical address
+ *     vendor mechanism
  *
- * Example:
+ * Canonical forms:
  *
- *     init values = expression;
+ *     init = expression;
  *
  *     init expression;
+ *
+ * The contextual identifier "init" remains semantic data rather than a new
+ * universal lexer token.
+ *
+ * ============================================================================
  */
-hdlMemoryInit
-    : hdlMemoryInitKeyword
+
+hdlMemoryInitialization
+    : identifier
       (
           ASSIGN
-          hdlExpression
-        | hdlExpression
+          expression
+        | expression
       )
       SEMICOLON
     ;
 
 
-hdlMemoryInitKeyword
-    : hdlKeyword
-    ;
-
-
 /*
  * ============================================================================
- * 14. MEMORY ACCESS
+ * 8. ACCESS DECLARATION
  * ============================================================================
  *
- * A memory access declaration describes logical access behavior.
+ * Generic access declarations remain open-world.
  *
- * It is not a machine instruction and does not prescribe a specific controller.
+ * Example:
+ *
+ *     access(read, address = addr, data = value);
+ *
+ *     access(write, address = addr, data = value);
+ *
+ *     access(readwrite, address = addr, data = value);
+ *
+ * The first expression identifies the logical operation.
+ *
+ * Semantic analysis determines whether the operation is legal.
+ *
+ * No finite operation enumeration is placed in the grammar.
+ *
+ * ============================================================================
  */
-hdlMemoryAccess
-    : hdlMemoryAccessKeyword
+
+hdlMemoryAccessDeclaration
+    : identifier
       LPAREN
-      hdlMemoryAccessArgumentList?
+      argumentList?
       RPAREN
       SEMICOLON
     ;
 
 
-hdlMemoryAccessArgumentList
-    : hdlMemoryAccessArgument
-      (
-          COMMA
-          hdlMemoryAccessArgument
-      )*
-      COMMA?
-    ;
+/*
+ * ============================================================================
+ * 9. PROPERTY
+ * ============================================================================
+ *
+ * A memory property is a named declaration-level semantic property.
+ *
+ * Examples:
+ *
+ *     latency = L;
+ *
+ *     throughput = T;
+ *
+ *     banking = banking_policy;
+ *
+ *     layout = layout_policy;
+ *
+ *     coherence = coherence_policy;
+ *
+ *     persistence = persistence_policy;
+ *
+ *     address_space = logical_space;
+ *
+ * The property name remains an identifier.
+ *
+ * The semantic registry determines:
+ *
+ *     - whether the property exists;
+ *     - its expected value type;
+ *     - its effect;
+ *     - compatibility;
+ *     - lowering behavior.
+ *
+ * This allows future memory technologies without modifying this grammar for
+ * every new property.
+ *
+ * ============================================================================
+ */
 
-
-hdlMemoryAccessArgument
+hdlMemoryProperty
     : identifier
-      ASSIGN
-      hdlExpression
-    | hdlExpression
+      (
+          ASSIGN
+          expression
+        | LPAREN
+          argumentList?
+          RPAREN
+      )
+      SEMICOLON
     ;
 
 
 /*
  * ============================================================================
- * 15. MEMORY REQUIREMENTS
+ * 10. REQUIREMENT
  * ============================================================================
  *
- * Requirements express properties the implementation must satisfy.
+ * Requirements are mandatory semantic conditions.
  *
- * They do NOT select a device.
+ * Examples:
  *
- * Example:
+ *     requires capacity >= required_capacity;
  *
- *     requires property;
+ *     requires latency <= required_latency;
  *
- * The semantic resource system determines whether a target satisfies it.
+ *     requires capability("memory.streaming");
+ *
+ * The parser records structure only.
+ *
+ * Resource satisfaction belongs downstream.
+ *
+ * ============================================================================
  */
+
 hdlMemoryRequirement
     : REQUIRES
-      hdlExpression
+      expression
       SEMICOLON
     ;
 
 
 /*
  * ============================================================================
- * 16. MEMORY CONSTRAINTS
+ * 11. CONSTRAINT
  * ============================================================================
  *
- * Constraints restrict valid realizations without becoming physical-device
- * selection syntax.
+ * Constraints restrict the legal realization space.
+ *
+ * They do not identify a physical target.
+ *
+ * ============================================================================
  */
+
 hdlMemoryConstraint
-    : WHERE
-      hdlExpression
+    : CONSTRAINT
+      expression
       SEMICOLON
     ;
 
 
 /*
  * ============================================================================
- * 17. MEMORY PREFERENCES
+ * 12. PREFERENCE
  * ============================================================================
  *
- * Preferences are non-mandatory implementation guidance.
+ * Preferences are non-binding implementation guidance.
  *
- * They must never silently become semantic requirements.
+ * A compiler may disregard a preference when necessary while preserving
+ * program semantics.
+ *
+ * ============================================================================
  */
+
 hdlMemoryPreference
-    : hdlMemoryPreferenceKeyword
-      hdlExpression
+    : PREFER
+      expression
       SEMICOLON
-    ;
-
-
-hdlMemoryPreferenceKeyword
-    : hdlKeyword
     ;
 
 
 /*
  * ============================================================================
- * 18. MEMORY CAPABILITY REQUIREMENTS
+ * 13. HINT
  * ============================================================================
  *
- * Capability requirements express semantic capabilities.
+ * Hints are explicitly non-binding.
  *
- * They do not identify a particular physical device.
+ * ============================================================================
  */
+
+hdlMemoryHint
+    : HINT
+      expression
+      SEMICOLON
+    ;
+
+
+/*
+ * ============================================================================
+ * 14. CAPABILITY REQUIREMENT
+ * ============================================================================
+ *
+ * Capability requirements describe semantic capabilities.
+ *
+ * Examples:
+ *
+ *     requires capability("memory.streaming");
+ *
+ *     requires capability("memory.atomic");
+ *
+ *     requires capability("memory.coherent");
+ *
+ * No device identifier is introduced.
+ *
+ * ============================================================================
+ */
+
 hdlMemoryCapabilityRequirement
-    : hdlMemoryCapabilityKeyword
-      hdlExpression
+    : REQUIRES
+      hdlMemoryCapabilityExpression
       SEMICOLON
     ;
 
 
-hdlMemoryCapabilityKeyword
-    : hdlKeyword
+hdlMemoryCapabilityExpression
+    : expression
     ;
 
 
 /*
  * ============================================================================
- * 19. MEMORY PROPERTY EXPRESSIONS
+ * 15. NESTED MEMORY DECLARATION
  * ============================================================================
  *
- * These rules are intentionally structural.
+ * Nested logical memory declarations allow hierarchical hardware descriptions.
  *
- * The parser accepts symbolic values such as:
+ * This does not imply a physical nested memory technology.
  *
- *     DEPTH
- *     WIDTH
- *     Rows * Columns
- *     parameterized expressions
- *     generic expressions
- *
- * No hard-coded integer maximum is present.
+ * ============================================================================
  */
 
-
-/*
- * ============================================================================
- * 20. OPTIONAL MEMORY DECLARATION LIST
- * ============================================================================
- *
- * This helper allows future composed HDL grammars to consume multiple memory
- * declarations without introducing another memory root.
- */
-hdlMemoryDeclarationList
-    : hdlMemoryDeclaration+
+hdlMemoryNestedDeclaration
+    : hdlMemoryDeclaration
     ;
 
 
 /*
  * ============================================================================
- * 21. MEMORY PORT DECLARATION LIST
+ * 16. PORT DECLARATION LIST
  * ============================================================================
  *
- * No finite number of ports is imposed.
+ * Helper for consumers that need a complete logical memory-port list.
+ *
+ * ============================================================================
  */
+
 hdlMemoryPortDeclarationList
-    : (
-          hdlMemoryReadPort
-        | hdlMemoryWritePort
-        | hdlMemoryReadWritePort
-      )+
+    : hdlMemoryPortDeclaration+
     ;
 
 
 /*
  * ============================================================================
- * 22. MEMORY DIMENSION LIST
- * ============================================================================
- *
- * Explicit helper for consumers that need dimensions independently.
- */
-hdlMemoryDimensionList
-    : hdlMemoryDimension+
-    ;
-
-
-/*
- * ============================================================================
- * 23. MEMORY PROPERTY LIST
+ * 17. PROPERTY LIST
  * ============================================================================
  */
+
 hdlMemoryPropertyList
     : hdlMemoryProperty+
     ;
@@ -880,9 +970,10 @@ hdlMemoryPropertyList
 
 /*
  * ============================================================================
- * 24. MEMORY REQUIREMENT LIST
+ * 18. REQUIREMENT LIST
  * ============================================================================
  */
+
 hdlMemoryRequirementList
     : hdlMemoryRequirement+
     ;
@@ -890,9 +981,10 @@ hdlMemoryRequirementList
 
 /*
  * ============================================================================
- * 25. MEMORY CONSTRAINT LIST
+ * 19. CONSTRAINT LIST
  * ============================================================================
  */
+
 hdlMemoryConstraintList
     : hdlMemoryConstraint+
     ;
@@ -900,9 +992,10 @@ hdlMemoryConstraintList
 
 /*
  * ============================================================================
- * 26. MEMORY PREFERENCE LIST
+ * 20. PREFERENCE LIST
  * ============================================================================
  */
+
 hdlMemoryPreferenceList
     : hdlMemoryPreference+
     ;
@@ -910,9 +1003,21 @@ hdlMemoryPreferenceList
 
 /*
  * ============================================================================
- * 27. MEMORY CAPABILITY LIST
+ * 21. HINT LIST
  * ============================================================================
  */
+
+hdlMemoryHintList
+    : hdlMemoryHint+
+    ;
+
+
+/*
+ * ============================================================================
+ * 22. CAPABILITY REQUIREMENT LIST
+ * ============================================================================
+ */
+
 hdlMemoryCapabilityRequirementList
     : hdlMemoryCapabilityRequirement+
     ;
@@ -920,194 +1025,524 @@ hdlMemoryCapabilityRequirementList
 
 /*
  * ============================================================================
- * 28. COMPOSITION CONTRACT
+ * 23. SEMANTIC CONTRACT
  * ============================================================================
  *
- * The following names are deliberately NOT redefined in this file:
+ * Parsing MUST NOT determine:
  *
- *     identifier
- *     hdlKeyword
- *     hdlExpression
- *     hdlTypeExpression
- *     hdlRangeExpression
- *     hdlAttribute
- *     hdlArgumentList
+ *     - whether dimensions are numerically valid;
+ *     - whether dimensions fit available hardware;
+ *     - whether a type is synthesizable;
+ *     - whether a port can be physically implemented;
+ *     - whether simultaneous accesses are legal;
+ *     - whether banking is realizable;
+ *     - whether timing requirements are satisfiable;
+ *     - whether memory capacity exists;
+ *     - whether a capability exists;
+ *     - whether a target exists.
  *
- * They are supplied by the composed HDL/core/type/expression grammars.
- *
- * This prevents:
- *
- *     duplicate identifier grammars;
- *     duplicate expression grammars;
- *     duplicate type grammars;
- *     duplicate attribute grammars;
- *     duplicate lexer definitions.
+ * Those questions belong to semantic analysis and downstream compilation.
  *
  * ============================================================================
- *
- * SEMANTIC CONTRACT
+ */
+
+
+/*
+ * ============================================================================
+ * 24. AST CONTRACT
  * ============================================================================
  *
- * The parser only establishes syntactic structure.
+ * Every hdlMemoryDeclaration must preserve enough information for downstream
+ * semantic analysis.
  *
- * Semantic analysis must subsequently determine:
+ * At minimum:
  *
- *     - whether the memory type is legal;
- *     - whether every dimension is valid;
- *     - whether dimensions are compatible;
- *     - whether symbolic dimensions can be resolved;
- *     - whether read/write interfaces are legal;
- *     - whether access modes are compatible;
- *     - whether initialization is legal;
- *     - whether latency constraints are satisfiable;
- *     - whether banking/partitioning intent is realizable;
- *     - whether coherence requirements are valid;
- *     - whether persistence requirements are valid;
- *     - whether resource requirements are satisfiable;
- *     - whether capabilities are available;
- *     - whether constraints can be met;
- *     - whether preferences can be honored;
- *     - whether the declaration can lower to canonical HDL/hardware IR.
+ *     source span
+ *     memory name
+ *     generic arguments
+ *     storage type
+ *     dimensions
+ *     attributes
+ *     ports
+ *     initialization
+ *     accesses
+ *     properties
+ *     requirements
+ *     constraints
+ *     preferences
+ *     hints
+ *     capability requirements
+ *     nested declarations
  *
- * The parser MUST NOT answer those questions.
- *
- * ============================================================================
- *
- * AST CONTRACT
- * ============================================================================
- *
- * The frontend AST must preserve at least:
- *
- *     - source span;
- *     - memory name;
- *     - generic arguments;
- *     - element/storage type;
- *     - dimensions;
- *     - modifiers;
- *     - attributes;
- *     - memory properties;
- *     - read ports;
- *     - write ports;
- *     - read/write ports;
- *     - initialization expressions;
- *     - access expressions;
- *     - requirements;
- *     - constraints;
- *     - preferences;
- *     - capability requirements.
- *
- * No physical device information should be inferred merely from syntax.
+ * No physical realization may be inferred solely from parsing.
  *
  * ============================================================================
- *
- * IR CONTRACT
+ */
+
+
+/*
+ * ============================================================================
+ * 25. IR CONTRACT
  * ============================================================================
  *
- * Lowering must convert the AST into the repository's canonical HDL/hardware
- * semantic representation.
+ * This grammar does not construct an IR.
  *
- * This grammar must NEVER construct:
+ * Semantic lowering must map the AST into the repository's canonical
+ * hardware/HDL semantic representation.
  *
+ * It MUST NOT create:
+ *
+ *     - a second memory IR;
+ *     - a second hardware IR;
+ *     - a quantum IR;
+ *     - a physical placement graph;
+ *     - a routing graph;
+ *     - a scheduling representation.
+ *
+ * If the memory participates in quantum-classical computation, the quantum
+ * semantic path remains:
+ *
+ *     domain-neutral AST
+ *          |
+ *          v
+ *     semantic analysis
+ *          |
+ *          v
  *     quantum::ir
- *     hardware placement
- *     physical memory addresses
- *     physical routing
- *     scheduling decisions
- *     target-specific allocation.
  *
- * If a memory is associated with quantum computation, the semantic/lowering
- * layer determines whether the operation participates in quantum semantics.
- *
- * quantum::ir remains the canonical quantum semantic boundary.
+ * This grammar never constructs quantum::ir.
  *
  * ============================================================================
- *
- * SCALABILITY CONTRACT
+ */
+
+
+/*
+ * ============================================================================
+ * 26. RESOURCE CONTRACT
  * ============================================================================
  *
- * This grammar is open-world with respect to:
+ * Memory resource analysis must distinguish:
  *
- *     dimensions;
- *     ports;
- *     memory declarations;
- *     properties;
- *     requirements;
- *     constraints;
- *     capabilities;
- *     generic parameters;
- *     symbolic expressions;
- *     module instances.
+ *     requirement
+ *     constraint
+ *     capability
+ *     preference
+ *     hint
  *
- * No parser-level numerical ceiling is encoded.
+ * Examples:
  *
- * A practical parser implementation may have external resource policies for:
+ *     requires capacity >= required_capacity;
  *
- *     memory;
- *     CPU time;
- *     recursion;
- *     token count;
- *     source size.
+ *     requires capability("memory.streaming");
  *
- * Such policies are implementation/runtime safety controls and MUST NOT be
- * represented as source-language semantic limits.
+ *     constraint latency <= target_latency;
+ *
+ *     prefer memory_policy;
+ *
+ *     hint implementation_policy;
+ *
+ * Resource availability is determined downstream.
  *
  * ============================================================================
- *
- * HARD-CODING AUDIT
+ */
+
+
+/*
+ * ============================================================================
+ * 27. SCALABILITY CONTRACT
  * ============================================================================
  *
- * This file contains no:
+ * The grammar is open with respect to:
  *
- *     fixed memory capacity;
- *     fixed address width;
- *     fixed bank count;
- *     fixed port count;
- *     fixed dimension count;
- *     fixed element count;
- *     fixed device count;
- *     fixed memory technology;
- *     fixed FPGA resource count;
- *     fixed ASIC resource count;
- *     fixed topology;
- *     fixed physical address;
- *     fixed device ID;
- *     fixed vendor.
+ *     memory declarations
+ *     dimensions
+ *     ports
+ *     properties
+ *     requirements
+ *     constraints
+ *     preferences
+ *     hints
+ *     capability requirements
+ *     generic arguments
+ *     nested memories
  *
- * ============================================================================
+ * No parser-level numerical ceiling is imposed.
  *
- * DETERMINISM
- * ============================================================================
+ * ANTLR repetition constructs are used instead of fixed cardinalities.
  *
- * The grammar contains:
+ * The compiler may still enforce operational safeguards for:
  *
- *     - no semantic predicates;
- *     - no actions;
- *     - no external state;
- *     - no environment reads;
- *     - no hardware discovery.
+ *     source size
+ *     parser memory
+ *     parser execution time
+ *     generated design size
+ *     semantic analysis cost
+ *     synthesis cost
  *
- * Therefore parsing is deterministic with respect to the token stream and
- * parser configuration.
+ * Such safeguards are implementation policies and MUST NOT become language
+ * semantics.
  *
  * ============================================================================
- *
- * COMPATIBILITY
+ */
+
+
+/*
+ * ============================================================================
+ * 28. DETERMINISM
  * ============================================================================
  *
- * Existing canonical HDL source:
+ * This grammar contains:
+ *
+ *     no actions
+ *     no semantic predicates
+ *     no external state
+ *     no filesystem access
+ *     no network access
+ *     no hardware discovery
+ *     no randomness
+ *     no runtime execution
+ *
+ * Therefore parsing depends only on:
+ *
+ *     source token stream
+ *     grammar version
+ *     parser configuration
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * 29. SAFE-RUST CONTRACT
+ * ============================================================================
+ *
+ * This grammar contains no Rust code.
+ *
+ * The consuming Zamani implementation remains required to use:
+ *
+ *     Rust 1.97 / Rust 1.97.1
+ *     Rust 2021
+ *     safe Rust only
+ *
+ * No unsafe Rust is required by this grammar.
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * 30. COMPATIBILITY CONTRACT
+ * ============================================================================
+ *
+ * The existing canonical declaration:
  *
  *     memory name: type [dimension];
  *
- * remains representable.
+ * remains supported.
  *
- * Existing module composition through:
+ * Existing HDL composition continues to enter through:
  *
  *     hdlMemoryDeclaration
  *
- * remains the integration boundary.
+ * The HDL composition root must therefore delegate that rule to this component
+ * and MUST NOT maintain a competing implementation.
  *
- * The canonical parser should import this grammar and stop maintaining a
- * second implementation of hdlMemoryDeclaration.
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * 31. REQUIRED HDL INTEGRATION
+ * ============================================================================
+ *
+ * grammar/hdl/hdl.g4
+ * ------------------
+ *
+ * Its member dispatcher currently exposes:
+ *
+ *     hdlMemoryDeclaration
+ *
+ * That remains the stable integration name.
+ *
+ * The implementation must be composed from this grammar component.
+ *
+ * There MUST NOT be two independent implementations of:
+ *
+ *     hdlMemoryDeclaration
+ *
+ * within the same generated parser.
+ *
+ *
+ * grammar/hdl/hardware-modules.g4
+ * -------------------------------
+ *
+ * Module composition may continue to consume:
+ *
+ *     hdlMemoryDeclaration
+ *
+ * without introducing another memory grammar.
+ *
+ *
+ * grammar/types/*
+ * ---------------
+ *
+ * This file delegates storage/element type syntax to:
+ *
+ *     typeExpression
+ *
+ * No hardware-specific second type system is created here.
+ *
+ *
+ * grammar/expressions/*
+ * --------------------
+ *
+ * This file delegates values and symbolic dimensions to:
+ *
+ *     expression
+ *     rangeExpression
+ *     argumentList
+ *
+ * No expression precedence is duplicated here.
+ *
+ *
+ * grammar/memory/*
+ * ----------------
+ *
+ * General memory semantics remain owned by the generic memory subsystem.
+ *
+ * This file represents HDL-specific structure and interface intent.
+ *
+ *
+ * grammar/resources/*
+ * -------------------
+ *
+ * Requirements and capabilities must ultimately map into the universal
+ * resource/capability model.
+ *
+ * This file does not create a second resource system.
+ *
+ *
+ * grammar/hardware/*
+ * ------------------
+ *
+ * Physical placement, topology, device identity, banking technology,
+ * memory-controller selection and target realization remain downstream.
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * 32. SOURCE-LEVEL EXAMPLES
+ * ============================================================================
+ *
+ * Simple logical memory:
+ *
+ *     memory data: Word [DEPTH];
+ *
+ *
+ * Symbolically sized memory:
+ *
+ *     memory data: Word [DEPTH];
+ *
+ *
+ * Multidimensional memory:
+ *
+ *     memory matrix: Word [ROWS][COLS];
+ *
+ *
+ * Generic memory:
+ *
+ *     memory tile<T, DEPTH>: T [DEPTH];
+ *
+ *
+ * Logical ports:
+ *
+ *     memory data: Word [DEPTH] {
+ *         input address: Address;
+ *         output value: Word;
+ *     };
+ *
+ *
+ * Requirement:
+ *
+ *     memory data: Word [DEPTH] {
+ *         requires capacity >= required_capacity;
+ *     };
+ *
+ *
+ * Capability:
+ *
+ *     memory data: Word [DEPTH] {
+ *         requires capability("memory.streaming");
+ *     };
+ *
+ *
+ * Constraint:
+ *
+ *     memory data: Word [DEPTH] {
+ *         constraint latency <= required_latency;
+ *     };
+ *
+ *
+ * Preference:
+ *
+ *     memory data: Word [DEPTH] {
+ *         prefer memory_policy;
+ *     };
+ *
+ *
+ * Hint:
+ *
+ *     memory data: Word [DEPTH] {
+ *         hint implementation_policy;
+ *     };
+ *
+ *
+ * Access intent:
+ *
+ *     memory data: Word [DEPTH] {
+ *         access(read, address = addr, data = value);
+ *     };
+ *
+ *
+ * Initialization:
+ *
+ *     memory data: Word [DEPTH] {
+ *         init = initialization_expression;
+ *     };
+ *
+ *
+ * None of these examples selects a physical memory technology.
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * 33. HARD-CODING AUDIT
+ * ============================================================================
+ *
+ * PROHIBITED UNIVERSAL ASSUMPTIONS:
+ *
+ *     [x] No MAX_MEMORY
+ *     [x] No MAX_DEPTH
+ *     [x] No MAX_WIDTH
+ *     [x] No MAX_BANKS
+ *     [x] No MAX_PORTS
+ *     [x] No MAX_READ_PORTS
+ *     [x] No MAX_WRITE_PORTS
+ *     [x] No MAX_ENTRIES
+ *     [x] No MAX_ADDRESS_BITS
+ *     [x] No MAX_DIMENSIONS
+ *     [x] No MAX_INSTANCES
+ *     [x] No fixed physical memory technology
+ *     [x] No fixed physical address
+ *     [x] No fixed bank identifier
+ *     [x] No fixed device identifier
+ *     [x] No fixed vendor
+ *     [x] No fixed topology
+ *     [x] No fixed FPGA resource count
+ *     [x] No fixed ASIC resource count
+ *
+ * Program-supplied numeric values remain valid program semantics.
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * 34. COMPLETION CRITERIA
+ * ============================================================================
+ *
+ * This file is complete when:
+ *
+ *     [x] The existing filename is retained.
+ *
+ *     [x] The canonical parser-facing vocabulary is ZamaniLexer.
+ *
+ *     [x] No second lexer is introduced.
+ *
+ *     [x] No duplicate expression grammar is introduced.
+ *
+ *     [x] No duplicate type grammar is introduced.
+ *
+ *     [x] No duplicate identifier grammar is introduced.
+ *
+ *     [x] Symbolic dimensions are supported.
+ *
+ *     [x] Arbitrary numbers of dimensions are supported.
+ *
+ *     [x] Arbitrary numbers of logical ports are supported.
+ *
+ *     [x] Arbitrary numbers of memory properties are supported.
+ *
+ *     [x] Requirements are distinct from constraints.
+ *
+ *     [x] Preferences are distinct from requirements.
+ *
+ *     [x] Hints are distinct from preferences.
+ *
+ *     [x] Capability requirements remain target-independent.
+ *
+ *     [x] Initialization is source-level intent.
+ *
+ *     [x] Accesses remain open-world.
+ *
+ *     [x] No physical address is required.
+ *
+ *     [x] No physical bank is required.
+ *
+ *     [x] No physical memory technology is selected.
+ *
+ *     [x] No resource ceiling is encoded.
+ *
+ *     [x] No quantum IR is introduced.
+ *
+ *     [x] No QEC implementation is introduced.
+ *
+ *     [x] No ZQN implementation is introduced.
+ *
+ *     [x] No routing is introduced.
+ *
+ *     [x] No scheduling is introduced.
+ *
+ *     [x] No hardware discovery is introduced.
+ *
+ *     [x] No Rust actions are introduced.
+ *
+ *     [x] No unsafe Rust is required.
+ *
+ *     [x] Existing hdlMemoryDeclaration remains the integration boundary.
+ *
+ *     [x] Downstream AST/semantic/IR ownership is predetermined.
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * 35. FINAL INVARIANT
+ * ============================================================================
+ *
+ * This grammar defines:
+ *
+ *     WHAT an HDL memory declaration means structurally.
+ *
+ * It does NOT define:
+ *
+ *     HOW that memory is physically realized.
+ *
+ * Consequently a Zamani program can describe portable memory intent once and
+ * allow later compilation/lowering to determine an appropriate realization
+ * from the available resources and target capabilities.
  *
  * ============================================================================
  */
