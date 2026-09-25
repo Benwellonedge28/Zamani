@@ -1,9 +1,3 @@
-parser grammar hdl;
-
-options {
-    tokenVocab = ZamaniTokens;
-}
-
 /*
  * ============================================================================
  * Zamani Universal Programming Language
@@ -12,258 +6,617 @@ options {
  * File:
  *     grammar/hdl/hdl.g4
  *
- * Authority:
- *     Canonical HDL parser grammar.
+ * Status:
+ *     Canonical / production HDL parser composition root.
  *
- * Purpose:
- *     Defines the syntactic structure of Zamani hardware-description and
- *     hardware/software-co-design constructs.
+ * Language:
+ *     Zamani
+ *
+ * Grammar technology:
+ *     ANTLR4 parser grammar
  *
  * Rust baseline:
  *     Rust 1.97 / Rust 1.97.1
- *
- * Safety:
- *     This grammar contains no target-language actions, predicates,
- *     filesystem access, networking, process execution, mutable global state,
- *     or unsafe code.
+ *     Rust edition 2021
+ *     Zamani-owned Rust MUST remain safe Rust.
  *
  * ============================================================================
- * OWNERSHIP
+ * AUTHORITY
  * ============================================================================
  *
- * THIS FILE OWNS:
+ * This file is the canonical HDL parser composition root.
  *
- *   - HDL source structure;
- *   - hardware-module declarations;
- *   - HDL interfaces and ports;
- *   - HDL signals and nets;
- *   - registers;
- *   - memories;
- *   - clocks and resets;
- *   - combinational processes;
- *   - sequential processes;
- *   - procedural HDL;
- *   - state machines;
- *   - pipelines;
- *   - module instances;
- *   - generate constructs;
- *   - HDL assertions;
- *   - HDL timing declarations;
- *   - HDL-local expressions;
- *   - HDL-local type syntax;
- *   - target-independent hardware intent syntax.
+ * Normative architecture:
  *
- * THIS FILE DOES NOT OWN:
- *
- *   - lexical recognition;
- *   - AST implementation;
- *   - semantic type checking;
- *   - hardware discovery;
- *   - target selection;
- *   - physical placement;
- *   - physical routing;
- *   - synthesis;
- *   - timing closure;
- *   - scheduling;
- *   - resource allocation;
- *   - FPGA/ASIC implementation;
- *   - CPU/GPU/QPU selection;
- *   - quantum IR;
- *   - QEC;
- *   - ZQN;
- *   - runtime execution.
- *
- * ============================================================================
- * ARCHITECTURE
- * ============================================================================
- *
- *     Zamani source
+ *     grammar/DESIGN.md
  *          |
  *          v
- *     ZamaniTokens
+ *     grammar/spec/hdl.md
  *          |
  *          v
- *     canonical parser/domain dispatcher
+ *     grammar/hdl/hdl.g4
+ *          |
+ *          +--> HDL parser delegates
  *          |
  *          v
- *     hdlDesign
+ *     grammar/Zamani.g4
  *          |
  *          v
- *     HDL frontend AST
+ *     canonical lexer / parser
+ *          |
+ *          v
+ *     domain-neutral AST
  *          |
  *          v
  *     semantic analysis
  *          |
- *          +--> type checking
- *          +--> width checking
- *          +--> capability checking
- *          +--> resource checking
- *          +--> clock-domain analysis
- *          +--> hardware legality
- *          |
  *          v
- *     canonical hardware semantic representation
+ *     canonical hardware semantic representation / IR
  *          |
  *          +--> optimization
- *          +--> synthesis
+ *          +--> verification
  *          +--> scheduling
+ *          +--> synthesis
  *          +--> placement
  *          +--> routing
  *          +--> target lowering
- *          |
- *          v
- *     hardware / runtime / deployment
+ *
+ * This file owns syntax composition.
+ *
+ * It DOES NOT own:
+ *
+ *     - lexical definitions;
+ *     - a second lexer;
+ *     - AST implementation;
+ *     - semantic analysis;
+ *     - hardware discovery;
+ *     - resource allocation;
+ *     - physical placement;
+ *     - physical routing;
+ *     - synthesis implementation;
+ *     - timing closure;
+ *     - target selection;
+ *     - vendor APIs;
+ *     - FPGA/ASIC implementation;
+ *     - CPU/GPU/QPU selection;
+ *     - quantum::ir;
+ *     - QEC;
+ *     - ZQN;
+ *     - HAL;
+ *     - runtime execution.
  *
  * ============================================================================
  * POCO-REAF
  * ============================================================================
  *
- * HDL source expresses:
+ * Zamani HDL describes PORTABLE HARDWARE INTENT.
  *
- *     - what hardware means;
- *     - what interfaces exist;
- *     - what behavior is required;
- *     - what timing relationships are semantic;
- *     - what resource/capability requirements are genuine.
+ * It describes:
  *
- * HDL source does NOT implicitly select:
+ *     WHAT
+ *     - a hardware module means;
+ *     - interfaces exist;
+ *     - signals communicate;
+ *     - storage is required;
+ *     - behavior occurs;
+ *     - timing relationships matter;
+ *     - protocols apply;
+ *     - capabilities are required;
+ *     - resources are required;
+ *     - correctness properties must hold.
  *
- *     - a specific FPGA;
- *     - a specific ASIC;
- *     - a particular fabrication node;
- *     - a particular vendor;
- *     - a particular package;
- *     - physical pins;
- *     - physical addresses;
- *     - a fixed LUT count;
- *     - a fixed BRAM count;
- *     - a fixed DSP count;
- *     - a fixed register count;
- *     - a fixed routing topology;
- *     - a fixed machine size.
+ * It does NOT implicitly describe:
+ *
+ *     WHICH FPGA
+ *     WHICH ASIC
+ *     WHICH CPU
+ *     WHICH GPU
+ *     WHICH QPU
+ *     WHICH physical region
+ *     WHICH physical pin
+ *     WHICH physical register
+ *     WHICH physical memory block
+ *     WHICH vendor primitive
+ *     WHICH routing path
+ *     WHICH placement
+ *     WHICH fabrication node
+ *
+ * Those are downstream realization decisions.
  *
  * ============================================================================
  * SCALABILITY
  * ============================================================================
  *
- * No grammar-level maximum is imposed on:
+ * This grammar imposes no language-level maximum on:
  *
  *     modules
+ *     interfaces
  *     ports
  *     signals
  *     nets
  *     registers
  *     memories
+ *     dimensions
  *     states
  *     transitions
  *     pipeline stages
  *     instances
  *     generated instances
- *     widths
- *     dimensions
  *     processes
  *     clocks
+ *     clock domains
+ *     widths
+ *     array dimensions
+ *     topology size
  *     hardware blocks
+ *     design hierarchy
  *
- * ANTLR repetition operators represent arbitrary cardinality.
+ * Repetition is represented by ANTLR repetition operators.
  *
- * Resource limits belong to:
+ * Resource exhaustion is an implementation concern, not a language rule.
  *
- *     parser resource policy
- *     compiler resource policy
+ * A compiler MAY impose operational safeguards for:
+ *
+ *     - memory exhaustion;
+ *     - parser exhaustion;
+ *     - pathological generated designs;
+ *     - macro/generate expansion;
+ *     - compile-time evaluation;
+ *     - denial-of-service protection.
+ *
+ * Such safeguards MUST NOT become semantic limits of Zamani HDL.
+ *
+ * ============================================================================
+ * HARD-CODING PROHIBITION
+ * ============================================================================
+ *
+ * This grammar MUST NOT define universal constants such as:
+ *
+ *     MAX_MODULES
+ *     MAX_PORTS
+ *     MAX_SIGNALS
+ *     MAX_REGISTERS
+ *     MAX_MEMORIES
+ *     MAX_STATES
+ *     MAX_PIPELINE_STAGES
+ *     MAX_WIDTH
+ *     MAX_DEVICES
+ *     MAX_LUTS
+ *     MAX_BRAMS
+ *     MAX_DSPS
+ *     MAX_FPGAS
+ *     MAX_ASICS
+ *     MAX_NODES
+ *
+ * It MUST NOT encode assumptions such as:
+ *
+ *     wire [31:0]
+ *     register<32>
+ *     memory<64GB>
+ *     FPGA_WITH_100000_LUTS
+ *
+ * unless the quantity is explicitly part of the user's program semantics.
+ *
+ * A width such as:
+ *
+ *     width = 32
+ *
+ * is valid program data.
+ *
+ * A language rule saying:
+ *
+ *     widths <= 32
+ *
+ * is not valid.
+ *
+ * ============================================================================
+ * REQUIREMENT / CAPABILITY / PREFERENCE / REALIZATION
+ * ============================================================================
+ *
+ * HDL source must distinguish:
+ *
+ *     REQUIREMENT
+ *         semantic condition that MUST be satisfied.
+ *
+ *     CAPABILITY
+ *         property a target must provide.
+ *
+ *     PREFERENCE
+ *         optimization guidance that may be ignored if semantics remain valid.
+ *
+ *     HINT
+ *         non-binding implementation guidance.
+ *
+ *     REALIZATION
+ *         target-specific downstream decision.
+ *
+ * Examples:
+ *
+ *     requires capability("streaming")
+ *     requires memory >= required_memory
+ *     requires timing(...)
+ *     prefer accelerator(...)
+ *     hint(...)
+ *
+ * Physical realization belongs downstream.
+ *
+ * ============================================================================
+ * CANONICAL LEXER
+ * ============================================================================
+ *
+ * This parser MUST consume the repository's canonical token vocabulary.
+ *
+ * There MUST NOT be an HDL-specific lexer.
+ *
+ * The canonical lexer owns:
+ *
+ *     identifiers
+ *     literals
+ *     operators
+ *     punctuation
+ *     keywords
+ *     comments
+ *     source positions
+ *
+ * HDL parser rules consume those tokens.
+ *
+ * If an HDL token is missing from the canonical lexer, that is a lexer
+ * conformance issue and MUST NOT be solved by adding a second lexer here.
+ *
+ * ============================================================================
+ * DELEGATE INTEGRATION
+ * ============================================================================
+ *
+ * The following files are subordinate HDL grammar components:
+ *
+ *     hardware-modules.g4
+ *     hardware-generics.g4
+ *     hardware-parameters.g4
+ *     hardware-interfaces.g4
+ *     ports.g4
+ *     signals.g4
+ *     wires.g4
+ *     registers.g4
+ *     memories.g4
+ *     clocks.g4
+ *     timing.g4
+ *     processes.g4
+ *     combinational.g4
+ *     sequential.g4
+ *     state_machines.g4
+ *     pipelines.g4
+ *     hardware-dialects.g4
+ *
+ * Their responsibility is feature-local syntax.
+ *
+ * This file owns:
+ *
+ *     - canonical HDL entry;
+ *     - HDL source-unit composition;
+ *     - member-category composition;
+ *     - cross-domain HDL composition;
+ *     - shared HDL syntax that cannot be owned by one delegate;
+ *     - integration points.
+ *
+ * A delegate MUST NOT become an independent HDL root.
+ *
+ * ============================================================================
+ * AST CONTRACT
+ * ============================================================================
+ *
+ * Every accepted construct MUST map through the repository's domain-neutral
+ * frontend AST.
+ *
+ * The grammar MUST NOT construct:
+ *
+ *     netlists
+ *     vendor primitives
+ *     FPGA placement objects
+ *     routing graphs
+ *     physical memories
+ *     physical clocks
+ *     QPU objects
+ *     QEC objects
+ *     HAL objects
+ *
+ * The semantic pipeline is:
+ *
+ *     grammar
+ *         |
+ *         v
+ *     domain-neutral AST
+ *         |
+ *         v
+ *     semantic validation
+ *         |
+ *         v
+ *     canonical hardware semantic representation / IR
+ *         |
+ *         v
+ *     downstream realization
+ *
+ * ============================================================================
+ * QUANTUM INTEGRATION
+ * ============================================================================
+ *
+ * HDL may describe control, timing, interfaces, memory, and hardware
+ * structures surrounding quantum computation.
+ *
+ * HDL MUST NOT create a competing quantum IR.
+ *
+ * Where a construct has quantum semantics:
+ *
+ *     HDL/hybrid source
+ *          |
+ *          v
  *     semantic analysis
- *     synthesis
- *     target capability analysis
- *     deployment
- *     runtime
- *     physical resource availability
+ *          |
+ *          v
+ *     existing quantum::ir
+ *
+ * Quantum operation meaning remains owned by the quantum subsystem.
+ *
+ * QEC remains owned by the QEC subsystem.
+ *
+ * ZQN remains owned by ZQN.
+ *
+ * Routing remains owned by routing.
+ *
+ * Scheduling remains owned by scheduling.
+ *
+ * HAL remains downstream.
  *
  * ============================================================================
- * IMPORTANT INTEGRATION RULE
+ * CROSS-DOMAIN INTEGRATION
  * ============================================================================
  *
- * HDL-specific keywords are owned by ZamaniTokens.
+ * HDL may compose with:
  *
- * DO NOT create a second lexer in this file.
+ *     classical
+ *     quantum
+ *     hybrid
+ *     AI
+ *     data
+ *     networking
+ *     distributed
+ *     security
+ *     resources
+ *     hardware
+ *     execution
+ *     compile
+ *     interoperability
  *
- * The canonical lexer therefore needs stable HDL tokens such as:
+ * Domain semantics remain owned by those domains.
  *
- *     K_MODULE
- *     K_INPUT
- *     K_OUTPUT
- *     K_INOUT
- *     K_INTERFACE
- *     K_SIGNAL
- *     K_WIRE
- *     K_NET
- *     K_LOGIC
- *     K_REGISTER
- *     K_MEMORY
- *     K_CLOCK
- *     K_RESET
- *     K_PROCESS
- *     K_ALWAYS
- *     K_COMBINATIONAL
- *     K_SEQUENTIAL
- *     K_STATE
- *     K_TRANSITION
- *     K_PIPELINE
- *     K_STAGE
- *     K_INSTANCE
- *     K_GENERATE
- *     K_PARAMETER
- *     K_LOCALPARAM
- *     K_SIGNED
- *     K_UNSIGNED
- *     K_RISING
- *     K_FALLING
- *     K_POSEDGE
- *     K_NEGEDGE
- *     K_ENABLE
- *     K_SYNCHRONOUS
- *     K_ASYNCHRONOUS
- *     K_LATCH
- *     K_TRI
- *     K_PULLUP
- *     K_PULLDOWN
- *     K_HIGHZ
- *     K_DRIVE
- *     K_RESOLVE
- *     K_ASSERT
- *     K_ASSUME
- *     K_COVER
- *     K_FOREVER
- *     K_REPEAT
- *     K_CONNECT
- *     K_MAP
- *     K_TO
- *     K_FROM
- *     K_DOMAIN
- *     K_TIMING
- *     K_LATENCY
- *     K_THROUGHPUT
- *     K_FREQUENCY
- *     K_DUTY
- *     K_PHASE
+ * HDL describes the hardware-facing structure and intent.
  *
- * These are lexical-language compatibility changes, not semantic hardware
- * assumptions.
+ * ============================================================================
+ * TIMING
+ * ============================================================================
+ *
+ * Timing syntax is declarative.
+ *
+ * The grammar may accept:
+ *
+ *     period
+ *     frequency
+ *     duty cycle
+ *     phase
+ *     latency
+ *     throughput
+ *     setup intent
+ *     hold intent
+ *     uncertainty
+ *     jitter
+ *     clock relationships
+ *     timing constraints
+ *
+ * Timing analysis and closure are downstream.
+ *
+ * ============================================================================
+ * CLOCKS
+ * ============================================================================
+ *
+ * Clock syntax describes source-level clock intent.
+ *
+ * The grammar does not select:
+ *
+ *     physical oscillator
+ *     PLL
+ *     clock tree
+ *     clock buffer
+ *     physical clock pin
+ *
+ * Clock-domain analysis is semantic.
+ *
+ * ============================================================================
+ * MEMORY
+ * ============================================================================
+ *
+ * HDL memory declarations describe logical storage.
+ *
+ * They may express:
+ *
+ *     element type
+ *     dimensions
+ *     address domain
+ *     read/write intent
+ *     synchronization intent
+ *     initialization
+ *     latency requirements
+ *     bandwidth requirements
+ *     capabilities
+ *
+ * They MUST NOT imply a fixed physical memory technology.
+ *
+ * ============================================================================
+ * HARDWARE ARRAYS
+ * ============================================================================
+ *
+ * Repetition may be:
+ *
+ *     explicit;
+ *     parameterized;
+ *     generated;
+ *     symbolic.
+ *
+ * Physical replication is downstream.
+ *
+ * ============================================================================
+ * GENERATION
+ * ============================================================================
+ *
+ * Generate constructs may describe parameterized hardware families.
+ *
+ * Generation semantics MUST be deterministic for a given semantic input.
+ *
+ * Resource limits for elaboration are implementation policies.
+ *
+ * ============================================================================
+ * PROCEDURAL HDL
+ * ============================================================================
+ *
+ * Process, combinational, and sequential behavior is source syntax only.
+ *
+ * Semantic analysis determines:
+ *
+ *     combinational legality
+ *     sequential legality
+ *     clock relationships
+ *     reset behavior
+ *     driver conflicts
+ *     read/write legality
+ *     CDC conditions
+ *     timing constraints
+ *
+ * ============================================================================
+ * STATE MACHINES
+ * ============================================================================
+ *
+ * State machines are unbounded in language semantics.
+ *
+ * The grammar imposes no fixed number of:
+ *
+ *     states
+ *     transitions
+ *     actions
+ *     guards
+ *
+ * ============================================================================
+ * PIPELINES
+ * ============================================================================
+ *
+ * Pipelines describe semantic stage relationships.
+ *
+ * The grammar imposes no fixed pipeline depth.
+ *
+ * Physical retiming, balancing, placement, and scheduling are downstream.
+ *
+ * ============================================================================
+ * VERIFICATION
+ * ============================================================================
+ *
+ * HDL may express:
+ *
+ *     assert
+ *     assume
+ *     cover
+ *
+ * and other repository-supported verification constructs.
+ *
+ * Verification semantics remain downstream.
+ *
+ * ============================================================================
+ * DIALECTS
+ * ============================================================================
+ *
+ * Hardware dialects are open-world.
+ *
+ * The core grammar MUST NOT enumerate every future vendor, accelerator,
+ * fabrication technology, protocol, or hardware family.
+ *
+ * Dialect identity is data.
+ *
+ * Dialect compatibility is semantic.
+ *
+ * ============================================================================
+ * DIAGNOSTICS
+ * ============================================================================
+ *
+ * The parser MUST preserve source locations through the normal ANTLR parse
+ * tree/token stream.
+ *
+ * Semantic diagnostics MUST be able to point to:
+ *
+ *     module
+ *     port
+ *     signal
+ *     register
+ *     memory
+ *     process
+ *     timing constraint
+ *     state
+ *     transition
+ *     pipeline stage
+ *     instance
+ *     generate construct
+ *
+ * ============================================================================
+ * SAFE RUST
+ * ============================================================================
+ *
+ * This grammar contains no embedded Rust actions or predicates.
+ *
+ * Rust implementations consuming this grammar MUST:
+ *
+ *     - target Rust 1.97 / 1.97.1;
+ *     - use Rust 2021;
+ *     - use safe Rust;
+ *     - contain no `unsafe`;
+ *     - avoid target-size constants;
+ *     - preserve source spans;
+ *     - use structured diagnostics;
+ *     - remain deterministic where required.
+ *
+ * ============================================================================
+ * PUBLIC ENTRY POINT
+ * ============================================================================
+ *
+ * hdlDesign is the canonical standalone HDL entry rule.
+ *
+ * grammar/Zamani.g4 MUST invoke the HDL domain through this boundary rather
+ * than duplicating the HDL grammar.
  *
  * ============================================================================
  */
 
-/* ============================================================================
- * PUBLIC ENTRY POINT
- * ========================================================================== */
+/*
+ * ============================================================================
+ * ROOT
+ * ============================================================================
+ */
 
 hdlDesign
-    : hdlModuleDeclaration+
-    EOF
+    : hdlSourceUnit* EOF
     ;
 
-/* ============================================================================
- * MODULES
- * ========================================================================== */
+hdlSourceUnit
+    : hdlModuleDeclaration
+    | hdlInterfaceDeclaration
+    | hdlPackageDeclaration
+    | hdlDialectDeclaration
+    ;
+
+/*
+ * ============================================================================
+ * MODULE
+ *
+ * The detailed module syntax is intentionally delegated to the existing
+ * hardware-modules grammar.
+ *
+ * These rules remain the stable composition contract.
+ * ============================================================================
+ */
 
 hdlModuleDeclaration
     : K_MODULE
@@ -280,38 +633,42 @@ hdlModuleBody
     ;
 
 hdlModuleMember
-    : hdlAttributes*
-      (
-          hdlParameterDeclaration
-        | hdlLocalParameterDeclaration
-        | hdlTypeDeclaration
-        | hdlInterfaceDeclaration
-        | hdlPortDeclarationStatement
-        | hdlSignalDeclaration
-        | hdlNetDeclaration
-        | hdlRegisterDeclaration
-        | hdlMemoryDeclaration
-        | hdlClockDeclaration
-        | hdlResetDeclaration
-        | hdlAssignment
-        | hdlProcessDeclaration
-        | hdlAlwaysDeclaration
-        | hdlCombinationalDeclaration
-        | hdlSequentialDeclaration
-        | hdlStateMachineDeclaration
-        | hdlPipelineDeclaration
-        | hdlInstanceDeclaration
-        | hdlGenerateDeclaration
-        | hdlTimingDeclaration
-        | hdlAssertion
-        | hdlBlockDeclaration
-        | hdlExpressionStatement
-      )
+    : hdlAttribute*
+      hdlModuleMemberCore
     ;
 
-/* ============================================================================
- * GENERICS / PARAMETERS
- * ========================================================================== */
+hdlModuleMemberCore
+    : hdlParameterDeclaration
+    | hdlLocalParameterDeclaration
+    | hdlTypeDeclaration
+    | hdlInterfaceDeclaration
+    | hdlPortDeclarationStatement
+    | hdlSignalDeclaration
+    | hdlNetDeclaration
+    | hdlRegisterDeclaration
+    | hdlMemoryDeclaration
+    | hdlClockDeclaration
+    | hdlResetDeclaration
+    | hdlAssignment
+    | hdlProcessDeclaration
+    | hdlAlwaysDeclaration
+    | hdlCombinationalDeclaration
+    | hdlSequentialDeclaration
+    | hdlStateMachineDeclaration
+    | hdlPipelineDeclaration
+    | hdlInstanceDeclaration
+    | hdlGenerateDeclaration
+    | hdlTimingDeclaration
+    | hdlAssertion
+    | hdlBlockDeclaration
+    | hdlExpressionStatement
+    ;
+
+/*
+ * ============================================================================
+ * GENERICS
+ * ============================================================================
+ */
 
 hdlGenericParameterBlock
     : LESS_THAN
@@ -321,36 +678,40 @@ hdlGenericParameterBlock
 
 hdlGenericParameterList
     : hdlGenericParameter
-      (
-          COMMA
-          hdlGenericParameter
-      )*
+      (COMMA hdlGenericParameter)*
       COMMA?
     ;
 
 hdlGenericParameter
     : identifier
       (
-          COLON
-          hdlTypeExpression
+          COLON hdlTypeExpression
       )?
       (
-          ASSIGN
-          hdlExpression
+          ASSIGN hdlExpression
       )?
       hdlConstraintClause*
     ;
+
+hdlConstraintClause
+    : K_REQUIRES hdlExpression
+    | K_WHERE hdlExpression
+    ;
+
+/*
+ * ============================================================================
+ * PARAMETERS
+ * ============================================================================
+ */
 
 hdlParameterDeclaration
     : K_PARAMETER
       identifier
       (
-          COLON
-          hdlTypeExpression
+          COLON hdlTypeExpression
       )?
       (
-          ASSIGN
-          hdlExpression
+          ASSIGN hdlExpression
       )?
       SEMICOLON
     ;
@@ -359,24 +720,20 @@ hdlLocalParameterDeclaration
     : K_LOCALPARAM
       identifier
       (
-          COLON
-          hdlTypeExpression
+          COLON hdlTypeExpression
       )?
       ASSIGN
       hdlExpression
       SEMICOLON
     ;
 
-hdlConstraintClause
-    : K_REQUIRES
-      hdlExpression
-    | K_WHERE
-      hdlExpression
-    ;
-
-/* ============================================================================
+/*
+ * ============================================================================
  * PORTS
- * ========================================================================== */
+ *
+ * Logical ports only. Physical pins belong downstream.
+ * ============================================================================
+ */
 
 hdlPortBlock
     : LPAREN
@@ -386,21 +743,17 @@ hdlPortBlock
 
 hdlPortDeclarationList
     : hdlPortDeclaration
-      (
-          COMMA
-          hdlPortDeclaration
-      )*
+      (COMMA hdlPortDeclaration)*
       COMMA?
     ;
 
 hdlPortDeclaration
-    : hdlAttributes*
+    : hdlAttribute*
       hdlPortDirection?
       hdlPortModifier*
       identifier
       (
-          COLON
-          hdlTypeExpression
+          COLON hdlTypeExpression
       )?
       hdlPortConstraint*
     ;
@@ -419,24 +772,21 @@ hdlPortModifier
     ;
 
 hdlPortConstraint
-    : LBRACKET
-      hdlRangeExpression
-      RBRACKET
+    : LBRACKET hdlRangeExpression RBRACKET
     | hdlAttribute
     ;
 
-/*
- * A declaration form is also permitted inside a module body.
- */
 hdlPortDeclarationStatement
     : hdlPortDirection
       hdlPortDeclarationList
       SEMICOLON
     ;
 
-/* ============================================================================
+/*
+ * ============================================================================
  * INTERFACES
- * ========================================================================== */
+ * ============================================================================
+ */
 
 hdlInterfaceDeclaration
     : K_INTERFACE
@@ -452,7 +802,7 @@ hdlInterfaceBody
     ;
 
 hdlInterfaceMember
-    : hdlAttributes*
+    : hdlAttribute*
       (
           hdlInterfacePort
         | hdlInterfaceSignal
@@ -465,8 +815,7 @@ hdlInterfacePort
     : hdlPortDirection
       identifier
       (
-          COLON
-          hdlTypeExpression
+          COLON hdlTypeExpression
       )?
       SEMICOLON
     ;
@@ -475,8 +824,7 @@ hdlInterfaceSignal
     : K_SIGNAL
       identifier
       (
-          COLON
-          hdlTypeExpression
+          COLON hdlTypeExpression
       )?
       SEMICOLON
     ;
@@ -485,23 +833,19 @@ hdlInterfaceParameter
     : K_PARAMETER
       identifier
       (
-          COLON
-          hdlTypeExpression
+          COLON hdlTypeExpression
       )?
       (
-          ASSIGN
-          hdlExpression
+          ASSIGN hdlExpression
       )?
       SEMICOLON
     ;
 
-/* ============================================================================
+/*
+ * ============================================================================
  * ATTRIBUTES
- * ========================================================================== */
-
-hdlAttributes
-    : hdlAttribute+
-    ;
+ * ============================================================================
+ */
 
 hdlAttribute
     : AT
@@ -515,16 +859,17 @@ hdlAttribute
 
 hdlArgumentList
     : hdlExpression
-      (
-          COMMA
-          hdlExpression
-      )*
+      (COMMA hdlExpression)*
       COMMA?
     ;
 
-/* ============================================================================
+/*
+ * ============================================================================
  * TYPES
- * ========================================================================== */
+ *
+ * Widths and dimensions are expressions, not fixed constants.
+ * ============================================================================
+ */
 
 hdlTypeDeclaration
     : K_TYPE
@@ -544,9 +889,7 @@ hdlTypePrimary
     : identifier
     | hdlQualifiedName
     | hdlBuiltinType
-    | LPAREN
-      hdlTypeExpression
-      RPAREN
+    | LPAREN hdlTypeExpression RPAREN
     ;
 
 hdlBuiltinType
@@ -570,10 +913,7 @@ hdlTypeSuffix
 
 hdlTypeArgumentList
     : hdlTypeArgument
-      (
-          COMMA
-          hdlTypeArgument
-      )*
+      (COMMA hdlTypeArgument)*
       COMMA?
     ;
 
@@ -582,9 +922,11 @@ hdlTypeArgument
     | hdlExpression
     ;
 
-/* ============================================================================
- * SIGNALS / NETS
- * ========================================================================== */
+/*
+ * ============================================================================
+ * SIGNALS
+ * ============================================================================
+ */
 
 hdlSignalDeclaration
     : K_SIGNAL
@@ -594,24 +936,25 @@ hdlSignalDeclaration
 
 hdlSignalDeclaratorList
     : hdlSignalDeclarator
-      (
-          COMMA
-          hdlSignalDeclarator
-      )*
+      (COMMA hdlSignalDeclarator)*
       COMMA?
     ;
 
 hdlSignalDeclarator
     : identifier
       (
-          COLON
-          hdlTypeExpression
+          COLON hdlTypeExpression
       )?
       (
-          ASSIGN
-          hdlExpression
+          ASSIGN hdlExpression
       )?
     ;
+
+/*
+ * ============================================================================
+ * NETS / WIRES
+ * ============================================================================
+ */
 
 hdlNetDeclaration
     : K_NET
@@ -628,36 +971,32 @@ hdlNetKind
 
 hdlNetDeclaratorList
     : hdlNetDeclarator
-      (
-          COMMA
-          hdlNetDeclarator
-      )*
+      (COMMA hdlNetDeclarator)*
       COMMA?
     ;
 
 hdlNetDeclarator
     : identifier
       (
-          COLON
-          hdlTypeExpression
+          COLON hdlTypeExpression
       )?
     ;
 
-/* ============================================================================
+/*
+ * ============================================================================
  * REGISTERS
- * ========================================================================== */
+ * ============================================================================
+ */
 
 hdlRegisterDeclaration
     : K_REGISTER
       identifier
       (
-          COLON
-          hdlTypeExpression
+          COLON hdlTypeExpression
       )?
       hdlRegisterProperty*
       (
-          ASSIGN
-          hdlExpression
+          ASSIGN hdlExpression
       )?
       SEMICOLON
     ;
@@ -668,9 +1007,14 @@ hdlRegisterProperty
     | hdlAttribute
     ;
 
-/* ============================================================================
+/*
+ * ============================================================================
  * MEMORY
- * ========================================================================== */
+ *
+ * Dimensions are semantic expressions.
+ * No physical memory technology is selected here.
+ * ============================================================================
+ */
 
 hdlMemoryDeclaration
     : K_MEMORY
@@ -683,16 +1027,12 @@ hdlMemoryDeclaration
     ;
 
 hdlMemoryDimension
-    : LBRACKET
-      hdlRangeExpression
-      RBRACKET
+    : LBRACKET hdlRangeExpression RBRACKET
     ;
 
 hdlMemoryProperty
-    : K_READ
-      hdlMemoryAccessMode?
-    | K_WRITE
-      hdlMemoryAccessMode?
+    : K_READ hdlMemoryAccessMode?
+    | K_WRITE hdlMemoryAccessMode?
     | hdlAttribute
     ;
 
@@ -701,31 +1041,26 @@ hdlMemoryAccessMode
     | K_ASYNC
     ;
 
-/* ============================================================================
+/*
+ * ============================================================================
  * CLOCKS / RESETS
- * ========================================================================== */
+ * ============================================================================
+ */
 
 hdlClockDeclaration
     : K_CLOCK
       identifier
       (
-          COLON
-          hdlTypeExpression
+          COLON hdlTypeExpression
       )?
       hdlClockProperty*
       SEMICOLON
     ;
 
 hdlClockProperty
-    : K_FREQUENCY
-      ASSIGN
-      hdlExpression
-    | K_DUTY
-      ASSIGN
-      hdlExpression
-    | K_PHASE
-      ASSIGN
-      hdlExpression
+    : K_FREQUENCY ASSIGN hdlExpression
+    | K_DUTY ASSIGN hdlExpression
+    | K_PHASE ASSIGN hdlExpression
     | hdlAttribute
     ;
 
@@ -733,8 +1068,7 @@ hdlResetDeclaration
     : K_RESET
       identifier
       (
-          COLON
-          hdlTypeExpression
+          COLON hdlTypeExpression
       )?
       hdlResetProperty*
       SEMICOLON
@@ -751,9 +1085,7 @@ hdlResetProperty
 hdlResetClause
     : K_RESET
       (
-          LPAREN
-          hdlExpression
-          RPAREN
+          LPAREN hdlExpression RPAREN
       )?
     ;
 
@@ -764,9 +1096,11 @@ hdlClockReference
       RPAREN
     ;
 
-/* ============================================================================
+/*
+ * ============================================================================
  * PROCESSES
- * ========================================================================== */
+ * ============================================================================
+ */
 
 hdlProcessDeclaration
     : K_PROCESS
@@ -799,28 +1133,23 @@ hdlProcessSensitivity
 
 hdlSensitivityList
     : hdlSensitivityItem
-      (
-          COMMA
-          hdlSensitivityItem
-      )*
+      (COMMA hdlSensitivityItem)*
       COMMA?
     ;
 
 hdlSensitivityItem
-    : K_POSEDGE
-      hdlExpression
-    | K_NEGEDGE
-      hdlExpression
-    | K_RISING
-      hdlExpression
-    | K_FALLING
-      hdlExpression
+    : K_POSEDGE hdlExpression
+    | K_NEGEDGE hdlExpression
+    | K_RISING hdlExpression
+    | K_FALLING hdlExpression
     | hdlExpression
     ;
 
-/* ============================================================================
- * BLOCKS
- * ========================================================================== */
+/*
+ * ============================================================================
+ * PROCEDURAL BLOCK
+ * ============================================================================
+ */
 
 hdlBlock
     : LBRACE
@@ -829,7 +1158,7 @@ hdlBlock
     ;
 
 hdlBlockItem
-    : hdlAttributes*
+    : hdlAttribute*
       (
           hdlVariableDeclaration
         | hdlAssignment
@@ -855,20 +1184,20 @@ hdlBlockDeclaration
       hdlBlock
     ;
 
-/* ============================================================================
+/*
+ * ============================================================================
  * LOCAL VARIABLES
- * ========================================================================== */
+ * ============================================================================
+ */
 
 hdlVariableDeclaration
     : hdlVariableKind
       identifier
       (
-          COLON
-          hdlTypeExpression
+          COLON hdlTypeExpression
       )?
       (
-          ASSIGN
-          hdlExpression
+          ASSIGN hdlExpression
       )?
       SEMICOLON
     ;
@@ -879,9 +1208,11 @@ hdlVariableKind
     | K_CONST
     ;
 
-/* ============================================================================
+/*
+ * ============================================================================
  * ASSIGNMENTS
- * ========================================================================== */
+ * ============================================================================
+ */
 
 hdlAssignment
     : hdlLValue
@@ -907,9 +1238,11 @@ hdlLValue
       hdlIndexSuffix*
     ;
 
-/* ============================================================================
- * CONDITIONALS
- * ========================================================================== */
+/*
+ * ============================================================================
+ * CONTROL FLOW
+ * ============================================================================
+ */
 
 hdlIfStatement
     : K_IF
@@ -918,23 +1251,15 @@ hdlIfStatement
       (
           K_ELSE
           (
-              K_IF
-              hdlExpression
-              hdlBlock
+              K_IF hdlExpression hdlBlock
             | hdlBlock
           )
       )*
     ;
 
-/* ============================================================================
- * CASE / SWITCH
- * ========================================================================== */
-
 hdlCaseStatement
     : K_CASE
-      LPAREN
-      hdlExpression
-      RPAREN
+      LPAREN hdlExpression RPAREN
       LBRACE
       hdlCaseItem*
       RBRACE
@@ -951,15 +1276,8 @@ hdlCaseItem
 
 hdlCaseExpressionList
     : hdlExpression
-      (
-          COMMA
-          hdlExpression
-      )*
+      (COMMA hdlExpression)*
     ;
-
-/* ============================================================================
- * LOOPS / GENERATION
- * ========================================================================== */
 
 hdlForStatement
     : K_FOR
@@ -982,12 +1300,10 @@ hdlVariableDeclarationNoTerminator
     : hdlVariableKind
       identifier
       (
-          COLON
-          hdlTypeExpression
+          COLON hdlTypeExpression
       )?
       (
-          ASSIGN
-          hdlExpression
+          ASSIGN hdlExpression
       )?
     ;
 
@@ -1002,6 +1318,12 @@ hdlRepeatStatement
       hdlExpression
       hdlBlock
     ;
+
+/*
+ * ============================================================================
+ * GENERATION
+ * ============================================================================
+ */
 
 hdlGenerateDeclaration
     : K_GENERATE
@@ -1035,29 +1357,45 @@ hdlGenerateIf
     ;
 
 hdlGenerateBlock
-    : hdlBlock
+    : identifier?
+      hdlBlock
     ;
 
-/* ============================================================================
- * INSTANCES / CONNECTIONS
- * ========================================================================== */
+/*
+ * ============================================================================
+ * INSTANCES
+ * ============================================================================
+ */
 
 hdlInstanceDeclaration
     : K_INSTANCE
       hdlQualifiedName
       identifier
-      hdlInstanceParameterOverrides?
-      hdlInstancePortConnections?
+      hdlGenericArgumentBlock?
+      hdlConnectionBlock?
       SEMICOLON
     ;
 
-hdlInstanceParameterOverrides
+hdlGenericArgumentBlock
     : LESS_THAN
-      hdlNamedArgumentList?
+      hdlGenericArgumentList
       GREATER_THAN
     ;
 
-hdlInstancePortConnections
+hdlGenericArgumentList
+    : hdlGenericArgument
+      (COMMA hdlGenericArgument)*
+      COMMA?
+    ;
+
+hdlGenericArgument
+    : identifier
+      COLON
+      hdlExpression
+    | hdlExpression
+    ;
+
+hdlConnectionBlock
     : LPAREN
       hdlConnectionList?
       RPAREN
@@ -1065,10 +1403,7 @@ hdlInstancePortConnections
 
 hdlConnectionList
     : hdlConnection
-      (
-          COMMA
-          hdlConnection
-      )*
+      (COMMA hdlConnection)*
       COMMA?
     ;
 
@@ -1079,170 +1414,42 @@ hdlConnection
     | hdlExpression
     ;
 
-hdlNamedArgumentList
-    : hdlNamedArgument
-      (
-          COMMA
-          hdlNamedArgument
-      )*
-      COMMA?
-    ;
-
-hdlNamedArgument
-    : identifier
-      ASSIGN
-      hdlExpression
-    ;
-
-/* ============================================================================
- * STATE MACHINES
- * ========================================================================== */
-
-hdlStateMachineDeclaration
-    : K_STATE
-      K_MACHINE?
-      identifier
-      hdlStateMachineTypeParameters?
-      hdlStateMachineBody
-    ;
-
-hdlStateMachineTypeParameters
-    : LESS_THAN
-      hdlTypeArgumentList
-      GREATER_THAN
-    ;
-
-hdlStateMachineBody
-    : LBRACE
-      hdlStateDeclaration*
-      hdlInitialStateDeclaration?
-      hdlTransitionDeclaration*
-      RBRACE
-    ;
-
-hdlStateDeclaration
-    : K_STATE
-      identifier
-      (
-          ASSIGN
-          hdlExpression
-      )?
-      SEMICOLON
-    ;
-
-hdlInitialStateDeclaration
-    : K_INITIAL
-      identifier
-      SEMICOLON
-    ;
-
-hdlTransitionDeclaration
-    : K_TRANSITION
-      identifier
-      (
-          K_TO
-          identifier
-      )?
-      hdlTransitionGuard?
-      hdlTransitionAction?
-      SEMICOLON
-    ;
-
-hdlTransitionGuard
-    : K_WHEN
-      hdlExpression
-    ;
-
-hdlTransitionAction
-    : K_DO
-      hdlExpression
-    ;
-
-/* ============================================================================
- * PIPELINES
- * ========================================================================== */
-
-hdlPipelineDeclaration
-    : K_PIPELINE
-      identifier?
-      hdlPipelineProperty*
-      hdlPipelineBody
-    ;
-
-hdlPipelineProperty
-    : K_LATENCY
-      ASSIGN
-      hdlExpression
-    | K_THROUGHPUT
-      ASSIGN
-      hdlExpression
-    | hdlAttribute
-    ;
-
-hdlPipelineBody
-    : LBRACE
-      hdlPipelineStage+
-      RBRACE
-    ;
-
-hdlPipelineStage
-    : K_STAGE
-      identifier?
-      hdlPipelineStageProperty*
-      hdlBlock
-    ;
-
-hdlPipelineStageProperty
-    : K_LATENCY
-      ASSIGN
-      hdlExpression
-    | K_ENABLE
-      ASSIGN
-      hdlExpression
-    | hdlAttribute
-    ;
-
-/* ============================================================================
+/*
+ * ============================================================================
  * TIMING
- * ========================================================================== */
+ * ============================================================================
+ */
 
 hdlTimingDeclaration
     : K_TIMING
-      hdlTimingTarget?
-      hdlTimingProperty+
-      SEMICOLON
+      identifier?
+      hdlTimingBody
     ;
 
-hdlTimingTarget
-    : identifier
-    | hdlQualifiedName
+hdlTimingBody
+    : LBRACE
+      hdlTimingItem*
+      RBRACE
     ;
 
-hdlTimingProperty
-    : K_LATENCY
-      ASSIGN
-      hdlExpression
-    | K_THROUGHPUT
-      ASSIGN
-      hdlExpression
-    | K_FREQUENCY
-      ASSIGN
-      hdlExpression
-    | K_PHASE
-      ASSIGN
-      hdlExpression
+hdlTimingItem
+    : K_LATENCY ASSIGN hdlExpression SEMICOLON
+    | K_THROUGHPUT ASSIGN hdlExpression SEMICOLON
+    | K_FREQUENCY ASSIGN hdlExpression SEMICOLON
+    | K_DUTY ASSIGN hdlExpression SEMICOLON
+    | K_PHASE ASSIGN hdlExpression SEMICOLON
     | hdlAttribute
     ;
 
-/* ============================================================================
+/*
+ * ============================================================================
  * ASSERTIONS
- * ========================================================================== */
+ * ============================================================================
+ */
 
 hdlAssertion
     : hdlAssertionKind
-      LPAREN
       hdlExpression
-      RPAREN
       SEMICOLON
     ;
 
@@ -1252,87 +1459,258 @@ hdlAssertionKind
     | K_COVER
     ;
 
-/* ============================================================================
- * RANGE / WIDTH EXPRESSIONS
- * ========================================================================== */
+/*
+ * ============================================================================
+ * STATE MACHINES
+ * ============================================================================
+ */
 
-hdlRangeExpression
-    : hdlExpression
-      hdlRangeOperator
+hdlStateMachineDeclaration
+    : K_STATE
+      K_MACHINE?
+      identifier
+      hdlStateMachineBody
+    ;
+
+hdlStateMachineBody
+    : LBRACE
+      hdlStateDeclaration*
+      hdlTransitionDeclaration*
+      RBRACE
+    ;
+
+hdlStateDeclaration
+    : K_STATE
+      identifier
+      hdlStateProperty*
+      SEMICOLON
+    ;
+
+hdlStateProperty
+    : K_INITIAL
+    | K_DEFAULT
+    | K_ENTRY hdlBlock
+    | K_EXIT hdlBlock
+    | hdlAttribute
+    ;
+
+hdlTransitionDeclaration
+    : K_TRANSITION
+      identifier?
+      hdlTransitionSource?
+      hdlTransitionArrow
+      hdlTransitionTarget
+      hdlTransitionGuard?
+      hdlTransitionAction?
+      SEMICOLON
+    ;
+
+hdlTransitionSource
+    : identifier
+    ;
+
+hdlTransitionTarget
+    : identifier
+    ;
+
+hdlTransitionArrow
+    : ARROW
+    | FAT_ARROW
+    ;
+
+hdlTransitionGuard
+    : K_WHEN
       hdlExpression
-    | hdlExpression
     ;
 
-hdlRangeOperator
-    : COLON
-    | DOT_DOT
-    | DOT_DOT_EQ
+hdlTransitionAction
+    : K_DO
+      hdlBlock
     ;
 
-hdlIndexSuffix
-    : LBRACKET
-      hdlRangeExpression
-      RBRACKET
+/*
+ * ============================================================================
+ * PIPELINES
+ * ============================================================================
+ */
+
+hdlPipelineDeclaration
+    : K_PIPELINE
+      identifier
+      hdlPipelineParameterBlock?
+      hdlPipelineBody
     ;
 
-/* ============================================================================
+hdlPipelineParameterBlock
+    : LPAREN
+      hdlPipelineParameterList?
+      RPAREN
+    ;
+
+hdlPipelineParameterList
+    : hdlPipelineParameter
+      (COMMA hdlPipelineParameter)*
+      COMMA?
+    ;
+
+hdlPipelineParameter
+    : identifier
+      (
+          COLON hdlTypeExpression
+      )?
+      (
+          ASSIGN hdlExpression
+      )?
+    ;
+
+hdlPipelineBody
+    : LBRACE
+      hdlPipelineItem*
+      RBRACE
+    ;
+
+hdlPipelineItem
+    : K_STAGE
+      identifier
+      hdlPipelineStageProperty*
+      hdlBlock?
+      SEMICOLON?
+    | hdlAttribute
+    ;
+
+hdlPipelineStageProperty
+    : K_LATENCY ASSIGN hdlExpression
+    | K_THROUGHPUT ASSIGN hdlExpression
+    | K_REQUIRES hdlExpression
+    | K_WHERE hdlExpression
+    | hdlAttribute
+    ;
+
+/*
+ * ============================================================================
+ * PACKAGE / DIALECT
+ * ============================================================================
+ *
+ * These are intentionally lightweight composition boundaries.
+ * Their complete semantics belong to the corresponding repository domains.
+ * ============================================================================
+ */
+
+hdlPackageDeclaration
+    : K_PACKAGE
+      hdlQualifiedName
+      hdlPackageBody
+    ;
+
+hdlPackageBody
+    : LBRACE
+      hdlPackageMember*
+      RBRACE
+    ;
+
+hdlPackageMember
+    : hdlAttribute*
+      (
+          hdlTypeDeclaration
+        | hdlParameterDeclaration
+        | hdlInterfaceDeclaration
+        | hdlModuleDeclaration
+      )
+    ;
+
+hdlDialectDeclaration
+    : K_DIALECT
+      hdlQualifiedName
+      hdlDialectBody?
+      SEMICOLON?
+    ;
+
+hdlDialectBody
+    : LBRACE
+      hdlDialectMember*
+      RBRACE
+    ;
+
+hdlDialectMember
+    : hdlAttribute
+    | hdlDialectProperty
+    ;
+
+hdlDialectProperty
+    : identifier
+      (
+          COLON hdlExpression
+      )?
+      SEMICOLON
+    ;
+
+/*
+ * ============================================================================
  * EXPRESSIONS
  *
- * Expressions are deliberately local to the HDL parser. They produce parser
- * structure only; semantic lowering determines the canonical expression/type
- * representation.
- * ========================================================================== */
+ * HDL expressions intentionally remain open-ended.
+ *
+ * The repository's canonical expression/type grammar should ultimately own
+ * general expression semantics. These local rules are retained as the HDL
+ * composition boundary until the canonical expression dispatcher is invoked
+ * by grammar/Zamani.g4.
+ * ============================================================================
+ */
 
 hdlExpression
+    : hdlAssignmentExpression
+    ;
+
+hdlAssignmentExpression
+    : hdlConditionalExpression
+      (
+          hdlAssignmentOperator
+          hdlAssignmentExpression
+      )?
+    ;
+
+hdlConditionalExpression
     : hdlLogicalOrExpression
+      (
+          QUESTION
+          hdlExpression
+          COLON
+          hdlExpression
+      )?
     ;
 
 hdlLogicalOrExpression
     : hdlLogicalAndExpression
-      (
-          LOGICAL_OR
-          hdlLogicalAndExpression
-      )*
+      (LOGICAL_OR hdlLogicalAndExpression)*
     ;
 
 hdlLogicalAndExpression
     : hdlBitwiseOrExpression
-      (
-          LOGICAL_AND
-          hdlBitwiseOrExpression
-      )*
+      (LOGICAL_AND hdlBitwiseOrExpression)*
     ;
 
 hdlBitwiseOrExpression
     : hdlBitwiseXorExpression
-      (
-          PIPE
-          hdlBitwiseXorExpression
-      )*
+      (PIPE hdlBitwiseXorExpression)*
     ;
 
 hdlBitwiseXorExpression
     : hdlBitwiseAndExpression
-      (
-          CARET
-          hdlBitwiseAndExpression
-      )*
+      (CARET hdlBitwiseAndExpression)*
     ;
 
 hdlBitwiseAndExpression
     : hdlEqualityExpression
-      (
-          AMPERSAND
-          hdlEqualityExpression
-      )*
+      (AMP hdlEqualityExpression)*
     ;
 
 hdlEqualityExpression
     : hdlRelationalExpression
       (
-          EQUAL_EQUAL
-          hdlRelationalExpression
-        | NOT_EQUAL
+          (
+              EQUAL
+            | NOT_EQUAL
+          )
           hdlRelationalExpression
       )*
     ;
@@ -1340,13 +1718,12 @@ hdlEqualityExpression
 hdlRelationalExpression
     : hdlShiftExpression
       (
-          LESS_EQUAL
-          hdlShiftExpression
-        | GREATER_EQUAL
-          hdlShiftExpression
-        | LESS_THAN
-          hdlShiftExpression
-        | GREATER_THAN
+          (
+              LESS_THAN
+            | LESS_EQUAL
+            | GREATER_THAN
+            | GREATER_EQUAL
+          )
           hdlShiftExpression
       )*
     ;
@@ -1354,9 +1731,10 @@ hdlRelationalExpression
 hdlShiftExpression
     : hdlAdditiveExpression
       (
-          LEFT_SHIFT
-          hdlAdditiveExpression
-        | RIGHT_SHIFT
+          (
+              SHIFT_LEFT
+            | SHIFT_RIGHT
+          )
           hdlAdditiveExpression
       )*
     ;
@@ -1364,9 +1742,10 @@ hdlShiftExpression
 hdlAdditiveExpression
     : hdlMultiplicativeExpression
       (
-          PLUS
-          hdlMultiplicativeExpression
-        | MINUS
+          (
+              PLUS
+            | MINUS
+          )
           hdlMultiplicativeExpression
       )*
     ;
@@ -1374,88 +1753,149 @@ hdlAdditiveExpression
 hdlMultiplicativeExpression
     : hdlUnaryExpression
       (
-          STAR
-          hdlUnaryExpression
-        | SLASH
-          hdlUnaryExpression
-        | PERCENT
+          (
+              STAR
+            | SLASH
+            | PERCENT
+          )
           hdlUnaryExpression
       )*
     ;
 
 hdlUnaryExpression
-    : PLUS
-      hdlUnaryExpression
-    | MINUS
-      hdlUnaryExpression
-    | EXCLAMATION
-      hdlUnaryExpression
-    | TILDE
-      hdlUnaryExpression
-    | K_NOT
+    : (
+          PLUS
+        | MINUS
+        | BANG
+        | TILDE
+      )
       hdlUnaryExpression
     | hdlPostfixExpression
     ;
 
 hdlPostfixExpression
     : hdlPrimaryExpression
-      (
-          hdlIndexSuffix
-        | DOT
-          identifier
-        | QUESTION_DOT
-          identifier
-        | LPAREN
-          hdlArgumentList?
-          RPAREN
-      )*
+      hdlPostfixSuffix*
+    ;
+
+hdlPostfixSuffix
+    : LPAREN
+      hdlArgumentList?
+      RPAREN
+    | LBRACKET
+      hdlExpression
+      RBRACKET
+    | DOT
+      identifier
     ;
 
 hdlPrimaryExpression
     : identifier
-    | hdlLiteral
     | hdlQualifiedName
-    | LPAREN
-      hdlExpression
-      RPAREN
+    | integerLiteral
+    | floatingLiteral
+    | stringLiteral
+    | characterLiteral
+    | booleanLiteral
+    | LPAREN hdlExpression RPAREN
+    | hdlArrayLiteral
     ;
 
-hdlLiteral
-    : INTEGER_LITERAL
-    | HEX_INTEGER
-    | BINARY_INTEGER
-    | OCTAL_INTEGER
-    | FLOAT_LITERAL
-    | CHAR_LITERAL
-    | STRING_LITERAL
-    | QUANTUM_LITERAL
-    | K_TRUE
-    | K_FALSE
-    | K_NULL
-    | K_NIL
-    ;
-
-/* ============================================================================
- * QUALIFIED NAMES
- * ========================================================================== */
-
-identifier
-    : IDENTIFIER
-    ;
-
-hdlQualifiedName
-    : identifier
+hdlArrayLiteral
+    : LBRACKET
       (
-          DOUBLE_COLON
-          identifier
-      )*
+          hdlExpression
+          (COMMA hdlExpression)*
+          COMMA?
+      )?
+      RBRACKET
     ;
-
-/* ============================================================================
- * EXPRESSION STATEMENTS
- * ========================================================================== */
 
 hdlExpressionStatement
     : hdlExpression
       SEMICOLON
     ;
+
+/*
+ * ============================================================================
+ * NAMES
+ * ============================================================================
+ */
+
+hdlQualifiedName
+    : identifier
+      (
+          DOT identifier
+      )*
+    ;
+
+identifier
+    : IDENTIFIER
+    ;
+
+integerLiteral
+    : INTEGER_LITERAL
+    ;
+
+floatingLiteral
+    : FLOAT_LITERAL
+    ;
+
+stringLiteral
+    : STRING_LITERAL
+    ;
+
+characterLiteral
+    : CHARACTER_LITERAL
+    ;
+
+booleanLiteral
+    : TRUE
+    | FALSE
+    ;
+
+/*
+ * ============================================================================
+ * INDEX / RANGE
+ * ============================================================================
+ */
+
+hdlIndexSuffix
+    : LBRACKET
+      hdlExpression
+      RBRACKET
+    ;
+
+hdlRangeExpression
+    : hdlRangeEndpoint
+      (
+          RANGE
+          hdlRangeEndpoint
+      )?
+    ;
+
+hdlRangeEndpoint
+    : hdlExpression
+    ;
+
+/*
+ * ============================================================================
+ * END
+ * ============================================================================
+ *
+ * No lexer rules appear in this file.
+ *
+ * No semantic actions appear in this file.
+ *
+ * No unsafe implementation exists in this file.
+ *
+ * No hardware-size limits exist in this file.
+ *
+ * No vendor-specific hardware is encoded in this file.
+ *
+ * No physical placement is encoded in this file.
+ *
+ * No competing quantum IR is encoded in this file.
+ *
+ * ============================================================================
+ */
