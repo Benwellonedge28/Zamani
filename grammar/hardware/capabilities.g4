@@ -1,158 +1,154 @@
-/**
+/*
  * ============================================================================
- * Zamani Universal Programming Language
+ * Zamani Universal Computing Language
  * ============================================================================
  *
  * File:
  *     grammar/hardware/capabilities.g4
  *
- * Grammar kind:
- *     ANTLR4 parser grammar
+ * Grammar:
+ *     ZamaniHardwareCapabilitiesParser
  *
- * Target:
+ * Status:
+ *     CANONICAL HARDWARE-CAPABILITY ADAPTER GRAMMAR
+ *
+ * Rust baseline:
  *     Rust 1.97 / Rust 1.97.1
  *     Rust 2021
+ *     safe Rust only
  *
- * Safety:
- *     No embedded target-language actions.
- *     No semantic execution.
- *     No unsafe Rust.
+ * ANTLR:
+ *     ANTLR4 parser grammar
+ *     action-free
+ *     predicate-free
  *
  * ============================================================================
  * PURPOSE
  * ============================================================================
  *
- * This grammar defines SOURCE-LEVEL HARDWARE CAPABILITY DECLARATIONS.
+ * This file owns the HARDWARE-SPECIFIC USE of the canonical Zamani capability
+ * model.
  *
- * A capability describes something an implementation MAY provide and that
- * source code, compilation, resource resolution, or deployment may require,
- * prefer, inspect, or reason about.
+ * It does NOT create a second capability language.
  *
- * Examples of capability concepts include:
+ * Canonical capability identity, capability references, capability expressions,
+ * and capability version syntax remain owned by:
  *
- *     compute
- *     parallel_execution
- *     vector_execution
- *     tensor_execution
- *     quantum_execution
- *     measurement
- *     dynamic_circuit
- *     hardware_acceleration
- *     memory_coherence
- *     high_bandwidth_memory
- *     programmable_logic
- *     deterministic_execution
- *     floating_point
- *     cryptographic_acceleration
- *     networking
+ *     grammar/core/capabilities.g4
  *
- * Capability names are intentionally open.
+ * Canonical general expressions remain owned by:
  *
- * The grammar MUST NOT enumerate every possible CPU, GPU, FPGA, ASIC,
- * quantum processor, accelerator, future processor, vendor extension,
- * architecture, instruction set, or implementation.
+ *     grammar/expressions/expressions.g4
+ *
+ * This file therefore acts as the hardware-domain integration boundary:
+ *
+ *     hardware intent
+ *          |
+ *          v
+ *     canonical capability model
+ *          |
+ *          v
+ *     hardware semantic analysis
  *
  * ============================================================================
- * OWNERSHIP
+ * FUNDAMENTAL OWNERSHIP RULE
  * ============================================================================
  *
  * THIS FILE OWNS:
  *
- *     - abstract hardware capability declarations;
- *     - capability references;
- *     - capability predicates;
- *     - capability properties;
- *     - capability requirements;
- *     - capability exclusions;
- *     - capability preferences;
- *     - capability guarantees;
- *     - capability dependencies;
- *     - capability relationships;
- *     - capability composition;
- *     - capability inheritance/extension intent;
- *     - capability profiles;
- *     - capability sets;
- *     - capability availability intent;
- *     - capability portability intent;
- *     - capability version intent;
- *     - capability parameters;
- *     - capability metadata;
- *     - capability evidence references;
- *     - abstract capability matching intent.
+ *     - hardware capability contracts;
+ *     - hardware capability requirements;
+ *     - hardware capability preferences;
+ *     - hardware capability constraints;
+ *     - hardware capability hints;
+ *     - hardware capability properties;
+ *     - hardware capability extension;
+ *     - hardware capability contract members;
+ *     - hardware capability collections;
+ *     - integration of canonical capability references into hardware syntax.
  *
  * THIS FILE DOES NOT OWN:
  *
  *     - lexical tokens;
  *     - identifiers;
- *     - literal definitions;
+ *     - qualified names;
+ *     - capability identity;
+ *     - capability version semantics;
  *     - general expressions;
- *     - general type definitions;
- *     - hardware module syntax;
- *     - ports;
- *     - wires;
- *     - signals;
- *     - clocks;
- *     - physical device enumeration;
- *     - physical device IDs;
- *     - physical addresses;
- *     - PCI identifiers;
- *     - vendor hardware discovery;
- *     - runtime probing;
- *     - calibration;
- *     - topology discovery;
+ *     - general types;
+ *     - resources;
+ *     - targets;
+ *     - topology;
+ *     - placement;
+ *     - devices;
+ *     - physical hardware discovery;
+ *     - device allocation;
  *     - routing;
- *     - placement algorithms;
  *     - scheduling;
  *     - optimization;
- *     - resource allocation;
- *     - resource quantities;
- *     - hardware drivers;
- *     - runtime dispatch;
- *     - quantum IR;
+ *     - calibration;
  *     - QEC;
  *     - ZQN;
- *     - simulation.
+ *     - quantum::ir;
+ *     - runtime capability probing;
+ *     - backend selection.
  *
  * ============================================================================
- * CAPABILITY VS RESOURCE
+ * CANONICAL DEPENDENCY DIRECTION
  * ============================================================================
  *
- * CAPABILITY
- *     Describes what an implementation can do or support.
+ *     grammar/lexer
+ *          |
+ *          v
+ *     ZamaniLexer
+ *          |
+ *          v
+ *     core/capabilities.g4
+ *          |
+ *          v
+ *     hardware/capabilities.g4
+ *          |
+ *          v
+ *     hardware.g4
+ *          |
+ *          v
+ *     ZamaniParser
+ *          |
+ *          v
+ *     domain-neutral AST
+ *          |
+ *          v
+ *     semantic capability model
+ *          |
+ *          +----------------------+
+ *          |                      |
+ *          v                      v
+ *     resource analysis       target analysis
+ *          |                      |
+ *          +----------+-----------+
+ *                     |
+ *                     v
+ *              compiler planning
+ *                     |
+ *          +----------+----------+
+ *          |          |          |
+ *          v          v          v
+ *       optimize   routing   scheduling
+ *                                |
+ *                                v
+ *                               HAL
+ *                                |
+ *                                v
+ *                             runtime
  *
- * RESOURCE
- *     Describes an amount, instance, availability, or consumable/allocatable
- *     computational resource.
+ * Quantum programs continue through:
  *
- * REQUIREMENT
- *     States what must be true for an implementation to be valid.
+ *     semantic quantum model
+ *             |
+ *             v
+ *         quantum::ir
  *
- * CONSTRAINT
- *     Restricts legal implementation choices.
- *
- * PREFERENCE
- *     Gives optimization guidance without changing semantic validity.
- *
- * HINT
- *     Gives advisory information which may be ignored.
- *
- * TARGET
- *     Identifies an abstract destination or target class.
- *
- * CAPABILITY IS NOT RESOURCE.
- *
- * For example:
- *
- *     capability quantum.dynamic_circuit
- *
- * says that dynamic-circuit execution is supported.
- *
- * It does NOT mean:
- *
- *     use device X;
- *     allocate N qubits;
- *     reserve a particular processor;
- *     use a particular topology.
+ * This file never creates another quantum IR.
  *
  * ============================================================================
  * POCO-REAF
@@ -160,172 +156,118 @@
  *
  * Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
  *
- * Capability declarations describe semantic compatibility requirements rather
- * than temporary physical implementation details.
+ * Hardware capabilities describe WHAT an implementation must support.
  *
- * A program can therefore express:
+ * They do not prescribe:
  *
- *     requires capability quantum.measurement;
+ *     - a physical CPU;
+ *     - a physical GPU;
+ *     - a physical FPGA;
+ *     - a physical ASIC;
+ *     - a physical QPU;
+ *     - a physical qubit;
+ *     - a device identifier;
+ *     - a vendor;
+ *     - a PCI address;
+ *     - an IP address;
+ *     - a machine name;
+ *     - a topology;
+ *     - a calibration record.
  *
- * without encoding:
- *
- *     a particular quantum processor;
- *     a fixed number of qubits;
- *     a physical qubit identifier;
- *     a vendor;
- *     a topology;
- *     a device address.
- *
- * Capability resolution happens after parsing.
+ * Those are downstream realization concerns.
  *
  * ============================================================================
  * SCALABILITY
  * ============================================================================
  *
- * This grammar contains NO fixed machine limits.
+ * This grammar contains NO universal capacity limits.
  *
- * It does not define:
+ * It MUST NOT define:
  *
  *     MAX_CAPABILITIES
  *     MAX_DEVICES
+ *     MAX_CPUS
  *     MAX_CORES
  *     MAX_THREADS
  *     MAX_GPUS
  *     MAX_FPGAS
+ *     MAX_ASICS
+ *     MAX_QPUS
  *     MAX_QUBITS
- *     MAX_MEMORY
  *     MAX_NODES
+ *     MAX_MEMORY
+ *     MAX_REGISTER_WIDTH
+ *     MAX_TENSOR_RANK
  *     MAX_ACCELERATORS
  *
- * Capability sets use arbitrary repetition:
+ * Collections use ANTLR repetition:
  *
  *     *
  *     +
  *
- * Capability values and parameters use expressions.
+ * Quantities and conditions use the canonical expression language.
  *
- * Consequently, the grammar places no artificial upper bound on the number
- * of capabilities, capability members, capability properties, or capability
- * relationships represented by source code.
+ * Practical limits belong to:
  *
- * ============================================================================
- * ARCHITECTURAL BOUNDARY
- * ============================================================================
- *
- * Source
- *   |
- *   v
- * lexer/tokens.g4
- *   |
- *   v
- * hardware/capabilities.g4
- *   |
- *   v
- * syntax AST
- *   |
- *   v
- * semantic capability model
- *   |
- *   +------------------------------+
- *   |                              |
- *   v                              v
- * program capability intent    target capability model
- *   |                              |
- *   +---------------+--------------+
- *                   |
- *                   v
- *             capability matching
- *                   |
- *                   v
- *          resource/target resolution
- *                   |
- *          +--------+---------+
- *          |        |         |
- *          v        v         v
- *       routing  scheduling  lowering
- *          |        |         |
- *          +--------+---------+
- *                   |
- *                   v
- *              hardware HAL
- *                   |
- *                   v
- *                runtime
+ *     compiler resources;
+ *     semantic/resource analysis;
+ *     target capabilities;
+ *     runtime resources;
+ *     deployment policy;
+ *     physical hardware.
  *
  * ============================================================================
- * QUANTUM BOUNDARY
+ * CAPABILITY / RESOURCE SEPARATION
  * ============================================================================
  *
- * Quantum capability syntax may describe capabilities such as:
+ * CAPABILITY
+ *     What an implementation can do.
  *
- *     quantum
- *     quantum.measurement
- *     quantum.dynamic_circuit
- *     quantum.mid_circuit_measurement
- *     quantum.reset
- *     quantum.error_correction
+ * RESOURCE
+ *     Something that may be available, consumed, shared, reserved, or
+ *     otherwise relevant to execution.
  *
- * However:
+ * REQUIREMENT
+ *     A condition required for semantic validity.
  *
- *     grammar -> quantum::ir
+ * CONSTRAINT
+ *     A mandatory condition on realization.
  *
- * is performed by semantic lowering.
+ * PREFERENCE
+ *     Non-mandatory optimization guidance.
  *
- * This grammar does NOT define quantum operations or create a second quantum
- * intermediate representation.
+ * HINT
+ *     Advisory information.
  *
- * quantum::ir remains the canonical quantum semantic boundary.
+ * TARGET
+ *     An abstract realization/execution context.
  *
- * QEC remains responsible for error correction.
- *
- * ZQN remains responsible for noise/fault semantics.
- *
- * Hardware capability declarations merely state capability intent.
+ * This grammar does not collapse these concepts.
  *
  * ============================================================================
- * HARDWARE BOUNDARY
+ * HARDWARE-CAPABILITY EXAMPLES
  * ============================================================================
  *
- * hardware.g4 owns hardware structure.
+ * Valid conceptual forms include:
  *
- * devices.g4 owns logical device declarations.
+ *     capability quantum::measurement;
  *
- * resources.g4 owns resource quantities and resource intent.
+ *     requires quantum::measurement;
  *
- * topology.g4 owns abstract topology descriptions.
+ *     requires quantum::dynamic_control;
  *
- * placement.g4 owns placement intent.
+ *     prefer accelerator::tensor_compute;
  *
- * targets.g4 owns target declarations.
+ *     constraint capability::deterministic_execution;
  *
- * This file owns the capability layer shared by those concepts.
+ *     hint capability::vector_execution;
  *
- * ============================================================================
- * INTEGRATION CONTRACT
- * ============================================================================
+ *     property native = true;
  *
- * Required upstream:
+ *     extends accelerator::compute;
  *
- *     grammar/lexer/tokens.g4
- *
- * Expected stable lexical vocabulary includes capability-oriented keywords
- * such as:
- *
- *     capability
- *     requires
- *     provides
- *     supports
- *     excludes
- *     prefers
- *     guarantees
- *     profile
- *     capability-set
- *
- * Exact keyword tokens are part of the lexical compatibility contract.
- *
- * Common punctuation and literals are also supplied by ZamaniTokens.
- *
- * This parser grammar must never define lexer rules itself.
+ * The exact capability identity is resolved by the canonical capability
+ * grammar and semantic registry.
  *
  * ============================================================================
  */
@@ -333,787 +275,311 @@
 parser grammar ZamaniHardwareCapabilitiesParser;
 
 options {
-    tokenVocab = ZamaniTokens;
+    tokenVocab = ZamaniLexer;
 }
 
+/*
+ * Import the canonical capability model.
+ *
+ * `Capabilities` is the grammar declared by:
+ *
+ *     grammar/core/capabilities.g4
+ *
+ * It owns:
+ *
+ *     capabilityDeclaration
+ *     capabilityReference
+ *     capabilityExpression
+ *     capabilityVersionClause
+ *     capabilityName
+ *     capabilityAlias
+ *     and related capability syntax.
+ *
+ * This file deliberately does not redefine any of those rules.
+ *
+ * The canonical general expression rule is also imported so that hardware
+ * properties and predicates can use the same expression semantics as the
+ * rest of Zamani.
+ */
+import Capabilities, Expressions;
+
 
 /* ============================================================================
- * 1. PUBLIC ENTRY POINTS
- * ============================================================================
- *
- * The grammar exposes both declarations and standalone capability clauses.
- *
- * This allows hardware declarations, device declarations, targets, and other
- * parser components to consume capability syntax without redefining it.
+ * 1. PUBLIC HARDWARE-CAPABILITY ENTRY POINTS
  * ========================================================================== */
 
+/*
+ * A complete hardware capability declaration.
+ *
+ * Example:
+ *
+ *     capability quantum::dynamic_control;
+ *
+ *     capability accelerator::tensor_compute {
+ *         requires compute::parallel;
+ *     }
+ *
+ * The identity itself remains canonical.
+ */
 hardwareCapabilityDeclaration
-    : hardwareCapabilityModifiers*
-      K_CAPABILITY
-      hardwareCapabilityName
-      hardwareCapabilityParameters?
-      hardwareCapabilitySpecification?
-      SEMICOLON?
-    ;
-
-hardwareCapabilityClause
-    : hardwareCapabilityRequirement
-    | hardwareCapabilityProvision
-    | hardwareCapabilitySupport
-    | hardwareCapabilityExclusion
-    | hardwareCapabilityPreference
-    | hardwareCapabilityGuarantee
-    | hardwareCapabilityProfileReference
-    | hardwareCapabilitySetReference
+    : capabilityDeclaration
+    | hardwareCapabilityContractDeclaration
     ;
 
 
-/* ============================================================================
- * 2. MODIFIERS
- * ========================================================================== */
-
-hardwareCapabilityModifiers
-    : hardwareCapabilityVisibility
-    | hardwareCapabilityAttribute
-    ;
-
-hardwareCapabilityVisibility
-    : K_PUBLIC
-    | K_PRIVATE
-    | K_INTERNAL
-    ;
-
-hardwareCapabilityAttribute
-    : AT IDENTIFIER
-      (
-          LPAREN hardwareCapabilityArgumentList? RPAREN
-      )?
-    ;
-
-
-/* ============================================================================
- * 3. CAPABILITY NAME
+/*
+ * A hardware-specific named capability contract.
  *
- * Capability names are open-ended qualified names.
- *
- * This deliberately avoids a closed grammar such as:
- *
- *     cpuCapability
- *     gpuCapability
- *     fpgaCapability
- *     quantumCapability
- *
- * New hardware classes therefore do not require a parser rewrite.
- * ========================================================================== */
-
-hardwareCapabilityName
-    : hardwareCapabilityQualifiedName
-    ;
-
-hardwareCapabilityQualifiedName
-    : IDENTIFIER
-      (
-          DOT IDENTIFIER
-      )*
-    ;
-
-
-/* ============================================================================
- * 4. CAPABILITY PARAMETERS
- *
- * Parameters allow capability descriptions to remain generic.
- *
- * Example:
- *
- *     capability vector.execution<width>;
- *
- * The grammar does not define what "width" means.
- *
- * Semantic analysis interprets the parameter according to the capability
- * schema.
- * ========================================================================== */
-
-hardwareCapabilityParameters
-    : LESS
-      hardwareCapabilityParameterList?
-      GREATER
-    ;
-
-hardwareCapabilityParameterList
-    : hardwareCapabilityParameter
-      (
-          COMMA hardwareCapabilityParameter
-      )*
-    ;
-
-hardwareCapabilityParameter
-    : IDENTIFIER
-      (
-          COLON hardwareCapabilityTypeReference
-      )?
-      (
-          ASSIGN hardwareCapabilityExpression
-      )?
-    ;
-
-hardwareCapabilityTypeReference
-    : hardwareCapabilityQualifiedName
-    ;
-
-
-/* ============================================================================
- * 5. CAPABILITY SPECIFICATION
- * ========================================================================== */
-
-hardwareCapabilitySpecification
-    : LBRACE
-      hardwareCapabilityBodyElement*
-      RBRACE
-    ;
-
-hardwareCapabilityBodyElement
-    : hardwareCapabilityAttributes*
-      hardwareCapabilityMember
-    ;
-
-hardwareCapabilityAttributes
-    : hardwareCapabilityAttribute
-    ;
-
-
-/* ============================================================================
- * 6. CAPABILITY MEMBERS
- * ========================================================================== */
-
-hardwareCapabilityMember
-    : hardwareCapabilityClause
-    | hardwareCapabilityProperty
-    | hardwareCapabilityParameterDeclaration
-    | hardwareCapabilityDependency
-    | hardwareCapabilityComposition
-    | hardwareCapabilityExtension
-    | hardwareCapabilityMetadata
-    ;
-
-
-/* ============================================================================
- * 7. REQUIREMENT
- *
- * A requirement is semantically mandatory.
- *
- * Example:
- *
- *     requires quantum.measurement;
- *
- * A capability requirement does not select a physical device.
- * ========================================================================== */
-
-hardwareCapabilityRequirement
-    : K_REQUIRES
-      hardwareCapabilityReference
-      SEMICOLON
-    ;
-
-hardwareCapabilityReference
-    : hardwareCapabilityQualifiedName
-      hardwareCapabilityArgumentList?
-    ;
-
-
-/* ============================================================================
- * 8. PROVISION
- *
- * "provides" describes a capability exposed by a logical hardware
- * declaration or implementation contract.
- * ========================================================================== */
-
-hardwareCapabilityProvision
-    : K_PROVIDES
-      hardwareCapabilityReferenceList
-      SEMICOLON
-    ;
-
-hardwareCapabilityReferenceList
-    : hardwareCapabilityReference
-      (
-          COMMA hardwareCapabilityReference
-      )*
-    ;
-
-
-/* ============================================================================
- * 9. SUPPORT
- *
- * "supports" is intentionally distinct from "provides".
- *
- * Semantic analysis determines whether support means:
- *
- *     native support;
- *     emulated support;
- *     delegated support;
- *     optional support;
- *     conditional support.
- *
- * The grammar does not make that determination.
- * ========================================================================== */
-
-hardwareCapabilitySupport
-    : K_SUPPORTS
-      hardwareCapabilityReferenceList
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 10. EXCLUSION
- *
- * Exclusion states that a capability must not be assumed or selected as part
- * of a particular capability contract.
- * ========================================================================== */
-
-hardwareCapabilityExclusion
-    : K_EXCLUDES
-      hardwareCapabilityReferenceList
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 11. PREFERENCE
- *
- * Preferences are advisory.
- *
- * A preference MUST NOT be interpreted as a semantic requirement merely
- * because it appears in source.
- * ========================================================================== */
-
-hardwareCapabilityPreference
-    : K_PREFER
-      hardwareCapabilityReferenceList
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 12. GUARANTEE
- *
- * A guarantee is stronger than ordinary support.
- *
- * The semantic layer determines whether a guarantee is statically verifiable,
- * target-dependent, deployment-dependent, or runtime-verified.
- * ========================================================================== */
-
-hardwareCapabilityGuarantee
-    : K_GUARANTEES
-      hardwareCapabilityReferenceList
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 13. PROFILE
- *
- * Profiles group capabilities under a symbolic name.
- *
- * Example:
- *
- *     profile quantum.dynamic;
- *
- * Profiles are not vendor names and do not identify physical hardware.
- * ========================================================================== */
-
-hardwareCapabilityProfileReference
-    : K_PROFILE
-      hardwareCapabilityQualifiedName
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 14. CAPABILITY SET
- *
- * Capability sets permit arbitrary collections of capabilities.
- * ========================================================================== */
-
-hardwareCapabilitySetReference
-    : K_CAPABILITY_SET
-      hardwareCapabilityQualifiedName
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 15. DEPENDENCIES
- *
- * A capability may depend upon other abstract capabilities.
- *
- * This represents a semantic relationship, not a runtime dependency graph.
- * ========================================================================== */
-
-hardwareCapabilityDependency
-    : K_DEPENDS
-      K_ON
-      hardwareCapabilityReferenceList
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 16. COMPOSITION
- *
- * A capability can be described as a composition of other capabilities.
- *
- * This is particularly useful for heterogeneous hardware.
- *
- * Example:
- *
- *     compose accelerator =
- *         compute
- *         + memory.access
- *         + parallel.execution;
- *
- * The exact semantic composition rules are outside ANTLR.
- * ========================================================================== */
-
-hardwareCapabilityComposition
-    : K_COMPOSE
-      (
-          ASSIGN
-      )?
-      hardwareCapabilityExpression
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 17. EXTENSION
- *
- * Capability extension permits domain-specific capability families without
- * changing the universal grammar.
- * ========================================================================== */
-
-hardwareCapabilityExtension
-    : K_EXTENDS
-      hardwareCapabilityReferenceList
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 18. CAPABILITY PARAMETER DECLARATION
- * ========================================================================== */
-
-hardwareCapabilityParameterDeclaration
-    : K_PARAMETER
-      IDENTIFIER
-      (
-          COLON
-          hardwareCapabilityTypeReference
-      )?
-      (
-          ASSIGN
-          hardwareCapabilityExpression
-      )?
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 19. METADATA
- *
- * Metadata is intentionally extensible.
- *
- * Standard semantic metadata can be recognized by semantic analysis without
- * forcing every future metadata key into the lexer.
- * ========================================================================== */
-
-hardwareCapabilityMetadata
-    : K_METADATA
-      LBRACE
-      hardwareCapabilityMetadataEntry*
-      RBRACE
-    ;
-
-hardwareCapabilityMetadataEntry
-    : IDENTIFIER
-      ASSIGN
-      hardwareCapabilityExpression
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 20. PROPERTY
- *
- * Generic property syntax is the forward-compatibility mechanism.
- *
- * Examples:
- *
- *     native = true;
- *     optional = false;
- *     experimental = true;
- *     version = "1";
- *
- * The grammar does not decide which properties are legal for a capability.
- * ========================================================================== */
-
-hardwareCapabilityProperty
-    : IDENTIFIER
-      ASSIGN
-      hardwareCapabilityExpression
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 21. ARGUMENTS
- * ========================================================================== */
-
-hardwareCapabilityArgumentList
-    : hardwareCapabilityArgument
-      (
-          COMMA hardwareCapabilityArgument
-      )*
-    ;
-
-hardwareCapabilityArgument
-    : hardwareCapabilityNamedArgument
-    | hardwareCapabilityExpression
-    ;
-
-hardwareCapabilityNamedArgument
-    : IDENTIFIER
-      ASSIGN
-      hardwareCapabilityExpression
-    ;
-
-
-/* ============================================================================
- * 22. EXPRESSIONS
- *
- * IMPORTANT:
- *
- * These expressions are capability expressions, not a second general-purpose
- * expression language.
- *
- * They are deliberately small and structural enough for capability
- * declarations while remaining extensible.
- *
- * If the canonical expression grammar exposes a shared expression rule, the
- * frontend integration layer should map this non-terminal to that canonical
- * rule rather than creating a competing semantic expression representation.
- * ========================================================================== */
-
-hardwareCapabilityExpression
-    : hardwareCapabilityConditionalExpression
-    ;
-
-hardwareCapabilityConditionalExpression
-    : hardwareCapabilityLogicalExpression
-      (
-          QUESTION
-          hardwareCapabilityExpression
-          COLON
-          hardwareCapabilityExpression
-      )?
-    ;
-
-hardwareCapabilityLogicalExpression
-    : hardwareCapabilityComparisonExpression
-      (
-          (
-              AND
-            | OR
-          )
-          hardwareCapabilityComparisonExpression
-      )*
-    ;
-
-hardwareCapabilityComparisonExpression
-    : hardwareCapabilityAdditiveExpression
-      (
-          (
-              EQUAL
-            | NOT_EQUAL
-            | LESS_EQUAL
-            | GREATER_EQUAL
-            | LESS
-            | GREATER
-          )
-          hardwareCapabilityAdditiveExpression
-      )?
-    ;
-
-hardwareCapabilityAdditiveExpression
-    : hardwareCapabilityMultiplicativeExpression
-      (
-          (
-              PLUS
-            | MINUS
-          )
-          hardwareCapabilityMultiplicativeExpression
-      )*
-    ;
-
-hardwareCapabilityMultiplicativeExpression
-    : hardwareCapabilityUnaryExpression
-      (
-          (
-              STAR
-            | SLASH
-            | PERCENT
-          )
-          hardwareCapabilityUnaryExpression
-      )*
-    ;
-
-hardwareCapabilityUnaryExpression
-    : (
-          PLUS
-        | MINUS
-        | NOT
-      )*
-      hardwareCapabilityPrimaryExpression
-    ;
-
-hardwareCapabilityPrimaryExpression
-    : hardwareCapabilityLiteral
-    | hardwareCapabilityReference
-    | hardwareCapabilityCall
-    | hardwareCapabilityIndex
-    | hardwareCapabilityMemberAccess
-    | LPAREN
-      hardwareCapabilityExpression
-      RPAREN
-    ;
-
-hardwareCapabilityCall
-    : hardwareCapabilityQualifiedName
-      LPAREN
-      hardwareCapabilityArgumentList?
-      RPAREN
-    ;
-
-hardwareCapabilityIndex
-    : hardwareCapabilityQualifiedName
-      LBRACKET
-      hardwareCapabilityExpression
-      RBRACKET
-    ;
-
-hardwareCapabilityMemberAccess
-    : hardwareCapabilityQualifiedName
-    ;
-
-
-/* ============================================================================
- * 23. LITERALS
- *
- * Literal recognition belongs to ZamaniTokens.
- * ========================================================================== */
-
-hardwareCapabilityLiteral
-    : INTEGER_LITERAL
-    | FLOAT_LITERAL
-    | STRING_LITERAL
-    | CHARACTER_LITERAL
-    | TRUE
-    | FALSE
-    | NULL
-    ;
-
-
-/* ============================================================================
- * 24. BOOLEAN / SET EXPRESSIONS
- *
- * These aliases make semantic processing easier without introducing
- * machine-specific semantics.
- * ========================================================================== */
-
-hardwareCapabilityPredicate
-    : hardwareCapabilityExpression
-    ;
-
-hardwareCapabilityPredicateList
-    : hardwareCapabilityPredicate
-      (
-          COMMA
-          hardwareCapabilityPredicate
-      )*
-    ;
-
-
-/* ============================================================================
- * 25. CAPABILITY DECLARATION BLOCKS
- *
- * Explicit named sets are useful for reusable capability contracts.
- * ========================================================================== */
-
-hardwareCapabilityProfileDeclaration
-    : hardwareCapabilityModifiers*
-      K_PROFILE
-      hardwareCapabilityQualifiedName
-      LBRACE
-      hardwareCapabilityProfileMember*
-      RBRACE
-      SEMICOLON?
-    ;
-
-hardwareCapabilityProfileMember
-    : hardwareCapabilityAttributes*
-      (
-          hardwareCapabilityClause
-        | hardwareCapabilityProperty
-        | hardwareCapabilityDependency
-        | hardwareCapabilityExtension
-      )
-    ;
-
-
-/* ============================================================================
- * 26. CAPABILITY SET DECLARATIONS
- * ========================================================================== */
-
-hardwareCapabilitySetDeclaration
-    : hardwareCapabilityModifiers*
-      K_CAPABILITY_SET
-      hardwareCapabilityQualifiedName
-      LBRACE
-      hardwareCapabilitySetMember*
-      RBRACE
-      SEMICOLON?
-    ;
-
-hardwareCapabilitySetMember
-    : hardwareCapabilityAttributes*
-      (
-          hardwareCapabilityReference
-        | hardwareCapabilityClause
-        | hardwareCapabilityProperty
-      )
+ * The leading `capability` keyword remains owned by the canonical capability
+ * grammar. The contract body belongs to this file.
+ */
+hardwareCapabilityContractDeclaration
+    : CAPABILITY
+      capabilityName
+      hardwareCapabilityContractBody
       SEMICOLON?
     ;
 
 
-/* ============================================================================
- * 27. ABSTRACT MATCHING INTENT
+/*
+ * A reusable anonymous contract.
  *
- * Matching is declarative.
- *
- * It does NOT perform discovery or allocation.
- *
- * The semantic/resource layer evaluates these expressions against a capability
- * model supplied by the compilation target or runtime environment.
- * ========================================================================== */
-
-hardwareCapabilityMatchExpression
-    : K_MATCH
-      hardwareCapabilityReference
-      (
-          K_AGAINST
-          hardwareCapabilityReference
-      )?
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 28. AVAILABILITY INTENT
- *
- * Availability is an observation of an environment.
- *
- * The grammar records the intent to describe availability but does not query
- * hardware.
- * ========================================================================== */
-
-hardwareCapabilityAvailability
-    : K_AVAILABILITY
-      hardwareCapabilityReference
-      (
-          ASSIGN
-          hardwareCapabilityExpression
-      )?
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 29. VERSION INTENT
- *
- * Capability versions are symbolic/version expressions.
- *
- * The grammar does not impose a particular versioning scheme.
- * ========================================================================== */
-
-hardwareCapabilityVersion
-    : K_VERSION
-      ASSIGN
-      hardwareCapabilityExpression
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 30. EVIDENCE
- *
- * Evidence may identify where a capability claim originates.
- *
- * Examples:
- *
- *     specification
- *     compiler
- *     target
- *     runtime
- *     provider
- *
- * The grammar does not trust evidence merely because it is syntactically
- * present. Trust and verification belong to semantic/security layers.
- * ========================================================================== */
-
-hardwareCapabilityEvidence
-    : K_EVIDENCE
-      ASSIGN
-      hardwareCapabilityExpression
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 31. CAPABILITY CONTRACT
- *
- * This is the reusable high-level contract consumed by devices, hardware
- * targets, accelerators, and compilation contexts.
- * ========================================================================== */
-
+ * This is useful when hardware.g4, devices.g4, targets.g4, or accelerator
+ * grammars need to attach a capability contract without declaring a new
+ * capability identity.
+ */
 hardwareCapabilityContract
     : LBRACE
       hardwareCapabilityContractMember*
       RBRACE
     ;
 
+
+/* ============================================================================
+ * 2. HARDWARE CAPABILITY CONTRACT MEMBERS
+ * ========================================================================== */
+
 hardwareCapabilityContractMember
     : hardwareCapabilityRequirement
-    | hardwareCapabilityProvision
-    | hardwareCapabilitySupport
-    | hardwareCapabilityExclusion
+    | hardwareCapabilityConstraint
     | hardwareCapabilityPreference
-    | hardwareCapabilityGuarantee
-    | hardwareCapabilityDependency
-    | hardwareCapabilityComposition
-    | hardwareCapabilityExtension
-    | hardwareCapabilityProfileReference
-    | hardwareCapabilitySetReference
+    | hardwareCapabilityHint
     | hardwareCapabilityProperty
-    | hardwareCapabilityVersion
-    | hardwareCapabilityAvailability
-    | hardwareCapabilityEvidence
+    | hardwareCapabilityExtension
+    | hardwareCapabilityReferenceMember
     ;
 
 
 /* ============================================================================
- * 32. CAPABILITY COLLECTION
+ * 3. REQUIREMENTS
+ * ============================================================================
  *
- * Arbitrary capability collections are supported.
+ * Requirement syntax is mandatory semantic intent.
+ *
+ * It does not perform capability discovery.
+ * It does not select a physical target.
+ * ========================================================================== */
+
+hardwareCapabilityRequirement
+    : REQUIRES
+      capabilityExpression
+      SEMICOLON
+    ;
+
+
+/* ============================================================================
+ * 4. CONSTRAINTS
+ * ============================================================================
+ *
+ * Constraints restrict valid realization.
+ *
+ * They are not preferences.
+ * ========================================================================== */
+
+hardwareCapabilityConstraint
+    : CONSTRAINT
+      capabilityConstraintExpression
+      SEMICOLON
+    ;
+
+hardwareCapabilityConstraintExpression
+    : capabilityExpression
+    | expression
+    ;
+
+
+/* ============================================================================
+ * 5. PREFERENCES
+ * ============================================================================
+ *
+ * Preferences are advisory optimization intent.
+ *
+ * They MUST NOT be interpreted as semantic requirements merely because they
+ * occur in source.
+ * ========================================================================== */
+
+hardwareCapabilityPreference
+    : PREFER
+      capabilityExpression
+      SEMICOLON
+    ;
+
+
+/* ============================================================================
+ * 6. HINTS
+ * ============================================================================
+ *
+ * Hints are weaker than preferences.
+ *
+ * A compiler may ignore a hint without invalidating the program.
+ * ========================================================================== */
+
+hardwareCapabilityHint
+    : HINT
+      (
+          capabilityExpression
+        | expression
+      )
+      SEMICOLON
+    ;
+
+
+/* ============================================================================
+ * 7. PROPERTIES
+ * ============================================================================
+ *
+ * Properties are extensible metadata/semantic attributes.
+ *
+ * The property name remains an identifier rather than becoming a permanent
+ * language keyword.
+ *
+ * Examples:
+ *
+ *     native = true;
+ *     optional = false;
+ *     emulated = true;
+ *     experimental = true;
+ *     priority = 10;
+ *
+ * The semantic layer decides which properties are valid.
+ * ========================================================================== */
+
+hardwareCapabilityProperty
+    : PROPERTY
+      hardwareCapabilityPropertyName
+      ASSIGN
+      expression
+      SEMICOLON
+    ;
+
+hardwareCapabilityPropertyName
+    : identifier
+    ;
+
+
+/* ============================================================================
+ * 8. EXTENSION
+ * ============================================================================
+ *
+ * Capability extension is symbolic.
+ *
+ * It does not imply physical inheritance, implementation inheritance, or
+ * object-oriented inheritance.
+ * ========================================================================== */
+
+hardwareCapabilityExtension
+    : EXTENDS
+      capabilityReferenceList
+      SEMICOLON
+    ;
+
+
+/* ============================================================================
+ * 9. DIRECT CAPABILITY REFERENCE
+ * ============================================================================
+ *
+ * This allows a contract body to contain a bare capability reference.
+ *
+ * Example:
+ *
+ *     {
+ *         quantum::measurement;
+ *         accelerator::tensor_compute;
+ *     }
+ *
+ * Whether a bare reference means "requires", "provides", or another semantic
+ * relationship must be determined by the enclosing semantic context.
+ *
+ * To avoid ambiguity, production hardware declarations should prefer explicit
+ * requirement/preference/constraint forms.
+ * ========================================================================== */
+
+hardwareCapabilityReferenceMember
+    : capabilityReference
+      SEMICOLON
+    ;
+
+
+/* ============================================================================
+ * 10. CAPABILITY CONTRACT BODY
+ * ========================================================================== */
+
+hardwareCapabilityContractBody
+    : LBRACE
+      hardwareCapabilityContractMember*
+      RBRACE
+    ;
+
+
+/* ============================================================================
+ * 11. CAPABILITY LISTS
+ * ============================================================================
+ *
+ * These wrappers deliberately reuse canonical capability references.
+ * ========================================================================== */
+
+hardwareCapabilityReferenceList
+    : capabilityReference
+      (
+          COMMA
+          capabilityReference
+      )*
+    ;
+
+hardwareCapabilityExpressionList
+    : capabilityExpression
+      (
+          COMMA
+          capabilityExpression
+      )*
+    ;
+
+
+/* ============================================================================
+ * 12. HARDWARE CAPABILITY REQUIREMENT LIST
+ * ========================================================================== */
+
+hardwareCapabilityRequirementList
+    : hardwareCapabilityRequirement+
+    ;
+
+
+/* ============================================================================
+ * 13. HARDWARE CAPABILITY CONTRACT LIST
+ * ========================================================================== */
+
+hardwareCapabilityContractList
+    : hardwareCapabilityContract+
+    ;
+
+
+/* ============================================================================
+ * 14. HARDWARE CAPABILITY COLLECTION
+ * ============================================================================
+ *
+ * A collection is an abstract set of capability references.
+ *
+ * It does not allocate or discover hardware.
  * ========================================================================== */
 
 hardwareCapabilityCollection
@@ -1124,354 +590,794 @@ hardwareCapabilityCollection
 
 
 /* ============================================================================
- * 33. QUALIFIED CAPABILITY PROPERTY PATH
+ * 15. CAPABILITY PROPERTY PREDICATE
+ * ============================================================================
  *
- * Used by semantic tooling when capability properties are hierarchical.
+ * Property predicates use the canonical expression grammar.
  *
  * Example:
  *
- *     quantum.measurement.readout
+ *     property supports_precision == required_precision;
  *
- * remains symbolic.
+ * The grammar does not decide whether that property exists or what it means.
  * ========================================================================== */
 
-hardwareCapabilityPropertyPath
-    : IDENTIFIER
-      (
-          DOT IDENTIFIER
-      )*
+hardwareCapabilityPropertyPredicate
+    : hardwareCapabilityPropertyName
+      hardwareCapabilityComparisonOperator
+      expression
+    ;
+
+hardwareCapabilityComparisonOperator
+    : EQ_EQ
+    | NOT_EQ
+    | LT
+    | LE
+    | GT
+    | GE
     ;
 
 
 /* ============================================================================
- * 34. CAPABILITY ATTRIBUTE ARGUMENTS
- * ========================================================================== */
-
-hardwareCapabilityAttributeArguments
-    : hardwareCapabilityArgument
-      (
-          COMMA
-          hardwareCapabilityArgument
-      )*
-    ;
-
-
-/* ============================================================================
- * 35. INTEGRATION CONTRACT
+ * 16. CAPABILITY MATCHING INTENT
  * ============================================================================
  *
- * ANTLR
- * -----
+ * This is declarative matching intent only.
  *
- * This file is a parser grammar and consumes ZamaniTokens.
+ * It does not perform discovery.
  *
- * Lexer
- * -----
+ * The semantic layer may later evaluate the expression against a capability
+ * environment.
+ * ========================================================================== */
+
+hardwareCapabilityMatch
+    : MATCH
+      capabilityExpression
+      SEMICOLON
+    ;
+
+
+/* ============================================================================
+ * 17. CAPABILITY AVAILABILITY INTENT
+ * ============================================================================
  *
- * All lexical recognition belongs to:
+ * Availability is source-level information.
  *
- *     grammar/lexer/tokens.g4
+ * The parser records the expression.
  *
- * No lexer rules are duplicated here.
+ * Runtime/hardware probing remains outside this grammar.
+ * ========================================================================== */
+
+hardwareCapabilityAvailability
+    : AVAILABILITY
+      capabilityReference
+      (
+          ASSIGN
+          expression
+      )?
+      SEMICOLON
+    ;
+
+
+/* ============================================================================
+ * 18. CAPABILITY PROFILE
+ * ============================================================================
  *
- * AST
- * ---
+ * A profile is a reusable symbolic grouping of capabilities.
  *
- * The parser produces syntax nodes which the frontend maps to the canonical
- * Zamani AST.
+ * It does not represent a physical device class.
+ * ========================================================================== */
+
+hardwareCapabilityProfile
+    : PROFILE
+      capabilityName
+      hardwareCapabilityContract
+    ;
+
+
+/* ============================================================================
+ * 19. CAPABILITY CONTRACT DECLARATION
+ * ============================================================================
  *
- * The AST should distinguish at least:
+ * `contract` is a language-level grouping construct.
  *
- *     CapabilityDeclaration
- *     CapabilityReference
- *     CapabilityRequirement
- *     CapabilityProvision
- *     CapabilitySupport
- *     CapabilityExclusion
- *     CapabilityPreference
- *     CapabilityGuarantee
- *     CapabilityDependency
- *     CapabilityComposition
- *     CapabilityProfile
- *     CapabilitySet
- *     CapabilityProperty
- *     CapabilityPredicate
+ * It is intentionally independent from:
  *
- * SEMANTIC ANALYSIS
- * -----------------
+ *     deployment contracts;
+ *     ABI contracts;
+ *     legal contracts;
+ *     runtime authorization;
+ *     hardware procurement.
  *
- * Semantic analysis validates:
+ * Semantic context determines its exact use.
+ * ========================================================================== */
+
+hardwareCapabilityNamedContract
+    : CONTRACT
+      identifier
+      hardwareCapabilityContract
+    ;
+
+
+/* ============================================================================
+ * 20. HARDWARE-CAPABILITY TARGET ADAPTER
+ * ============================================================================
  *
- *     - capability existence;
- *     - capability namespace;
- *     - capability parameter types;
- *     - capability relationships;
- *     - requirement satisfiability;
- *     - conflicting requirements;
- *     - invalid exclusions;
- *     - profile composition;
- *     - version compatibility;
- *     - dialect ownership;
- *     - target applicability.
+ * Targets may consume this rule.
  *
- * This grammar does not perform those checks.
+ * The target itself remains owned by:
  *
- * RESOURCE INTEGRATION
- * --------------------
+ *     grammar/hardware/targets.g4
  *
- * resources.g4 owns resource quantities and resource requirements.
+ * This rule only represents the capability portion of target intent.
+ * ========================================================================== */
+
+hardwareTargetCapabilityClause
+    : REQUIRES
+      capabilityExpression
+      SEMICOLON
+    | PREFER
+      capabilityExpression
+      SEMICOLON
+    | CONSTRAINT
+      capabilityConstraintExpression
+      SEMICOLON
+    ;
+
+
+/* ============================================================================
+ * 21. DEVICE-CAPABILITY ADAPTER
+ * ============================================================================
  *
- * Capability resolution MAY produce resource requirements, but that
- * transformation belongs to semantic analysis.
+ * Devices may consume this contract without redefining capability syntax.
  *
- * HARDWARE INTEGRATION
- * --------------------
+ * Physical device discovery remains downstream.
+ * ========================================================================== */
+
+hardwareDeviceCapabilityClause
+    : hardwareCapabilityContractMember
+    ;
+
+
+/* ============================================================================
+ * 22. ACCELERATOR-CAPABILITY ADAPTER
+ * ========================================================================== */
+
+hardwareAcceleratorCapabilityClause
+    : hardwareCapabilityContractMember
+    ;
+
+
+/* ============================================================================
+ * 23. CPU/GPU/FPGA/ASIC/QPU CAPABILITY ADAPTER
+ * ============================================================================
  *
- * hardware.g4 may consume:
+ * These are deliberately generic.
  *
+ * There is no separate closed capability enumeration for:
+ *
+ *     CPU
+ *     GPU
+ *     FPGA
+ *     ASIC
+ *     QPU
+ *
+ * New hardware classes can use the same capability contract.
+ * ========================================================================== */
+
+hardwareComputeCapabilityClause
+    : hardwareCapabilityContractMember
+    ;
+
+
+/* ============================================================================
+ * 24. HDL CAPABILITY ADAPTER
+ * ============================================================================
+ *
+ * HDL may state capability requirements without moving physical realization
+ * into the capability grammar.
+ * ========================================================================== */
+
+hardwareHdlCapabilityClause
+    : REQUIRES
+      capabilityExpression
+      SEMICOLON
+    | CONSTRAINT
+      capabilityConstraintExpression
+      SEMICOLON
+    | PREFER
+      capabilityExpression
+      SEMICOLON
+    ;
+
+
+/* ============================================================================
+ * 25. QUANTUM CAPABILITY ADAPTER
+ * ============================================================================
+ *
+ * Examples of semantic capability identities may include:
+ *
+ *     quantum::measurement
+ *     quantum::dynamic_control
+ *     quantum::mid_circuit_measurement
+ *     quantum::reset
+ *     quantum::logical_qubits
+ *     quantum::error_correction
+ *
+ * These remain identifiers, not fixed parser alternatives.
+ *
+ * This grammar does not enumerate quantum operations or gates.
+ * ========================================================================== */
+
+hardwareQuantumCapabilityClause
+    : hardwareCapabilityContractMember
+    ;
+
+
+/* ============================================================================
+ * 26. DISTRIBUTED CAPABILITY ADAPTER
+ * ========================================================================== */
+
+hardwareDistributedCapabilityClause
+    : hardwareCapabilityContractMember
+    ;
+
+
+/* ============================================================================
+ * 27. AI / ACCELERATOR CAPABILITY ADAPTER
+ * ========================================================================== */
+
+hardwareAiCapabilityClause
+    : hardwareCapabilityContractMember
+    ;
+
+
+/* ============================================================================
+ * 28. NETWORK CAPABILITY ADAPTER
+ * ========================================================================== */
+
+hardwareNetworkCapabilityClause
+    : hardwareCapabilityContractMember
+    ;
+
+
+/* ============================================================================
+ * 29. SECURITY CAPABILITY ADAPTER
+ * ========================================================================== */
+
+hardwareSecurityCapabilityClause
+    : hardwareCapabilityContractMember
+    ;
+
+
+/* ============================================================================
+ * 30. GENERIC HARDWARE CAPABILITY EXPRESSION
+ * ============================================================================
+ *
+ * This alias exists solely as an integration boundary.
+ *
+ * It delegates to the canonical capability expression.
+ *
+ * There is deliberately NO second expression hierarchy here.
+ * ========================================================================== */
+
+hardwareCapabilityExpression
+    : capabilityExpression
+    ;
+
+
+/* ============================================================================
+ * 31. GENERIC HARDWARE CAPABILITY REFERENCE
+ * ========================================================================== */
+
+hardwareCapabilityReference
+    : capabilityReference
+    ;
+
+
+/* ============================================================================
+ * 32. HARDWARE CAPABILITY NAME
+ * ============================================================================
+ *
+ * This alias preserves a stable hardware-domain API without redefining
+ * capability identity.
+ * ========================================================================== */
+
+hardwareCapabilityName
+    : capabilityName
+    ;
+
+
+/* ============================================================================
+ * 33. HARDWARE CAPABILITY VERSION
+ * ============================================================================
+ *
+ * Version syntax remains owned by core/capabilities.g4.
+ * ========================================================================== */
+
+hardwareCapabilityVersionClause
+    : capabilityVersionClause
+    ;
+
+
+/* ============================================================================
+ * 34. HARDWARE CAPABILITY ALIAS
+ * ========================================================================== */
+
+hardwareCapabilityAlias
+    : capabilityAlias
+    ;
+
+
+/* ============================================================================
+ * 35. HARDWARE CAPABILITY REQUIREMENT REFERENCE
+ * ========================================================================== */
+
+hardwareCapabilityRequirementReference
+    : capabilityRequirementReference
+    ;
+
+
+/* ============================================================================
+ * 36. HARDWARE CAPABILITY PREFERENCE REFERENCE
+ * ========================================================================== */
+
+hardwareCapabilityPreferenceReference
+    : capabilityPreferenceReference
+    ;
+
+
+/* ============================================================================
+ * 37. HARDWARE CAPABILITY CONSTRAINT REFERENCE
+ * ========================================================================== */
+
+hardwareCapabilityConstraintReference
+    : capabilityConstraintReference
+    ;
+
+
+/* ============================================================================
+ * 38. HARDWARE CAPABILITY EFFECT REFERENCE
+ * ========================================================================== */
+
+hardwareCapabilityEffectReference
+    : capabilityEffectReference
+    ;
+
+
+/* ============================================================================
+ * 39. HARDWARE CAPABILITY TARGET REFERENCE
+ * ========================================================================== */
+
+hardwareCapabilityTargetReference
+    : capabilityTargetReference
+    ;
+
+
+/* ============================================================================
+ * 40. HARDWARE CAPABILITY FEATURE REFERENCE
+ * ========================================================================== */
+
+hardwareCapabilityFeatureReference
+    : capabilityFeatureReference
+    ;
+
+
+/* ============================================================================
+ * 41. INTEGRATION CONTRACT
+ * ============================================================================
+ *
+ * HARDWARE.G4
+ * -----------
+ *
+ * hardware.g4 MUST consume:
+ *
+ *     hardwareCapabilityDeclaration
+ *     hardwareCapabilityReference
  *     hardwareCapabilityContract
  *
- * to describe what a hardware implementation provides or requires.
+ * and MUST NOT redefine:
  *
- * DEVICES INTEGRATION
- * -------------------
+ *     capabilityReference
+ *     capabilityName
+ *     capabilityExpression
+ *     capabilityVersionClause
  *
- * devices.g4 may reference capability declarations but must not redefine
- * capability syntax.
- *
- * TARGET INTEGRATION
- * ------------------
- *
- * targets.g4 may use capability contracts to express target compatibility.
- *
- * TOPOLOGY INTEGRATION
- * --------------------
- *
- * topology.g4 may require capabilities relevant to links, communication,
- * connectivity, or topology-dependent operations.
- *
- * PLACEMENT INTEGRATION
- * ---------------------
- *
- * placement.g4 consumes resolved capability information.
- *
- * It does not depend on this grammar for placement algorithms.
- *
- * SCHEDULING
+ * TARGETS.G4
  * ----------
  *
- * Scheduling consumes capability information after semantic resolution.
+ * targets.g4 may consume:
  *
- * This grammar must never schedule an operation.
+ *     hardwareTargetCapabilityClause
+ *     hardwareCapabilityContract
  *
- * ROUTING
- * -------
+ * It remains the sole owner of target declaration syntax.
  *
- * Routing may use resolved capabilities to determine legal implementations.
+ * DEVICES.G4
+ * ----------
  *
- * This grammar never performs routing.
+ * devices.g4 may consume:
  *
- * OPTIMIZATION
- * ------------
+ *     hardwareDeviceCapabilityClause
+ *     hardwareCapabilityContract
  *
- * Optimization may use capability information to select legal implementations.
+ * It remains the owner of device syntax.
  *
- * This grammar never optimizes.
+ * RESOURCES
+ * ---------
  *
- * HARDWARE HAL
- * ------------
+ * Resource grammar remains responsible for:
  *
- * The HAL supplies implementation capability information.
+ *     resource identity;
+ *     resource quantities;
+ *     resource availability;
+ *     resource accounting;
+ *     resource requirements.
  *
- * The HAL MUST NOT depend on parser syntax to discover hardware.
+ * A capability may semantically imply a resource requirement, but this
+ * transformation is performed by semantic analysis, not the parser.
  *
- * The direction is:
+ * TOPOLOGY
+ * --------
  *
- *     source capability intent
- *             |
- *             v
- *     semantic capability model
- *             |
- *             v
- *     HAL capability model
+ * topology.g4 owns topology syntax.
  *
- * not:
+ * This grammar may express capabilities related to topology, but does not
+ * define topology itself.
  *
- *     parser -> hardware discovery
+ * PLACEMENT
+ * ---------
+ *
+ * placement.g4 consumes resolved semantic capability information.
+ *
+ * It does not perform placement.
  *
  * QUANTUM
  * -------
  *
- * Quantum capability declarations may influence compilation feasibility.
+ * Quantum source capability intent may ultimately influence quantum semantic
+ * validation.
  *
- * They do not define quantum operations.
+ * The canonical path remains:
  *
- * Quantum operations lower through the canonical quantum::ir boundary.
+ *     source
+ *       ->
+ *     AST
+ *       ->
+ *     semantic quantum model
+ *       ->
+ *     quantum::ir
+ *
+ * This file never creates or modifies quantum::ir.
  *
  * QEC
  * ---
  *
- * QEC consumes resolved capability information where necessary.
+ * QEC may consume resolved capabilities.
  *
- * This grammar does not define QEC algorithms.
+ * QEC implementation remains outside grammar.
  *
  * ZQN
  * ---
  *
- * ZQN provides noise/fault semantics.
+ * ZQN may consume resolved noise/fault-related capabilities.
  *
- * Capability syntax may state that an implementation supports a particular
- * fault-tolerance or mitigation capability, but ZQN remains the owner of
- * noise/fault semantics.
+ * ZQN remains the owner of noise/fault semantics.
+ *
+ * ROUTING
+ * -------
+ *
+ * Routing may use capability information to determine legal realizations.
+ *
+ * Routing does not belong here.
+ *
+ * SCHEDULING
+ * ----------
+ *
+ * Scheduling may use capability information.
+ *
+ * Scheduling does not belong here.
+ *
+ * HAL
+ * ---
+ *
+ * HAL provides target/environment capability information.
+ *
+ * The parser never probes the HAL.
  *
  * RUNTIME
  * -------
  *
- * Runtime capability state is supplied by the runtime environment.
+ * Runtime capability state is downstream data.
  *
- * Parsing must remain independent of runtime state.
+ * It is not source syntax.
  *
- * DISTRIBUTED
- * -----------
+ * ============================================================================
+ * AST CONTRACT
+ * ============================================================================
  *
- * Distributed execution may consume capability contracts for nodes, links,
- * accelerators, memory domains, communication facilities, or execution
- * environments.
+ * All hardware capability syntax must map to the existing domain-neutral
+ * capability representation.
  *
- * No fixed node count is permitted.
+ * Conceptual mapping:
  *
- * AI
- * --
+ *     hardwareCapabilityDeclaration
+ *             |
+ *             v
+ *     CapabilityDeclaration / HardwareCapabilityContract
+ *             |
+ *             v
+ *     semantic capability model
  *
- * AI/ML accelerators may expose symbolic capabilities such as:
+ * The AST MUST preserve:
  *
- *     tensor.execution
- *     matrix.acceleration
- *     mixed_precision
- *     accelerator.execution
+ *     capability identity;
+ *     version requirement;
+ *     contract member order;
+ *     property names;
+ *     property expressions;
+ *     source spans.
  *
- * The grammar must not enumerate a fixed accelerator catalogue.
+ * The AST MUST NOT contain:
  *
- * HDL
- * ---
+ *     physical device IDs;
+ *     physical qubit IDs;
+ *     backend handles;
+ *     runtime authorization tokens;
+ *     calibration state;
+ *     scheduler state;
+ *     routing state.
  *
- * HDL constructs may require or provide hardware capabilities.
+ * ============================================================================
+ * SEMANTIC CONTRACT
+ * ============================================================================
  *
- * Capability declarations do not define HDL structural connectivity.
+ * Semantic analysis is responsible for:
  *
- * INTEROPERABILITY
- * ----------------
+ *     - resolving capability names;
+ *     - resolving namespaces;
+ *     - checking capability versions;
+ *     - validating capability properties;
+ *     - validating requirement satisfiability;
+ *     - detecting contradictory requirements;
+ *     - detecting incompatible constraints;
+ *     - resolving capability inheritance;
+ *     - resolving profiles;
+ *     - deriving resource requirements when specified by capability metadata;
+ *     - checking target applicability;
+ *     - checking portability;
+ *     - checking dialect ownership;
+ *     - validating security/trust of capability evidence.
  *
- * Foreign backends may map external capability descriptions into the
- * semantic capability model.
+ * None of these operations occur during parsing.
  *
- * They must not modify the meaning of source syntax.
+ * ============================================================================
+ * ERROR CONTRACT
+ * ============================================================================
  *
- * TOOLING
- * -------
+ * Syntax errors:
  *
- * IDEs, formatters, linters, documentation generators, and capability
- * inspectors may consume the parser AST.
+ *     requires;
+ *     prefer;
+ *     constraint;
+ *     capability foo::;
  *
- * Tools must not infer physical hardware solely from capability syntax.
+ * are parser errors.
+ *
+ * Semantic errors:
+ *
+ *     unknown capability;
+ *     incompatible capability version;
+ *     contradictory requirement;
+ *     unavailable target capability;
+ *
+ * are semantic/resource/target errors.
+ *
+ * A resource shortage MUST NOT be reported as a syntax error.
  *
  * ============================================================================
  * DETERMINISM
  * ============================================================================
  *
- * Parsing this grammar must be deterministic for the same token stream and
- * grammar version.
+ * Parsing is pure with respect to external state.
  *
- * No runtime state, network access, hardware probing, clock, randomness, or
- * environment-dependent operation is permitted during parsing.
+ * It MUST NOT depend on:
+ *
+ *     hardware;
+ *     network;
+ *     filesystem;
+ *     clock;
+ *     randomness;
+ *     environment variables;
+ *     runtime state;
+ *     target discovery.
+ *
+ * Identical source and identical grammar/token versions must produce
+ * identical parse structure.
  *
  * ============================================================================
  * SECURITY
  * ============================================================================
  *
- * Capability declarations are declarative.
+ * Capability syntax is untrusted input.
  *
- * They must not:
+ * This grammar performs:
  *
- *     execute commands;
- *     access files;
- *     access networks;
- *     probe devices;
- *     allocate hardware;
- *     modify runtime state.
+ *     no filesystem access;
+ *     no network access;
+ *     no process execution;
+ *     no hardware probing;
+ *     no credential access;
+ *     no backend loading.
  *
- * Any external capability evidence must be validated by trusted semantic or
- * runtime components.
- *
- * ============================================================================
- * COMPATIBILITY
- * ============================================================================
- *
- * Capability names are namespaced and extensible.
- *
- * Standard capability names require language-version compatibility policy.
- *
- * Vendor/provider/experimental capability names should use qualified
- * namespaces rather than modifying universal grammar productions.
- *
- * Removing or changing a standardized capability keyword is a language
- * compatibility event.
+ * Capability names and property expressions are data until semantic analysis.
  *
  * ============================================================================
  * HARD-CODING AUDIT
  * ============================================================================
  *
- * This file contains no:
+ * No machine capacity is encoded here.
  *
- *     fixed CPU count;
- *     fixed GPU count;
- *     fixed FPGA count;
- *     fixed ASIC count;
- *     fixed qubit count;
- *     fixed memory capacity;
+ * Specifically absent:
+ *
+ *     MAX_QUBITS
+ *     MAX_CPUS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_NODES
+ *     MAX_MEMORY
+ *     MAX_THREADS
+ *     MAX_TENSOR_RANK
+ *     MAX_REGISTER_WIDTH
+ *     MAX_NETWORK_SIZE
+ *     MAX_DEVICE_COUNT
+ *
+ * There is also no:
+ *
+ *     physical device enumeration;
+ *     physical qubit enumeration;
+ *     vendor enumeration;
  *     fixed topology;
- *     fixed device identifier;
- *     fixed hardware address;
- *     fixed vendor;
- *     fixed architecture;
- *     fixed accelerator count;
- *     fixed capability count.
+ *     fixed accelerator catalogue;
+ *     fixed quantum gate catalogue.
  *
- * Capability collections use arbitrary repetition.
+ * ============================================================================
+ * RUST INTEGRATION
+ * ============================================================================
  *
- * Quantities, dimensions, versions, and predicates use symbolic expressions.
+ * This grammar contains no Rust actions.
+ *
+ * Therefore Rust 1.97 / Rust 1.97.1 integration occurs entirely in the
+ * generated-parser/frontend crate.
+ *
+ * The Rust crate MUST:
+ *
+ *     - use Rust 2021;
+ *     - compile without unsafe code;
+ *     - preserve parser source spans;
+ *     - map parse nodes to the existing AST;
+ *     - preserve capability identity;
+ *     - distinguish syntax errors from semantic errors.
+ *
+ * This .g4 file itself contains no Rust and therefore contains no unsafe code.
+ *
+ * ============================================================================
+ * TEST CONTRACT
+ * ============================================================================
+ *
+ * The following classes must exist under:
+ *
+ *     grammar/tests/hardware/capabilities/
+ *
+ * POSITIVE:
+ *
+ *     capability quantum::measurement;
+ *
+ *     capability accelerator::tensor_compute {
+ *         requires compute::parallel;
+ *     }
+ *
+ *     capability future::domain::feature {
+ *         prefer accelerator::tensor_compute;
+ *     }
+ *
+ *     capability quantum::dynamic_control {
+ *         constraint quantum::measurement;
+ *         hint quantum::reset;
+ *     }
+ *
+ *     capability accelerator::compute {
+ *         property native = true;
+ *     }
+ *
+ * NEGATIVE:
+ *
+ *     capability;
+ *
+ *     requires;
+ *
+ *     prefer;
+ *
+ *     constraint;
+ *
+ *     capability quantum::;
+ *
+ *     property = true;
+ *
+ * BOUNDARY:
+ *
+ *     one capability;
+ *     many capability members;
+ *     deeply qualified capability names;
+ *     large symbolic expressions;
+ *     large capability collections;
+ *     nested contracts.
+ *
+ * SCALABILITY:
+ *
+ *     arbitrary number of capability members;
+ *     arbitrary number of capability references;
+ *     arbitrary qualified-name depth;
+ *     arbitrary program-level capability declarations;
+ *     symbolic resource requirements;
+ *     changing target resource availability without changing source syntax.
+ *
+ * CROSS-DOMAIN:
+ *
+ *     classical capabilities;
+ *     quantum capabilities;
+ *     HDL capabilities;
+ *     accelerator capabilities;
+ *     distributed capabilities;
+ *     AI capabilities;
+ *     networking capabilities;
+ *     security capabilities;
+ *     future dialect capabilities.
+ *
+ * DETERMINISM:
+ *
+ *     identical source + grammar + lexer version
+ *         ->
+ *     identical parse structure.
  *
  * ============================================================================
  * COMPLETION CRITERIA
  * ============================================================================
  *
- * This file is complete only when:
+ * This file is complete when:
  *
- * [ ] ZamaniTokens provides every referenced token.
- * [ ] No lexer rules are duplicated here.
- * [ ] Capability syntax has one authoritative owner.
- * [ ] devices.g4 consumes this capability contract rather than redefining it.
- * [ ] hardware.g4 consumes this capability contract rather than redefining it.
- * [ ] resources.g4 remains the owner of resource quantities.
- * [ ] targets.g4 remains the owner of target syntax.
- * [ ] topology.g4 remains the owner of topology syntax.
- * [ ] placement.g4 remains the owner of placement syntax.
- * [ ] semantic analysis owns capability validation.
- * [ ] HAL owns runtime/physical capability discovery.
- * [ ] quantum::ir remains the canonical quantum semantic boundary.
- * [ ] no QEC implementation is embedded here.
- * [ ] no ZQN implementation is embedded here.
- * [ ] no routing/scheduling/optimization logic is embedded here.
- * [ ] no physical hardware identifiers are required.
- * [ ] no fixed machine/resource limits exist.
- * [ ] positive parser tests exist.
- * [ ] negative parser tests exist.
- * [ ] boundary/scalability tests exist.
- * [ ] cross-domain tests exist.
- * [ ] deterministic parsing tests exist.
- * [ ] compatibility tests cover capability vocabulary evolution.
- * [ ] generated Rust integration succeeds on Rust 1.97/1.97.1.
- * [ ] generated code is accepted under the repository no-unsafe policy.
+ * [x] Canonical lexer is used.
+ * [x] No K_* pseudo-tokens are used.
+ * [x] Canonical capability identity is reused.
+ * [x] Canonical capability expressions are reused.
+ * [x] General expressions are not reimplemented.
+ * [x] No hardware-size limits exist.
+ * [x] No physical hardware is selected.
+ * [x] No vendor catalogue is embedded.
+ * [x] No quantum gate catalogue is embedded.
+ * [x] No quantum IR is duplicated.
+ * [x] No QEC implementation is embedded.
+ * [x] No ZQN implementation is embedded.
+ * [x] No routing is embedded.
+ * [x] No scheduling is embedded.
+ * [x] No optimization is embedded.
+ * [x] No runtime probing is embedded.
+ * [x] No Rust actions exist.
+ *
+ * The repository integration items below must also be completed:
+ *
+ * [ ] canonical core/capabilities.g4 compiles against ZamaniLexer;
+ * [ ] canonical Expressions grammar compiles against ZamaniLexer;
+ * [ ] Hardware composition imports this grammar;
+ * [ ] hardware.g4 removes duplicate capability productions;
+ * [ ] targets.g4 consumes this capability contract rather than duplicating it;
+ * [ ] resources/capabilities.g4 consumes canonical capabilityReference;
+ * [ ] devices.g4 consumes the capability contract;
+ * [ ] capability AST lowering uses the existing frontend AST;
+ * [ ] semantic capability resolution is implemented;
+ * [ ] positive/negative/boundary/scalability tests pass;
+ * [ ] Rust 1.97/1.97.1 generated-parser integration passes;
+ * [ ] repository-wide no-unsafe policy passes.
  *
  * ============================================================================
  */
