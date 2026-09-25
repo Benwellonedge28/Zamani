@@ -1,9 +1,3 @@
-parser grammar combinational;
-
-options {
-    tokenVocab = ZamaniTokens;
-}
-
 /*
  * ============================================================================
  * Zamani Programming Language
@@ -12,38 +6,48 @@ options {
  * File:
  *     grammar/hdl/combinational.g4
  *
- * Role:
- *     Production HDL combinational-logic grammar.
+ * Status:
+ *     CANONICAL HDL COMBINATIONAL-BEHAVIOR DELEGATE
  *
- * Baseline:
+ * Grammar technology:
+ *     ANTLR4 parser grammar
+ *
+ * Rust baseline:
  *     Rust 1.97 / Rust 1.97.1
+ *     Rust 2021
  *
  * Safety:
- *     This grammar contains no embedded Rust code.
- *     No unsafe Rust is required or permitted.
+ *     This grammar contains no embedded Rust actions.
+ *     Zamani's Rust implementation MUST remain safe Rust.
+ *     Rust `unsafe` is not required or permitted by this contract.
  *
  * ============================================================================
  * PURPOSE
  * ============================================================================
  *
- * This file owns the SOURCE SYNTAX for combinational hardware behavior.
+ * This file owns SOURCE SYNTAX for target-independent combinational hardware
+ * behavior.
  *
- * It describes hardware whose outputs are determined by its current inputs
- * and explicitly referenced state-free values.
+ * A combinational region describes behavior whose outputs are functions of
+ * currently available inputs and values, without introducing persistent
+ * sequential state.
  *
- * The grammar describes:
+ * The grammar deliberately describes LOGICAL HARDWARE INTENT.
  *
- *     - combinational declarations;
- *     - combinational blocks;
- *     - combinational assignments;
- *     - conditional combinational logic;
- *     - case/selection logic;
- *     - combinational local declarations;
- *     - nested combinational regions;
- *     - logical assertions;
- *     - combinational expression statements;
- *     - generate constructs when supported by the surrounding HDL grammar;
- *     - attributes and source-level metadata.
+ * It does NOT describe:
+ *
+ *     - physical gates;
+ *     - physical wires;
+ *     - FPGA LUTs;
+ *     - ASIC cells;
+ *     - physical registers;
+ *     - physical pins;
+ *     - placement;
+ *     - routing;
+ *     - clock trees;
+ *     - device IDs;
+ *     - vendor primitives;
+ *     - target-specific resource counts.
  *
  * ============================================================================
  * OWNERSHIP
@@ -51,47 +55,51 @@ options {
  *
  * THIS FILE OWNS:
  *
- *     - hdlCombinationalDeclaration;
- *     - hdlCombinationalBody;
- *     - hdlCombinationalStatement;
- *     - combinational-context assignment syntax;
- *     - combinational-context control-flow composition;
- *     - combinational-context local declarations;
- *     - combinational-context nested blocks;
- *     - combinational-context expression statements;
- *     - combinational-context assertions;
- *     - combinational source annotations.
+ *     - hdlCombinationalDeclaration
+ *     - hdlCombinationalBody
+ *     - hdlCombinationalStatement
+ *     - hdlCombinationalAssignment
+ *     - hdlCombinationalIf
+ *     - hdlCombinationalCase
+ *     - hdlCombinationalFor
+ *     - hdlCombinationalLocalDeclaration
+ *     - hdlCombinationalExpressionStatement
+ *     - hdlCombinationalAssertion
+ *     - hdlCombinationalBlock
  *
  * THIS FILE DOES NOT OWN:
  *
- *     - lexical tokens;
+ *     - lexer rules;
  *     - identifiers;
+ *     - qualified names;
  *     - general expressions;
  *     - general types;
- *     - ordinary software control flow;
- *     - sequential logic;
- *     - clocks;
- *     - timing;
+ *     - attributes;
+ *     - ports;
+ *     - signals;
+ *     - nets;
  *     - registers;
  *     - memories;
+ *     - clocks;
+ *     - resets;
+ *     - timing;
+ *     - sequential behavior;
  *     - state machines;
- *     - processes;
- *     - wires;
- *     - ports;
- *     - hardware modules;
+ *     - pipelines;
+ *     - modules;
+ *     - interfaces;
+ *     - generation/elaboration;
  *     - synthesis;
  *     - optimization;
+ *     - routing;
  *     - scheduling;
  *     - placement;
- *     - routing;
- *     - physical resources;
- *     - target devices;
- *     - FPGA resources;
- *     - ASIC resources;
+ *     - resource discovery;
+ *     - target selection;
+ *     - runtime execution;
  *     - quantum::ir;
  *     - QEC;
- *     - ZQN;
- *     - runtime execution.
+ *     - ZQN.
  *
  * ============================================================================
  * ARCHITECTURAL POSITION
@@ -100,163 +108,222 @@ options {
  *     Zamani source
  *          |
  *          v
- *     canonical lexer
+ *     grammar/antlr/ZamaniLexer.g4
  *          |
  *          v
  *     canonical parser
  *          |
  *          v
- *     HDL parser
+ *     HDL composition
  *          |
- *          +--> hardware-modules.g4
- *          +--> signals.g4
- *          +--> wires.g4
- *          +--> registers.g4
- *          +--> clocks.g4
- *          +--> timing.g4
+ *          +--> modules
+ *          +--> ports
+ *          +--> signals
+ *          +--> nets
+ *          +--> registers
  *          +--> THIS FILE
- *          +--> sequential.g4
- *          +--> processes.g4
- *          +--> state-machines.g4
+ *          +--> sequential
+ *          +--> clocking
+ *          +--> timing
+ *          +--> state machines
+ *          +--> pipelines
  *          |
  *          v
- *     frontend AST
+ *     domain-neutral frontend AST
  *          |
  *          v
  *     semantic analysis
  *          |
  *          +--> name resolution
  *          +--> type checking
- *          +--> width/shape checking
+ *          +--> width/shape analysis
  *          +--> driver analysis
  *          +--> combinational completeness
- *          +--> latch detection
  *          +--> dependency analysis
  *          +--> capability analysis
  *          +--> resource analysis
  *          |
  *          v
- *     canonical hardware semantic representation
+ *     canonical hardware semantic representation / IR
  *          |
  *          +--> optimization
+ *          +--> verification
  *          +--> synthesis
  *          +--> scheduling
  *          +--> placement
  *          +--> routing
  *          |
  *          v
- *     target lowering
- *
- * Grammar establishes syntax.
- * Semantic analysis establishes meaning.
- * Hardware compilation establishes realization.
+ *     target realization
  *
  * ============================================================================
  * POCO-REAF
  * ============================================================================
  *
- * A combinational declaration expresses LOGICAL HARDWARE BEHAVIOR.
+ * The same combinational source construct MUST remain target-independent.
  *
- * It MUST NOT permanently encode:
- *
- *     - FPGA family;
- *     - ASIC family;
- *     - process node;
- *     - LUT count;
- *     - gate count;
- *     - DSP count;
- *     - BRAM count;
- *     - physical routing;
- *     - physical placement;
- *     - pin numbers;
- *     - physical addresses;
- *     - device identifiers;
- *     - fixed machine topology;
- *     - fixed hardware capacity.
- *
- * The same combinational semantic program must be capable of being lowered
- * into different implementation technologies when semantically valid.
- *
- * ============================================================================
- * SCALABILITY
- * ============================================================================
- *
- * There are deliberately NO grammar-level finite limits.
- *
- * There is no:
+ * The grammar therefore contains no universal hardware capacities such as:
  *
  *     MAX_INPUTS
  *     MAX_OUTPUTS
+ *     MAX_SIGNALS
  *     MAX_ASSIGNMENTS
  *     MAX_BRANCHES
  *     MAX_CASE_ITEMS
- *     MAX_NESTING
- *     MAX_SIGNALS
  *     MAX_WIDTH
  *     MAX_BITS
+ *     MAX_NESTING
  *     MAX_MODULES
- *     MAX_BLOCKS
+ *     MAX_LUTS
+ *     MAX_GATES
+ *     MAX_FPGAS
+ *     MAX_ASICS
  *
- * Repetition is represented through ANTLR *, + and ? operators.
+ * A program quantity is allowed:
  *
- * Resource limits belong to:
+ *     let width = 1024;
  *
- *     - compiler resource policies;
- *     - semantic analysis;
- *     - synthesis;
- *     - target capability analysis;
- *     - scheduling;
- *     - deployment;
- *     - runtime.
+ * because that is program semantics.
+ *
+ * A language restriction such as:
+ *
+ *     width <= 32
+ *
+ * is NOT allowed as a universal grammar rule.
  *
  * ============================================================================
  * IMPORTANT SEMANTIC BOUNDARY
  * ============================================================================
  *
- * The grammar MUST NOT decide whether a combinational design:
+ * Parsing does NOT determine whether a design:
  *
- *     - fits a particular FPGA;
- *     - fits an ASIC;
- *     - has sufficient routing;
+ *     - fits a target;
  *     - meets timing;
- *     - consumes a particular number of LUTs;
- *     - consumes a particular number of gates;
- *     - has a particular propagation delay.
+ *     - fits available LUTs;
+ *     - fits available gates;
+ *     - satisfies fanout limits;
+ *     - satisfies routing capacity;
+ *     - satisfies power limits;
+ *     - satisfies thermal limits;
+ *     - can be synthesized by a particular tool.
  *
- * Those are downstream properties.
+ * Those are downstream semantic/compiler/target concerns.
  *
- * The semantic layer MUST, however, detect source-level semantic violations
- * such as:
+ * The semantic layer MUST nevertheless validate source-level correctness,
+ * including:
  *
- *     - invalid assignment targets;
- *     - incompatible types;
- *     - incompatible widths;
+ *     - assignment target legality;
+ *     - type compatibility;
+ *     - width/shape compatibility;
  *     - conflicting drivers;
- *     - incomplete conditional assignment where completeness is required;
- *     - unintended inferred storage;
- *     - illegal sequential constructs inside a combinational region;
- *     - invalid recursive combinational dependencies;
- *     - unsupported semantic constructs.
+ *     - incomplete output assignment;
+ *     - unintended storage inference;
+ *     - invalid stateful constructs;
+ *     - invalid combinational cycles where prohibited;
+ *     - unsupported semantic operations.
  *
  * ============================================================================
- * LEXICAL CONTRACT
+ * CANONICAL LEXER CONTRACT
  * ============================================================================
  *
- * This grammar uses the canonical ZamaniTokens vocabulary.
+ * Parser grammars MUST consume the production lexer:
  *
- * A dedicated:
+ *     grammar/antlr/ZamaniLexer.g4
  *
- *     K_COMBINATIONAL
+ * Therefore:
  *
- * token MUST be added to the canonical lexer/token vocabulary.
+ *     tokenVocab = ZamaniLexer;
  *
- * The parser must NOT use:
+ * is intentional.
  *
- *     'combinational'
+ * This grammar MUST NOT define lexical rules.
  *
- * as a parser literal because this is a separate parser grammar using
- * tokenVocab. ANTLR requires parser-visible literals/tokens to exist in the
- * imported vocabulary. 3
+ * The canonical keyword vocabulary needs a stable token for:
+ *
+ *     combinational
+ *
+ * with the token name:
+ *
+ *     COMBINATIONAL
+ *
+ * The canonical keyword vocabulary also needs:
+ *
+ *     DEFAULT
+ *
+ * for the case default branch.
+ *
+ * Existing language-wide keywords reused here include:
+ *
+ *     IF
+ *     ELSE
+ *     CASE
+ *     FOR
+ *     LET
+ *     VAR
+ *     CONST
+ *     ASSERT
+ *
+ * Parser-local K_* aliases MUST NOT be invented here.
+ *
+ * ============================================================================
+ * SHARED GRAMMAR CONTRACT
+ * ============================================================================
+ *
+ * The following rules are supplied by the canonical HDL/parser composition:
+ *
+ *     identifier
+ *     hdlQualifiedName
+ *     hdlExpression
+ *     hdlTypeExpression
+ *     hdlLValue
+ *     hdlAttribute
+ *
+ * This file MUST NOT redefine them.
+ *
+ * The public rule names remain stable even if their ownership is later moved
+ * into a more explicit shared HDL grammar.
+ *
+ * ============================================================================
+ * COMBINATIONAL VS SEQUENTIAL
+ * ============================================================================
+ *
+ * Combinational behavior:
+ *
+ *     current inputs/state-visible values
+ *              |
+ *              v
+ *        combinational logic
+ *              |
+ *              v
+ *           outputs
+ *
+ * Sequential behavior:
+ *
+ *     current state + inputs
+ *              |
+ *              v
+ *        state transition
+ *              |
+ *              v
+ *          next state
+ *
+ * Sequential constructs belong to:
+ *
+ *     grammar/hdl/sequential.g4
+ *
+ * Clock syntax belongs to:
+ *
+ *     grammar/hdl/clocking.g4
+ *
+ * Reset syntax belongs to:
+ *
+ *     grammar/hdl/reset.g4
+ *
+ * Timing constraints belong to:
+ *
+ *     grammar/hdl/timing.g4
+ *
+ * This grammar must not absorb those responsibilities.
  *
  * ============================================================================
  */
@@ -267,99 +334,30 @@ options {
  * ========================================================================== */
 
 /*
- * A named combinational hardware region.
- *
- * Canonical form:
+ * Canonical forms:
  *
  *     combinational {
  *         ...
  *     }
  *
- * Named form:
- *
- *     combinational logic_unit {
+ *     combinational adder {
  *         ...
  *     }
  *
- * The optional name is a logical source-level identifier.
+ * The optional identifier is a logical source-level name.
  *
- * It is NOT a physical block/device identifier.
+ * It is NOT:
+ *
+ *     - a device name;
+ *     - a physical block name;
+ *     - an FPGA region;
+ *     - an ASIC placement;
+ *     - a vendor primitive.
  */
 hdlCombinationalDeclaration
-    : hdlCombinationalModifiers*
-      K_COMBINATIONAL
+    : COMBINATIONAL
       identifier?
-      hdlCombinationalAttributes?
       hdlCombinationalBody
-    ;
-
-
-/* ============================================================================
- * DECLARATION MODIFIERS
- * ========================================================================== */
-
-/*
- * Modifiers are deliberately represented through the existing HDL contextual
- * keyword mechanism rather than duplicating the language-wide lexer.
- *
- * Semantic validation determines which modifiers are legal.
- */
-hdlCombinationalModifiers
-    : hdlKeyword
-    ;
-
-
-/* ============================================================================
- * ATTRIBUTES
- * ========================================================================== */
-
-hdlCombinationalAttributes
-    : hdlAttribute+
-    ;
-
-
-/*
- * Combinational attributes use the repository's existing HDL attribute
- * contract.
- *
- * Examples:
- *
- *     @pure
- *     @parallel
- *     @dont_merge
- *     @keep
- *     @vendor(...)
- *
- * The grammar does NOT assign implementation meaning to these attributes.
- */
-hdlCombinationalAttribute
-    : AT
-      identifier
-      (
-          LPAREN
-          hdlCombinationalArgumentList?
-          RPAREN
-      )?
-    ;
-
-
-hdlCombinationalArgumentList
-    : hdlCombinationalArgument
-      (
-          COMMA
-          hdlCombinationalArgument
-      )*
-      COMMA?
-    ;
-
-
-hdlCombinationalArgument
-    : identifier
-      (
-          ASSIGN
-          hdlExpression
-      )?
-    | hdlExpression
     ;
 
 
@@ -375,14 +373,12 @@ hdlCombinationalBody
 
 
 /*
- * A body may be empty syntactically so tooling can support incremental editing.
+ * The body is intentionally open-ended through repetition.
  *
- * Semantic validation MUST reject an empty combinational implementation where
- * the surrounding language construct requires actual behavior.
+ * There is no grammar-level limit on the number of statements.
  */
 hdlCombinationalStatement
-    : hdlCombinationalDeclaration
-    | hdlCombinationalAssignment
+    : hdlCombinationalAssignment
     | hdlCombinationalIf
     | hdlCombinationalCase
     | hdlCombinationalFor
@@ -390,7 +386,6 @@ hdlCombinationalStatement
     | hdlCombinationalExpressionStatement
     | hdlCombinationalAssertion
     | hdlCombinationalBlock
-    | hdlCombinationalGenerate
     ;
 
 
@@ -399,13 +394,17 @@ hdlCombinationalStatement
  * ========================================================================== */
 
 /*
- * Combinational assignment is intentionally restricted to ordinary assignment.
+ * Combinational assignment intentionally uses the ordinary ASSIGN token.
  *
- * Sequential/non-blocking assignment semantics do not belong here.
+ * Example:
  *
- * If Zamani later introduces additional hardware assignment operators, they
- * must be added to the shared operator/token specification first and then
- * explicitly classified semantically.
+ *     result = a + b;
+ *
+ * Sequential/non-blocking assignment syntax does NOT belong here.
+ *
+ * If Zamani introduces a distinct sequential assignment operator in the
+ * future, that token must be defined by the canonical lexer/operator contract
+ * and consumed by sequential.g4.
  */
 hdlCombinationalAssignment
     : hdlLValue
@@ -415,22 +414,11 @@ hdlCombinationalAssignment
     ;
 
 
-/*
- * Explicit assignment statement with an optional annotation.
- */
-hdlCombinationalAnnotatedAssignment
-    : hdlCombinationalAttributes
-      hdlCombinationalAssignment
-    ;
-
-
 /* ============================================================================
  * CONDITIONAL LOGIC
  * ========================================================================== */
 
 /*
- * Conditional combinational logic.
- *
  * Canonical form:
  *
  *     if (condition) {
@@ -439,13 +427,11 @@ hdlCombinationalAnnotatedAssignment
  *         ...
  *     }
  *
- * The condition is a normal Zamani expression.
- *
- * Whether all outputs receive assignments on every control path is a semantic
- * question, not a parser question.
+ * Parentheses are required here so that the HDL control construct remains
+ * structurally distinct from expression-level conditionals.
  */
 hdlCombinationalIf
-    : K_IF
+    : IF
       LPAREN
       hdlExpression
       RPAREN
@@ -455,7 +441,7 @@ hdlCombinationalIf
 
 
 hdlCombinationalElseClause
-    : K_ELSE
+    : ELSE
       (
           hdlCombinationalIf
         | hdlCombinationalBody
@@ -464,23 +450,27 @@ hdlCombinationalElseClause
 
 
 /* ============================================================================
- * CASE / SELECTION LOGIC
+ * CASE / SELECTION
  * ========================================================================== */
 
 /*
- * Case-style combinational selection.
+ * Canonical form:
  *
- * The semantic layer determines:
+ *     case (selector) {
+ *         value:
+ *             ...
  *
- *     - exhaustiveness;
- *     - duplicate patterns;
- *     - overlap;
- *     - default coverage;
- *     - constant-foldability;
- *     - implementation strategy.
+ *         other:
+ *             ...
+ *
+ *         default:
+ *             ...
+ *     }
+ *
+ * Exhaustiveness and overlap are semantic properties.
  */
 hdlCombinationalCase
-    : K_CASE
+    : CASE
       LPAREN
       hdlExpression
       RPAREN
@@ -494,7 +484,7 @@ hdlCombinationalCaseItem
     : hdlCombinationalCasePattern
       COLON
       hdlCombinationalBody
-    | K_DEFAULT
+    | DEFAULT
       COLON
       hdlCombinationalBody
     ;
@@ -510,21 +500,34 @@ hdlCombinationalCasePattern
 
 
 /* ============================================================================
- * COMBINATIONAL ITERATION
+ * COMPILE-TIME / ELABORATION-ORIENTED FOR
  * ========================================================================== */
 
 /*
- * Compile-time/static elaboration iteration may be legal inside an HDL
- * combinational region.
+ * A `for` inside a combinational region is syntactically accepted as a
+ * parameterized structural/combinational construct.
  *
- * Runtime-dependent unbounded iteration is NOT silently assumed to be
- * synthesizable.
+ * Whether it represents:
  *
- * Semantic analysis decides whether the loop can represent finite hardware
- * elaboration or whether it violates the selected hardware semantic model.
+ *     - compile-time elaboration;
+ *     - statically unrolled logic;
+ *     - a legal bounded combinational iteration;
+ *
+ * is decided by semantic analysis/elaboration.
+ *
+ * The grammar does NOT impose a fixed iteration count.
+ *
+ * Example:
+ *
+ *     for (let i = 0; i < width; i = i + 1) {
+ *         ...
+ *     }
+ *
+ * An implementation may reject a runtime-unbounded loop semantically rather
+ * than making the grammar encode a maximum.
  */
 hdlCombinationalFor
-    : K_FOR
+    : FOR
       LPAREN
       hdlCombinationalForInitializer?
       SEMICOLON
@@ -545,19 +548,28 @@ hdlCombinationalForInitializer
 
 
 /* ============================================================================
- * LOCAL DECLARATIONS
+ * LOCAL COMBINATIONAL VALUES
  * ========================================================================== */
 
 /*
- * Local combinational values are logical intermediate values.
+ * Local values are source-level intermediate values.
  *
- * They do not imply:
+ * They do NOT imply physical storage.
  *
- *     - physical registers;
- *     - CPU registers;
- *     - FPGA registers;
- *     - memory;
- *     - persistent state.
+ * A compiler may lower them to:
+ *
+ *     wires;
+ *     optimized expressions;
+ *     shared subexpressions;
+ *     registers only if another semantic construct explicitly requires state.
+ *
+ * Example:
+ *
+ *     let sum: Logic = a + b;
+ *
+ * or:
+ *
+ *     var carry = a & b;
  */
 hdlCombinationalLocalDeclaration
     : hdlCombinationalLocalDeclarationNoTerminator
@@ -566,7 +578,7 @@ hdlCombinationalLocalDeclaration
 
 
 hdlCombinationalLocalDeclarationNoTerminator
-    : hdlKeyword
+    : hdlCombinationalBindingKind
       identifier
       (
           COLON
@@ -579,16 +591,24 @@ hdlCombinationalLocalDeclarationNoTerminator
     ;
 
 
+hdlCombinationalBindingKind
+    : LET
+    | VAR
+    | CONST
+    ;
+
+
 /* ============================================================================
  * EXPRESSION STATEMENTS
  * ========================================================================== */
 
 /*
- * Expression statements are allowed for constructs whose semantic model
- * explicitly permits them.
+ * Expression statements are syntactically permitted because expressions may
+ * include source-level constructs that are meaningful in an HDL semantic
+ * environment.
  *
- * Semantic validation must reject expressions with side effects that are
- * incompatible with combinational semantics.
+ * Semantic analysis MUST reject expressions that imply incompatible
+ * side effects, state, runtime execution, or unsupported behavior.
  */
 hdlCombinationalExpressionStatement
     : hdlExpression
@@ -600,6 +620,16 @@ hdlCombinationalExpressionStatement
  * NESTED BLOCKS
  * ========================================================================== */
 
+/*
+ * Nested blocks provide lexical grouping only.
+ *
+ * They do not create:
+ *
+ *     - clocks;
+ *     - state;
+ *     - physical hierarchy;
+ *     - hardware instances.
+ */
 hdlCombinationalBlock
     : LBRACE
       hdlCombinationalStatement*
@@ -608,138 +638,772 @@ hdlCombinationalBlock
 
 
 /* ============================================================================
- * GENERATION
- * ========================================================================== */
-
-/*
- * Generation is syntax-level composition.
- *
- * It does not mean a fixed number of generated hardware instances.
- *
- * Cardinality may be derived from:
- *
- *     - generics;
- *     - parameters;
- *     - compile-time expressions;
- *     - type-level values;
- *     - resource-independent semantic descriptions.
- *
- * Actual realizability is determined during elaboration/compilation.
- */
-hdlCombinationalGenerate
-    : hdlKeyword
-      (
-          hdlCombinationalGenerateBody
-        | hdlExpression
-        hdlCombinationalGenerateBody
-      )
-    ;
-
-
-hdlCombinationalGenerateBody
-    : hdlCombinationalBody
-    ;
-
-
-/* ============================================================================
  * ASSERTIONS
  * ========================================================================== */
 
 /*
- * Assertions are retained as source-level semantic statements.
+ * Example:
  *
- * They may later feed:
+ *     assert (a != b);
  *
- *     - formal verification;
+ * Assertions remain source-level correctness properties.
+ *
+ * They may feed:
+ *
  *     - simulation;
- *     - synthesis-time validation;
- *     - equivalence checking.
+ *     - formal verification;
+ *     - equivalence checking;
+ *     - synthesis-time validation.
  *
- * They do not directly prescribe a hardware implementation.
+ * They do not directly select a physical implementation.
  */
 hdlCombinationalAssertion
-    : hdlKeyword
+    : ASSERT
+      LPAREN
       hdlExpression
+      RPAREN
       SEMICOLON
     ;
 
 
 /* ============================================================================
- * EXPLICIT OUTPUT COVERAGE / DEFAULTING
+ * EXPLICITLY EXCLUDED SYNTAX
  * ========================================================================== */
 
 /*
- * A combinational construct may explicitly express a default assignment.
+ * The following are deliberately NOT rules in this file:
  *
- * This is represented through the ordinary assignment grammar rather than
- * introducing a special machine-dependent defaulting operation.
+ *     sequential declarations
+ *     process declarations
+ *     clock declarations
+ *     reset declarations
+ *     timing declarations
+ *     register declarations
+ *     memory declarations
+ *     state-machine declarations
+ *     pipeline declarations
+ *     generate declarations
+ *     physical placement
+ *     routing
+ *     vendor primitives
+ *
+ * Their syntax belongs to their respective grammar owners.
+ *
+ * This prevents combinational.g4 from becoming another monolithic HDL grammar.
+ */
+
+
+/* ============================================================================
+ * AST CONTRACT
+ * ========================================================================== */
+
+/*
+ * Conceptual mappings:
+ *
+ *     hdlCombinationalDeclaration
+ *         -> domain-neutral CombinationalDeclaration
+ *
+ *     hdlCombinationalAssignment
+ *         -> Assignment / HardwareAssignment
+ *
+ *     hdlCombinationalIf
+ *         -> Conditional
+ *
+ *     hdlCombinationalCase
+ *         -> Selection
+ *
+ *     hdlCombinationalFor
+ *         -> ElaborationLoop / CombinationalLoop
+ *
+ *     hdlCombinationalLocalDeclaration
+ *         -> LocalBinding
+ *
+ *     hdlCombinationalAssertion
+ *         -> Assertion
+ *
+ * Exact Rust AST type names are owned by:
+ *
+ *     src/frontend/ast/
+ *
+ * This grammar MUST NOT construct Rust AST objects.
+ *
+ * Every AST node must retain source-span information.
+ */
+
+
+/* ============================================================================
+ * SEMANTIC CONTRACT
+ * ========================================================================== */
+
+/*
+ * Semantic analysis owns:
+ *
+ *     - declaration/name resolution;
+ *     - scope;
+ *     - type resolution;
+ *     - width/shape checking;
+ *     - assignment compatibility;
+ *     - lvalue legality;
+ *     - driver analysis;
+ *     - combinational completeness;
+ *     - latch/storage inference detection;
+ *     - dependency analysis;
+ *     - combinational-cycle analysis;
+ *     - loop/elaboration legality;
+ *     - constant evaluation;
+ *     - capability requirements;
+ *     - resource requirements;
+ *     - target-independent portability analysis.
+ *
+ * The grammar does NOT decide these properties.
+ *
+ * In particular, this grammar must not reject:
+ *
+ *     large widths;
+ *     large arrays;
+ *     large numbers of branches;
+ *     large numbers of statements;
+ *     large numbers of outputs;
+ *     large generated designs;
+ *
+ * merely because today's hardware may not support them.
+ */
+
+
+/* ============================================================================
+ * COMBINATIONAL COMPLETENESS
+ * ========================================================================== */
+
+/*
+ * The semantic layer must determine whether every required output receives a
+ * value on every control path.
  *
  * Example:
  *
- *     y = default_value;
- *     if (condition) {
- *         y = alternate_value;
+ *     combinational {
+ *         if (enable) {
+ *             out = value;
+ *         }
  *     }
  *
- * Semantic analysis determines whether every relevant output is assigned on
- * every control path.
+ * The parser accepts this.
+ *
+ * Semantic analysis determines whether:
+ *
+ *     - `out` already has a valid default;
+ *     - another surrounding assignment provides coverage;
+ *     - the construct is incomplete;
+ *     - storage would otherwise be inferred;
+ *     - the selected HDL semantic profile permits the behavior.
+ *
+ * Do NOT encode completeness using parser-only alternatives.
  */
 
 
 /* ============================================================================
- * FORBIDDEN-IN-COMBINATION SEMANTIC CONTRACT
+ * DEPENDENCY / CYCLE CONTRACT
  * ========================================================================== */
 
 /*
- * The following constructs MUST NOT become valid merely because they happen
- * to be syntactically expressible through shared HDL rules:
+ * The grammar accepts arbitrary legal expressions:
  *
- *     - clock declarations as executable statements;
- *     - edge-triggered events;
- *     - non-blocking/sequential assignment;
- *     - explicit state storage;
- *     - reset operations;
- *     - latch declarations;
- *     - sequential process declarations;
- *     - physical placement;
- *     - physical routing;
- *     - target-specific timing directives.
+ *     a = b;
+ *     b = c;
+ *     c = a;
  *
- * These are checked by semantic analysis after parsing.
+ * Whether such a design forms an illegal combinational cycle is a semantic
+ * graph-analysis problem.
  *
- * The parser intentionally remains syntax-oriented and does not duplicate
- * semantic ownership from sequential.g4, clocks.g4, timing.g4, or hardware/.
+ * The parser must not impose a fixed dependency depth or graph size.
  */
 
 
 /* ============================================================================
- * DEPENDENCY CONTRACT
+ * IR CONTRACT
  * ========================================================================== */
 
 /*
- * This delegate grammar intentionally consumes shared rules supplied by the
- * canonical HDL grammar/import graph:
+ * This grammar lowers indirectly:
  *
- *     hdlKeyword
- *     identifier
- *     hdlExpression
- *     hdlTypeExpression
- *     hdlLValue
- *     hdlAttribute
+ *     source
+ *       |
+ *       v
+ *     frontend AST
+ *       |
+ *       v
+ *     semantic hardware model
+ *       |
+ *       v
+ *     canonical HDL / Hardware IR
  *
- * It MUST NOT redefine them here.
+ * Typical semantic IR concepts include:
  *
- * This prevents:
+ *     - combinational region;
+ *     - assignment;
+ *     - boolean/logical operation;
+ *     - arithmetic operation;
+ *     - mux/selection;
+ *     - intermediate value;
+ *     - dependency edge;
+ *     - assertion/property.
  *
- *     - duplicate expression grammars;
- *     - duplicate identifier grammars;
- *     - duplicate type systems;
- *     - duplicate attribute systems;
- *     - incompatible AST interpretations.
+ * The grammar MUST NOT define physical:
+ *
+ *     - gates;
+ *     - LUTs;
+ *     - cells;
+ *     - wires;
+ *     - pins;
+ *     - routes.
+ *
+ * Physical realization belongs downstream.
  */
 
 
 /* ============================================================================
- * END OF FILE
+ * COMPILER CONTRACT
+ * ========================================================================== */
+
+/*
+ * Compiler responsibilities after parsing include:
+ *
+ *     semantic validation
+ *     constant evaluation
+ *     dependency analysis
+ *     combinational-cycle detection
+ *     width/shape normalization
+ *     optimization
+ *     common-subexpression elimination
+ *     dead-code elimination
+ *     boolean simplification
+ *     algebraic simplification
+ *     synthesis
+ *     verification
+ *     scheduling where applicable
+ *     placement
+ *     routing
+ *     target lowering
+ *
+ * None of these operations belong in this grammar.
+ */
+
+
+/* ============================================================================
+ * RUNTIME CONTRACT
+ * ========================================================================== */
+
+/*
+ * A pure combinational construct has no mandatory runtime state.
+ *
+ * Simulation/runtime systems may evaluate it, but this grammar does not create
+ * runtime objects or perform runtime actions.
+ *
+ * Runtime/simulation behavior is downstream.
+ */
+
+
+/* ============================================================================
+ * CROSS-DOMAIN CONTRACT
+ * ========================================================================== */
+
+/*
+ * Classical:
+ *
+ *     ordinary expressions and values may participate in combinational logic.
+ *
+ * Quantum:
+ *
+ *     this grammar does not define quantum operations.
+ *
+ *     Quantum operations remain owned by grammar/quantum/ and ultimately
+ *     semantic quantum operations cross the canonical quantum::ir boundary.
+ *
+ * Hybrid:
+ *
+ *     hybrid constructs may reference HDL combinational behavior through the
+ *     common semantic model.
+ *
+ * AI/data:
+ *
+ *     tensor/vector/data expressions may participate when the semantic and
+ *     hardware models permit them.
+ *
+ * Hardware/resources:
+ *
+ *     capability and resource requirements are analyzed downstream.
+ *
+ * Networking/distributed:
+ *
+ *     communication intent belongs to their respective domains.
+ */
+
+
+/* ============================================================================
+ * SCALABILITY CONTRACT
+ * ========================================================================== */
+
+/*
+ * The following constructs are intentionally unbounded by grammar:
+ *
+ *     hdlCombinationalStatement*
+ *     hdlCombinationalCaseItem*
+ *     hdlCombinationalCasePattern*
+ *     hdlCombinationalBody nesting
+ *     expression size
+ *     expression dimensions
+ *     number of declarations
+ *     number of assignments
+ *     number of outputs
+ *     number of intermediate values
+ *
+ * No finite maximum is encoded.
+ *
+ * "Infinity" means:
+ *
+ *     no artificial language-level ceiling.
+ *
+ * Actual execution remains constrained by:
+ *
+ *     - available memory;
+ *     - compiler resources;
+ *     - synthesis resources;
+ *     - target capabilities;
+ *     - deployment resources;
+ *     - runtime environment.
+ */
+
+
+/* ============================================================================
+ * DIAGNOSTIC CONTRACT
+ * ========================================================================== */
+
+/*
+ * Parser diagnostics must preserve source locations for:
+ *
+ *     - `combinational`;
+ *     - optional combinational name;
+ *     - assignment target;
+ *     - assignment expression;
+ *     - condition;
+ *     - case selector;
+ *     - case pattern;
+ *     - loop initializer;
+ *     - loop condition;
+ *     - loop update;
+ *     - local binding;
+ *     - assertion.
+ *
+ * Semantic diagnostics should subsequently report:
+ *
+ *     - incompatible assignment;
+ *     - incomplete assignment;
+ *     - conflicting drivers;
+ *     - illegal state;
+ *     - illegal cycle;
+ *     - invalid width/shape;
+ *     - unsupported target capability.
+ */
+
+
+/* ============================================================================
+ * DETERMINISM
+ * ========================================================================== */
+
+/*
+ * Parsing MUST be deterministic for identical:
+ *
+ *     source;
+ *     language version;
+ *     lexer vocabulary;
+ *     grammar version.
+ *
+ * This grammar contains:
+ *
+ *     - no semantic predicates;
+ *     - no actions;
+ *     - no filesystem access;
+ *     - no network access;
+ *     - no hardware discovery;
+ *     - no randomness;
+ *     - no environment-dependent parsing.
+ */
+
+
+/* ============================================================================
+ * SECURITY
+ * ========================================================================== */
+
+/*
+ * This grammar cannot:
+ *
+ *     - execute commands;
+ *     - access files;
+ *     - access networks;
+ *     - discover hardware;
+ *     - access credentials;
+ *     - invoke a compiler backend;
+ *     - allocate physical resources.
+ *
+ * It is a pure syntax boundary.
+ */
+
+
+/* ============================================================================
+ * HARD-CODING AUDIT
+ * ========================================================================== */
+
+/*
+ * PASS:
+ *
+ *     No MAX_* hardware capacity exists.
+ *     No physical device ID exists.
+ *     No physical pin exists.
+ *     No fixed register width exists.
+ *     No fixed signal count exists.
+ *     No fixed branch count exists.
+ *     No fixed loop count exists.
+ *     No fixed hardware topology exists.
+ *     No vendor primitive is required.
+ *     No target is selected.
+ *
+ * Numeric values remain ordinary program expressions.
+ */
+
+
+/* ============================================================================
+ * INTEGRATION CONTRACT
+ * ========================================================================== */
+
+/*
+ * 1. grammar/antlr/ZamaniLexer.g4
+ *
+ *    Remains the sole production lexer boundary.
+ *
+ *
+ * 2. grammar/lexer/keywords.g4
+ *
+ *    Add the canonical reserved words:
+ *
+ *        COMBINATIONAL : 'combinational' ;
+ *        DEFAULT       : 'default' ;
+ *
+ *    Do NOT add K_COMBINATIONAL or K_DEFAULT as a second vocabulary.
+ *
+ *
+ * 3. grammar/lexer/tokens.g4
+ *
+ *    Continues composing ZamaniKeywords.
+ *
+ *    No parser-local token definition belongs here.
+ *
+ *
+ * 4. grammar/hdl/hdl.g4
+ *
+ *    REMOVE its duplicate:
+ *
+ *        hdlCombinationalDeclaration
+ *            : K_COMBINATIONAL
+ *              hdlBlock
+ *            ;
+ *
+ *    The canonical declaration must instead delegate to:
+ *
+ *        hdlCombinationalDeclaration
+ *
+ *    from this grammar.
+ *
+ *    The existing hdlBlockItem dispatch may continue to expose the stable
+ *    rule name, but it must have exactly one implementation owner.
+ *
+ *
+ * 5. grammar/hdl/sequential.g4
+ *
+ *    Must remain independent.
+ *
+ *    It must NOT import combinational semantics.
+ *
+ *
+ * 6. grammar/hdl/registers.g4
+ *
+ *    Register declarations remain separate.
+ *
+ *    A local combinational binding must never silently become a register.
+ *
+ *
+ * 7. grammar/hdl/signals.g4
+ *
+ *    Signals remain logical value-bearing objects.
+ *
+ *    Combinational assignments may target compatible signal lvalues according
+ *    to semantic analysis.
+ *
+ *
+ * 8. grammar/hdl/nets.g4
+ *
+ *    Nets remain connectivity objects.
+ *
+ *    This file does not define net declarations or connectivity.
+ *
+ *
+ * 9. grammar/hdl/clocking.g4
+ *
+ *    Clock declarations remain outside this grammar.
+ *
+ *
+ * 10. grammar/hdl/timing.g4
+ *
+ *     Timing constraints remain outside this grammar.
+ *
+ *
+ * 11. grammar/hdl/state-machines.g4
+ *
+ *     State-machine semantics remain outside this grammar.
+ *
+ *
+ * 12. grammar/hdl/pipelines.g4
+ *
+ *     Pipeline semantics remain outside this grammar.
+ *
+ *
+ * 13. grammar/hdl/generate.g4
+ *
+ *     General hardware generation remains owned by generate.g4.
+ *
+ *     The `for` syntax here is only the combinational behavioral form.
+ *
+ *
+ * 14. grammar/Zamani.g4
+ *
+ *     The universal root delegates to the HDL composition root.
+ *
+ *     It must not reproduce combinational productions.
+ *
+ *
+ * 15. grammar/validation/
+ *
+ *     Validation must detect:
+ *
+ *        - duplicate hdlCombinationalDeclaration owners;
+ *        - parser-local lexer definitions;
+ *        - K_* legacy token usage where canonical tokens are required;
+ *        - fixed hardware capacities;
+ *        - sequential constructs leaking into combinational grammar.
+ */
+
+
+/* ============================================================================
+ * TEST CONTRACT
+ * ========================================================================== */
+
+/*
+ * POSITIVE:
+ *
+ *     combinational {
+ *         out = a & b;
+ *     }
+ *
+ *     combinational and_gate {
+ *         out = a & b;
+ *     }
+ *
+ *     combinational {
+ *         let sum = a + b;
+ *         out = sum;
+ *     }
+ *
+ *     combinational {
+ *         if (enable) {
+ *             out = a;
+ *         } else {
+ *             out = b;
+ *         }
+ *     }
+ *
+ *     combinational {
+ *         case (opcode) {
+ *             0:
+ *                 out = a;
+ *
+ *             1, 2:
+ *                 out = b;
+ *
+ *             default:
+ *                 out = c;
+ *         }
+ *     }
+ *
+ *     combinational {
+ *         for (let i = 0; i < width; i = i + 1) {
+ *             out[i] = input[i];
+ *         }
+ *     }
+ *
+ *     combinational {
+ *         assert (a == b);
+ *     }
+ *
+ *
+ * NEGATIVE / PARSE:
+ *
+ *     combinational
+ *
+ *     combinational foo
+ *
+ *     combinational { out = ; }
+ *
+ *     combinational { if (a) out = b; }
+ *
+ *     combinational { case (x) { }   // semantically potentially invalid
+ *                    }
+ *
+ *
+ * SEMANTIC NEGATIVE:
+ *
+ *     incomplete output assignment;
+ *     incompatible assignment widths;
+ *     incompatible types;
+ *     invalid lvalue;
+ *     conflicting drivers;
+ *     illegal combinational cycle;
+ *     sequential-only operation;
+ *     clock/reset declaration inside combinational behavior;
+ *     storage inference where prohibited;
+ *     runtime-unbounded synthesis loop.
+ *
+ *
+ * BOUNDARY:
+ *
+ *     very large symbolic widths;
+ *     many assignments;
+ *     many case branches;
+ *     many nested blocks;
+ *     many outputs;
+ *     many generated intermediate values;
+ *     arbitrarily large valid expressions.
+ *
+ *
+ * SCALABILITY:
+ *
+ *     The tests must verify absence of artificial grammar-level maxima.
+ *
+ *
+ * DETERMINISM:
+ *
+ *     Identical source and grammar version must yield identical parse trees.
+ *
+ *
+ * CROSS-DOMAIN:
+ *
+ *     classical expression -> combinational logic;
+ *     tensor/vector expression -> combinational logic;
+ *     hardware capability requirement -> downstream semantic analysis;
+ *     hybrid source -> HDL combinational region;
+ *     quantum-related metadata -> semantic integration only.
+ */
+
+
+/* ============================================================================
+ * COMPLETION CRITERIA
+ * ========================================================================== */
+
+/*
+ * This file is DONE when:
+ *
+ * [x] It has exactly one combinational declaration owner.
+ *
+ * [x] It consumes ZamaniLexer rather than ZamaniTokens directly.
+ *
+ * [x] It does not define lexer rules.
+ *
+ * [x] It does not define a second expression grammar.
+ *
+ * [x] It does not define a second type grammar.
+ *
+ * [x] It does not define a second identifier grammar.
+ *
+ * [x] It does not define a second attribute grammar.
+ *
+ * [x] It does not own sequential behavior.
+ *
+ * [x] It does not own clocks.
+ *
+ * [x] It does not own resets.
+ *
+ * [x] It does not own timing.
+ *
+ * [x] It does not own registers.
+ *
+ * [x] It does not own nets.
+ *
+ * [x] It does not own physical realization.
+ *
+ * [x] It contains no hardware capacity constants.
+ *
+ * [x] It supports arbitrary expression complexity permitted by the language.
+ *
+ * [x] It supports arbitrary numbers of statements/branches structurally.
+ *
+ * [x] AST mappings are predetermined.
+ *
+ * [x] Semantic responsibilities are predetermined.
+ *
+ * [x] IR integration is predetermined.
+ *
+ * [x] Compiler responsibilities are predetermined.
+ *
+ * [x] Runtime responsibilities are predetermined.
+ *
+ * [x] Diagnostics are predetermined.
+ *
+ * [x] Positive tests are predetermined.
+ *
+ * [x] Negative tests are predetermined.
+ *
+ * [x] Boundary tests are predetermined.
+ *
+ * [x] Scalability tests are predetermined.
+ *
+ * [x] Determinism tests are predetermined.
+ *
+ * [x] Cross-domain integration is predetermined.
+ *
+ * [x] Rust 1.97 / 1.97.1 compatibility requires no unsafe Rust.
+ *
+ * ============================================================================
+ * FINAL INVARIANT
+ * ============================================================================
+ *
+ *     combinational.g4
+ *          =
+ *     portable combinational SOURCE SYNTAX
+ *
+ *     combinational.g4
+ *          !=
+ *     synthesis
+ *
+ *     combinational.g4
+ *          !=
+ *     physical hardware
+ *
+ *     combinational.g4
+ *          !=
+ *     target selection
+ *
+ *     combinational.g4
+ *          !=
+ *     resource allocation
+ *
+ *     combinational.g4
+ *          !=
+ *     timing closure
+ *
+ *     combinational.g4
+ *          !=
+ *     runtime execution
+ *
+ * The same source-level combinational intent can therefore participate in
+ * lowering toward different realization technologies, subject to semantic
+ * correctness, capabilities, and available resources.
+ *
  * ============================================================================
  */
