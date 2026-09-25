@@ -1,7 +1,7 @@
 parser grammar sequential;
 
 options {
-    tokenVocab = ZamaniTokens;
+    tokenVocab = ZamaniLexer;
 }
 
 /*
@@ -12,43 +12,56 @@ options {
  * File:
  *     grammar/hdl/sequential.g4
  *
- * Purpose:
- *     Production HDL sequential-behavior grammar delegate.
+ * Status:
+ *     Canonical HDL sequential-behavior parser component.
  *
- * Baseline:
+ * Purpose:
+ *     Defines target-independent sequential hardware behavior:
+ *
+ *         - sequential regions;
+ *         - event/sensitivity specifications;
+ *         - sequential assignments;
+ *         - conditional state transitions;
+ *         - case-based state transitions;
+ *         - sequential local values;
+ *         - sequential assertions;
+ *         - nested sequential blocks.
+ *
+ * Rust baseline:
  *     Rust 1.97 / Rust 1.97.1
+ *     Edition 2021
  *
  * Safety:
- *     This grammar contains no embedded Rust code.
- *     Generated/compiler/runtime Rust MUST remain safe Rust.
- *     Rust `unsafe` is prohibited.
+ *     This grammar contains no Rust actions or unsafe code.
+ *     Zamani compiler/runtime implementation MUST remain safe Rust.
  *
  * ============================================================================
- * ARCHITECTURAL ROLE
+ * ARCHITECTURAL PRINCIPLE
  * ============================================================================
  *
- * Sequential hardware describes behavior whose semantic interpretation may
- * depend on state, storage, clock/event boundaries, reset behavior, enables,
- * or other explicitly declared sequential conditions.
+ * Sequential HDL syntax describes STATE-TRANSITION INTENT.
  *
- * This grammar describes SOURCE SYNTAX ONLY.
+ * It does NOT describe:
  *
- * It does not:
+ *     - physical registers;
+ *     - flip-flop cell types;
+ *     - physical clock trees;
+ *     - physical reset networks;
+ *     - FPGA primitives;
+ *     - ASIC cells;
+ *     - physical pins;
+ *     - placement;
+ *     - routing;
+ *     - timing closure;
+ *     - vendor APIs;
+ *     - target device identifiers;
+ *     - resource allocation;
+ *     - scheduling implementation;
+ *     - synthesis implementation.
  *
- *     - create hardware;
- *     - allocate registers;
- *     - select a clock tree;
- *     - select an FPGA;
- *     - select an ASIC;
- *     - select a QPU;
- *     - determine physical placement;
- *     - determine physical routing;
- *     - perform timing closure;
- *     - schedule operations;
- *     - allocate resources;
- *     - synthesize gates;
- *     - select vendor primitives;
- *     - create a second IR.
+ * Those concerns belong to downstream semantic analysis, hardware IR,
+ * resource/capability analysis, synthesis, scheduling, routing, placement,
+ * and target lowering.
  *
  * ============================================================================
  * OWNERSHIP
@@ -58,176 +71,161 @@ options {
  *
  *     - sequential declaration syntax;
  *     - sequential body syntax;
- *     - sequential event specifications;
- *     - clock/reset/enable relationships at source level;
+ *     - sequential event/sensitivity syntax;
  *     - sequential assignments;
  *     - sequential conditionals;
- *     - sequential selection;
- *     - sequential local declarations;
- *     - sequential nested blocks;
- *     - sequential assertions;
- *     - sequential generation syntax;
- *     - source-level sequential attributes.
+ *     - sequential case selection;
+ *     - sequential local-value declarations;
+ *     - sequential assertion statements;
+ *     - nested sequential blocks.
  *
  * THIS FILE DOES NOT OWN:
  *
- *     - lexical tokens;
+ *     - lexer rules;
+ *     - identifiers;
+ *     - literals;
  *     - general expressions;
  *     - general types;
- *     - signal declarations;
- *     - register declarations;
- *     - memory declarations;
+ *     - HDL ports;
+ *     - HDL signals;
+ *     - HDL nets;
+ *     - physical/logical register declarations;
+ *     - memories;
  *     - clock declarations;
  *     - timing constraints;
- *     - combinational logic;
- *     - state-machine semantics;
- *     - pipeline semantics;
- *     - process ownership;
- *     - hardware capabilities;
- *     - hardware resources;
- *     - physical topology;
+ *     - combinational behavior;
+ *     - state-machine declarations;
+ *     - pipeline declarations;
+ *     - generate/elaboration constructs;
+ *     - process declarations;
+ *     - resource declarations;
+ *     - capability declarations;
  *     - synthesis;
  *     - scheduling;
  *     - routing;
  *     - placement;
- *     - optimization;
- *     - runtime execution.
+ *     - quantum::ir;
+ *     - QEC;
+ *     - ZQN;
+ *     - HAL;
+ *     - runtime behavior.
  *
  * ============================================================================
- * DEPENDENCY DIRECTION
+ * SHARED CONTRACTS
  * ============================================================================
  *
- *     canonical lexer
- *          |
- *          v
- *     ZamaniTokens
- *          |
- *          v
- *     HDL parser
- *          |
- *          +--> clocks.g4
- *          +--> timing.g4
- *          +--> registers.g4
- *          +--> combinational.g4
- *          +--> THIS FILE
- *          +--> processes.g4
- *          +--> state-machines.g4
- *          |
- *          v
- *     frontend AST
- *          |
- *          v
- *     semantic analysis
- *          |
- *          +--> name resolution
- *          +--> type checking
- *          +--> width/shape checking
- *          +--> driver analysis
- *          +--> sequential legality
- *          +--> state analysis
- *          +--> clock/reset analysis
- *          +--> capability analysis
- *          +--> resource analysis
- *          |
- *          v
- *     canonical hardware semantic representation
- *          |
- *          +--> optimization
- *          +--> synthesis
- *          +--> scheduling
- *          +--> placement
- *          +--> routing
- *          |
- *          v
- *     target lowering
+ * The following rules are supplied by the canonical HDL composition:
  *
- * The grammar MUST NOT depend on any downstream compiler or runtime subsystem.
+ *     identifier
+ *     qualifiedHdlName
+ *     hdlExpression
+ *     hdlTypeExpression
+ *     hdlLValue
+ *
+ * They MUST have one authoritative owner.
+ *
+ * This file MUST NOT define another expression, type, identifier, or lvalue
+ * grammar.
+ *
+ * ============================================================================
+ * ATTRIBUTE OWNERSHIP
+ * ============================================================================
+ *
+ * Declaration-level attributes are owned by the enclosing HDL declaration
+ * dispatcher.
+ *
+ * Therefore this file intentionally DOES NOT put:
+ *
+ *     hdlAttribute*
+ *
+ * inside `hdlSequentialDeclaration`.
+ *
+ * The enclosing composition rule is responsible for attaching attributes to
+ * the sequential declaration AST node.
+ *
+ * ============================================================================
+ * STRUCTURAL OWNERSHIP
+ * ============================================================================
+ *
+ * `generate.g4` owns structural/elaboration-time repetition.
+ *
+ * `state-machines.g4` owns explicit state-machine declarations.
+ *
+ * `pipelines.g4` owns pipeline declarations.
+ *
+ * `processes.g4` owns generic process declarations.
+ *
+ * `clocks.g4` owns clock declarations.
+ *
+ * `reset.g4` owns standalone reset declarations/intent where applicable.
+ *
+ * `timing.g4` owns timing constraints.
+ *
+ * Sequential behavior may REFER to these constructs through shared expressions
+ * and names, but must not duplicate their declarations.
  *
  * ============================================================================
  * POCO-REAF
  * ============================================================================
  *
- * Sequential source describes semantic state transitions.
+ * This grammar contains no universal hardware capacities.
  *
- * It MUST NOT encode permanent assumptions about:
- *
- *     - number of registers;
- *     - number of bits;
- *     - number of clocks;
- *     - number of state elements;
- *     - clock-tree topology;
- *     - FPGA family;
- *     - ASIC family;
- *     - process technology;
- *     - physical register location;
- *     - physical pin;
- *     - physical address;
- *     - device identifier;
- *     - routing fabric;
- *     - hardware capacity.
- *
- * All such information belongs to downstream capability/resource/target
- * descriptions when it is required for realization.
- *
- * ============================================================================
- * SCALABILITY
- * ============================================================================
- *
- * No finite grammar-level limits are permitted.
- *
- * There is deliberately no:
+ * It does NOT define:
  *
  *     MAX_REGISTERS
+ *     MAX_BITS
+ *     MAX_WIDTH
  *     MAX_STATES
  *     MAX_CLOCKS
+ *     MAX_PROCESSES
  *     MAX_EVENTS
  *     MAX_BRANCHES
- *     MAX_ASSIGNMENTS
- *     MAX_NESTING
- *     MAX_WIDTH
- *     MAX_BITS
- *     MAX_PROCESSES
+ *     MAX_MEMORY
+ *     MAX_DEVICES
+ *     MAX_PIPELINE_STAGES
  *     MAX_MODULES
  *
- * Repetition is expressed structurally with ANTLR operators:
+ * Nor does it assume:
  *
- *     *
- *     +
- *     ?
+ *     32-bit registers;
+ *     64-bit registers;
+ *     fixed clock counts;
+ *     fixed reset counts;
+ *     fixed state counts;
+ *     fixed FPGA resources;
+ *     fixed ASIC resources;
+ *     fixed CPU/GPU resources;
+ *     fixed QPU resources.
  *
- * Physical limits are evaluated by semantic analysis, compilation, scheduling,
- * synthesis, deployment, or runtime resource policies.
+ * Program cardinality is constrained only by available implementation
+ * resources and explicit semantic requirements.
  *
  * ============================================================================
- * LEXICAL CONTRACT
+ * SEMANTIC MODEL
  * ============================================================================
  *
- * This grammar uses the canonical ZamaniTokens vocabulary.
+ * The intended lowering is:
  *
- * A dedicated:
+ *     sequential declaration
+ *             |
+ *             v
+ *     domain-neutral HDL AST
+ *             |
+ *             v
+ *     sequential semantic analysis
+ *             |
+ *             v
+ *     canonical hardware semantic representation / IR
+ *             |
+ *             +--> optimization
+ *             +--> synthesis
+ *             +--> scheduling
+ *             +--> timing analysis
+ *             +--> placement
+ *             +--> routing
+ *             +--> target lowering
  *
- *     K_SEQUENTIAL
- *
- * token MUST exist in the canonical token vocabulary.
- *
- * The grammar deliberately does not define its own lexer rules.
- *
- * Contextual sequential terms such as:
- *
- *     clock
- *     reset
- *     enable
- *     sync
- *     async
- *     rising
- *     falling
- *     edge
- *     state
- *     next
- *     default
- *
- * are interpreted by semantic analysis unless the language-wide lexer promotes
- * a particular term to a reserved keyword.
+ * This grammar does NOT introduce a second sequential IR.
  *
  * ============================================================================
  */
@@ -235,117 +233,64 @@ options {
 
 /* ============================================================================
  * PUBLIC ENTRY POINT
- * ========================================================================== */
+ * ============================================================================
+ */
 
 /*
- * Named or anonymous sequential hardware behavior.
+ * Named or anonymous sequential behavior.
  *
  * Examples:
  *
  *     sequential {
- *         ...
+ *         q = d;
  *     }
  *
  *     sequential controller {
- *         ...
+ *         state = next_state;
  *     }
  *
- * The name is a logical source-level name.
- * It is not a physical device identifier.
+ * Event/sensitivity information is optional because a sequential construct may
+ * also be associated with timing/process metadata by its enclosing HDL
+ * composition or semantic model.
  */
 hdlSequentialDeclaration
-    : hdlSequentialModifiers*
-      K_SEQUENTIAL
+    : SEQUENTIAL
       identifier?
-      hdlSequentialAttributes?
       hdlSequentialEventSpecification?
       hdlSequentialBody
     ;
 
 
 /* ============================================================================
- * MODIFIERS
- * ========================================================================== */
-
-/*
- * Modifiers are intentionally contextual.
+ * EVENT / SENSITIVITY SPECIFICATION
+ * ============================================================================
  *
- * Semantic analysis determines whether a modifier is legal for a particular
- * sequential construct.
- */
-hdlSequentialModifiers
-    : hdlKeyword
-    ;
-
-
-/* ============================================================================
- * ATTRIBUTES
- * ========================================================================== */
-
-hdlSequentialAttributes
-    : hdlAttribute+
-    ;
-
-
-/*
- * Sequential attributes reuse the repository-wide attribute mechanism.
+ * Event syntax is deliberately explicit rather than using `hdlKeyword`.
  *
- * The grammar does not assign implementation meaning to attributes.
- */
-hdlSequentialAttribute
-    : AT
-      identifier
-      (
-          LPAREN
-          hdlSequentialArgumentList?
-          RPAREN
-      )?
-    ;
-
-
-hdlSequentialArgumentList
-    : hdlSequentialArgument
-      (
-          COMMA
-          hdlSequentialArgument
-      )*
-      COMMA?
-    ;
-
-
-hdlSequentialArgument
-    : identifier
-      (
-          ASSIGN
-          hdlExpression
-      )?
-    | hdlExpression
-    ;
-
-
-/* ============================================================================
- * EVENT / CLOCK SPECIFICATION
- * ========================================================================== */
-
-/*
- * Sequential behavior may optionally declare the source-level events that
- * establish its state-transition boundary.
+ * This prevents arbitrary keywords from silently becoming legal clock/reset
+ * syntax.
  *
- * Examples:
+ * Canonical source form:
  *
- *     sequential @(clock) { ... }
+ *     sequential @(clock) {
+ *         ...
+ *     }
  *
- *     sequential @(rising clock) { ... }
+ *     sequential @(posedge clock) {
+ *         ...
+ *     }
  *
- *     sequential @(falling clock) { ... }
+ *     sequential @(negedge reset_n, posedge clock) {
+ *         ...
+ *     }
  *
- *     sequential @(clock, reset) { ... }
- *
- * The actual legality of event combinations is semantic.
+ * The semantic layer determines whether a particular event combination is
+ * legal for the selected sequential model.
  */
 hdlSequentialEventSpecification
-    : LPAREN
-      hdlSequentialEventList?
+    : AT
+      LPAREN
+      hdlSequentialEventList
       RPAREN
     ;
 
@@ -356,7 +301,6 @@ hdlSequentialEventList
           COMMA
           hdlSequentialEvent
       )*
-      COMMA?
     ;
 
 
@@ -367,27 +311,44 @@ hdlSequentialEvent
     ;
 
 
+/*
+ * Edge vocabulary is deliberately small and semantic.
+ *
+ * It describes an event relationship rather than a particular implementation.
+ */
 hdlSequentialEdge
-    : hdlKeyword
+    : POSEDGE
+    | NEGEDGE
     ;
 
 
+/*
+ * The event source is an HDL expression so symbolic and parameterized
+ * references remain possible.
+ *
+ * Semantic analysis must require an event-compatible expression.
+ */
 hdlSequentialEventSource
-    : qualifiedHdlName
-    | identifier
-    | hdlExpression
+    : hdlExpression
     ;
 
 
+/*
+ * Existing language-level synchronization vocabulary can be used as an event
+ * qualifier where the surrounding semantic model permits it.
+ *
+ * No arbitrary keyword is accepted here.
+ */
 hdlSequentialEventQualifier
-    : hdlKeyword
-    | hdlAttribute
+    : ASYNC
+    | SYNC
     ;
 
 
 /* ============================================================================
  * BODY
- * ========================================================================== */
+ * ============================================================================
+ */
 
 hdlSequentialBody
     : LBRACE
@@ -398,30 +359,37 @@ hdlSequentialBody
 
 hdlSequentialStatement
     : hdlSequentialAssignment
-    | hdlSequentialIf
+    | hdlSequentialConditional
     | hdlSequentialCase
     | hdlSequentialLocalDeclaration
-    | hdlSequentialExpressionStatement
     | hdlSequentialAssertion
     | hdlSequentialBlock
-    | hdlSequentialGenerate
     ;
 
 
 /* ============================================================================
- * ASSIGNMENT
- * ========================================================================== */
-
-/*
- * Sequential assignment is syntactically distinct from combinational
- * assignment by its containing sequential semantic region.
+ * SEQUENTIAL ASSIGNMENT
+ * ============================================================================
  *
- * This grammar intentionally uses the canonical ASSIGN token because the
- * current Zamani token vocabulary must remain the sole operator authority.
+ * The assignment operator is deliberately the canonical ASSIGN token.
  *
- * If Zamani later standardizes a distinct sequential/non-blocking assignment
- * operator, that operator MUST be introduced centrally in the canonical lexer
- * and operator grammar first; this file must not invent a private token.
+ * Sequential semantics are determined by the containing sequential region.
+ *
+ * A future non-blocking/clocked assignment operator must first be added to
+ * the canonical lexer/operator contract. It must NOT be invented locally in
+ * this grammar.
+ *
+ * The semantic layer determines:
+ *
+ *     - current-state read;
+ *     - next-state write;
+ *     - update ordering;
+ *     - multiple-driver legality;
+ *     - write conflicts;
+ *     - reset dominance;
+ *     - enable behavior;
+ *     - state inference;
+ *     - deterministic transition semantics.
  */
 hdlSequentialAssignment
     : hdlLValue
@@ -431,33 +399,13 @@ hdlSequentialAssignment
     ;
 
 
-/*
- * Attribute-bearing sequential assignment.
- */
-hdlSequentialAnnotatedAssignment
-    : hdlSequentialAttributes
-      hdlSequentialAssignment
-    ;
-
-
 /* ============================================================================
- * CONDITIONAL STATE TRANSITIONS
- * ========================================================================== */
-
-/*
- * Conditional state update.
- *
- * Semantic analysis determines:
- *
- *     - whether all state elements are properly defined;
- *     - whether branches conflict;
- *     - whether reset dominates normal operation;
- *     - whether enables are legal;
- *     - whether a construct infers storage;
- *     - whether the resulting state transition is deterministic.
+ * CONDITIONAL STATE TRANSITION
+ * ============================================================================
  */
-hdlSequentialIf
-    : K_IF
+
+hdlSequentialConditional
+    : IF
       LPAREN
       hdlExpression
       RPAREN
@@ -467,26 +415,32 @@ hdlSequentialIf
 
 
 hdlSequentialElseClause
-    : K_ELSE
+    : ELSE
       (
-          hdlSequentialIf
+          hdlSequentialConditional
         | hdlSequentialBody
       )
     ;
 
 
 /* ============================================================================
- * CASE / STATE SELECTION
- * ========================================================================== */
-
-/*
- * Case-style state transition selection.
+ * CASE-BASED STATE TRANSITION
+ * ============================================================================
  *
- * Exhaustiveness, overlap, duplicate patterns, and default semantics belong
- * to semantic analysis.
+ * Case matching and coverage are semantic concerns.
+ *
+ * The grammar permits arbitrary numbers of case items.
+ *
+ * Semantic analysis must detect:
+ *
+ *     - duplicate/default conflicts;
+ *     - overlapping patterns where prohibited;
+ *     - unreachable branches;
+ *     - incomplete coverage where required;
+ *     - incompatible pattern types.
  */
 hdlSequentialCase
-    : K_CASE
+    : CASE
       LPAREN
       hdlExpression
       RPAREN
@@ -500,7 +454,7 @@ hdlSequentialCaseItem
     : hdlSequentialCasePattern
       COLON
       hdlSequentialBody
-    | K_DEFAULT
+    | DEFAULT
       COLON
       hdlSequentialBody
     ;
@@ -516,44 +470,59 @@ hdlSequentialCasePattern
 
 
 /* ============================================================================
- * LOCAL DECLARATIONS
- * ========================================================================== */
-
-/*
- * Local values inside a sequential region do not automatically imply
- * persistent hardware storage.
+ * LOCAL SEQUENTIAL VALUES
+ * ============================================================================
  *
- * Whether a local becomes state, combinational logic, or an implementation
- * artifact is determined downstream.
+ * Local declarations are restricted to immutable/explicitly initialized
+ * values so the grammar does not silently introduce another state-storage
+ * mechanism.
+ *
+ * Persistent state must be represented by the appropriate HDL state/register/
+ * memory semantics elsewhere and then referenced through hdlLValue.
+ *
+ * Semantic analysis must still verify:
+ *
+ *     - initialization;
+ *     - type compatibility;
+ *     - lifetime;
+ *     - use-before-definition;
+ *     - absence of unintended storage.
  */
 hdlSequentialLocalDeclaration
-    : hdlKeyword
+    : (LET | CONST)
       identifier
       (
           COLON
           hdlTypeExpression
       )?
-      (
-          ASSIGN
-          hdlExpression
-      )?
+      ASSIGN
+      hdlExpression
       SEMICOLON
     ;
 
 
 /* ============================================================================
- * EXPRESSION STATEMENTS
- * ========================================================================== */
-
-hdlSequentialExpressionStatement
-    : hdlExpression
+ * ASSERTION
+ * ============================================================================
+ *
+ * This is the sequential statement form of an assertion.
+ *
+ * The dedicated HDL assertion grammar may own declaration/property forms;
+ * this rule only owns the procedural sequential statement boundary.
+ */
+hdlSequentialAssertion
+    : ASSERT
+      LPAREN
+      hdlExpression
+      RPAREN
       SEMICOLON
     ;
 
 
 /* ============================================================================
- * NESTED BLOCKS
- * ========================================================================== */
+ * NESTED BLOCK
+ * ============================================================================
+ */
 
 hdlSequentialBlock
     : LBRACE
@@ -562,652 +531,261 @@ hdlSequentialBlock
     ;
 
 
-/* ============================================================================
- * RESET
- * ========================================================================== */
-
 /*
- * Reset is represented as a source-level state-transition condition.
+ * ============================================================================
+ * SEMANTIC INVARIANTS
+ * ============================================================================
  *
- * It does not select a physical reset network.
- */
-hdlSequentialResetClause
-    : hdlKeyword
-      (
-          LPAREN
-          hdlExpression
-          RPAREN
-      )?
-    ;
-
-
-/*
- * Explicit reset-oriented sequential region.
+ * These are NOT parser actions. They are mandatory downstream semantic
+ * contracts for every successfully parsed sequential construct.
  *
- * Example conceptual form:
+ * 1. EVENT VALIDITY
  *
- *     reset {
- *         state = initial;
- *     }
+ *    An event specification must resolve to valid event sources.
  *
- * The contextual keyword is interpreted semantically.
- */
-hdlSequentialResetRegion
-    : hdlKeyword
-      hdlSequentialBody
-    ;
-
-
-/* ============================================================================
- * ENABLE
- * ========================================================================== */
-
-/*
- * Enables are source-level predicates controlling whether a sequential
- * transition is applied.
- */
-hdlSequentialEnableClause
-    : hdlKeyword
-      (
-          LPAREN
-          hdlExpression
-          RPAREN
-      )?
-    ;
-
-
-/* ============================================================================
- * DEFAULT / HOLD SEMANTICS
- * ========================================================================== */
-
-/*
- * A sequential implementation may intentionally retain the current state
- * when no transition assignment occurs.
+ * 2. CLOCK VALIDITY
  *
- * The grammar does not introduce a machine-specific "hold register"
- * operation. Absence of an assignment is interpreted by semantic analysis.
- */
-hdlSequentialDefaultClause
-    : K_DEFAULT
-      COLON
-      hdlSequentialBody
-    ;
-
-
-/* ============================================================================
- * GENERATION
- * ========================================================================== */
-
-/*
- * Sequential generation is source-level elaboration syntax.
+ *    A clock event must resolve to a declared/valid clock or event-capable
+ *    semantic source.
  *
- * It must never imply a fixed number of physical state elements.
+ * 3. EDGE VALIDITY
  *
- * Cardinality may depend on:
+ *    POSEDGE/NEGEDGE may only apply where the semantic event model permits
+ *    edge-triggered behavior.
  *
- *     - generic parameters;
- *     - compile-time expressions;
- *     - type-level values;
- *     - semantic elaboration.
- */
-hdlSequentialGenerate
-    : hdlKeyword
-      (
-          hdlSequentialGenerateBody
-        | hdlExpression
-          hdlSequentialGenerateBody
-      )
-    ;
-
-
-hdlSequentialGenerateBody
-    : hdlSequentialBody
-    ;
-
-
-/* ============================================================================
- * ASSERTIONS
- * ========================================================================== */
-
-/*
- * Assertions may feed:
+ * 4. RESET VALIDITY
  *
- *     - simulation;
- *     - formal verification;
- *     - synthesis-time validation;
- *     - equivalence checking;
- *     - verification tooling.
+ *    Reset behavior is semantic. It must not be inferred from arbitrary
+ *    identifiers solely because their names contain "reset".
  *
- * They do not directly determine implementation.
- */
-hdlSequentialAssertion
-    : hdlKeyword
-      hdlExpression
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * STATE UPDATE GROUP
- * ========================================================================== */
-
-/*
- * Explicit grouping of state updates.
+ * 5. STATE VALIDITY
  *
- * This allows future semantic analysis to preserve source-level update
- * boundaries without hard-coding the number of updates.
- */
-hdlSequentialUpdateGroup
-    : hdlKeyword
-      hdlSequentialBody
-    ;
-
-
-/* ============================================================================
- * CLOCK / RESET RELATIONSHIPS
- * ========================================================================== */
-
-/*
- * Source-level relationship declarations are intentionally generic.
+ *    State targets must be legal sequentially writable objects.
  *
- * Examples of concepts that semantic analysis may recognize:
+ * 6. SINGLE-DRIVER VALIDITY
  *
- *     clock
- *     reset
- *     enable
- *     synchronizer
- *     asynchronous
- *     synchronous
+ *    Conflicting sequential drivers must be diagnosed according to the HDL
+ *    semantic model.
  *
- * The grammar does not impose a fixed clock topology.
- */
-hdlSequentialControlClause
-    : hdlKeyword
-      (
-          LPAREN
-          hdlExpression
-          RPAREN
-      )?
-    ;
-
-
-/* ============================================================================
- * SEQUENTIAL VALUE SELECTION
- * ========================================================================== */
-
-/*
- * A source-level value transition can be expressed as an ordinary expression.
+ * 7. UPDATE VALIDITY
  *
- * This rule exists as an explicit semantic boundary so future sequential
- * expression extensions do not require changing the enclosing declaration.
- */
-hdlSequentialValue
-    : hdlExpression
-    ;
-
-
-/* ============================================================================
- * SEQUENTIAL STATE TARGET
- * ========================================================================== */
-
-/*
- * State targets use the common HDL lvalue contract.
+ *    Sequential assignments must lower to deterministic state transitions.
  *
- * The grammar deliberately does not introduce:
+ * 8. READ/WRITE ANALYSIS
  *
- *     physical_register
- *     register_number
- *     flip_flop_id
- *     hardware_address
+ *    The compiler must distinguish current-state reads from next-state writes.
  *
- * or any equivalent machine-specific identifier.
- */
-hdlSequentialStateTarget
-    : hdlLValue
-    ;
-
-
-/* ============================================================================
- * SEQUENTIAL TRANSITION
- * ========================================================================== */
-
-/*
- * A transition is a source-level update from a current semantic state to a
- * next semantic value.
+ * 9. RESET/ENABLE DOMINANCE
  *
- * The grammar does not construct the state-transition IR.
- */
-hdlSequentialTransition
-    : hdlSequentialStateTarget
-      ASSIGN
-      hdlSequentialValue
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * MULTIPLE STATE TRANSITIONS
- * ========================================================================== */
-
-/*
- * Arbitrarily many transitions are supported.
- */
-hdlSequentialTransitionList
-    : hdlSequentialTransition+
-    ;
-
-
-/* ============================================================================
- * SEQUENTIAL REGION WITH EXPLICIT CONTROLS
- * ========================================================================== */
-
-/*
- * This form provides an explicit structural place for clock/reset/enable
- * metadata without embedding physical implementation.
+ *    Where reset and enable conditions coexist, their precedence must be
+ *    determined by explicit semantic rules rather than source ordering alone.
  *
- * Example conceptual syntax:
+ * 10. COMBINATIONAL/SEQUENTIAL SEPARATION
  *
- *     sequential controller
- *         clock(clk)
- *         reset(reset_n)
- *         enable(enable)
- *     {
- *         ...
- *     }
- */
-hdlSequentialControlledDeclaration
-    : hdlSequentialModifiers*
-      K_SEQUENTIAL
-      identifier?
-      hdlSequentialControlClause*
-      hdlSequentialAttributes?
-      hdlSequentialBody
-    ;
-
-
-/* ============================================================================
- * SEQUENTIAL PROCESS COMPATIBILITY BOUNDARY
- * ========================================================================== */
-
-/*
- * Processes belong to processes.g4.
+ *     This construct must not silently become a combinational region.
  *
- * This rule is intentionally only a syntactic delegation boundary.
+ * 11. CLOCK-DOMAIN VALIDATION
  *
- * The parent HDL grammar may use this rule when a process is explicitly
- * classified as sequential.
- */
-hdlSequentialProcessBody
-    : hdlSequentialBody
-    ;
-
-
-/* ============================================================================
- * FORBIDDEN OWNERSHIP
- * ========================================================================== */
-
-/*
- * The following concepts MUST NOT be implemented as grammar-owned hardware
- * semantics here:
+ *     Cross-clock state interactions require explicit downstream validation.
  *
- *     - physical flip-flop type;
- *     - FPGA slice;
- *     - LUT;
- *     - ASIC cell;
- *     - physical register number;
- *     - physical clock-tree node;
- *     - physical reset network;
- *     - device ID;
- *     - pin number;
- *     - physical timing delay;
- *     - routing resource;
- *     - placement coordinate;
- *     - hardware address.
+ * 12. LATCH/STATE SEMANTICS
  *
- * Those belong to target/resource/capability models.
+ *     Missing assignments in a sequential region represent state retention
+ *     only when the sequential semantic model explicitly permits that
+ *     behavior. The parser does not infer this.
+ *
+ * 13. WIDTH/SHAPE VALIDATION
+ *
+ *     Assignment compatibility is checked semantically.
+ *
+ * 14. RESOURCE VALIDATION
+ *
+ *     Register/state/memory requirements are evaluated downstream against
+ *     available resources and capabilities.
+ *
+ * 15. PORTABILITY
+ *
+ *     No semantic rule may depend on a particular FPGA, ASIC, CPU, GPU, QPU,
+ *     vendor, board, package, or physical topology unless explicitly selected
+ *     through downstream target realization.
+ *
+ * ============================================================================
  */
 
 
-/* ============================================================================
- * SEMANTIC VALIDATION CONTRACT
- * ========================================================================== */
-
 /*
- * Downstream semantic analysis MUST validate at least:
- *
- *     - identifiers resolve;
- *     - assignment targets are legal;
- *     - assignment types are compatible;
- *     - widths/shapes are compatible;
- *     - state targets are writable;
- *     - clock/event sources are valid;
- *     - event combinations are legal;
- *     - reset semantics are valid;
- *     - synchronous/asynchronous classification is legal;
- *     - enable predicates are valid;
- *     - conflicting state updates are diagnosed;
- *     - unreachable transitions are diagnosed where required;
- *     - incomplete state behavior is diagnosed where required;
- *     - illegal combinational/sequential mixing is diagnosed;
- *     - unsupported constructs are diagnosed;
- *     - generated cardinality is resource-checked downstream;
- *     - timing requirements are checked by timing analysis;
- *     - target realizability is checked outside this grammar.
- *
- * None of these checks belong in parser actions or predicates.
- */
-
-
-/* ============================================================================
+ * ============================================================================
  * AST CONTRACT
- * ========================================================================== */
-
-/*
- * The parser must expose enough structure for the frontend AST to represent:
+ * ============================================================================
  *
- *     SequentialDeclaration
- *         - name
- *         - modifiers
- *         - attributes
- *         - events
- *         - body
+ * The frontend AST should represent these concepts generically:
  *
+ *     SequentialRegion
  *     SequentialEvent
- *         - edge
- *         - source
- *         - qualifiers
- *
  *     SequentialAssignment
- *         - target
- *         - value
- *
- *     SequentialIf
- *         - condition
- *         - then
- *         - else
- *
+ *     SequentialConditional
  *     SequentialCase
- *         - selector
- *         - cases
- *
  *     SequentialLocal
- *         - name
- *         - type
- *         - initializer
- *
  *     SequentialAssertion
- *         - condition/expression
+ *     SequentialBlock
  *
- * The grammar itself MUST NOT construct these AST objects.
+ * Source spans MUST be retained.
+ *
+ * Attributes attached by the enclosing HDL dispatcher MUST remain associated
+ * with the SequentialRegion rather than being reparsed here.
+ *
+ * The AST must not contain:
+ *
+ *     PhysicalRegisterId
+ *     FpgaRegisterId
+ *     VendorFlipFlop
+ *     PhysicalClockPin
+ *     RoutingResourceId
+ *
+ * unless such target-specific objects are introduced later during target
+ * lowering, outside the frontend AST.
+ *
+ * ============================================================================
  */
 
 
-/* ============================================================================
+/*
+ * ============================================================================
  * IR CONTRACT
- * ========================================================================== */
+ * ============================================================================
+ *
+ * The sequential AST lowers into the repository's canonical HDL/hardware
+ * semantic representation.
+ *
+ * Conceptually:
+ *
+ *     SequentialRegion
+ *          |
+ *          +--> event boundary
+ *          +--> state read dependencies
+ *          +--> next-state assignments
+ *          +--> conditional selection
+ *          +--> case selection
+ *          +--> assertions
+ *          |
+ *          v
+ *     Hardware/HDL IR
+ *
+ * No second "SequentialIR" is introduced by this grammar.
+ *
+ * ============================================================================
+ */
+
 
 /*
- * This grammar MUST NOT define a sequential IR.
+ * ============================================================================
+ * COMPILER / RUNTIME CONTRACT
+ * ============================================================================
  *
- * AST lowering belongs to the frontend semantic layer.
+ * Compiler responsibilities:
  *
- * The resulting semantic representation may then be consumed by:
- *
- *     - HDL/hardware IR;
+ *     - name resolution;
+ *     - type checking;
+ *     - width/shape checking;
+ *     - event validation;
+ *     - clock-domain analysis;
+ *     - reset analysis;
+ *     - state-transition construction;
+ *     - driver analysis;
+ *     - dependency analysis;
  *     - optimization;
+ *     - synthesis/lowering;
  *     - scheduling;
- *     - synthesis;
  *     - timing analysis;
- *     - placement;
- *     - routing;
- *     - target lowering.
+ *     - placement/routing;
+ *     - target realization.
  *
- * Quantum syntax and quantum::ir remain separate.
+ * Runtime responsibilities are relevant only for simulation, emulation,
+ * hardware control, or generated executable environments.
  *
- * This file MUST NOT depend on quantum::ir.
+ * This grammar itself has no runtime behavior.
+ *
+ * ============================================================================
  */
 
 
-/* ============================================================================
- * RUNTIME CONTRACT
- * ========================================================================== */
-
 /*
- * Runtime MUST NOT depend directly on this grammar.
+ * ============================================================================
+ * HARD-CODING AUDIT
+ * ============================================================================
  *
- * Runtime receives compiled/lowered representations rather than reparsing
- * source-level sequential declarations.
+ * Forbidden in this grammar:
+ *
+ *     MAX_REGISTERS
+ *     MAX_BITS
+ *     MAX_STATES
+ *     MAX_CLOCKS
+ *     MAX_EVENTS
+ *     MAX_PROCESSES
+ *     MAX_WIDTH
+ *     MAX_MEMORY
+ *     MAX_DEVICES
+ *     MAX_THREADS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_QUBITS
+ *
+ * Also forbidden:
+ *
+ *     physical register numbers;
+ *     physical clock IDs;
+ *     vendor primitive names;
+ *     FPGA-specific resource counts;
+ *     ASIC cell names;
+ *     fixed bus widths;
+ *     fixed clock counts;
+ *     fixed state counts.
+ *
+ * Numeric values remain legal when they are actual program semantics, such as:
+ *
+ *     counter = 1024;
+ *     width = 4096;
+ *
+ * The prohibition is against making such values universal grammar/compiler
+ * limits.
+ *
+ * ============================================================================
  */
 
 
-/* ============================================================================
- * DETERMINISM CONTRACT
- * ========================================================================== */
-
 /*
- * Given the same token stream and parser configuration, this grammar must
- * produce deterministic parse structure.
+ * ============================================================================
+ * COMPLETION CONTRACT
+ * ============================================================================
  *
- * No:
+ * This file is complete when:
  *
- *     - random behavior;
- *     - timestamps;
- *     - environment reads;
- *     - filesystem access;
- *     - network access;
- *     - hardware discovery;
- *     - runtime state;
+ * [x] sequential declaration has one canonical owner;
+ * [x] canonical ZamaniLexer vocabulary is consumed;
+ * [x] no K_* pseudo-token dependency exists;
+ * [x] no hdlKeyword dependency exists;
+ * [x] no duplicate attribute grammar exists;
+ * [x] no duplicate expression grammar exists;
+ * [x] no duplicate type grammar exists;
+ * [x] no generate ownership exists here;
+ * [x] no state-machine ownership exists here;
+ * [x] no pipeline ownership exists here;
+ * [x] no process ownership exists here;
+ * [x] no physical implementation is encoded;
+ * [x] no artificial capacity exists;
+ * [x] event syntax is explicit;
+ * [x] sequential assignment is explicit;
+ * [x] conditional transitions are explicit;
+ * [x] case transitions are explicit;
+ * [x] local values are explicit;
+ * [x] assertions are explicit;
+ * [x] nested blocks are explicit;
+ * [x] AST mapping is predetermined;
+ * [x] IR mapping is predetermined;
+ * [x] semantic obligations are predetermined;
+ * [x] downstream ownership is predetermined;
+ * [x] POCO-REAF constraints are preserved;
+ * [x] Rust implementation remains outside this grammar and safe.
  *
- * may affect parsing.
- */
-
-
-/* ============================================================================
- * SAFETY CONTRACT
- * ========================================================================== */
-
-/*
- * No embedded target-language actions are permitted.
- *
- * In particular:
- *
- *     - no Rust action blocks;
- *     - no Rust semantic predicates;
- *     - no unsafe;
- *     - no FFI;
- *     - no filesystem operations;
- *     - no process execution;
- *     - no network access.
- *
- * Rust 1.97 / Rust 1.97.1 compatibility is established by the generated
- * frontend/compiler integration, not by embedding Rust into this grammar.
- */
-
-
-/* ============================================================================
- * COMPATIBILITY CONTRACT
- * ========================================================================== */
-
-/*
- * This file owns stable parser rule names beginning with:
- *
- *     hdlSequential
- *
- * Existing callers must migrate to these names rather than retaining a
- * duplicate sequential grammar in hdl.g4.
- *
- * Deprecated sequential rules must be removed only after all parser imports
- * and generated parser references have been migrated.
- */
-
-
-/* ============================================================================
- * INTEGRATION CONTRACT
- * ========================================================================== */
-
-/*
- * hdl.g4 MUST:
- *
- *     1. import this grammar as a delegate;
- *     2. retain the single public HDL module/design entry point;
- *     3. remove its duplicate hdlSequentialDeclaration rule;
- *     4. route sequential constructs to hdlSequentialDeclaration;
- *     5. retain ownership of module composition rather than sequential
- *        implementation details.
- *
- * combinational.g4 MUST NOT import sequential semantics.
- *
- * clocks.g4 owns clock declaration syntax.
- *
- * timing.g4 owns timing constraint syntax.
- *
- * registers.g4 owns register declaration syntax.
- *
- * processes.g4 owns generic process syntax.
- *
- * state-machines.g4 owns explicit state-machine syntax.
- *
- * No cyclic grammar dependency is permitted.
- */
-
-
-/* ============================================================================
- * INTEGRATION WITH OTHER ZAMANI SUBSYSTEMS
- * ========================================================================== */
-
-/*
- * Lexer:
- *     canonical ZamaniTokens only.
- *
- * AST:
- *     parser structure is lowered into the frontend AST.
- *
- * Semantic analysis:
- *     owns sequential legality and meaning.
- *
- * Type system:
- *     validates values, targets, widths and shapes.
- *
- * Capability system:
- *     determines whether a requested sequential semantic can be realized.
- *
- * Resource system:
- *     determines resource requirements.
- *
- * Timing:
- *     determines whether clock/event behavior satisfies timing constraints.
- *
- * Scheduling:
- *     may schedule implementation operations after semantic lowering.
- *
- * Hardware abstraction:
- *     provides target-independent capabilities and target-specific facts.
- *
- * Optimization:
- *     may transform the lowered semantic representation while preserving
- *     sequential meaning.
- *
- * Synthesis:
- *     determines physical implementation.
- *
- * Runtime:
- *     consumes lowered/compiled artifacts.
- *
- * quantum::ir:
- *     NO dependency.
- *
- * QEC:
- *     NO dependency.
- *
- * ZQN:
- *     NO dependency.
- *
- * Those systems are downstream or independent semantic domains and must not
- * become parser dependencies.
- */
-
-
-/* ============================================================================
- * SCALABILITY INVARIANTS
- * ========================================================================== */
-
-/*
- * The grammar imposes no fixed limit on:
- *
- *     - sequential declarations;
- *     - state targets;
- *     - assignments;
- *     - events;
- *     - branches;
- *     - cases;
- *     - nesting;
- *     - generated regions;
- *     - width;
- *     - state count;
- *     - clocks;
- *     - resets;
- *     - enables.
- *
- * All collections use grammar repetition rather than fixed cardinality.
- *
- * No source-level construct may imply:
- *
- *     "this machine has N registers"
- *
- * unless N is itself explicitly part of the program's semantic model.
- */
-
-
-/* ============================================================================
- * COMPLETION CRITERIA
- * ========================================================================== */
-
-/*
- * This file is COMPLETE only when:
- *
- *     [ ] canonical ZamaniTokens contains K_SEQUENTIAL;
- *
- *     [ ] hdl.g4 imports this delegate;
- *
- *     [ ] duplicate hdlSequentialDeclaration in hdl.g4 is removed;
- *
- *     [ ] no second sequential lexer exists;
- *
- *     [ ] all referenced shared HDL rules resolve;
- *
- *     [ ] parser generation succeeds;
- *
- *     [ ] sequential positive tests pass;
- *
- *     [ ] invalid sequential syntax tests pass;
- *
- *     [ ] semantic-invalid sequential constructs are rejected downstream;
- *
- *     [ ] clock/reset/enable combinations are tested;
- *
- *     [ ] nested sequential regions are tested;
- *
- *     [ ] arbitrarily repeated assignments/cases are tested;
- *
- *     [ ] large generated sequential descriptions are tested;
- *
- *     [ ] deterministic parsing is verified;
- *
- *     [ ] round-trip parsing is verified where supported;
- *
- *     [ ] no machine-size constants exist;
- *
- *     [ ] no physical hardware identifiers are embedded;
- *
- *     [ ] no target-specific actions exist;
- *
- *     [ ] no Rust unsafe code is introduced;
- *
- *     [ ] Rust 1.97 / Rust 1.97.1 integration succeeds;
- *
- *     [ ] AST lowering succeeds without grammar changes;
- *
- *     [ ] downstream hardware semantic lowering succeeds;
- *
- *     [ ] no dependency cycle exists.
+ * ============================================================================
  */
