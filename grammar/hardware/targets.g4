@@ -6,152 +6,162 @@
  * File:
  *     grammar/hardware/targets.g4
  *
- * Grammar kind:
- *     ANTLR4 parser grammar
+ * Grammar:
+ *     ZamaniHardwareTargetsParser
  *
- * Rust integration:
+ * Status:
+ *     CANONICAL TARGET-INTENT LEAF GRAMMAR
+ *
+ * Rust baseline:
  *     Rust 1.97 / Rust 1.97.1
  *     Rust 2021
- *     no embedded Rust actions
- *     no unsafe Rust
+ *     safe Rust only
+ *
+ * ANTLR:
+ *     parser grammar
+ *     action-free
+ *     predicate-free
  *
  * ============================================================================
  * PURPOSE
  * ============================================================================
  *
- * This file owns the SOURCE-LEVEL TARGET INTENT MODEL.
+ * This file defines SOURCE-LEVEL TARGET INTENT.
  *
- * A target describes an abstract destination or execution class for a
- * Zamani program without making a particular physical machine part of the
- * program's permanent semantics.
+ * A target is an abstract execution/realization class or target contract.
  *
- * Examples of valid semantic target concepts include:
+ * Examples include:
  *
- *     cpu
- *     gpu
- *     accelerator
- *     fpga
- *     asic
- *     quantum
- *     simulator
- *     heterogeneous
- *     embedded
- *     distributed
- *     cloud
- *     custom.domain.target
+ *     target cpu;
+ *     target gpu;
+ *     target accelerator;
+ *     target fpga;
+ *     target asic;
+ *     target quantum;
+ *     target simulator;
+ *     target embedded;
+ *     target distributed;
+ *     target cloud;
+ *     target heterogeneous;
+ *     target custom.domain.target;
  *
- * These names are symbolic language-level identifiers.
+ * These names are symbolic semantic identities.
  *
- * They are NOT:
+ * They do NOT identify:
  *
- *     physical device identifiers;
+ *     physical devices;
+ *     device handles;
  *     PCI addresses;
  *     IP addresses;
  *     serial numbers;
- *     qubit indices;
- *     core indices;
+ *     physical qubit IDs;
+ *     CPU IDs;
+ *     GPU IDs;
+ *     FPGA coordinates;
  *     machine names;
- *     vendor-specific device handles.
+ *     vendor devices;
+ *     physical topology.
  *
- * Concrete target resolution is performed by downstream semantic/compiler/
- * hardware/runtime layers.
+ * Physical realization is resolved after parsing.
  *
  * ============================================================================
  * OWNERSHIP
  * ============================================================================
  *
- * THIS FILE OWNS
+ * THIS FILE OWNS:
  *
  *   - target declarations;
- *   - target references;
- *   - target inheritance/extension intent;
+ *   - target names;
+ *   - target parameters;
+ *   - target inheritance/extension;
  *   - target requirements;
  *   - target constraints;
  *   - target preferences;
  *   - target hints;
  *   - target capability requirements;
- *   - target resource requirements;
+ *   - target resource requirements/references;
  *   - target portability intent;
  *   - target scalability intent;
  *   - target performance intent;
  *   - target latency intent;
  *   - target energy intent;
  *   - target reliability intent;
- *   - target deployment intent;
- *   - target execution-domain intent;
  *   - target properties;
  *   - target annotations;
- *   - target composition;
- *   - target parameterization;
- *   - symbolic target selection expressions.
+ *   - target-local composition through extension;
+ *   - symbolic target references.
  *
- * THIS FILE DOES NOT OWN
+ * THIS FILE DOES NOT OWN:
  *
  *   - lexical tokens;
  *   - identifiers;
- *   - numeric literal syntax;
- *   - strings;
  *   - general expressions;
  *   - general types;
+ *   - resource declarations;
+ *   - capability declarations;
+ *   - topology declarations;
+ *   - placement declarations;
  *   - hardware discovery;
  *   - physical device enumeration;
- *   - physical device selection;
- *   - calibration;
+ *   - device allocation;
+ *   - physical placement;
  *   - routing;
  *   - scheduling;
  *   - optimization;
- *   - backend implementation;
- *   - hardware drivers;
- *   - runtime dispatch;
- *   - physical topology;
- *   - quantum IR;
+ *   - compilation backend selection;
+ *   - deployment;
+ *   - runtime execution;
  *   - QEC;
  *   - ZQN;
- *   - simulation;
- *   - resource allocation algorithms.
+ *   - quantum::ir;
+ *   - HDL behavior.
  *
  * ============================================================================
- * ARCHITECTURAL BOUNDARY
+ * ARCHITECTURAL POSITION
  * ============================================================================
  *
- * Source
- *     |
- *     v
- * lexer/tokens.g4
- *     |
- *     v
- * parser / targets.g4
- *     |
- *     v
- * frontend AST
- *     |
- *     v
- * semantic analysis
- *     |
- *     +-------------------------+
+ *     Zamani source
+ *          |
+ *          v
+ *     canonical lexer
+ *          |
+ *          v
+ *     Zamani parser
+ *          |
+ *          v
+ *     hardware target syntax
+ *          |
+ *          v
+ *     domain-neutral AST
+ *          |
+ *          v
+ *     semantic target model
+ *          |
+ *     +----+--------------------+
  *     |                         |
  *     v                         v
- * target intent             resource intent
- *     |                         |
- *     +------------+------------+
- *                  |
- *                  v
- *       capability/resource resolution
- *                  |
- *                  v
- *       compiler target analysis
- *                  |
- *                  v
- *       optimization / routing
- *                  |
- *                  v
- *              scheduling
- *                  |
- *                  v
- *            hardware HAL
- *                  |
- *                  v
- *               runtime
+ * capability/resource      program semantics
+ * resolution
+ *     |
+ *     v
+ * compilation analysis
+ *     |
+ *     +------------------------+
+ *     |            |           |
+ *     v            v           v
+ * optimization  routing    scheduling
+ *                              |
+ *                              v
+ *                             HAL
+ *                              |
+ *                              v
+ *                           runtime
+ *
+ * Quantum programs additionally converge on:
+ *
+ *     quantum::ir
+ *
+ * before target realization.
  *
  * ============================================================================
  * POCO-REAF
@@ -159,112 +169,122 @@
  *
  * Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
  *
- * Target syntax describes the semantic destination required or preferred by
- * a program. It does not force a specific implementation.
+ * A target declaration expresses WHAT kind of realization is required or
+ * preferred.
+ *
+ * It does not prescribe WHICH physical machine realizes it.
  *
  * For example:
  *
- *     target quantum;
+ *     target quantum {
+ *         requires quantum;
+ *         requires capability.quantum.measurement;
+ *     }
  *
- * means that the program has quantum execution intent.
+ * does not select:
  *
- * It does NOT mean:
+ *     a vendor;
+ *     a QPU;
+ *     a physical qubit;
+ *     a topology;
+ *     a calibration;
+ *     a native gate set.
  *
- *     use a particular quantum processor;
- *     use a particular vendor;
- *     use a fixed qubit count;
- *     use a fixed coupling map;
- *     use a fixed gate set;
- *     use a fixed calibration;
- *     use a fixed physical topology.
- *
- * The compiler/runtime resolves the target against available capabilities.
+ * Those decisions belong downstream.
  *
  * ============================================================================
  * SCALABILITY
  * ============================================================================
  *
- * This grammar contains no:
+ * This grammar intentionally contains no universal capacity constants.
+ *
+ * It MUST NOT encode:
  *
  *     MAX_TARGETS
  *     MAX_DEVICES
  *     MAX_CPUS
  *     MAX_CORES
+ *     MAX_THREADS
  *     MAX_GPUS
  *     MAX_FPGAS
  *     MAX_ASICS
+ *     MAX_ACCELERATORS
+ *     MAX_QPUS
  *     MAX_QUBITS
  *     MAX_NODES
  *     MAX_MEMORY
+ *     MAX_STORAGE
+ *     MAX_REGISTER_WIDTH
+ *     MAX_TENSOR_RANK
  *     MAX_TARGET_SIZE
  *
- * Repetition uses ANTLR's * and + operators.
+ * Repetition is represented by ANTLR repetition operators.
  *
- * Quantities and dimensions are expressions.
+ * Quantities are represented by expressions.
  *
- * Therefore the grammar itself imposes no finite machine-size ceiling.
+ * Any finite limitation encountered in practice belongs to:
+ *
+ *     compiler resources;
+ *     runtime resources;
+ *     target capabilities;
+ *     operating environment;
+ *     deployment environment;
+ *     physical hardware.
+ *
+ * Such limitations are not language-level grammar limits.
  *
  * ============================================================================
- * IMPORTANT SEMANTIC DISTINCTIONS
+ * SEMANTIC DISTINCTIONS
  * ============================================================================
  *
  * TARGET
- *     An abstract compilation/execution destination.
+ *     Abstract realization/execution class.
  *
  * REQUIREMENT
- *     A condition which must be satisfied for the requested target semantics.
+ *     Mandatory semantic condition.
  *
  * CONSTRAINT
- *     A condition that legal implementations must respect.
+ *     Mandatory realization condition.
  *
  * PREFERENCE
- *     An optimization preference which may be traded off.
+ *     Non-mandatory optimization guidance.
  *
  * HINT
- *     Advisory information that may be ignored.
+ *     Advisory information.
  *
  * CAPABILITY
- *     An implementation/environment property or required capability.
+ *     Required or referenced ability.
  *
  * RESOURCE
- *     An abstract resource requirement.
+ *     Required or referenced resource.
  *
  * PROPERTY
- *     Extensible target metadata.
+ *     Extensible metadata.
  *
- * NONE OF THESE MAY BE SILENTLY COLLAPSED.
+ * These concepts MUST remain distinguishable in the AST and semantic model.
  *
  * ============================================================================
  * EXTENSIBILITY
  * ============================================================================
  *
- * Target kinds are intentionally open.
+ * Target kinds are OPEN.
  *
- * Do NOT create a finite grammar such as:
+ * This grammar deliberately does not contain:
  *
  *     targetCpu
  *     targetGpu
  *     targetFpga
  *     targetQuantum
+ *     targetAsic
  *
- * as the only possible target kinds.
+ * as separate universal grammar productions.
  *
- * Such a design would require grammar changes whenever a new computing
- * architecture appears.
+ * Instead, all target identities use symbolic qualified names.
  *
- * Instead:
+ * Consequently, a future computational architecture can be introduced by
+ * semantic registration/dialect support without requiring a new permanent
+ * core target production.
  *
- *     targetReference
- *
- * accepts symbolic and qualified names.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * ANTLR GRAMMAR DECLARATION
  * ============================================================================
  */
 
@@ -277,23 +297,13 @@ options {
 
 /*
  * ============================================================================
- * 1. PUBLIC TARGET DECLARATION
+ * PUBLIC ENTRY POINT
  * ============================================================================
  *
- * This is the primary rule consumed by hardware.g4/root grammar integration.
+ * This is the ONLY public target declaration entry rule.
  *
- * Example:
- *
- *     target quantum;
- *
- *     target portable_quantum {
- *         requires quantum;
- *         prefers simulator;
- *     }
- *
- *     target heterogeneous<Scale> {
- *         requires accelerator;
- *     }
+ * hardware.g4 MUST delegate target declarations here rather than defining
+ * another hardwareTargetDeclaration production.
  *
  * ============================================================================
  */
@@ -313,7 +323,7 @@ hardwareTargetDeclaration
 
 /*
  * ============================================================================
- * 2. VISIBILITY
+ * VISIBILITY
  * ============================================================================
  */
 
@@ -327,12 +337,12 @@ hardwareTargetVisibility
 
 /*
  * ============================================================================
- * 3. TARGET MODIFIERS
+ * DECLARATION MODIFIERS
  * ============================================================================
  *
- * Modifiers describe source-level declaration properties.
+ * These modify the source declaration.
  *
- * They do not select hardware.
+ * They do not select physical hardware.
  *
  * ============================================================================
  */
@@ -350,41 +360,50 @@ hardwareTargetModifier
 
 /*
  * ============================================================================
- * 4. TARGET ANNOTATIONS
+ * ANNOTATIONS
  * ============================================================================
  *
- * Annotation names remain open.
+ * Annotation identity remains open.
  *
- * Vendor-specific or experimental annotations must not require new grammar
- * keywords merely because a new provider appears.
+ * New vendors, technologies, research features and dialects therefore do not
+ * need permanent core keywords.
  *
- * Semantic validation determines whether an annotation is known, registered,
- * experimental, deprecated, or invalid.
+ * Semantic validation determines whether an annotation is:
+ *
+ *     standard;
+ *     dialect-defined;
+ *     experimental;
+ *     deprecated;
+ *     unknown;
+ *     invalid.
  *
  * ============================================================================
  */
 
 hardwareTargetAnnotation
-    : AT IDENTIFIER
+    : AT
+      IDENTIFIER
       (
-          LPAREN hardwareTargetAnnotationArguments? RPAREN
+          LPAREN
+          hardwareTargetAnnotationArguments?
+          RPAREN
       )?
     ;
-
 
 hardwareTargetAnnotationArguments
     : hardwareTargetAnnotationArgument
       (
-          COMMA hardwareTargetAnnotationArgument
+          COMMA
+          hardwareTargetAnnotationArgument
       )*
     ;
-
 
 hardwareTargetAnnotationArgument
     : IDENTIFIER
     | STRING_LITERAL
     | INTEGER_LITERAL
     | FLOAT_LITERAL
+    | QUANTUM_LITERAL
     | hardwareTargetQualifiedName
     | hardwareTargetExpression
     ;
@@ -392,46 +411,47 @@ hardwareTargetAnnotationArgument
 
 /*
  * ============================================================================
- * 5. TARGET PARAMETERS
+ * TARGET PARAMETERS
  * ============================================================================
  *
- * Parameters make target declarations scalable.
+ * Target parameters are semantic parameters.
  *
- * A parameter can represent:
+ * Examples:
  *
- *     width
- *     lanes
- *     memory requirement
- *     problem size
- *     precision
- *     vector length
- *     logical resource quantity
- *     user-defined semantic parameter
+ *     Width
+ *     Lanes
+ *     Precision
+ *     Capacity
+ *     ProblemSize
+ *     Workload
  *
- * No physical maximum is encoded.
+ * They are NOT fixed hardware constants.
  *
  * ============================================================================
  */
 
 hardwareTargetParameters
-    : LT hardwareTargetParameter
+    : LT
+      hardwareTargetParameter
       (
-          COMMA hardwareTargetParameter
+          COMMA
+          hardwareTargetParameter
       )*
+      COMMA?
       GT
     ;
-
 
 hardwareTargetParameter
     : IDENTIFIER
       (
-          COLON hardwareTargetParameterBound
+          COLON
+          hardwareTargetParameterBound
       )?
       (
-          ASSIGN hardwareTargetExpression
+          ASSIGN
+          hardwareTargetExpression
       )?
     ;
-
 
 hardwareTargetParameterBound
     : hardwareTargetQualifiedName
@@ -441,16 +461,16 @@ hardwareTargetParameterBound
 
 /*
  * ============================================================================
- * 6. TARGET EXTENSION
+ * TARGET EXTENSION
  * ============================================================================
  *
- * Target extension expresses semantic composition.
+ * Extension is semantic composition.
  *
- * It is NOT physical inheritance from a machine.
+ * It is not physical inheritance.
  *
  * Example:
  *
- *     target quantum_accelerator extends accelerator { ... }
+ *     target quantum_accelerator extends accelerator;
  *
  * ============================================================================
  */
@@ -459,14 +479,15 @@ hardwareTargetExtends
     : K_EXTENDS
       hardwareTargetQualifiedName
       (
-          COMMA hardwareTargetQualifiedName
+          COMMA
+          hardwareTargetQualifiedName
       )*
     ;
 
 
 /*
  * ============================================================================
- * 7. TARGET SPECIFICATION
+ * TARGET SPECIFICATION
  * ============================================================================
  */
 
@@ -476,13 +497,6 @@ hardwareTargetSpecification
       RBRACE
     ;
 
-
-/*
- * ============================================================================
- * 8. TARGET BODY
- * ============================================================================
- */
-
 hardwareTargetBodyElement
     : hardwareTargetAnnotation*
       hardwareTargetClause
@@ -491,13 +505,23 @@ hardwareTargetBodyElement
 
 /*
  * ============================================================================
- * 9. TARGET CLAUSES
+ * TARGET CLAUSE DISPATCH
+ * ============================================================================
+ *
+ * IMPORTANT OWNERSHIP RULE:
+ *
+ * This dispatcher contains only target-owned intent.
+ *
+ * Deployment, execution, placement, topology, routing and recovery are
+ * intentionally NOT target clauses.
+ *
+ * Their syntax belongs to their respective subsystem grammars.
+ *
  * ============================================================================
  */
 
 hardwareTargetClause
-    : hardwareTargetReferenceClause
-    | hardwareTargetRequirementClause
+    : hardwareTargetRequirementClause
     | hardwareTargetConstraintClause
     | hardwareTargetPreferenceClause
     | hardwareTargetHintClause
@@ -510,50 +534,19 @@ hardwareTargetClause
     | hardwareTargetLatencyClause
     | hardwareTargetEnergyClause
     | hardwareTargetReliabilityClause
-    | hardwareTargetDeploymentClause
-    | hardwareTargetExecutionClause
-    | hardwareTargetCompositionClause
-    | hardwareTargetFallbackClause
     ;
 
 
 /*
  * ============================================================================
- * 10. TARGET REFERENCE
+ * REQUIREMENTS
  * ============================================================================
  *
- * References another abstract target.
+ * Requirement means:
  *
- * The reference is symbolic.
+ *     this condition is required for the requested semantics.
  *
- * ============================================================================
- */
-
-hardwareTargetReferenceClause
-    : K_TARGET
-      hardwareTargetQualifiedName
-      SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * 11. TARGET REQUIREMENT
- * ============================================================================
- *
- * Requirement is mandatory semantic intent.
- *
- * Examples:
- *
- *     requires quantum;
- *
- *     requires accelerator;
- *
- *     requires target.quantum;
- *
- *     requires capability.compute;
- *
- * The grammar does not determine whether the requirement can be satisfied.
+ * Requirement satisfaction is a semantic/compiler concern.
  *
  * ============================================================================
  */
@@ -564,23 +557,21 @@ hardwareTargetRequirementClause
       SEMICOLON
     ;
 
-
 hardwareTargetRequirementSubject
     : hardwareTargetReference
     | hardwareTargetCapabilityReference
     | hardwareTargetResourceReference
+    | hardwareTargetComparison
     | hardwareTargetExpression
     ;
 
 
 /*
  * ============================================================================
- * 12. TARGET CONSTRAINT
+ * CONSTRAINTS
  * ============================================================================
  *
- * Constraints are stronger than preferences and hints.
- *
- * Their satisfiability is determined semantically.
+ * A constraint is a mandatory condition on legal realization.
  *
  * ============================================================================
  */
@@ -591,18 +582,21 @@ hardwareTargetConstraintClause
       SEMICOLON
     ;
 
-
 hardwareTargetConstraintSubject
-    : hardwareTargetExpression
+    : hardwareTargetComparison
+    | hardwareTargetExpression
     ;
 
 
 /*
  * ============================================================================
- * 13. TARGET PREFERENCE
+ * PREFERENCES
  * ============================================================================
  *
- * Preferences must never silently become requirements.
+ * A preference MUST remain distinguishable from a requirement.
+ *
+ * An implementation may trade a preference away while preserving program
+ * semantics.
  *
  * ============================================================================
  */
@@ -613,23 +607,23 @@ hardwareTargetPreferenceClause
       SEMICOLON
     ;
 
-
 hardwareTargetPreferenceSubject
     : hardwareTargetReference
     | hardwareTargetCapabilityReference
     | hardwareTargetResourceReference
+    | hardwareTargetComparison
     | hardwareTargetExpression
     ;
 
 
 /*
  * ============================================================================
- * 14. TARGET HINT
+ * HINTS
  * ============================================================================
  *
  * Hints are advisory.
  *
- * An implementation may ignore a hint without violating source semantics.
+ * They MUST NOT silently become constraints.
  *
  * ============================================================================
  */
@@ -643,12 +637,16 @@ hardwareTargetHintClause
 
 /*
  * ============================================================================
- * 15. TARGET CAPABILITY
+ * CAPABILITY REQUIREMENTS
  * ============================================================================
  *
- * This rule expresses a capability requirement/reference.
+ * This rule represents a symbolic capability reference.
  *
- * Capability discovery remains outside grammar.
+ * Capability declaration/discovery belongs to:
+ *
+ *     grammar/hardware/capabilities.g4
+ *
+ * Runtime capability probing belongs downstream.
  *
  * ============================================================================
  */
@@ -659,7 +657,6 @@ hardwareTargetCapabilityClause
       SEMICOLON
     ;
 
-
 hardwareTargetCapabilityReference
     : hardwareTargetQualifiedName
     ;
@@ -667,13 +664,12 @@ hardwareTargetCapabilityReference
 
 /*
  * ============================================================================
- * 16. TARGET RESOURCE
+ * RESOURCE REQUIREMENTS
  * ============================================================================
  *
- * Resource semantics are delegated to hardware/resources.g4.
+ * Resource declaration/semantics belong to the resource subsystem.
  *
- * This file accepts symbolic resource intent without duplicating the complete
- * resource grammar.
+ * This grammar only permits a target to refer to resource intent.
  *
  * ============================================================================
  */
@@ -684,12 +680,11 @@ hardwareTargetResourceClause
       SEMICOLON
     ;
 
-
 hardwareTargetResourceSpecification
     : hardwareTargetResourceReference
+    | hardwareTargetComparison
     | hardwareTargetExpression
     ;
-
 
 hardwareTargetResourceReference
     : hardwareTargetQualifiedName
@@ -698,10 +693,12 @@ hardwareTargetResourceReference
 
 /*
  * ============================================================================
- * 17. TARGET PORTABILITY
+ * PORTABILITY
  * ============================================================================
  *
- * Portability is explicit semantic intent.
+ * Portability is semantic intent.
+ *
+ * The parser does not determine whether a target is actually portable.
  *
  * ============================================================================
  */
@@ -709,7 +706,8 @@ hardwareTargetResourceReference
 hardwareTargetPortabilityClause
     : K_PORTABLE
       (
-          ASSIGN hardwareTargetExpression
+          ASSIGN
+          hardwareTargetExpression
       )?
       SEMICOLON
     ;
@@ -717,20 +715,16 @@ hardwareTargetPortabilityClause
 
 /*
  * ============================================================================
- * 18. TARGET SCALABILITY
+ * SCALABILITY
  * ============================================================================
- *
- * Scaling is represented symbolically.
  *
  * Examples:
  *
  *     scalability = problem_size;
- *
  *     scalability = workload * lanes;
- *
  *     scalability = available_capacity;
  *
- * No finite scale is embedded.
+ * There is deliberately no maximum scale.
  *
  * ============================================================================
  */
@@ -745,7 +739,7 @@ hardwareTargetScalabilityClause
 
 /*
  * ============================================================================
- * 19. TARGET PERFORMANCE
+ * PERFORMANCE
  * ============================================================================
  */
 
@@ -759,7 +753,7 @@ hardwareTargetPerformanceClause
 
 /*
  * ============================================================================
- * 20. TARGET LATENCY
+ * LATENCY
  * ============================================================================
  */
 
@@ -773,7 +767,7 @@ hardwareTargetLatencyClause
 
 /*
  * ============================================================================
- * 21. TARGET ENERGY
+ * ENERGY
  * ============================================================================
  */
 
@@ -787,7 +781,7 @@ hardwareTargetEnergyClause
 
 /*
  * ============================================================================
- * 22. TARGET RELIABILITY
+ * RELIABILITY
  * ============================================================================
  */
 
@@ -801,144 +795,17 @@ hardwareTargetReliabilityClause
 
 /*
  * ============================================================================
- * 23. TARGET DEPLOYMENT
+ * EXTENSIBLE PROPERTY
  * ============================================================================
  *
- * Deployment describes deployment intent.
+ * Properties provide an extension mechanism without continuously expanding
+ * the permanent core keyword set.
  *
- * It does NOT perform deployment.
+ * Example:
  *
- * ============================================================================
- */
-
-hardwareTargetDeploymentClause
-    : K_DEPLOY
-      hardwareTargetDeploymentSpecification
-      SEMICOLON?
-    ;
-
-
-hardwareTargetDeploymentSpecification
-    : hardwareTargetExpression
-    | LBRACE
-      hardwareTargetBodyElement*
-      RBRACE
-    ;
-
-
-/*
- * ============================================================================
- * 24. TARGET EXECUTION
- * ============================================================================
+ *     vendor.domain.feature = value;
  *
- * Execution intent remains abstract.
- *
- * Runtime behavior belongs to execution/runtime layers.
- *
- * ============================================================================
- */
-
-hardwareTargetExecutionClause
-    : K_EXECUTION
-      hardwareTargetExpression
-      SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * 25. TARGET COMPOSITION
- * ============================================================================
- *
- * Composition permits a target to describe a heterogeneous or composed
- * execution intent without enumerating a finite set of machine types.
- *
- * ============================================================================
- */
-
-hardwareTargetCompositionClause
-    : K_TARGET
-      K_GROUP
-      IDENTIFIER
-      hardwareTargetCompositionBody
-    ;
-
-
-hardwareTargetCompositionBody
-    : LBRACE
-      hardwareTargetCompositionElement*
-      RBRACE
-    ;
-
-
-hardwareTargetCompositionElement
-    : hardwareTargetAnnotation*
-      hardwareTargetCompositionMember
-    ;
-
-
-hardwareTargetCompositionMember
-    : hardwareTargetReferenceClause
-    | hardwareTargetRequirementClause
-    | hardwareTargetConstraintClause
-    | hardwareTargetPreferenceClause
-    | hardwareTargetHintClause
-    | hardwareTargetCapabilityClause
-    | hardwareTargetResourceClause
-    | hardwareTargetPropertyClause
-    ;
-
-
-/*
- * ============================================================================
- * 26. TARGET FALLBACK
- * ============================================================================
- *
- * A fallback is an ordered semantic alternative.
- *
- * It does not execute fallback behavior itself.
- *
- * The resilience/runtime/compiler layers determine whether a fallback is
- * legal, safe, and semantically preserving.
- *
- * ============================================================================
- */
-
-hardwareTargetFallbackClause
-    : K_FALLBACK
-      hardwareTargetFallbackSpecification
-      SEMICOLON
-    ;
-
-
-hardwareTargetFallbackSpecification
-    : hardwareTargetReference
-    | LBRACKET
-      hardwareTargetReference
-      (
-          COMMA hardwareTargetReference
-      )*
-      RBRACKET
-    ;
-
-
-/*
- * ============================================================================
- * 27. EXTENSIBLE TARGET PROPERTY
- * ============================================================================
- *
- * Unknown future properties can remain syntactically representable.
- *
- * Semantic analysis determines whether the property is:
- *
- *     standard;
- *     dialect-defined;
- *     vendor-defined;
- *     experimental;
- *     deprecated;
- *     invalid.
- *
- * This avoids turning every future hardware feature into a grammar keyword.
+ * The semantic layer decides whether the property is recognized.
  *
  * ============================================================================
  */
@@ -950,7 +817,6 @@ hardwareTargetPropertyClause
       SEMICOLON
     ;
 
-
 hardwareTargetPropertyName
     : IDENTIFIER
     | hardwareTargetQualifiedName
@@ -959,25 +825,27 @@ hardwareTargetPropertyName
 
 /*
  * ============================================================================
- * 28. TARGET REFERENCE
+ * SYMBOLIC TARGET REFERENCE
  * ============================================================================
  *
- * A target reference is deliberately open-ended.
+ * Target references are open-ended.
  *
  * Examples:
  *
  *     cpu
  *     gpu
+ *     accelerator
  *     fpga
  *     quantum
  *     simulator
+ *     heterogeneous
  *     embedded
  *     distributed
  *     cloud
- *     heterogeneous
- *     organization.domain.target
+ *     quantum::simulator
+ *     vendor.domain.target
  *
- * No finite enumeration exists here.
+ * The grammar does not enumerate target kinds.
  *
  * ============================================================================
  */
@@ -989,19 +857,17 @@ hardwareTargetReference
 
 /*
  * ============================================================================
- * 29. QUALIFIED TARGET NAME
+ * QUALIFIED TARGET NAME
  * ============================================================================
  *
- * The grammar permits symbolic namespaces and dialect namespaces.
+ * Qualified names provide extensibility and namespace isolation.
  *
- * Examples:
+ * Both namespace styles already exist in the repository vocabulary:
  *
- *     quantum
- *     quantum.simulator
- *     hardware.accelerator
- *     vendor.domain.target
+ *     foo::bar
+ *     foo.bar
  *
- * The semantic layer resolves whether such a name is known.
+ * No depth limit is encoded.
  *
  * ============================================================================
  */
@@ -1017,44 +883,146 @@ hardwareTargetQualifiedName
 
 /*
  * ============================================================================
- * 30. TARGET EXPRESSION
+ * COMPARISON
  * ============================================================================
  *
- * Target expressions intentionally remain broad enough to reference the
- * canonical expression system without reproducing all expression precedence
- * rules in this domain grammar.
+ * Comparisons are kept separate because they carry stronger semantic intent
+ * than an arbitrary expression in requirements/constraints.
  *
- * The root Zamani grammar should map this rule to the canonical expression
- * grammar when the parser architecture permits parser-rule imports.
+ * ============================================================================
+ */
+
+hardwareTargetComparison
+    : hardwareTargetValue
+      hardwareTargetRelationOperator
+      hardwareTargetValue
+    ;
+
+hardwareTargetRelationOperator
+    : ASSIGN
+    | EQUAL_EQUAL
+    | NOT_EQUAL
+    | LESS
+    | LESS_EQUAL
+    | GREATER
+    | GREATER_EQUAL
+    ;
+
+
+/*
+ * ============================================================================
+ * EXPRESSION BRIDGE
+ * ============================================================================
  *
- * If the repository's ANTLR architecture requires domain-local expression
- * rules, the implementation must preserve the same expression semantics as
- * grammar/expressions/.
+ * This is deliberately a SMALL target-domain expression bridge.
  *
- * IMPORTANT:
+ * It does not attempt to become a second universal expression grammar.
  *
- * This rule is syntax only.
+ * Its purpose is to permit target quantities, symbolic references and simple
+ * target predicates while the canonical expression system remains authoritative
+ * for general expressions.
  *
- * It must not perform:
- *
- *     target discovery;
- *     capability discovery;
- *     resource allocation;
- *     backend selection;
- *     routing;
- *     scheduling.
+ * When the parser composition layer can directly expose the canonical
+ * expression rule, hardwareTargetExpression SHOULD be replaced by a direct
+ * delegation to that canonical rule without changing the semantic target
+ * contract.
  *
  * ============================================================================
  */
 
 hardwareTargetExpression
-    : hardwareTargetExpressionAtom
+    : hardwareTargetExpressionOr
+    ;
+
+hardwareTargetExpressionOr
+    : hardwareTargetExpressionAnd
       (
-          hardwareTargetExpressionOperator
-          hardwareTargetExpressionAtom
+          LOGICAL_OR
+          hardwareTargetExpressionAnd
       )*
     ;
 
+hardwareTargetExpressionAnd
+    : hardwareTargetExpressionEquality
+      (
+          LOGICAL_AND
+          hardwareTargetExpressionEquality
+      )*
+    ;
+
+hardwareTargetExpressionEquality
+    : hardwareTargetExpressionComparison
+      (
+          (
+              EQUAL_EQUAL
+            | NOT_EQUAL
+          )
+          hardwareTargetExpressionComparison
+      )*
+    ;
+
+hardwareTargetExpressionComparison
+    : hardwareTargetExpressionRange
+      (
+          (
+              LESS
+            | LESS_EQUAL
+            | GREATER
+            | GREATER_EQUAL
+          )
+          hardwareTargetExpressionRange
+      )*
+    ;
+
+hardwareTargetExpressionRange
+    : hardwareTargetExpressionAdditive
+      (
+          (
+              DOT_DOT
+            | DOT_DOT_EQ
+          )
+          hardwareTargetExpressionAdditive
+      )*
+    ;
+
+hardwareTargetExpressionAdditive
+    : hardwareTargetExpressionMultiplicative
+      (
+          (
+              PLUS
+            | MINUS
+            | PIPE
+            | CARET
+          )
+          hardwareTargetExpressionMultiplicative
+      )*
+    ;
+
+hardwareTargetExpressionMultiplicative
+    : hardwareTargetExpressionUnary
+      (
+          (
+              STAR
+            | SLASH
+            | PERCENT
+            | AMPERSAND
+          )
+          hardwareTargetExpressionUnary
+      )*
+    ;
+
+hardwareTargetExpressionUnary
+    : (
+          PLUS
+        | MINUS
+        )
+      hardwareTargetExpressionUnary
+    | hardwareTargetExpressionPostfix
+    ;
+
+hardwareTargetExpressionPostfix
+    : hardwareTargetExpressionAtom
+    ;
 
 hardwareTargetExpressionAtom
     : hardwareTargetQualifiedName
@@ -1062,474 +1030,422 @@ hardwareTargetExpressionAtom
     | FLOAT_LITERAL
     | STRING_LITERAL
     | QUANTUM_LITERAL
-    | LPAREN hardwareTargetExpression RPAREN
-    ;
-
-
-hardwareTargetExpressionOperator
-    : PLUS
-    | MINUS
-    | STAR
-    | SLASH
-    | PERCENT
-    | EQUAL_EQUAL
-    | NOT_EQUAL
-    | LESS_EQUAL
-    | GREATER_EQUAL
-    | LESS
-    | GREATER
-    | LOGICAL_AND
-    | LOGICAL_OR
-    | AMPERSAND
-    | PIPE
-    | CARET
-    | DOT_DOT
-    | DOT_DOT_EQ
+    | LPAREN
+      hardwareTargetExpression
+      RPAREN
     ;
 
 
 /*
  * ============================================================================
- * 31. TARGET CAPABILITY/RESOURCE REFERENCES
- * ============================================================================
- *
- * These remain aliases at grammar level so semantic analysis can construct
- * strongly typed AST nodes without embedding backend knowledge here.
+ * TARGET VALUE
  * ============================================================================
  */
 
-hardwareTargetCapabilityName
+hardwareTargetValue
     : hardwareTargetQualifiedName
-    ;
-
-
-hardwareTargetResourceName
-    : hardwareTargetQualifiedName
+    | INTEGER_LITERAL
+    | FLOAT_LITERAL
+    | STRING_LITERAL
+    | QUANTUM_LITERAL
+    | LPAREN
+      hardwareTargetExpression
+      RPAREN
     ;
 
 
 /*
  * ============================================================================
- * 32. SEMANTIC INTEGRATION CONTRACT
+ * AST CONTRACT
  * ============================================================================
  *
- * The parser/AST layer MUST preserve the distinction between:
+ * The parser MUST NOT lower these constructs into strings prematurely.
  *
+ * The frontend AST must preserve at minimum:
+ *
+ *     TargetDeclaration
  *     TargetReference
+ *     TargetParameter
+ *     TargetExtension
  *     TargetRequirement
  *     TargetConstraint
  *     TargetPreference
  *     TargetHint
- *     TargetCapability
- *     TargetResource
+ *     TargetCapabilityReference
+ *     TargetResourceReference
  *     TargetProperty
- *     TargetDeploymentIntent
- *     TargetExecutionIntent
- *     TargetFallback
+ *     TargetPortabilityIntent
+ *     TargetScalabilityIntent
+ *     TargetPerformanceIntent
+ *     TargetLatencyIntent
+ *     TargetEnergyIntent
+ *     TargetReliabilityIntent
  *
- * These must not all be lowered into an untyped string.
+ * Every node must preserve source-span information.
  *
- * The AST should retain:
+ * Expressions must remain structured expression trees.
  *
- *     source span;
- *     target name/reference;
- *     declaration identity;
- *     parameter bindings;
- *     modifiers;
- *     annotations;
- *     clauses;
- *     expression trees;
- *     declaration order where semantically relevant;
- *     provenance information.
+ * Qualified names must remain structured names.
  *
- * Semantic analysis then validates:
+ * ============================================================================
+ * SEMANTIC CONTRACT
+ * ============================================================================
  *
- *     name resolution;
- *     duplicate declarations;
+ * Semantic analysis owns:
+ *
+ *     target name resolution;
+ *     duplicate detection;
  *     parameter scope;
- *     target compatibility;
- *     requirement satisfiability;
- *     constraint validity;
- *     capability requirements;
- *     resource requirements;
- *     portability;
- *     fallback legality;
- *     dialect ownership;
- *     version compatibility.
+ *     parameter binding;
+ *     inheritance/extension validation;
+ *     requirement validation;
+ *     constraint validation;
+ *     preference validation;
+ *     capability resolution;
+ *     resource resolution;
+ *     portability validation;
+ *     dialect validation;
+ *     version compatibility;
+ *     target compatibility.
+ *
+ * Parsing MUST NOT:
+ *
+ *     discover hardware;
+ *     probe capabilities;
+ *     allocate resources;
+ *     choose devices;
+ *     route computation;
+ *     schedule computation;
+ *     invoke a backend.
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 33. DOWNSTREAM INTEGRATION CONTRACT
+ * RESOURCE INTEGRATION
  * ============================================================================
  *
- * hardware/targets.g4
- *     |
- *     v
- * frontend AST
- *     |
- *     v
- * semantic target model
- *     |
- *     +-----------------------------+
- *     |                             |
- *     v                             v
- * resource/capability resolution  program semantics
- *     |                             |
- *     +--------------+--------------+
- *                    |
- *                    v
- *             compilation context
- *                    |
- *          +---------+----------+
- *          |                    |
- *          v                    v
- * optimization             hardware analysis
- *          |                    |
- *          +---------+----------+
- *                    |
- *                    v
- *                 routing
- *                    |
- *                    v
- *               scheduling
- *                    |
- *                    v
- *               hardware HAL
- *                    |
- *                    v
- *                 runtime
+ * Target resource references are symbolic references only.
  *
- * Quantum programs:
+ * Resource ownership remains with:
  *
- *     target intent
- *         |
- *         v
- *     semantic analysis
- *         |
- *         v
- *     quantum::ir
- *         |
- *         v
- *     target/capability analysis
- *         |
- *         v
- *     optimization/routing/scheduling
+ *     grammar/resources/
+ *     grammar/hardware/resources.g4
  *
- * This grammar NEVER creates or owns quantum::ir.
+ * Target syntax MUST NOT redefine the resource declaration model.
+ *
+ * The semantic pipeline is:
+ *
+ *     target resource intent
+ *          |
+ *          v
+ *     semantic resource model
+ *          |
+ *          v
+ *     capability/resource resolution
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 34. HARDWARE ABSTRACTION INTEGRATION
+ * CAPABILITY INTEGRATION
  * ============================================================================
  *
- * Hardware HAL is responsible for actual implementation knowledge, including:
+ * Capability declaration ownership remains:
  *
- *     available devices;
- *     physical resources;
- *     capabilities;
- *     topology;
+ *     grammar/hardware/capabilities.g4
+ *
+ * Target capability clauses create requirements/references.
+ *
+ * They do not perform capability discovery.
+ *
+ * ============================================================================
+ * TARGET / COMPILE INTEGRATION
+ * ============================================================================
+ *
+ * This file defines the semantic target contract.
+ *
+ * It does NOT own compilation-target policy.
+ *
+ * Compilation-specific target selection, profiles, cross-compilation and
+ * backend policy remain owned by:
+ *
+ *     grammar/compile/target.g4
+ *
+ * The compiler combines:
+ *
+ *     source target intent
+ *          +
+ *     compilation policy
+ *          +
+ *     resolved capabilities/resources
+ *
+ * to produce a realization plan.
+ *
+ * ============================================================================
+ * TARGET / EXECUTION INTEGRATION
+ * ============================================================================
+ *
+ * Execution policy remains owned by:
+ *
+ *     grammar/execution/
+ *
+ * This grammar must not contain runtime commands.
+ *
+ * A target declaration is not an execution instruction.
+ *
+ * ============================================================================
+ * TARGET / TOPOLOGY INTEGRATION
+ * ============================================================================
+ *
+ * Topology remains owned by:
+ *
+ *     grammar/hardware/topology.g4
+ *
+ * Target syntax may require a topology capability through:
+ *
+ *     requires capability.topology.some_property;
+ *
+ * or a target property/reference understood by semantic analysis.
+ *
+ * This grammar does not define graph structure, physical connectivity,
+ * coupling maps or routing algorithms.
+ *
+ * ============================================================================
+ * TARGET / PLACEMENT INTEGRATION
+ * ============================================================================
+ *
+ * Placement remains owned by:
+ *
+ *     grammar/hardware/placement.g4
+ *
+ * This grammar therefore does not contain physical placement declarations.
+ *
+ * Target semantics identify the realization class.
+ *
+ * Placement determines where within a realization class semantic resources may
+ * be realized.
+ *
+ * ============================================================================
+ * TARGET / HDL INTEGRATION
+ * ============================================================================
+ *
+ * HDL syntax remains owned by:
+ *
+ *     grammar/hdl/
+ *
+ * A target may be associated semantically with hardware generated from HDL,
+ * but target syntax does not duplicate HDL modules, wires, clocks, registers,
+ * timing behavior or synthesis syntax.
+ *
+ * ============================================================================
+ * TARGET / QUANTUM INTEGRATION
+ * ============================================================================
+ *
+ * Quantum computation remains owned by:
+ *
+ *     grammar/quantum/
+ *
+ * Target syntax may express:
+ *
+ *     requires quantum;
+ *     requires capability.quantum.measurement;
+ *     requires capability.quantum.dynamic_control;
+ *
+ * but it MUST NOT define:
+ *
+ *     quantum gates;
+ *     physical qubits;
+ *     coupling maps;
+ *     native gate sets;
  *     calibration;
- *     backend identity;
- *     supported operations;
- *     runtime state;
- *     availability;
- *     resource capacity.
- *
- * targets.g4 only represents source-level intent.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 35. RESOURCE INTEGRATION
- * ============================================================================
- *
- * grammar/hardware/resources.g4 remains authoritative for resource-specific
- * source syntax.
- *
- * targets.g4 may reference resource intent but must not redefine the resource
- * model.
- *
- * This prevents:
- *
- *     targets.g4 -> resources.g4 -> targets.g4
- *
- * circular grammar ownership.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 36. PLACEMENT INTEGRATION
- * ============================================================================
- *
- * grammar/hardware/placement.g4 owns placement intent.
- *
- * targets.g4 MUST NOT define:
- *
- *     physical placement;
- *     coordinates;
- *     physical qubit mapping;
- *     pin assignments;
- *     device-local placement algorithms.
- *
- * A target may establish a destination requirement, while placement decides
- * where semantic resources are realized within that destination.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 37. TOPOLOGY INTEGRATION
- * ============================================================================
- *
- * grammar/hardware/topology.g4 owns topology descriptions.
- *
- * A target may constrain or require topology properties through symbolic
- * expressions, but it must not encode a fixed topology.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 38. CAPABILITY INTEGRATION
- * ============================================================================
- *
- * grammar/hardware/capabilities.g4 owns hardware capability declarations.
- *
- * Target capability references are symbolic references to that capability
- * system.
- *
- * Capability discovery remains outside grammar.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 39. COMPILATION INTEGRATION
- * ============================================================================
- *
- * Compiler target analysis consumes the semantic target model.
- *
- * It may resolve:
- *
- *     target requirements;
- *     constraints;
- *     preferences;
- *     capabilities;
- *     resource requirements;
- *     portability;
- *     fallback options.
- *
- * The compiler may choose an implementation only after semantic validation.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 40. RUNTIME INTEGRATION
- * ============================================================================
- *
- * Runtime receives a resolved target/execution plan.
- *
- * Runtime discovery may determine:
- *
- *     currently available resources;
- *     device state;
- *     backend availability;
- *     runtime capabilities;
- *     resource capacity.
- *
- * Runtime state MUST NOT modify the source grammar semantics.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 41. RESILIENCE INTEGRATION
- * ============================================================================
- *
- * Target fallback syntax may provide semantic alternatives.
- *
- * The resilience subsystem decides whether recovery actions such as:
- *
- *     Retry
- *     Restart
- *     Resume
- *     Rollback
- *     Remap
- *     Reroute
- *     Reschedule
- *     Recompile
- *     Reoptimize
- *     ChangeQEC
- *     Mitigate
- *     SwitchBackend
- *     QuarantineResource
- *     Abort
- *
- * are legal and safe.
- *
- * targets.g4 does not implement resilience policy.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 42. QEC / ZQN INTEGRATION
- * ============================================================================
- *
- * Target declarations may require capabilities relevant to quantum execution.
- *
- * They must not define:
- *
  *     QEC algorithms;
- *     syndrome extraction;
- *     correction operations;
  *     noise models;
+ *     pulse schedules.
+ *
+ * Quantum semantic lowering remains:
+ *
+ *     quantum source
+ *          |
+ *          v
+ *     domain-neutral AST
+ *          |
+ *          v
+ *     semantic analysis
+ *          |
+ *          v
+ *     quantum::ir
+ *          |
+ *          v
+ *     optimization
+ *          |
+ *          v
+ *     routing
+ *          |
+ *          v
+ *     scheduling
+ *          |
+ *          v
+ *     QEC / resilience
+ *          |
+ *          v
+ *     ZQN
+ *          |
+ *          v
+ *     HAL
+ *          |
+ *          v
+ *     target realization
+ *
+ * ============================================================================
+ * TARGET / RESILIENCE INTEGRATION
+ * ============================================================================
+ *
+ * Reliability intent may be declared here.
+ *
+ * Recovery policy does not belong here.
+ *
+ * Resilience remains responsible for decisions such as:
+ *
+ *     retry;
+ *     recover;
+ *     remap;
+ *     reroute;
+ *     reschedule;
+ *     recompile;
+ *     reoptimize;
+ *     switch backend;
+ *     quarantine;
+ *     reject.
+ *
+ * The target grammar does not execute any of these actions.
+ *
+ * ============================================================================
+ * TARGET / ZQN INTEGRATION
+ * ============================================================================
+ *
+ * ZQN remains the canonical fault/noise semantic subsystem.
+ *
+ * This grammar may express target-level reliability intent, but does not
+ * define:
+ *
  *     fault channels;
- *     calibration data.
- *
- * ZQN describes faults/noise.
- *
- * QEC detects/corrects errors.
- *
- * Hardware HAL describes available capabilities.
- *
- * Target syntax merely expresses source-level intent.
+ *     noise channels;
+ *     syndrome semantics;
+ *     correlated noise;
+ *     leakage;
+ *     loss;
+ *     mitigation algorithms.
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 43. DETERMINISM
+ * DETERMINISM
  * ============================================================================
  *
- * Parsing must be deterministic.
+ * Parsing is deterministic.
  *
  * Given identical:
  *
  *     source;
  *     lexer version;
  *     grammar version;
+ *     dialect configuration;
  *
  * the parser must produce the same parse structure.
  *
- * Target resolution is intentionally outside parsing and may depend on a
- * compilation/runtime context.
+ * Parsing MUST NOT depend on:
  *
- * Therefore:
- *
- *     parse(source)
- *
- * must never perform target discovery.
+ *     hardware;
+ *     available CPUs;
+ *     available GPUs;
+ *     available FPGAs;
+ *     available QPUs;
+ *     filesystem state;
+ *     network state;
+ *     wall-clock time;
+ *     randomness;
+ *     environment state.
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 44. SECURITY
+ * SECURITY
  * ============================================================================
  *
- * Grammar parsing performs no:
+ * This grammar contains no:
  *
- *     filesystem access;
- *     network access;
+ *     Rust actions;
+ *     filesystem operations;
+ *     network operations;
  *     hardware access;
- *     device discovery;
  *     process execution;
  *     environment mutation;
- *     runtime allocation.
+ *     secret access.
  *
- * Target strings are data, not executable commands.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 45. HARD-CODING AUDIT
- * ============================================================================
- *
- * Forbidden in this file:
- *
- *     MAX_*
- *     fixed device counts;
- *     fixed CPU counts;
- *     fixed GPU counts;
- *     fixed FPGA counts;
- *     fixed qubit counts;
- *     fixed memory sizes;
- *     fixed topology sizes;
- *     fixed vendor lists;
- *     fixed device IDs;
- *     fixed addresses;
- *     fixed machine names;
- *     fixed backend names as exhaustive enumerations.
- *
- * Open symbolic target names are intentional.
+ * Target names are data.
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 46. NEGATIVE SEMANTIC CASES
+ * RUST INTEGRATION
  * ============================================================================
  *
- * Syntax alone must permit semantic analysis to reject:
+ * This file contains no Rust implementation.
+ *
+ * The generated parser is consumed by the repository's Rust frontend and must
+ * remain compatible with:
+ *
+ *     Rust 1.97
+ *     Rust 1.97.1
+ *     Rust 2021
+ *
+ * No unsafe Rust is required or permitted by this grammar contract.
+ *
+ * The grammar itself does not assume a Rust integer width for source numeric
+ * literals.
+ *
+ * ============================================================================
+ * COMPATIBILITY
+ * ============================================================================
+ *
+ * Existing stable source target syntax must remain representable.
+ *
+ * Changes to:
+ *
+ *     K_TARGET;
+ *     target declaration structure;
+ *     qualified names;
+ *     target clause keywords;
+ *     property syntax;
+ *
+ * are compatibility-sensitive.
+ *
+ * Compatibility migrations belong to:
+ *
+ *     grammar/compatibility/
+ *     grammar/spec/compatibility.md
+ *
+ * ============================================================================
+ * NEGATIVE TEST CONTRACT
+ * ============================================================================
+ *
+ * Parser/semantic tests must cover:
+ *
+ *     target;
+ *     target {};
+ *     target foo extends;
+ *     target foo < >;
+ *     target foo <,>;
+ *     target foo { requires; };
+ *     target foo { capability; };
+ *     target foo { resource; };
+ *     target foo { prefer; };
+ *
+ * Semantic tests must cover:
  *
  *     duplicate target declarations;
  *     unresolved target references;
- *     unresolved capability references;
- *     invalid resource references;
- *     impossible constraints;
- *     incompatible target composition;
- *     illegal fallback cycles;
- *     conflicting requirements;
- *     invalid parameter bindings.
- *
- * These are semantic errors, not parser errors, unless the source is actually
- * syntactically malformed.
+ *     invalid extensions;
+ *     unresolved capabilities;
+ *     unresolved resources;
+ *     contradictory requirements;
+ *     invalid parameter bindings;
+ *     illegal dialect properties.
  *
  * ============================================================================
- */
-
-
-/*
+ * POSITIVE TEST CONTRACT
  * ============================================================================
- * 47. EXAMPLES OF INTENDED VALID SYNTAX
- * ============================================================================
+ *
+ * The following forms must be representable:
  *
  *     target portable;
  *
@@ -1537,136 +1453,196 @@ hardwareTargetResourceName
  *         requires quantum;
  *     }
  *
- *     target scalable_accelerator<Scale> {
- *         requires accelerator;
+ *     target scalable<Scale> {
  *         scalability = Scale;
+ *     }
+ *
+ *     target accelerator {
+ *         requires accelerator;
+ *         requires capability.compute;
+ *     }
+ *
+ *     target quantum_accelerator extends accelerator {
+ *         requires quantum;
+ *         requires capability.quantum.measurement;
  *     }
  *
  *     target hybrid {
  *         requires classical;
  *         requires quantum;
- *         prefers heterogeneous;
+ *         prefer heterogeneous;
  *     }
  *
  *     target distributed {
  *         requires distributed;
- *         constraint placement_scope <= available_scope;
+ *         scalability = workload_size;
  *     }
  *
  *     target future_backend {
  *         requires future.domain.compute;
  *     }
  *
- * These examples do not select physical machines.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 48. SCALABILITY TEST INTENT
- * ============================================================================
- *
- * The test corpus must verify that this grammar accepts symbolic values such
- * as:
- *
- *     target scalable<N>;
- *
- *     target scalable {
- *         requires resource.compute >= workload_size;
- *         scalability = problem_size;
+ *     target portable_compute {
+ *         portable = true;
+ *         performance = required_throughput;
+ *         latency <= target_latency;
  *     }
  *
- * without embedding a maximum N.
- *
- * The test suite must also verify that no parser rule assumes:
- *
- *     one CPU;
- *     one GPU;
- *     one FPGA;
- *     one accelerator;
- *     one quantum device;
- *     one node;
- *     one memory region;
- *     one topology.
- *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 49. COMPLETION CRITERIA
+ * SCALABILITY TEST CONTRACT
  * ============================================================================
  *
- * This file is complete only when:
+ * Tests must demonstrate that the grammar does not impose a language-level
+ * upper bound on:
  *
- * [ ] hardwareTargetDeclaration is integrated into the root grammar.
+ *     target declarations;
+ *     target parameters;
+ *     target extension depth;
+ *     qualified-name depth;
+ *     target body clauses;
+ *     target properties;
+ *     expression structure;
+ *     resource expressions;
+ *     capability references.
  *
- * [ ] Existing hardwareTargetDecl ownership is migrated from hardware.g4.
+ * Large values in tests are program data, not language limits.
  *
- * [ ] No duplicate target declaration rule remains authoritative.
+ * ============================================================================
+ * HARD-CODING AUDIT
+ * ============================================================================
  *
- * [ ] Target references are symbolic and extensible.
+ * This file contains no:
  *
- * [ ] Target requirements are distinct from constraints.
+ *     MAX_QUBITS
+ *     MAX_CPUS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_NODES
+ *     MAX_MEMORY
+ *     MAX_THREADS
+ *     MAX_TENSOR_RANK
+ *     MAX_REGISTER_WIDTH
+ *     MAX_NETWORK_SIZE
+ *     MAX_DEVICE_COUNT
  *
- * [ ] Constraints are distinct from preferences.
+ * It also contains no finite enumeration of:
  *
- * [ ] Preferences are distinct from hints.
+ *     CPU architectures;
+ *     GPU architectures;
+ *     FPGA families;
+ *     QPU vendors;
+ *     accelerators;
+ *     cloud providers;
+ *     machine models.
  *
- * [ ] Capabilities are distinct from resources.
+ * ============================================================================
+ * COMPLETION CRITERIA
+ * ============================================================================
  *
- * [ ] Deployment is distinct from target declaration.
+ * This file is complete when:
  *
- * [ ] Runtime discovery is absent from grammar.
+ * [x] Target declaration has one canonical owner.
  *
- * [ ] Physical device selection is absent from grammar.
+ * [x] Target references are symbolic and open-ended.
  *
- * [ ] Physical topology is absent from grammar.
+ * [x] Qualified names have no grammar-imposed depth limit.
  *
- * [ ] Placement remains owned by placement.g4.
+ * [x] Parameters are expression-capable.
  *
- * [ ] Resource semantics remain owned by resources.g4.
+ * [x] Requirements are distinct from constraints.
  *
- * [ ] Capability semantics remain owned by capabilities.g4.
+ * [x] Constraints are distinct from preferences.
  *
- * [ ] Topology semantics remain owned by topology.g4.
+ * [x] Preferences are distinct from hints.
  *
- * [ ] No fixed hardware/resource limits exist.
+ * [x] Capabilities are distinct from resources.
  *
- * [ ] No vendor-specific finite target enumeration exists.
+ * [x] Target properties are extensible.
  *
- * [ ] No embedded Rust actions exist.
+ * [x] No physical device selection is encoded.
  *
- * [ ] Generated Rust remains compatible with Rust 1.97/1.97.1.
+ * [x] No hardware discovery is encoded.
  *
- * [ ] No unsafe Rust is introduced.
+ * [x] No routing is encoded.
  *
- * [ ] AST integration is defined before implementation.
+ * [x] No scheduling is encoded.
  *
- * [ ] Compiler integration is defined before implementation.
+ * [x] No deployment operation is encoded.
  *
- * [ ] Runtime integration is defined before implementation.
+ * [x] No runtime operation is encoded.
  *
- * [ ] Quantum integration terminates at semantic lowering / quantum::ir.
+ * [x] No QEC implementation is encoded.
  *
- * [ ] QEC and ZQN remain downstream concerns.
+ * [x] No ZQN implementation is encoded.
  *
- * [ ] Positive tests exist.
+ * [x] No quantum::ir duplication is encoded.
  *
- * [ ] Negative syntax tests exist.
+ * [x] No hardware capacity limit is encoded.
  *
- * [ ] Semantic negative tests exist.
+ * [x] No vendor list is hard-coded.
  *
- * [ ] Scalability tests exist.
+ * [x] No embedded Rust exists.
  *
- * [ ] Cross-domain tests exist.
+ * [x] No unsafe implementation requirement exists.
  *
- * [ ] Determinism tests exist.
+ * [x] Rust 1.97 / 1.97.1 compatibility is preserved.
  *
- * [ ] Round-trip tests exist where a canonical printer is available.
+ * [ ] hardware.g4 delegates hardwareTargetDeclaration to this grammar.
+ *
+ * [ ] the duplicate hardwareTargetDeclaration in hardware.g4 is removed.
+ *
+ * [ ] the Hardware composition grammar imports this parser grammar.
+ *
+ * [ ] canonical expression delegation is wired through the repository's
+ *     parser-composition layer.
+ *
+ * [ ] positive tests are present.
+ *
+ * [ ] negative tests are present.
+ *
+ * [ ] scalability tests are present.
+ *
+ * [ ] semantic conformance tests are present.
+ *
+ * ============================================================================
+ * FINAL RULE
+ * ============================================================================
+ *
+ * This grammar describes TARGET INTENT.
+ *
+ * It does not describe the machine itself.
+ *
+ * Therefore:
+ *
+ *     target syntax
+ *         !=
+ *     hardware inventory
+ *
+ *     target requirement
+ *         !=
+ *     physical allocation
+ *
+ *     target capability
+ *         !=
+ *     capability discovery
+ *
+ *     target preference
+ *         !=
+ *     mandatory implementation
+ *
+ *     target declaration
+ *         !=
+ *     runtime execution
+ *
+ * The compiler and runtime remain responsible for turning portable semantic
+ * intent into an actual realization supported by available resources.
+ *
+ * That separation is the grammar-level foundation for:
+ *
+ *     Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
+ *
+ * while allowing Zamani to scale from the smallest supported computation to
+ * arbitrarily larger realizations subject to actual available resources.
  *
  * ============================================================================
  */
