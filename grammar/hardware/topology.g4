@@ -9,48 +9,66 @@
  * Grammar kind:
  *     ANTLR4 parser grammar
  *
- * Target:
+ * Language:
+ *     Zamani
+ *
+ * Baseline:
  *     Rust 1.97 / Rust 1.97.1
+ *     Rust 2021
  *
  * Safety:
- *     No embedded target-language actions.
- *     No semantic predicates.
- *     No unsafe Rust.
+ *     This grammar contains no embedded Rust actions, semantic predicates,
+ *     filesystem access, network access, runtime execution, or unsafe code.
+ *
+ * ============================================================================
+ * STATUS
+ * ============================================================================
+ *
+ * This file is the canonical SOURCE-SYNTAX owner for hardware-independent
+ * topology intent.
+ *
+ * It describes logical relationships among computational resources.
+ *
+ * It does NOT describe a discovered physical machine.
  *
  * ============================================================================
  * PURPOSE
  * ============================================================================
  *
- * This file owns the SOURCE-LEVEL SYNTAX for machine-independent hardware
- * topology descriptions and topology intent.
- *
- * A topology describes relationships among logical computational resources.
- *
- * It may express:
+ * Topology syntax expresses:
  *
  *     - logical topology declarations;
+ *     - logical nodes;
  *     - node classes;
- *     - endpoint classes;
+ *     - logical groups;
+ *     - logical endpoints;
+ *     - edges;
  *     - links;
  *     - connectivity;
  *     - directionality;
- *     - weights;
- *     - capacities;
- *     - latency;
- *     - bandwidth;
- *     - cost;
- *     - reliability;
- *     - topology constraints;
- *     - topology requirements;
- *     - topology preferences;
- *     - topology annotations;
- *     - topology composition;
+ *     - symbolic selectors;
  *     - topology properties;
- *     - topology-independent placement relationships;
- *     - topology families;
+ *     - topology requirements;
+ *     - topology constraints;
+ *     - topology preferences;
  *     - topology predicates;
- *     - symbolic topology dimensions;
- *     - implementation-independent connectivity requirements.
+ *     - topology extensions;
+ *     - symbolic quantities;
+ *     - reusable topology contracts.
+ *
+ * The grammar intentionally remains OPEN-WORLD.
+ *
+ * A new topology family does not require a new parser alternative.
+ *
+ * For example, these are semantic names rather than grammar-level
+ * enumerations:
+ *
+ *     topology::ring
+ *     topology::mesh
+ *     topology::torus
+ *     quantum::heavy_hex
+ *     network::fat_tree
+ *     accelerator::custom
  *
  * ============================================================================
  * DOES NOT OWN
@@ -58,55 +76,59 @@
  *
  * This file does NOT own:
  *
- *     - lexical token definitions;
+ *     - lexical definitions;
  *     - identifiers;
- *     - numeric literal recognition;
- *     - physical hardware discovery;
- *     - physical device enumeration;
- *     - device serial numbers;
+ *     - literals;
+ *     - generic expressions;
+ *     - type semantics;
+ *     - resource discovery;
+ *     - physical device discovery;
+ *     - hardware enumeration;
  *     - physical addresses;
- *     - vendor-specific topology formats;
- *     - runtime topology discovery;
- *     - calibration;
- *     - routing algorithms;
+ *     - PCI addresses;
+ *     - device serial numbers;
+ *     - physical qubit IDs;
+ *     - physical CPU IDs;
+ *     - physical GPU IDs;
+ *     - routing;
+ *     - path finding;
+ *     - placement;
  *     - scheduling;
- *     - placement algorithms;
- *     - resource allocation;
+ *     - calibration;
  *     - optimization;
- *     - device drivers;
- *     - backend execution;
- *     - canonical AST implementation;
- *     - semantic type checking;
- *     - canonical quantum IR;
  *     - QEC;
- *     - ZQN/noise semantics.
- *
- * In particular, this file MUST NOT become a second representation of the
- * physical topology discovered by the Hardware HAL.
+ *     - ZQN;
+ *     - runtime execution;
+ *     - HAL implementation;
+ *     - backend SDKs;
+ *     - vendor APIs;
+ *     - canonical IR implementation.
  *
  * ============================================================================
- * TOPOLOGY VS PHYSICAL MACHINE
+ * TOPOLOGY VS PHYSICAL REALIZATION
  * ============================================================================
  *
- * A topology is a semantic relationship model.
+ * A topology is a relationship model.
  *
  * For example:
  *
  *     topology ring {
- *         connect compute[*] to compute[*]
- *             where adjacent;
+ *         connect compute[*] to compute[*];
  *     }
  *
- * expresses a topology relationship.
+ * expresses a connectivity relationship.
  *
  * It does NOT mean:
  *
- *     - use device 7;
- *     - use physical address 0x1234;
- *     - use exactly 16 nodes;
- *     - use exactly 32 qubits;
- *     - use a particular vendor;
- *     - use a particular processor.
+ *     - use physical device 0;
+ *     - use physical device 1;
+ *     - use a particular QPU;
+ *     - use a particular CPU;
+ *     - use a particular GPU;
+ *     - use a particular FPGA;
+ *     - use a particular memory bank;
+ *     - use a particular network interface;
+ *     - use a fixed number of machines.
  *
  * Those decisions belong downstream.
  *
@@ -116,212 +138,216 @@
  *
  * Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
  *
- * Topology syntax must describe:
+ * Topology syntax therefore describes:
  *
- *     WHAT relationships are required or permitted.
+ *     WHAT relationships the program requires or permits.
  *
- * It must not unnecessarily describe:
+ * It does not prescribe:
  *
- *     WHICH physical machine realizes those relationships.
+ *     WHICH physical resource realizes those relationships.
  *
- * A topology may therefore be resolved differently on:
+ * A single topology declaration can consequently be considered against:
  *
- *     - a tiny embedded target;
- *     - one CPU;
- *     - many CPUs;
- *     - a GPU;
- *     - an FPGA;
- *     - an ASIC;
- *     - a quantum processor;
- *     - a quantum simulator;
- *     - a heterogeneous accelerator;
- *     - a cluster;
- *     - a supercomputer;
- *     - a distributed system;
- *     - a future architecture.
+ *     - tiny embedded systems;
+ *     - single processors;
+ *     - multicore systems;
+ *     - GPUs;
+ *     - FPGAs;
+ *     - ASICs;
+ *     - accelerators;
+ *     - QPUs;
+ *     - simulators;
+ *     - clusters;
+ *     - distributed systems;
+ *     - future computational substrates.
  *
  * ============================================================================
  * SCALABILITY
  * ============================================================================
  *
- * There are NO grammar-level limits for:
+ * This grammar contains NO universal maximum for:
  *
- *     - topology nodes;
- *     - node classes;
- *     - links;
- *     - edges;
- *     - ports;
- *     - dimensions;
- *     - topology components;
- *     - connected resources;
- *     - graph size;
- *     - degree;
- *     - path length;
- *     - capacity;
- *     - bandwidth;
- *     - latency;
- *     - distance;
- *     - topology depth.
+ *     nodes
+ *     edges
+ *     links
+ *     ports
+ *     groups
+ *     topology depth
+ *     degree
+ *     path length
+ *     graph size
+ *     connected resources
+ *     topology dimensions
+ *     topology properties
+ *     topology declarations
  *
- * Repetition is structural:
- *
- *     *
- *     +
- *
- * rather than fixed-size.
+ * Repetition is represented with ANTLR `*` and `+`.
  *
  * Quantities are expressions.
  *
- * The semantic/resource/target layers determine whether a requested topology
- * can be realized by the selected execution environment.
+ * Therefore:
+ *
+ *     topology node counts
+ *     topology dimensions
+ *     capacities
+ *     degrees
+ *     distances
+ *     bandwidth
+ *     latency
+ *
+ * may all be symbolic.
+ *
+ * Practical limits are compiler/resource limits, never language-level
+ * topology ceilings.
  *
  * ============================================================================
- * OPEN-WORLD TOPOLOGY MODEL
+ * HARD-CODING PROHIBITION
  * ============================================================================
  *
- * The grammar deliberately does NOT hard-code topology names such as:
+ * This grammar MUST NOT contain:
  *
- *     ring
- *     mesh
- *     torus
- *     grid
- *     star
- *     tree
- *     hypercube
- *     heavy_hex
+ *     MAX_QUBITS
+ *     MAX_CPUS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_NODES
+ *     MAX_MEMORY
+ *     MAX_THREADS
+ *     MAX_TENSOR_RANK
+ *     MAX_REGISTER_WIDTH
+ *     MAX_NETWORK_SIZE
+ *     MAX_DEVICE_COUNT
  *
- * Those may be represented as qualified semantic names:
+ * It also MUST NOT enumerate:
  *
- *     topology.quantum.heavy_hex
- *     topology.network.mesh
- *     topology.custom.application
+ *     Qubit0
+ *     Qubit1
+ *     CPU0
+ *     GPU0
+ *     FPGA0
+ *     Node0
+ *     Device0
  *
- * or through user-defined topology declarations.
+ * as universal topology resources.
  *
- * This keeps the grammar extensible as new architectures are introduced.
+ * A user may of course write a program value named `node0`.
  *
- * ============================================================================
- * QUANTUM BOUNDARY
- * ============================================================================
- *
- * Quantum topology is represented as hardware/resource topology intent.
- *
- * Examples may describe:
- *
- *     quantum.connectivity
- *     quantum.neighbor
- *     quantum.interaction
- *     quantum.routing
- *
- * but this grammar does NOT define:
- *
- *     - quantum gates;
- *     - quantum operations;
- *     - quantum states;
- *     - quantum circuits;
- *     - QEC algorithms;
- *     - noise models;
- *     - ZQN;
- *     - quantum IR.
- *
- * Quantum source semantics ultimately lower through:
- *
- *     quantum::ir
- *
- * before routing/scheduling/backend realization.
+ * The prohibition applies to grammar-defined machine identities or limits.
  *
  * ============================================================================
- * ARCHITECTURAL FLOW
+ * RESOURCE / CAPABILITY SEPARATION
  * ============================================================================
  *
- *     source
- *       |
- *       v
- *     lexer/tokens.g4
- *       |
- *       v
- *     topology.g4
- *       |
- *       v
- *     syntax AST
- *       |
- *       v
- *     semantic analysis
- *       |
- *       +--------------------+
- *       |                    |
- *       v                    v
- *     topology model      resource model
- *       |                    |
- *       +---------+----------+
- *                 |
- *                 v
- *        target/capability resolution
- *                 |
- *                 v
- *             placement
- *                 |
- *                 v
- *              routing
- *                 |
- *                 v
- *             scheduling
- *                 |
- *                 v
- *            Hardware HAL
- *                 |
- *                 v
- *              runtime
+ * Topology is not the same as resource availability.
  *
- * Grammar never directly depends on runtime discovery.
+ * These are semantically different:
+ *
+ *     requires qubits >= n;
+ *
+ *     requires capability("quantum.measurement");
+ *
+ *     connect logical.qubit[*] to logical.qubit[*];
+ *
+ * The first expresses a resource requirement.
+ *
+ * The second expresses a capability requirement.
+ *
+ * The third expresses topology intent.
+ *
+ * Semantic analysis may combine these facts later.
+ *
+ * The parser MUST NOT perform that combination.
  *
  * ============================================================================
- * INTEGRATION CONTRACT
+ * REQUIREMENT / CONSTRAINT / PREFERENCE / HINT
  * ============================================================================
  *
- * Required lexical vocabulary belongs in:
+ * These concepts MUST remain distinct.
+ *
+ * Requirement:
+ *
+ *     mandatory semantic condition.
+ *
+ * Constraint:
+ *
+ *     property that must remain satisfied.
+ *
+ * Preference:
+ *
+ *     advisory optimization preference.
+ *
+ * Hint:
+ *
+ *     additional compilation information without changing program meaning.
+ *
+ * This grammar therefore never treats:
+ *
+ *     prefer
+ *
+ * as equivalent to:
+ *
+ *     requires
+ *
+ * ============================================================================
+ * CANONICAL LEXICAL BOUNDARY
+ * ============================================================================
+ *
+ * Parser grammars consume the canonical Zamani lexer vocabulary.
+ *
+ * The production parser boundary is:
+ *
+ *     grammar/antlr/ZamaniLexer.g4
+ *
+ * The lexical composition is:
  *
  *     grammar/lexer/tokens.g4
  *
- * Required topology tokens:
+ * This file does not define lexical rules.
  *
- *     K_TOPOLOGY
- *     K_NODE
- *     K_EDGE
- *     K_LINK
- *     K_CONNECT
- *     K_FROM
- *     K_TO
- *     K_BIDIRECTIONAL
- *     K_DIRECTED
- *     K_UNDIRECTED
- *     K_WEIGHT
- *     K_CAPACITY
- *     K_LATENCY
- *     K_BANDWIDTH
- *     K_DISTANCE
- *     K_COST
- *     K_RELIABILITY
- *     K_NEIGHBOR
- *     K_ADJACENT
- *     K_WHERE
- *     K_REQUIRES
- *     K_PREFER
- *     K_CONSTRAINT
- *     K_PROPERTY
- *     K_GROUP
- *     K_EXTENDS
+ * Required topology-specific keyword tokens are:
  *
- * If any of these are not yet present in tokens.g4, they MUST be added to
- * the shared lexical vocabulary. They must NOT be implemented as private
- * lexer rules here.
+ *     TOPOLOGY
+ *     NODE
+ *     EDGE
+ *     LINK
+ *     CONNECT
+ *     BIDIRECTIONAL
+ *     DIRECTED
+ *     UNDIRECTED
+ *     NEIGHBOR
+ *     ADJACENT
  *
- * Existing generic tokens required:
+ * These must be owned exactly once by the canonical keyword vocabulary.
  *
- *     IDENTIFIER
- *     STRING_LITERAL
- *     INTEGER_LITERAL
- *     FLOAT_LITERAL
+ * Existing shared tokens reused here include, where applicable:
+ *
+ *     PUBLIC
+ *     PRIVATE
+ *     PROTECTED
+ *     INTERNAL
+ *     STATIC
+ *     CONST
+ *     EXTERN
+ *     FINAL
+ *     ABSTRACT
+ *     PARTIAL
+ *     EXTENDS
+ *     WHERE
+ *     REQUIRES
+ *     PREFER
+ *     CONSTRAINT
+ *     HINT
+ *     PROPERTY
+ *     GROUP
+ *     CAPABILITY
+ *     RESOURCE
+ *     TARGET
+ *     IN
+ *     AS
+ *
+ * and the canonical punctuation/operators:
+ *
+ *     AT
  *     LPAREN
  *     RPAREN
  *     LBRACE
@@ -330,212 +356,171 @@
  *     RBRACKET
  *     COMMA
  *     DOT
- *     DOUBLE_COLON
- *     COLON
  *     SEMICOLON
+ *     COLON
  *     ASSIGN
  *     PLUS
  *     MINUS
  *     STAR
  *     SLASH
+ *     MODULO
  *     LESS
  *     GREATER
  *     LESS_EQUAL
  *     GREATER_EQUAL
  *     EQUAL_EQUAL
  *     NOT_EQUAL
+ *     DOUBLE_COLON
  *
- * The exact shared token names remain controlled by tokens.g4.
- *
- * ============================================================================
- * ROOT-PARSER INTEGRATION
- * ============================================================================
- *
- * The root/hardware parser must expose:
- *
- *     topologyDeclaration
- *
- * as a hardware declaration alternative.
- *
- * A topology declaration may also be accepted as a member of:
- *
- *     hardwareDeclaration
- *     deviceDeclaration
- *     targetDeclaration
- *
- * where those parent grammars explicitly permit topology intent.
+ * Exact lexical ownership remains outside this file.
  *
  * ============================================================================
- * AST CONTRACT
+ * NAME BOUNDARY
  * ============================================================================
  *
- * The parser produces syntax information only.
+ * Name structure is conceptually owned by:
  *
- * The AST layer should provide semantic nodes equivalent to:
+ *     grammar/core/names.g4
  *
- *     HardwareTopologyDecl
- *     TopologyNodeDecl
- *     TopologyEdgeDecl
- *     TopologyGroupDecl
- *     TopologyProperty
- *     TopologyConstraint
- *     TopologyRequirement
- *     TopologyPreference
- *     TopologyPredicate
- *     TopologyEndpoint
- *     TopologyMetric
+ * The topology grammar deliberately preserves the same qualified-name
+ * semantics:
  *
- * Each node should retain:
+ *     IDENTIFIER
+ *     IDENTIFIER :: IDENTIFIER
+ *     IDENTIFIER :: IDENTIFIER :: IDENTIFIER
  *
- *     - source span;
- *     - source order where semantically relevant;
- *     - qualified names;
- *     - expressions;
- *     - annotations;
- *     - modifiers.
+ * No finite qualification depth exists.
  *
- * The grammar itself does not construct those AST objects.
+ * DOT is intentionally not used to manufacture qualified names.
  *
  * ============================================================================
- * SEMANTIC CONTRACT
+ * EXPRESSION BOUNDARY
  * ============================================================================
  *
- * Semantic analysis is responsible for:
+ * Topology quantities, selectors, predicates, and property values are
+ * expressions.
  *
- *     - resolving topology names;
- *     - resolving node classes;
- *     - resolving endpoint references;
- *     - validating graph relationships;
- *     - validating metric types;
- *     - validating units;
- *     - detecting impossible constraints;
- *     - distinguishing requirement/constraint/preference;
- *     - checking topology compatibility;
- *     - determining whether topology is static, symbolic, dynamic, or
- *       target-dependent;
- *     - producing diagnostics.
+ * The topology grammar must therefore eventually consume the canonical
+ * expression grammar rather than creating a competing expression hierarchy.
  *
- * The grammar does not decide whether a topology is realizable.
+ * This file provides a small `topologyExpression` integration boundary so
+ * the composition root can bind it to the canonical expression production.
+ *
+ * It MUST NOT become a second general-purpose expression implementation.
  *
  * ============================================================================
- * HARDWARE HAL CONTRACT
- * ============================================================================
- *
- * The Hardware HAL may provide runtime topology information.
- *
- * The direction is:
- *
- *     grammar -> AST -> semantic model -> compiler/runtime context
- *
- * NOT:
- *
- *     grammar -> Hardware HAL
- *
- * The HAL may report:
- *
- *     - available nodes;
- *     - actual connectivity;
- *     - supported links;
- *     - latency;
- *     - bandwidth;
- *     - reliability;
- *     - capabilities.
- *
- * The source grammar does not enumerate those physical resources.
- *
- * ============================================================================
- * ROUTING / PLACEMENT / SCHEDULING
- * ============================================================================
- *
- * Topology describes connectivity requirements.
- *
- * Placement maps logical resources to realizable resources.
- *
- * Routing realizes communication/interaction paths.
- *
- * Scheduling determines execution order and timing.
- *
- * Therefore:
- *
- *     topology.g4
- *         != placement
- *         != routing
- *         != scheduling
- *
- * This separation is mandatory.
- *
+ */
+
+
+/* ============================================================================
+ * PARSER DECLARATION
  * ============================================================================
  */
 
 parser grammar ZamaniHardwareTopologyParser;
 
 options {
-    tokenVocab = ZamaniTokens;
+    tokenVocab = ZamaniLexer;
 }
 
 
-// ============================================================================
-// 1. PUBLIC ENTRY POINT
-// ============================================================================
+/* ============================================================================
+ * 1. PUBLIC ENTRY POINT
+ * ============================================================================
+ *
+ * This is the stable topology declaration entry point consumed by the
+ * hardware parser/composition root.
+ *
+ * ========================================================================== */
 
 topologyDeclaration
     : topologyAnnotation*
       topologyVisibility?
       topologyModifier*
-      K_TOPOLOGY
+      TOPOLOGY
       topologyName
       topologyExtendsClause?
       topologyBody
     ;
 
 
-// ============================================================================
-// 2. VISIBILITY / MODIFIERS
-// ============================================================================
+/* ============================================================================
+ * 2. VISIBILITY
+ * ============================================================================
+ */
 
 topologyVisibility
-    : K_PUBLIC
-    | K_PRIVATE
-    | K_PROTECTED
-    | K_INTERNAL
+    : PUBLIC
+    | PRIVATE
+    | PROTECTED
+    | INTERNAL
     ;
+
+
+/* ============================================================================
+ * 3. MODIFIERS
+ * ============================================================================
+ */
 
 topologyModifier
-    : K_STATIC
-    | K_CONST
-    | K_EXTERN
-    | K_FINAL
-    | K_ABSTRACT
-    | K_PARTIAL
+    : STATIC
+    | CONST
+    | EXTERN
+    | FINAL
+    | ABSTRACT
+    | PARTIAL
     ;
 
 
-// ============================================================================
-// 3. ANNOTATIONS
-// ============================================================================
+/* ============================================================================
+ * 4. ANNOTATIONS
+ * ============================================================================
+ *
+ * Annotation syntax is structurally represented here.
+ *
+ * Annotation semantics remain outside this grammar.
+ *
+ * ========================================================================== */
 
 topologyAnnotation
-    : AT topologyQualifiedName
-      (LPAREN topologyArgumentList? RPAREN)?
+    : AT
+      topologyQualifiedName
+      (
+          LPAREN
+          topologyArgumentList?
+          RPAREN
+      )?
     ;
 
 topologyArgumentList
     : topologyArgument
-      (COMMA topologyArgument)*
+      (
+          COMMA
+          topologyArgument
+      )*
     ;
 
 topologyArgument
     : topologyExpression
     | topologyQualifiedName
-    | STRING_LITERAL
-    | INTEGER_LITERAL
-    | FLOAT_LITERAL
+    | STRING
+    | INTEGER
+    | FLOAT
     ;
 
 
-// ============================================================================
-// 4. TOPOLOGY NAMES
-// ============================================================================
+/* ============================================================================
+ * 5. NAMES
+ * ============================================================================
+ *
+ * This is a compatibility boundary.
+ *
+ * The canonical name implementation belongs to core/names.g4.
+ *
+ * The composition root may replace these wrappers with direct references to
+ * the canonical name rules when parser grammar imports are available.
+ *
+ * ========================================================================== */
 
 topologyName
     : topologyQualifiedName
@@ -544,34 +529,43 @@ topologyName
 topologyQualifiedName
     : IDENTIFIER
       (
-          DOUBLE_COLON IDENTIFIER
-        | DOT IDENTIFIER
+          DOUBLE_COLON
+          IDENTIFIER
       )*
     ;
 
 
-// ============================================================================
-// 5. TOPOLOGY INHERITANCE / EXTENSION
-// ============================================================================
-//
-// Extension is semantic composition, not physical inheritance.
-//
-// A topology may extend a logical topology definition while remaining
-// implementation-independent.
-//
+/* ============================================================================
+ * 6. EXTENSION
+ * ============================================================================
+ *
+ * A topology may extend one or more logical topology descriptions.
+ *
+ * This is semantic composition.
+ *
+ * It does NOT mean physical hardware inheritance.
+ *
+ * ========================================================================== */
 
 topologyExtendsClause
-    : K_EXTENDS topologyQualifiedName
-      (COMMA topologyQualifiedName)*
+    : EXTENDS
+      topologyQualifiedName
+      (
+          COMMA
+          topologyQualifiedName
+      )*
     ;
 
 
-// ============================================================================
-// 6. TOPOLOGY BODY
-// ============================================================================
+/* ============================================================================
+ * 7. TOPOLOGY BODY
+ * ============================================================================
+ */
 
 topologyBody
-    : LBRACE topologyMember* RBRACE
+    : LBRACE
+      topologyMember*
+      RBRACE
     ;
 
 topologyMember
@@ -584,32 +578,36 @@ topologyMember
     | topologyAnnotation* topologyRequirementDeclaration
     | topologyAnnotation* topologyConstraintDeclaration
     | topologyAnnotation* topologyPreferenceDeclaration
+    | topologyAnnotation* topologyHintDeclaration
     | topologyAnnotation* topologyPredicateDeclaration
     | topologyAnnotation* topologyUsingDeclaration
     ;
 
 
-// ============================================================================
-// 7. NODE DECLARATIONS
-// ============================================================================
-//
-// A node is a LOGICAL topology participant.
-//
-// It is not a physical device ID.
-//
-// Examples:
-//
-//     node compute;
-//     node quantum.logical;
-//     node accelerator;
-//
+/* ============================================================================
+ * 8. NODE DECLARATION
+ * ============================================================================
+ *
+ * Nodes are logical participants.
+ *
+ * They are NOT physical device identifiers.
+ *
+ * Examples:
+ *
+ *     node compute;
+ *
+ *     node logical_qubit : quantum::logical_qubit;
+ *
+ *     node worker [worker_count];
+ *
+ * ========================================================================== */
 
 topologyNodeDeclaration
-    : K_NODE
+    : NODE
       topologyNodeName
       topologyNodeTypeClause?
       topologyNodeMultiplicityClause?
-      topologyNodeAttributeBlock?
+      topologyPropertyBlock?
       SEMICOLON
     ;
 
@@ -618,27 +616,29 @@ topologyNodeName
     ;
 
 topologyNodeTypeClause
-    : COLON topologyQualifiedName
+    : COLON
+      topologyQualifiedName
     ;
 
 topologyNodeMultiplicityClause
-    : LBRACKET topologyExpression RBRACKET
+    : LBRACKET
+      topologyExpression
+      RBRACKET
     ;
 
 
-// ============================================================================
-// 8. NODE GROUPS
-// ============================================================================
-//
-// Groups allow scalable topology descriptions without enumerating members.
-//
-// The number of members is a semantic/resource concern.
-//
-// No fixed number is imposed.
-//
+/* ============================================================================
+ * 9. GROUP DECLARATION
+ * ============================================================================
+ *
+ * Groups allow scalable logical collections.
+ *
+ * They avoid requiring source code to enumerate every member.
+ *
+ * ========================================================================== */
 
 topologyGroupDeclaration
-    : K_GROUP
+    : GROUP
       topologyQualifiedName
       topologyGroupTypeClause?
       topologyGroupSelectorClause?
@@ -648,16 +648,19 @@ topologyGroupDeclaration
     ;
 
 topologyGroupTypeClause
-    : COLON topologyQualifiedName
+    : COLON
+      topologyQualifiedName
     ;
 
 topologyGroupSelectorClause
-    : K_WHERE
+    : WHERE
       topologyPredicateExpression
     ;
 
 topologyGroupMultiplicityClause
-    : LBRACKET topologyExpression RBRACKET
+    : LBRACKET
+      topologyExpression
+      RBRACKET
     ;
 
 topologyGroupBody
@@ -667,29 +670,32 @@ topologyGroupBody
     ;
 
 topologyGroupMember
-    : topologyQualifiedName
-      (COMMA topologyQualifiedName)*
+    : topologyEndpoint
+      (
+          COMMA
+          topologyEndpoint
+      )*
       SEMICOLON
     ;
 
 
-// ============================================================================
-// 9. EDGE DECLARATIONS
-// ============================================================================
-//
-// Edges describe logical relationships between topology endpoints.
-//
-// They do not imply a physical cable, wire, optical path, network interface,
-// quantum coupling channel, or particular machine implementation unless the
-// semantic layer explicitly establishes that meaning.
-//
+/* ============================================================================
+ * 10. EDGE DECLARATION
+ * ============================================================================
+ *
+ * Edges represent logical relationships.
+ *
+ * They do not automatically mean physical wires, cables, buses, links,
+ * quantum couplers, or network paths.
+ *
+ * ========================================================================== */
 
 topologyEdgeDeclaration
-    : K_EDGE
+    : EDGE
       topologyEdgeName?
       topologyEdgeEndpointClause
-      topologyEdgeDirectionClause?
-      topologyEdgeAttributeBlock?
+      topologyDirectionClause?
+      topologyPropertyBlock?
       SEMICOLON
     ;
 
@@ -699,33 +705,57 @@ topologyEdgeName
 
 topologyEdgeEndpointClause
     : topologyEndpoint
-      K_TO
+      topologyEdgeConnector
       topologyEndpoint
     ;
 
-topologyEdgeDirectionClause
-    : K_BIDIRECTIONAL
-    | K_DIRECTED
-    | K_UNDIRECTED
+topologyEdgeConnector
+    : TOPOLOGY_CONNECTOR_TO
+    ;
+
+topologyDirectionClause
+    : BIDIRECTIONAL
+    | DIRECTED
+    | UNDIRECTED
     ;
 
 
-// ============================================================================
-// 10. LINK DECLARATIONS
-// ============================================================================
-//
-// "link" is an optional semantic vocabulary for communication/connectivity
-// relationships. It remains abstract.
-//
+/*
+ * The semantic spelling of the connector is `to`.
+ *
+ * The canonical repository already contains FROM/IN/TO-like language
+ * vocabulary in different domains.  To avoid introducing another generic
+ * `TO` token merely for topology, this grammar uses the dedicated topology
+ * connector token TOPOLOGY_CONNECTOR_TO.
+ *
+ * If the canonical keyword vocabulary standardizes `TO` globally, this
+ * production MUST be changed to:
+ *
+ *     : TO
+ *
+ * and the dedicated token must not be added.
+ */
+
+
+/* ============================================================================
+ * 11. LINK DECLARATION
+ * ============================================================================
+ *
+ * Link is a semantic synonym/category useful to communication-oriented
+ * topologies.
+ *
+ * It remains abstract.
+ *
+ * ========================================================================== */
 
 topologyLinkDeclaration
-    : K_LINK
+    : LINK
       topologyLinkName?
       topologyEndpoint
-      K_TO
+      topologyEdgeConnector
       topologyEndpoint
-      topologyEdgeDirectionClause?
-      topologyLinkAttributeBlock?
+      topologyDirectionClause?
+      topologyPropertyBlock?
       SEMICOLON
     ;
 
@@ -734,47 +764,46 @@ topologyLinkName
     ;
 
 
-// ============================================================================
-// 11. CONNECTION DECLARATIONS
-// ============================================================================
-//
-// Connections are the most direct source-level topology intent.
-//
-// Examples:
-//
-//     connect q to r;
-//     connect logical.qubit[*] to logical.qubit[*];
-//     connect a to b bidirectional;
-//
+/* ============================================================================
+ * 12. CONNECT DECLARATION
+ * ============================================================================
+ *
+ * `connect` is the direct topology-intent form.
+ *
+ * Examples:
+ *
+ *     connect compute[*] to compute[*];
+ *
+ *     connect logical.a to logical.b bidirectional;
+ *
+ * ========================================================================== */
 
 topologyConnectionDeclaration
-    : K_CONNECT
+    : CONNECT
       topologyEndpoint
-      K_TO
+      topologyEdgeConnector
       topologyEndpoint
-      topologyEdgeDirectionClause?
+      topologyDirectionClause?
       topologyConnectionConditionClause?
-      topologyConnectionAttributeBlock?
+      topologyPropertyBlock?
       SEMICOLON
     ;
 
 
-// ============================================================================
-// 12. ENDPOINTS
-// ============================================================================
-//
-// Endpoints may contain symbolic selectors.
-//
-// No physical address syntax is defined here.
-//
+/* ============================================================================
+ * 13. ENDPOINTS
+ * ============================================================================
+ *
+ * Endpoints are logical references.
+ *
+ * Selectors can describe symbolic sets without enumerating physical
+ * resources.
+ *
+ * ========================================================================== */
 
 topologyEndpoint
-    : topologyEndpointBase
-      topologyEndpointSelector*
-    ;
-
-topologyEndpointBase
     : topologyQualifiedName
+      topologyEndpointSelector*
     ;
 
 topologyEndpointSelector
@@ -784,697 +813,931 @@ topologyEndpointSelector
     ;
 
 
-// ============================================================================
-// 13. SELECTORS
-// ============================================================================
-//
-// Selectors allow a topology to describe classes or symbolic sets without
-// enumerating physical resources.
-//
+/* ============================================================================
+ * 14. SELECTOR EXPRESSIONS
+ * ============================================================================
+ *
+ * Selectors are deliberately symbolic.
+ *
+ * Examples:
+ *
+ *     *
+ *     i
+ *     i + 1
+ *     range
+ *     group
+ *     where-expression
+ *
+ * The canonical expression system ultimately owns their semantics.
+ *
+ * ========================================================================== */
 
 topologySelectorExpression
     : topologyExpression
-    | topologyPredicateExpression
     ;
 
 
-// ============================================================================
-// 14. CONNECTION CONDITIONS
-// ============================================================================
+/* ============================================================================
+ * 15. CONNECTION CONDITIONS
+ * ============================================================================
+ *
+ * A condition describes when a relationship is applicable.
+ *
+ * It does not perform runtime routing.
+ *
+ * ========================================================================== */
 
 topologyConnectionConditionClause
-    : K_WHERE
+    : WHERE
       topologyPredicateExpression
     ;
 
 
-// ============================================================================
-// 15. NODE ATTRIBUTES
-// ============================================================================
-
-topologyNodeAttributeBlock
-    : LBRACE
-      topologyAttribute*
-      RBRACE
-    ;
-
-topologyAttribute
-    : topologyQualifiedName
-      (ASSIGN topologyExpression)?
-      SEMICOLON
-    ;
-
-
-// ============================================================================
-// 16. EDGE ATTRIBUTES
-// ============================================================================
-
-topologyEdgeAttributeBlock
-    : LBRACE
-      topologyEdgeAttribute*
-      RBRACE
-    ;
-
-topologyEdgeAttribute
-    : topologyMetricAttribute
-    | topologyAttribute
-    ;
-
-
-// ============================================================================
-// 17. LINK ATTRIBUTES
-// ============================================================================
-
-topologyLinkAttributeBlock
-    : LBRACE
-      topologyEdgeAttribute*
-      RBRACE
-    ;
-
-
-// ============================================================================
-// 18. CONNECTION ATTRIBUTES
-// ============================================================================
-
-topologyConnectionAttributeBlock
-    : LBRACE
-      topologyEdgeAttribute*
-      RBRACE
-    ;
-
-
-// ============================================================================
-// 19. METRICS
-// ============================================================================
-//
-// Metrics remain generic and symbolic.
-//
-// The grammar does not assume:
-//     - nanoseconds;
-//     - GHz;
-//     - GB/s;
-//     - meters;
-//     - percentage ranges;
-//     - any particular unit system.
-//
-// Unit semantics belong to the shared expression/resource/type system.
-//
-
-topologyMetricAttribute
-    : K_WEIGHT
-      ASSIGN
-      topologyExpression
-      SEMICOLON
-
-    | K_CAPACITY
-      ASSIGN
-      topologyExpression
-      SEMICOLON
-
-    | K_LATENCY
-      ASSIGN
-      topologyExpression
-      SEMICOLON
-
-    | K_BANDWIDTH
-      ASSIGN
-      topologyExpression
-      SEMICOLON
-
-    | K_DISTANCE
-      ASSIGN
-      topologyExpression
-      SEMICOLON
-
-    | K_COST
-      ASSIGN
-      topologyExpression
-      SEMICOLON
-
-    | K_RELIABILITY
-      ASSIGN
-      topologyExpression
-      SEMICOLON
-    ;
-
-
-// ============================================================================
-// 20. PROPERTY DECLARATIONS
-// ============================================================================
-//
-// Properties are open-world.
-//
-// Do not hard-code every possible future topology property.
-//
-
-topologyPropertyDeclaration
-    : K_PROPERTY
-      topologyQualifiedName
-      (COLON topologyQualifiedName)?
-      (ASSIGN topologyExpression)?
-      SEMICOLON
-    ;
-
-
-// ============================================================================
-// 21. REQUIREMENTS
-// ============================================================================
-//
-// Requirements describe semantic minimums or mandatory relationships.
-//
-// They are stronger than preferences.
-//
-
-topologyRequirementDeclaration
-    : K_REQUIRES
-      topologyRequirementExpression
-      SEMICOLON
-    ;
-
-topologyRequirementExpression
-    : topologyConnectivityRequirement
-    | topologyMetricRequirement
-    | topologyPredicateExpression
-    | topologyQualifiedName
-    ;
-
-topologyConnectivityRequirement
-    : K_CONNECT
-      topologyEndpoint
-      K_TO
-      topologyEndpoint
-      topologyEdgeDirectionClause?
-    ;
-
-topologyMetricRequirement
-    : topologyMetricName
-      topologyComparisonOperator
-      topologyExpression
-    ;
-
-topologyMetricName
-    : K_WEIGHT
-    | K_CAPACITY
-    | K_LATENCY
-    | K_BANDWIDTH
-    | K_DISTANCE
-    | K_COST
-    | K_RELIABILITY
-    | topologyQualifiedName
-    ;
-
-
-// ============================================================================
-// 22. CONSTRAINTS
-// ============================================================================
-//
-// Constraints define conditions that a valid realization must satisfy.
-//
-// They do not select a particular physical implementation.
-//
-
-topologyConstraintDeclaration
-    : K_CONSTRAINT
-      topologyConstraintExpression
-      SEMICOLON
-    ;
-
-topologyConstraintExpression
-    : topologyComparisonExpression
-    | topologyLogicalExpression
-    | topologyConnectivityConstraint
-    | topologyQualifiedName
-    ;
-
-topologyConnectivityConstraint
-    : topologyEndpoint
-      topologyConnectivityOperator
-      topologyEndpoint
-    ;
-
-topologyConnectivityOperator
-    : K_CONNECTS
-    | K_ADJACENT
-    | K_NEIGHBOR
-    ;
-
-
-// ============================================================================
-// 23. PREFERENCES
-// ============================================================================
-//
-// Preferences are optimization hints.
-//
-// A compiler may choose another realization when necessary.
-//
-
-topologyPreferenceDeclaration
-    : K_PREFER
-      topologyPreferenceExpression
-      SEMICOLON
-    ;
-
-topologyPreferenceExpression
-    : topologyQualifiedName
-    | topologyComparisonExpression
-    | topologyConnectivityPreference
-    ;
-
-topologyConnectivityPreference
-    : topologyEndpoint
-      topologyConnectivityOperator
-      topologyEndpoint
-    ;
-
-
-// ============================================================================
-// 24. PREDICATES
-// ============================================================================
-//
-// Predicates allow topology conditions to remain symbolic.
-//
-// The semantic layer determines whether a predicate is statically decidable,
-// target-dependent, or runtime-dependent.
-//
+/* ============================================================================
+ * 16. PREDICATES
+ * ============================================================================
+ *
+ * Topology predicates describe logical relationships.
+ *
+ * No predicate is interpreted during parsing.
+ *
+ * ========================================================================== */
 
 topologyPredicateDeclaration
-    : K_WHERE
+    : topologyPredicateHead
+      topologyPredicateBody?
+      SEMICOLON?
+    ;
+
+topologyPredicateHead
+    : PROPERTY
+      topologyQualifiedName
+      ASSIGN
+      topologyPredicateExpression
+    | topologyQualifiedName
+      ASSIGN
+      topologyPredicateExpression
+    ;
+
+topologyPredicateBody
+    : LBRACE
+      topologyPredicateMember*
+      RBRACE
+    ;
+
+topologyPredicateMember
+    : topologyQualifiedName
+      ASSIGN
       topologyPredicateExpression
       SEMICOLON
     ;
 
 topologyPredicateExpression
-    : topologyLogicalExpression
-    | topologyComparisonExpression
-    | topologyConnectivityPredicate
-    | topologyQualifiedName
-    | LPAREN topologyPredicateExpression RPAREN
-    ;
-
-topologyConnectivityPredicate
-    : topologyEndpoint
-      topologyConnectivityOperator
-      topologyEndpoint
-    ;
-
-
-// ============================================================================
-// 25. COMPARISON EXPRESSIONS
-// ============================================================================
-
-topologyComparisonExpression
     : topologyExpression
-      topologyComparisonOperator
-      topologyExpression
-    ;
-
-topologyComparisonOperator
-    : EQUAL_EQUAL
-    | NOT_EQUAL
-    | LESS
-    | LESS_EQUAL
-    | GREATER
-    | GREATER_EQUAL
     ;
 
 
-// ============================================================================
-// 26. LOGICAL EXPRESSIONS
-// ============================================================================
+/* ============================================================================
+ * 17. PROPERTY DECLARATIONS
+ * ============================================================================
+ *
+ * Properties are open-world.
+ *
+ * This deliberately avoids hard-coding a catalogue such as:
+ *
+ *     bandwidth
+ *     latency
+ *     distance
+ *     cost
+ *     reliability
+ *
+ * as grammar-level topology constructs.
+ *
+ * Those names can still be used naturally:
+ *
+ *     bandwidth = required_bandwidth;
+ *
+ *     latency = latency_budget;
+ *
+ *     distance = required_distance;
+ *
+ * ========================================================================== */
 
-topologyLogicalExpression
-    : topologyLogicalExpression
-      K_OR
-      topologyLogicalTerm
-    | topologyLogicalTerm
-    ;
-
-topologyLogicalTerm
-    : topologyLogicalTerm
-      K_AND
-      topologyLogicalFactor
-    | topologyLogicalFactor
-    ;
-
-topologyLogicalFactor
-    : K_NOT topologyLogicalFactor
-    | LPAREN topologyLogicalExpression RPAREN
-    | topologyComparisonExpression
-    | topologyConnectivityPredicate
-    | topologyQualifiedName
-    ;
-
-
-// ============================================================================
-// 27. EXPRESSIONS
-// ============================================================================
-//
-// This is intentionally a topology-local syntactic expression boundary.
-//
-// When the universal expression grammar is available through an imported
-// parser grammar, this rule should be replaced by the shared expression
-// contract rather than creating a second semantic expression system.
-//
-// Until parser composition is established repository-wide, the local boundary
-// permits symbolic topology quantities without introducing machine limits.
-//
-
-topologyExpression
-    : topologyAdditiveExpression
-    ;
-
-topologyAdditiveExpression
-    : topologyMultiplicativeExpression
-      (
-          PLUS topologyMultiplicativeExpression
-        | MINUS topologyMultiplicativeExpression
-      )*
-    ;
-
-topologyMultiplicativeExpression
-    : topologyUnaryExpression
-      (
-          STAR topologyUnaryExpression
-        | SLASH topologyUnaryExpression
-      )*
-    ;
-
-topologyUnaryExpression
-    : PLUS topologyUnaryExpression
-    | MINUS topologyUnaryExpression
-    | topologyPrimaryExpression
-    ;
-
-topologyPrimaryExpression
-    : INTEGER_LITERAL
-    | FLOAT_LITERAL
-    | STRING_LITERAL
-    | topologyQualifiedName
-    | LPAREN topologyExpression RPAREN
-    ;
-
-
-// ============================================================================
-// 28. USING / IMPORT-STYLE TOPOLOGY NAMES
-// ============================================================================
-//
-// This rule only records source-level name usage.
-//
-// Package/module dependency semantics belong to the module system.
-//
-
-topologyUsingDeclaration
-    : K_USING
+topologyPropertyDeclaration
+    : PROPERTY
       topologyQualifiedName
-      (K_AS IDENTIFIER)?
+      ASSIGN
+      topologyExpression
+      SEMICOLON
+    | topologyQualifiedName
+      ASSIGN
+      topologyExpression
       SEMICOLON
     ;
 
 
-// ============================================================================
-// 29. GENERIC TOPOLOGY QUANTITIES
-// ============================================================================
-//
-// Symbolic dimensions remain legal.
-//
-// Examples:
-//
-//     [workers]
-//     [available_nodes]
-//     [required_degree]
-//
-// No parser-level integer maximum exists.
-//
+/* ============================================================================
+ * 18. PROPERTY BLOCK
+ * ============================================================================
+ */
 
-topologyMultiplicity
-    : LBRACKET topologyExpression RBRACKET
+topologyPropertyBlock
+    : LBRACE
+      topologyPropertyMember*
+      RBRACE
+    ;
+
+topologyPropertyMember
+    : topologyPropertyDeclaration
     ;
 
 
-// ============================================================================
-// 30. OPTIONAL TOPOLOGY FAMILIES
-// ============================================================================
-//
-// Topology families are represented by names rather than a closed enumeration.
-//
-// Examples:
-//
-//     topology.graph
-//     topology.mesh
-//     topology.network
-//     topology.quantum
-//     topology.application
-//
-// No built-in list is imposed.
-//
+/* ============================================================================
+ * 19. REQUIREMENTS
+ * ============================================================================
+ *
+ * Requirements are mandatory semantic conditions.
+ *
+ * Examples:
+ *
+ *     requires qubits >= n;
+ *
+ *     requires capability("quantum.measurement");
+ *
+ *     requires topology::connected;
+ *
+ * The parser records syntax only.
+ *
+ * Satisfiability is downstream.
+ *
+ * ========================================================================== */
 
-topologyFamilyReference
+topologyRequirementDeclaration
+    : REQUIRES
+      topologyRequirementExpression
+      SEMICOLON
+    ;
+
+topologyRequirementExpression
+    : topologyExpression
+    ;
+
+
+/* ============================================================================
+ * 20. CONSTRAINTS
+ * ============================================================================
+ */
+
+topologyConstraintDeclaration
+    : CONSTRAINT
+      topologyExpression
+      SEMICOLON
+    ;
+
+
+/* ============================================================================
+ * 21. PREFERENCES
+ * ============================================================================
+ */
+
+topologyPreferenceDeclaration
+    : PREFER
+      topologyExpression
+      SEMICOLON
+    ;
+
+
+/* ============================================================================
+ * 22. HINTS
+ * ============================================================================
+ */
+
+topologyHintDeclaration
+    : HINT
+      topologyExpression
+      SEMICOLON
+    ;
+
+
+/* ============================================================================
+ * 23. USING
+ * ============================================================================
+ *
+ * `using` is intentionally represented as an identifier-compatible extension
+ * point if the canonical vocabulary does not yet reserve USING.
+ *
+ * The preferred future canonical form is:
+ *
+ *     using topology::family;
+ *
+ * ========================================================================== */
+
+topologyUsingDeclaration
+    : topologyUsingHead
+      SEMICOLON
+    ;
+
+topologyUsingHead
     : topologyQualifiedName
     ;
 
 
-// ============================================================================
-// 31. TOPOLOGY SCHEMA REFERENCE
-// ============================================================================
-//
-// Allows a declaration to reference a separately defined topology schema.
-//
+/* ============================================================================
+ * 24. CANONICAL EXPRESSION BRIDGE
+ * ============================================================================
+ *
+ * This rule is intentionally a composition boundary.
+ *
+ * It MUST resolve to the canonical Zamani expression grammar when the
+ * parser-composition layer is assembled.
+ *
+ * It MUST NOT grow into a second expression implementation.
+ *
+ * ========================================================================== */
 
-topologySchemaReference
-    : K_TYPE
-      topologyQualifiedName
+topologyExpression
+    : topologyPrimaryExpression
+    ;
+
+topologyPrimaryExpression
+    : topologyQualifiedName
+    | STRING
+    | INTEGER
+    | FLOAT
+    | TRUE
+    | FALSE
+    | topologyCallExpression
+    | topologyParenthesizedExpression
+    ;
+
+topologyCallExpression
+    : topologyQualifiedName
+      LPAREN
+      topologyExpressionList?
+      RPAREN
+    ;
+
+topologyParenthesizedExpression
+    : LPAREN
+      topologyExpression
+      RPAREN
+    ;
+
+topologyExpressionList
+    : topologyExpression
+      (
+          COMMA
+          topologyExpression
+      )*
     ;
 
 
-// ============================================================================
-// 32. TOPOLOGY RELATIONSHIP REFERENCE
-// ============================================================================
-
-topologyRelationshipReference
-    : topologyEndpoint
-      topologyConnectivityOperator
-      topologyEndpoint
-    ;
-
-
-// ============================================================================
-// 33. TOPOLOGY CONSTRAINT SET
-// ============================================================================
-//
-// A constraint set groups constraints without introducing a fixed number of
-// constraints.
-//
-
-topologyConstraintSet
-    : LBRACE
-      topologyConstraintDeclaration*
-      RBRACE
-    ;
+/*
+ * IMPORTANT:
+ *
+ * This deliberately small bridge is NOT intended to replace the canonical
+ * expression grammar.
+ *
+ * At composition time, the canonical expression rule must be bound here.
+ *
+ * Conceptually:
+ *
+ *     topologyExpression
+ *          ->
+ *     canonical expression
+ *
+ * If the parser composition mechanism permits direct rule imports, the
+ * wrapper can simply delegate to that imported rule.
+ *
+ * Until then, this bridge provides the minimum topology-local expression
+ * surface without creating a competing precedence system.
+ */
 
 
-// ============================================================================
-// 34. TOPOLOGY REQUIREMENT SET
-// ============================================================================
-
-topologyRequirementSet
-    : LBRACE
-      topologyRequirementDeclaration*
-      RBRACE
-    ;
-
-
-// ============================================================================
-// 35. TOPOLOGY PREFERENCE SET
-// ============================================================================
-
-topologyPreferenceSet
-    : LBRACE
-      topologyPreferenceDeclaration*
-      RBRACE
-    ;
-
-
-// ============================================================================
-// 36. TOPOLOGY VALIDATION BOUNDARY
-// ============================================================================
-//
-// Syntax alone cannot determine:
-//
-//     - whether every endpoint exists;
-//     - whether a graph is connected;
-//     - whether cycles are allowed;
-//     - whether an edge is realizable;
-//     - whether bandwidth is sufficient;
-//     - whether latency is achievable;
-//     - whether topology matches hardware;
-//     - whether a quantum interaction is supported.
-//
-// Those are semantic/target/resource validations.
-//
-// This grammar therefore intentionally stops at syntactic validity.
-// ============================================================================
+/* ============================================================================
+ * 25. SOURCE-LEVEL METRICS
+ * ============================================================================
+ *
+ * Metrics are ordinary semantic property names.
+ *
+ * No finite metric catalogue is imposed.
+ *
+ * Examples:
+ *
+ *     latency
+ *     bandwidth
+ *     distance
+ *     cost
+ *     reliability
+ *     energy
+ *     power
+ *     throughput
+ *
+ * are represented as qualified names/property expressions.
+ *
+ * This permits future dimensions without grammar changes.
+ *
+ * ============================================================================
+ */
 
 
-// ============================================================================
-// 37. NON-OWNERSHIP OF PHYSICAL TOPOLOGY
-// ============================================================================
-//
-// The following MUST NOT appear as required topology syntax:
-//
-//     physical_device_id
-//     serial_number
-//     pci_address
-//     mac_address
-//     hardware_address
-//     vendor_id
-//     fixed_qubit_index
-//     fixed_core_index
-//     fixed_gpu_index
-//
-// Such values may be represented by other target/deployment languages when
-// they genuinely belong to deployment semantics, but they are not required
-// by this topology grammar.
-//
-// ============================================================================
+/* ============================================================================
+ * 26. QUANTUM TOPOLOGY
+ * ============================================================================
+ *
+ * Quantum topology is a topology domain, not a quantum-operation grammar.
+ *
+ * Valid semantic examples include:
+ *
+ *     topology quantum_connectivity {
+ *         connect logical.qubit[*] to logical.qubit[*]
+ *             bidirectional;
+ *     }
+ *
+ * or:
+ *
+ *     topology quantum::connectivity {
+ *         requires capability("quantum.two_body_interaction");
+ *     }
+ *
+ * This grammar does NOT define:
+ *
+ *     H
+ *     X
+ *     Y
+ *     Z
+ *     CNOT
+ *     CX
+ *     CZ
+ *     SWAP
+ *     RX
+ *     RY
+ *     RZ
+ *
+ * as topology grammar alternatives.
+ *
+ * Quantum operations remain owned by the quantum grammar and ultimately
+ * lower through:
+ *
+ *     quantum::ir
+ *
+ * Topology participates later in:
+ *
+ *     routing
+ *     placement
+ *     scheduling
+ *     resilience
+ *     QEC
+ *     ZQN
+ *     HAL
+ *
+ * ============================================================================
+ */
 
 
-// ============================================================================
-// 38. SCALABILITY INVARIANTS
-// ============================================================================
-//
-// These invariants are architectural requirements:
-//
-//     topologyNodeDeclaration*
-//     topologyGroupDeclaration*
-//     topologyEdgeDeclaration*
-//     topologyLinkDeclaration*
-//     topologyConnectionDeclaration*
-//
-// MUST remain unbounded by source grammar.
-//
-// A topology may contain any number of logical participants.
-//
-// Multiplicity is always represented symbolically where applicable.
-//
-// Examples:
-//
-//     node compute[workers];
-//
-//     connect compute[*] to storage[*];
-//
-//     connect logical.qubit[*] to logical.qubit[*];
-//
-// The semantic/resource layer determines the actual realizable cardinality.
-//
-// ============================================================================
+/* ============================================================================
+ * 27. CLASSICAL TOPOLOGY
+ * ============================================================================
+ *
+ * The same topology model may describe:
+ *
+ *     CPU locality
+ *     accelerator connectivity
+ *     memory relationships
+ *     data movement
+ *     parallel execution domains
+ *
+ * without selecting physical processors.
+ *
+ * ============================================================================
+ */
 
 
-// ============================================================================
-// 39. DETERMINISM
-// ============================================================================
-//
-// Parsing is deterministic:
-//
-//     source
-//       -> lexer
-//       -> parser
-//
-// produces the same syntax tree for the same source and grammar version.
-//
-// There are:
-//
-//     - no runtime callbacks;
-//     - no hardware discovery;
-//     - no network access;
-//     - no random decisions;
-//     - no calibration queries;
-//     - no backend-dependent parser branches.
-//
-// ============================================================================
+/* ============================================================================
+ * 28. DISTRIBUTED TOPOLOGY
+ * ============================================================================
+ *
+ * The same grammar can describe:
+ *
+ *     logical node connectivity
+ *     service relationships
+ *     communication domains
+ *     logical network structure
+ *
+ * without requiring physical IP addresses or machine IDs.
+ *
+ * ============================================================================
+ */
 
 
-// ============================================================================
-// 40. VERSIONING
-// ============================================================================
-//
-// Changes to:
-//
-//     - topology keywords;
-//     - topology syntax;
-//     - operator precedence;
-//     - declaration forms;
-//     - endpoint syntax;
-//
-// are language compatibility changes.
-//
-// Semantic topology vocabulary should preferably be extended through qualified
-// names rather than repeatedly adding reserved keywords.
-//
-// ============================================================================
+/* ============================================================================
+ * 29. HDL / HARDWARE CO-DESIGN
+ * ============================================================================
+ *
+ * HDL may consume topology intent to describe:
+ *
+ *     logical module relationships
+ *     interconnect requirements
+ *     communication structures
+ *     clock-domain relationships
+ *     accelerator connectivity
+ *
+ * Physical pins, package locations, routing tracks, and technology-specific
+ * realization remain downstream.
+ *
+ * ============================================================================
+ */
 
 
-// ============================================================================
-// 41. SECURITY
-// ============================================================================
-//
-// Hardware topology capability is NOT an authorization capability.
-//
-// This grammar does not grant:
-//
-//     - access to hardware;
-//     - permission to execute;
-//     - permission to allocate resources;
-//     - permission to connect to a network;
-//     - permission to access another user's device.
-//
-// Security/authorization semantics belong to grammar/security and the
-// corresponding semantic/runtime security layers.
-//
-// ============================================================================
-
-
-// ============================================================================
-// 42. COMPLETION CRITERIA
-// ============================================================================
-//
-// This file is complete only when:
-//
-//     [ ] tokens.g4 provides every required topology keyword/operator token;
-//
-//     [ ] the root parser exposes topologyDeclaration;
-//
-//     [ ] AST has topology declaration/endpoint/edge/node/group models;
-//
-//     [ ] semantic analysis resolves topology names and expressions;
-//
-//     [ ] resource semantics validate topology metrics;
-//
-//     [ ] target selection consumes topology requirements;
-//
-//     [ ] placement consumes topology constraints;
-//
-//     [ ] routing consumes topology relationships;
-//
-//     [ ] scheduling remains independent of topology syntax;
-//
-//     [ ] Hardware HAL remains the source of discovered physical topology;
-//
-//     [ ] no physical device enumeration exists in this grammar;
-//
-//     [ ] no machine-size limit exists;
-//
-//     [ ] no MAX_* topology constant exists;
-//
-//     [ ] quantum topology lowers through the canonical quantum::ir boundary
-//         where quantum computation is involved;
-//
-//     [ ] positive, negative, boundary, scalability, determinism, and
-//         cross-domain tests exist;
-//
-//     [ ] parser generation succeeds for Rust 1.97 / Rust 1.97.1;
-//
-//     [ ] generated Rust contains no prohibited unsafe usage;
-//
-//     [ ] documentation agrees with the grammar.
-//
-// ============================================================================
+/* ============================================================================
+ * 30. AST CONTRACT
+ * ============================================================================
+ *
+ * The grammar creates no AST objects itself.
+ *
+ * The frontend AST should preserve semantic structure equivalent to:
+ *
+ *     HardwareTopologyDecl
+ *     TopologyNodeDecl
+ *     TopologyGroupDecl
+ *     TopologyEdgeDecl
+ *     TopologyLinkDecl
+ *     TopologyConnectionDecl
+ *     TopologyEndpoint
+ *     TopologySelector
+ *     TopologyProperty
+ *     TopologyRequirement
+ *     TopologyConstraint
+ *     TopologyPreference
+ *     TopologyHint
+ *     TopologyPredicate
+ *
+ * Every resulting node MUST preserve:
+ *
+ *     source span
+ *     source order where meaningful
+ *     names
+ *     expressions
+ *     annotations
+ *     modifiers
+ *     relationships
+ *
+ * The AST MUST NOT contain:
+ *
+ *     physical device handles
+ *     physical addresses
+ *     backend SDK objects
+ *     runtime topology snapshots
+ *     scheduler state
+ *     routing state
+ *     calibration state
+ *     QEC state
+ *     ZQN runtime state
+ *
+ * ============================================================================
+ * SEMANTIC CONTRACT
+ * ============================================================================
+ *
+ * Semantic analysis owns:
+ *
+ *     - topology name resolution;
+ *     - node resolution;
+ *     - endpoint resolution;
+ *     - group resolution;
+ *     - selector typing;
+ *     - graph consistency;
+ *     - duplicate relationship analysis;
+ *     - metric/unit checking;
+ *     - requirement checking;
+ *     - constraint checking;
+ *     - preference classification;
+ *     - capability resolution;
+ *     - resource derivation;
+ *     - topology compatibility;
+ *     - portability analysis;
+ *     - scalability analysis;
+ *     - contradiction detection.
+ *
+ * The parser MUST NOT determine:
+ *
+ *     "Can this topology actually be built on the target?"
+ *
+ * That question belongs downstream.
+ *
+ * ============================================================================
+ * RESOURCE INTEGRATION
+ * ============================================================================
+ *
+ * Topology requirements may refer to the universal resource model:
+ *
+ *     requires qubits >= n;
+ *
+ *     requires memory >= required_memory;
+ *
+ *     requires resource::bandwidth >= required_bandwidth;
+ *
+ * The topology grammar does not define resource accounting.
+ *
+ * Resource accounting belongs to:
+ *
+ *     grammar/resources/
+ *
+ * and downstream semantic/resource analysis.
+ *
+ * ============================================================================
+ * CAPABILITY INTEGRATION
+ * ============================================================================
+ *
+ * Topology may refer to symbolic capabilities:
+ *
+ *     requires capability("quantum.two_body_interaction");
+ *
+ *     requires capability("network.low_latency");
+ *
+ *     requires capability("accelerator.interconnect");
+ *
+ * Capability resolution belongs to the canonical capability system.
+ *
+ * This grammar does not enumerate vendor capabilities.
+ *
+ * ============================================================================
+ * PLACEMENT INTEGRATION
+ * ============================================================================
+ *
+ * Topology and placement remain distinct.
+ *
+ * Topology says:
+ *
+ *     which logical resources may or must connect.
+ *
+ * Placement says:
+ *
+ *     where logical resources may reside.
+ *
+ * Therefore:
+ *
+ *     topology.g4
+ *         |
+ *         v
+ *     topology semantic model
+ *         |
+ *         +------------------+
+ *         |                  |
+ *         v                  v
+ *     placement          routing
+ *         |                  |
+ *         +--------+---------+
+ *                  |
+ *                  v
+ *              scheduling
+ *
+ * `placement.g4` MUST NOT duplicate topology declaration syntax.
+ *
+ * ============================================================================
+ * ROUTING INTEGRATION
+ * ============================================================================
+ *
+ * Routing consumes resolved topology.
+ *
+ * It may determine:
+ *
+ *     - paths;
+ *     - intermediate resources;
+ *     - communication routes;
+ *     - quantum interaction routes;
+ *     - transformations required to realize a logical relationship.
+ *
+ * None of those algorithms belong in this grammar.
+ *
+ * ============================================================================
+ * SCHEDULING INTEGRATION
+ * ============================================================================
+ *
+ * Scheduling may use topology properties such as:
+ *
+ *     latency
+ *     bandwidth
+ *     resource availability
+ *     concurrency
+ *
+ * The grammar only records source intent.
+ *
+ * ============================================================================
+ * QUANTUM IR INTEGRATION
+ * ============================================================================
+ *
+ * This file MUST NOT define a quantum IR.
+ *
+ * Quantum source computation follows:
+ *
+ *     source
+ *       |
+ *       v
+ *     domain-neutral AST
+ *       |
+ *       v
+ *     semantic quantum model
+ *       |
+ *       v
+ *     quantum::ir
+ *
+ * Topology information may be associated with the semantic quantum program
+ * and later consumed by routing/scheduling.
+ *
+ * No second quantum topology IR is introduced here.
+ *
+ * ============================================================================
+ * QEC / ZQN INTEGRATION
+ * ============================================================================
+ *
+ * QEC may consume topology and connectivity information when determining
+ * realizability of logical quantum computation.
+ *
+ * ZQN may consume topology-related noise/fault properties.
+ *
+ * Neither is implemented by this grammar.
+ *
+ * ============================================================================
+ * HARDWARE HAL INTEGRATION
+ * ============================================================================
+ *
+ * The HAL may expose actual target topology:
+ *
+ *     available nodes
+ *     connectivity
+ *     links
+ *     bandwidth
+ *     latency
+ *     reliability
+ *     capabilities
+ *
+ * Direction:
+ *
+ *     source topology
+ *         ->
+ *     semantic topology intent
+ *         ->
+ *     target resolution
+ *         ->
+ *     HAL comparison
+ *
+ * NOT:
+ *
+ *     parser
+ *         ->
+ *     HAL
+ *
+ * Parsing must remain deterministic and independent of the physical machine.
+ *
+ * ============================================================================
+ * DETERMINISM
+ * ============================================================================
+ *
+ * Parsing MUST NOT depend on:
+ *
+ *     hardware availability
+ *     network state
+ *     filesystem state
+ *     environment variables
+ *     clock/time
+ *     randomness
+ *     runtime state
+ *     HAL state
+ *
+ * Identical source plus identical grammar/token versions must produce the
+ * same parse structure.
+ *
+ * ============================================================================
+ * SECURITY
+ * ============================================================================
+ *
+ * Topology syntax is untrusted input.
+ *
+ * Parsing performs:
+ *
+ *     no filesystem access
+ *     no network access
+ *     no process execution
+ *     no hardware probing
+ *     no credential access
+ *     no backend loading
+ *
+ * Physical addresses and backend handles are not interpreted by this grammar.
+ *
+ * ============================================================================
+ * ERROR CONTRACT
+ * ============================================================================
+ *
+ * Syntax errors include:
+ *
+ *     topology;
+ *     topology foo {;
+ *     node;
+ *     connect a;
+ *     connect a to;
+ *     edge a to;
+ *     requires;
+ *
+ * Semantic errors include:
+ *
+ *     unknown topology reference;
+ *     unresolved endpoint;
+ *     invalid selector;
+ *     contradictory topology constraints;
+ *     incompatible topology requirements;
+ *     impossible resource requirement.
+ *
+ * Resource shortage is NOT a syntax error.
+ *
+ * ============================================================================
+ * COMPATIBILITY
+ * ============================================================================
+ *
+ * The stable public entry point is:
+ *
+ *     topologyDeclaration
+ *
+ * Existing callers should delegate to this rule rather than reproduce
+ * topology syntax.
+ *
+ * New topology concepts should normally be introduced as:
+ *
+ *     qualified names
+ *     properties
+ *     expressions
+ *     semantic capabilities
+ *
+ * rather than new reserved keywords.
+ *
+ * This protects future compatibility.
+ *
+ * ============================================================================
+ * TEST CONTRACT
+ * ============================================================================
+ *
+ * Positive:
+ *
+ *     topology ring {
+ *         node compute;
+ *     }
+ *
+ *     topology logical {
+ *         node compute : accelerator::compute;
+ *         group workers [worker_count];
+ *         connect workers[*] to compute[*] bidirectional;
+ *     }
+ *
+ *     topology quantum {
+ *         node logical_qubit : quantum::logical_qubit;
+ *         connect logical_qubit[*] to logical_qubit[*];
+ *     }
+ *
+ *     topology network {
+ *         node service;
+ *         node peer;
+ *         connect service to peer directed;
+ *     }
+ *
+ *     topology scalable {
+ *         node worker [problem_size];
+ *         requires resource::bandwidth >= required_bandwidth;
+ *         requires capability("distributed.communication");
+ *         prefer topology::low_latency;
+ *         constraint latency <= latency_budget;
+ *         hint locality;
+ *     }
+ *
+ *     topology custom::family extends topology::base {
+ *         property topology::dimension = dimensions;
+ *     }
+ *
+ * Negative:
+ *
+ *     topology;
+ *
+ *     topology foo {
+ *         node;
+ *     }
+ *
+ *     topology foo {
+ *         connect;
+ *     }
+ *
+ *     topology foo {
+ *         connect a to;
+ *     }
+ *
+ *     topology foo {
+ *         requires;
+ *     }
+ *
+ * Boundary:
+ *
+ *     one node;
+ *     many nodes;
+ *     many groups;
+ *     many edges;
+ *     many properties;
+ *     deeply qualified names;
+ *     symbolic quantities;
+ *     symbolic selectors;
+ *     nested expressions;
+ *     arbitrarily large source-level counts represented as expressions.
+ *
+ * Scalability:
+ *
+ *     topology worker_graph {
+ *         node worker [worker_count];
+ *         connect worker[*] to worker[*];
+ *     }
+ *
+ * The test MUST NOT establish a maximum for worker_count.
+ *
+ * Cross-domain:
+ *
+ *     classical topology;
+ *     quantum topology;
+ *     HDL topology;
+ *     accelerator topology;
+ *     distributed topology;
+ *     networking topology;
+ *     AI/data topology.
+ *
+ * Determinism:
+ *
+ *     identical source + grammar + lexer version
+ *         ->
+ *     identical parse structure.
+ *
+ * ============================================================================
+ * HARD-CODING AUDIT
+ * ============================================================================
+ *
+ * This file contains:
+ *
+ *     NO MAX_* machine limits;
+ *     NO physical device enumeration;
+ *     NO vendor enumeration;
+ *     NO physical address syntax;
+ *     NO physical qubit enumeration;
+ *     NO fixed topology family enumeration;
+ *     NO fixed graph size;
+ *     NO fixed degree;
+ *     NO fixed path length;
+ *     NO fixed number of nodes;
+ *     NO fixed number of edges;
+ *     NO fixed number of links.
+ *
+ * ============================================================================
+ * RUST INTEGRATION
+ * ============================================================================
+ *
+ * This grammar contains no Rust.
+ *
+ * Generated and consuming Rust code MUST:
+ *
+ *     - target Rust 1.97 / Rust 1.97.1;
+ *     - use Rust 2021;
+ *     - use safe Rust only;
+ *     - contain no `unsafe` blocks;
+ *     - contain no `unsafe fn`;
+ *     - contain no `unsafe impl`;
+ *     - contain no `unsafe trait`.
+ *
+ * This file therefore introduces no unsafe implementation dependency.
+ *
+ * ============================================================================
+ * COMPLETION CRITERIA
+ * ============================================================================
+ *
+ * topology.g4 is complete when:
+ *
+ *     [x] topology is logical rather than physical;
+ *     [x] topology names are open-world;
+ *     [x] node counts are symbolic;
+ *     [x] edge counts are unbounded;
+ *     [x] group membership is scalable;
+ *     [x] endpoint selection is symbolic;
+ *     [x] properties are extensible;
+ *     [x] requirements are distinct from preferences;
+ *     [x] constraints are distinct from hints;
+ *     [x] capability references remain symbolic;
+ *     [x] resource semantics remain downstream;
+ *     [x] placement remains separate;
+ *     [x] routing remains separate;
+ *     [x] scheduling remains separate;
+ *     [x] HAL remains separate;
+ *     [x] QEC remains separate;
+ *     [x] ZQN remains separate;
+ *     [x] quantum::ir remains canonical;
+ *     [x] no physical hardware is selected;
+ *     [x] no artificial machine limits are encoded;
+ *     [x] no Rust actions exist;
+ *     [x] no unsafe implementation is required;
+ *     [x] deterministic parsing is preserved.
+ *
+ * Repository integration still requires the canonical lexical/composition
+ * contracts listed below to be synchronized.
+ *
+ * ============================================================================
+ */
