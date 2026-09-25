@@ -1,411 +1,270 @@
-Worked for 32s
+Zamani Hardware Grammar
 
-I inspected the current main branch and the actual grammar/hardware/ contents, including hardware.g4, resources.g4, capabilities.g4, constraints.g4, targets.g4, devices.g4, topology.g4, placement.g4, accelerators.g4, cpu.g4, gpu.g4, fpga.g4, asic.g4, qpu.g4, quantum-device.g4, memory.g4, interconnect.g4, timing.g4, power.g4, thermal.g4, reliability.g4, calibration.g4, negotiation.g4, deployment.g4, and the repository-level DESIGN.md, Zamani.g4, and lexer architecture.
-
-There is an important correction to make to the existing README: it currently describes the subsystem as essentially production-ready, while the actual repository still has integration blockers—most notably the current hardware.g4 using ZamaniTokens/K_* vocabulary rather than cleanly aligning with the canonical lexer architecture, and the presence of overlapping/legacy ownership such as hardware-constraints.g4. The README below therefore defines production architecture and completion criteria, without falsely claiming that every current implementation file already satisfies them.
-
-Here is the complete replacement for grammar/hardware/README.md:
-
-# Zamani Hardware Grammar
-
-**Path:** `grammar/hardware/`  
-**Primary composition grammar:** `grammar/hardware/hardware.g4`  
-**Language:** Zamani Universal Computing Language  
-**Grammar technology:** ANTLR  
-**Compiler/frontend baseline:** Rust 1.97 / Rust 1.97.1  
-**Rust edition:** 2021  
-**Rust safety policy:** production compiler implementation uses safe Rust; no `unsafe`  
-**Primary portability objective:** `Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever` (POCO-REAF)  
-**Scalability objective:** from the smallest supported computation to arbitrarily large computations, subject only to program semantics, representational limits, declared requirements, compiler/runtime resources, and target availability  
-**Status:** Normative hardware-subsystem architecture and completion contract
+Path: "grammar/hardware/"
+Language: Zamani
+Repository: "Benwellonedge28/Zamani"
+Canonical language root: "grammar/Zamani.g4"
+Hardware composition root: "grammar/hardware/hardware.g4"
+Grammar technology: ANTLR4
+Compiler implementation: Rust 2021
+Rust baseline: Rust 1.97 / Rust 1.97.1
+Safety requirement: Safe Rust only; production implementation MUST NOT use "unsafe"
+Primary portability objective: "Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever" (POCO-REAF)
+Scalability objective: From the smallest meaningful computation to arbitrarily large computations, limited only by program semantics, representational constraints, declared requirements/policies, compiler/runtime resources, and target availability
+Status: Normative hardware-subsystem architecture and implementation-completion contract
 
 ---
 
-# 1. Purpose
+1. Purpose
 
-`grammar/hardware/` defines the Zamani source-language syntax required to describe **hardware intent**.
+"grammar/hardware/" defines the Zamani source-language boundary for expressing hardware intent.
 
-It provides the language boundary for expressing:
+The subsystem provides syntax for describing hardware-related semantics without making the Zamani language dependent on a particular physical machine.
+
+It covers the language-facing representation of:
 
 - hardware declarations;
-- abstract hardware composition;
-- hardware interfaces;
-- ports and connections;
-- resources;
-- capabilities;
-- requirements;
-- constraints;
-- preferences;
-- hints;
-- targets;
-- topology;
-- placement intent;
-- mappings;
-- device classes;
+- abstract hardware;
+- hardware resources;
+- hardware capabilities;
+- hardware requirements;
+- hardware constraints;
+- hardware preferences;
+- hardware hints;
+- target classes;
+- logical devices;
 - accelerators;
-- CPU-class targets;
-- GPU-class targets;
-- FPGA-class targets;
-- ASIC-class targets;
-- QPU-class targets;
+- CPU-class computation;
+- GPU-class computation;
+- FPGA-class computation;
+- ASIC-class computation;
+- QPU-class computation;
 - quantum-device capabilities;
-- memory contracts;
-- compute contracts;
-- interconnect contracts;
-- timing intent;
-- power intent;
-- thermal constraints;
-- reliability requirements;
-- calibration metadata;
+- memory;
+- interconnects;
+- topology;
+- placement;
+- timing;
+- power;
+- thermal properties;
+- reliability;
+- resilience;
+- calibration intent;
+- negotiation;
 - deployment intent;
-- hardware negotiation;
-- future hardware extension points.
-
-The subsystem exists to allow a Zamani program to express **what hardware relationship a computation requires** without permanently binding the program to a particular physical machine.
+- heterogeneous hardware;
+- hardware/software co-design;
+- future hardware classes.
 
 The fundamental rule is:
 
-> Hardware syntax describes portable semantic intent.  
-> Hardware realization is performed downstream.
+«The hardware grammar describes portable hardware intent. It does not perform hardware realization.»
 
-This subsystem is therefore one of the foundations required for:
+The subsystem therefore sits between the general Zamani language and downstream semantic/compiler infrastructure.
 
-> **Program Once → Compile Once → Run Everywhere → Anywhere → Forever**
+The intended model is:
 
-and the broader Zamani objective:
-
-> **From Atom to Everywhere.**
+Zamani Source
+     |
+     v
+Canonical Lexer
+     |
+     v
+Canonical Parser
+     |
+     v
+Frontend AST
+     |
+     v
+Semantic Analysis
+     |
+     v
+Hardware Intent
+     |
+     v
+Resource / Capability / Constraint Analysis
+     |
+     v
+Canonical Semantic Model / IR
+     |
+     +-------------------+-------------------+
+     |                   |                   |
+     v                   v                   v
+ Classical          quantum::ir       HDL/Hardware
+     |                   |                   |
+     +-------------------+-------------------+
+                         |
+                         v
+                Optimization / Lowering
+                         |
+              +----------+----------+
+              |          |          |
+              v          v          v
+           Routing   Scheduling  Resilience
+                                    |
+                                    v
+                                   ZQN
+                                    |
+                                    v
+                                   HAL
+                                    |
+                                    v
+                           Target Realization
 
 ---
 
-# 2. Production Status Clarification
+2. Production Status
 
-This README is the **normative architecture and completion contract** for `grammar/hardware/`.
+This document defines the production target for "grammar/hardware/".
 
-It does **not** claim that every existing `.g4` file in this directory is already production-complete.
+It must not falsely imply that every existing hardware grammar implementation is already complete.
 
-The current repository contains substantial hardware grammar work, but production readiness requires repository-wide convergence.
+The current repository contains substantial hardware work, including:
 
-In particular, the current implementation contains integration issues that must be resolved before the subsystem can truthfully be considered complete.
+hardware.g4
+resources.g4
+capabilities.g4
+constraints.g4
+targets.g4
+devices.g4
+topology.g4
+placement.g4
+accelerators.g4
+cpu.g4
+gpu.g4
+fpga.g4
+asic.g4
+qpu.g4
+quantum-device.g4
+memory.g4
+interconnect.g4
+timing.g4
+power.g4
+thermal.g4
+reliability.g4
+calibration.g4
+negotiation.g4
+deployment.g4
 
-Known categories include:
+There are also overlapping or historical concepts such as:
 
-- grammar/token-vocabulary convergence;
-- duplicate ownership;
-- legacy grammar names;
-- composition-root cleanup;
-- specialized grammar import normalization;
-- expression/type reuse;
-- AST traceability;
-- semantic-model traceability;
-- IR traceability;
-- repository-wide conformance;
-- negative testing;
-- scalability testing;
-- hard-coding audits;
-- generated-parser verification.
+hardware-constraints.g4
+
+The repository currently contains integration inconsistencies that this README explicitly addresses.
+
+In particular, production completion requires convergence of:
+
+- lexer vocabulary;
+- parser vocabulary;
+- grammar imports;
+- grammar ownership;
+- AST contracts;
+- semantic contracts;
+- IR contracts;
+- hardware/resource/capability boundaries;
+- quantum integration;
+- HDL integration;
+- compiler integration;
+- HAL integration;
+- test coverage;
+- compatibility;
+- scalability;
+- hard-coding prevention.
 
 Therefore:
 
-> **This document defines what "done" means.**
+«A grammar file is not production-ready merely because ANTLR accepts it.»
 
-It must not be used to mark an individual grammar implementation complete merely because ANTLR accepts its syntax.
-
----
-
-# 3. Architectural Position
-
-The hardware grammar is located at the syntax layer.
-
-The complete architecture is:
-
-```text
-                    Zamani Source
-                         |
-                         v
-                Canonical Zamani Lexer
-                         |
-                         v
-                     Token Stream
-                         |
-                         v
-                 Canonical Zamani Parser
-                         |
-                         v
-                    Frontend AST
-                         |
-             +-----------+-----------+
-             |           |           |
-             v           v           v
-          Names       Types       Expressions
-             |           |           |
-             +-----------+-----------+
-                         |
-                         v
-                 Semantic Analysis
-                         |
-          +--------------+---------------+
-          |              |               |
-          v              v               v
-       Resources     Capabilities     Requirements
-          |              |               |
-          +--------------+---------------+
-                         |
-                         v
-                 Semantic Hardware Model
-                         |
-                         v
-                  Canonical Compiler IR
-                         |
-             +-----------+------------+
-             |           |            |
-             v           v            v
-         Classical   quantum::ir    HDL/Hardware
-             |           |            |
-             +-----------+------------+
-                         |
-                         v
-                    Optimization
-                         |
-             +-----------+------------+
-             |           |            |
-             v           v            v
-          Routing    Scheduling    Resilience
-                         |
-                         v
-                        ZQN
-                         |
-                         v
-                        HAL
-                         |
-                         v
-                 Target Lowering
-                         |
-        +--------+-------+--------+--------+
-        |        |       |        |        |
-        v        v       v        v        v
-       CPU      GPU     FPGA     QPU     Future
-                                             targets
-
-The hardware grammar is upstream of:
-
-resource resolution;
-
-target discovery;
-
-physical placement;
-
-routing;
-
-scheduling;
-
-synthesis;
-
-calibration;
-
-resilience;
-
-runtime dispatch;
-
-device drivers.
-
-
-It must not absorb those responsibilities.
-
+A hardware feature is production-ready only after its complete language-to-runtime contract has been established.
 
 ---
 
-4. Core Architectural Invariant
+3. Repository Architecture Observed
 
-The following distinction is permanent:
+The repository establishes a broader architecture in which:
 
-Grammar
-    !=
-AST
-    !=
-Semantic Model
-    !=
-IR
-    !=
-Compiler Backend
-    !=
-HAL
-    !=
-Runtime
-    !=
-Physical Hardware
+grammar/DESIGN.md
 
-The grammar recognizes source syntax.
+is the normative grammar architecture.
 
-The AST preserves source structure.
+grammar/Zamani.g4
 
-Semantic analysis determines meaning and validity.
+is intended to be the canonical ANTLR composition root.
 
-IR represents compiler-level semantics.
+grammar/grammar.md
 
-Backends perform target-specific lowering.
+is the implementation-conformance reference.
 
-The HAL exposes target capabilities and runtime state.
+grammar/Zamani-Grammar.md
 
-The runtime executes the resulting program.
+is the extended/historical/design reference and must not silently introduce accepted syntax.
 
-Physical hardware is the final realization.
+The Rust implementation currently includes:
 
-No layer may silently become another layer.
+src/lexer.rs
+src/parser.rs
 
+and the repository architecture also establishes a domain-neutral frontend AST direction under:
+
+src/frontend/ast/
+
+with canonical quantum semantics eventually reaching:
+
+quantum::ir
+
+The hardware grammar must integrate with that architecture rather than creating a parallel architecture.
 
 ---
 
-5. Ownership
+4. Single-Language Rule
 
-5.1 grammar/hardware/ owns
+Zamani is one language.
 
-The subsystem owns source syntax for:
+Hardware is not a separate programming language.
 
-hardware contracts;
+Quantum is not a separate programming language.
 
-hardware declarations;
+HDL is not a separate programming language.
 
-abstract hardware composition;
+Classical computing is not a separate programming language.
 
-resources;
+AI, distributed computing, networking, and other domains are not separate languages.
 
-capabilities;
+They are domains of the same language.
 
-requirements;
+The common foundation includes:
 
-constraints;
+lexical model
+identifiers
+names
+paths
+literals
+types
+expressions
+statements
+declarations
+functions
+modules
+effects
+resources
+capabilities
+constraints
+diagnostics
+source locations
+versioning
+compatibility
 
-preferences;
+Hardware-specific grammar extends this foundation.
 
-hints;
-
-targets;
-
-topology requirements;
-
-placement intent;
-
-mappings;
-
-device contracts;
-
-accelerator contracts;
-
-compute contracts;
-
-memory contracts;
-
-interconnect contracts;
-
-timing contracts;
-
-power contracts;
-
-thermal contracts;
-
-reliability contracts;
-
-calibration intent;
-
-deployment intent;
-
-hardware extension points.
-
-
+It must not replace it.
 
 ---
 
-5.2 grammar/hardware/ does not own
+5. Authority Model
 
-It does not own:
+The hardware subsystem follows the repository-wide authority model.
 
-lexical tokenization;
-
-identifier definitions;
-
-general expression syntax;
-
-general type syntax;
-
-general statement syntax;
-
-canonical AST implementation;
-
-type checking;
-
-capability discovery;
-
-resource allocation;
-
-target discovery;
-
-physical device enumeration;
-
-physical addresses;
-
-device drivers;
-
-calibration algorithms;
-
-synthesis algorithms;
-
-place-and-route algorithms;
-
-routing algorithms;
-
-scheduling algorithms;
-
-optimization algorithms;
-
-QEC algorithms;
-
-ZQN implementation;
-
-quantum circuit semantics;
-
-quantum::ir;
-
-runtime execution;
-
-deployment orchestration.
-
-
-
----
-
-6. Single Authority Rule
-
-There must be exactly one canonical Zamani language.
-
-The repository may contain:
-
-ANTLR grammar;
-
-Rust lexer;
-
-Rust parser;
-
-AST;
-
-semantic implementation;
-
-generated documentation;
-
-compatibility specifications;
-
-IDE grammars;
-
-syntax highlighting;
-
-historical design material;
-
-
-but these must all describe the same language.
-
-They must not become competing language definitions.
-
-The authority hierarchy is:
+The intended hierarchy is:
 
 grammar/DESIGN.md
         |
@@ -416,290 +275,359 @@ grammar/specification/
 grammar/spec/
         |
         v
+feature contracts
+        |
+        v
 canonical lexer contract
         |
         v
-canonical Zamani grammar
+grammar/Zamani.g4
         |
         v
 Rust lexer/parser
         |
         v
-AST contract
+domain-neutral AST
         |
         v
-semantic contract
+semantic analysis
         |
         v
-canonical IR contracts
+canonical IR
         |
         v
-implementation conformance
+compiler/backend/runtime
+        |
+        v
+grammar/grammar.md
 
-grammar/Zamani-Grammar.md is historical/extended design material and is not an independent authority.
+"grammar/Zamani-Grammar.md" remains an extended/historical/design reference.
 
-grammar/grammar.md is an implementation-conformance reference and is not an independent authority.
+It must not silently become a second authority.
 
+Likewise, "grammar/grammar.md" documents implementation conformance and must not become a competing language specification.
 
 ---
 
-7. Relationship to grammar/DESIGN.md
+6. Relationship to "grammar/DESIGN.md"
 
-grammar/DESIGN.md is the repository-wide normative architecture.
+"grammar/DESIGN.md" is the repository-wide architectural authority.
 
 This README specializes that architecture for hardware.
 
-If this README conflicts with grammar/DESIGN.md, the repository-wide design contract takes precedence and this document must be corrected.
+Therefore:
 
-Hardware-specific decisions must remain consistent with:
+- "DESIGN.md" defines global architectural rules;
+- this README defines hardware-specific ownership;
+- individual ".g4" files define individual syntax contracts;
+- Rust implementation defines executable frontend behavior;
+- semantic analysis defines hardware meaning;
+- IR defines compiler representation;
+- backends/HAL/runtime define realization.
 
-canonical lexical architecture;
-
-canonical AST architecture;
-
-canonical semantic architecture;
-
-canonical IR architecture;
-
-quantum::ir;
-
-resource/capability separation;
-
-POCO-REAF;
-
-no artificial hardware limits.
-
-
+If this document conflicts with "grammar/DESIGN.md", "DESIGN.md" takes precedence and this document must be corrected.
 
 ---
 
-8. Relationship to grammar/Zamani.g4
+7. Relationship to "grammar/Zamani.g4"
 
-grammar/Zamani.g4 is the canonical language composition root.
+"grammar/Zamani.g4" remains the single complete-language ANTLR composition root.
 
-It must ultimately dispatch into the hardware grammar.
+"grammar/hardware/hardware.g4" is only the hardware-domain composition root.
 
-The intended relationship is:
+The relationship is:
 
-Zamani.g4
-    |
-    +--> classical
-    |
-    +--> quantum
-    |
-    +--> hybrid
-    |
-    +--> HDL
-    |
-    +--> hardware
-    |
-    +--> distributed
-    |
-    +--> AI/data
-    |
-    +--> networking
-    |
-    +--> security
-    |
-    +--> other domains
+grammar/Zamani.g4
+        |
+        +--> core
+        +--> types
+        +--> expressions
+        +--> declarations
+        +--> statements
+        +--> functions
+        +--> modules
+        +--> effects
+        +--> memory
+        +--> concurrency
+        |
+        +--> classical
+        +--> quantum
+        +--> hybrid
+        +--> HDL
+        +--> hardware
+        +--> distributed
+        +--> AI
+        +--> data
+        +--> networking
+        +--> security
+        +--> interoperability
+        +--> dialects
+        +--> macros
+        +--> metaprogramming
 
-hardware.g4 must not become a second Zamani root grammar.
-
-The hardware subsystem must expose a stable hardware entry point that the canonical root can consume.
-
+The hardware grammar MUST NOT become another complete Zamani grammar.
 
 ---
 
-9. Relationship to grammar/grammar.md
+8. Current Lexer Integration Requirement
 
-grammar/grammar.md describes what the current implementation accepts.
+The actual "src/lexer.rs" currently defines its own "TokenType" enumeration and contains tokens for general language concepts as well as Zamani-specific concepts.
 
-It should ultimately be generated or validated from:
+Examples include:
 
-Specification
-+
-Canonical grammar
-+
-Lexer implementation
-+
-Parser implementation
-+
-AST implementation
+Identifier
+String
+Integer
+Float
+Char
+Boolean
+QuantumLiteral
+NanoAnnotation
+MTSLiteral
 
-It must distinguish at minimum:
+and many keywords/operators.
 
-SPECIFIED
-LEXER_IMPLEMENTED
-PARSER_IMPLEMENTED
-AST_IMPLEMENTED
-SEMANTIC_IMPLEMENTED
-IR_IMPLEMENTED
-BACKEND_IMPLEMENTED
-TESTED
-STABLE
-EXPERIMENTAL
-DEPRECATED
+It also currently contains overlapping token concepts such as:
 
-Hardware syntax must not be considered implemented merely because it exists in hardware.g4.
+BitAnd
+Ampersand
 
+Question
 
----
+and the parser uses both "BitAnd" and "Ampersand" in precedence handling.
 
-10. Relationship to grammar/Zamani-Grammar.md
+Hardware grammar files must not introduce another hardware-specific token vocabulary.
 
-Zamani-Grammar.md may contain:
+In particular, the existing hardware grammar material that uses "ZamaniTokens" / "K_*" style vocabulary must converge with the canonical lexer architecture.
 
-future hardware concepts;
+The production rule is:
 
-experimental hardware ideas;
+«Hardware grammar consumes the canonical Zamani token vocabulary. It does not invent a second lexical namespace.»
 
-universal-computing concepts;
-
-historical grammar designs;
-
-future accelerators;
-
-future computational substrates;
-
-Sankofa concepts;
-
-MTS concepts;
-
-nano concepts;
-
-AI concepts;
-
-proposed hardware paradigms.
-
-
-It is not automatically accepted language syntax.
-
-The promotion path is:
-
-Zamani-Grammar.md
-        |
-        v
-Feature proposal
-        |
-        v
-Semantic design
-        |
-        v
-AST contract
-        |
-        v
-Canonical grammar
-        |
-        v
-Lexer implementation
-        |
-        v
-Parser implementation
-        |
-        v
-Semantic implementation
-        |
-        v
-IR contract
-        |
-        v
-Compiler/backend integration
-        |
-        v
-Tests
-        |
-        v
-Stable
-
+Any token that is genuinely required must first be established through the canonical lexical contract.
 
 ---
 
-11. POCO-REAF
+9. Canonical Names and Expressions
 
-The hardware subsystem exists to protect:
+Hardware grammars must reuse the repository's canonical:
+
+identifier
+qualified name
+path
+expression
+literal
+type
+attribute
+modifier
+
+rules.
+
+A hardware grammar must not redefine:
+
+identifier
+qualifiedName
+expression
+type
+literal
+
+merely for convenience.
+
+This is required to prevent grammar divergence.
+
+For example:
+
+hardware.g4
+resources.g4
+targets.g4
+devices.g4
+topology.g4
+placement.g4
+
+must all consume the same conceptual name/expression/type system.
+
+---
+
+10. Ownership Model
+
+"grammar/hardware/" owns source syntax for hardware intent.
+
+It owns:
+
+- hardware declarations;
+- hardware contracts;
+- hardware resource references;
+- hardware capability references;
+- hardware requirements;
+- hardware constraints;
+- hardware preferences;
+- hardware hints;
+- abstract target references;
+- logical device declarations;
+- accelerator declarations;
+- hardware topology intent;
+- placement intent;
+- memory intent;
+- interconnect intent;
+- timing intent;
+- power intent;
+- thermal intent;
+- reliability intent;
+- calibration intent;
+- deployment intent;
+- hardware negotiation;
+- hardware-domain properties;
+- hardware-domain extension points.
+
+It does not own:
+
+- lexical definitions;
+- general identifiers;
+- general expression precedence;
+- general types;
+- compiler resource allocation;
+- hardware discovery;
+- physical device enumeration;
+- device drivers;
+- physical addressing;
+- routing algorithms;
+- scheduling algorithms;
+- optimization algorithms;
+- synthesis implementation;
+- calibration algorithms;
+- QEC implementation;
+- ZQN implementation;
+- quantum IR;
+- runtime execution.
+
+---
+
+11. Hardware Intent Versus Hardware Realization
+
+This distinction is the central design rule.
+
+The source program describes:
+
+WHAT
+
+The compiler and runtime determine:
+
+WHERE
+WHEN
+HOW
+ON WHICH TARGET
+USING WHICH PHYSICAL RESOURCES
+
+For example:
+
+requires capability("gpu.compute")
+
+is hardware intent.
+
+It does not mean:
+
+use GPU #0
+
+Likewise:
+
+requires qubits >= required_qubits
+
+is a resource requirement.
+
+It does not mean:
+
+use physical qubits 0..N
+
+Likewise:
+
+requires topology(...)
+
+is topology intent.
+
+It does not perform routing.
+
+---
+
+12. POCO-REAF
+
+The hardware subsystem must protect:
 
 Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
 
-POCO-REAF means that the program describes semantic intent independently of the accidental characteristics of the machine on which it eventually executes.
+POCO-REAF means that a programmer can express stable computation semantics without rewriting the fundamental program solely because the realization changes.
 
-A Zamani program should be able to express:
+Potential realizations include:
 
-what computation is required
-what capabilities are required
-what resources are required
-what constraints must hold
-what preferences are desirable
-what relationships between resources matter
+atom-scale / nano-oriented target
+embedded processor
+single CPU
+multicore CPU
+GPU
+FPGA
+ASIC
+accelerator
+QPU
+quantum simulator
+heterogeneous system
+HPC system
+cluster
+distributed system
+cloud
+future target
 
-without requiring the source program to permanently encode:
-
-which CPU
-which GPU
-which QPU
-which FPGA
-which ASIC
-which physical qubit
-which memory bank
-which physical core
-which device ID
-which physical address
-
+The source remains target-independent wherever the computation's semantics permit.
 
 ---
 
-12. POCO-REAF Does Not Mean "Every Program Runs Everywhere"
+13. POCO-REAF Does Not Remove Resource Requirements
 
-Portability does not mean that every target has sufficient resources.
+POCO-REAF does not mean:
 
-These are distinct:
+«every program can execute on every machine regardless of resources.»
 
-source validity
+These states are different:
+
+lexically valid
     !=
-semantic validity
+syntactically valid
     !=
-target compatibility
+semantically valid
     !=
-resource feasibility
+target compatible
     !=
-runtime availability
+resource feasible
+    !=
+runtime available
 
-For example, a program may semantically require a quantity of quantum resources that a particular QPU cannot currently provide.
+For example:
 
-The compiler may then:
+requires capability("quantum.mid_circuit_measurement")
 
-select another target;
+may be valid Zamani syntax and valid program semantics even if a particular target lacks that capability.
 
-distribute the computation;
+The compiler may:
 
-use logical resources;
+- choose another target;
+- choose another execution mode;
+- transform the program if semantics permit;
+- use a simulator;
+- distribute the computation;
+- use logical resources;
+- decompose operations;
+- route operations;
+- schedule operations;
+- apply resilience mechanisms;
+- reject the target with a precise diagnostic.
 
-transform the computation;
-
-decompose operations;
-
-route operations;
-
-schedule operations;
-
-apply resilience mechanisms;
-
-use a simulator;
-
-defer execution;
-
-reject the target with a precise diagnostic.
-
-
-The grammar must not silently change the program's semantics merely because one target is smaller.
-
+It must not silently change the program's meaning.
 
 ---
 
-13. Absolute Scalability Rule
+14. Absolute Scalability Rule
 
-There are no grammar-level hardware capacity limits.
+No hardware grammar may impose universal hardware capacities.
 
-The subsystem must never impose universal limits such as:
+The following concepts MUST NOT become language-level constants:
 
 MAX_QUBITS
 MAX_CPUS
@@ -713,1204 +641,495 @@ MAX_REGISTER_WIDTH
 MAX_NETWORK_SIZE
 MAX_DEVICE_COUNT
 
-Nor may equivalent restrictions be hidden through:
+Equivalent disguised restrictions are also prohibited.
 
-bounded grammar repetitions;
+For example, do not encode:
 
-finite device enumerations;
+qubit0
+qubit1
+qubit2
+...
 
-fixed physical identifiers;
+as the only representable hardware model.
 
-fixed topology sizes;
+Do not encode:
 
-fixed resource arrays;
+gpu0
+gpu1
+gpu2
 
-fixed machine-specific alternatives;
+as the universal GPU model.
 
-fixed register counts;
+Do not encode:
 
-fixed memory capacities;
+wire [31:0]
 
-fixed accelerator counts.
+as a universal hardware width.
 
+Do not encode:
 
-The grammar may parse arbitrary finite source structures supported by the parser implementation.
+RAM = 64GB
+VRAM = 24GB
 
-Actual implementation limits are implementation/resource concerns, not language semantics.
-
+as language assumptions.
 
 ---
 
-14. Program Constants Are Not Hardware Limits
+15. Program Constants Versus Language Limits
 
-The rule does not prohibit normal program values.
+Normal program constants remain valid.
 
-This is valid:
+For example:
 
 let n = 1024;
-allocate n resources;
 
-because 1024 is program data.
+is program data.
 
-This is not acceptable as a universal language limitation:
-
-MAX_QUBITS = 1024
-
-when it means that Zamani can never represent a larger computation.
-
-Similarly:
+Likewise:
 
 Tensor<T, 1024, 1024>
 
 may be valid program semantics.
 
-But:
+What is prohibited is turning that value into a universal implementation ceiling:
 
-the grammar only supports tensors up to 1024 × 1024
+MAX_TENSOR_DIMENSION = 1024
 
-is prohibited.
+or:
 
+Zamani tensors can never exceed 1024 × 1024
+
+The rule applies to:
+
+- qubits;
+- CPUs;
+- cores;
+- threads;
+- GPUs;
+- FPGAs;
+- ASIC resources;
+- memory;
+- tensor dimensions;
+- tensor rank;
+- register widths;
+- nodes;
+- devices;
+- links;
+- timelines;
+- ports;
+- channels.
 
 ---
 
-15. Requirement / Capability / Constraint / Preference / Hint / Realization
+16. Requirement / Capability / Constraint / Preference / Hint
 
-These concepts must remain separate.
+The hardware grammar MUST keep these concepts distinct.
 
-15.1 Requirement
+16.1 Requirement
 
-A condition necessary for valid execution.
+A condition required for a valid realization.
 
 Conceptually:
 
-requires qubits >= n
+requires qubits >= required_qubits
 
+16.2 Capability
 
----
-
-15.2 Capability
-
-Something the target can provide.
+A capability provided by a target.
 
 Conceptually:
 
 requires capability("quantum.measurement")
 
+16.3 Constraint
 
----
-
-15.3 Constraint
-
-A condition that must remain satisfied.
+A condition that must hold.
 
 Conceptually:
 
-requires latency <= budget
+requires latency <= latency_budget
 
+16.4 Preference
 
----
-
-15.4 Preference
-
-A desirable implementation property that is not semantic necessity.
+A desirable realization property that is not necessarily mandatory.
 
 Conceptually:
 
 prefer accelerator("tensor.compute")
 
+16.5 Hint
 
----
-
-15.5 Hint
-
-Information supplied to optimization or realization without changing program meaning.
+Information supplied to optimization without changing program meaning.
 
 Conceptually:
 
 hint locality
 
+16.6 Realization
 
----
+A downstream decision mapping abstract resources to concrete resources.
 
-15.6 Realization
-
-A downstream implementation choice.
-
-Conceptually:
+For example:
 
 logical resource
-    ->
+      |
+      v
+target resource
+      |
+      v
 physical resource
 
-Physical realization belongs to compilation, routing, scheduling, HAL, deployment, and runtime systems.
-
-
----
-
-16. Hardware Resource Model
-
-Hardware resources are semantic quantities or relationships.
-
-Examples include:
-
-compute capacity;
-
-memory;
-
-storage;
-
-bandwidth;
-
-communication capacity;
-
-accelerator capacity;
-
-quantum resources;
-
-programmable logic resources;
-
-timing budget;
-
-power budget;
-
-thermal budget;
-
-reliability budget.
-
-
-Resource declarations must use expressions and semantic types.
-
-They must not embed physical limits.
-
-The following conceptual forms are valid:
-
-requires memory >= required_memory
-requires compute >= required_compute
-requires qubits >= required_qubits
-requires bandwidth >= required_bandwidth
-
-The actual resource value is resolved downstream.
-
+This mapping belongs downstream.
 
 ---
 
-17. Capability Model
+17. Resource Semantics
 
-Capabilities describe what a target can do.
+Hardware resources are semantic quantities, not fixed machine assumptions.
+
+Possible resource classes include:
+
+compute
+memory
+storage
+bandwidth
+latency
+throughput
+energy
+power
+thermal capacity
+reliability
+quantum resources
+programmable logic
+communication
+accelerator capacity
+
+Resource quantities must be expressible through the canonical expression system.
+
+Examples:
+
+requires resource.compute >= required_compute
+requires resource.memory >= required_memory
+requires resource.qubits >= required_qubits
+requires resource.bandwidth >= required_bandwidth
+
+The actual target value is determined during semantic/resource analysis and target realization.
+
+---
+
+18. Capability Semantics
+
+Capabilities describe what an implementation can provide.
 
 Examples:
 
 quantum.compute
 quantum.measurement
 quantum.mid_circuit_measurement
+quantum.dynamic_control
 tensor.compute
 gpu.compute
 fpga.reconfiguration
 programmable_logic
-cryptographic.compute
-high_bandwidth_memory
 distributed.communication
+high_bandwidth_memory
+cryptographic.compute
 
-Capability names should be extensible.
+Capabilities must be extensible.
 
-Vendor-specific capabilities should not require permanent core-language keywords.
+Vendor-specific capabilities must not pollute the core language with permanent keywords.
 
-Qualified capability names and extension mechanisms should be preferred.
+Qualified names are preferred:
 
+vendor.domain.capability
 
----
-
-18. Target Model
-
-Targets represent target classes or target contracts.
-
-A target is not necessarily a physical device.
-
-For example, a target can conceptually describe:
-
-CPU-class execution
-GPU-class execution
-FPGA-class execution
-ASIC-class execution
-QPU-class execution
-heterogeneous execution
-distributed execution
-embedded execution
-cloud execution
-simulator execution
-future execution model
-
-The grammar must not assume that a target name identifies one physical machine.
-
+or another canonical extension mechanism defined by the core capability model.
 
 ---
 
-19. Device Model
+19. Target Semantics
 
-A source-level device identifier is a semantic name unless a separate target/deployment contract explicitly defines it as a realization identifier.
+A target represents an abstract realization class or target contract.
 
-The core hardware grammar must not require physical enumeration.
+Examples:
+
+cpu
+gpu
+fpga
+asic
+accelerator
+quantum
+simulator
+embedded
+distributed
+cloud
+heterogeneous
+custom.domain.target
+
+A target is not automatically a physical device.
+
+The grammar must not assume:
+
+target gpu0
+
+means a particular physical GPU unless a downstream deployment contract explicitly defines that meaning.
+
+---
+
+20. Device Semantics
+
+"devices.g4" owns logical device declarations and device intent.
+
+It must not perform physical device discovery.
+
+The grammar must not depend on:
+
+- PCI addresses;
+- serial numbers;
+- IP addresses;
+- physical qubit IDs;
+- operating-system device paths;
+- driver handles;
+- machine-specific IDs.
+
+A source-level device name is semantic unless a separate deployment/realization contract gives it physical meaning.
+
+---
+
+21. Topology Semantics
+
+"topology.g4" owns abstract topology intent.
+
+It may represent:
+
+- logical nodes;
+- logical endpoints;
+- connectivity;
+- relationships;
+- direction;
+- locality;
+- distance;
+- grouping;
+- hierarchy;
+- topology properties;
+- topology requirements;
+- topology constraints;
+- topology preferences.
+
+It does not perform:
+
+- graph discovery;
+- route generation;
+- shortest-path computation;
+- physical placement;
+- scheduling.
+
+The downstream flow is:
+
+topology intent
+       |
+       v
+semantic topology model
+       |
+       v
+target topology
+       |
+       v
+routing
+
+---
+
+22. Placement Semantics
+
+"placement.g4" owns placement intent.
+
+It may express:
+
+- affinity;
+- anti-affinity;
+- co-location;
+- separation;
+- locality;
+- grouping;
+- migration intent;
+- elasticity;
+- placement constraints;
+- placement preferences;
+- placement hints.
+
+It does not perform actual placement.
+
+The flow is:
+
+placement intent
+       |
+       v
+semantic placement model
+       |
+       v
+resource/target analysis
+       |
+       v
+physical placement
+
+---
+
+23. Memory Integration
+
+"hardware/memory.g4" is a hardware-facing memory contract.
+
+The generic memory model remains owned by the memory subsystem.
+
+The relationship is:
+
+grammar/memory/
+        |
+        v
+generic memory semantics
+        |
+        v
+grammar/hardware/memory.g4
+        |
+        v
+hardware memory intent
+
+Hardware memory syntax may describe:
+
+- capacity requirements;
+- bandwidth;
+- latency;
+- address-space properties;
+- memory classes;
+- locality;
+- persistence;
+- coherence requirements;
+- capability requirements;
+- resource requirements;
+- power/energy properties.
 
 It must not assume:
 
-gpu0
-gpu1
-gpu2
-...
-
-or:
-
-qpu0
-qpu1
-...
-
-as the universal hardware model.
-
-Physical discovery belongs downstream.
-
-
----
-
-20. Topology Model
-
-Topology syntax expresses relationships and requirements.
-
-Examples include:
-
-connectivity;
-
-proximity;
-
-degree;
-
-distance;
-
-locality;
-
-communication relationships;
-
-hierarchy;
-
-affinity;
-
-partitioning.
-
-
-Topology syntax must not perform graph discovery.
-
-The topology grammar describes requirements.
-
-Routing and physical topology resolution happen later.
-
-
----
-
-21. Placement Model
-
-Placement describes intent.
-
-Examples include:
-
-affinity;
-
-locality;
-
-grouping;
-
-proximity;
-
-anti-affinity;
-
-colocation;
-
-separation;
-
-hierarchy.
-
-
-Placement syntax is an input to downstream mapping and scheduling.
-
-It is not the physical placement algorithm.
-
-
----
-
-22. Hardware / HDL Separation
-
-grammar/hardware/ and grammar/hdl/ have different responsibilities.
-
-grammar/hardware/
-    hardware contracts and realization intent
-
-grammar/hdl/
-    HDL behavioral and structural syntax
-
-Hardware syntax may state that programmable logic or a particular capability is required.
-
-HDL syntax may define:
-
-modules;
-
-signals;
-
-processes;
-
-combinational logic;
-
-sequential logic;
-
-state machines;
-
-pipelines;
-
-interfaces;
-
-memories.
-
-
-hardware.g4 must not become a duplicate HDL grammar.
-
-There must be no circular dependency:
-
-hardware.g4 <-> hdl.g4
-
-The semantic layers may later integrate.
-
-
----
-
-23. Hardware / Quantum Separation
-
-The hardware subsystem describes quantum devices and capabilities.
-
-The quantum subsystem describes quantum computation.
-
-Therefore:
-
-grammar/quantum/
-    quantum program semantics
-
-grammar/hardware/
-    quantum device contracts
-
-The architecture is:
-
-quantum source
-      |
-      v
-quantum AST
-      |
-      v
-quantum semantic model
-      |
-      v
-quantum::ir
-      |
-      v
-routing
-      |
-      v
-scheduling
-      |
-      v
-resilience/QEC/ZQN
-      |
-      v
-hardware realization
-
-hardware.g4 must never create a second quantum IR.
-
-
----
-
-24. Hardware / QEC Separation
-
-The hardware grammar may express requirements related to error correction or reliability.
-
-It must not implement QEC.
-
-Examples of semantic information that may be represented:
-
-requires capability("quantum.error_correction")
-requires reliability >= required_reliability
-requires noise <= allowed_noise
-
-The actual QEC implementation belongs downstream.
-
-QEC owns:
-
-code selection;
-
-syndrome processing;
-
-correction;
-
-logical error analysis;
-
-fault-tolerance transformation.
-
-
-
----
-
-25. Hardware / ZQN Separation
-
-ZQN is a downstream semantic/system component.
-
-The hardware grammar may expose source-level requirements or properties relevant to noise and reliability.
-
-It must not duplicate ZQN.
-
-The intended direction is:
-
-hardware syntax
-      |
-      v
-semantic hardware model
-      |
-      v
-ZQN / resilience analysis
-      |
-      v
-target realization
-
-
----
-
-26. Hardware / Routing Separation
-
-Topology and placement information are inputs to routing.
-
-The grammar must not perform routing.
-
-Routing owns:
-
-path selection;
-
-resource mapping;
-
-connectivity resolution;
-
-movement/decomposition;
-
-physical path construction.
-
-
-The grammar merely represents the source-level intent.
-
-
----
-
-27. Hardware / Scheduling Separation
-
-Timing and resource information can be consumed by the scheduler.
-
-The grammar does not schedule.
-
-Scheduling owns:
-
-ordering;
-
-temporal placement;
-
-resource reservation;
-
-synchronization;
-
-concurrency;
-
-dependency resolution;
-
-execution timing.
-
-
-The hardware grammar only preserves the relevant source-level contract.
-
-
----
-
-28. Hardware / Optimization Separation
-
-Preferences and hints may guide optimization.
-
-The grammar does not optimize.
-
-Optimization owns semantics-preserving transformations.
-
-A parser must never choose a GPU, FPGA, QPU, CPU, physical qubit, or execution schedule merely because the grammar contains a preference.
-
-
----
-
-29. Hardware / HAL Separation
-
-The HAL is responsible for target-specific capabilities and runtime state.
-
-The hardware grammar must not query the HAL.
-
-There must be no:
-
-grammar -> device discovery
-grammar -> runtime
-grammar -> driver
-grammar -> physical hardware
-
-relationship.
-
-Instead:
-
-source
-  |
-  v
-semantic requirements
-  |
-  v
-compiler
-  |
-  v
-HAL
-  |
-  v
-available target
-
-
----
-
-30. Hardware / Runtime Separation
-
-The parser must never execute hardware operations.
-
-No grammar action may:
-
-open a device;
-
-allocate memory;
-
-communicate with a GPU;
-
-access a QPU;
-
-invoke a driver;
-
-query a physical machine;
-
-perform scheduling;
-
-execute code.
-
-
-The grammar must be action-free.
-
-
----
-
-31. Existing Hardware Directory
-
-The current repository contains the following important hardware files:
-
-grammar/hardware/
-├── README.md
-├── hardware.g4
-├── devices.g4
-├── resources.g4
-├── capabilities.g4
-├── constraints.g4
-├── hardware-constraints.g4
-├── targets.g4
-├── topology.g4
-├── placement.g4
-├── accelerators.g4
-├── compute.g4
-├── memory.g4
-├── interconnect.g4
-├── timing.g4
-├── power.g4
-├── thermal.g4
-├── reliability.g4
-├── calibration.g4
-├── negotiation.g4
-├── deployment.g4
-├── cpu.g4
-├── gpu.g4
-├── fpga.g4
-├── asic.g4
-├── qpu.g4
-└── quantum-device.g4
-
-Existing files should be expanded and normalized rather than unnecessarily renamed.
-
-
----
-
-32. hardware.g4
-
-Purpose
-
-hardware.g4 is the hardware composition grammar.
-
-It is not the implementation grammar for every hardware technology.
-
-Owns
-
-hardware declaration entry;
-
-common hardware composition;
-
-common hardware attributes;
-
-common generic parameters;
-
-common hardware contracts;
-
-common hardware body;
-
-integration of specialized hardware declarations.
-
-
-Does not own
-
-It must not duplicate:
-
-resources;
-
-capabilities;
-
-constraints;
-
-targets;
-
-devices;
-
-topology;
-
-placement;
-
-accelerators;
-
-CPU;
-
-GPU;
-
-FPGA;
-
-ASIC;
-
-QPU;
-
-timing;
-
-power;
-
-thermal;
-
-reliability;
-
-calibration;
-
-deployment;
-
-interconnect;
-
-memory.
-
-
-Required correction
-
-The current hardware.g4 must be normalized to the canonical lexer vocabulary and parser architecture.
-
-It must not rely on a second token vocabulary such as a parallel ZamaniTokens architecture if the canonical repository lexer is ZamaniLexer.
-
-It must not use undefined K_* tokens merely because an older hardware grammar used them.
-
-It must reuse:
-
-canonical identifiers;
-
-canonical expressions;
-
-canonical types;
-
-canonical punctuation;
-
-canonical operators.
-
-
-The composition grammar must delegate rather than duplicate.
-
-
----
-
-33. resources.g4
-
-Owns
-
-resource declarations;
-
-resource quantities;
-
-resource relationships;
-
-resource references;
-
-resource properties.
-
-
-Does not own
-
-allocation;
-
-runtime accounting;
-
-scheduling;
-
-target discovery.
-
-
-Integration
-
-Consumes:
-
-core names
-types
-expressions
-
-Produces:
-
-resource syntax
-
-Downstream:
-
-semantic resource model
-
-
----
-
-34. capabilities.g4
-
-Owns
-
-capability declaration;
-
-capability reference;
-
-capability properties;
-
-capability relationships.
-
-
-Does not own
-
-capability discovery;
-
-device probing;
-
-runtime feature detection.
-
-
-Integration
-
-Capabilities must map to a semantic capability model.
-
-They must remain extensible.
-
-
----
-
-35. constraints.g4
-
-Owns
-
-hardware constraints;
-
-comparison relationships;
-
-constraint expressions;
-
-constraint properties.
-
-
-Does not own
-
-optimization;
-
-scheduling;
-
-target discovery.
-
-
-It represents conditions that downstream analysis must satisfy.
-
-
----
-
-36. hardware-constraints.g4
-
-This file is currently an overlapping/duplicate constraint authority.
-
-It must not remain a second permanent constraints grammar.
-
-Before deletion:
-
-1. identify all references;
-
-
-2. compare rules against constraints.g4;
-
-
-3. migrate unique functionality to the canonical owner;
-
-
-4. update imports;
-
-
-5. update tests;
-
-
-6. update documentation;
-
-
-7. verify no references remain;
-
-
-8. remove the redundant file only after conformance passes.
-
-
-
-Do not maintain two grammars defining the same concept.
-
-
----
-
-37. targets.g4
-
-Owns
-
-target declarations;
-
-target properties;
-
-target contracts;
-
-target classes;
-
-target-independent target metadata.
-
-
-Does not own
-
-physical target discovery;
-
-backend implementation;
-
-runtime allocation.
-
-
-Target syntax must describe classes of execution environments.
-
-
----
-
-38. devices.g4
-
-Owns
-
-abstract device declarations;
-
-device classes;
-
-device relationships;
-
-semantic device properties.
-
-
-Does not own
-
-physical enumeration;
-
-driver handles;
-
-operating-system device IDs;
-
-physical addresses.
-
-
-
----
-
-39. topology.g4
-
-Owns
-
-topology declarations;
-
-topology requirements;
-
-connectivity;
-
-degree;
-
-distance;
-
-locality;
-
-hierarchy.
-
-
-Does not own
-
-routing;
-
-graph optimization;
-
-physical topology discovery.
-
-
-
----
-
-40. placement.g4
-
-Owns
-
-placement intent;
-
-affinity;
-
-grouping;
-
-locality;
-
-proximity;
-
-separation;
-
-placement properties.
-
-
-Does not own
-
-physical placement;
-
-scheduling;
-
-resource allocation.
-
-
-
----
-
-41. accelerators.g4
-
-Owns
-
-accelerator contracts;
-
-accelerator classes;
-
-accelerator capabilities;
-
-accelerator resources;
-
-accelerator properties.
-
-
-Does not own
-
-CUDA;
-
-ROCm;
-
-vendor runtime APIs;
-
-physical accelerator allocation;
-
-scheduling.
-
-
-Framework/vendor implementation belongs outside the language core.
-
-
----
-
-42. compute.g4
-
-This grammar should describe generic compute capability and hardware compute intent.
-
-It must not encode fixed:
-
-core counts;
-
-execution units;
-
-vector widths;
-
-instruction widths;
-
-processor counts.
-
-
-Hardware-specific characteristics belong in semantic properties or capability models.
-
-
----
-
-43. memory.g4
-
-Owns
-
-memory contracts;
-
-memory classes;
-
-memory relationships;
-
-memory capabilities;
-
-memory properties;
-
-memory access intent.
-
-
-It must not hard-code:
-
-64 GB RAM
-24 GB VRAM
+64GB RAM
+24GB VRAM
 32-bit registers
-fixed cache sizes
-fixed bank counts
 
-Actual values belong to target discovery and semantic resource resolution.
-
+as universal limits.
 
 ---
 
-44. interconnect.g4
+24. Interconnect Integration
 
-Owns
+"interconnect.g4" owns source-level interconnect intent.
 
-abstract interconnect declarations;
+It may represent:
 
-communication capabilities;
+- logical links;
+- endpoint groups;
+- channels;
+- fabrics;
+- direction;
+- bandwidth;
+- latency;
+- distance;
+- reliability;
+- ordering;
+- flow control;
+- QoS;
+- protocol intent;
+- connectivity;
+- abstract routing domains.
 
-bandwidth requirements;
+It does not perform routing.
 
-latency requirements;
+The flow is:
 
-connectivity relationships;
-
-interconnect properties.
-
-
-Does not own
-
-physical network discovery;
-
-packet routing;
-
-physical switch configuration;
-
-driver implementation.
-
-
-
----
-
-45. timing.g4
-
-Timing is a semantic contract.
-
-It may describe:
-
-latency;
-
-duration;
-
-deadlines;
-
-periods;
-
-synchronization;
-
-temporal relationships;
-
-timing constraints.
-
-
-It must not assume a particular clock frequency.
-
-For example, the language may express:
-
-requires latency <= budget
-
-without assuming:
-
-clock = 3.2GHz
-
-unless that value is explicitly program/target semantics.
-
+interconnect intent
+       |
+       v
+semantic interconnect model
+       |
+       v
+topology analysis
+       |
+       v
+routing
+       |
+       v
+scheduling
+       |
+       v
+HAL
 
 ---
 
-46. power.g4
+25. Timing Integration
 
-Power syntax may express:
+Timing syntax describes intent.
 
-power requirements;
+It may represent:
 
-power constraints;
+- timing constraints;
+- latency;
+- throughput;
+- ordering;
+- synchronization;
+- deadlines;
+- timing relationships;
+- clock intent;
+- temporal constraints.
 
-energy budgets;
+Timing syntax must not assume a universal hardware clock frequency.
 
-energy properties;
+For example, do not establish:
 
-power preferences.
+clock = 1GHz
 
+as a language-wide assumption.
 
-It must not impose universal machine limits.
-
-
----
-
-47. thermal.g4
-
-Thermal syntax may express:
-
-thermal constraints;
-
-temperature relationships;
-
-cooling requirements;
-
-thermal budgets;
-
-thermal properties.
-
-
-It must not encode a universal physical operating range as a language limitation.
-
+Actual clocking is target realization.
 
 ---
 
-48. reliability.g4
+26. Power and Thermal Integration
 
-Reliability syntax may express:
+Power and thermal syntax describes constraints and requirements.
 
-reliability requirements;
+It may express:
 
-availability;
+power budget
+energy budget
+thermal budget
+thermal constraints
+power preferences
+energy requirements
 
-fault tolerance;
+The grammar does not perform:
 
-recovery expectations;
+- thermal simulation;
+- power estimation;
+- DVFS;
+- physical cooling;
+- chip-level thermal placement.
 
-degradation policies;
+Those belong downstream.
 
-reliability properties.
+---
 
+27. Reliability and Resilience
 
-The resilience subsystem remains responsible for runtime and compiler decisions.
+"reliability.g4" owns hardware-facing reliability intent.
 
-Required resilience vocabulary may include:
+The grammar may express:
+
+- reliability requirements;
+- availability requirements;
+- fault tolerance;
+- resilience requirements;
+- degradation policies;
+- recovery intent;
+- redundancy intent.
+
+The existing resilience vocabulary must remain semantically compatible with:
 
 Unknown
 Healthy
@@ -1930,711 +1149,750 @@ RECOVER
 ESCALATE
 REJECT
 
-These are semantic vocabulary, not runtime implementations.
+These are semantic states/outcomes.
 
-
----
-
-49. calibration.g4
-
-Calibration syntax may describe calibration requirements or metadata.
-
-It must not perform calibration.
-
-Actual calibration remains a target/runtime concern.
-
+The grammar does not implement recovery.
 
 ---
 
-50. negotiation.g4
+28. Calibration Boundary
 
-Negotiation syntax may express:
+"calibration.g4" may describe calibration-related intent or requirements.
 
-acceptable capabilities;
+It must not implement calibration.
 
-resource alternatives;
+Calibration algorithms, measurements, device characterization, and calibration data belong downstream.
 
-preferences;
+For quantum systems this is particularly important.
 
-fallback policies;
+The architecture remains:
 
-target selection criteria.
-
-
-It must not perform runtime negotiation during parsing.
-
-
----
-
-51. deployment.g4
-
-Deployment syntax may express deployment intent.
-
-It must not become a second runtime or orchestration language.
-
-Physical deployment decisions belong downstream.
-
-
----
-
-52. cpu.g4
-
-CPU syntax must remain CPU-class and architecture-independent.
-
-It must not assume:
-
-N cores
-N registers
-fixed ISA
-fixed register width
-fixed cache size
-
-A target may expose such facts later through capabilities and resources.
-
-
----
-
-53. gpu.g4
-
-GPU syntax must remain extensible across GPU architectures.
-
-It must not hard-code:
-
-GPU count;
-
-warp size;
-
-wavefront size;
-
-physical GPU IDs;
-
-vendor runtime behavior;
-
-memory capacity;
-
-architecture-specific instruction limits.
-
-
-Vendor-specific information should use extension/property mechanisms.
-
-The existing GPU grammar requires normalization into the same parser-grammar architecture as the other hardware grammars before it can become a clean composition dependency.
-
-
----
-
-54. fpga.g4
-
-FPGA syntax must express:
-
-programmable logic;
-
-FPGA capability;
-
-FPGA resources;
-
-parameters;
-
-configuration intent.
-
-
-It must not hard-code:
-
-LUT counts;
-
-DSP counts;
-
-BRAM counts;
-
-physical pins;
-
-board identities;
-
-synthesis tool behavior.
-
-
-
----
-
-55. asic.g4
-
-ASIC syntax must express:
-
-ASIC contracts;
-
-implementation requirements;
-
-technology-independent properties;
-
-physical constraints that are genuinely semantic.
-
-
-It must not own:
-
-foundry selection;
-
-transistor-level synthesis;
-
-place-and-route;
-
-timing closure;
-
-physical design implementation.
-
-
-
----
-
-56. qpu.g4
-
-QPU syntax describes quantum-processing hardware.
-
-It may express:
-
-QPU capabilities;
-
-quantum resources;
-
-measurement capability;
-
-connectivity;
-
-topology;
-
-device-level properties;
-
-error characteristics;
-
-execution capabilities.
-
-
-It must not enumerate quantum gates.
-
-Quantum computation belongs to grammar/quantum/.
-
-The canonical quantum semantic boundary remains:
-
+source
+  |
+  v
+hardware/quantum intent
+  |
+  v
+semantic analysis
+  |
+  v
 quantum::ir
-
-
----
-
-57. quantum-device.g4
-
-This grammar describes quantum-device contracts.
-
-It must remain separate from quantum program syntax.
-
-The intended division is:
-
-quantum/
-    computation
-
-hardware/quantum-device.g4
-    quantum hardware
-
-No second quantum IR may be introduced.
-
+  |
+  v
+device analysis
+  |
+  v
+calibration
 
 ---
 
-58. Generic Parameters
+29. Negotiation Boundary
 
-Hardware constructs should support semantic generic parameters where useful.
+"negotiation.g4" represents requirements and capability negotiation intent.
 
-For example, conceptually:
+It must not itself query hardware.
 
-hardware Accelerator<Capacity> {
-    requires resource.compute >= Capacity;
-}
+For example:
 
-The value of Capacity is a semantic parameter.
+requires capability("tensor.compute")
 
-It is not a parser-defined maximum.
+is source-level intent.
 
-Generic parameters allow the same source structure to scale across:
+Actual capability discovery occurs through target/HAL/runtime infrastructure.
 
-tiny systems;
-
-embedded systems;
-
-large accelerators;
-
-heterogeneous systems;
-
-clusters;
-
-future systems.
-
-
+The grammar is deterministic and must behave identically regardless of the physical machine available during parsing.
 
 ---
 
-59. Qualified Names and Extensibility
+30. Deployment Boundary
 
-The hardware grammar must support extensibility through names and properties rather than an ever-growing list of keywords.
+"deployment.g4" describes deployment intent.
+
+It may represent:
+
+- target classes;
+- environment requirements;
+- resource requirements;
+- deployment constraints;
+- placement preferences;
+- resilience policies;
+- execution modes.
+
+It must not directly perform deployment.
+
+Actual deployment belongs downstream.
+
+---
+
+31. CPU / GPU / FPGA / ASIC / Accelerator Integration
+
+The specialized files:
+
+cpu.g4
+gpu.g4
+fpga.g4
+asic.g4
+accelerators.g4
+
+must describe classes of hardware capability and intent, not hard-coded machines.
+
+They may describe:
+
+compute characteristics
+capability classes
+memory relationships
+parallelism properties
+programmability
+reconfiguration
+specialized acceleration
+performance properties
+constraints
+requirements
+
+They must not impose:
+
+exact core count
+exact GPU count
+exact register count
+exact SIMD width
+exact FPGA capacity
+exact ASIC dimensions
+
+as universal language limits.
+
+---
+
+32. Quantum Device Integration
+
+"quantum-device.g4" is hardware-domain syntax.
+
+It may describe:
+
+- quantum-device class;
+- quantum capabilities;
+- measurement;
+- reset;
+- dynamic circuits;
+- mid-circuit measurement;
+- classical feed-forward;
+- logical/physical resource relationships;
+- abstract connectivity;
+- timing;
+- quality requirements;
+- reliability;
+- resource requirements.
+
+It must not create a second quantum IR.
+
+The semantic flow is:
+
+quantum source
+      |
+      v
+frontend AST
+      |
+      v
+quantum semantic analysis
+      |
+      v
+quantum::ir
+      |
+      v
+hardware capability/resource analysis
+      |
+      v
+routing
+      |
+      v
+scheduling
+      |
+      v
+QEC / resilience / ZQN
+      |
+      v
+HAL
+
+"quantum::ir" remains canonical.
+
+---
+
+33. Relationship to the Quantum Grammar
+
+The hardware subsystem must not duplicate quantum operation syntax.
+
+For example, the quantum subsystem owns semantic quantum operations such as:
+
+apply H ...
+apply custom_gate ...
+apply vendor.operation ...
+apply operation(parameter) ...
+
+Hardware owns the capability of the target to provide those operations.
+
+This means the distinction is:
+
+quantum:
+    what operation the program performs
+
+hardware:
+    what capability the target provides
+
+compiler:
+    how the operation is realized
+
+routing:
+    where resources are placed
+
+scheduling:
+    when operations execute
+
+QEC/ZQN:
+    how resilience/noise is handled
+
+HAL:
+    how the target exposes execution
+
+---
+
+34. No Fixed Quantum Hardware Model
+
+The hardware subsystem must never assume:
+
+MAX_QUBITS
+
+or any equivalent hidden maximum.
+
+It must support semantic quantities such as:
+
+requires resource.qubits >= n
+
+where "n" is a program expression.
+
+A target may have:
+
+small capacity
+large capacity
+distributed capacity
+logical capacity
+simulated capacity
+future capacity
+
+without requiring changes to the grammar.
+
+---
+
+35. HDL Boundary
+
+Hardware grammar and HDL grammar are related but not identical.
+
+Hardware grammar describes:
+
+hardware intent
+resource relationships
+target requirements
+capabilities
+deployment
+placement
+topology
+constraints
+
+HDL describes:
+
+hardware structure
+signals
+nets
+ports
+modules
+state
+combinational behavior
+sequential behavior
+clocking
+timing
+verification
+synthesis intent
+
+The hardware subsystem must not absorb HDL behavioral semantics.
+
+The HDL subsystem must not become a hidden hardware deployment language.
+
+The integration is:
+
+Zamani program
+      |
+      +--> software/classical semantics
+      |
+      +--> quantum semantics
+      |
+      +--> HDL semantics
+      |
+      +--> hardware intent
+              |
+              v
+       hardware/software
+          co-design
+              |
+              v
+       compiler/lowering
+
+---
+
+36. Hardware/Software Co-Design
+
+Zamani should allow one semantic program to express computation plus hardware intent where appropriate.
+
+For example:
+
+computation
+    +
+memory intent
+    +
+parallelism intent
+    +
+accelerator intent
+    +
+communication intent
+    +
+timing constraints
+    +
+hardware implementation intent
+
+The same semantic computation may subsequently be realized as:
+
+CPU execution
+GPU execution
+FPGA accelerator
+ASIC implementation
+quantum/hybrid execution
+heterogeneous execution
+distributed execution
+
+The grammar must preserve the distinction between algorithmic semantics and implementation intent.
+
+---
+
+37. Generic Parameters
+
+Hardware syntax must support symbolic and generic quantities.
 
 Conceptually:
 
-capability("vendor.feature")
+hardware Target<N> {
+    requires resource.compute >= N;
+}
 
 or:
 
-vendor.namespace.property
+hardware QuantumTarget<Q> {
+    requires resource.qubits >= Q;
+}
 
-This permits new hardware technologies to be represented without modifying the core grammar every time a vendor introduces a feature.
+The exact surface syntax must follow the canonical Zamani type/expression/generic systems.
 
-A new keyword should be introduced only when the concept genuinely has language-level semantic meaning.
-
-
----
-
-60. Hardware Extensions
-
-New hardware technologies should first attempt to use:
-
-existing resources;
-
-existing capabilities;
-
-requirements;
-
-constraints;
-
-preferences;
-
-hints;
-
-properties;
-
-generic parameters;
-
-target classes;
-
-dialect extensions.
-
-
-A new grammar file is justified only when the technology introduces syntax that cannot be represented cleanly by the existing abstractions.
-
+The hardware grammar must not invent a second generic mechanism.
 
 ---
 
-61. No Vendor Lock-In
+38. Qualified Names
 
-The core hardware grammar must not require:
-
-CUDA;
-
-ROCm;
-
-vendor-specific QPU APIs;
-
-FPGA vendor languages;
-
-ASIC vendor flows;
-
-proprietary driver APIs;
-
-proprietary deployment formats.
-
-
-Such systems belong to interoperability, dialect, backend, HAL, or tooling layers.
-
-
----
-
-62. Hardware and Classical Computing
-
-Hardware syntax must compose with classical computation.
-
-Example semantic relationship:
-
-classical computation
-        |
-        v
-requires compute
-        |
-        v
-target capability
-        |
-        v
-CPU/GPU/accelerator realization
-
-The classical program should remain semantically independent from the physical machine.
-
-
----
-
-63. Hardware and Quantum Computing
-
-The same hardware contract can support quantum execution:
-
-quantum computation
-        |
-        v
-quantum::ir
-        |
-        v
-resource/capability requirements
-        |
-        v
-QPU target
-        |
-        v
-routing/scheduling/QEC/ZQN
-        |
-        v
-physical execution
-
-The quantum program does not need to be rewritten merely because the target changes.
-
-
----
-
-64. Hardware and HDL
-
-Hardware/software co-design must be possible:
-
-software algorithm
-       +
-hardware intent
-       +
-HDL implementation
-       +
-resource requirements
-       +
-timing requirements
-       +
-verification properties
-
-The semantic model must preserve the relationship between the domains without collapsing their grammar ownership.
-
-
----
-
-65. Hardware and AI/Data
-
-AI and data workloads may express requirements such as:
-
-requires capability("tensor.compute")
-requires memory >= required_memory
-prefer accelerator("tensor")
-
-The hardware grammar must not encode a particular AI framework.
-
-The AI grammar remains responsible for AI semantics.
-
-The data grammar remains responsible for data semantics.
-
-Hardware remains responsible for hardware intent.
-
-
----
-
-66. Hardware and Distributed Computing
-
-Distributed programs may express:
-
-compute resources;
-
-communication requirements;
-
-topology;
-
-placement;
-
-replication;
-
-locality;
-
-bandwidth;
-
-latency;
-
-fault tolerance.
-
-
-There must be no universal:
-
-MAX_NODES
-
-or equivalent hidden node limit.
-
-
----
-
-67. Hardware and Networking
-
-Networking capabilities may be represented as semantic capabilities and resource requirements.
+Hardware extensions should be representable through qualified names.
 
 Examples:
 
-requires capability("network.streaming")
-requires bandwidth >= required_bandwidth
-requires latency <= budget
+vendor.compute.capability
+vendor.quantum.operation
+domain.accelerator.feature
 
-Physical addresses and routes remain downstream.
+This allows future hardware technologies without requiring a new Zamani keyword for every vendor or technology.
 
-
----
-
-68. Hardware and Security
-
-Hardware security capabilities may include:
-
-secure execution;
-
-cryptographic acceleration;
-
-trusted execution;
-
-secure memory;
-
-hardware-backed identity;
-
-isolation.
-
-
-Security semantics remain owned by grammar/security/ and the security semantic subsystem.
-
-Hardware merely represents the hardware relationship.
-
+The language should evolve through semantic capability registries and dialect mechanisms rather than permanent keyword accumulation.
 
 ---
 
-69. Hardware and Effects
+39. Vendor Independence
 
-Hardware operations may have effects.
+The core hardware grammar must not contain permanent vendor-specific syntax merely because a current device exists.
 
-For example:
+Vendor-specific behavior should be represented through:
 
-device access;
+- qualified names;
+- capabilities;
+- properties;
+- dialects;
+- interoperability contracts;
+- backend metadata.
 
-resource acquisition;
+For example, the grammar should not need:
 
-external communication;
+nvidia_gpu
+amd_gpu
+intel_gpu
+vendor_x_qpu
+vendor_y_fpga
 
-timing;
-
-measurement;
-
-persistent state.
-
-
-The hardware grammar must not reimplement the effect system.
-
-Effects remain integrated through the canonical effect grammar and semantic system.
-
-
----
-
-70. Hardware and Memory
-
-Memory must be represented semantically.
-
-The language must support the distinction between:
-
-memory requirement
-memory capability
-memory preference
-memory placement
-memory realization
-
-For example:
-
-requires memory >= workload_memory
-
-does not mean:
-
-allocate physical RAM now
-
+as universal keywords.
 
 ---
 
-71. Hardware and Concurrency
+40. No Physical Hardware Discovery During Parsing
 
-Hardware resources may participate in:
+Parsing must be deterministic.
 
-parallelism;
+The parser must not ask:
 
-task parallelism;
+How many GPUs are installed?
+How many qubits exist?
+Which FPGA is available?
+How much RAM exists?
+What is the PCI address?
+What driver is installed?
 
-data parallelism;
+The parser must operate on source text only.
 
-pipelines;
+Target/resource discovery occurs later.
 
-asynchronous execution;
+Therefore:
 
-distributed execution.
+same source
++
+same language version
++
+same lexical/parser rules
+=
+same syntax result
 
-
-The hardware grammar does not own concurrency semantics.
-
-grammar/concurrency/ owns the concurrency language.
-
-Hardware only provides relevant capabilities and resource contracts.
-
-
----
-
-72. Canonical Names
-
-Hardware grammars must reuse the canonical name and identifier infrastructure.
-
-They must not create independent versions of:
-
-identifier
-qualified name
-path
-member access
-namespace
-
-If a shared name rule is needed, it belongs in the common grammar infrastructure.
-
+regardless of the target machine.
 
 ---
 
-73. Canonical Expressions
+41. No Runtime Execution in Grammar
 
-Hardware quantities must use the canonical expression grammar.
+ANTLR grammar files must remain action-free.
 
-Do not create local copies of arithmetic expressions inside hardware grammars.
+Hardware grammar MUST NOT:
 
-This is especially important for:
+- execute hardware operations;
+- access files;
+- access networks;
+- invoke drivers;
+- query operating-system devices;
+- allocate physical resources;
+- perform routing;
+- perform scheduling;
+- perform calibration;
+- execute quantum operations;
+- perform synthesis.
 
-resource quantities;
+No embedded Rust implementation belongs in the grammar.
 
-constraints;
+---
 
-timing;
+42. Rust Safety
 
-power;
+The Rust implementation baseline is:
 
-thermal values;
+Rust 1.97 / Rust 1.97.1
+Rust 2021
 
-capacities;
+Production compiler/runtime implementation must use safe Rust.
 
-dimensions;
+No "unsafe" implementation is required for the hardware grammar architecture.
 
-topology parameters.
+The grammar itself must remain action-free.
 
+Generated ANTLR/Rust integration must be reviewed so that no project-owned unsafe implementation is introduced.
 
-The direction must be:
+If a generated dependency internally contains unsafe implementation details, that dependency must be evaluated separately; the Zamani implementation itself must not add unsafe blocks or unsafe APIs merely to support hardware grammar functionality.
 
-hardware grammar
+---
+
+43. Current Rust Lexer/Parser Integration
+
+The current "src/parser.rs" is a recursive-descent/Pratt parser and has its own precedence model.
+
+It currently handles concepts such as:
+
+Assign
+Range
+LogicalOr
+LogicalAnd
+BitOr
+BitXor
+BitAnd
+Equality
+Comparison
+Shift
+Sum
+Product
+Prefix
+Call
+Index
+Member
+
+Hardware grammar must not redefine these precedence relationships.
+
+Hardware expressions must reuse the canonical expression semantics.
+
+If hardware syntax requires an expression, the hardware feature contract must identify:
+
+canonical expression rule
+AST representation
+semantic interpretation
+IR interpretation
+
+before the hardware grammar is considered complete.
+
+---
+
+44. AST Contract
+
+Every hardware grammar construct requires a predetermined AST mapping.
+
+The required chain is:
+
+grammar rule
       |
       v
-canonical expression grammar
-
-not:
-
-hardware grammar
+AST node
       |
-      +--> private expression language
+      v
+semantic hardware model
+      |
+      v
+canonical IR
 
-
----
-
-74. Canonical Types
-
-Hardware grammars must reuse the canonical type system.
-
-Hardware-specific semantic types may be defined under grammar/types/ when necessary.
-
-The hardware grammar should reference them rather than redefining:
-
-generic types;
-
-arrays;
-
-references;
-
-numeric types;
-
-resource types;
-
-capability types.
-
-
-
----
-
-75. AST Contract
-
-Every hardware grammar construct must have a predetermined AST representation.
-
-The AST must preserve enough information to represent:
-
-source span;
-
-name;
-
-attributes;
-
-modifiers;
-
-generic parameters;
-
-properties;
-
-resources;
-
-capabilities;
-
-requirements;
-
-constraints;
-
-preferences;
-
-hints;
-
-target information;
-
-topology;
-
-placement;
-
-mappings;
-
-device class;
-
-specialization metadata.
-
-
-The AST must not contain physical runtime state.
-
-
----
-
-76. Semantic Contract
-
-Semantic analysis interprets the AST.
+A grammar rule is incomplete if its AST mapping is undefined.
 
 For example:
 
-requires memory >= required_memory
+hardwareRequirement
 
-must eventually be checked for:
+must identify:
 
-valid resource name;
+AST representation
+semantic requirement representation
+resource/capability interaction
+diagnostics
+IR representation or lowering boundary
+compiler consumers
 
-valid expression;
-
-valid units/types;
-
-valid comparison;
-
-valid resource semantics.
-
-
-The parser does not perform this analysis.
-
+before it is declared complete.
 
 ---
 
-77. IR Contract
+45. Domain-Neutral AST Requirement
 
-Hardware grammar must lower indirectly:
+Hardware-specific parser rules must not force vendor-specific or physical-device-specific structures into:
+
+src/frontend/ast/
+
+The frontend AST should preserve language structure.
+
+Hardware-specific meaning belongs in semantic analysis.
+
+For example, an AST should represent a generic hardware requirement rather than directly storing a physical GPU handle.
+
+---
+
+46. Semantic Contract
+
+Semantic analysis owns:
+
+- capability validation;
+- resource validation;
+- requirement validation;
+- constraint validation;
+- target compatibility;
+- type compatibility;
+- topology compatibility;
+- placement compatibility;
+- hardware property validation.
+
+The grammar only establishes syntax.
+
+---
+
+47. IR Contract
+
+The hardware subsystem must map to the repository's canonical IR architecture.
+
+It must not create a second competing hardware IR merely because hardware syntax exists.
+
+Where a hardware-specific IR is necessary, it must have an explicitly defined boundary and relationship to the canonical compiler IR.
+
+Quantum semantics MUST continue to reach:
+
+quantum::ir
+
+and must not be diverted into:
+
+hardware::quantum_ir
+
+or another competing representation.
+
+---
+
+48. Resource and Capability Integration
+
+The hardware subsystem intersects strongly with:
+
+grammar/resources/
+grammar/core/
+grammar/compile/
+grammar/execution/
+grammar/quantum/
+grammar/hdl/
+
+The ownership rule is:
+
+core:
+    universal resource/capability concepts
+
+resources:
+    general resource semantics
+
+hardware:
+    hardware-specific resource/capability intent
+
+quantum:
+    quantum computation semantics
+
+HDL:
+    hardware-description semantics
+
+compile:
+    compilation and target selection
+
+execution:
+    runtime/execution policies
+
+HAL:
+    actual target capability/resource realization
+
+No subsystem should duplicate another subsystem's authority.
+
+---
+
+49. Target Selection Boundary
+
+Hardware grammar can express target requirements and preferences.
+
+It must not perform target selection.
+
+The distinction is:
+
+target requirement
+        |
+        v
+target analysis
+        |
+        v
+candidate targets
+        |
+        v
+selection policy
+        |
+        v
+chosen realization
+
+The grammar stops before selection.
+
+---
+
+50. Routing Boundary
+
+Topology and placement syntax feed routing.
+
+They do not implement routing.
+
+The intended pipeline is:
+
+logical topology
+      |
+      v
+hardware semantic model
+      |
+      v
+target topology
+      |
+      v
+routing
+      |
+      v
+physical realization
+
+Quantum routing remains compatible with "quantum::ir".
+
+---
+
+51. Scheduling Boundary
+
+Hardware timing and resource requirements feed scheduling.
+
+The grammar does not schedule.
+
+Scheduling must remain downstream so that the same program can be scheduled differently on different targets.
+
+---
+
+52. Optimization Boundary
+
+Hardware preferences and hints may guide optimization.
+
+They must not force optimizer implementation into grammar.
+
+The grammar expresses:
+
+intent
+
+The optimizer determines:
+
+implementation
+
+provided program semantics remain unchanged.
+
+---
+
+53. Resilience / QEC / ZQN Boundary
+
+Hardware reliability and resilience requirements may feed:
+
+resilience
+QEC
+ZQN
+
+but the hardware grammar must not duplicate their implementations.
+
+For quantum computing:
+
+hardware capability
+       |
+       v
+quantum semantic model
+       |
+       v
+quantum::ir
+       |
+       v
+QEC / resilience / ZQN
+       |
+       v
+target realization
+
+The grammar does not implement QEC.
+
+The grammar does not implement noise simulation.
+
+The grammar does not implement ZQN.
+
+---
+
+54. HAL Boundary
+
+The Hardware Abstraction Layer is the boundary through which concrete target capabilities and operations become available to the compiler/runtime.
+
+The grammar does not call the HAL.
+
+The flow is:
 
 source
   |
@@ -2645,2115 +1903,1240 @@ grammar
 AST
   |
   v
-semantic hardware model
+semantic model
   |
   v
-canonical IR / semantic representations
-
-Never:
-
-source
+compiler
   |
   v
-hardware grammar
+HAL
   |
   v
-physical hardware
+target
 
-And never:
-
-hardware grammar
-  |
-  v
-second quantum IR
-
+This separation is essential for POCO-REAF.
 
 ---
 
-78. quantum::ir Boundary
+55. Hardware File Ownership
 
-Quantum computation must eventually reach the canonical:
+The existing hardware directory should be organized according to the following ownership model.
 
+"hardware.g4"
+
+Owns:
+
+- hardware composition;
+- hardware entry point;
+- hardware declaration dispatch;
+- hardware-domain statement dispatch;
+- hardware-domain integration.
+
+Does not own specialized leaf syntax.
+
+Completion requires:
+
+canonical imports
+canonical lexer
+canonical names
+canonical expressions
+canonical types
+all leaf grammars integrated
+no duplicate rules
+AST contract
+semantic contract
+IR contract
+tests
+
+---
+
+"resources.g4"
+
+Owns:
+
+- hardware resource declarations;
+- resource references;
+- quantities;
+- resource requirements;
+- resource constraints;
+- resource preferences;
+- resource profiles;
+- hardware resource properties.
+
+Does not own generic resource semantics or physical allocation.
+
+---
+
+"capabilities.g4"
+
+Owns:
+
+- hardware capability integration;
+- hardware capability requirements;
+- capability preferences;
+- capability constraints;
+- hardware capability properties;
+- hardware capability extension points.
+
+It must consume the canonical capability model.
+
+---
+
+"constraints.g4"
+
+Owns:
+
+- hardware-specific constraint integration;
+- hardware constraint classification;
+- hardware resource constraints;
+- hardware capability constraints;
+- hardware target constraints;
+- hardware topology constraints;
+- hardware timing constraints;
+- hardware reliability constraints;
+- hardware implementation-intent constraints.
+
+It must not duplicate generic constraint expression semantics.
+
+---
+
+"hardware-constraints.g4"
+
+This file is currently overlapping with "constraints.g4".
+
+It must not remain a second production implementation.
+
+The final repository should choose one authoritative implementation.
+
+The preferred transition is:
+
+hardware-constraints.g4
+        |
+        v
+compatibility/deprecation facade
+        |
+        v
+constraints.g4
+
+after repository-wide references are migrated.
+
+It may eventually be retired only after:
+
+- references are migrated;
+- tests are migrated;
+- imports are migrated;
+- compatibility requirements are satisfied.
+
+No unnecessary rename should be performed merely for cosmetic reasons.
+
+---
+
+"targets.g4"
+
+Owns:
+
+- target declarations;
+- target classes;
+- target parameters;
+- target requirements;
+- target constraints;
+- target preferences;
+- target properties;
+- target extension.
+
+Does not own target selection or physical target discovery.
+
+---
+
+"devices.g4"
+
+Owns:
+
+- logical device declarations;
+- device classes;
+- device capabilities;
+- device resources;
+- device relationships;
+- device requirements;
+- device constraints;
+- device preferences.
+
+Does not enumerate physical devices.
+
+---
+
+"topology.g4"
+
+Owns:
+
+- abstract topology;
+- logical nodes;
+- logical endpoints;
+- relationships;
+- connectivity;
+- topology properties;
+- topology requirements;
+- topology constraints;
+- topology preferences.
+
+Does not own routing.
+
+---
+
+"placement.g4"
+
+Owns:
+
+- placement declarations;
+- affinity;
+- anti-affinity;
+- co-location;
+- separation;
+- locality;
+- grouping;
+- migration;
+- elasticity;
+- placement requirements;
+- placement constraints;
+- placement preferences.
+
+Does not perform placement.
+
+---
+
+"accelerators.g4"
+
+Owns generic accelerator intent.
+
+It must not encode individual accelerator vendors as permanent language features.
+
+---
+
+"cpu.g4"
+
+Owns CPU-class hardware intent.
+
+It must not impose fixed core/thread/register limits.
+
+---
+
+"gpu.g4"
+
+Owns GPU-class hardware intent.
+
+It must not impose fixed GPU counts, memory sizes, or vendor-specific universal assumptions.
+
+---
+
+"fpga.g4"
+
+Owns FPGA-class intent:
+
+- programmable logic;
+- reconfiguration;
+- accelerator intent;
+- resource relationships;
+- interfaces;
+- timing intent.
+
+It must not encode one FPGA family as the language model.
+
+---
+
+"asic.g4"
+
+Owns ASIC-class intent.
+
+It must not encode fixed silicon characteristics as universal language limits.
+
+---
+
+"qpu.g4"
+
+Owns QPU-class target intent.
+
+It must not duplicate quantum computation semantics.
+
+---
+
+"quantum-device.g4"
+
+Owns quantum-device hardware capability intent.
+
+It must integrate with:
+
+grammar/quantum/
+src/quantum/
 quantum::ir
+QEC
+ZQN
+HAL
 
-There must be exactly one canonical quantum IR boundary.
-
-The hardware grammar can describe QPU requirements and device capabilities.
-
-It cannot replace the quantum IR.
-
+without creating another quantum language or IR.
 
 ---
 
-79. Compiler Integration
+"memory.g4"
 
-Hardware semantic information may be consumed by:
+Owns hardware-facing memory intent.
 
-target selection;
+Generic memory remains in:
 
-capability analysis;
-
-resource analysis;
-
-optimization;
-
-lowering;
-
-routing;
-
-scheduling;
-
-synthesis;
-
-resilience;
-
-deployment.
-
-
-The grammar must expose source information without embedding these algorithms.
-
+grammar/memory/
 
 ---
 
-80. Runtime Integration
+"interconnect.g4"
 
-Runtime systems may use compiled hardware metadata to:
+Owns hardware-facing communication/interconnect intent.
 
-discover available targets;
-
-query capabilities;
-
-allocate resources;
-
-dispatch execution;
-
-adapt to runtime conditions;
-
-recover from failures.
-
-
-Runtime must not need to reinterpret source syntax to discover basic hardware semantics.
-
+Routing remains downstream.
 
 ---
 
-81. Diagnostics
+"timing.g4"
 
-Hardware syntax must support deterministic diagnostics.
+Owns hardware timing intent.
 
-Diagnostics should identify:
-
-source file;
-
-source span;
-
-offending token;
-
-expected syntax;
-
-relevant construct;
-
-stable diagnostic category.
-
-
-Semantic diagnostics should distinguish:
-
-syntax error
-type error
-unknown capability
-unknown resource
-invalid requirement
-unsatisfied requirement
-invalid constraint
-invalid target
-invalid topology
-invalid placement
-
-The parser must not attempt to solve semantic errors by silently changing the source meaning.
-
+Actual scheduling remains downstream.
 
 ---
 
-82. Determinism
+"power.g4"
 
-The hardware grammar must parse deterministically.
+Owns power intent.
 
-It must avoid:
-
-unnecessary ambiguous alternatives;
-
-competing declaration forms;
-
-duplicate ownership;
-
-hidden precedence rules;
-
-context-sensitive hacks where avoidable;
-
-embedded executable predicates.
-
-
-The same source and same grammar version must produce the same parse structure.
-
+Power estimation and physical power management remain downstream.
 
 ---
 
-83. Action-Free Grammar
+"thermal.g4"
 
-All hardware grammars must remain action-free.
+Owns thermal intent.
 
-No:
-
-{ Rust code }
-
-actions.
-
-No:
-
-@parser::members
-
-containing runtime logic.
-
-No embedded device calls.
-
-No unsafe Rust.
-
-The parser is a syntax recognizer, not a hardware controller.
-
+Thermal analysis remains downstream.
 
 ---
 
-84. Rust 1.97 / 1.97.1
+"reliability.g4"
 
-The repository implementation must remain compatible with:
+Owns reliability requirements and intent.
 
-Rust 1.97
-Rust 1.97.1
-Edition 2021
-
-The grammar itself must not depend on unstable or unsafe Rust behavior.
-
-Generated parser code must be tested against the repository's supported toolchain.
-
+Reliability implementation remains downstream.
 
 ---
 
-85. No unsafe
+"calibration.g4"
 
-The compiler implementation must not introduce Rust:
+Owns calibration-related source intent.
 
-unsafe
-unsafe fn
-unsafe impl
-unsafe trait
-unsafe { ... }
-
-The grammar must remain action-free so that it cannot introduce hidden implementation behavior.
-
-This safety rule applies to the compiler implementation.
-
-It is distinct from whether the Zamani source language itself eventually has an unsafe source-level construct.
-
+Calibration algorithms remain downstream.
 
 ---
 
-86. Existing gpu.g4 Integration
+"negotiation.g4"
 
-The existing gpu.g4 must be treated carefully.
+Owns source-level capability/resource negotiation intent.
 
-It currently does not fit the desired clean parser-grammar architecture as cleanly as the other specialized parser grammars.
-
-Before it becomes a direct imported dependency of the composition root, it must be normalized to:
-
-parser grammar ...
-options { tokenVocab = canonical lexer; }
-
-and must:
-
-reuse canonical tokens;
-
-reuse canonical names;
-
-reuse canonical expressions;
-
-reuse canonical types;
-
-expose one stable GPU declaration entry point;
-
-contain no embedded implementation code;
-
-contain no duplicate hardware composition;
-
-contain no physical resource limits.
-
-
-Until that normalization is complete, hardware.g4 must not create a duplicate GPU implementation merely to compensate.
-
+Actual negotiation/discovery remains downstream.
 
 ---
 
-87. Legacy Token Vocabulary
+"deployment.g4"
 
-The current hardware grammar contains legacy-style constructs such as:
+Owns source-level deployment intent.
 
-ZamaniTokens
-K_HARDWARE
-K_RESOURCE
-K_CAPABILITY
-...
-
-These must be reconciled with the canonical lexical architecture.
-
-The solution is not to create another lexer.
-
-The solution is:
-
-one canonical lexer
-        |
-        v
-one canonical token vocabulary
-        |
-        v
-all parser grammars
-
-Any compatibility bridge must be explicit and temporary.
-
+Actual deployment remains downstream.
 
 ---
 
-88. Keyword Policy
+56. Independent File Completion Contract
 
-Hardware technology names should not automatically become keywords.
+Every file under "grammar/hardware/" MUST be independently completable.
 
-For example, the existence of a new accelerator vendor should not require a new permanent Zamani keyword.
-
-Prefer:
-
-qualified names
-properties
-capabilities
-dialects
-extension points
-
-over:
-
-one new keyword for every technology
-
-This is essential for POCO-REAF.
-
-
----
-
-89. Hardware Technology Evolution
-
-A new technology should be representable without rewriting old programs.
-
-For example, future hardware could introduce:
-
-new accelerators;
-
-new memory technologies;
-
-new interconnects;
-
-new compute paradigms;
-
-new quantum architectures;
-
-new programmable substrates;
-
-new heterogeneous systems.
-
-
-Existing programs should remain valid where their semantics remain valid.
-
-The compiler can discover the new realization.
-
-
----
-
-90. Resource Negotiation
-
-Hardware requirements may have alternatives.
-
-The language should eventually support concepts such as:
-
-requires capability("A")
-or capability("B")
-
-or equivalent canonical requirement semantics.
-
-Negotiation belongs to semantic/compiler layers.
-
-The grammar must preserve enough structure for those layers.
-
-
----
-
-91. Resource Availability
-
-The language may express resource requirements.
-
-Availability is target-dependent.
-
-Therefore:
-
-requires memory >= required_memory
-
-does not mean that the grammar itself knows how much memory exists.
-
-The semantic/compiler pipeline evaluates the requirement against a target.
-
-
----
-
-92. Tiny-to-Large Scaling
-
-The same semantic hardware model must work for:
-
-single operation
-single resource
-single device
-embedded system
-microcontroller
-CPU
-multicore CPU
-GPU
-FPGA
-ASIC
-QPU
-accelerator
-heterogeneous system
-cluster
-HPC system
-distributed system
-cloud
-future computational substrate
-
-There must be no grammar-defined transition point where a larger machine requires a different language.
-
-
----
-
-93. Atom-to-Everywhere Principle
-
-The hardware subsystem must support the broader Zamani vision:
-
-atom
-  |
-  v
-molecule
-  |
-  v
-device
-  |
-  v
-embedded system
-  |
-  v
-processor
-  |
-  v
-accelerator
-  |
-  v
-heterogeneous system
-  |
-  v
-cluster
-  |
-  v
-distributed system
-  |
-  v
-cloud/HPC
-  |
-  v
-future systems
-
-The source-level semantic abstractions remain stable.
-
-Only the realization changes.
-
-
----
-
-94. Hardware Generics
-
-Generic hardware parameters may represent:
-
-dimensions;
-
-capacities;
-
-widths;
-
-counts;
-
-timing parameters;
-
-resource quantities;
-
-feature selections.
-
-
-These are program/semantic parameters.
-
-They must not become global compiler maximums.
-
-
----
-
-95. Dimension Semantics
-
-Hardware dimensions must be represented symbolically or generically where possible.
-
-Examples:
-
-width
-lanes
-capacity
-depth
-degree
-distance
-bandwidth
-latency
-
-The grammar must not assume a specific machine width.
-
-
----
-
-96. Physical Identifiers
-
-Physical identifiers belong to target realization.
-
-Core hardware syntax should not require:
-
-physical_cpu_7
-gpu_3
-qpu_1
-qubit_17
-memory_bank_4
-
-unless a separate explicitly target-specific/deployment-level construct defines such a realization.
-
-Portable source should remain portable.
-
-
----
-
-97. Physical Addresses
-
-Physical addresses are not core hardware-language semantics.
-
-Do not encode:
-
-0x80000000
-
-as a universal hardware placement mechanism.
-
-If low-level address semantics are required for a specific target, they must belong to an explicitly defined target/ABI/interop layer.
-
-
----
-
-98. Vendor Extensions
-
-Vendor extensions must be isolated.
-
-Preferred structure:
-
-vendor.namespace.feature
-
-or an explicit dialect.
-
-Vendor syntax must not silently become universal Zamani syntax.
-
-
----
-
-99. Dialect Integration
-
-Hardware dialects must declare:
-
-name;
-
-version;
-
-owner;
-
-syntax extensions;
-
-semantic extensions;
-
-AST mapping;
-
-IR mapping;
-
-compatibility;
-
-feature gates.
-
-
-A dialect must not create a competing language root.
-
-
----
-
-100. Security Boundary
-
-Hardware grammar parsing must not:
-
-access hardware;
-
-execute vendor code;
-
-load arbitrary plugins;
-
-perform network requests;
-
-access filesystem state;
-
-inspect local machine resources.
-
-
-This protects deterministic builds and reproducible parsing.
-
-
----
-
-101. Reproducibility
-
-Hardware source compilation must be reproducible.
-
-Target-specific discovery must occur in a controlled downstream phase.
-
-The parser itself must not depend on:
-
-current CPU
-current GPU
-current QPU
-current memory
-current network
-current clock
-current device inventory
-
-for syntax validity.
-
-
----
-
-102. Cross-Compilation
-
-A hardware-aware Zamani program should be parseable and semantically analyzable without having the final physical target installed.
-
-Target-specific validation may occur later.
-
-This enables:
-
-cross compilation;
-
-remote compilation;
-
-CI builds;
-
-reproducible builds;
-
-offline analysis;
-
-simulation;
-
-deployment planning.
-
-
-
----
-
-103. Simulation
-
-The hardware contract model must support simulation targets.
-
-A simulator is a target realization, not a separate language.
-
-The same semantic hardware requirements should be representable for:
-
-real hardware
-simulator
-emulator
-virtual target
-
-where semantically appropriate.
-
-
----
-
-104. Future Hardware
-
-Future hardware must be representable without requiring the grammar to predict every future device.
-
-This is achieved through:
-
-capabilities;
-
-resources;
-
-generic parameters;
-
-properties;
-
-qualified names;
-
-dialects;
-
-target classes;
-
-extensible semantic models.
-
-
-This is preferable to maintaining an ever-growing list of physical device types.
-
-
----
-
-105. File Completion Contract
-
-Every hardware .g4 file is complete only when its contract is known in advance.
-
-Every file must document:
+Before implementing a file, its contract must answer:
 
 File
 Purpose
 Status
 Owns
 Does Not Own
-Inputs
-Outputs
 Dependencies
 Upstream Contracts
 Downstream Consumers
 Public Rules
-AST Contract
-Semantic Contract
-IR Contract
-Compiler Integration
-Runtime Integration
-Tooling Integration
-Cross-Domain Integration
+AST Mapping
+Semantic Mapping
+IR Mapping
+Compiler Consumers
+Runtime Consumers
 Positive Tests
 Negative Tests
 Boundary Tests
 Scalability Tests
-Compatibility Tests
 Determinism Tests
-Hard-Coding Audit
+Compatibility
 Diagnostics
 Security
 Performance
+Hard-Coding Audit
 Completion Criteria
 
-This is mandatory.
-
-
----
-
-106. Independent-First Completion Rule
-
-The requirement is:
-
-> A file should be able to be completed without needing to redesign it after another file changes.
-
-
-
-To achieve that, every file must define its integration contracts before implementation.
-
-For example, before completing topology.g4, define:
-
-what topology owns
-what it consumes
-what it exports
-how its AST is represented
-how semantic topology is represented
-how routing consumes it
-how placement consumes it
-what tests prove it complete
-
-Then other files integrate against the contract.
-
-They must not silently redefine topology.
-
+This ensures that finishing one file does not require reopening it merely because another file was subsequently implemented.
 
 ---
 
-107. Stable Public Rules
+57. Dependency Direction
 
-Public parser rules must be treated as compatibility surfaces.
+Dependencies must flow toward shared foundations.
 
-Changing a public rule name requires:
+Preferred direction:
 
-compatibility analysis;
+lexer
+   |
+   v
+core names/types/expressions
+   |
+   v
+hardware leaf grammars
+   |
+   v
+hardware composition
+   |
+   v
+Zamani composition root
 
-parser updates;
+Avoid:
 
-AST impact analysis;
+hardware A -> hardware B
+hardware B -> hardware C
+hardware C -> hardware A
 
-tests;
+Circular grammar dependencies must not be introduced.
 
-documentation updates;
-
-migration information.
-
-
-Avoid unnecessary renames.
-
-Existing major filenames should remain unless there is a demonstrated architectural reason to remove or consolidate them.
-
+Where multiple hardware domains need a common concept, the concept belongs in the appropriate shared foundation.
 
 ---
 
-108. Duplicate Ownership Rule
+58. Hardware Composition Contract
 
-No two files may permanently own the same concept.
-
-Examples of prohibited duplication:
-
-constraints.g4
-hardware-constraints.g4
-
-both defining hardware constraints.
-
-Likewise:
+The intended hardware composition is:
 
 hardware.g4
-gpu.g4
+    |
+    +--> resources.g4
+    +--> capabilities.g4
+    +--> constraints.g4
+    +--> targets.g4
+    +--> devices.g4
+    +--> topology.g4
+    +--> placement.g4
+    +--> accelerators.g4
+    +--> memory.g4
+    +--> interconnect.g4
+    +--> timing.g4
+    +--> power.g4
+    +--> thermal.g4
+    +--> reliability.g4
+    +--> calibration.g4
+    +--> negotiation.g4
+    +--> deployment.g4
+    +--> cpu.g4
+    +--> gpu.g4
+    +--> fpga.g4
+    +--> asic.g4
+    +--> qpu.g4
+    +--> quantum-device.g4
 
-both defining GPU declarations.
+This is a composition relationship, not a duplication relationship.
 
-Likewise:
+---
+
+59. Grammar Modularity
+
+The hardware subsystem should use leaf grammars for concepts that genuinely have independent ownership.
+
+However, excessive fragmentation is also prohibited.
+
+A new file is justified only when it provides:
+
+- a coherent ownership boundary;
+- reusable syntax;
+- independent tests;
+- a clear integration point;
+- a meaningful semantic boundary.
+
+Do not create a file merely to move five grammar lines somewhere else.
+
+---
+
+60. No Competing Hardware Grammar
+
+There must be exactly one canonical hardware-domain grammar composition.
+
+Do not create:
 
 hardware.g4
-qpu.g4
+hardware2.g4
+universal-hardware.g4
+hardware-language.g4
 
-both defining QPU declarations.
+as competing roots.
 
-The composition root delegates.
+Likewise, do not create another hardware directory beside:
 
-The specialized grammar owns.
+grammar/hardware/
 
+unless a future architectural decision explicitly establishes a different responsibility.
 
----
-
-109. Import Direction
-
-The desired dependency direction is:
-
-canonical lexer
-      |
-      v
-core names / paths
-      |
-      v
-canonical expressions / types
-      |
-      v
-hardware specialized grammars
-      |
-      v
-hardware composition grammar
-      |
-      v
-Zamani root composition
-
-Specialized hardware grammars must not depend on:
-
-runtime;
-
-compiler backend;
-
-HAL implementation;
-
-physical device manager.
-
-
+Existing functionality must be expanded and normalized.
 
 ---
 
-110. No Circular Grammar Dependencies
+61. Feature Contracts
 
-The following are prohibited:
+Hardware features should eventually have machine-readable feature contracts under the repository's feature-contract system.
 
-hardware.g4 <-> hdl.g4
-hardware.g4 <-> quantum.g4
-hardware.g4 <-> runtime grammar
-hardware.g4 <-> compiler implementation
+A hardware feature contract should identify:
 
-Shared syntax should be moved upward into common grammar infrastructure.
+feature ID
+name
+status
+version
+syntax owner
+lexer dependencies
+AST nodes
+semantic rules
+IR mapping
+compiler consumers
+runtime consumers
+capabilities
+resources
+constraints
+tests
+compatibility
+hard-coding policy
 
-
----
-
-111. Resource / Capability Separation
-
-A resource is not a capability.
-
-For example:
-
-resource memory
-
-describes a resource.
-
-capability quantum.measurement
-
-describes an ability.
-
-A target can have:
-
-resource capacity
-+
-capability
-
-without these being the same semantic concept.
-
+This allows a feature to be independently completed.
 
 ---
 
-112. Constraint / Preference Separation
+62. Feature Promotion
 
-A constraint must affect validity.
+A hardware feature follows:
 
-A preference must guide realization without changing program correctness.
+Zamani-Grammar.md
+        |
+        v
+proposal
+        |
+        v
+semantic design
+        |
+        v
+feature contract
+        |
+        v
+AST contract
+        |
+        v
+grammar
+        |
+        v
+lexer/parser
+        |
+        v
+semantic implementation
+        |
+        v
+IR
+        |
+        v
+compiler/backend
+        |
+        v
+tests
+        |
+        v
+stable
 
-Do not represent both as one generic "requirement" category internally.
-
-The distinction must survive into semantic analysis.
-
-
----
-
-113. Requirement / Realization Separation
-
-A source program may require:
-
-qubits >= n
-
-without specifying:
-
-physical_qubit(0)
-physical_qubit(1)
-...
-
-Physical mapping is downstream.
-
-This is one of the central requirements for POCO-REAF.
-
-
----
-
-114. Hardware Contracts and Semantic Types
-
-If hardware concepts require new semantic types, those types belong under:
-
-grammar/types/
-
-rather than being secretly implemented inside hardware grammar.
-
-Examples may include:
-
-Resource<T>
-Capability
-HardwareTarget
-Topology
-Placement
-
-where such types are genuinely needed by the language design.
-
+Presence in "Zamani-Grammar.md" alone never makes a feature legal Zamani syntax.
 
 ---
 
-115. Hardware Contracts and Effects
+63. Positive Tests
 
-If hardware access has effects, those effects must map into the canonical effect system.
+Every hardware feature needs positive tests.
 
-The hardware grammar must not invent a second effect language.
+Examples include:
 
-
----
-
-116. Hardware Contracts and Ownership
-
-If a hardware resource has ownership or borrowing semantics, those concepts must integrate with:
-
-grammar/memory/
-grammar/types/
-grammar/effects/
-
-rather than creating another ownership model under hardware.
-
-
----
-
-117. Hardware Contracts and Concurrency
-
-If hardware resources are shared concurrently, concurrency semantics remain under:
-
-grammar/concurrency/
-
-Hardware provides resource/capability metadata.
-
-Concurrency determines how the program expresses parallel access.
-
+minimal hardware contract
+resource requirement
+capability requirement
+target declaration
+logical device
+abstract topology
+placement intent
+memory requirement
+interconnect requirement
+accelerator preference
+timing requirement
+reliability requirement
+deployment intent
+heterogeneous target
+parameterized hardware contract
+qualified capability
 
 ---
 
-118. Hardware Contracts and Distributed Execution
+64. Negative Tests
 
-Distributed hardware relationships must integrate with:
+Every hardware feature must also have rejection tests.
+
+Examples:
+
+invalid hardware declaration
+invalid capability syntax
+invalid resource expression
+invalid topology
+invalid placement
+duplicate invalid declarations
+malformed qualified name
+invalid constraint
+invalid target contract
+invalid hardware-specific type usage
+
+Negative tests are necessary to establish the actual language boundary.
+
+---
+
+65. Boundary Tests
+
+Boundary tests must include:
+
+empty hardware contract
+single resource
+large resource list
+deep topology
+large logical device set
+parameterized resource
+zero where semantically invalid
+negative values where semantically invalid
+very large representable quantities
+nested hardware declarations
+nested constraints
+combined capability/resource constraints
+
+No boundary test may accidentally establish an artificial maximum.
+
+---
+
+66. Scalability Tests
+
+Scalability tests must verify that grammar design does not introduce artificial hardware limits.
+
+Test dimensions include:
+
+number of resources
+number of capabilities
+number of devices
+number of topology relationships
+number of endpoints
+number of ports
+number of constraints
+number of target properties
+number of accelerator declarations
+number of logical qubits
+number of hardware requirements
+number of modules
+
+The test suite may choose finite test values.
+
+Those values are test parameters, not language limits.
+
+---
+
+67. Determinism Tests
+
+Parsing the same source must not depend on:
+
+- installed hardware;
+- CPU count;
+- GPU count;
+- available RAM;
+- device IDs;
+- network topology;
+- QPU availability;
+- driver state.
+
+The same source and language version must produce the same syntactic result.
+
+---
+
+68. Portability Tests
+
+Hardware intent must be tested against abstract targets.
+
+For example, one semantic source contract may be analyzed against:
+
+embedded
+CPU
+GPU
+FPGA
+ASIC
+QPU
+simulator
+heterogeneous
+distributed
+
+The grammar should remain unchanged.
+
+Only downstream target feasibility changes.
+
+---
+
+69. Hard-Coding Audit
+
+Every hardware grammar change requires a hard-coding audit.
+
+Search for:
+
+MAX_QUBITS
+MAX_CPUS
+MAX_GPUS
+MAX_FPGAS
+MAX_NODES
+MAX_MEMORY
+MAX_THREADS
+MAX_TENSOR_RANK
+MAX_REGISTER_WIDTH
+MAX_NETWORK_SIZE
+MAX_DEVICE_COUNT
+
+Also search for equivalent hidden restrictions.
+
+Examples:
+
+fixed repetition counts
+fixed device enumerations
+fixed resource arrays
+fixed physical IDs
+fixed topology sizes
+fixed register widths
+fixed memory capacities
+fixed accelerator counts
+
+Any discovered value must be classified as:
+
+program semantics
+test data
+implementation limit
+target capability
+language limitation
+
+Only the first four may be acceptable in the appropriate layer.
+
+A universal language limitation is prohibited unless it is an unavoidable representation rule explicitly documented by the language specification.
+
+---
+
+70. Hardware Identifiers
+
+The following must not become universal hardware semantics:
+
+physical_qubit_0
+gpu0
+cpu3
+fpga1
+node7
+memory_bank2
+pci:...
+/dev/...
+
+Such identifiers may exist in explicit deployment/target-specific contracts where required.
+
+They must never become the foundational hardware model.
+
+---
+
+71. Hardware Quantities
+
+Quantities should be represented through the canonical expression system.
+
+Examples:
+
+n
+required_memory
+required_compute
+latency_budget
+bandwidth_requirement
+qubit_count
+
+The compiler evaluates or reasons about these values according to semantic rules.
+
+The grammar does not need to know the final physical quantity.
+
+---
+
+72. Resource Availability
+
+Resource availability is a runtime/target property.
+
+Conceptually:
+
+program requirement
+       |
+       v
+target capability/resource inventory
+       |
+       v
+feasibility analysis
+
+The source language should remain valid independently of today's inventory.
+
+---
+
+73. Dynamic and Elastic Hardware
+
+Where supported by semantics, hardware intent should allow:
+
+- elastic resources;
+- dynamic allocation;
+- dynamic device availability;
+- scaling;
+- resource pools;
+- distributed resources;
+- changing target availability.
+
+The grammar should express intent rather than fixed inventory.
+
+---
+
+74. Heterogeneous Computing
+
+Hardware grammar must support heterogeneous intent.
+
+A computation may require multiple capability classes:
+
+CPU-class control
+GPU-class tensor compute
+FPGA-class streaming acceleration
+quantum-class computation
+distributed communication
+
+The source should be able to describe relationships among these without hard-coding a specific physical machine.
+
+---
+
+75. Distributed Hardware
+
+The hardware subsystem integrates with:
 
 grammar/distributed/
 grammar/networking/
 
-The hardware subsystem must not create a second distributed-programming model.
+Hardware topology may describe logical relationships.
 
+Distributed semantics describe computation/distribution.
+
+Networking describes communication.
+
+The hardware grammar must not duplicate distributed execution semantics.
 
 ---
 
-119. Hardware Contracts and AI
+76. AI / Tensor Hardware
 
-AI acceleration requirements integrate with:
+Hardware acceleration for AI must integrate with:
 
 grammar/ai/
 grammar/data/
 grammar/classical/
+grammar/hardware/
 
-Hardware remains responsible for hardware intent.
+The hardware grammar may express capabilities such as:
 
+tensor.compute
+matrix.compute
+accelerator.compute
+high_bandwidth_memory
 
----
-
-120. Hardware Contracts and Interoperability
-
-External hardware descriptions may be imported through:
-
-grammar/interoperability/
-
-Possible external formats include:
-
-HDL formats;
-
-QASM;
-
-QIR;
-
-LLVM-related representations;
-
-MLIR-related representations;
-
-vendor formats.
-
-
-These are interoperability boundaries, not competing Zamani semantic models.
-
+It must not encode a particular AI framework.
 
 ---
 
-121. Testing Architecture
+77. Embedded Hardware
 
-Hardware testing must occur at several levels:
+Embedded execution is a target class, not a fixed machine.
 
-lexical
-syntax
-AST
-semantic
-IR
-compiler
-target
-runtime
+The hardware grammar must not assume:
 
-A syntax-only test is insufficient for production readiness.
+fixed flash
+fixed RAM
+fixed CPU
+fixed register width
 
+as universal properties.
+
+The target capability/resource model determines actual feasibility.
 
 ---
 
-122. Positive Tests
+78. Future Hardware
 
-Every public hardware construct needs positive tests.
+Future hardware must be representable without requiring a redesign of the language core.
 
-Required categories include:
+This is achieved through:
 
-minimal hardware
-resources
+qualified names
 capabilities
-requirements
-constraints
-preferences
-targets
-devices
-topology
-placement
-mapping
-connections
-memory
-interconnect
-timing
-power
-thermal
-reliability
-accelerators
-CPU
-GPU
-FPGA
-ASIC
-QPU
-quantum device
-deployment
-negotiation
-
-
----
-
-123. Negative Tests
-
-Negative tests must verify rejection of:
-
-malformed hardware declarations;
-
-missing identifiers;
-
-invalid generic syntax;
-
-invalid resource expressions;
-
-malformed requirements;
-
-invalid constraints;
-
-malformed topology;
-
-malformed placement;
-
-malformed mappings;
-
-invalid properties;
-
-invalid target declarations;
-
-invalid specialized declarations.
-
-
-
----
-
-124. Boundary Tests
-
-Boundary tests must include:
-
-empty collections where legal;
-
-one-element collections;
-
-nested hardware declarations;
-
-large property lists;
-
-large generic lists;
-
-deeply nested expressions;
-
-large topology descriptions;
-
-large resource sets;
-
-large device compositions.
-
-
-Tests must not accidentally define artificial language limits.
-
-
----
-
-125. Scalability Tests
-
-Scalability tests must vary:
-
-number of hardware declarations
-number of resources
-number of capabilities
-number of ports
-number of connections
-number of instances
-number of topology relationships
-number of properties
-number of generic parameters
-
-The tests must establish that the grammar has no arbitrary fixed hardware capacity.
-
-
----
-
-126. Tiny-to-Infinite Test Principle
-
-"Infinity" here means no language-defined artificial upper bound.
-
-No finite test can literally instantiate an infinite machine.
-
-Therefore production tests establish:
-
-no grammar-defined maximum
-+
-successful scaling across increasingly large inputs
-+
-graceful failure only from implementation/resource exhaustion
-
-This distinction must be documented.
-
-
----
-
-127. POCO-REAF Test
-
-A representative test should conceptually compile the same semantic program against:
-
-tiny target
-CPU
-GPU
-FPGA
-ASIC
-QPU
-heterogeneous target
-distributed target
-simulator
-future/extension target
-
-The source semantics remain unchanged.
-
-Only target realization changes.
-
-
----
-
-128. Cross-Domain Tests
-
-Mandatory combinations include:
-
-classical + hardware
-quantum + hardware
-HDL + hardware
-classical + quantum + hardware
-quantum + HDL + hardware
-AI + hardware
-distributed + hardware
-networking + hardware
-security + hardware
-AI + quantum + hardware
-classical + quantum + HDL + hardware
-
-These tests must verify grammar composition and semantic compatibility.
-
-
----
-
-129. Determinism Tests
-
-The same source must produce the same:
-
-token sequence;
-
-parse structure;
-
-diagnostics;
-
-AST structure;
-
-
-for the same compiler/grammar version.
-
-Hardware discovery must not affect parsing.
-
-
----
-
-130. Hard-Coding Audit
-
-Every hardware grammar change must be scanned for:
-
-MAX_QUBITS
-MAX_CPUS
-MAX_GPUS
-MAX_FPGAS
-MAX_NODES
-MAX_MEMORY
-MAX_THREADS
-MAX_TENSOR_RANK
-MAX_REGISTER_WIDTH
-MAX_NETWORK_SIZE
-MAX_DEVICE_COUNT
-
-and equivalent forms.
-
-Also inspect for accidental fixed resources such as:
-
-gpu0
-gpu1
-qpu0
-qubit0
-qubit1
-core0
-core1
-memory64gb
-
-when these are being used as universal language structures.
-
-
----
-
-131. Hard-Coding Classification
-
-Every fixed number encountered must be classified as:
-
-1. program semantics
-2. explicit semantic requirement
-3. target-specific requirement
-4. resource constraint
-5. implementation limitation
-6. test fixture
-7. documentation example
-8. accidental language limitation
-
-Only legitimate categories may remain.
-
-An implementation limitation must not silently become a language limitation.
-
-
----
-
-132. Performance
-
-The grammar must remain scalable in parser complexity.
-
-Avoid:
-
-unnecessary ambiguous alternatives;
-
-repeated expensive lookahead;
-
-duplicated expression grammars;
-
-recursive structures that can be represented iteratively;
-
-redundant dispatch layers.
-
-
-Large hardware descriptions should be parseable without quadratic behavior introduced by avoidable grammar ambiguity.
-
-Performance benchmarking belongs in validation.
-
-
----
-
-133. Error Recovery
-
-Error recovery must preserve useful diagnostics.
-
-Malformed hardware syntax should not cause unrelated parts of a program to become unintelligible when recovery is possible.
-
-The parser must remain deterministic.
-
-
----
-
-134. Source Spans
-
-Every hardware AST construct must be traceable to source spans.
-
-At minimum:
-
-start position
-end position
-source file identity
-
-The semantic and diagnostic layers must be able to report errors against these spans.
-
-
----
-
-135. Tooling
-
-The grammar must support:
-
-syntax highlighting;
-
-IDE completion;
-
-language-server parsing;
-
-navigation;
-
-formatting;
-
-diagnostics;
-
-AST inspection;
-
-documentation generation;
-
-refactoring tools.
-
-
-Stable syntax and public rule contracts are therefore tooling compatibility surfaces.
-
-
----
-
-136. Documentation Generation
-
-Hardware documentation should ultimately be generated from authoritative contracts where practical.
-
-Generated documentation must not become another independent language specification.
-
-
----
-
-137. Compatibility
-
-Hardware syntax changes must be tracked in:
-
-grammar/compatibility/
-grammar/spec/compatibility.md
-
-Compatibility analysis must consider:
-
-lexer
-parser
-AST
-semantic model
-IR
-compiler
-backend
-runtime
-
-A grammar change is not complete until downstream impact is understood.
-
-
----
-
-138. Versioning
-
-Hardware extensions must be version-aware.
-
-A feature may be:
-
-experimental
-proposed
-stable
-deprecated
-removed
-
-Versioning must not require rewriting unrelated hardware programs.
-
-
----
-
-139. Deprecation
-
-Deprecated syntax must have:
-
-documented replacement;
-
-compatibility period;
-
-diagnostics;
-
-migration path;
-
-tests.
-
-
-Do not silently remove existing syntax without compatibility analysis.
-
-
----
-
-140. Repository-Wide Integration Matrix
-
-Component	Hardware relationship
-
-grammar/DESIGN.md	architectural authority
-grammar/Zamani.g4	canonical root composition
-grammar/lexer/	lexical contract
-grammar/core/	names, paths, common syntax
-grammar/types/	shared type system
-grammar/expressions/	shared expressions
-grammar/resources/	universal resource model
-grammar/classical/	classical computation
-grammar/quantum/	quantum computation
-grammar/hybrid/	quantum/classical composition
-grammar/hdl/	HDL syntax
-grammar/hardware/	hardware intent
-grammar/distributed/	distributed semantics
-grammar/ai/	AI semantics
-grammar/data/	data semantics
-grammar/networking/	networking semantics
-grammar/security/	security semantics
-grammar/compile/	compilation intent
-grammar/execution/	execution intent
-grammar/interoperability/	external formats
-grammar/dialects/	controlled extensions
-src/lexer.rs	executable lexical implementation
-src/parser.rs	executable parser
-src/frontend/ast/	syntax AST
-semantic analysis	hardware meaning
-quantum::ir	canonical quantum semantic boundary
-QEC	quantum error correction
-ZQN	fault/noise semantics
-optimization	transformation
-routing	physical mapping
-scheduling	temporal/resource scheduling
-HAL	target capabilities/state
-runtime	execution
-
-
-
----
-
-141. Ownership Matrix
-
-Concept	Owner
-
-Identifiers	grammar/core/
-Expressions	grammar/expressions/
-General types	grammar/types/
-Hardware composition	hardware/hardware.g4
-Resources	hardware/resources.g4
-Capabilities	hardware/capabilities.g4
-Constraints	hardware/constraints.g4
-Targets	hardware/targets.g4
-Devices	hardware/devices.g4
-Topology	hardware/topology.g4
-Placement	hardware/placement.g4
-Accelerators	hardware/accelerators.g4
-Compute	hardware/compute.g4
-Memory	hardware/memory.g4
-Interconnect	hardware/interconnect.g4
-Timing	hardware/timing.g4
-Power	hardware/power.g4
-Thermal	hardware/thermal.g4
-Reliability	hardware/reliability.g4
-Calibration	hardware/calibration.g4
-Negotiation	hardware/negotiation.g4
-Deployment	hardware/deployment.g4
-CPU	hardware/cpu.g4
-GPU	hardware/gpu.g4
-FPGA	hardware/fpga.g4
-ASIC	hardware/asic.g4
-QPU	hardware/qpu.g4
-Quantum devices	hardware/quantum-device.g4
-Quantum computation	grammar/quantum/
-Quantum canonical IR	quantum::ir
-HDL	grammar/hdl/
-Routing	compiler routing subsystem
-Scheduling	compiler scheduling subsystem
-QEC	quantum resilience subsystem
-ZQN	fault/noise subsystem
-Physical discovery	HAL/target subsystem
-Runtime execution	runtime
-
-
-
----
-
-142. Recommended Independent-First Completion Order
-
-The hardware subsystem should be completed in this order:
-
-1. README.md
-       |
-       v
-2. canonical lexer/token contract
-       |
-       v
-3. core names/paths
-       |
-       v
-4. canonical expressions
-       |
-       v
-5. canonical types
-       |
-       v
-6. resources.g4
-       |
-       v
-7. capabilities.g4
-       |
-       v
-8. constraints.g4
-       |
-       v
-9. devices.g4
-       |
-       v
-10. targets.g4
-       |
-       v
-11. topology.g4
-       |
-       v
-12. placement.g4
-       |
-       v
-13. compute.g4
-       |
-       v
-14. memory.g4
-       |
-       v
-15. interconnect.g4
-       |
-       v
-16. timing.g4
-       |
-       v
-17. power.g4
-       |
-       v
-18. thermal.g4
-       |
-       v
-19. reliability.g4
-       |
-       v
-20. calibration.g4
-       |
-       v
-21. negotiation.g4
-       |
-       v
-22. deployment.g4
-       |
-       v
-23. accelerators.g4
-       |
-       v
-24. cpu.g4
-       |
-       v
-25. gpu.g4
-       |
-       v
-26. fpga.g4
-       |
-       v
-27. asic.g4
-       |
-       v
-28. qpu.g4
-       |
-       v
-29. quantum-device.g4
-       |
-       v
-30. hardware.g4 composition
-       |
-       v
-31. AST integration
-       |
-       v
-32. semantic integration
-       |
-       v
-33. IR integration
-       |
-       v
-34. compiler integration
-       |
-       v
-35. HAL integration
-       |
-       v
-36. runtime integration
-       |
-       v
-37. repository-wide tests
-
-The order is intentional.
-
-It prevents the composition root from compensating for incomplete leaf grammars.
-
-
----
-
-143. Completion Criteria for resources.g4
-
-Complete only when:
-
-resource syntax is defined;
-
-expressions are canonical;
-
-types are canonical;
-
-resource semantics are documented;
-
-AST mapping is defined;
-
-semantic mapping is defined;
-
-IR mapping is defined;
-
-hardware integration is defined;
-
-compiler consumers are defined;
-
-runtime consumers are defined;
-
-positive tests exist;
-
-negative tests exist;
-
-scalability tests exist;
-
-hard-coding audit passes.
-
-
-
----
-
-144. Completion Criteria for capabilities.g4
-
-Complete only when:
-
-capability syntax is defined;
-
-capability names are extensible;
-
-qualified names work;
-
-AST mapping exists;
-
-semantic capability model exists;
-
-target capability checking is defined;
-
-vendor extension behavior is defined;
-
-tests exist;
-
-no physical discovery is embedded;
-
-no fixed capability list becomes mandatory.
-
-
-
----
-
-145. Completion Criteria for targets.g4
-
-Complete only when:
-
-target classes are representable;
-
-target properties are representable;
-
-target requirements are representable;
-
-target constraints are representable;
-
-target realization is downstream;
-
-no physical device enumeration is required;
-
-AST/semantic/IR contracts exist;
-
-tests exist.
-
-
-
----
-
-146. Completion Criteria for topology.g4
-
-Complete only when:
-
-abstract topology is expressible;
-
-relationships are expressible;
-
-requirements are expressible;
-
-properties are expressible;
-
-topology does not perform routing;
-
-topology does not discover hardware;
-
-routing can consume its semantic representation;
-
-tests exist.
-
-
-
----
-
-147. Completion Criteria for placement.g4
-
-Complete only when:
-
-placement intent is expressible;
-
-affinity is expressible;
-
-locality is expressible;
-
-grouping is expressible;
-
-constraints are expressible;
-
-physical placement is downstream;
-
-AST/semantic/IR contracts exist;
-
-tests exist.
-
-
-
----
-
-148. Completion Criteria for CPU/GPU/FPGA/ASIC/QPU
-
-Every specialized compute grammar is complete only when:
-
-class declaration
-+
-capabilities
-+
 resources
-+
-parameters
-+
 properties
-+
-requirements
-+
-constraints
-+
-AST
-+
-semantics
-+
-IR
-+
-compiler consumers
-+
-tests
+generic contracts
+dialects
+extension points
 
-are defined.
-
-None may encode a universal physical capacity.
-
+rather than adding a keyword for every new device class.
 
 ---
 
-149. Completion Criteria for hardware.g4
+79. Dialect Integration
 
-hardware.g4 is complete only when:
+Hardware-specific dialects must integrate through the repository dialect mechanism.
 
-it is a composition grammar;
+A dialect should identify:
 
-it has one stable hardware entry point;
+name
+version
+syntax extensions
+semantic extensions
+AST mapping
+IR mapping
+compatibility
+feature gates
 
-it uses the canonical lexer vocabulary;
-
-it uses canonical names;
-
-it uses canonical expressions;
-
-it uses canonical types;
-
-it delegates specialized ownership;
-
-it does not duplicate leaf grammars;
-
-it does not contain physical limits;
-
-it does not contain device discovery;
-
-it does not contain runtime behavior;
-
-it does not create a quantum IR;
-
-it integrates with the canonical Zamani root;
-
-its AST contract is complete;
-
-its semantic contract is complete;
-
-its IR contract is complete;
-
-all public rules have tests;
-
-integration tests pass.
-
-
+A dialect must not silently redefine core Zamani semantics.
 
 ---
 
-150. Completion Criteria for the Entire Directory
+80. Interoperability
 
-grammar/hardware/ is production-ready only when:
+Hardware grammar may interoperate with:
 
-[ ] Authority is unambiguous
-[ ] Hardware ownership is unambiguous
-[ ] Duplicate ownership is removed
-[ ] Canonical lexer is used
-[ ] Canonical names are used
-[ ] Canonical expressions are used
-[ ] Canonical types are used
-[ ] Hardware composition is modular
-[ ] Resource model is integrated
-[ ] Capability model is integrated
-[ ] Requirement model is integrated
-[ ] Constraint model is integrated
-[ ] Preference model is integrated
-[ ] Target model is integrated
-[ ] Device model is integrated
-[ ] Topology model is integrated
-[ ] Placement model is integrated
-[ ] Accelerator model is integrated
-[ ] CPU model is integrated
-[ ] GPU model is integrated
-[ ] FPGA model is integrated
-[ ] ASIC model is integrated
-[ ] QPU model is integrated
-[ ] Quantum-device model is integrated
-[ ] Memory model is integrated
-[ ] Interconnect model is integrated
-[ ] Timing model is integrated
-[ ] Power model is integrated
-[ ] Thermal model is integrated
-[ ] Reliability model is integrated
-[ ] Calibration boundary is defined
-[ ] Negotiation boundary is defined
-[ ] Deployment boundary is defined
-[ ] HDL separation is enforced
-[ ] Quantum separation is enforced
-[ ] quantum::ir remains canonical
-[ ] QEC remains downstream
-[ ] ZQN remains downstream
-[ ] Routing remains downstream
-[ ] Scheduling remains downstream
-[ ] Optimization remains downstream
-[ ] HAL remains downstream
-[ ] Runtime remains downstream
-[ ] No unsafe Rust is introduced
-[ ] Grammar is action-free
-[ ] No hardware discovery occurs during parsing
-[ ] No physical device enumeration occurs in core grammar
-[ ] No artificial capacity limits exist
-[ ] No fixed qubit limit exists
-[ ] No fixed CPU limit exists
-[ ] No fixed GPU limit exists
-[ ] No fixed FPGA limit exists
-[ ] No fixed node limit exists
-[ ] No fixed memory limit exists
-[ ] No fixed thread limit exists
-[ ] No fixed tensor-rank limit exists
-[ ] No fixed register-width limit exists
-[ ] No fixed network-size limit exists
-[ ] No fixed device-count limit exists
-[ ] Generic parameters work
-[ ] Qualified names work
-[ ] Vendor extensions work without core-language pollution
-[ ] Dialect integration is defined
-[ ] Source spans are preserved
-[ ] Diagnostics are deterministic
-[ ] Positive tests pass
-[ ] Negative tests pass
-[ ] Boundary tests pass
-[ ] Scalability tests pass
-[ ] Determinism tests pass
-[ ] Cross-domain tests pass
-[ ] Compatibility tests pass
-[ ] AST coverage passes
-[ ] Semantic coverage passes
-[ ] IR coverage passes
-[ ] Compiler integration passes
-[ ] HAL integration passes
-[ ] Runtime integration passes
-[ ] Rust 1.97/1.97.1 build passes
+HDL
+QASM
+QIR
+LLVM-family representations
+MLIR-family representations
+WASM
+foreign functions
+vendor toolchains
 
+but these are interoperability/lowering boundaries.
+
+They are not competing Zamani semantic authorities.
 
 ---
 
-151. Production Validation Pipeline
+81. Error Diagnostics
 
-The final validation pipeline is:
+Hardware grammar and semantic integration must preserve source spans.
 
-README / architecture
-        |
-        v
-Specification
-        |
-        v
-Lexical contract
-        |
-        v
-Canonical tokens
-        |
-        v
-ANTLR grammar validation
-        |
-        v
-Rust lexer conformance
-        |
-        v
-Rust parser conformance
-        |
-        v
-AST coverage
-        |
-        v
-Semantic coverage
-        |
-        v
-IR coverage
-        |
-        v
-Compiler coverage
-        |
-        v
-HAL/target coverage
-        |
-        v
-Runtime coverage
-        |
-        v
-Cross-domain tests
-        |
-        v
-Scalability tests
-        |
-        v
-Compatibility tests
-        |
-        v
-Production release
+Diagnostics should identify:
 
-A grammar file cannot be declared production-ready solely because ANTLR generates a parser.
+source file
+line
+column
+span
+error category
+primary message
+related context
+suggestion where appropriate
 
+Diagnostics must be deterministic.
+
+They should distinguish:
+
+syntax error
+name error
+type error
+resource error
+capability error
+constraint error
+target incompatibility
+resource infeasibility
+deployment error
 
 ---
 
-152. What Must Never Be Added
+82. Error Layering
 
-Do not add:
+A syntax error belongs to parsing.
 
-MAX_QUBITS
-MAX_CPUS
-MAX_GPUS
-MAX_FPGAS
-MAX_NODES
-MAX_MEMORY
-MAX_THREADS
-MAX_TENSOR_RANK
-MAX_REGISTER_WIDTH
-MAX_NETWORK_SIZE
-MAX_DEVICE_COUNT
+A missing capability belongs to semantic/target analysis.
 
-Do not add:
+Insufficient resources belong to resource feasibility analysis.
 
-physical_qubit_0
-physical_qubit_1
-...
+Unavailable runtime hardware belongs to runtime/deployment.
 
-as a universal hardware model.
-
-Do not add:
-
-gpu0
-gpu1
-gpu2
-
-as a universal GPU model.
-
-Do not add:
-
-wire [31:0]
-
-as a universal hardware width.
-
-Do not add:
-
-RAM = 64GB
-VRAM = 24GB
-
-as language-wide assumptions.
-
-Do not add fixed topology assumptions.
-
-Do not add fixed clock frequencies.
-
-Do not add fixed vendor assumptions.
-
-Do not add a second quantum IR.
-
-Do not add hardware execution actions.
-
-Do not add hardware discovery to the parser.
-
-Do not add runtime behavior to the grammar.
-
+Do not report a runtime resource problem as a parser error.
 
 ---
 
-153. What Should Be Added
+83. Security Boundary
 
-Prefer:
+Hardware grammar must not become a privileged hardware-control escape hatch.
 
-requires resource >= expression
-requires capability("qualified.capability")
-requires topology(...)
-requires placement(...)
-prefer ...
-hint ...
-target ...
-property ...
-generic parameter ...
-qualified extension ...
+Parsing source must not:
 
-This keeps hardware intent portable.
+- execute commands;
+- access devices;
+- access arbitrary files;
+- invoke drivers;
+- modify hardware;
+- query privileged state.
 
+Hardware execution belongs downstream behind explicit security boundaries.
 
 ---
 
-154. Example Portable Hardware Intent
+84. Deterministic Grammar Requirement
 
-A conceptual Zamani program may eventually express:
+The grammar must avoid unnecessary ambiguity.
 
-hardware WorkloadTarget<RequiredCompute> {
+Production validation must include:
+
+- ambiguous alternatives;
+- unreachable rules;
+- duplicate rules;
+- duplicate token concepts;
+- left recursion where unsupported;
+- precedence conflicts;
+- keyword collisions;
+- import conflicts.
+
+---
+
+85. Existing Token Vocabulary Integration
+
+The current Rust lexer already contains broad Zamani vocabulary.
+
+Hardware grammar must not assume a token exists merely because a hardware ".g4" file names it.
+
+The implementation sequence is:
+
+specification
+      |
+      v
+lexical contract
+      |
+      v
+canonical lexer token
+      |
+      v
+grammar
+      |
+      v
+parser
+
+not:
+
+hardware grammar invents token
+      |
+      v
+hope lexer eventually supports it
+
+This rule prevents later re-editing.
+
+---
+
+86. Existing "unsafe" Keyword
+
+The current Rust lexer includes a "KeywordUnsafe" token.
+
+That does not change the hardware implementation safety rule.
+
+Hardware grammar work must not introduce or require unsafe Rust.
+
+If the broader Zamani language ultimately retains an "unsafe" source-language construct, that is a separate language-semantics decision and must not be confused with Rust implementation safety.
+
+For the hardware subsystem:
+
+«No hardware grammar implementation requires unsafe Rust.»
+
+---
+
+87. Generated Parser Policy
+
+Generated parser sources should be treated as build artifacts unless repository policy explicitly makes them tracked sources.
+
+The source-of-truth remains:
+
+grammar/*.g4
+
+and the canonical specification.
+
+Generated code must not be manually modified to repair grammar behavior.
+
+---
+
+88. Build Compatibility
+
+The hardware grammar must remain compatible with:
+
+Rust 1.97
+Rust 1.97.1
+Rust 2021
+
+The implementation must not require newer Rust-only language features unless the repository baseline is intentionally raised through an explicit compatibility change.
+
+---
+
+89. Performance
+
+Grammar design should avoid unnecessary pathological ambiguity and excessive backtracking.
+
+Performance must be evaluated against representative source sizes.
+
+However:
+
+«Performance optimization must never introduce a semantic hardware capacity limit.»
+
+For example, changing a parser algorithm to improve performance is acceptable.
+
+Changing the language to allow only 1024 devices is not.
+
+---
+
+90. Memory Safety
+
+No unsafe memory manipulation is required for hardware grammar.
+
+Compiler data structures should use safe Rust abstractions.
+
+Potentially large hardware descriptions must be represented through scalable data structures rather than fixed arrays.
+
+---
+
+91. Resource Representation
+
+Prefer dynamic structures such as semantic collections rather than fixed-size structures.
+
+Conceptually:
+
+resources: collection
+capabilities: collection
+devices: collection
+connections: collection
+constraints: collection
+
+The actual Rust representation belongs to implementation layers, but the grammar must not impose fixed cardinality.
+
+---
+
+92. Physical Limits Versus Representational Limits
+
+There is an important distinction.
+
+The language cannot promise mathematically infinite physical hardware.
+
+It can provide an unbounded language model subject to implementation representation.
+
+Therefore:
+
+infinity
+
+in POCO-REAF means:
+
+«no artificial language-level finite hardware ceiling.»
+
+Actual execution remains bounded by:
+
+- available resources;
+- representation;
+- target capabilities;
+- runtime environment;
+- physical reality.
+
+This distinction must remain explicit.
+
+---
+
+93. "From Atom to Everywhere"
+
+The hardware architecture must support the conceptual spectrum:
+
+atomic / nano-scale computation
+        |
+        v
+embedded
+        |
+        v
+single processor
+        |
+        v
+multicore
+        |
+        v
+GPU
+        |
+        v
+FPGA
+        |
+        v
+ASIC
+        |
+        v
+accelerator
+        |
+        v
+QPU
+        |
+        v
+heterogeneous system
+        |
+        v
+HPC
+        |
+        v
+cluster
+        |
+        v
+distributed/cloud
+        |
+        v
+future computational substrates
+
+The grammar must not need a separate language for each level.
+
+---
+
+94. Hardware Intent Example
+
+Conceptually, a portable contract can look like:
+
+hardware ComputeTarget<RequiredCompute> {
     requires resource.compute >= RequiredCompute;
     requires capability("tensor.compute");
     prefer accelerator("compute");
 }
 
-The same semantic contract may then be realized on:
+The same semantic intent could be considered against:
 
-embedded processor
 CPU
-multicore CPU
 GPU
 FPGA
 ASIC
 accelerator
-cluster
-cloud
+heterogeneous system
+distributed system
 future target
 
-without the grammar defining a physical machine.
-
+The grammar does not choose the physical machine.
 
 ---
 
-155. Example Quantum Hardware Intent
+95. Quantum Hardware Example
 
 Conceptually:
 
@@ -4763,14 +3146,13 @@ hardware QuantumTarget<RequiredQubits> {
     requires resource.qubits >= RequiredQubits;
 }
 
-This does not mean that the grammar knows how many physical qubits exist.
+The compiler determines whether a target can satisfy the requirement.
 
-The compiler determines feasibility against the selected target.
-
+The grammar does not establish a maximum number of qubits.
 
 ---
 
-156. Example Topology Intent
+96. Topology Example
 
 Conceptually:
 
@@ -4781,51 +3163,58 @@ requires topology(
 
 The grammar preserves the requirement.
 
-Routing determines the physical realization.
-
+The routing subsystem determines physical realization.
 
 ---
 
-157. Example Memory Intent
+97. Memory Example
 
 Conceptually:
 
-requires memory >= workload_memory;
+requires memory >= required_memory;
 
-The compiler determines whether the selected target provides sufficient memory and how the program should be mapped.
+The compiler determines whether memory requirements can be satisfied.
 
+It may choose:
+
+- local memory;
+- accelerator memory;
+- distributed memory;
+- virtual memory;
+- another target;
+- another execution strategy.
+
+The grammar does not encode a fixed memory capacity.
 
 ---
 
-158. Example Capability Intent
+98. Capability Example
 
 Conceptually:
 
 requires capability("quantum.mid_circuit_measurement");
 
-The source does not name a vendor or physical device.
+The source remains independent of a particular QPU.
 
-The target capability system determines whether the requirement can be satisfied.
-
+Capability resolution occurs later.
 
 ---
 
-159. Example Preference
+99. Preference Example
 
 Conceptually:
 
 prefer accelerator("tensor.compute");
 
-This is not a mandatory physical mapping.
+This does not force a physical accelerator.
 
-If the preferred accelerator is unavailable, downstream policy determines what happens.
-
+If no such accelerator exists, downstream policy determines whether another implementation can satisfy the program.
 
 ---
 
-160. Example Physical Realization
+100. Physical Realization Example
 
-Physical realization should occur later:
+The downstream architecture may eventually perform:
 
 logical resource
        |
@@ -4835,92 +3224,1375 @@ target resource
        v
 physical resource
 
-The realization may change between targets without changing source semantics.
+For example:
 
+logical qubit
+       |
+       v
+logical QPU resource
+       |
+       v
+physical qubit
+
+or:
+
+logical accelerator
+       |
+       v
+GPU-class accelerator
+       |
+       v
+physical GPU
+
+This is not grammar responsibility.
 
 ---
 
-161. Repository Maintenance Rule
+101. Compile-Once Requirement
 
-When adding a new hardware technology:
+POCO-REAF requires the compiler architecture to preserve semantic meaning across targets.
+
+The hardware grammar therefore MUST NOT encode backend-specific implementation decisions into the portable program.
+
+The compiler may perform:
+
+target selection
+specialization
+optimization
+decomposition
+routing
+scheduling
+resource allocation
+lowering
+
+without requiring source rewriting where semantics permit.
+
+---
+
+102. Compile-Time Versus Runtime Hardware
+
+Some information is available during compilation.
+
+Other information is only available at runtime.
+
+The grammar must not force all hardware information to be known statically.
+
+The architecture may support:
+
+compile-time requirement
+runtime capability
+dynamic availability
+late binding
+deployment-time selection
+
+as long as their semantic contracts are explicit.
+
+---
+
+103. Dynamic Resource Availability
+
+A program may be compiled for an abstract target and later encounter different available resources.
+
+The system should distinguish:
+
+program requirement
+target capability
+current availability
+
+This is necessary for:
+
+- clusters;
+- cloud systems;
+- heterogeneous machines;
+- QPU queues;
+- elastic accelerators;
+- dynamic distributed resources.
+
+---
+
+104. Hardware Contracts Must Be Declarative
+
+Hardware grammar should be declarative.
+
+Prefer:
+
+requires ...
+provides ...
+supports ...
+constrains ...
+prefers ...
+hints ...
+
+over executable parser-level commands.
+
+---
+
+105. No Hidden Compiler Policy in Grammar
+
+The grammar must not encode assumptions such as:
+
+GPU is always preferred
+CPU is always fallback
+QPU always requires physical qubits
+FPGA always means synthesis
+
+Those are compiler policy decisions.
+
+The language should expose explicit semantics.
+
+---
+
+106. No Vendor-Specific Grammar Explosion
+
+A future technology must not require:
+
+keyword vendorA
+keyword vendorB
+keyword vendorC
+
+unless the language semantics genuinely require a dedicated keyword.
+
+Most extension should use:
+
+qualified names
+capabilities
+properties
+dialects
+
+---
+
+107. Hardware and Classical Computing
+
+Hardware intent must integrate naturally with classical computation.
+
+A classical algorithm can request:
+
+compute
+memory
+vectorization
+tensor.compute
+parallel execution
+accelerator
+
+without becoming a different language.
+
+---
+
+108. Hardware and Quantum Computing
+
+Quantum programs can request:
+
+quantum.compute
+quantum.measurement
+quantum.reset
+quantum.dynamic_control
+quantum.mid_circuit_measurement
+quantum.connectivity
+quantum reliability
+
+without hard-coding a physical QPU.
+
+---
+
+109. Hardware and HDL
+
+HDL constructs may ultimately lower into hardware realizations described through the hardware subsystem.
+
+The boundary must remain:
+
+HDL:
+    structure/behavior
+
+Hardware:
+    realization intent/resource/capability
+
+Compiler:
+    lowering/synthesis planning
+
+Backend:
+    physical realization
+
+---
+
+110. Hardware and Distributed Computing
+
+Hardware topology can express:
+
+locality
+connectivity
+communication
+placement
+
+Distributed semantics express:
+
+processes
+actors
+services
+messages
+replication
+consistency
+
+These must not be conflated.
+
+---
+
+111. Hardware and Networking
+
+Networking owns network programming semantics.
+
+Hardware owns hardware-level interconnect intent.
+
+The two can interoperate without duplicating:
+
+endpoint
+protocol
+routing
+communication
+
+ownership.
+
+---
+
+112. Hardware and Security
+
+Hardware grammar can express security capabilities and requirements, but security semantics remain integrated with:
+
+grammar/security/
+
+Examples:
+
+secure execution
+trusted capability
+confidential computation
+cryptographic acceleration
+
+must be represented through shared semantic models.
+
+---
+
+113. Hardware and AI
+
+AI computation may request:
+
+tensor.compute
+matrix.compute
+accelerator
+high_bandwidth_memory
+parallel execution
+
+The hardware grammar provides target intent.
+
+AI semantics remain in:
+
+grammar/ai/
+
+---
+
+114. Hardware and Data
+
+Data movement requirements may interact with:
+
+memory
+interconnect
+bandwidth
+latency
+storage
+
+but data semantics remain in:
+
+grammar/data/
+
+---
+
+115. Compatibility
+
+Hardware grammar evolution must preserve existing valid programs where possible.
+
+Changes must classify:
+
+compatible
+source-compatible
+AST-compatible
+semantic-compatible
+IR-compatible
+breaking
+deprecated
+experimental
+
+The repository's compatibility subsystem remains authoritative for version policy.
+
+---
+
+116. Deprecated Hardware Grammar
+
+When a hardware file becomes redundant, do not immediately delete it.
+
+Preferred sequence:
+
+old grammar
+    |
+    v
+mark deprecated
+    |
+    v
+migrate references
+    |
+    v
+migrate tests
+    |
+    v
+validate imports
+    |
+    v
+remove duplicate authority
+
+This is particularly relevant to:
+
+hardware-constraints.g4
+
+because "constraints.g4" already claims canonical ownership.
+
+---
+
+117. Grammar-to-AST Traceability
+
+Every public grammar rule must have a traceability record.
+
+Conceptually:
+
+hardwareResourceRequirement
+        |
+        +--> AST node
+        |
+        +--> semantic model
+        |
+        +--> resource analysis
+        |
+        +--> IR/lowering
+        |
+        +--> tests
+
+No orphan grammar rules are permitted.
+
+---
+
+118. AST-to-Semantics Traceability
+
+Every hardware AST node must identify:
+
+semantic owner
+validation rules
+resource effects
+capability effects
+diagnostics
+IR/lowering destination
+
+---
+
+119. Semantic-to-IR Traceability
+
+Every semantic hardware concept must identify whether it:
+
+maps directly to IR
+maps to metadata
+maps to target requirements
+maps to compiler constraints
+is consumed only during analysis
+is lowered before IR
+
+This prevents semantic concepts from disappearing silently.
+
+---
+
+120. Compiler Consumer Contract
+
+Every hardware feature must state which compiler phase consumes it.
+
+Possible consumers include:
+
+name resolution
+type checking
+effect analysis
+resource analysis
+capability analysis
+target analysis
+optimization
+placement
+routing
+scheduling
+resilience
+QEC
+ZQN
+lowering
+deployment
+
+---
+
+121. Runtime Consumer Contract
+
+If a hardware feature has runtime significance, it must identify the runtime consumer.
+
+Examples:
+
+dynamic capability
+resource availability
+device state
+runtime selection
+recovery
+monitoring
+
+If it has no runtime consumer, the feature must state that explicitly.
+
+---
+
+122. No Orphan Features
+
+A feature is incomplete if it exists only in:
+
+hardware/*.g4
+
+without:
+
+AST
+semantic ownership
+IR/lowering
+tests
+
+The feature must be marked:
+
+PARTIAL
+
+or:
+
+PLANNED
+
+rather than incorrectly marked stable.
+
+---
+
+123. Production Readiness Checklist: Architecture
+
+The directory passes architecture review only when:
+
+[ ] One hardware composition root exists
+[ ] One complete-language composition root exists
+[ ] No competing hardware language exists
+[ ] Ownership is explicit
+[ ] Dependencies are explicit
+[ ] Dependency direction is acyclic
+[ ] Generic syntax is reused
+[ ] Canonical lexer is reused
+[ ] Canonical expressions are reused
+[ ] Canonical types are reused
+[ ] AST mapping exists
+[ ] Semantic mapping exists
+[ ] IR mapping exists
+
+---
+
+124. Production Readiness Checklist: Scalability
+
+[ ] No MAX_QUBITS
+[ ] No MAX_CPUS
+[ ] No MAX_GPUS
+[ ] No MAX_FPGAS
+[ ] No MAX_NODES
+[ ] No MAX_MEMORY
+[ ] No MAX_THREADS
+[ ] No MAX_TENSOR_RANK
+[ ] No MAX_REGISTER_WIDTH
+[ ] No MAX_NETWORK_SIZE
+[ ] No MAX_DEVICE_COUNT
+[ ] No fixed device enumeration
+[ ] No fixed topology size
+[ ] No fixed memory capacity
+[ ] No fixed register width
+[ ] No fixed accelerator count
+[ ] No fixed timeline count
+[ ] No fixed port count
+[ ] No fixed channel count
+
+---
+
+125. Production Readiness Checklist: Safety
+
+[ ] Grammar is action-free
+[ ] No embedded Rust actions
+[ ] No embedded hardware execution
+[ ] No hardware discovery during parsing
+[ ] No filesystem access
+[ ] No network access
+[ ] No driver access
+[ ] No runtime execution
+[ ] No project-owned unsafe Rust
+[ ] Rust 1.97 compatible
+[ ] Rust 1.97.1 compatible
+[ ] Rust 2021 compatible
+
+---
+
+126. Production Readiness Checklist: Quantum
+
+[ ] Quantum hardware capability is supported
+[ ] Quantum resource requirements are supported
+[ ] Measurement capability is supported
+[ ] Dynamic-circuit capability is supported
+[ ] Mid-circuit measurement capability is supported
+[ ] Classical feed-forward capability is supported
+[ ] Abstract connectivity is supported
+[ ] No fixed qubit limit exists
+[ ] No fixed physical-qubit model exists
+[ ] quantum::ir remains canonical
+[ ] No duplicate quantum IR exists
+[ ] QEC remains downstream
+[ ] ZQN remains downstream
+
+---
+
+127. Production Readiness Checklist: HDL
+
+[ ] HDL boundary is explicit
+[ ] Hardware intent is separate from HDL behavior
+[ ] Parameterized hardware is supported
+[ ] Timing intent is supported
+[ ] Memory intent is supported
+[ ] Interface intent is supported
+[ ] Synthesis intent has a downstream boundary
+[ ] No fixed register width is imposed
+[ ] No fixed FPGA capacity is imposed
+[ ] No physical chip assumption is embedded
+
+---
+
+128. Production Readiness Checklist: Compiler
+
+[ ] Resource analysis consumes hardware requirements
+[ ] Capability analysis consumes hardware capabilities
+[ ] Target analysis consumes target intent
+[ ] Placement consumes placement intent
+[ ] Routing consumes topology intent
+[ ] Scheduling consumes timing intent
+[ ] Resilience consumes reliability intent
+[ ] QEC consumes quantum resilience requirements
+[ ] ZQN consumes noise/resilience semantics
+[ ] HAL consumes target realization
+[ ] Runtime consumes runtime-relevant hardware metadata
+
+---
+
+129. Production Readiness Checklist: Tests
+
+[ ] Positive tests
+[ ] Negative tests
+[ ] Boundary tests
+[ ] Scalability tests
+[ ] Determinism tests
+[ ] Portability tests
+[ ] Compatibility tests
+[ ] AST tests
+[ ] Semantic tests
+[ ] IR tests
+[ ] Compiler integration tests
+[ ] HAL integration tests
+[ ] Runtime integration tests
+[ ] Cross-domain tests
+[ ] Hard-coding tests
+
+---
+
+130. Cross-Domain Integration Matrix
+
+Hardware must integrate with:
+
+Domain| Hardware relationship
+"core/"| names, attributes, common declarations
+"types/"| resource/capability types
+"expressions/"| quantities and predicates
+"declarations/"| hardware declarations
+"statements/"| hardware intent statements
+"functions/"| hardware-aware functions
+"modules/"| hardware module boundaries
+"effects/"| hardware-related effects
+"memory/"| generic memory semantics
+"concurrency/"| parallel resource intent
+"classical/"| CPU/general computation
+"quantum/"| quantum computation
+"hybrid/"| quantum-classical execution
+"hdl/"| hardware structure/behavior
+"resources/"| generic resource semantics
+"compile/"| target selection/lowering
+"execution/"| runtime policies
+"distributed/"| distributed hardware
+"ai/"| accelerator/tensor requirements
+"data/"| data movement/storage
+"networking/"| interconnect/network relationships
+"security/"| trusted/secure hardware capabilities
+"interoperability/"| external hardware formats
+"dialects/"| future/vendor extensions
+"validation/"| conformance
+"compatibility/"| versioning and migration
+"tests/"| production verification
+
+---
+
+131. Independent Implementation Order
+
+To minimize re-editing, implement hardware files in dependency order.
+
+Stage 1 — shared contracts
+
+Complete first:
+
+grammar/DESIGN.md
+grammar/specification/
+grammar/spec/
+grammar/lexer/
+grammar/core/
+grammar/expressions/
+grammar/types/
+
+These define the foundations.
+
+Stage 2 — hardware leaf contracts
+
+Then complete:
+
+resources.g4
+capabilities.g4
+targets.g4
+devices.g4
+constraints.g4
+
+These establish the core hardware intent vocabulary.
+
+Stage 3 — relationship contracts
+
+Then:
+
+topology.g4
+placement.g4
+memory.g4
+interconnect.g4
+timing.g4
+
+Stage 4 — target classes
+
+Then:
+
+accelerators.g4
+cpu.g4
+gpu.g4
+fpga.g4
+asic.g4
+qpu.g4
+quantum-device.g4
+
+Stage 5 — physical-quality intent
+
+Then:
+
+power.g4
+thermal.g4
+reliability.g4
+calibration.g4
+
+Stage 6 — deployment
+
+Then:
+
+negotiation.g4
+deployment.g4
+
+Stage 7 — hardware composition
+
+Only after leaf contracts are stable:
+
+hardware.g4
+
+Stage 8 — complete-language composition
+
+Then integrate through:
+
+grammar/Zamani.g4
+
+Stage 9 — implementation conformance
+
+Then update/validate:
+
+grammar/grammar.md
+
+Stage 10 — full validation
+
+Then run:
+
+lexer
+parser
+AST
+semantic
+IR
+compiler
+HAL
+runtime
+cross-domain
+scalability
+compatibility
+
+tests.
+
+---
+
+132. Why "hardware.g4" Comes Last
+
+"hardware.g4" is the composition point.
+
+If it is implemented before its leaf contracts are settled, it becomes a source of repeated edits.
+
+The independent-first strategy is therefore:
+
+leaf contract
+      |
+      v
+leaf implementation
+      |
+      v
+leaf tests
+      |
+      v
+hardware composition
+      |
+      v
+Zamani composition
+
+This satisfies the requirement that an individual file can be considered complete without repeatedly reopening it after unrelated files change.
+
+---
+
+133. Definition of "Done" for an Individual File
+
+A file is complete only when:
+
+Purpose
+        defined
+
+Ownership
+        defined
+
+Dependencies
+        defined
+
+Public syntax
+        defined
+
+AST contract
+        defined
+
+Semantic contract
+        defined
+
+IR contract
+        defined
+
+Compiler consumers
+        defined
+
+Runtime consumers
+        defined
+
+Diagnostics
+        defined
+
+Compatibility
+        defined
+
+Positive tests
+        present
+
+Negative tests
+        present
+
+Boundary tests
+        present
+
+Scalability tests
+        present
+
+Determinism tests
+        present
+
+Hard-coding audit
+        passed
+
+Only then is the file marked production-ready.
+
+---
+
+134. Definition of "Done" for a Hardware Feature
+
+A feature is complete only when:
+
+Specification
+    +
+Lexer
+    +
+Parser
+    +
+AST
+    +
+Semantic Analysis
+    +
+IR
+    +
+Compiler
+    +
+Target/HAL
+    +
+Runtime where applicable
+    +
+Tests
+
+are all accounted for.
+
+If one layer is missing:
+
+PARTIAL
+
+or:
+
+PLANNED
+
+must be used.
+
+---
+
+135. Definition of Hardware Grammar Production Readiness
+
+"grammar/hardware/" is production-ready only when:
+
+one language
+one lexer
+one parser architecture
+one AST architecture
+one semantic architecture
+one canonical IR architecture
+one hardware composition root
+no duplicate hardware authority
+no fixed hardware capacity
+no physical-device dependency
+no vendor lock-in
+no parser-time hardware discovery
+no unsafe implementation
+complete AST traceability
+complete semantic traceability
+complete IR traceability
+complete compiler integration
+complete target integration
+complete HAL integration
+complete test coverage
+
+all hold.
+
+---
+
+136. Repository-Wide Conformance
+
+Hardware grammar production readiness must be verified against:
+
+grammar/DESIGN.md
+grammar/Zamani.g4
+grammar/grammar.md
+grammar/Zamani-Grammar.md
+grammar/spec/
+grammar/specification/
+grammar/core/
+grammar/types/
+grammar/expressions/
+grammar/resources/
+grammar/quantum/
+grammar/hdl/
+grammar/compile/
+grammar/execution/
+grammar/validation/
+grammar/compatibility/
+src/lexer.rs
+src/parser.rs
+src/frontend/ast/
+src/quantum/
+
+The hardware subsystem cannot declare itself complete while contradicting a higher-level contract.
+
+---
+
+137. Current Integration Issues That Must Be Corrected
+
+The existing repository inspection identifies several classes of issues that must be resolved.
+
+137.1 Token vocabulary divergence
+
+Some existing hardware grammar material uses vocabulary that does not directly align with the current canonical Rust lexer.
+
+Resolution:
+
+canonical lexer vocabulary
+        |
+        v
+ANTLR grammar vocabulary
+        |
+        v
+hardware grammar
+
+No second token vocabulary.
+
+---
+
+137.2 Duplicate constraint ownership
+
+Both:
+
+constraints.g4
+hardware-constraints.g4
+
+currently claim hardware constraint responsibility.
+
+Resolution:
+
+constraints.g4
+    |
+    v
+canonical implementation
+
+hardware-constraints.g4
+    |
+    v
+compatibility/deprecation
+
+until safe retirement is possible.
+
+---
+
+137.3 Composition authority
+
+Some hardware files document relationships to parser structures that must be reconciled with the actual canonical "grammar/Zamani.g4" architecture.
+
+Resolution:
+
+«"grammar/Zamani.g4" remains the only complete-language root.»
+
+---
+
+137.4 Quantum authority
+
+Some hardware documentation references quantum-device behavior while the repository architecture establishes:
+
+quantum::ir
+
+as the canonical quantum IR.
+
+Resolution:
+
+«hardware syntax may describe quantum hardware capabilities, but quantum program semantics continue through "quantum::ir".»
+
+---
+
+137.5 Documentation status
+
+Documentation must not call a feature production-ready merely because ".g4" syntax exists.
+
+The status must reflect:
+
+SPECIFIED
+IMPLEMENTED
+PARTIAL
+PLANNED
+DEPRECATED
+EXPERIMENTAL
+STABLE
+
+according to actual repository integration.
+
+---
+
+138. No Unnecessary Renames
+
+Existing major filenames should be retained.
+
+Do not rename:
+
+hardware.g4
+resources.g4
+capabilities.g4
+constraints.g4
+targets.g4
+devices.g4
+topology.g4
+placement.g4
+memory.g4
+interconnect.g4
+...
+
+merely for aesthetics.
+
+If duplicate ownership must be removed, prefer:
+
+migration
+deprecation
+reference redirection
+test migration
+
+before deletion.
+
+---
+
+139. Expansion Rule
+
+The objective is to expand existing repository functionality, not replace working features with an unrelated architecture.
+
+For every existing hardware feature:
+
+inspect
+        |
+        v
+classify ownership
+        |
+        v
+preserve useful behavior
+        |
+        v
+normalize vocabulary
+        |
+        v
+connect AST
+        |
+        v
+connect semantics
+        |
+        v
+connect IR
+        |
+        v
+test
+
+Only redundant or contradictory implementations should be consolidated.
+
+---
+
+140. What Must Never Be Added
+
+Never add universal language assumptions such as:
+
+MAX_QUBITS
+MAX_CPUS
+MAX_GPUS
+MAX_FPGAS
+MAX_NODES
+MAX_MEMORY
+MAX_THREADS
+MAX_TENSOR_RANK
+MAX_REGISTER_WIDTH
+MAX_NETWORK_SIZE
+MAX_DEVICE_COUNT
+
+Never make these the universal language model:
+
+physical qubit IDs
+GPU IDs
+CPU IDs
+FPGA coordinates
+memory-bank IDs
+PCI addresses
+device handles
+driver handles
+
+Never add:
+
+hardware discovery
+runtime execution
+routing implementation
+scheduling implementation
+calibration implementation
+QEC implementation
+ZQN implementation
+
+to parser grammar.
+
+Never create another quantum IR.
+
+Never create another complete Zamani grammar.
+
+Never turn every vendor feature into a core keyword.
+
+---
+
+141. What Should Be Preferred
+
+Prefer:
+
+requires ...
+provides ...
+supports ...
+prefer ...
+hint ...
+property ...
+target ...
+capability(...)
+resource(...)
+topology(...)
+placement(...)
+
+Prefer:
+
+qualified names
+generic parameters
+symbolic quantities
+semantic constraints
+capability contracts
+resource contracts
+target-independent intent
+
+Prefer downstream resolution for:
+
+device selection
+resource allocation
+physical mapping
+routing
+scheduling
+calibration
+deployment
+
+---
+
+142. Hardware Contract Example
+
+Conceptually:
+
+hardware ComputeTarget<N> {
+    requires resource.compute >= N;
+    requires capability("tensor.compute");
+    prefer accelerator("compute");
+}
+
+This describes requirements.
+
+It does not say:
+
+use GPU #3
+
+or:
+
+use 16 CPU cores
+
+---
+
+143. Hardware + Quantum Example
+
+Conceptually:
+
+hardware QuantumTarget<N> {
+    requires capability("quantum.compute");
+    requires capability("quantum.measurement");
+    requires resource.qubits >= N;
+}
+
+The actual target may be:
+
+QPU
+simulator
+distributed quantum system
+future quantum target
+
+subject to semantic feasibility.
+
+---
+
+144. Hardware + HDL Example
+
+Conceptually:
+
+hardware AcceleratorTarget<W> {
+    requires capability("programmable.logic");
+    requires resource.compute >= required_compute;
+    requires resource.memory >= required_memory;
+}
+
+HDL can describe the implementation structure separately.
+
+---
+
+145. Hardware + Distributed Example
+
+Conceptually:
+
+hardware DistributedTarget {
+    requires capability("distributed.communication");
+    requires topology(...);
+    requires resource.compute >= required_compute;
+}
+
+The number of nodes is not hard-coded.
+
+---
+
+146. Hardware + AI Example
+
+Conceptually:
+
+hardware TensorTarget {
+    requires capability("tensor.compute");
+    requires resource.memory >= required_memory;
+    prefer accelerator("matrix.compute");
+}
+
+This remains framework-independent.
+
+---
+
+147. Hardware + Security Example
+
+Conceptually:
+
+hardware SecureTarget {
+    requires capability("secure.compute");
+    requires capability("trusted.execution");
+}
+
+Security semantics remain integrated with the security subsystem.
+
+---
+
+148. Hardware + Portability
+
+A hardware contract should be portable across target classes.
+
+For example:
+
+same source
+       |
+       +--> embedded
+       +--> CPU
+       +--> GPU
+       +--> FPGA
+       +--> ASIC
+       +--> QPU
+       +--> simulator
+       +--> cluster
+       +--> cloud
+       +--> future target
+
+Target feasibility may differ.
+
+Source semantics should not.
+
+---
+
+149. Hardware + Resource Negotiation
+
+The intended model is:
+
+program
+   |
+   v
+requirements
+   |
+   v
+target capabilities
+   |
+   v
+resource feasibility
+   |
+   v
+realization strategy
+
+The parser remains independent of the result.
+
+---
+
+150. Hardware + Runtime Availability
+
+A target may satisfy the static contract but become unavailable at runtime.
+
+Therefore:
+
+semantic validity
+        !=
+runtime availability
+
+The runtime may return a documented outcome such as:
+
+RETRY
+RECOVER
+ESCALATE
+REJECT
+
+according to the runtime/resilience architecture.
+
+---
+
+151. Future-Proofing
+
+Future hardware must be introduced through extension rather than grammar replacement.
+
+A new hardware class should first answer:
+
+Does existing capability syntax express it?
+Does existing resource syntax express it?
+Does existing target syntax express it?
+Does existing property syntax express it?
+Does an existing dialect mechanism express it?
+Does the semantic model already support it?
+
+Only if the answer is no should new grammar syntax be introduced.
+
+---
+
+152. New Hardware Feature Review
+
+Before adding a new hardware feature:
 
 1. Search existing grammar ownership.
-
-
-2. Search existing capabilities.
-
-
-3. Search existing resources.
-
-
-4. Search existing target classes.
-
-
-5. Search existing dialect mechanisms.
-
-
-6. Determine whether existing syntax is sufficient.
-
-
-7. Add new syntax only if necessary.
-
-
-8. Define AST contract before grammar implementation.
-
-
-9. Define semantic contract before implementation.
-
-
-10. Define IR contract before implementation.
-
-
-11. Define compiler consumers.
-
-
-12. Define runtime consumers.
-
-
-13. Add positive tests.
-
-
-14. Add negative tests.
-
-
-15. Add scalability tests.
-
-
-16. Perform hard-coding audit.
-
-
-17. Verify no duplicate owner exists.
-
-
-18. Verify no dependency cycle exists.
-
-
-
+2. Search "grammar/spec/".
+3. Search "grammar/specification/".
+4. Search "grammar/core/".
+5. Search "grammar/resources/".
+6. Search "grammar/quantum/".
+7. Search "grammar/hdl/".
+8. Search "grammar/compile/".
+9. Search "grammar/execution/".
+10. Search existing capabilities.
+11. Search existing resources.
+12. Search existing target classes.
+13. Search existing dialect mechanisms.
+14. Determine whether existing syntax is sufficient.
+15. Define semantic ownership.
+16. Define AST representation.
+17. Define IR/lowering.
+18. Define compiler consumers.
+19. Define runtime consumers.
+20. Define tests.
+21. Perform hard-coding audit.
+22. Check compatibility.
+23. Check cross-domain integration.
+24. Only then add syntax if necessary.
 
 ---
 
-162. Required Change Review
+153. Hardware Change Review Questions
 
 Every hardware grammar change must answer:
 
 1. What syntax changed?
 2. Which file owns it?
 3. Why does that file own it?
-4. Does another file already own the concept?
-5. Does the change require a new keyword?
+4. Does another file already own it?
+5. Does it require a new keyword?
 6. Could a qualified name represent it?
-7. Could a property represent it?
-8. Could a capability represent it?
-9. Could a resource represent it?
-10. Does it introduce a machine assumption?
-11. Does it introduce a physical identifier?
-12. Does it introduce a fixed capacity?
-13. Does it alter the AST?
-14. Does it alter semantics?
-15. Does it alter IR?
+7. Could a capability represent it?
+8. Could a resource represent it?
+9. Could a property represent it?
+10. Does it introduce a physical-machine assumption?
+11. Does it introduce a fixed capacity?
+12. Does it introduce physical identifiers?
+13. Does it change the AST?
+14. Does it change semantic analysis?
+15. Does it change IR?
 16. Does it affect quantum::ir?
 17. Does it affect QEC?
 18. Does it affect ZQN?
@@ -4939,147 +4611,217 @@ Every hardware grammar change must answer:
 31. Are scalability tests present?
 32. Has the hard-coding audit passed?
 
+---
+
+154. Validation Pipeline
+
+The complete validation pipeline is:
+
+hardware specification
+        |
+        v
+feature contract
+        |
+        v
+lexical contract
+        |
+        v
+ANTLR grammar
+        |
+        v
+ANTLR validation
+        |
+        v
+Rust lexer conformance
+        |
+        v
+Rust parser conformance
+        |
+        v
+AST coverage
+        |
+        v
+semantic coverage
+        |
+        v
+IR coverage
+        |
+        v
+compiler coverage
+        |
+        v
+HAL coverage
+        |
+        v
+runtime coverage
+        |
+        v
+cross-domain tests
+        |
+        v
+scalability tests
+        |
+        v
+compatibility tests
+        |
+        v
+production
 
 ---
 
-163. Definition of a Complete Hardware Feature
+155. Production Gate
 
-A hardware feature is not complete when:
+The hardware subsystem must not be marked production-ready until all required gates pass.
 
-grammar parses
+Architecture
 
-It is complete only when:
+[ ] Ownership is unambiguous
+[ ] Composition is unambiguous
+[ ] Dependencies are acyclic
+[ ] No duplicate authority exists
 
-Specification
-    +
-Lexer
-    +
-Parser
-    +
-AST
-    +
-Semantic analysis
-    +
+Syntax
+
+[ ] Grammar is valid
+[ ] Grammar is deterministic
+[ ] No unnecessary ambiguity
+[ ] Canonical lexer vocabulary used
+[ ] Canonical names used
+[ ] Canonical expressions used
+[ ] Canonical types used
+
+Semantics
+
+[ ] AST contracts complete
+[ ] Semantic contracts complete
+[ ] Resource contracts complete
+[ ] Capability contracts complete
+[ ] Target contracts complete
+[ ] Constraint contracts complete
+
 IR
-    +
+
+[ ] IR mapping complete
+[ ] No duplicate quantum IR
+[ ] Hardware metadata has defined ownership
+[ ] Lowering boundary defined
+
 Compiler
-    +
-Target/HAL
-    +
-Runtime
-    +
+
+[ ] Resource analysis integrated
+[ ] Capability analysis integrated
+[ ] Target analysis integrated
+[ ] Placement integrated
+[ ] Routing integrated
+[ ] Scheduling integrated
+[ ] Resilience integrated
+[ ] QEC integration defined
+[ ] ZQN integration defined
+[ ] HAL integration defined
+
+Safety
+
+[ ] No unsafe Rust introduced
+[ ] Grammar is action-free
+[ ] No runtime execution in grammar
+[ ] No hardware discovery in parser
+
+Scalability
+
+[ ] No artificial hardware capacity limits
+[ ] No fixed qubit ceiling
+[ ] No fixed CPU ceiling
+[ ] No fixed GPU ceiling
+[ ] No fixed FPGA ceiling
+[ ] No fixed node ceiling
+[ ] No fixed memory ceiling
+[ ] No fixed thread ceiling
+[ ] No fixed tensor-rank ceiling
+[ ] No fixed register-width ceiling
+[ ] No fixed network-size ceiling
+[ ] No fixed device-count ceiling
+
 Tests
 
-are all accounted for.
-
-If a downstream implementation does not exist yet, the feature must be marked:
-
-PLANNED
-
-or:
-
-PARTIALLY IMPLEMENTED
-
-rather than falsely marked production-ready.
-
-
----
-
-164. Definition of POCO-REAF Success
-
-The hardware subsystem succeeds when:
-
-one source program
-       |
-       v
-one semantic meaning
-       |
-       +----> tiny target
-       |
-       +----> CPU
-       |
-       +----> GPU
-       |
-       +----> FPGA
-       |
-       +----> ASIC
-       |
-       +----> QPU
-       |
-       +----> accelerator
-       |
-       +----> heterogeneous system
-       |
-       +----> distributed system
-       |
-       +----> simulator
-       |
-       +----> future target
-
-and the target-specific implementation changes without requiring the programmer to rewrite the fundamental computation merely because hardware changes.
-
+[ ] Positive
+[ ] Negative
+[ ] Boundary
+[ ] Scalability
+[ ] Determinism
+[ ] Portability
+[ ] Compatibility
+[ ] AST
+[ ] Semantic
+[ ] IR
+[ ] Compiler
+[ ] HAL
+[ ] Runtime
+[ ] Cross-domain
 
 ---
 
-165. Final Hardware Architecture
+156. Final Hardware Architecture
 
-The intended final model is:
+The target architecture is:
 
-ZAMANI PROGRAM
+                         ZAMANI SOURCE
                                |
                                v
-                        Canonical Lexer
+                       Canonical Lexer
                                |
                                v
-                         Zamani Parser
+                      Canonical Parser
                                |
                                v
-                          Frontend AST
+                         Frontend AST
                                |
              +-----------------+-----------------+
              |                 |                 |
              v                 v                 v
-          Classical         Quantum            HDL
+          Classical         Quantum             HDL
              |                 |                 |
              +-----------------+-----------------+
                                |
                                v
-                    Hardware Intent Model
+                     Hardware Intent Model
                                |
-             +-----------------+-----------------+
-             |                 |                 |
-             v                 v                 v
-         Resources        Capabilities       Requirements
-             |                 |                 |
-             +-----------------+-----------------+
+        +----------------------+----------------------+
+        |                      |                      |
+        v                      v                      v
+    Resources             Capabilities          Requirements
+        |                      |                      |
+        +----------------------+----------------------+
                                |
-             +-----------------+-----------------+
-             |                 |                 |
-             v                 v                 v
-        Constraints       Preferences          Hints
-             |                 |                 |
-             +-----------------+-----------------+
-                               |
-                               v
-                    Canonical Semantic Model
+        +----------------------+----------------------+
+        |                      |                      |
+        v                      v                      v
+   Constraints            Preferences              Hints
+        |                      |                      |
+        +----------------------+----------------------+
                                |
                                v
-                       Canonical Compiler IR
+                   Canonical Semantic Model
                                |
-             +-----------------+-----------------+
-             |                 |                 |
-             v                 v                 v
-        Classical IR      quantum::ir      HDL/Hardware
-             |                 |                 |
-             +-----------------+-----------------+
+                               v
+                     Canonical Compiler IR
+                               |
+          +--------------------+--------------------+
+          |                    |                    |
+          v                    v                    v
+      Classical           quantum::ir         HDL/Hardware
+          |                    |                    |
+          +--------------------+--------------------+
                                |
                                v
                          Optimization
                                |
-             +-----------------+-----------------+
-             |                 |                 |
-             v                 v                 v
-           Routing        Scheduling        Resilience
+          +--------------------+--------------------+
+          |                    |                    |
+          v                    v                    v
+       Placement            Routing             Scheduling
+                               |
+                               v
+                           Resilience
                                |
                                v
                               ZQN
@@ -5088,71 +4830,59 @@ ZAMANI PROGRAM
                               HAL
                                |
                                v
-                       Target realization
+                      Target Realization
                                |
-          +----------+---------+---------+----------+
-          |          |                   |          |
-          v          v                   v          v
-         CPU        GPU                 FPGA       QPU
-          |          |                   |          |
-          +----------+-------------------+----------+
+          +---------+----------+----------+----------+
+          |         |                     |          |
+          v         v                     v          v
+         CPU       GPU                  FPGA        QPU
+          |         |                     |          |
+          +---------+----------+----------+----------+
                                |
                                v
-                    Future target classes
-
+                       Future Targets
 
 ---
 
-166. Non-Negotiable Invariants
+157. Fundamental Invariants
 
-The following are permanent hardware-subsystem invariants:
+The following are non-negotiable:
 
-NO artificial hardware capacity limits
-NO fixed qubit limits
-NO fixed CPU limits
-NO fixed GPU limits
-NO fixed FPGA limits
-NO fixed node limits
-NO fixed memory limits
-NO fixed thread limits
-NO fixed tensor-rank limits
-NO fixed register-width limits
-NO fixed network-size limits
-NO fixed device-count limits
-
-NO physical device discovery during parsing
-NO physical device enumeration in portable hardware grammar
-NO physical addresses in portable hardware grammar
+ONE Zamani language
+ONE canonical lexical architecture
+ONE canonical language composition root
+ONE hardware composition root
+ONE domain-neutral AST architecture
+ONE canonical quantum IR
+NO artificial hardware limits
+NO physical-device dependency in portable syntax
 NO vendor lock-in
+NO parser-time hardware discovery
 NO runtime execution in grammar
-NO embedded unsafe Rust
-NO embedded executable grammar actions
-
-NO duplicate constraints grammar
-NO duplicate resource grammar
-NO duplicate capability grammar
-NO duplicate target grammar
-NO duplicate device grammar
+NO unsafe Rust
+NO duplicate hardware grammar authority
+NO duplicate resource authority
+NO duplicate capability authority
+NO duplicate constraint authority
 NO duplicate quantum IR
-NO duplicate QEC model
-NO duplicate ZQN model
-NO duplicate HDL behavior
+NO hidden physical topology
+NO fixed device enumeration
+NO fixed memory assumptions
+NO fixed register assumptions
+NO fixed qubit assumptions
+NO fixed CPU/GPU/FPGA assumptions
 
-NO circular grammar dependencies
+And:
 
-YES canonical lexer
-YES canonical names
-YES canonical expressions
-YES canonical types
-YES resource semantics
-YES capability semantics
-YES requirement semantics
-YES constraint semantics
-YES preference semantics
-YES hint semantics
+YES declarative hardware intent
+YES resource requirements
+YES capability requirements
+YES constraints
+YES preferences
+YES hints
 YES generic parameters
+YES symbolic quantities
 YES qualified names
-YES target independence
 YES extensibility
 YES deterministic parsing
 YES source spans
@@ -5163,28 +4893,31 @@ YES IR traceability
 YES compiler integration
 YES HAL integration
 YES runtime integration
-YES cross-domain composition
+YES quantum integration
+YES HDL integration
+YES distributed integration
+YES heterogeneous computing
 YES scalability
 YES POCO-REAF
 
-
 ---
 
-167. Final Rule
+158. Final Definition of the Hardware Grammar
 
-The hardware grammar must describe:
+The Zamani hardware grammar must describe:
 
-WHAT the computation requires
-WHAT capabilities are needed
+WHAT hardware relationship is required
 WHAT resources are required
+WHAT capabilities are required
 WHAT constraints apply
-WHAT relationships matter
+WHAT properties matter
+WHAT topology matters
+WHAT placement intent exists
+WHAT target classes are compatible
 WHAT implementation preferences exist
-WHAT hardware intent is being expressed
 
 It must not permanently describe:
 
-WHICH physical machine
 WHICH physical CPU
 WHICH physical GPU
 WHICH physical FPGA
@@ -5194,80 +4927,222 @@ WHICH physical qubit
 WHICH physical core
 WHICH physical memory bank
 WHICH physical address
+WHICH physical node
+WHICH physical device
 
-Those decisions belong to downstream compilation and runtime realization.
-
-Therefore the invariant is:
-
-Zamani Source
-     |
-     v
-Portable Hardware Intent
-     |
-     v
-Semantic Analysis
-     |
-     v
-Canonical IR
-     |
-     v
-Target-independent Optimization
-     |
-     v
-Routing / Scheduling / Resilience / ZQN
-     |
-     v
-HAL
-     |
-     v
-Target Realization
-
-This is the architecture required for:
-
-> Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
-
-
-
-and:
-
-> Zamani — From Atom to Everywhere.
-
-
-
+Those decisions belong downstream.
 
 ---
 
-168. Final Status of This README
+159. Final POCO-REAF Principle
 
-This README is complete when it serves as the stable contract against which every file in grammar/hardware/ can be independently implemented and verified.
+The complete hardware architecture exists to enable:
 
-It intentionally does not claim that the existing .g4 implementations are already compliant.
+                 PROGRAM ONCE
+                       |
+                       v
+                STABLE SEMANTICS
+                       |
+                       v
+               COMPILE / ANALYZE
+                       |
+                       v
+             DISCOVER CAPABILITIES
+                       |
+                       v
+             RESOLVE RESOURCES
+                       |
+                       v
+                  OPTIMIZE
+                       |
+          +------------+------------+
+          |            |            |
+          v            v            v
+       ROUTING     SCHEDULING    RESILIENCE
+                                      |
+                                      v
+                                     ZQN
+                                      |
+                                      v
+                                     HAL
+                                      |
+          +------------+---------------+-------------+
+          |            |               |             |
+          v            v               v             v
+         CPU          GPU             FPGA          QPU
+          |            |               |             |
+          +------------+---------------+-------------+
+                                      |
+                                      v
+                               FUTURE TARGETS
 
-The next implementation work must bring each existing file into conformance with this contract, beginning with the independent leaf grammars and ending with hardware.g4 as the composition root.
+The programmer writes the semantic computation once.
 
-No unnecessary filename renaming is required.
+The hardware subsystem expresses what that computation requires from its realization.
 
-No parallel hardware grammar hierarchy should be created.
+The compiler and runtime determine how those requirements are satisfied.
 
-Existing useful functionality should be expanded and normalized.
+This is the mechanism by which Zamani can pursue:
 
-Redundant implementations should be consolidated only after references, AST dependencies, semantic dependencies, and tests have been migrated.
+«Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever»
 
-The final hardware subsystem must remain:
+while remaining honest about actual resource availability.
 
-machine-independent
+---
+
+160. Final Implementation Rule
+
+The repository must not attempt to make "grammar/hardware/" production-ready by continually expanding "hardware.g4".
+
+Instead:
+
+complete contracts independently
+        |
+        v
+complete leaf grammars independently
+        |
+        v
+complete AST mappings
+        |
+        v
+complete semantic mappings
+        |
+        v
+complete IR mappings
+        |
+        v
+complete compiler consumers
+        |
+        v
+complete tests
+        |
+        v
+compose hardware.g4
+        |
+        v
+compose grammar/Zamani.g4
+        |
+        v
+validate against lexer/parser
+        |
+        v
+validate entire compiler pipeline
+
+This is the required implementation strategy.
+
+---
+
+161. Final Repository Rule
+
+Existing repository functionality must be:
+
+inspected
+preserved where valid
+expanded where incomplete
+normalized where inconsistent
+deprecated where duplicated
+tested where untested
+integrated where isolated
+
+It must not be discarded merely because the architecture is being strengthened.
+
+Existing filenames should remain unless there is a concrete technical reason to change them.
+
+In particular:
+
+grammar/hardware/hardware.g4
+grammar/hardware/resources.g4
+grammar/hardware/capabilities.g4
+grammar/hardware/constraints.g4
+grammar/hardware/targets.g4
+grammar/hardware/devices.g4
+grammar/hardware/topology.g4
+grammar/hardware/placement.g4
+
+and the other existing hardware files should be treated as the implementation surface to converge, not as disposable prototypes.
+
+---
+
+162. Completion Statement
+
+"grammar/hardware/README.md" is complete when it serves as the stable contract against which every hardware grammar file can be independently implemented, integrated, tested, and declared complete.
+
+The implementation is complete only when the actual repository satisfies this contract.
+
+In particular, documentation must never outrun implementation.
+
+The production hardware subsystem must ultimately be:
+
+target-independent
 resource-aware
 capability-aware
-target-independent
-extensible
+constraint-aware
+scalable
 deterministic
 safe
-scalable
-cross-domain
+extensible
+vendor-neutral
+quantum-compatible
+HDL-compatible
 compiler-integrated
+HAL-integrated
 runtime-integrated
-future-proof
+future-compatible
 
-while preserving the single-language Zamani architecture.
+while preserving one Zamani language and one coherent semantic architecture.
 
-This version deliberately corrects the biggest problem in the current README: **documentation status must not outrun implementation status**. The existing repository already has the right broad hardware components, but `hardware.g4` and some specialized grammars still need normalization against the canonical lexer/parser architecture before the subsystem can legitimately be called production-ready.
+The final invariant is:
+
+Zamani Source
+      |
+      v
+Portable Hardware Intent
+      |
+      v
+Semantic Analysis
+      |
+      v
+Canonical IR
+      |
+      v
+Optimization
+      |
+      v
+Placement / Routing / Scheduling / Resilience
+      |
+      v
+ZQN
+      |
+      v
+HAL
+      |
+      v
+Target Realization
+
+Therefore:
+
+«Hardware grammar defines intent; the compiler defines realization; the target defines availability; the runtime defines execution.»
+
+And:
+
+«No artificial hardware ceiling belongs in the Zamani language.»
+
+And:
+
+«"quantum::ir" remains the canonical quantum IR.»
+
+And:
+
+«"grammar/Zamani.g4" remains the canonical complete-language composition root.»
+
+And:
+
+«"grammar/hardware/hardware.g4" remains the canonical hardware-domain composition root.»
+
+And:
+
+«Rust 1.97 / 1.97.1 and Rust 2021 remain the implementation baseline, with no project-owned "unsafe" Rust.»
+
+And ultimately:
+
+«Zamani — Program Once, Compile Once, Run Everywhere, Anywhere, Forever — from the smallest meaningful computation to arbitrarily large computation, subject only to actual semantics, resources, capabilities, and available targets.»
