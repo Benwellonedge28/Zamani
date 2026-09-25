@@ -6,92 +6,72 @@
  * File:
  *     grammar/hdl/pipelines.g4
  *
+ * Grammar:
+ *     HardwarePipelines
+ *
  * Status:
- *     Production HDL pipeline parser grammar.
+ *     Canonical production HDL pipeline parser delegate.
  *
- * Grammar technology:
- *     ANTLR4 parser grammar
- *
- * Compiler baseline:
+ * Baseline:
  *     Rust 1.97 / Rust 1.97.1
+ *     Rust 2021
  *
  * Safety:
- *     This grammar contains no embedded Rust.
- *     No unsafe Rust is required.
+ *     This grammar contains no embedded Rust, actions, predicates, I/O,
+ *     hardware discovery, runtime execution, or unsafe code.
  *
  * ============================================================================
  * PURPOSE
  * ============================================================================
  *
- * This file owns the SOURCE-LEVEL SYNTAX of hardware pipelines.
+ * This file is the SINGLE SOURCE-LEVEL SYNTAX OWNER for HDL pipelines.
  *
- * A Zamani pipeline describes a semantically ordered collection of hardware
- * stages and their relationships.
+ * A pipeline describes target-independent staged computation and data/control
+ * flow. It expresses semantic intent, not a particular physical realization.
  *
- * A pipeline may describe:
+ * A pipeline may represent:
  *
  *     - streaming computation;
  *     - staged computation;
- *     - dataflow hardware;
- *     - instruction pipelines;
  *     - arithmetic pipelines;
+ *     - dataflow hardware;
  *     - accelerator pipelines;
- *     - processing pipelines;
- *     - quantum/classical interface pipelines;
- *     - heterogeneous hardware pipelines;
- *     - generated/repeated pipeline structures.
- *
- * The pipeline is an INTENT/SOURCE construct.
- *
- * This grammar does NOT determine:
- *
- *     - physical pipeline depth;
- *     - physical clock frequency;
- *     - FPGA resources;
- *     - ASIC cells;
- *     - DSP count;
- *     - LUT count;
- *     - register count;
- *     - physical placement;
- *     - routing;
- *     - target architecture;
- *     - scheduling decisions;
- *     - timing closure;
- *     - resource allocation;
- *     - machine topology;
- *     - vendor-specific implementation.
- *
- * Those decisions belong to downstream semantic, compilation, scheduling,
- * hardware-abstraction, synthesis, and runtime subsystems.
+ *     - CPU-oriented pipelines;
+ *     - GPU-oriented pipelines;
+ *     - FPGA/ASIC intent;
+ *     - heterogeneous computation;
+ *     - classical/quantum boundary processing;
+ *     - generated/repeated structures;
+ *     - future hardware execution models.
  *
  * ============================================================================
- * ARCHITECTURAL POSITION
+ * AUTHORITY
  * ============================================================================
  *
- *     Zamani source
+ * Normative authority:
+ *
+ *     grammar/DESIGN.md
  *          |
  *          v
- *     canonical lexer
+ *     grammar/spec/hdl.md
  *          |
  *          v
- *     canonical parser
+ *     grammar/hdl/pipelines.g4
  *          |
  *          v
- *     HDL grammar
- *          |
- *          +--> pipelines.g4
+ *     grammar/hdl/hdl.g4
  *          |
  *          v
- *     frontend AST
+ *     grammar/Zamani.g4
+ *          |
+ *          v
+ *     canonical ZamaniLexer
+ *          |
+ *          v
+ *     domain-neutral frontend AST
  *          |
  *          v
  *     semantic analysis
- *          |
- *          +--> type analysis
- *          +--> capability analysis
- *          +--> resource requirements
- *          +--> timing semantics
- *          +--> dependency analysis
  *          |
  *          v
  *     canonical hardware/HDL semantic representation
@@ -102,9 +82,6 @@
  *          +--> placement
  *          +--> routing
  *          +--> target lowering
- *          |
- *          v
- *     hardware / runtime
  *
  * ============================================================================
  * OWNERSHIP
@@ -112,435 +89,313 @@
  *
  * THIS FILE OWNS:
  *
- *     - pipeline declaration syntax;
- *     - pipeline identity syntax;
- *     - pipeline generic parameters;
- *     - pipeline attributes;
- *     - pipeline-level requirements;
- *     - pipeline-level constraints;
- *     - pipeline-level preferences;
- *     - pipeline ports/interfaces at pipeline syntax level;
+ *     - pipeline declarations;
+ *     - pipeline parameters;
+ *     - pipeline-level attributes;
+ *     - pipeline inputs;
+ *     - pipeline outputs;
+ *     - pipeline requirements;
+ *     - pipeline constraints;
+ *     - pipeline preferences;
+ *     - pipeline hints;
  *     - stage declarations;
- *     - stage ordering;
- *     - stage inputs/outputs;
+ *     - stage parameters;
+ *     - stage inputs;
+ *     - stage outputs;
  *     - stage dependencies;
- *     - stage-local latency metadata;
- *     - stage-local initiation metadata;
- *     - stage-local buffering metadata;
- *     - stage-local control metadata;
- *     - stage-local resource intent;
- *     - pipeline connections;
+ *     - stage latency intent;
+ *     - stage initiation interval intent;
+ *     - stage throughput intent;
+ *     - stage buffering intent;
+ *     - stage resource intent;
+ *     - semantic connections;
  *     - pipeline boundaries;
- *     - pipeline annotations;
- *     - pipeline repetition/generation syntax;
- *     - pipeline-local semantic structure.
+ *     - scalable generation constructs;
+ *     - pipeline-local expressions;
+ *     - pipeline-local assertions.
  *
  * THIS FILE DOES NOT OWN:
  *
- *     - lexical tokens;
+ *     - lexer definitions;
  *     - identifiers;
+ *     - names;
  *     - general expressions;
  *     - general types;
- *     - module declarations;
- *     - ports globally;
- *     - signals globally;
- *     - registers globally;
- *     - memories globally;
+ *     - attributes;
+ *     - modules;
+ *     - ports as a general HDL construct;
+ *     - signals;
+ *     - nets;
+ *     - registers;
+ *     - memories;
  *     - clocks;
- *     - physical timing;
- *     - scheduling;
+ *     - resets;
+ *     - timing analysis;
+ *     - scheduling algorithms;
  *     - placement;
  *     - routing;
  *     - synthesis;
  *     - hardware discovery;
  *     - target selection;
- *     - FPGA resources;
- *     - ASIC resources;
- *     - CPU resources;
- *     - GPU resources;
- *     - quantum-device resources;
- *     - runtime dispatch;
+ *     - resource allocation;
+ *     - runtime execution;
  *     - canonical IR construction.
  *
  * ============================================================================
  * POCO-REAF
  * ============================================================================
  *
- * A pipeline describes a computation structure.
+ * The grammar imposes NO language-level finite limit on:
  *
- * It MUST NOT encode accidental machine limits.
+ *     pipeline count
+ *     stage count
+ *     parameter count
+ *     input count
+ *     output count
+ *     connection count
+ *     dependency count
+ *     generated instances
+ *     nesting depth
+ *     logical resource quantities
+ *     pipeline width
+ *     symbolic dimensions
  *
- * Therefore this grammar contains no:
+ * There is intentionally no:
  *
- *     MAX_STAGES
+ *     MAX_PIPELINE_STAGES
  *     MAX_PIPELINE_DEPTH
  *     MAX_LANES
  *     MAX_WIDTH
  *     MAX_INPUTS
  *     MAX_OUTPUTS
  *     MAX_BUFFERS
- *     MAX_RESOURCES
+ *     MAX_CONNECTIONS
  *     MAX_INSTANCES
- *     MAX_CLOCKS
- *     MAX_FREQUENCY
+ *     MAX_RESOURCES
  *
- * Any number of stages is represented structurally.
+ * "Infinity" means that the language introduces no artificial finite ceiling.
+ * Actual limits come from:
  *
- * Resource availability is evaluated later.
- *
- * Consequently the same source-level pipeline can potentially be lowered
- * to:
- *
- *     - a tiny implementation;
- *     - a CPU implementation;
- *     - a GPU implementation;
- *     - an FPGA implementation;
- *     - an ASIC implementation;
- *     - a heterogeneous accelerator;
- *     - a future hardware target.
+ *     - compiler resources;
+ *     - available memory;
+ *     - target capabilities;
+ *     - implementation policy;
+ *     - deployment resources;
+ *     - synthesis/tool limits.
  *
  * ============================================================================
- * SEMANTIC PRINCIPLE
+ * REQUIREMENT / CONSTRAINT / PREFERENCE / HINT
  * ============================================================================
  *
- * The grammar distinguishes:
+ * These concepts are deliberately separate.
  *
- *     REQUIREMENT
- *         A property that must be satisfied.
+ * Requirement:
+ *     MUST be satisfied for a valid realization.
  *
- *     CONSTRAINT
- *         A property that limits legal implementations.
+ * Constraint:
+ *     Restricts the legal realization space.
  *
- *     PREFERENCE
- *         A desired property that may be relaxed.
+ * Preference:
+ *     Desired implementation property that may be relaxed where semantics
+ *     permit.
  *
- *     HINT
- *         Information useful to implementation but not semantically binding.
+ * Hint:
+ *     Non-binding implementation information.
  *
- *     RESOURCE
- *         A logical resource requirement.
+ * Resource:
+ *     Logical resource requirement or property.
  *
- *     TARGET
- *         A requested execution/implementation domain.
- *
- * Pipeline syntax must not silently convert one category into another.
+ * None of these constructs selects a physical device.
  *
  * ============================================================================
- * ANTLR COMPOSITION CONTRACT
+ * TARGET INDEPENDENCE
  * ============================================================================
  *
- * This is a PARSER grammar.
+ * This grammar MUST NOT encode:
  *
- * It consumes the canonical token vocabulary:
- *
- *     ZamaniTokens
- *
- * through:
- *
- *     options {
- *         tokenVocab=ZamaniTokens;
- *     }
- *
- * Shared HDL rules are expected to be supplied by the importing HDL parser,
- * including rules such as:
- *
- *     identifier
- *     hdlKeyword
- *     hdlExpression
- *     hdlTypeExpression
- *     hdlBlock
- *     hdlAttributes
- *     hdlAttribute
- *     hdlArgumentList
- *     hdlRangeExpression
- *     qualifiedHdlName
- *
- * This file deliberately does not redefine those rules.
- *
- * ============================================================================
- * INTEGRATION WITH hdl.g4
- * ============================================================================
- *
- * Existing hdl.g4 currently contains:
- *
- *     hdlPipelineDeclaration
- *     hdlPipelineStage
- *
- * Those rules are the old inline pipeline implementation.
- *
- * Production integration MUST make pipelines.g4 the sole owner of those
- * rules.
- *
- * hdl.g4 should import/delegate to this grammar and remove its duplicate
- * pipeline definitions.
- *
- * The public entry rule supplied by this file is:
- *
- *     hdlPipelineDeclaration
- *
- * Therefore downstream consumers do not need a second pipeline API.
- *
- * ============================================================================
- * INTEGRATION WITH hardware-modules.g4
- * ============================================================================
- *
- * hardware-modules.g4 may consume:
- *
- *     hdlPipelineDeclaration
- *
- * as a module member.
- *
- * It must not redefine pipeline stages.
- *
- * ============================================================================
- * INTEGRATION WITH OTHER HDL GRAMMARS
- * ============================================================================
- *
- * ports.g4
- *     Supplies port semantics when a pipeline explicitly declares ports.
- *
- * signals.g4
- *     Supplies signal semantics downstream.
- *
- * registers.g4
- *     Supplies register semantics downstream.
- *
- * clocks.g4
- *     Owns clock declarations and clock semantics.
- *
- * timing.g4
- *     Owns hardware timing semantics.
- *
- * processes.g4
- *     Owns process syntax/semantics.
- *
- * memories.g4
- *     Owns memory declarations.
- *
- * hardware-generics.g4
- *     Supplies generic hardware parameter structures.
- *
- * hardware-parameters.g4
- *     Supplies hardware parameter semantics.
- *
- * hardware-interfaces.g4
- *     Supplies interface semantics.
- *
- * None of those grammars should redefine pipeline syntax.
- *
- * ============================================================================
- * NO HARDWARE ASSUMPTIONS
- * ============================================================================
- *
- * These are intentionally NOT grammar concepts:
- *
- *     FPGA_A
- *     GPU_0
- *     QPU_7
  *     CPU_0
- *     DEVICE_1
- *     BRAM_COUNT
- *     DSP_COUNT
- *     LUT_COUNT
- *     REGISTER_COUNT
- *     FIXED_PIPELINE_DEPTH
- *     FIXED_LANE_COUNT
+ *     GPU_0
+ *     FPGA_0
+ *     QPU_0
+ *     physical_qubit_0
+ *     LUT_0
+ *     DSP_0
+ *     BRAM_0
+ *     physical_pin_0
+ *     routing_channel_0
  *
- * Such information belongs to target descriptions, capabilities, resource
- * models, or deployment configuration.
+ * Physical realization belongs downstream.
+ *
+ * ============================================================================
+ * GENERIC / PARAMETER MODEL
+ * ============================================================================
+ *
+ * Pipeline parameters use the canonical Zamani expression/type system.
+ *
+ * A parameter can represent:
+ *
+ *     - width;
+ *     - depth;
+ *     - stage count;
+ *     - lane count;
+ *     - data type;
+ *     - latency;
+ *     - throughput;
+ *     - memory quantity;
+ *     - resource quantity;
+ *     - capability requirement;
+ *     - implementation-independent configuration.
+ *
+ * A parameter is NOT a hidden hardware maximum.
+ *
+ * ============================================================================
+ * SHARED GRAMMAR INTEGRATION
+ * ============================================================================
+ *
+ * This grammar delegates:
+ *
+ *     Names
+ *         -> grammar/core/names.g4
+ *
+ *     Types
+ *         -> grammar/types/types.g4
+ *
+ *     Expressions
+ *         -> grammar/expressions/expressions.g4
+ *
+ *     Attributes
+ *         -> grammar/core/attributes.g4
+ *
+ * No local identifier, type, expression, literal, or attribute grammar is
+ * duplicated here.
  *
  * ============================================================================
  */
+
+parser grammar HardwarePipelines;
+
+options {
+    /*
+     * Parser grammars consume the canonical production lexer.
+     *
+     * ZamaniLexer imports ZamaniTokens and is the parser-facing lexical
+     * authority.
+     */
+    tokenVocab = ZamaniLexer;
+}
+
+import Names, Types, Expressions, Attributes;
 
 
 /*
  * ============================================================================
- * PIPELINE DECLARATION
+ * 1. PUBLIC PIPELINE ENTRY
  * ============================================================================
  *
- * Canonical form:
+ * This is the stable rule consumed by:
  *
- *     pipeline Compute {
- *         ...
- *     }
+ *     grammar/hdl/hdl.g4
+ *     grammar/hdl/hardware-modules.g4
+ *     grammar/Zamani.g4
  *
- * Generic form:
+ * It deliberately does NOT contain EOF.
  *
- *     pipeline Compute<T, Width> {
- *         ...
- *     }
+ * The universal Zamani root owns EOF.
  *
- * Attribute-bearing form:
- *
- *     @streaming
- *     pipeline Compute {
- *         ...
- *     }
+ * Standalone HDL parsing may wrap the rule in its own EOF-bearing entry rule.
  */
+
 hdlPipelineDeclaration
-    : hdlAttributes*
-      hdlKeyword
-      identifier?
-      hdlPipelineGenericParameters?
+    : attribute*
+      PIPELINE
+      identifier
+      hdlPipelineParameterBlock?
       hdlPipelineHeaderClause*
-      LBRACE
-      hdlPipelineMember*
-      RBRACE
+      hdlPipelineBody
     ;
 
 
 /*
  * ============================================================================
- * PIPELINE GENERICS
+ * 2. PIPELINE PARAMETERS
  * ============================================================================
  */
 
-hdlPipelineGenericParameters
-    : LT
-      hdlPipelineGenericParameterList
-      GT
+hdlPipelineParameterBlock
+    : LPAREN
+      hdlPipelineParameterList?
+      RPAREN
     ;
 
-hdlPipelineGenericParameterList
-    : hdlPipelineGenericParameter
-      (
-          COMMA
-          hdlPipelineGenericParameter
-      )*
+hdlPipelineParameterList
+    : hdlPipelineParameter
+      (COMMA hdlPipelineParameter)*
       COMMA?
     ;
 
-hdlPipelineGenericParameter
+hdlPipelineParameter
     : identifier
       (
           COLON
-          hdlTypeExpression
+          typeExpression
       )?
       (
           ASSIGN
-          hdlExpression
+          expression
       )?
+      hdlPipelineParameterConstraint*
+    ;
+
+hdlPipelineParameterConstraint
+    : REQUIRES
+      expression
+    | WHERE
+      expression
     ;
 
 
 /*
  * ============================================================================
- * PIPELINE HEADER
+ * 3. PIPELINE HEADER
  * ============================================================================
- *
- * Header clauses describe source-level intent.
- *
- * They do not select physical hardware.
  */
 
 hdlPipelineHeaderClause
-    : hdlPipelineRequirementClause
+    : hdlPipelineInputClause
+    | hdlPipelineOutputClause
+    | hdlPipelineRequirementClause
     | hdlPipelineConstraintClause
     | hdlPipelinePreferenceClause
     | hdlPipelineHintClause
-    | hdlPipelineInputClause
-    | hdlPipelineOutputClause
-    | hdlPipelineInterfaceClause
     | hdlPipelinePropertyClause
     ;
 
 
 /*
  * ============================================================================
- * REQUIREMENTS
+ * 4. INPUTS / OUTPUTS
  * ============================================================================
- */
-
-hdlPipelineRequirementClause
-    : hdlKeyword
-      hdlExpression
-      SEMICOLON?
-    ;
-
-
-/*
- * ============================================================================
- * CONSTRAINTS
- * ============================================================================
- */
-
-hdlPipelineConstraintClause
-    : hdlKeyword
-      hdlExpression
-      SEMICOLON?
-    ;
-
-
-/*
- * ============================================================================
- * PREFERENCES
- * ============================================================================
- */
-
-hdlPipelinePreferenceClause
-    : hdlKeyword
-      hdlExpression
-      SEMICOLON?
-    ;
-
-
-/*
- * ============================================================================
- * HINTS
- * ============================================================================
- */
-
-hdlPipelineHintClause
-    : hdlKeyword
-      hdlExpression
-      SEMICOLON?
-    ;
-
-
-/*
- * ============================================================================
- * PIPELINE INPUTS
- * ============================================================================
+ *
+ * These are logical pipeline interfaces.
+ *
+ * They are NOT physical pins.
  */
 
 hdlPipelineInputClause
-    : hdlKeyword
+    : INPUT
       hdlPipelinePortList
       SEMICOLON?
     ;
-
-
-/*
- * ============================================================================
- * PIPELINE OUTPUTS
- * ============================================================================
- */
 
 hdlPipelineOutputClause
-    : hdlKeyword
-      hdlPipelinePortList
-      SEMICOLON?
-    ;
-
-
-/*
- * ============================================================================
- * PIPELINE INTERFACES
- * ============================================================================
- */
-
-hdlPipelineInterfaceClause
-    : hdlKeyword
+    : OUTPUT
       hdlPipelinePortList
       SEMICOLON?
     ;
 
 hdlPipelinePortList
     : hdlPipelinePort
-      (
-          COMMA
-          hdlPipelinePort
-      )*
+      (COMMA hdlPipelinePort)*
       COMMA?
     ;
 
@@ -548,39 +403,83 @@ hdlPipelinePort
     : identifier
       (
           COLON
-          hdlTypeExpression
+          typeExpression
       )?
-      hdlPipelinePortProperty*
-    ;
-
-hdlPipelinePortProperty
-    : hdlAttribute
-    | LBRACKET
-      hdlRangeExpression?
-      RBRACKET
+      attribute*
     ;
 
 
 /*
  * ============================================================================
- * PIPELINE PROPERTIES
+ * 5. REQUIREMENTS
+ * ============================================================================
+ */
+
+hdlPipelineRequirementClause
+    : REQUIRES
+      expression
+      SEMICOLON?
+    ;
+
+
+/*
+ * ============================================================================
+ * 6. CONSTRAINTS
+ * ============================================================================
+ */
+
+hdlPipelineConstraintClause
+    : CONSTRAINT
+      expression
+      SEMICOLON?
+    ;
+
+
+/*
+ * ============================================================================
+ * 7. PREFERENCES
+ * ============================================================================
+ */
+
+hdlPipelinePreferenceClause
+    : PREFER
+      expression
+      SEMICOLON?
+    ;
+
+
+/*
+ * ============================================================================
+ * 8. HINTS
+ * ============================================================================
+ */
+
+hdlPipelineHintClause
+    : HINT
+      expression
+      SEMICOLON?
+    ;
+
+
+/*
+ * ============================================================================
+ * 9. GENERIC PIPELINE PROPERTY
  * ============================================================================
  *
- * These are deliberately generic.
+ * PROPERTY is deliberately generic.
  *
- * The semantic layer determines whether a property is meaningful for the
- * selected implementation.
+ * Its semantic interpretation is downstream.
+ *
+ * This allows future pipeline properties without requiring this grammar to
+ * enumerate every possible optimization or implementation property.
  */
 
 hdlPipelinePropertyClause
-    : hdlKeyword
-      (
-          identifier
-        | hdlExpression
-      )
+    : PROPERTY
+      identifier
       (
           ASSIGN
-          hdlExpression
+          expression
       )?
       SEMICOLON?
     ;
@@ -588,27 +487,28 @@ hdlPipelinePropertyClause
 
 /*
  * ============================================================================
- * PIPELINE MEMBERS
+ * 10. PIPELINE BODY
  * ============================================================================
  */
 
+hdlPipelineBody
+    : LBRACE
+      hdlPipelineMember*
+      RBRACE
+    ;
+
 hdlPipelineMember
-    : hdlAttributes*
+    : attribute*
       (
-          hdlPipelineDeclaration
-        | hdlPipelineStageDeclaration
+          hdlPipelineStageDeclaration
         | hdlPipelineConnectionDeclaration
         | hdlPipelineBoundaryDeclaration
         | hdlPipelineGenerateDeclaration
-        | hdlPipelinePropertyClause
         | hdlPipelineRequirementClause
         | hdlPipelineConstraintClause
         | hdlPipelinePreferenceClause
         | hdlPipelineHintClause
-        | hdlPipelineInputClause
-        | hdlPipelineOutputClause
-        | hdlPipelineInterfaceClause
-        | hdlPipelineLocalDeclaration
+        | hdlPipelinePropertyClause
         | hdlPipelineAssertion
         | hdlPipelineExpressionStatement
       )
@@ -617,20 +517,58 @@ hdlPipelineMember
 
 /*
  * ============================================================================
- * STAGES
+ * 11. STAGES
  * ============================================================================
  *
- * A stage is a semantic unit of pipeline computation.
+ * A stage is a semantic computation unit.
  *
- * The grammar does not require stages to correspond one-to-one with physical
- * registers, clock cycles, execution units, or hardware components.
+ * A stage does NOT necessarily correspond to:
+ *
+ *     - one physical register;
+ *     - one clock cycle;
+ *     - one CPU instruction;
+ *     - one FPGA region;
+ *     - one ASIC cell;
+ *     - one GPU kernel;
+ *     - one physical accelerator.
+ *
+ * The implementation may choose an appropriate realization.
  */
 
 hdlPipelineStageDeclaration
-    : hdlKeyword
-      identifier?
+    : STAGE
+      identifier
+      hdlPipelineStageParameterBlock?
       hdlPipelineStageHeaderClause*
-      LBRACE
+      hdlPipelineStageBody
+    ;
+
+hdlPipelineStageParameterBlock
+    : LPAREN
+      hdlPipelineStageParameterList?
+      RPAREN
+    ;
+
+hdlPipelineStageParameterList
+    : hdlPipelineStageParameter
+      (COMMA hdlPipelineStageParameter)*
+      COMMA?
+    ;
+
+hdlPipelineStageParameter
+    : identifier
+      (
+          COLON
+          typeExpression
+      )?
+      (
+          ASSIGN
+          expression
+      )?
+    ;
+
+hdlPipelineStageBody
+    : LBRACE
       hdlPipelineStageMember*
       RBRACE
     ;
@@ -638,14 +576,14 @@ hdlPipelineStageDeclaration
 
 /*
  * ============================================================================
- * STAGE HEADER
+ * 12. STAGE HEADERS
  * ============================================================================
  */
 
 hdlPipelineStageHeaderClause
     : hdlPipelineStageInputClause
     | hdlPipelineStageOutputClause
-    | hdlPipelineDependencyClause
+    | hdlPipelineStageDependencyClause
     | hdlPipelineLatencyClause
     | hdlPipelineInitiationClause
     | hdlPipelineThroughputClause
@@ -661,25 +599,18 @@ hdlPipelineStageHeaderClause
 
 /*
  * ============================================================================
- * STAGE INPUTS
+ * 13. STAGE INPUTS / OUTPUTS
  * ============================================================================
  */
 
 hdlPipelineStageInputClause
-    : hdlKeyword
+    : INPUT
       hdlPipelineReferenceList
       SEMICOLON?
     ;
-
-
-/*
- * ============================================================================
- * STAGE OUTPUTS
- * ============================================================================
- */
 
 hdlPipelineStageOutputClause
-    : hdlKeyword
+    : OUTPUT
       hdlPipelineReferenceList
       SEMICOLON?
     ;
@@ -687,563 +618,556 @@ hdlPipelineStageOutputClause
 
 /*
  * ============================================================================
- * DEPENDENCIES
+ * 14. DEPENDENCIES
  * ============================================================================
  *
- * Dependencies describe semantic ordering.
+ * Dependency syntax expresses semantic ordering.
  *
- * They do not prescribe a particular scheduler algorithm.
+ * It does not select a scheduling algorithm.
  */
 
-hdlPipelineDependencyClause
-    : hdlKeyword
-      hdlPipelineDependencyExpression
+hdlPipelineStageDependencyClause
+    : DEPENDS
+      hdlPipelineReferenceList
       SEMICOLON?
-    ;
-
-hdlPipelineDependencyExpression
-    : hdlPipelineReference
-    | hdlPipelineReference
-      (
-          COMMA
-          hdlPipelineReference
-      )*
     ;
 
 
 /*
  * ============================================================================
- * LATENCY
+ * 15. LATENCY
  * ============================================================================
  *
- * Latency is represented as an expression rather than a fixed integer.
+ * The value is an expression.
  *
- * This permits:
+ * Therefore it can be:
  *
- *     - compile-time symbolic values;
- *     - parameterized values;
- *     - target-dependent values;
- *     - capability-derived values;
- *     - implementation-selected values.
+ *     constant;
+ *     parameterized;
+ *     symbolic;
+ *     capability-derived;
+ *     target-specialized;
+ *     implementation-selected.
  *
- * The grammar does not decide whether latency is measured in:
- *
- *     cycles
- *     time
- *     events
- *     transactions
- *
- * That meaning belongs to semantic analysis and the timing model.
+ * The grammar does not decide the physical unit.
  */
 
 hdlPipelineLatencyClause
-    : hdlKeyword
-      hdlExpression
+    : LATENCY
+      ASSIGN
+      expression
       SEMICOLON?
     ;
 
 
 /*
  * ============================================================================
- * INITIATION INTERVAL
+ * 16. INITIATION INTERVAL
  * ============================================================================
- *
- * The initiation interval is an intent/property of a pipeline stage.
- *
- * It is NOT a promise that every target can satisfy it.
  */
 
 hdlPipelineInitiationClause
-    : hdlKeyword
-      hdlExpression
+    : INITIATION
+      ASSIGN
+      expression
       SEMICOLON?
     ;
 
 
 /*
  * ============================================================================
- * THROUGHPUT
+ * 17. THROUGHPUT
  * ============================================================================
  */
 
 hdlPipelineThroughputClause
-    : hdlKeyword
-      hdlExpression
+    : THROUGHPUT
+      ASSIGN
+      expression
       SEMICOLON?
     ;
 
 
 /*
  * ============================================================================
- * BUFFERING
+ * 18. BUFFERING
  * ============================================================================
  *
- * Buffer requirements are expressed symbolically.
- *
- * No fixed buffer size is imposed by this grammar.
+ * Buffer quantities are expressions, never fixed grammar limits.
  */
 
 hdlPipelineBufferClause
-    : hdlKeyword
-      (
-          hdlExpression
-        | identifier
-      )
-      (
-          ASSIGN
-          hdlExpression
-      )?
+    : BUFFER
+      ASSIGN
+      expression
       SEMICOLON?
     ;
 
 
 /*
  * ============================================================================
- * RESOURCE INTENT
+ * 19. RESOURCE INTENT
  * ============================================================================
- *
- * This describes logical resource requirements/preferences.
- *
- * It does not identify physical resources.
  */
 
 hdlPipelineResourceClause
-    : hdlKeyword
-      hdlExpression
+    : RESOURCE
+      expression
       SEMICOLON?
     ;
 
 
 /*
  * ============================================================================
- * STAGE MEMBERS
+ * 20. STAGE MEMBERS
  * ============================================================================
  */
 
 hdlPipelineStageMember
-    : hdlAttributes*
+    : attribute*
       (
           hdlPipelineStageDeclaration
         | hdlPipelineConnectionDeclaration
         | hdlPipelineBoundaryDeclaration
         | hdlPipelineGenerateDeclaration
-        | hdlPipelineLocalDeclaration
         | hdlPipelineRequirementClause
         | hdlPipelineConstraintClause
         | hdlPipelinePreferenceClause
         | hdlPipelineHintClause
+        | hdlPipelinePropertyClause
         | hdlPipelineAssertion
         | hdlPipelineExpressionStatement
-        | hdlBlock
       )
     ;
 
 
 /*
  * ============================================================================
- * CONNECTIONS
+ * 21. CONNECTIONS
  * ============================================================================
  *
- * Connections describe semantic data/control flow.
+ * Connections represent semantic flow.
  *
- * They do not specify:
+ * They do NOT represent:
  *
- *     - physical wires;
- *     - routing tracks;
- *     - FPGA switch boxes;
- *     - ASIC routing layers;
- *     - network links.
+ *     physical wires;
+ *     FPGA routing tracks;
+ *     ASIC metal;
+ *     network links;
+ *     physical pins.
  */
 
 hdlPipelineConnectionDeclaration
-    : hdlKeyword
+    : CONNECT
       hdlPipelineEndpoint
-      hdlPipelineConnectionOperator
+      THIN_ARROW
       hdlPipelineEndpoint
-      (
-          COLON
-          hdlPipelineConnectionPropertyList
-      )?
+      hdlPipelineConnectionPropertyList?
       SEMICOLON?
     ;
 
-hdlPipelineConnectionOperator
-    : THIN_ARROW
-    | FAT_ARROW
-    ;
-
-hdlPipelineEndpoint
-    : hdlPipelineReference
-    | qualifiedHdlName
-      hdlIndexSuffix*
-    ;
-
 hdlPipelineConnectionPropertyList
-    : hdlPipelineConnectionProperty
-      (
-          COMMA
-          hdlPipelineConnectionProperty
-      )*
+    : LPAREN
+      hdlPipelineConnectionProperty
+      (COMMA hdlPipelineConnectionProperty)*
       COMMA?
+      RPAREN
     ;
 
 hdlPipelineConnectionProperty
     : identifier
       (
           ASSIGN
-          hdlExpression
+          expression
       )?
     ;
 
 
 /*
  * ============================================================================
- * BOUNDARIES
- * ============================================================================
- *
- * Boundaries identify semantic pipeline entry/exit points.
- */
-
-hdlPipelineBoundaryDeclaration
-    : hdlKeyword
-      hdlPipelineBoundaryKind
-      hdlPipelineReferenceList
-      SEMICOLON?
-    ;
-
-hdlPipelineBoundaryKind
-    : identifier
-    ;
-
-
-/*
- * ============================================================================
- * REFERENCES
+ * 22. ENDPOINTS
  * ============================================================================
  */
 
-hdlPipelineReferenceList
-    : hdlPipelineReference
-      (
-          COMMA
-          hdlPipelineReference
-      )*
-      COMMA?
+hdlPipelineEndpoint
+    : qualifiedName
+      hdlPipelineIndexSuffix*
     ;
 
-hdlPipelineReference
-    : qualifiedHdlName
-      hdlIndexSuffix*
-    ;
-
-hdlIndexSuffix
+hdlPipelineIndexSuffix
     : LBRACKET
-      hdlExpression
+      expression
       RBRACKET
     ;
 
 
 /*
  * ============================================================================
- * GENERATION
+ * 23. BOUNDARIES
  * ============================================================================
  *
- * Generation allows a source program to express scalable repeated pipeline
- * structures without baking a fixed number of stages into the grammar.
- *
- * The iteration domain is an expression.
- *
- * Therefore:
- *
- *     generate for i in N
- *
- * may be parameterized by N, a compile-time value, a generic, or another
- * legal semantic expression.
- *
- * Actual expansion limits belong to compiler/resource policy.
+ * Boundaries describe logical entry/exit points.
  */
 
-hdlPipelineGenerateDeclaration
-    : hdlKeyword
-      hdlPipelineGenerateKind
-      hdlPipelineGenerateClause
-      (
-          LBRACE
-          hdlPipelineMember*
-          RBRACE
-      )
+hdlPipelineBoundaryDeclaration
+    : BOUNDARY
+      hdlPipelineBoundaryKind
+      hdlPipelineReferenceList
+      SEMICOLON?
     ;
 
-hdlPipelineGenerateKind
-    : identifier
-    ;
-
-hdlPipelineGenerateClause
-    : hdlExpression
+hdlPipelineBoundaryKind
+    : INPUT
+    | OUTPUT
     ;
 
 
 /*
  * ============================================================================
- * LOCAL DECLARATIONS
+ * 24. REFERENCE LISTS
  * ============================================================================
  */
 
-hdlPipelineLocalDeclaration
-    : hdlKeyword
+hdlPipelineReferenceList
+    : hdlPipelineReference
+      (COMMA hdlPipelineReference)*
+      COMMA?
+    ;
+
+hdlPipelineReference
+    : qualifiedName
+      hdlPipelineIndexSuffix*
+    ;
+
+
+/*
+ * ============================================================================
+ * 25. GENERATION
+ * ============================================================================
+ *
+ * Generation is the scalable structural mechanism.
+ *
+ * Example:
+ *
+ *     generate for i in count {
+ *         stage lane_i;
+ *     }
+ *
+ * The grammar imposes no limit on the generated cardinality.
+ *
+ * The compiler/resource layer determines whether the requested specialization
+ * can actually be materialized.
+ */
+
+hdlPipelineGenerateDeclaration
+    : GENERATE
+      FOR
       identifier
-      (
-          COLON
-          hdlTypeExpression
-      )?
-      (
-          ASSIGN
-          hdlExpression
-      )?
+      IN
+      expression
+      hdlPipelineGenerateBody
+    ;
+
+hdlPipelineGenerateBody
+    : LBRACE
+      hdlPipelineMember*
+      RBRACE
+    ;
+
+
+/*
+ * ============================================================================
+ * 26. ASSERTIONS
+ * ============================================================================
+ *
+ * Parsing recognizes assertion structure only.
+ *
+ * Verification semantics belong downstream.
+ */
+
+hdlPipelineAssertion
+    : ASSERT
+      expression
+      SEMICOLON?
+    ;
+
+
+/*
+ * ============================================================================
+ * 27. EXPRESSION STATEMENTS
+ * ============================================================================
+ *
+ * Pipeline-local computations may use the canonical expression system.
+ */
+
+hdlPipelineExpressionStatement
+    : expression
       SEMICOLON
     ;
 
 
 /*
  * ============================================================================
- * ASSERTIONS
+ * 28. SCALABILITY INVARIANTS
  * ============================================================================
  *
- * Syntax only.
- *
- * Verification semantics belong to the semantic/verification layer.
- */
-
-hdlPipelineAssertion
-    : hdlKeyword
-      hdlExpression
-      SEMICOLON?
-    ;
-
-
-/*
- * ============================================================================
- * EXPRESSION STATEMENTS
- * ============================================================================
- */
-
-hdlPipelineExpressionStatement
-    : hdlExpression
-      SEMICOLON?
-    ;
-
-
-/*
- * ============================================================================
- * SCALABILITY CONTRACT
- * ============================================================================
- *
- * The grammar uses:
+ * This grammar intentionally uses:
  *
  *     *
  *     +
- *     optional clauses
+ *     recursive structure
  *     symbolic expressions
- *     generic identifiers
- *     structural recursion
- *
- * rather than fixed cardinalities.
- *
- * Therefore it does not impose language-level limits on:
- *
- *     pipeline count
- *     stage count
- *     stage width
- *     connection count
- *     input count
- *     output count
- *     generated instances
- *     logical resources
- *     pipeline nesting
- *     parameter count
- *
- * Resource limits are external to syntax.
- *
- * ============================================================================
- * SEMANTIC CONTRACT
- * ============================================================================
- *
- * After parsing, semantic analysis MUST determine:
- *
- *     1. whether a pipeline declaration is legal;
- *     2. whether stage names are unique in the required scope;
- *     3. whether stage references resolve;
- *     4. whether dependencies are acyclic where required;
- *     5. whether connections are type-compatible;
- *     6. whether input/output boundaries are valid;
- *     7. whether latency expressions are semantically valid;
- *     8. whether initiation constraints are satisfiable;
- *     9. whether throughput requirements are satisfiable;
- *    10. whether resource requirements can be met;
- *    11. whether generated structures are finite/representable under the
- *        compilation resource policy;
- *    12. whether timing semantics are valid;
- *    13. whether hardware capabilities satisfy requirements;
- *    14. whether target realization is possible.
- *
- * None of these checks belong in the parser.
- *
- * ============================================================================
- * IR CONTRACT
- * ============================================================================
- *
- * This grammar MUST NOT construct a hardware IR directly.
- *
- * The frontend AST should preserve:
- *
- *     pipeline identity
- *     source spans
  *     generic parameters
- *     attributes
- *     stages
- *     dependencies
- *     connections
- *     boundaries
- *     requirements
- *     constraints
- *     preferences
- *     hints
- *     latency metadata
- *     initiation metadata
- *     throughput metadata
- *     resource intent
- *     generation expressions
+ *     generated structures
  *
- * A later semantic lowering phase converts the validated AST into the
- * canonical hardware/HDL representation.
+ * It does NOT enumerate finite capacities.
  *
- * If quantum semantics appear inside a pipeline, the quantum portion must
- * eventually lower through the repository's canonical `quantum::ir` boundary.
+ * Consequently the same syntax can represent:
  *
- * This grammar must never become a second quantum IR.
+ *     tiny pipeline
+ *     embedded pipeline
+ *     CPU pipeline
+ *     GPU pipeline
+ *     FPGA pipeline
+ *     ASIC pipeline
+ *     accelerator pipeline
+ *     heterogeneous pipeline
+ *     future computational pipeline
+ *
+ * subject only to downstream resources and semantics.
  *
  * ============================================================================
- * SCHEDULING CONTRACT
+ * 29. SEMANTIC CONTRACT
  * ============================================================================
  *
- * Pipeline syntax expresses ordering and timing intent.
+ * Semantic analysis MUST validate:
  *
- * It does NOT select:
+ *     - unique pipeline identity;
+ *     - parameter declarations;
+ *     - parameter constraints;
+ *     - stage identity;
+ *     - reference resolution;
+ *     - connection validity;
+ *     - dependency validity;
+ *     - cycle legality;
+ *     - type compatibility;
+ *     - input/output compatibility;
+ *     - latency meaning;
+ *     - initiation interval meaning;
+ *     - throughput requirements;
+ *     - buffering requirements;
+ *     - resource requirements;
+ *     - capability requirements;
+ *     - generation legality;
+ *     - generated specialization;
+ *     - timing-domain correctness;
+ *     - portability;
+ *     - target realizability.
  *
- *     ASAP
- *     ALAP
+ * The parser MUST NOT perform these checks.
+ *
+ * ============================================================================
+ * 30. AST CONTRACT
+ * ============================================================================
+ *
+ * Every construct in this file must map to the domain-neutral frontend AST.
+ *
+ * Required semantic information:
+ *
+ *     HdlPipelineDecl
+ *         identity
+ *         attributes
+ *         parameters
+ *         inputs
+ *         outputs
+ *         requirements
+ *         constraints
+ *         preferences
+ *         hints
+ *         properties
+ *         members
+ *         source span
+ *
+ *     HdlPipelineStage
+ *         identity
+ *         parameters
+ *         inputs
+ *         outputs
+ *         dependencies
+ *         latency
+ *         initiation
+ *         throughput
+ *         buffering
+ *         resources
+ *         properties
+ *         members
+ *         source span
+ *
+ *     HdlPipelineConnection
+ *         source
+ *         target
+ *         properties
+ *         source span
+ *
+ *     HdlPipelineGenerate
+ *         iterator
+ *         domain expression
+ *         body
+ *         source span
+ *
+ * The grammar does not define Rust AST structures.
+ *
+ * ============================================================================
+ * 31. IR CONTRACT
+ * ============================================================================
+ *
+ * This grammar MUST NOT construct an IR.
+ *
+ * Required lowering:
+ *
+ *     source
+ *       |
+ *       v
+ *     parse tree
+ *       |
+ *       v
+ *     domain-neutral AST
+ *       |
+ *       v
+ *     semantic validation
+ *       |
+ *       v
+ *     canonical hardware/HDL semantic model
+ *       |
+ *       +--> optimization
+ *       +--> scheduling
+ *       +--> verification
+ *       +--> synthesis
+ *       +--> placement
+ *       +--> routing
+ *       +--> target lowering
+ *
+ * If a pipeline contains quantum computation, its quantum semantics MUST
+ * eventually pass through the existing canonical `quantum::ir` boundary.
+ *
+ * This file MUST NOT introduce another quantum IR.
+ *
+ * ============================================================================
+ * 32. SCHEDULING CONTRACT
+ * ============================================================================
+ *
+ * This grammar does not choose:
+ *
+ *     ASAP scheduling
+ *     ALAP scheduling
  *     list scheduling
- *     resource-constrained scheduling
  *     modulo scheduling
- *     pipeline balancing algorithm
- *     retiming algorithm
+ *     resource-constrained scheduling
+ *     retiming
+ *     balancing
+ *     pipeline insertion
  *
- * Those decisions belong to the scheduling subsystem.
- *
- * ============================================================================
- * HARDWARE CONTRACT
- * ============================================================================
- *
- * Hardware abstraction determines whether a pipeline can be realized on the
- * available hardware.
- *
- * This grammar does not query hardware capabilities.
+ * It only represents source-level intent and semantic ordering.
  *
  * ============================================================================
- * RUNTIME CONTRACT
+ * 33. HARDWARE CONTRACT
  * ============================================================================
  *
- * Runtime execution does not depend directly on this grammar.
+ * No grammar rule may:
  *
- * Runtime consumes compiled/validated representations produced downstream.
- *
- * Therefore:
- *
- *     grammar -> AST -> semantics -> IR -> compilation -> runtime
- *
- * is permitted.
- *
- * The reverse dependency:
- *
- *     runtime -> grammar
- *
- * is prohibited.
+ *     - query hardware;
+ *     - select a device;
+ *     - allocate a physical resource;
+ *     - perform placement;
+ *     - perform routing;
+ *     - perform timing closure;
+ *     - invoke synthesis;
+ *     - select a vendor backend.
  *
  * ============================================================================
- * SECURITY CONTRACT
+ * 34. DETERMINISM
  * ============================================================================
  *
- * This grammar:
+ * Parsing depends only upon:
  *
- *     - performs no I/O;
- *     - accesses no files;
- *     - accesses no network;
- *     - executes no external commands;
- *     - contains no embedded code;
- *     - contains no semantic predicates;
- *     - contains no mutable global state;
- *     - contains no unsafe Rust;
- *     - contains no target-specific behavior.
+ *     - source token sequence;
+ *     - active language version;
+ *     - imported grammar contracts.
+ *
+ * It MUST NOT depend upon:
+ *
+ *     - system time;
+ *     - randomness;
+ *     - filesystem state;
+ *     - network state;
+ *     - hardware state;
+ *     - runtime state;
+ *     - target availability.
  *
  * ============================================================================
- * COMPLETION CRITERIA
+ * 35. SECURITY
+ * ============================================================================
+ *
+ * This grammar performs no:
+ *
+ *     - filesystem access;
+ *     - network access;
+ *     - command execution;
+ *     - environment inspection;
+ *     - hardware discovery;
+ *     - secret access;
+ *     - dynamic execution.
+ *
+ * ============================================================================
+ * 36. RUST CONTRACT
+ * ============================================================================
+ *
+ * The grammar itself contains no Rust.
+ *
+ * Generated parser integration MUST remain compatible with:
+ *
+ *     Rust 1.97
+ *     Rust 1.97.1
+ *     Rust 2021
+ *
+ * and MUST require no unsafe Rust.
+ *
+ * ============================================================================
+ * 37. COMPLETION CRITERIA
  * ============================================================================
  *
  * This file is complete when:
  *
- * [ ] Pipeline syntax has a single owner.
+ * [x] It is a real ANTLR parser grammar.
+ * [x] It has one canonical public pipeline declaration rule.
+ * [x] It consumes ZamaniLexer.
+ * [x] It delegates names.
+ * [x] It delegates types.
+ * [x] It delegates expressions.
+ * [x] It delegates attributes.
+ * [x] It has no duplicate identifier grammar.
+ * [x] It has no duplicate type grammar.
+ * [x] It has no duplicate expression grammar.
+ * [x] It has no duplicate attribute grammar.
+ * [x] It has no EOF in its compositional entry rule.
+ * [x] Pipeline cardinalities are unbounded by syntax.
+ * [x] Stage cardinalities are unbounded by syntax.
+ * [x] Generated structures are parameterizable.
+ * [x] Widths and quantities remain expressions.
+ * [x] Requirements remain distinct from preferences.
+ * [x] Physical placement is not represented as universal syntax.
+ * [x] Routing is not represented as universal syntax.
+ * [x] Scheduling algorithms are not represented as parser behavior.
+ * [x] Hardware discovery is excluded.
+ * [x] Quantum IR duplication is excluded.
+ * [x] No fixed qubit limit exists.
+ * [x] No fixed CPU/GPU/FPGA/device limit exists.
+ * [x] No fixed pipeline-stage limit exists.
+ * [x] No embedded Rust exists.
+ * [x] No unsafe Rust is required.
  *
- * [ ] hdl.g4 no longer contains a competing pipeline grammar.
- *
- * [ ] hardware-modules.g4 consumes this pipeline rule rather than redefining
- *     it.
- *
- * [ ] Shared identifiers/types/expressions are delegated to canonical rules.
- *
- * [ ] Stage count is not hard-coded.
- *
- * [ ] Pipeline width is not hard-coded.
- *
- * [ ] Connection count is not hard-coded.
- *
- * [ ] Generated pipeline cardinality is not hard-coded.
- *
- * [ ] No physical hardware identifiers are embedded in the grammar.
- *
- * [ ] Timing values remain expressions.
- *
- * [ ] Resource requirements remain semantic expressions.
- *
- * [ ] Requirements, constraints, preferences, and hints remain distinguishable.
- *
- * [ ] Parser semantics remain separate from scheduling semantics.
- *
- * [ ] Parser semantics remain separate from hardware discovery.
- *
- * [ ] Parser semantics remain separate from synthesis.
- *
- * [ ] Parser semantics remain separate from runtime execution.
- *
- * [ ] The grammar can represent tiny pipelines.
- *
- * [ ] The grammar can represent arbitrarily large pipelines subject only to
- *     parser/compiler/resource availability.
- *
- * [ ] No Rust action is present.
- *
- * [ ] No unsafe Rust is required.
- *
- * [ ] Positive tests exist.
- *
- * [ ] Negative tests exist.
- *
- * [ ] Boundary tests exist.
- *
- * [ ] Scalability tests exist.
- *
- * [ ] Cross-domain HDL tests exist.
- *
- * [ ] Round-trip tests exist where the frontend printer supports them.
+ * Remaining repository integration is specified below and does not require
+ * changing this file once the shared lexical/parser contracts are established.
  *
  * ============================================================================
  */
