@@ -10,11 +10,11 @@
  *     HardwareModules
  *
  * Status:
- *     Canonical modular HDL module grammar.
+ *     CANONICAL HDL MODULE DELEGATE
  *
  * Purpose:
- *     Define the source-level syntax for reusable, parameterized, portable
- *     hardware modules and their logical composition.
+ *     Own the source-level syntax for reusable, parameterized, logical HDL
+ *     modules and logical module instantiation.
  *
  * Rust baseline:
  *     Rust 1.97 / Rust 1.97.1
@@ -25,11 +25,11 @@
  * Safety:
  *     Action-free ANTLR parser grammar.
  *     No embedded Rust.
- *     No embedded target-language code.
+ *     No semantic predicates.
  *     No unsafe code.
  *
  * ============================================================================
- * ARCHITECTURAL AUTHORITY
+ * AUTHORITY
  * ============================================================================
  *
  * Normative architecture:
@@ -43,98 +43,74 @@
  *     grammar/spec/
  *          |
  *          v
- *     grammar/antlr/ZamaniLexer.g4
- *          |
- *          v
- *     grammar/antlr/ZamaniParser.g4
+ *     grammar/hdl/hdl.g4
  *          |
  *          +--> HardwareModules
- *                  |
- *                  +--> HardwareGenerics
- *                  +--> HardwareParameters
- *                  +--> HardwareInterfaces
- *                  +--> HardwarePorts
- *                  +--> HardwareSignals
- *                  +--> HardwareWires
- *                  +--> HardwareRegisters
- *                  +--> HardwareClocks
- *                  +--> HardwareTiming
- *                  +--> HardwareCombinational
- *                  +--> HardwareSequential
- *                  +--> HardwareProcesses
- *                  +--> HardwareStateMachines
- *                  +--> HardwareMemories
- *                  +--> HardwarePipelines
- *                  +--> HardwareDialects
- *                  |
- *                  v
- *              domain-neutral AST
- *                  |
- *                  v
- *              semantic analysis
- *                  |
- *                  v
- *              canonical hardware semantic representation / IR
- *                  |
- *                  +--> optimization
- *                  +--> verification
- *                  +--> scheduling
- *                  +--> routing
- *                  +--> synthesis
- *                  +--> target lowering
- *                  |
- *                  v
- *              target realization
+ *          |
+ *          +--> Generate
+ *          |
+ *          +--> ports
+ *          +--> signals
+ *          +--> wires
+ *          +--> registers
+ *          +--> memories
+ *          +--> clocks
+ *          +--> timing
+ *          +--> processes
+ *          +--> combinational
+ *          +--> sequential
+ *          +--> pipelines
+ *          |
+ *          v
+ *     domain-neutral AST
+ *          |
+ *          v
+ *     semantic analysis
+ *          |
+ *          v
+ *     canonical hardware semantic model / IR
+ *          |
+ *          +--> optimization
+ *          +--> verification
+ *          +--> scheduling
+ *          +--> routing
+ *          +--> synthesis
+ *          +--> target lowering
+ *          |
+ *          v
+ *     target realization
  *
- * This file is a parser component.
+ * This file is a parser delegate.
  *
- * It is NOT:
- *
- *     - the canonical lexer;
- *     - the canonical root parser;
- *     - the hardware semantic model;
- *     - a netlist;
- *     - an HDL implementation backend;
- *     - a synthesis engine;
- *     - a physical placement engine;
- *     - a routing engine;
- *     - a scheduler;
- *     - a target selector;
- *     - a resource discovery mechanism;
- *     - a vendor API;
- *     - a runtime;
- *     - a quantum IR;
- *     - a QEC implementation;
- *     - a ZQN implementation;
- *     - a HAL implementation.
+ * It MUST NOT become another HDL parser root.
  *
  * ============================================================================
- * SINGLE AUTHORITY
+ * OWNERSHIP
  * ============================================================================
  *
- * This file owns ONLY:
+ * THIS FILE OWNS:
  *
- *     - hardware module declaration syntax;
- *     - module names;
- *     - module-level generic composition;
- *     - module-level contract syntax;
+ *     - HDL module declaration syntax;
+ *     - logical module names;
+ *     - module-level generic specialization attachment;
  *     - module body composition;
- *     - logical module instantiation;
+ *     - logical module instance syntax;
+ *     - logical module references;
  *     - logical instance specialization;
  *     - logical instance connections;
- *     - module-local metadata;
+ *     - logical instance connection lists.
  *
- * This file does NOT own:
+ * THIS FILE DOES NOT OWN:
  *
  *     - identifiers;
- *     - qualified-name lexical rules;
+ *     - qualified names generally;
  *     - expressions;
  *     - types;
  *     - generic declaration syntax;
  *     - parameter declaration syntax;
  *     - ports;
  *     - signals;
- *     - wires;
+ *     - wires/nets;
  *     - registers;
  *     - memories;
  *     - clocks;
@@ -142,140 +118,102 @@
  *     - processes;
  *     - combinational behavior;
  *     - sequential behavior;
- *     - pipelines;
- *     - interfaces;
  *     - state machines;
- *     - dialect definitions;
- *     - resources;
+ *     - pipelines;
+ *     - generate syntax;
+ *     - resource requirements;
  *     - capabilities;
- *     - physical targets;
- *     - physical devices;
- *     - placement;
+ *     - target selection;
+ *     - physical placement;
  *     - routing;
- *     - scheduling;
  *     - synthesis;
- *     - optimization;
+ *     - scheduling;
  *     - calibration;
+ *     - QEC;
+ *     - ZQN;
+ *     - HAL;
  *     - runtime execution.
  *
  * ============================================================================
- * CRITICAL REPOSITORY INTEGRATION
+ * SINGLE-AUTHORITY RULE
  * ============================================================================
  *
- * The repository currently contains:
+ * This file replaces the previous module implementation that also attempted
+ * to own:
  *
- *     grammar/hdl/hardware-modules.g4
- *     grammar/hdl/hardware-generics.g4
- *     grammar/hdl/hardware-parameters.g4
- *     grammar/hdl/hardware-interfaces.g4
- *     grammar/hdl/ports.g4
- *     grammar/hdl/signals.g4
- *     grammar/hdl/wires.g4
- *     grammar/hdl/registers.g4
- *     grammar/hdl/clocks.g4
- *     grammar/hdl/timing.g4
- *     grammar/hdl/combinational.g4
- *     grammar/hdl/sequential.g4
- *     grammar/hdl/processes.g4
- *     grammar/hdl/memories.g4
- *     grammar/hdl/pipelines.g4
- *     grammar/hdl/hardware-dialects.g4
+ *     - generate syntax;
+ *     - resource contracts;
+ *     - verification syntax;
+ *     - continuous assignments;
+ *     - generic declaration syntax;
+ *     - parameter declaration syntax.
  *
- * This file is the module composition boundary.
+ * Those are separate ownership domains.
  *
- * The canonical parser composition layer is responsible for importing the
- * required parser grammars. This file deliberately does not create a second
- * parser root or a second lexer.
+ * In particular:
  *
- * ============================================================================
- * CANONICAL LEXER CONTRACT
- * ============================================================================
+ *     generate.g4
+ *         owns general structural generation syntax.
  *
- * Parser grammars consume the canonical lexer vocabulary:
+ *     hardware-generics.g4
+ *         owns HDL generic declaration/specialization syntax.
  *
- *     tokenVocab = ZamaniLexer;
+ *     signals.g4
+ *         owns signal syntax.
  *
- * The canonical lexer is:
+ *     wires.g4
+ *         owns wire/net syntax.
  *
- *     grammar/antlr/ZamaniLexer.g4
+ *     registers.g4
+ *         owns register syntax.
  *
- * This file MUST NOT define lexer rules.
+ *     memories.g4
+ *         owns memory syntax.
  *
- * It MUST NOT introduce local tokens for:
+ *     resources/
+ *         owns resource/capability intent.
  *
- *     MODULE
- *     HDL
- *     INSTANCE
- *     PARAMETER
- *     GENERIC
- *     PORT
- *     SIGNAL
- *     DEVICE
- *     FPGA
- *     GPU
- *     CPU
- *     QPU
- *     ASIC
- *
- * The parser consumes the canonical token names established by the lexer
- * authority.
- *
- * Existing parser architecture uses the K_* keyword vocabulary, therefore
- * this module grammar uses K_MODULE, K_INSTANCE and other canonical K_ tokens
- * where such tokens already form part of the repository's parser contract.
+ *     verification grammar
+ *         owns verification constructs.
  *
  * ============================================================================
  * POCO-REAF
  * ============================================================================
  *
- * Hardware modules express portable hardware intent.
+ * A module is a logical source-level abstraction.
  *
- * A module may describe:
+ * It does NOT identify:
  *
- *     - behavior;
- *     - structure;
- *     - interfaces;
- *     - logical storage;
- *     - logical resources;
- *     - parameterization;
- *     - timing intent;
- *     - capabilities;
- *     - requirements;
- *     - composition;
- *     - verification intent.
- *
- * A module does NOT inherently identify:
- *
- *     - a particular FPGA;
- *     - a particular ASIC;
- *     - a particular CPU;
- *     - a particular GPU;
- *     - a particular QPU;
- *     - a particular accelerator;
- *     - a physical board;
- *     - a physical pin;
- *     - a physical address;
- *     - a physical memory block;
- *     - a physical register;
- *     - a vendor primitive;
- *     - a routing path;
- *     - a placement location;
- *     - a fabrication process.
+ *     a CPU;
+ *     a GPU;
+ *     an FPGA;
+ *     an ASIC;
+ *     a QPU;
+ *     a physical accelerator;
+ *     a physical board;
+ *     a physical pin;
+ *     a physical register;
+ *     a physical memory block;
+ *     a physical routing path;
+ *     a physical placement;
+ *     a vendor primitive.
  *
  * Therefore:
  *
  *     Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
  *
- * remains a semantic/compiler/runtime responsibility rather than a parser
- * implementation detail.
+ * remains possible at the language level.
+ *
+ * Target realization happens after semantic analysis and canonical IR
+ * construction.
  *
  * ============================================================================
  * SCALABILITY
  * ============================================================================
  *
- * There are NO language-level maxima in this file.
+ * This grammar contains NO universal machine/resource limits.
  *
- * In particular, this grammar contains no:
+ * It contains no:
  *
  *     MAX_MODULES
  *     MAX_INSTANCES
@@ -288,186 +226,333 @@
  *     MAX_WIDTH
  *     MAX_DEPTH
  *     MAX_LANES
- *     MAX_PIPELINE_STAGES
- *     MAX_CLOCKS
  *     MAX_DEVICES
+ *     MAX_NODES
  *     MAX_CORES
+ *     MAX_THREADS
  *     MAX_GPUS
  *     MAX_FPGAS
  *     MAX_QPUS
- *     MAX_NODES
+ *     MAX_QUBITS
  *     MAX_MEMORY
  *     MAX_REGISTER_WIDTH
+ *     MAX_NETWORK_SIZE
+ *     MAX_DEVICE_COUNT
  *
- * Repetition uses ANTLR repetition operators:
+ * Source repetition is represented by ANTLR repetition operators.
  *
- *     *
- *     +
- *     ?
+ * Practical limits may exist in:
  *
- * Quantities appearing in source are program-level expressions.
+ *     compiler resources;
+ *     elaboration resources;
+ *     target resources;
+ *     synthesis;
+ *     routing;
+ *     scheduling;
+ *     deployment.
  *
- * Physical realizability is checked downstream using:
- *
- *     semantic analysis
- *     capability analysis
- *     resource analysis
- *     compilation
- *     scheduling
- *     routing
- *     hardware abstraction
- *     target lowering
- *     runtime/deployment
+ * Those limits MUST NOT become language-level limits.
  *
  * ============================================================================
- * GENERIC / PARAMETER SEPARATION
+ * TARGET INDEPENDENCE
  * ============================================================================
  *
- * Generic declaration syntax is owned by:
+ * The following are valid logical names:
  *
- *     hardware-generics.g4
+ *     cpu
+ *     gpu
+ *     fpga
+ *     qpu
+ *     accelerator
+ *     node
  *
- * Parameter declaration syntax is owned by:
+ * Their spelling does not select physical hardware.
  *
- *     hardware-parameters.g4
+ * For example:
  *
- * This file only consumes those contracts.
+ *     instance compute: ComputeUnit;
  *
- * It MUST NOT redefine:
+ * means a logical instance.
+ *
+ * It does NOT mean:
+ *
+ *     physical device 0.
+ *
+ * ============================================================================
+ * GENERATE INTEGRATION
+ * ============================================================================
+ *
+ * Structural generation is NOT implemented in this file.
+ *
+ * The canonical generation grammar is:
+ *
+ *     grammar/hdl/generate.g4
+ *
+ * It owns:
+ *
+ *     hdlGenerateDeclaration
+ *     hdlGenerateFor
+ *     hdlGenerateIf
+ *     hdlGenerateBlock
+ *     hdlGenerateBody
+ *
+ * This module grammar merely permits the generation rule to participate in
+ * module composition through the HDL member dispatcher.
+ *
+ * There must never be a second:
+ *
+ *     hdlModuleGenerate
+ *     hdlModuleGenerateFor
+ *     hdlModuleGenerateIf
+ *     hdlModuleGenerateBlock
+ *
+ * implementation here.
+ *
+ * ============================================================================
+ * GENERICS
+ * ============================================================================
+ *
+ * Generic declarations and generic specialization are external contracts.
+ *
+ * The preferred ownership is:
+ *
+ *     grammar/hdl/hardware-generics.g4
+ *
+ * This file only consumes:
  *
  *     hardwareGenericParameters
- *     hardwareGenericParameter
- *     hardwareGenericArguments
  *     hardwareGenericSpecialization
- *     hdlParameterDeclaration
- *     hdlParameterBlock
- *     hdlParameterBinding
- *     hdlParameterSpecialization
  *
- * This prevents multiple incompatible representations of the same concept.
+ * when those rules are provided by the HDL composition grammar.
+ *
+ * ============================================================================
+ * EXPRESSIONS
+ * ============================================================================
+ *
+ * This file MUST NOT define another expression grammar.
+ *
+ * Expressions are supplied by the canonical HDL/universal expression
+ * composition.
+ *
+ * Module instance arguments therefore consume:
+ *
+ *     expression
+ *
+ * rather than defining:
+ *
+ *     moduleExpression
+ *     instanceExpression
+ *     hardwareExpression
+ *
+ * ============================================================================
+ * NAMES
+ * ============================================================================
+ *
+ * Simple identifiers and logical qualified module names are source-level
+ * names.
+ *
+ * No physical resource identity is implied.
  *
  * ============================================================================
  * AST CONTRACT
  * ============================================================================
  *
- * The parser produces syntax structure only.
+ * The parser produces syntax only.
  *
- * Conceptual mapping:
+ * The frontend AST should be capable of representing:
  *
- *     hdlModuleDecl
- *          |
- *          v
- *     domain-neutral module declaration AST
- *          |
- *          +--> generic parameter nodes
- *          +--> contract nodes
- *          +--> member nodes
- *          +--> instance nodes
- *          +--> connection nodes
- *          |
- *          v
- *     semantic hardware module model
- *          |
- *          v
- *     canonical hardware IR
+ *     HdlModuleDeclaration
+ *     HdlModuleName
+ *     HdlModuleBody
+ *     HdlModuleInstance
+ *     HdlModuleReference
+ *     HdlModuleSpecialization
+ *     HdlModuleConnection
  *
- * This grammar MUST NOT introduce backend AST nodes such as:
+ * The AST remains domain-neutral.
+ *
+ * It MUST NOT create:
  *
  *     FpgaModuleNode
- *     CpuModuleNode
  *     GpuModuleNode
+ *     CpuModuleNode
  *     QpuModuleNode
  *     VendorModuleNode
  *     PhysicalModuleNode
- *     NetlistModuleNode
  *     PlacementModuleNode
+ *     NetlistModuleNode
+ *
+ * ============================================================================
+ * SEMANTIC CONTRACT
+ * ============================================================================
+ *
+ * Semantic analysis is responsible for:
+ *
+ *     - module name resolution;
+ *     - namespace resolution;
+ *     - duplicate module detection;
+ *     - generic specialization;
+ *     - parameter/type checking;
+ *     - instance interface checking;
+ *     - named connection validation;
+ *     - connection type compatibility;
+ *     - direction compatibility;
+ *     - instance scope;
+ *     - recursive dependency detection;
+ *     - module elaboration;
+ *     - capability analysis;
+ *     - resource analysis;
+ *     - target realizability.
+ *
+ * None of these checks belong in the parser.
+ *
+ * ============================================================================
+ * RESOURCE / CAPABILITY SEPARATION
+ * ============================================================================
+ *
+ * Module syntax does not directly select hardware.
+ *
+ * Source-level requirements such as:
+ *
+ *     requires qubits >= n
+ *
+ *     requires capability("gpu.compute")
+ *
+ *     requires memory >= required_memory
+ *
+ * belong to the resource/capability subsystem.
+ *
+ * A module reference such as:
+ *
+ *     ComputeUnit
+ *
+ * is not a resource allocation.
  *
  * ============================================================================
  * QUANTUM INTEGRATION
  * ============================================================================
  *
- * A hardware module may surround or interact with quantum computation.
+ * A module may surround quantum-related hardware/control structures.
  *
- * This file does not own quantum operation semantics.
+ * This file does not define quantum operation semantics.
  *
- * If a module contains quantum constructs:
+ * Quantum source continues through:
  *
- *     source
- *       |
- *       v
- *     generic/domain-neutral AST
- *       |
- *       v
- *     semantic analysis
- *       |
- *       v
- *     quantum semantics
- *       |
- *       v
+ *     generic AST
+ *          |
+ *          v
+ *     semantic quantum model
+ *          |
+ *          v
  *     quantum::ir
  *
- * quantum::ir remains the canonical quantum semantic boundary.
+ * This file MUST NOT create:
  *
- * This grammar MUST NOT create:
- *
- *     QuantumModuleIR
  *     HardwareQuantumIR
+ *     QuantumModuleIR
  *     HardwareGateIR
  *
- * as competing quantum representations.
+ * or another quantum intermediate representation.
  *
  * QEC, ZQN, routing, scheduling, calibration and HAL remain downstream.
+ *
+ * ============================================================================
+ * CLASSICAL / HYBRID INTEGRATION
+ * ============================================================================
+ *
+ * A hardware module may contain or surround classical and hybrid computation.
+ *
+ * Classical semantics remain owned by the classical subsystem.
+ *
+ * Quantum/classical interaction remains owned by the hybrid and quantum
+ * semantic subsystems.
+ *
+ * This grammar provides only the structural module boundary.
  *
  * ============================================================================
  * DETERMINISM
  * ============================================================================
  *
- * Parsing a module is deterministic with respect to:
+ * Parsing depends only on:
  *
- *     source;
- *     language version;
- *     canonical lexical vocabulary;
- *     canonical grammar composition.
+ *     source text;
+ *     canonical lexer vocabulary;
+ *     grammar version;
+ *     selected language/dialect configuration.
  *
- * This grammar MUST NOT depend on:
+ * It MUST NOT inspect:
  *
- *     hardware state;
+ *     hardware;
  *     CPU count;
  *     GPU availability;
  *     QPU availability;
  *     filesystem state;
  *     network state;
- *     wall-clock time;
  *     environment variables;
+ *     wall-clock time;
  *     randomness;
- *     deployment state.
+ *     deployment topology.
  *
  * ============================================================================
  * SECURITY
  * ============================================================================
  *
- * This grammar contains no actions.
+ * This grammar:
  *
- * It performs no:
- *
- *     filesystem access;
- *     network access;
- *     command execution;
- *     hardware probing;
- *     credential access;
- *     target discovery;
- *     backend invocation.
+ *     - executes no code;
+ *     - accesses no files;
+ *     - accesses no network;
+ *     - accesses no hardware;
+ *     - accesses no credentials;
+ *     - performs no target discovery;
+ *     - contains no embedded Rust.
  *
  * ============================================================================
- * PUBLIC API
+ * COMPATIBILITY
  * ============================================================================
  *
- * The public rule consumed by the HDL composition layer is:
+ * The stable module entry contract is:
  *
- *     hdlModuleDecl
+ *     hdlModuleDeclaration
  *
- * The canonical HDL parser should expose this rule through its normal
- * composition boundary.
+ * Existing inline module-generation rules are intentionally removed from this
+ * file because generation now has a single owner in generate.g4.
+ *
+ * Existing module instance semantics are preserved as logical source-level
+ * composition.
+ *
+ * ============================================================================
+ * COMPLETION CRITERIA
+ * ============================================================================
+ *
+ * This file is complete when:
+ *
+ *     [x] one canonical module declaration rule exists;
+ *     [x] module names are target-independent;
+ *     [x] module bodies are unbounded;
+ *     [x] module instances are logical;
+ *     [x] instance specialization is supported;
+ *     [x] named connections are supported;
+ *     [x] positional connections are supported;
+ *     [x] generic syntax is delegated;
+ *     [x] expression syntax is delegated;
+ *     [x] type syntax is delegated;
+ *     [x] generate syntax is delegated;
+ *     [x] signals are delegated;
+ *     [x] ports are delegated;
+ *     [x] memories are delegated;
+ *     [x] registers are delegated;
+ *     [x] no physical target is encoded;
+ *     [x] no hardware maximum is encoded;
+ *     [x] no vendor is encoded;
+ *     [x] no competing quantum IR exists;
+ *     [x] no embedded Rust exists;
+ *     [x] no unsafe exists;
+ *     [x] AST integration is predetermined;
+ *     [x] semantic integration is predetermined;
+ *     [x] IR integration is predetermined;
+ *     [x] compiler integration is predetermined;
+ *     [x] runtime integration is predetermined.
  *
  * ============================================================================
  */
@@ -484,183 +569,56 @@ options {
  * 1. MODULE DECLARATION
  * ============================================================================
  *
- * Canonical source form:
+ * Canonical forms:
  *
  *     module Counter {
  *         ...
  *     }
  *
- * Parameterized:
- *
- *     module Counter<WIDTH> {
+ *     module compute::Counter {
  *         ...
  *     }
  *
- * With a logical namespace:
- *
- *     module compute::Counter<WIDTH> {
- *         ...
- *     }
- *
- * The module name remains a logical source identifier.
+ * Generic specialization/declaration syntax is supplied by the canonical
+ * generic grammar.
  */
-hdlModuleDecl
-    : hdlModulePrefix?
+hdlModuleDeclaration
+    : hdlAttribute*
       K_MODULE
       hdlModuleName
       hardwareGenericParameters?
-      hdlModuleContractClause*
       hdlModuleBody
     ;
 
 
 /*
  * ============================================================================
- * 2. OPTIONAL MODULE PREFIX
+ * 2. MODULE NAME
  * ============================================================================
  *
- * This rule provides a controlled extension point for module metadata.
+ * A module name is a logical qualified source name.
  *
- * It deliberately does not introduce a new target-specific module kind.
- *
- * Attributes are supplied by the canonical attribute grammar.
- */
-hdlModulePrefix
-    : attribute+
-    ;
-
-
-/*
- * ============================================================================
- * 3. MODULE NAME
- * ============================================================================
- *
- * Module names are logical names.
- *
- * No depth limit is imposed on qualification.
- *
- * Examples:
- *
- *     Counter
- *
- *     compute::Counter
- *
- *     compute::integer::Counter
- *
- * The canonical identifier rule remains authoritative.
+ * It is deliberately not a target/device identifier.
  */
 hdlModuleName
     : identifier
-      (DOUBLE_COLON identifier)*
+      (
+          DOUBLE_COLON
+          identifier
+      )*
     ;
 
 
 /*
  * ============================================================================
- * 4. MODULE CONTRACT
+ * 3. MODULE BODY
  * ============================================================================
  *
- * Contracts express source-level module requirements and externally visible
- * guarantees without selecting a physical implementation.
+ * The module body is an unbounded ordered collection of HDL module members.
  *
- * `requires` is a semantic requirement.
+ * Concrete member syntax remains owned by the corresponding HDL subsystem.
  *
- * `provides` describes a capability or property exposed by the module.
- *
- * `constraint` expresses a semantic restriction.
- *
- * `prefer` expresses a non-binding implementation preference.
- *
- * These meanings are validated downstream.
- */
-hdlModuleContractClause
-    : hdlModuleRequiresClause
-    | hdlModuleProvidesClause
-    | hdlModuleConstraintClause
-    | hdlModulePreferenceClause
-    ;
-
-
-/*
- * ============================================================================
- * 5. REQUIREMENTS
- * ============================================================================
- *
- * Examples:
- *
- *     requires capability("streaming");
- *
- *     requires qubits >= required_qubits;
- *
- *     requires memory >= required_memory;
- *
- *     requires latency <= maximum_latency;
- *
- * The grammar does not evaluate the expression.
- */
-hdlModuleRequiresClause
-    : K_REQUIRES expression SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * 6. PROVIDED CAPABILITIES
- * ============================================================================
- *
- * Examples:
- *
- *     provides capability("vector.compute");
- *
- *     provides capability("streaming");
- *
- *     provides interface::protocol;
- *
- * The meaning of the expression is semantic.
- */
-hdlModuleProvidesClause
-    : K_PROVIDES expression SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * 7. CONSTRAINTS
- * ============================================================================
- *
- * Constraints are semantic restrictions.
- *
- * They are not target selections.
- */
-hdlModuleConstraintClause
-    : K_CONSTRAINT expression SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * 8. PREFERENCES
- * ============================================================================
- *
- * Preferences are non-binding implementation guidance.
- *
- * A preference must never make a program semantically dependent on a
- * particular physical device unless the program separately expresses that
- * requirement.
- */
-hdlModulePreferenceClause
-    : K_PREFER expression SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * 9. MODULE BODY
- * ============================================================================
- *
- * The module body is an ordered sequence of module members.
- *
- * There is intentionally no finite member count.
+ * The rule hdlModuleMemberCore is supplied by the HDL composition boundary.
  */
 hdlModuleBody
     : LBRACE
@@ -671,122 +629,28 @@ hdlModuleBody
 
 /*
  * ============================================================================
- * 10. MODULE MEMBER
+ * 4. MODULE MEMBER
  * ============================================================================
  *
- * This is the critical integration boundary.
+ * Attribute ownership remains in the canonical HDL/core grammar.
  *
- * Module-specific syntax is composed from the owning HDL grammar components.
+ * The actual member dispatcher is deliberately not duplicated here.
  *
- * This rule MUST NOT copy their implementations.
+ * `hdlModuleMemberCore` is the integration point supplied by the HDL
+ * composition grammar.
  */
 hdlModuleMember
-    : hdlModuleMemberAttributes*
+    : hdlAttribute*
       hdlModuleMemberCore
     ;
 
 
 /*
  * ============================================================================
- * 11. MODULE MEMBER ATTRIBUTES
+ * 5. MODULE INSTANCE
  * ============================================================================
  *
- * Attributes are metadata.
- *
- * They are not physical placement directives.
- */
-hdlModuleMemberAttributes
-    : attribute
-    ;
-
-
-/*
- * ============================================================================
- * 12. MODULE MEMBER DISPATCH
- * ============================================================================
- *
- * The names below are integration points supplied by the existing HDL
- * component grammars.
- *
- * Ownership:
- *
- *     hdlParameterDeclaration
- *         hardware-parameters.g4
- *
- *     hardwareGenericParameters
- *         hardware-generics.g4
- *
- *     hdlPortDeclaration
- *         ports.g4
- *
- *     hdlSignalDeclaration
- *         signals.g4
- *
- *     hdlWireDeclaration
- *         wires.g4
- *
- *     hdlRegisterDeclaration
- *         registers.g4
- *
- *     hdlClockDeclaration
- *         clocks.g4
- *
- *     hdlTimingDeclaration
- *         timing.g4
- *
- *     hdlCombinationalDeclaration
- *         combinational.g4
- *
- *     hdlSequentialDeclaration
- *         sequential.g4
- *
- *     hdlProcessDeclaration
- *         processes.g4
- *
- *     hdlStateMachineDeclaration
- *         state-machines.g4
- *
- *     hdlMemoryDeclaration
- *         memories.g4
- *
- *     hdlPipelineDeclaration
- *         pipelines.g4
- *
- *     hdlInterfaceDeclaration
- *         hardware-interfaces.g4
- *
- * This module grammar owns only the dispatch relationship.
- */
-hdlModuleMemberCore
-    : hdlParameterDeclaration
-    | hdlParameterAliasDeclaration
-    | hdlPortDeclaration
-    | hdlSignalDeclaration
-    | hdlWireDeclaration
-    | hdlRegisterDeclaration
-    | hdlClockDeclaration
-    | hdlTimingDeclaration
-    | hdlCombinationalDeclaration
-    | hdlSequentialDeclaration
-    | hdlProcessDeclaration
-    | hdlStateMachineDeclaration
-    | hdlMemoryDeclaration
-    | hdlPipelineDeclaration
-    | hdlInterfaceDeclaration
-    | hdlModuleInstance
-    | hdlContinuousAssignment
-    | hdlModuleGenerate
-    | hdlModuleBinding
-    | hdlModuleVerification
-    ;
-
-
-/*
- * ============================================================================
- * 13. MODULE INSTANCE
- * ============================================================================
- *
- * A module instance is a logical source-level composition relationship.
+ * Logical source-level module composition.
  *
  * Examples:
  *
@@ -794,791 +658,648 @@ hdlModuleMemberCore
  *
  *     instance counter: Counter<WIDTH = width>;
  *
- *     instance counter: compute::Counter<WIDTH = width>;
+ *     instance arithmetic: compute::Arithmetic<WIDTH = width> {
+ *         a = lhs,
+ *         b = rhs,
+ *         result = output
+ *     };
  *
- * The instance name is NOT:
- *
- *     a device ID;
- *     a physical address;
- *     a board identifier;
- *     a CPU ID;
- *     a GPU ID;
- *     a QPU ID.
+ * No physical device is selected.
  */
-hdlModuleInstance
+hdlInstanceDeclaration
     : K_INSTANCE
       identifier
       COLON
       hdlModuleReference
-      hdlModuleInstanceConnections?
+      hdlInstanceConnectionBlock?
       SEMICOLON
     ;
 
 
 /*
  * ============================================================================
- * 14. MODULE REFERENCE
+ * 6. MODULE REFERENCE
  * ============================================================================
  *
- * Module resolution belongs to module/semantic analysis.
+ * A module reference may identify:
  *
- * The reference can identify:
+ *     - a local module;
+ *     - an imported module;
+ *     - a package module;
+ *     - a generated module;
+ *     - a dialect-provided module;
+ *     - an external logical module.
  *
- *     local modules;
- *     imported modules;
- *     package modules;
- *     generated modules;
- *     dialect-provided modules;
- *     external modules.
+ * Resolution is semantic.
  */
 hdlModuleReference
-    : identifier
-      (DOUBLE_COLON identifier)*
+    : hdlModuleName
       hardwareGenericSpecialization?
     ;
 
 
 /*
  * ============================================================================
- * 15. INSTANCE CONNECTIONS
+ * 7. INSTANCE CONNECTION BLOCK
  * ============================================================================
  *
- * Connections are logical bindings between the instance interface and
- * expressions/signals/ports in the containing module.
+ * Named and positional connections may coexist syntactically only where the
+ * semantic model permits it.
  *
- * Physical routing is NOT implied.
+ * The semantic layer is responsible for rejecting invalid mixtures.
  *
- * Example:
- *
- *     instance alu: ALU {
- *         input_a = a,
- *         input_b = b,
- *         output = result
- *     };
+ * No fixed connection count exists.
  */
-hdlModuleInstanceConnections
+hdlInstanceConnectionBlock
     : LBRACE
-      hdlModuleInstanceConnectionList?
+      hdlInstanceConnectionList?
       RBRACE
     ;
 
 
 /*
  * ============================================================================
- * 16. CONNECTION LIST
+ * 8. CONNECTION LIST
  * ============================================================================
  */
-hdlModuleInstanceConnectionList
-    : hdlModuleInstanceConnection
-      (COMMA hdlModuleInstanceConnection)*
+hdlInstanceConnectionList
+    : hdlInstanceConnection
+      (
+          COMMA
+          hdlInstanceConnection
+      )*
       COMMA?
     ;
 
 
 /*
  * ============================================================================
- * 17. CONNECTION
+ * 9. CONNECTION
  * ============================================================================
  *
- * Named connections are preferred because they remain stable when an
- * interface evolves.
+ * Named:
  *
- * The expression on the right is interpreted by semantic analysis.
+ *     input_a = a
+ *
+ * Positional:
+ *
+ *     a
+ *
+ * The semantic layer resolves the latter against the module interface.
  */
-hdlModuleInstanceConnection
-    : identifier ASSIGN expression
-    ;
-
-
-/*
- * ============================================================================
- * 18. EXPLICIT POSITIONAL CONNECTIONS
- * ============================================================================
- *
- * Positional connection syntax is retained as a compatibility/expressive
- * extension.
- *
- * Example:
- *
- *     instance pair: Pair {
- *         a,
- *         b
- *     };
- *
- * Semantic analysis is responsible for validating interface ordering.
- */
-hdlModulePositionalConnectionList
-    : expression
-      (COMMA expression)*
-      COMMA?
-    ;
-
-
-/*
- * ============================================================================
- * 19. MODULE GENERATION
- * ============================================================================
- *
- * Generate constructs are owned by the module composition boundary only when
- * they represent module-level structural generation.
- *
- * The detailed generation semantics remain owned by the HDL generation
- * subsystem.
- */
-hdlModuleGenerate
-    : K_GENERATE
-      hdlModuleGenerateBody
-    ;
-
-
-hdlModuleGenerateBody
-    : LBRACE
-      hdlModuleGenerateItem*
-      RBRACE
-    ;
-
-
-hdlModuleGenerateItem
-    : hdlModuleGenerateFor
-    | hdlModuleGenerateIf
-    | hdlModuleGenerateMember
-    ;
-
-
-hdlModuleGenerateFor
-    : K_FOR
-      LPAREN
-      hdlModuleGenerateBinding
-      SEMICOLON
-      expression
-      SEMICOLON
-      expression
-      RPAREN
-      hdlModuleGenerateBlock
-    ;
-
-
-hdlModuleGenerateBinding
+hdlInstanceConnection
     : identifier
       ASSIGN
       expression
-    ;
-
-
-hdlModuleGenerateIf
-    : K_IF
-      LPAREN
-      expression
-      RPAREN
-      hdlModuleGenerateBlock
-      (
-          K_ELSE
-          hdlModuleGenerateBlock
-      )?
-    ;
-
-
-hdlModuleGenerateBlock
-    : LBRACE
-      hdlModuleGenerateMember*
-      RBRACE
-    ;
-
-
-hdlModuleGenerateMember
-    : hdlModuleMember
-    ;
-
-
-/*
- * ============================================================================
- * 20. MODULE BINDING
- * ============================================================================
- *
- * A module binding establishes a source-level relationship between logical
- * module entities.
- *
- * It does not perform physical placement or routing.
- *
- * The semantic layer determines whether the binding is legal.
- */
-hdlModuleBinding
-    : K_BIND
-      hdlModuleBindingSubject
-      ASSIGN
-      hdlModuleBindingTarget
-      SEMICOLON
-    ;
-
-
-hdlModuleBindingSubject
-    : hdlModuleReference
-    | identifier
-    ;
-
-
-hdlModuleBindingTarget
-    : hdlModuleReference
-    | identifier
     | expression
     ;
 
 
 /*
  * ============================================================================
- * 21. CONTINUOUS ASSIGNMENT
+ * 10. GENERIC SPECIALIZATION ADAPTER
  * ============================================================================
  *
- * This rule is a composition boundary for the existing HDL assignment
- * subsystem.
+ * This grammar does not define generic specialization.
  *
- * The implementation of assignment semantics belongs to that subsystem.
- */
-hdlContinuousAssignment
-    : K_ASSIGN
-      expression
-      ASSIGN
-      expression
-      SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * 22. MODULE VERIFICATION
- * ============================================================================
+ * `hardwareGenericSpecialization` is supplied by the generic subsystem.
  *
- * Module-local verification constructs remain source-level assertions.
+ * Conceptual forms include:
  *
- * Verification engines are downstream.
+ *     Counter<WIDTH = 32>
  *
- * This rule intentionally keeps the assertion body as an expression.
- */
-hdlModuleVerification
-    : hdlModuleAssert
-    | hdlModuleAssume
-    | hdlModuleCover
-    ;
-
-
-hdlModuleAssert
-    : K_ASSERT
-      expression
-      SEMICOLON
-    ;
-
-
-hdlModuleAssume
-    : K_ASSUME
-      expression
-      SEMICOLON
-    ;
-
-
-hdlModuleCover
-    : K_COVER
-      expression
-      SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * 23. MODULE ATTRIBUTE / METADATA CONTRACT
- * ============================================================================
+ *     Counter<T = Data>
  *
- * Attribute semantics remain outside this grammar.
+ *     Counter<WIDTH = width, LANES = lanes>
  *
- * Legitimate examples may include source-level metadata such as:
- *
- *     @synthesizable
- *     @simulation
- *     @formal
- *     @portable
- *
- * A module attribute MUST NOT silently select:
- *
- *     FPGA device
- *     GPU device
- *     CPU core
- *     QPU
- *     vendor
- *     board
- *     physical pin
- *     physical memory block.
- *
- * Those are separate semantic/target concerns.
+ * The actual generic grammar remains the sole authority.
  */
 
 
 /*
  * ============================================================================
- * 24. GENERIC INTEGRATION CONTRACT
+ * 11. MEMBER-DISPATCH INTEGRATION
  * ============================================================================
  *
- * This file consumes:
+ * The HDL composition root must expose `hdlModuleMemberCore`.
  *
- *     hardwareGenericParameters
+ * It is responsible for composing:
  *
- * from:
+ *     parameters
+ *     local parameters
+ *     type declarations
+ *     interfaces
+ *     ports
+ *     signals
+ *     nets
+ *     registers
+ *     memories
+ *     clocks
+ *     resets
+ *     assignments
+ *     processes
+ *     always constructs
+ *     combinational constructs
+ *     sequential constructs
+ *     state machines
+ *     pipelines
+ *     generate constructs
+ *     timing
+ *     assertions
+ *     nested/block declarations
+ *     expression statements
  *
- *     grammar/hdl/hardware-generics.g4
+ * This file deliberately does not reproduce that list.
+ *
+ * This is important because otherwise:
+ *
+ *     hdl.g4
  *
  * and:
  *
- *     hardwareGenericSpecialization
+ *     hardware-modules.g4
  *
- * from the same grammar.
- *
- * No generic syntax is duplicated here.
- *
- * Therefore a future change to generic semantics does not require this file
- * to redefine generic parameter lists.
+ * would become competing module-member authorities.
  */
 
 
 /*
  * ============================================================================
- * 25. PARAMETER INTEGRATION CONTRACT
+ * 12. GENERATE INTEGRATION
  * ============================================================================
  *
- * This file consumes:
+ * `generate.g4` is the sole general generation owner.
  *
- *     hdlParameterDeclaration
- *     hdlParameterAliasDeclaration
+ * The HDL composition layer must include:
  *
- * from:
+ *     hdlGenerateDeclaration
  *
- *     grammar/hdl/hardware-parameters.g4
+ * in its canonical `hdlModuleMemberCore`.
  *
- * Parameter types/defaults/domains/constraints remain owned there.
+ * No module-specific generate grammar is defined here.
  *
- * Module syntax only decides where a parameter declaration is legal.
+ * Therefore the following old rules are intentionally absent:
+ *
+ *     hdlModuleGenerate
+ *     hdlModuleGenerateBody
+ *     hdlModuleGenerateItem
+ *     hdlModuleGenerateFor
+ *     hdlModuleGenerateBinding
+ *     hdlModuleGenerateIf
+ *     hdlModuleGenerateBlock
+ *     hdlModuleGenerateMember
+ *
+ * This prevents structural generation from splitting into two grammars.
  */
 
 
 /*
  * ============================================================================
- * 26. INTERFACE INTEGRATION CONTRACT
+ * 13. PORT INTEGRATION
  * ============================================================================
  *
- * Hardware interface declarations remain owned by:
+ * Ports remain owned by:
  *
- *     grammar/hdl/hardware-interfaces.g4
+ *     grammar/hdl/ports.g4
  *
- * Module instances connect to logical interface members.
+ * The module grammar merely permits the canonical port member rule through
+ * `hdlModuleMemberCore`.
  *
- * Physical pin mapping remains downstream.
+ * Physical pins and board locations remain downstream.
  */
 
 
 /*
  * ============================================================================
- * 27. PORT / SIGNAL / REGISTER / MEMORY INTEGRATION
+ * 14. SIGNAL / WIRE / REGISTER INTEGRATION
  * ============================================================================
- *
- * The module grammar deliberately does not redefine these concepts.
  *
  * Ownership remains:
  *
- *     ports.g4
  *     signals.g4
  *     wires.g4
  *     registers.g4
+ *
+ * No declaration syntax is duplicated here.
+ */
+
+
+/*
+ * ============================================================================
+ * 15. MEMORY INTEGRATION
+ * ============================================================================
+ *
+ * Memory declarations remain owned by:
+ *
  *     memories.g4
  *
- * A module can contain those constructs through hdlModuleMemberCore.
+ * Module composition does not imply:
+ *
+ *     RAM capacity;
+ *     VRAM capacity;
+ *     physical block RAM;
+ *     SRAM technology;
+ *     DRAM technology;
+ *     device-local memory.
  */
 
 
 /*
  * ============================================================================
- * 28. CLOCK / TIMING INTEGRATION
+ * 16. CLOCK / TIMING INTEGRATION
  * ============================================================================
  *
- * Clock and timing declarations remain owned by:
+ * Clock and timing syntax remain owned by their respective HDL grammars.
  *
- *     clocks.g4
- *     timing.g4
+ * Module composition does not select:
  *
- * This file merely establishes their legal location inside a module.
- *
- * Timing closure and physical clock-tree construction are downstream.
+ *     physical oscillator;
+ *     PLL;
+ *     clock tree;
+ *     physical clock pin.
  */
 
 
 /*
  * ============================================================================
- * 29. PROCESS / COMBINATIONAL / SEQUENTIAL INTEGRATION
+ * 17. PIPELINE INTEGRATION
  * ============================================================================
  *
- * Behavioral HDL constructs remain owned by:
- *
- *     processes.g4
- *     combinational.g4
- *     sequential.g4
- *
- * Semantic analysis determines:
- *
- *     - driver conflicts;
- *     - combinational completeness;
- *     - sequential legality;
- *     - reset behavior;
- *     - clock relationships;
- *     - CDC correctness;
- *     - inferred storage.
- */
-
-
-/*
- * ============================================================================
- * 30. PIPELINE INTEGRATION
- * ============================================================================
- *
- * Pipeline declarations are delegated to:
+ * Pipeline syntax remains owned by:
  *
  *     pipelines.g4
  *
- * Pipeline depth is source/program data.
- *
- * There is no language maximum for:
- *
- *     pipeline stages;
- *     lanes;
- *     operations;
- *     generated instances.
- *
- * Physical retiming and placement are downstream.
+ * No maximum stage count is encoded here.
  */
 
 
 /*
  * ============================================================================
- * 31. STATE-MACHINE INTEGRATION
+ * 18. RESOURCE / CAPABILITY INTEGRATION
  * ============================================================================
  *
- * State-machine syntax is delegated to:
+ * Resource and capability expressions remain outside the module grammar.
  *
- *     state-machines.g4
+ * A module may eventually participate in:
  *
- * There is no parser-level limit on:
+ *     requires ...
+ *     provides ...
+ *     prefer ...
+ *     capability(...)
  *
- *     states;
- *     transitions;
- *     guards;
- *     actions.
+ * but the lexical/syntactic ownership of those constructs belongs to the
+ * resource/capability subsystem.
+ *
+ * This prevents unsupported K_REQUIRES/K_PROVIDES/K_CONSTRAINT/K_PREFER tokens
+ * from being invented inside this grammar.
  */
 
 
 /*
  * ============================================================================
- * 32. HARDWARE DIALECT INTEGRATION
+ * 19. VERIFICATION INTEGRATION
  * ============================================================================
  *
- * Vendor/technology-specific syntax must use the dialect extension mechanism.
+ * Verification constructs remain owned by the HDL verification/assertion
+ * grammar and enter the module through `hdlModuleMemberCore`.
  *
- * This file MUST NOT enumerate:
+ * This file does not define:
  *
- *     vendor A;
- *     vendor B;
- *     FPGA family X;
- *     ASIC family Y;
- *     accelerator Z;
+ *     assert
+ *     assume
+ *     cover
  *
- * as permanent core module forms.
- *
- * Dialect identity remains semantic/source metadata.
- *
- * Dialect compatibility is resolved downstream.
+ * again.
  */
 
 
 /*
  * ============================================================================
- * 33. HARDWARE TARGET INTEGRATION
+ * 20. AST / SEMANTIC / IR PIPELINE
  * ============================================================================
  *
- * A module can express requirements/preferences through contract expressions.
+ * Module syntax:
  *
- * Example:
+ *     hdlModuleDeclaration
+ *          |
+ *          v
+ *     domain-neutral frontend AST
+ *          |
+ *          v
+ *     name/type/generic/connection analysis
+ *          |
+ *          v
+ *     semantic hardware module model
+ *          |
+ *          v
+ *     canonical hardware semantic representation / IR
+ *          |
+ *          +--> optimization
+ *          +--> verification
+ *          +--> scheduling
+ *          +--> synthesis
+ *          +--> routing
+ *          +--> placement
+ *          +--> target lowering
  *
- *     requires capability("streaming");
- *
- *     requires memory >= required_memory;
- *
- *     prefer accelerator("vector");
- *
- * None of these select a physical device.
- *
- * Target realization occurs later.
+ * No module-specific backend IR is introduced here.
  */
 
 
 /*
  * ============================================================================
- * 34. RESOURCE INTEGRATION
+ * 21. QUANTUM BOUNDARY
  * ============================================================================
  *
- * A module may use source expressions representing resource requirements.
+ * If a module participates in quantum/hybrid computation:
  *
- * Examples:
+ *     module syntax
+ *          |
+ *          v
+ *     generic AST
+ *          |
+ *          v
+ *     semantic analysis
+ *          |
+ *          v
+ *     quantum semantic model
+ *          |
+ *          v
+ *     quantum::ir
  *
- *     requires qubits >= n;
+ * This grammar does not create:
  *
- *     requires memory >= required_memory;
+ *     QuantumModuleIR
+ *     HardwareQuantumIR
+ *     HardwareGateIR
  *
- *     requires capability("tensor.compute");
- *
- *     requires capability("gpu.compute");
- *
- *     requires capability("quantum.measurement");
- *
- * The grammar does not evaluate or resolve those requirements.
+ * quantum::ir remains the canonical quantum boundary.
  */
 
 
 /*
  * ============================================================================
- * 35. NO PHYSICAL HARD-CODING
+ * 22. COMPILER INTEGRATION
  * ============================================================================
  *
- * This grammar MUST remain valid for:
+ * The compiler consumes module declarations after parsing.
  *
- *     tiny hardware designs;
- *     embedded systems;
- *     microcontrollers;
- *     CPUs;
- *     multicore systems;
- *     GPUs;
- *     FPGAs;
- *     ASICs;
- *     accelerators;
- *     QPUs;
- *     heterogeneous systems;
- *     distributed systems;
- *     HPC systems;
- *     future hardware.
+ * Required stages include:
  *
- * No syntax in this file assumes:
+ *     parsing
+ *     name resolution
+ *     generic specialization
+ *     type checking
+ *     interface checking
+ *     structural validation
+ *     resource/capability analysis
+ *     elaboration
+ *     canonical IR lowering
+ *     optimization
+ *     scheduling
+ *     routing
+ *     synthesis
+ *     target lowering
  *
- *     32-bit registers;
- *     64-bit registers;
- *     fixed FPGA resources;
- *     fixed GPU count;
- *     fixed CPU count;
- *     fixed QPU count;
- *     fixed memory size;
- *     fixed topology;
- *     fixed pipeline depth.
+ * Module parsing itself must not perform any of those operations.
  */
 
 
 /*
  * ============================================================================
- * 36. NO PHYSICAL INSTANCE SEMANTICS
+ * 23. RUNTIME INTEGRATION
  * ============================================================================
  *
- * This is valid source-level naming:
+ * Module declarations describe source-level structure.
  *
- *     instance gpu: ComputeUnit;
+ * They do not themselves execute.
  *
- * It does NOT mean:
- *
- *     physical GPU number 0.
- *
- * Likewise:
- *
- *     instance qpu: QuantumController;
- *
- * does not identify a particular physical QPU.
- *
- * Physical mapping is downstream.
+ * Runtime behavior belongs to the semantic constructs contained in a module
+ * after compilation/elaboration.
  */
 
 
 /*
  * ============================================================================
- * 37. SOURCE-LEVEL VS TARGET-LEVEL SEPARATION
+ * 24. ERROR / DIAGNOSTIC CONTRACT
  * ============================================================================
  *
- * The following conceptual distinction is mandatory:
+ * Source locations must remain available for:
  *
- *     requirement
- *         = semantic condition
+ *     module declaration;
+ *     module name;
+ *     generic specialization;
+ *     instance name;
+ *     module reference;
+ *     connection;
+ *     module member.
  *
- *     capability
- *         = property required/provided
+ * Semantic diagnostics should distinguish:
  *
- *     preference
- *         = non-binding implementation guidance
+ *     unknown module;
+ *     duplicate module;
+ *     invalid specialization;
+ *     missing required connection;
+ *     unknown connection;
+ *     incompatible connection;
+ *     invalid instance scope;
+ *     recursive elaboration;
+ *     unsatisfied capability;
+ *     insufficient target resources.
  *
- *     hint
- *         = optional implementation guidance
+ * Syntax errors remain parser diagnostics.
  *
- *     realization
- *         = target-specific downstream decision
- *
- * This grammar represents only the source-level portions.
+ * Resource/capability failures must not be reported as syntax errors merely
+ * because the target cannot realize the program.
  */
 
 
 /*
  * ============================================================================
- * 38. ERROR / DIAGNOSTIC CONTRACT
+ * 25. SECURITY CONTRACT
  * ============================================================================
  *
- * The parser must preserve normal ANTLR token/source context.
+ * Module grammar performs no:
  *
- * Semantic diagnostics should be able to identify:
+ *     filesystem access;
+ *     network access;
+ *     process execution;
+ *     hardware discovery;
+ *     credential access;
+ *     environment inspection;
+ *     backend invocation.
  *
- *     - module name;
- *     - generic parameter;
- *     - contract;
- *     - module member;
- *     - instance;
- *     - instance specialization;
- *     - connection;
- *     - generated member.
+ * External module loading belongs to module/package infrastructure.
  *
- * Diagnostics are implemented by the frontend/semantic infrastructure.
- *
- * This grammar contains no recovery actions or embedded Rust.
- */
-
-
-/*
  * ============================================================================
- * 39. COMPATIBILITY CONTRACT
+ * 26. HARD-CODING AUDIT
  * ============================================================================
  *
- * Existing stable parser rule:
+ * No universal resource limit appears in the grammar.
  *
- *     hdlModuleDecl
+ * Program constants such as:
  *
- * is retained.
+ *     32
+ *     1024
+ *     1000000
  *
- * Existing conceptual child-rule names are retained wherever they are already
- * established by the repository.
+ * remain ordinary expressions when supplied by the program.
  *
- * The following older responsibilities are intentionally NOT retained here:
+ * They must never be interpreted by this grammar as universal hardware
+ * limits.
  *
- *     - duplicate generic grammar;
- *     - duplicate parameter grammar;
- *     - physical target selection;
- *     - physical placement;
- *     - fixed resource limits;
- *     - vendor-specific module enumeration.
- *
- * This keeps compatibility at the public module boundary while eliminating
- * duplicate internal authorities.
- */
-
-
-/*
  * ============================================================================
- * 40. HARD-CODING AUDIT
+ * 27. SAFE-RUST CONTRACT
  * ============================================================================
  *
- * Forbidden universal concepts:
+ * This grammar contains no Rust.
  *
- *     MAX_QUBITS
- *     MAX_CPUS
- *     MAX_GPUS
- *     MAX_FPGAS
- *     MAX_NODES
- *     MAX_MEMORY
- *     MAX_THREADS
- *     MAX_TENSOR_RANK
- *     MAX_REGISTER_WIDTH
- *     MAX_NETWORK_SIZE
- *     MAX_DEVICE_COUNT
- *     MAX_MODULES
- *     MAX_INSTANCES
- *     MAX_PORTS
+ * Generated/parser/frontend implementations must remain:
  *
- * None are represented as grammar limits.
- *
- * Numeric values appearing inside expressions remain program data.
- */
-
-
-/*
- * ============================================================================
- * 41. SAFE-RUST CONTRACT
- * ============================================================================
- *
- * This file contains no Rust.
- *
- * Consumers in the Zamani compiler are expected to target:
- *
- *     Rust 1.97
- *     Rust 1.97.1
+ *     Rust 1.97 / Rust 1.97.1
  *     Rust 2021
+ *     safe Rust
  *
- * The compiler implementation must use safe Rust only.
+ * No `unsafe` is required or permitted by the Zamani compiler architecture.
  *
- * This grammar requires no `unsafe`.
- */
-
-
-/*
  * ============================================================================
- * 42. COMPLETION CRITERIA
+ * 28. PRODUCTION TEST CONTRACT
  * ============================================================================
  *
- * This file is complete when all of the following hold:
+ * Required positive tests:
  *
- * [x] Module declaration has one canonical entry rule.
- * [x] Module naming is target-independent.
- * [x] Generic declarations are delegated.
- * [x] Generic specializations are delegated.
- * [x] Parameter declarations are delegated.
- * [x] Module contracts are source-level only.
- * [x] Module body composition is centralized here.
- * [x] Child HDL grammars remain owners of their constructs.
- * [x] Module instances are logical.
- * [x] Instance specialization is generic-aware.
- * [x] Instance connections are logical.
- * [x] Generation is parameterized.
- * [x] No fixed hardware capacity exists.
- * [x] No fixed topology exists.
- * [x] No physical device is selected.
- * [x] No vendor is hard-coded.
- * [x] No competing quantum IR exists.
- * [x] quantum::ir remains downstream.
- * [x] No embedded Rust exists.
- * [x] No unsafe exists.
- * [x] Source-level AST ownership is explicit.
- * [x] Semantic ownership is explicit.
- * [x] IR ownership is explicit.
- * [x] Resource/capability separation is preserved.
- * [x] POCO-REAF is preserved.
+ *     module Minimal {}
  *
- * The corresponding conformance tests belong under:
+ *     module Counter {
+ *         ...
+ *     }
  *
- *     grammar/tests/hdl/
+ *     module compute::Counter {}
  *
- * and must cover:
+ *     instance counter: Counter;
  *
- *     - minimal module;
- *     - parameterized module;
- *     - generic module;
- *     - nested module;
- *     - qualified module;
- *     - module instance;
- *     - specialized instance;
- *     - named connections;
- *     - generated modules;
- *     - requirements;
- *     - capabilities;
- *     - preferences;
- *     - large symbolic dimensions;
- *     - quantum-aware hardware composition;
- *     - negative syntax;
- *     - ambiguity;
- *     - determinism;
- *     - scalability;
- *     - compatibility.
+ *     instance counter: Counter<WIDTH = width>;
+ *
+ *     instance alu: compute::ALU {
+ *         a = lhs,
+ *         b = rhs,
+ *         result = output
+ *     };
+ *
+ *     instance pair: Pair {
+ *         a,
+ *         b
+ *     };
+ *
+ * Required structural tests:
+ *
+ *     module containing ports
+ *     module containing signals
+ *     module containing wires
+ *     module containing registers
+ *     module containing memories
+ *     module containing processes
+ *     module containing pipelines
+ *     module containing generate constructs
+ *     nested generate constructs
+ *     multiple module instances
+ *     deeply qualified module names
+ *     parameterized/generic modules
+ *
+ * Required negative tests:
+ *
+ *     missing module name
+ *     missing module body
+ *     malformed qualification
+ *     malformed instance
+ *     missing instance type
+ *     malformed specialization
+ *     malformed connection
+ *     duplicate connection
+ *     invalid member
+ *
+ * Required scalability tests:
+ *
+ *     many modules
+ *     many instances
+ *     large symbolic dimensions
+ *     deeply nested logical modules
+ *     large connection lists
+ *     generated module families
+ *
+ * Tests MUST NOT establish artificial language maxima.
+ *
+ * ============================================================================
+ * 29. DETERMINISM TEST
+ * ============================================================================
+ *
+ * Identical source and identical grammar/lexer versions must produce
+ * equivalent parse structures.
+ *
+ * Parsing must not depend on:
+ *
+ *     hardware availability;
+ *     machine size;
+ *     runtime state;
+ *     network state;
+ *     environment variables;
+ *     randomness.
+ *
+ * ============================================================================
+ * 30. FINAL OWNERSHIP CONTRACT
+ * ============================================================================
+ *
+ * One responsibility per layer:
+ *
+ *     hardware-modules.g4
+ *         -> module structure and logical instances
+ *
+ *     generate.g4
+ *         -> structural generation
+ *
+ *     ports.g4
+ *         -> ports
+ *
+ *     signals.g4
+ *         -> signals
+ *
+ *     wires.g4
+ *         -> wires/nets
+ *
+ *     registers.g4
+ *         -> registers
+ *
+ *     memories.g4
+ *         -> memories
+ *
+ *     pipelines.g4
+ *         -> pipelines
+ *
+ *     hardware-generics.g4
+ *         -> generics
+ *
+ *     resource subsystem
+ *         -> requirements/capabilities/resources
+ *
+ *     hdl.g4
+ *         -> composition
+ *
+ *     ZamaniParser.g4
+ *         -> universal composition
+ *
+ *     frontend AST
+ *         -> representation
+ *
+ *     semantic analysis
+ *         -> meaning/validity
+ *
+ *     canonical IR
+ *         -> executable semantic representation
+ *
+ *     backend
+ *         -> target realization
+ *
+ * This is the required boundary for POCO-REAF.
  *
  * ============================================================================
  */
