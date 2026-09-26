@@ -6,15 +6,15 @@
  * File:
  *     grammar/ai/training.g4
  *
- * Role:
- *     Production AI / ML training-domain parser grammar.
+ * Grammar:
+ *     AITraining
  *
- * Grammar technology:
- *     ANTLR4 parser grammar
+ * Status:
+ *     CANONICAL AI TRAINING SOURCE-SYNTAX COMPONENT
  *
- * Language/runtime baseline:
+ * Language baseline:
  *     Rust 1.97 / Rust 1.97.1
- *     Rust edition 2021
+ *     Rust 2021
  *
  * Safety:
  *     - No embedded Rust actions.
@@ -22,21 +22,21 @@
  *     - No target-specific implementation.
  *     - No filesystem access.
  *     - No network access.
+ *     - No hardware discovery.
  *     - No runtime execution.
- *     - No unsafe implementation.
+ *     - No unsafe Rust requirement.
  *
  * ============================================================================
- *
  * PURPOSE
  * ============================================================================
  *
- * This file owns SOURCE-LEVEL SYNTAX for AI/ML TRAINING INTENT.
+ * This grammar owns SOURCE-LEVEL TRAINING INTENT.
  *
- * Training syntax describes the semantic intent of a learning computation:
+ * It describes:
  *
  *     - training declarations;
- *     - training regions;
- *     - training inputs;
+ *     - training phases;
+ *     - training steps;
  *     - model references;
  *     - dataset references;
  *     - objectives;
@@ -45,28 +45,43 @@
  *     - metrics;
  *     - hyperparameters;
  *     - schedules;
- *     - training phases;
- *     - training steps;
  *     - validation;
  *     - evaluation;
  *     - checkpoints;
- *     - reproducibility metadata;
+ *     - reproducibility;
  *     - resource requirements;
  *     - capability requirements;
  *     - constraints;
  *     - preferences;
+ *     - hints;
  *     - distributed-training intent;
  *     - accelerator intent;
- *     - quantum-assisted training intent;
- *     - classical training intent;
- *     - hybrid training intent;
- *     - custom/future training strategies.
+ *     - hybrid classical/quantum training intent;
+ *     - extensible future training operations.
  *
- * This grammar does NOT implement training.
+ * This grammar describes intent.
+ *
+ * It does NOT implement:
+ *
+ *     - gradient descent;
+ *     - automatic differentiation;
+ *     - optimizer algorithms;
+ *     - numerical kernels;
+ *     - tensor execution;
+ *     - model execution;
+ *     - dataset execution;
+ *     - scheduling;
+ *     - resource allocation;
+ *     - hardware discovery;
+ *     - device selection;
+ *     - routing;
+ *     - QEC;
+ *     - ZQN;
+ *     - HAL;
+ *     - runtime execution.
  *
  * ============================================================================
- *
- * ARCHITECTURAL POSITION
+ * ARCHITECTURAL PIPELINE
  * ============================================================================
  *
  *     Zamani source
@@ -75,141 +90,119 @@
  *     ZamaniLexer
  *          |
  *          v
- *     Canonical parser
+ *     ZamaniParser
  *          |
- *          +--------------------------+
- *          |                          |
- *          v                          v
- *     Types / Expressions        AI training syntax
- *                                     |
- *                                     v
- *                              Frontend AST
- *                                     |
- *                                     v
- *                            Semantic analysis
- *                                     |
- *                  +------------------+------------------+
- *                  |                  |                  |
- *                  v                  v                  v
- *              AI semantics      Resources          Capabilities
- *                  |                  |                  |
- *                  +------------------+------------------+
- *                                     |
- *                                     v
- *                              Canonical semantic IR
- *                                     |
- *                    +----------------+----------------+
- *                    |                |                |
- *                    v                v                v
- *                Classical        Quantum          Accelerator
- *                  lowering        lowering           lowering
- *                    |                |                |
- *                    +----------------+----------------+
- *                                     |
- *                                     v
- *                                Optimization
- *                                     |
- *                                     v
- *                                 Scheduling
- *                                     |
- *                                     v
- *                              Target realization
- *                                     |
- *                                     v
- *                                  Runtime
+ *          v
+ *     AITraining
+ *          |
+ *          v
+ *     domain-neutral frontend AST
+ *          |
+ *          v
+ *     semantic analysis
+ *          |
+ *     +----+----------+-----------+
+ *     |               |           |
+ *     v               v           v
+ *     AI semantics  Resources  Capabilities
+ *     |               |           |
+ *     +---------------+-----------+
+ *                     |
+ *                     v
+ *            canonical semantic model
+ *                     |
+ *                     v
+ *             canonical compiler IR
+ *                     |
+ *        +------------+-------------+
+ *        |            |             |
+ *        v            v             v
+ *    Classical     quantum::ir   HDL/accelerator
+ *    lowering       lowering      lowering
+ *        |            |             |
+ *        +------------+-------------+
+ *                     |
+ *                     v
+ *                 optimization
+ *                     |
+ *                 scheduling
+ *                     |
+ *                 resilience
+ *                     |
+ *                    ZQN
+ *                     |
+ *                    HAL
+ *                     |
+ *              target realization
  *
- * training.g4 MUST NOT construct IR directly.
+ * `training.g4` MUST NOT construct or define IR.
  *
  * ============================================================================
- *
  * OWNERSHIP
  * ============================================================================
  *
  * THIS FILE OWNS:
  *
  *     - training declaration syntax;
- *     - training region syntax;
+ *     - training body boundaries;
  *     - training phase syntax;
  *     - training step syntax;
- *     - training objective boundaries;
- *     - training loss boundaries;
- *     - optimizer boundaries;
- *     - metric boundaries;
- *     - hyperparameter boundaries;
- *     - schedule boundaries;
- *     - validation boundaries;
- *     - checkpoint boundaries;
- *     - reproducibility boundaries;
- *     - training resource/capability/constraint boundaries;
- *     - distributed-training intent boundaries;
- *     - accelerator-training intent boundaries;
- *     - extensible training operation boundaries.
+ *     - training objective syntax;
+ *     - training loss syntax;
+ *     - optimizer intent syntax;
+ *     - metric syntax;
+ *     - hyperparameter syntax;
+ *     - schedule syntax;
+ *     - validation/evaluation syntax;
+ *     - checkpoint syntax;
+ *     - reproducibility syntax;
+ *     - resource/capability/constraint/preference/hint syntax;
+ *     - distributed-training intent syntax;
+ *     - accelerator-training intent syntax;
+ *     - generic training-operation extension syntax.
  *
  * THIS FILE DOES NOT OWN:
  *
- *     - lexical tokens;
- *     - AI keywords;
+ *     - lexer tokens;
+ *     - annotation marker lexing;
  *     - identifiers;
- *     - general expressions;
- *     - general statements;
- *     - canonical types;
- *     - tensor types;
- *     - tensor implementation;
+ *     - expressions;
+ *     - types;
+ *     - statements;
  *     - model declarations;
  *     - dataset declarations;
+ *     - tensor declarations;
  *     - inference;
- *     - differentiation implementation;
- *     - optimizer implementation;
- *     - numerical kernels;
- *     - accelerator implementation;
- *     - GPU selection;
- *     - CPU selection;
- *     - TPU/NPU selection;
- *     - quantum hardware selection;
- *     - hardware discovery;
- *     - hardware topology;
- *     - resource allocation;
+ *     - differentiation;
+ *     - optimizer implementations;
+ *     - framework APIs;
+ *     - hardware;
+ *     - resource discovery;
  *     - scheduling;
- *     - compiler optimization;
- *     - canonical IR;
- *     - classical IR;
- *     - quantum::ir;
- *     - QEC;
- *     - ZQN;
- *     - calibration;
- *     - backend selection;
- *     - runtime execution.
+ *     - runtime;
+ *     - IR.
  *
  * ============================================================================
- *
- * DOMAIN KEYWORD POLICY
+ * LEXICAL CONTRACT
  * ============================================================================
  *
- * Training vocabulary is NOT added as a collection of lexer keywords.
+ * The canonical annotation marker is:
  *
- * Consequently:
+ *     AT
  *
- *     training
- *     model
- *     dataset
- *     objective
- *     loss
- *     optimizer
- *     metric
- *     parameter
- *     phase
- *     step
- *     checkpoint
- *     validation
- *     schedule
+ * which is lexically:
  *
- * remain extensible domain identifiers.
+ *     '@'
  *
- * The canonical NANO_ANNOTATION token provides the syntactic domain boundary.
+ * This file MUST NOT use the obsolete/non-canonical:
  *
- * Semantic analysis validates annotation meaning.
+ *     NANO_ANNOTATION
  *
- * For example:
+ * Training annotations therefore begin structurally as:
+ *
+ *     AT IDENTIFIER
+ *
+ * Examples:
  *
  *     @training
  *     @model
@@ -220,82 +213,217 @@
  *     @metric
  *     @phase
  *     @step
- *     @validation
  *     @checkpoint
  *
- * are semantic annotations, not new lexer keywords.
+ * Annotation meaning is resolved semantically.
  *
- * This preserves library, dialect and future-language extensibility.
+ * This grammar does not create one lexer token per AI concept.
  *
  * ============================================================================
+ * TYPE CONTRACT
+ * ============================================================================
  *
+ * Types belong to the canonical type grammar.
+ *
+ * This file consumes:
+ *
+ *     typeExpression
+ *
+ * It MUST NOT define:
+ *
+ *     TrainingType
+ *     ModelType
+ *     DatasetType
+ *     TensorType
+ *     OptimizerType
+ *
+ * as competing type systems.
+ *
+ * ============================================================================
+ * EXPRESSION CONTRACT
+ * ============================================================================
+ *
+ * Expressions belong to the canonical expression grammar.
+ *
+ * This file consumes:
+ *
+ *     expression
+ *     argumentList
+ *
+ * Expressions may represent:
+ *
+ *     - models;
+ *     - datasets;
+ *     - tensors;
+ *     - objectives;
+ *     - losses;
+ *     - metrics;
+ *     - optimizer values;
+ *     - hyperparameters;
+ *     - schedules;
+ *     - predicates;
+ *     - symbolic dimensions;
+ *     - resource quantities;
+ *     - capabilities;
+ *     - quantum-derived values;
+ *     - classical values;
+ *     - distributed values.
+ *
+ * This grammar MUST NOT redefine expression syntax.
+ *
+ * ============================================================================
+ * STATEMENT CONTRACT
+ * ============================================================================
+ *
+ * Ordinary Zamani statements remain owned by the canonical statement grammar.
+ *
+ * Training bodies may contain ordinary statements.
+ *
+ * This grammar MUST NOT become a second general-purpose statement grammar.
+ *
+ * ============================================================================
+ * MODEL CONTRACT
+ * ============================================================================
+ *
+ * Models are semantic values.
+ *
+ * Model declarations remain owned by:
+ *
+ *     grammar/ai/model.g4
+ *     grammar/ai/models.g4
+ *
+ * depending on the repository's canonical model composition path.
+ *
+ * Training references models through:
+ *
+ *     expression
+ *
+ * Training does not redefine model declaration syntax.
+ *
+ * ============================================================================
+ * DATASET CONTRACT
+ * ============================================================================
+ *
+ * Datasets are semantic values.
+ *
+ * Dataset declarations remain owned by:
+ *
+ *     grammar/ai/datasets.g4
+ *
+ * and the broader:
+ *
+ *     grammar/data/
+ *
+ * subsystem.
+ *
+ * Training references datasets through expressions.
+ *
+ * Training MUST NOT duplicate dataset declaration syntax.
+ *
+ * ============================================================================
+ * TENSOR CONTRACT
+ * ============================================================================
+ *
+ * Tensor types and tensor-domain syntax remain owned by the canonical AI/data
+ * and type systems.
+ *
+ * Training only consumes tensor values/types through existing contracts.
+ *
+ * ============================================================================
+ * DIFFERENTIATION CONTRACT
+ * ============================================================================
+ *
+ * Automatic differentiation is NOT implemented here.
+ *
+ * Training may consume differentiated values and operations through ordinary
+ * expressions.
+ *
+ * Differentiation remains owned by the canonical differentiation subsystem.
+ *
+ * ============================================================================
+ * AI FRAMEWORK INDEPENDENCE
+ * ============================================================================
+ *
+ * This grammar MUST NOT enumerate:
+ *
+ *     SGD
+ *     Adam
+ *     AdamW
+ *     RMSProp
+ *     Adagrad
+ *     L-BFGS
+ *     XGBoost
+ *     PyTorch
+ *     TensorFlow
+ *     JAX
+ *     ONNX
+ *     CUDA
+ *     ROCm
+ *     TPU
+ *     NPU
+ *
+ * or any future framework/algorithm merely because it exists.
+ *
+ * Such names remain ordinary semantic/library identifiers.
+ *
+ * ============================================================================
  * POCO-REAF CONTRACT
  * ============================================================================
  *
- * Training syntax describes:
+ * The training language describes:
  *
- *     WHAT is being optimized;
- *     WHAT data participates;
- *     WHAT objective is intended;
- *     WHAT optimization semantics are requested;
+ *     WHAT is being trained;
+ *     WHAT data is used;
+ *     WHAT objective is optimized;
  *     WHAT measurements matter;
- *     WHAT constraints apply;
+ *     WHAT correctness constraints apply;
  *     WHAT capabilities are required;
- *     WHAT resource preferences exist;
- *     WHAT reproducibility guarantees are requested.
+ *     WHAT resources are required or preferred.
  *
- * It MUST NOT silently encode:
+ * It does NOT prescribe:
  *
- *     - a specific GPU;
- *     - a specific CPU;
- *     - a specific TPU;
- *     - a specific NPU;
- *     - a specific accelerator;
- *     - a specific device ID;
- *     - a fixed device count;
- *     - a fixed worker count;
- *     - a fixed node count;
- *     - a fixed cluster topology;
- *     - a fixed memory capacity;
- *     - a fixed VRAM capacity;
- *     - a fixed SIMD width;
- *     - a fixed accelerator topology.
+ *     - CPU;
+ *     - GPU;
+ *     - FPGA;
+ *     - ASIC;
+ *     - TPU;
+ *     - NPU;
+ *     - QPU;
+ *     - physical device identifier;
+ *     - node identifier;
+ *     - worker identifier;
+ *     - memory bank;
+ *     - fixed memory capacity;
+ *     - fixed accelerator count;
+ *     - fixed worker count;
+ *     - fixed node count;
+ *     - fixed topology.
  *
- * Those concerns belong to:
- *
- *     resources;
- *     capabilities;
- *     targets;
- *     optimization;
- *     scheduling;
- *     deployment;
- *     runtime.
+ * Those decisions belong downstream.
  *
  * ============================================================================
- *
  * SCALABILITY CONTRACT
  * ============================================================================
  *
  * There are NO grammar-level finite limits for:
  *
- *     - training datasets;
- *     - number of models;
- *     - number of objectives;
- *     - number of losses;
- *     - number of metrics;
- *     - number of parameters;
- *     - number of hyperparameters;
- *     - number of phases;
- *     - number of steps;
- *     - number of validation stages;
- *     - number of checkpoints;
- *     - number of workers;
- *     - number of devices;
- *     - number of nodes;
- *     - number of accelerators;
- *     - model size;
- *     - tensor rank;
+ *     - models;
+ *     - datasets;
+ *     - parameters;
+ *     - hyperparameters;
+ *     - objectives;
+ *     - losses;
+ *     - metrics;
+ *     - phases;
+ *     - steps;
+ *     - checkpoints;
+ *     - validation stages;
+ *     - workers;
+ *     - devices;
+ *     - nodes;
+ *     - accelerators;
  *     - tensor dimensions;
+ *     - tensor rank;
  *     - batch size;
  *     - sequence length;
  *     - feature count;
@@ -303,235 +431,172 @@
  *
  * Repetition is structural.
  *
- * Practical limits are determined by:
+ * Practical limitations arise only from genuine:
  *
- *     - available memory;
  *     - compiler resources;
  *     - runtime resources;
- *     - resource policies;
  *     - target capabilities;
- *     - deployment constraints.
+ *     - explicitly declared requirements;
+ *     - deployment constraints;
+ *     - physical resources.
  *
  * ============================================================================
- *
- * TYPE CONTRACT
+ * HARD-CODING PROHIBITION
  * ============================================================================
  *
- * Canonical types are owned by the shared type grammar.
+ * This grammar MUST NOT introduce:
  *
- * This file reuses:
+ *     MAX_PARAMETERS
+ *     MAX_HYPERPARAMETERS
+ *     MAX_PHASES
+ *     MAX_STEPS
+ *     MAX_WORKERS
+ *     MAX_DEVICES
+ *     MAX_NODES
+ *     MAX_GPUS
+ *     MAX_CPUS
+ *     MAX_FPGAS
+ *     MAX_QUBITS
+ *     MAX_MEMORY
+ *     MAX_TENSOR_RANK
+ *     MAX_TENSOR_DIMENSION
  *
- *     typeExpression
- *
- * It does NOT define:
- *
- *     TrainingType
- *     ModelType
- *     DatasetType
- *     TensorType
- *     OptimizerType
- *     MetricType
- *
- * as competing type systems.
- *
- * ============================================================================
- *
- * EXPRESSION CONTRACT
- * ============================================================================
- *
- * General expressions are owned by the canonical expression grammar.
- *
- * This file reuses:
- *
- *     expression
- *
- * for:
- *
- *     - model values;
- *     - dataset values;
- *     - loss expressions;
- *     - objective expressions;
- *     - metric expressions;
- *     - optimizer expressions;
- *     - hyperparameters;
- *     - schedules;
- *     - predicates;
- *     - symbolic dimensions;
- *     - tensor expressions;
- *     - quantum expressions;
- *     - hardware-independent resource expressions;
- *     - compile-time expressions;
- *     - runtime expressions where semantically permitted.
+ * Numeric values in source programs remain ordinary program semantics.
  *
  * ============================================================================
- *
- * CROSS-DOMAIN CONTRACT
+ * RESOURCE SEMANTICS
  * ============================================================================
  *
- * Training may consume:
+ * Training distinguishes:
  *
- *     classical values;
- *     tensor values;
- *     model values;
- *     dataset values;
- *     quantum-derived values;
- *     hardware-backed values;
- *     distributed values;
- *     accelerator values;
- *     future domain values.
+ *     requirement
+ *     capability
+ *     constraint
+ *     preference
+ *     hint
  *
- * Training syntax does not own those domains.
+ * Examples:
  *
- * It merely provides semantic boundaries where those values participate in
- * training.
+ *     requires capability("tensor.compute")
+ *     requires capability("distributed.training")
+ *     requires capability("quantum.measurement")
  *
- * ============================================================================
+ * are portable semantic requirements.
  *
- * DIFFERENTIATION CONTRACT
- * ============================================================================
+ * They are NOT hardware selection commands.
  *
- * A training declaration may reference differentiated values and operations.
+ * A source program MUST NOT require:
  *
- * This file does NOT define automatic differentiation.
+ *     GPU 0
+ *     QPU 7
+ *     node 12
  *
- * Differentiation belongs to:
- *
- *     grammar/ai/differentiation.g4
- *
- * or its eventual canonical semantic owner.
+ * merely to express portable training intent.
  *
  * ============================================================================
- *
- * DATASET CONTRACT
+ * DISTRIBUTED TRAINING
  * ============================================================================
  *
- * Training may reference dataset values.
- *
- * This file does NOT redefine dataset declarations.
- *
- * Dataset declarations belong to:
- *
- *     grammar/ai/datasets.g4
- *
- * Training receives dataset semantics through ordinary expressions and
- * semantic references.
- *
- * ============================================================================
- *
- * MODEL CONTRACT
- * ============================================================================
- *
- * Training may reference model values.
- *
- * This file does NOT redefine model declarations.
- *
- * Model declarations belong to:
- *
- *     grammar/ai/models.g4
- *
- * ============================================================================
- *
- * TENSOR CONTRACT
- * ============================================================================
- *
- * Training may consume tensor values and tensor types.
- *
- * This file does NOT redefine tensor syntax.
- *
- * Tensor semantics belong to:
- *
- *     grammar/ai/tensors.g4
- *
- * and the canonical tensor/classical type system.
- *
- * ============================================================================
- *
- * DISTRIBUTED TRAINING CONTRACT
- * ============================================================================
- *
- * Distributed training can express intent such as:
+ * Distributed training may express:
  *
  *     partitioning;
  *     replication;
  *     synchronization;
- *     locality;
  *     consistency;
- *     parallel execution;
- *     fault tolerance.
+ *     locality;
+ *     fault tolerance;
+ *     parallelism.
  *
- * It MUST NOT encode:
- *
- *     worker count;
- *     node count;
- *     node identifiers;
- *     cluster topology;
- *     network addresses;
- *     device identifiers.
- *
- * Those are downstream deployment/resource concerns.
+ * It MUST NOT encode a universal machine topology.
  *
  * ============================================================================
- *
- * REPRODUCIBILITY CONTRACT
+ * QUANTUM / HYBRID TRAINING
  * ============================================================================
  *
- * Reproducibility metadata is explicit semantic information.
+ * Training expressions may consume quantum-derived values.
  *
- * The grammar must never silently insert:
+ * Example semantic pattern:
  *
- *     random seeds;
- *     ordering policies;
- *     initialization algorithms;
- *     deterministic execution modes.
+ *     quantum computation
+ *          |
+ *          v
+ *     measurement/value
+ *          |
+ *          v
+ *     training expression
  *
- * If reproducibility is requested, it must be represented explicitly through
- * an expression or annotation and validated downstream.
+ * Quantum semantics remain owned by the quantum subsystem.
  *
- * ============================================================================
+ * The canonical quantum boundary remains:
  *
- * CHECKPOINT CONTRACT
- * ============================================================================
+ *     quantum::ir
  *
- * A checkpoint declaration expresses checkpoint intent.
+ * Training MUST NOT define:
  *
- * It does NOT imply a particular:
- *
- *     filesystem;
- *     serialization format;
- *     storage device;
- *     cloud provider;
- *     database;
- *     memory representation.
- *
- * The runtime and interoperability layers determine the realization.
+ *     QubitId
+ *     physical qubits
+ *     quantum gates
+ *     coupling maps
+ *     routing
+ *     QEC
+ *     ZQN
  *
  * ============================================================================
+ * REPRODUCIBILITY
+ * ============================================================================
  *
+ * Reproducibility is explicit source intent.
+ *
+ * The grammar does not silently insert:
+ *
+ *     seeds;
+ *     deterministic ordering;
+ *     initialization policy;
+ *     execution policy.
+ *
+ * Those must be expressed explicitly when required and validated downstream.
+ *
+ * ============================================================================
+ * CHECKPOINTS
+ * ============================================================================
+ *
+ * Checkpoints describe logical persistence/recovery intent.
+ *
+ * They do not select:
+ *
+ *     - filesystem;
+ *     - object store;
+ *     - database;
+ *     - cloud provider;
+ *     - device memory;
+ *     - storage device.
+ *
+ * ============================================================================
  * ANTLR COMPOSITION CONTRACT
  * ============================================================================
  *
- * Stable public entry point:
+ * Public entry point:
  *
  *     trainingConstruct
  *
- * The canonical AI grammar should delegate training syntax to this rule.
+ * Required parser imports:
  *
- * This grammar MUST NOT import ai.g4.
+ *     Types
+ *     Expressions
+ *     Statements
  *
- * This grammar SHOULD NOT import models.g4, datasets.g4, or tensors.g4.
+ * This grammar MUST NOT import:
  *
- * Those domains are consumed through semantic values and shared
- * expression/type syntax.
+ *     AI
+ *     Models
+ *     Datasets
+ *     Tensors
  *
- * This avoids:
+ * because those imports create unnecessary domain cycles.
  *
- *     AI -> Training -> AI
+ * AITraining is a leaf/domain grammar.
  *
- * and:
- *
- *     Models -> Training -> Models
- *
- * style grammar cycles.
+ * The AI composition grammar is responsible for composing it.
  *
  * ============================================================================
  */
@@ -542,47 +607,50 @@ options {
     tokenVocab = ZamaniLexer;
 }
 
-import Types, Expressions;
+import Types,
+       Expressions,
+       Statements;
 
 
 /* ============================================================================
- * 1. PUBLIC ENTRY POINT
- * ========================================================================== */
-
-/**
- * Stable public parser boundary for training-domain syntax.
+ * PUBLIC ENTRY POINT
+ * ============================================================================
+ *
+ * IMPORTANT:
+ *
+ * `trainingConstruct` intentionally does NOT accept:
+ *
+ *     expression
+ *     identifier
+ *     assignment
+ *     arbitrary block
+ *
+ * by themselves.
+ *
+ * This prevents the training grammar from swallowing ordinary Zamani syntax.
  */
 trainingConstruct
     : trainingDeclaration
-    | trainingReference
-    | trainingExpression
-    | trainingRegion
-    | trainingAssignment
     ;
 
 
 /* ============================================================================
- * 2. TRAINING DECLARATION
- * ========================================================================== */
-
-/**
- * Canonical training declaration.
+ * TRAINING DECLARATION
+ * ============================================================================
  *
- * Semantic validation MUST require the leading annotation to represent
- * `@training`.
+ * Canonical form:
  *
- * Examples:
- *
- *     @training experiment;
- *
- *     @training experiment = train(model, dataset);
- *
- *     @training experiment {
- *         @model model;
- *         @dataset data;
- *         @loss lossFunction;
- *         @optimizer optimizer;
+ *     @training Experiment
+ *     {
+ *         ...
  *     }
+ *
+ * Optional type and initializer are supported:
+ *
+ *     @training Experiment : TrainingSpec = config;
+ *
+ * The exact semantic validity of the annotation spelling `training` is
+ * checked after parsing.
  */
 trainingDeclaration
     : trainingAnnotation
@@ -595,7 +663,13 @@ trainingDeclaration
 
 
 trainingAnnotation
-    : NANO_ANNOTATION
+    : AT
+      trainingAnnotationName
+    ;
+
+
+trainingAnnotationName
+    : IDENTIFIER
     ;
 
 
@@ -612,12 +686,10 @@ trainingInitializer
 
 
 /* ============================================================================
- * 3. TRAINING BODY
- * ========================================================================== */
-
-/**
- * Training body is an unbounded ordered sequence of training members.
+ * TRAINING BODY
+ * ============================================================================
  */
+
 trainingBody
     : LBRACE
       trainingMember*
@@ -626,565 +698,799 @@ trainingBody
 
 
 trainingMember
-    : trainingBindingMember
-    | trainingReferenceMember
-    | trainingObjectiveMember
-    | trainingLossMember
-    | trainingOptimizerMember
-    | trainingMetricMember
-    | trainingHyperparameterMember
-    | trainingScheduleMember
-    | trainingPhase
-    | trainingStep
-    | trainingValidationMember
-    | trainingCheckpointMember
-    | trainingReproducibilityMember
+    : trainingAnnotatedMember
     | trainingRequirementMember
     | trainingCapabilityMember
     | trainingConstraintMember
     | trainingPreferenceMember
-    | trainingResourceMember
-    | trainingDistributedMember
-    | trainingAcceleratorMember
-    | trainingOperationMember
-    | trainingStatementMember
+    | trainingHintMember
+    | trainingPhase
+    | trainingStep
+    | trainingStatement
     ;
 
 
 /* ============================================================================
- * 4. GENERIC TRAINING BINDINGS
- * ========================================================================== */
-
-/**
- * General typed or initialized training-local binding.
+ * ANNOTATED TRAINING MEMBERS
+ * ============================================================================
  *
- * Semantic analysis determines whether the annotation denotes a model,
- * dataset, tensor, hyperparameter, state, metric, or another training value.
+ * The annotation is structurally generic.
+ *
+ * Semantic analysis determines whether it denotes:
+ *
+ *     model
+ *     dataset
+ *     objective
+ *     loss
+ *     optimizer
+ *     metric
+ *     hyperparameter
+ *     schedule
+ *     validation
+ *     evaluation
+ *     checkpoint
+ *     reproducibility
+ *     distributed training
+ *     accelerator intent
+ *     another registered training concept.
+ *
+ * This avoids a growing lexer vocabulary.
  */
-trainingBindingMember
-    : NANO_ANNOTATION
-      identifier
-      trainingBindingType?
-      trainingBindingInitializer?
-      SEMICOLON
+trainingAnnotatedMember
+    : trainingMemberAnnotation
+      trainingMemberPayload
+      SEMICOLON?
     ;
 
 
-trainingBindingType
-    : COLON
-      typeExpression
+trainingMemberAnnotation
+    : AT
+      trainingAnnotationName
     ;
 
 
-trainingBindingInitializer
-    : ASSIGN
-      expression
+trainingMemberPayload
+    : trainingNamedBinding
+    | trainingExpressionPayload
+    | trainingBlockPayload
+    | trainingCallPayload
     ;
 
 
-/**
- * A semantic reference without introducing another declaration.
- */
-trainingReferenceMember
-    : NANO_ANNOTATION
-      expression
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 5. MODEL / DATASET REFERENCES
- * ========================================================================== */
-
-/**
- * Training consumes models through expressions.
- *
- * The semantic layer resolves the expression to the model domain.
- */
-trainingModelReference
-    : expression
-    ;
-
-
-/**
- * Training consumes datasets through expressions.
- *
- * The semantic layer resolves the expression to the dataset domain.
- */
-trainingDatasetReference
-    : expression
-    ;
-
-
-/**
- * Training consumes tensor values through expressions.
- */
-trainingTensorReference
-    : expression
-    ;
-
-
-/* ============================================================================
- * 6. OBJECTIVES
- * ========================================================================== */
-
-/**
- * Objective declaration.
- *
- * Semantic validation MUST require the annotation to represent `@objective`.
- */
-trainingObjectiveMember
-    : NANO_ANNOTATION
-      identifier?
-      ASSIGN
-      expression
-      SEMICOLON
-    ;
-
-
-/**
- * Objective may also be represented without an explicit binding.
- *
- * Example:
- *
- *     @objective minimize(error);
- */
-trainingObjectiveExpression
-    : NANO_ANNOTATION
-      expression
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 7. LOSS
- * ========================================================================== */
-
-/**
- * Loss definition.
- *
- * Examples:
- *
- *     @loss loss = cross_entropy;
- *
- *     @loss cross_entropy(output, target);
- */
-trainingLossMember
-    : NANO_ANNOTATION
-      trainingNamedOrUnnamedExpression
-      SEMICOLON
-    ;
-
-
-trainingNamedOrUnnamedExpression
+trainingNamedBinding
     : identifier
+      trainingTypeClause?
       ASSIGN
       expression
-    | expression
     ;
 
 
-/* ============================================================================
- * 8. OPTIMIZER
- * ========================================================================== */
-
-/**
- * Optimizer intent.
- *
- * The grammar intentionally does not enumerate:
- *
- *     SGD
- *     Adam
- *     AdamW
- *     RMSProp
- *     evolutionary methods
- *     quantum optimization
- *     future optimizers
- *
- * They remain semantic/library-level values.
- */
-trainingOptimizerMember
-    : NANO_ANNOTATION
-      trainingNamedOrUnnamedExpression
-      SEMICOLON
+trainingExpressionPayload
+    : expression
     ;
 
 
-/* ============================================================================
- * 9. METRICS
- * ========================================================================== */
-
-/**
- * Training metric.
- *
- * Metric implementations are semantic/library concerns.
- */
-trainingMetricMember
-    : NANO_ANNOTATION
-      trainingNamedOrUnnamedExpression
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 10. HYPERPARAMETERS
- * ========================================================================== */
-
-/**
- * Hyperparameters are expressions, not grammar-level constants.
- *
- * This allows:
- *
- *     literals;
- *     symbolic values;
- *     configuration values;
- *     compile-time values;
- *     runtime values;
- *     derived values;
- *     resource-aware values.
- */
-trainingHyperparameterMember
-    : NANO_ANNOTATION
-      identifier
-      trainingHyperparameterType?
-      ASSIGN
-      expression
-      SEMICOLON
-    ;
-
-
-trainingHyperparameterType
-    : COLON
-      typeExpression
-    ;
-
-
-/* ============================================================================
- * 11. SCHEDULES
- * ========================================================================== */
-
-/**
- * A training schedule expresses semantic scheduling intent.
- *
- * This is NOT Zamani compiler scheduling.
- *
- * The runtime/compiler scheduling subsystem remains responsible for actual
- * execution ordering and timing.
- */
-trainingScheduleMember
-    : NANO_ANNOTATION
-      trainingNamedOrUnnamedExpression
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 12. TRAINING PHASES
- * ========================================================================== */
-
-/**
- * Named phase containing nested training members.
- *
- * The number of phases is unbounded.
- */
-trainingPhase
-    : NANO_ANNOTATION
-      identifier
-      trainingPhaseBody
-    ;
-
-
-trainingPhaseBody
+trainingBlockPayload
     : LBRACE
       trainingMember*
       RBRACE
     ;
 
 
-/* ============================================================================
- * 13. TRAINING STEPS
- * ========================================================================== */
-
-/**
- * Named semantic training step.
- *
- * A step does not prescribe:
- *
- *     - one kernel;
- *     - one device;
- *     - one thread;
- *     - one accelerator;
- *     - one scheduling mechanism.
- */
-trainingStep
-    : NANO_ANNOTATION
-      identifier?
-      ASSIGN
-      expression
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 14. VALIDATION
- * ========================================================================== */
-
-/**
- * Validation intent.
- *
- * Validation implementation remains outside the grammar.
- */
-trainingValidationMember
-    : NANO_ANNOTATION
-      trainingNamedOrUnnamedExpression
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 15. CHECKPOINTS
- * ========================================================================== */
-
-/**
- * Checkpoint intent.
- *
- * The expression determines the semantic checkpoint policy.
- *
- * The grammar does not prescribe storage.
- */
-trainingCheckpointMember
-    : NANO_ANNOTATION
-      trainingCheckpointPayload
-      SEMICOLON
-    ;
-
-
-trainingCheckpointPayload
+trainingCallPayload
     : identifier
-      ASSIGN
-      expression
-    | expression
+      LPAREN
+      argumentList?
+      RPAREN
     ;
 
 
 /* ============================================================================
- * 16. REPRODUCIBILITY
- * ========================================================================== */
-
-/**
- * Explicit reproducibility declaration.
+ * EXPLICIT RESOURCE / CAPABILITY CONTRACTS
+ * ============================================================================
  *
- * No implicit seed or ordering is introduced.
- */
-trainingReproducibilityMember
-    : NANO_ANNOTATION
-      trainingNamedOrUnnamedExpression
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 17. REQUIREMENTS
- * ========================================================================== */
-
-/**
- * Training requirement.
+ * These are deliberately separate from annotations because they have language
+ * semantics that must remain distinguishable:
  *
- * Examples may semantically express:
+ *     requirement
+ *     capability
+ *     constraint
+ *     preference
+ *     hint
  *
- *     numerical precision requirements;
- *     memory requirements;
- *     throughput requirements;
- *     latency requirements;
- *     quantum capability requirements;
- *     distributed execution requirements.
- *
- * No physical resource is allocated here.
+ * They remain target-independent.
  */
 trainingRequirementMember
-    : NANO_ANNOTATION
-      trainingNamedOrUnnamedExpression
+    : REQUIRES
+      expression
       SEMICOLON
     ;
 
-
-/* ============================================================================
- * 18. CAPABILITIES
- * ========================================================================== */
 
 trainingCapabilityMember
-    : NANO_ANNOTATION
-      trainingNamedOrUnnamedExpression
+    : CAPABILITY
+      expression
       SEMICOLON
     ;
 
-
-/* ============================================================================
- * 19. CONSTRAINTS
- * ========================================================================== */
 
 trainingConstraintMember
-    : NANO_ANNOTATION
-      trainingNamedOrUnnamedExpression
+    : CONSTRAINT
+      expression
       SEMICOLON
     ;
 
-
-/* ============================================================================
- * 20. PREFERENCES
- * ========================================================================== */
 
 trainingPreferenceMember
-    : NANO_ANNOTATION
-      trainingNamedOrUnnamedExpression
+    : PREFER
+      expression
+      SEMICOLON
+    ;
+
+
+trainingHintMember
+    : HINT
+      expression
       SEMICOLON
     ;
 
 
 /* ============================================================================
- * 21. RESOURCE INTENT
- * ========================================================================== */
-
-/**
- * Resource declarations express requirements/preferences, not allocation.
+ * TRAINING PHASE
+ * ============================================================================
+ *
+ * Phases are structural and unbounded.
+ *
+ * Examples:
+ *
+ *     @phase warmup {
+ *         ...
+ *     }
+ *
+ *     @phase optimization {
+ *         ...
+ *     }
  */
-trainingResourceMember
-    : NANO_ANNOTATION
-      trainingNamedOrUnnamedExpression
-      SEMICOLON
+trainingPhase
+    : AT
+      trainingPhaseName
+      LBRACE
+      trainingMember*
+      RBRACE
+    ;
+
+
+trainingPhaseName
+    : IDENTIFIER
     ;
 
 
 /* ============================================================================
- * 22. DISTRIBUTED TRAINING
- * ========================================================================== */
-
-/**
- * Distributed training is represented as semantic intent.
+ * TRAINING STEP
+ * ============================================================================
  *
- * It does NOT encode worker/node/device counts or topology.
+ * A training step is a semantic unit of training work.
+ *
+ * It does not correspond to:
+ *
+ *     one CPU instruction;
+ *     one GPU kernel;
+ *     one thread;
+ *     one accelerator;
+ *     one device.
  */
-trainingDistributedMember
-    : NANO_ANNOTATION
-      trainingNamedOrUnnamedExpression
-      SEMICOLON
+trainingStep
+    : AT
+      trainingStepName
+      (
+          ASSIGN expression
+        | LPAREN argumentList? RPAREN
+        | LBRACE trainingMember* RBRACE
+      )
+      SEMICOLON?
+    ;
+
+
+trainingStepName
+    : IDENTIFIER
     ;
 
 
 /* ============================================================================
- * 23. ACCELERATOR TRAINING
- * ========================================================================== */
-
-/**
- * Accelerator intent.
+ * ORDINARY ZAMANI STATEMENTS
+ * ============================================================================
  *
- * The grammar does not select GPU/TPU/NPU/FPGA/ASIC hardware.
+ * Training code may contain ordinary language statements.
+ *
+ * The canonical statement grammar owns their syntax.
  */
-trainingAcceleratorMember
-    : NANO_ANNOTATION
-      trainingNamedOrUnnamedExpression
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 24. GENERIC TRAINING OPERATIONS
- * ========================================================================== */
-
-/**
- * Extensibility boundary for future training operations.
- *
- * Examples can semantically represent:
- *
- *     federated training;
- *     reinforcement learning;
- *     graph learning;
- *     multimodal learning;
- *     transfer learning;
- *     meta-learning;
- *     continual learning;
- *     self-supervised learning;
- *     quantum-assisted learning;
- *     hybrid learning;
- *     future learning paradigms.
- *
- * The grammar does not need a new production for every future algorithm.
- */
-trainingOperationMember
-    : NANO_ANNOTATION
-      trainingNamedOrUnnamedExpression
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 25. ORDINARY ZAMANI STATEMENTS
- * ========================================================================== */
-
-/**
- * Training regions may contain ordinary Zamani statements.
- *
- * This prevents training.g4 from becoming a second general-purpose statement
- * grammar.
- */
-trainingStatementMember
+trainingStatement
     : statement
     ;
 
 
 /* ============================================================================
- * 26. TRAINING REGIONS
- * ========================================================================== */
-
-/**
- * Anonymous training computation region.
+ * NAMED TRAINING VALUE HELPERS
+ * ============================================================================
+ *
+ * These semantic helper rules deliberately do not enumerate algorithms.
+ *
+ * For example:
+ *
+ *     @loss loss = cross_entropy(output, target);
+ *     @optimizer optimizer = my_optimizer(config);
+ *     @metric accuracy = accuracy(predictions, labels);
+ *
+ * all use the same structural representation.
  */
-trainingRegion
-    : LBRACE
-      trainingRegionMember*
-      RBRACE
+trainingNamedValue
+    : identifier
+      ASSIGN
+      expression
     ;
 
 
-trainingRegionMember
-    : trainingMember
-    | statement
+trainingNamedValueWithType
+    : identifier
+      COLON
+      typeExpression
+      ASSIGN
+      expression
     ;
 
 
 /* ============================================================================
- * 27. TRAINING REFERENCES
- * ========================================================================== */
-
-/**
- * Reference to a training value.
+ * TRAINING OPERATION EXTENSION
+ * ============================================================================
+ *
+ * Future training paradigms remain expressible without adding a new grammar
+ * production for every algorithm.
+ *
+ * Examples of semantic operations include:
+ *
+ *     transfer learning
+ *     continual learning
+ *     meta learning
+ *     reinforcement learning
+ *     self-supervised learning
+ *     federated learning
+ *     graph learning
+ *     multimodal learning
+ *     probabilistic learning
+ *     symbolic learning
+ *     quantum-assisted learning
+ *     hybrid learning
+ *     future learning systems
+ *
+ * The operation remains an annotation + expression.
  */
-trainingReference
-    : identifier
+trainingOperation
+    : AT
+      trainingAnnotationName
+      expression
+      SEMICOLON?
     ;
 
 
-/**
- * General training expression.
+/* ============================================================================
+ * RESOURCE-AWARE TRAINING EXPRESSIONS
+ * ============================================================================
+ *
+ * Examples:
+ *
+ *     requires memory >= required_memory;
+ *     requires capability("tensor.compute");
+ *     requires capability("quantum.measurement");
+ *     requires capability("distributed.training");
+ *
+ * The expressions themselves are owned by the canonical expression grammar.
  */
-trainingExpression
+trainingResourceExpression
     : expression
     ;
 
 
 /* ============================================================================
- * 28. TRAINING ASSIGNMENTS
- * ========================================================================== */
-
-/**
- * Training-local assignment boundary.
+ * DISTRIBUTED TRAINING INTENT
+ * ============================================================================
  *
- * General assignment semantics remain owned by the expression/statement
- * subsystem.
+ * These forms remain semantic rather than physical.
  */
-trainingAssignment
-    : identifier
-      ASSIGN
+trainingDistributedIntent
+    : AT
+      trainingAnnotationName
       expression
-      SEMICOLON
+      SEMICOLON?
     ;
+
+
+/* ============================================================================
+ * ACCELERATOR INTENT
+ * ============================================================================
+ *
+ * Accelerator intent may be expressed without naming a physical device.
+ */
+trainingAcceleratorIntent
+    : AT
+      trainingAnnotationName
+      expression
+      SEMICOLON?
+    ;
+
+
+/* ============================================================================
+ * HYBRID / QUANTUM TRAINING
+ * ============================================================================
+ *
+ * Quantum-derived values are ordinary expressions from the training grammar's
+ * perspective.
+ *
+ * No quantum-specific syntax is duplicated here.
+ */
+trainingHybridIntent
+    : AT
+      trainingAnnotationName
+      expression
+      SEMICOLON?
+    ;
+
+
+/* ============================================================================
+ * EXTENSIBILITY
+ * ============================================================================
+ *
+ * Semantic registration may add future training annotations without changing
+ * the lexer.
+ *
+ * The parser remains structurally stable.
+ *
+ * Examples:
+ *
+ *     @training
+ *     @model
+ *     @dataset
+ *     @objective
+ *     @loss
+ *     @optimizer
+ *     @metric
+ *     @schedule
+ *     @validation
+ *     @evaluation
+ *     @checkpoint
+ *     @reproducibility
+ *     @distributed
+ *     @accelerator
+ *     @hybrid
+ *     @custom_training_operation
+ *
+ * are all represented by:
+ *
+ *     AT IDENTIFIER ...
+ *
+ * where their exact semantic role is determined downstream.
+ */
+
+
+/* ============================================================================
+ * AST CONTRACT
+ * ============================================================================
+ *
+ * The parser layer must preserve:
+ *
+ *     - annotation name;
+ *     - declared training name;
+ *     - declared type;
+ *     - initializer;
+ *     - member order;
+ *     - member source spans;
+ *     - expressions;
+ *     - resource/capability clauses;
+ *     - nested phases;
+ *     - nested steps;
+ *     - ordinary statements.
+ *
+ * The grammar does NOT mandate vendor/framework AST types.
+ *
+ * The frontend AST should remain domain-neutral where practical.
+ *
+ * A semantic training representation may be produced after AST construction.
+ *
+ * ============================================================================
+ * SEMANTIC CONTRACT
+ * ============================================================================
+ *
+ * Semantic analysis must validate at least:
+ *
+ *     - training annotation meaning;
+ *     - identifier binding;
+ *     - duplicate declarations;
+ *     - type compatibility;
+ *     - model reference validity;
+ *     - dataset reference validity;
+ *     - objective validity;
+ *     - loss validity;
+ *     - optimizer compatibility;
+ *     - metric compatibility;
+ *     - hyperparameter validity;
+ *     - schedule validity;
+ *     - phase/step relationships;
+ *     - resource requirements;
+ *     - capability requirements;
+ *     - constraint consistency;
+ *     - preference legality;
+ *     - reproducibility semantics;
+ *     - checkpoint semantics;
+ *     - distributed semantics;
+ *     - quantum/classical boundary validity.
+ *
+ * None of these decisions belong in this parser grammar.
+ *
+ * ============================================================================
+ * IR CONTRACT
+ * ============================================================================
+ *
+ * This grammar creates NO IR.
+ *
+ * The semantic model is lowered into the repository's canonical compiler IR.
+ *
+ * AI training must not create:
+ *
+ *     TrainingIR
+ *     MLIR
+ *     FrameworkIR
+ *     VendorTrainingIR
+ *
+ * merely as a frontend grammar artifact.
+ *
+ * If a training-specific intermediate representation is required internally,
+ * it must have an explicitly documented ownership and lowering contract and
+ * must not compete with the repository's canonical semantic/IR boundary.
+ *
+ * Quantum-derived operations ultimately follow:
+ *
+ *     training semantics
+ *          |
+ *          v
+ *     semantic analysis
+ *          |
+ *          v
+ *     quantum::ir
+ *
+ * where the computation is genuinely quantum.
+ *
+ * ============================================================================
+ * COMPILER INTEGRATION
+ * ============================================================================
+ *
+ * Compiler stages consume semantic information, not parser-specific
+ * implementation details.
+ *
+ * The compiler may:
+ *
+ *     - specialize;
+ *     - fuse operations;
+ *     - lower tensor computations;
+ *     - distribute work;
+ *     - select available capabilities;
+ *     - optimize;
+ *     - schedule;
+ *     - route quantum work;
+ *     - lower to hardware.
+ *
+ * None of these decisions modify training grammar semantics.
+ *
+ * ============================================================================
+ * RUNTIME INTEGRATION
+ * ============================================================================
+ *
+ * Runtime may discover:
+ *
+ *     - available memory;
+ *     - accelerators;
+ *     - devices;
+ *     - nodes;
+ *     - storage;
+ *     - network resources;
+ *     - quantum capabilities.
+ *
+ * Such discovery MUST NOT alter parsing or source meaning.
+ *
+ * ============================================================================
+ * DIAGNOSTICS
+ * ============================================================================
+ *
+ * Diagnostics must preserve source spans for:
+ *
+ *     - invalid training declaration;
+ *     - invalid annotation;
+ *     - duplicate name;
+ *     - invalid objective;
+ *     - invalid loss;
+ *     - invalid optimizer;
+ *     - invalid metric;
+ *     - invalid requirement;
+ *     - invalid capability;
+ *     - invalid constraint;
+ *     - invalid preference;
+ *     - invalid phase;
+ *     - invalid step;
+ *     - invalid expression;
+ *     - invalid type.
+ *
+ * Parser diagnostics must remain syntax-focused.
+ *
+ * Semantic diagnostics must explain semantic failures.
+ *
+ * Resource diagnostics must distinguish:
+ *
+ *     requirement
+ *     capability
+ *     constraint
+ *     preference
+ *
+ * rather than presenting all of them as "hardware errors".
+ *
+ * ============================================================================
+ * SECURITY
+ * ============================================================================
+ *
+ * Parsing training source must not:
+ *
+ *     - execute training;
+ *     - load a model;
+ *     - load a dataset;
+ *     - access a network;
+ *     - access credentials;
+ *     - access hardware;
+ *     - allocate devices;
+ *     - invoke frameworks.
+ *
+ * Such operations belong to explicitly authorized downstream compiler/runtime
+ * components.
+ *
+ * ============================================================================
+ * DETERMINISM
+ * ============================================================================
+ *
+ * Parsing depends only on:
+ *
+ *     - source;
+ *     - lexer version;
+ *     - parser grammar;
+ *     - explicitly selected dialect configuration.
+ *
+ * It must not depend on:
+ *
+ *     - hardware availability;
+ *     - GPU count;
+ *     - QPU availability;
+ *     - network state;
+ *     - filesystem state;
+ *     - randomness;
+ *     - wall-clock time.
+ *
+ * ============================================================================
+ * TEST CONTRACT
+ * ============================================================================
+ *
+ * Required positive tests include:
+ *
+ *     @training experiment;
+ *
+ *     @training experiment {
+ *         @model model;
+ *         @dataset data;
+ *         @objective objective = loss;
+ *         @loss loss = compute_loss(output, target);
+ *         @optimizer optimizer = optimizer_config;
+ *         @metric accuracy = metric_fn;
+ *     }
+ *
+ *     @training experiment {
+ *         requires capability("tensor.compute");
+ *         requires capability("distributed.training");
+ *         requires capability("quantum.measurement");
+ *         prefer capability("accelerator.compute");
+ *         hint optimization_policy;
+ *     }
+ *
+ *     @training experiment {
+ *         @phase warmup {
+ *             @step initialize = initialize_model();
+ *         }
+ *
+ *         @phase optimization {
+ *             @step update = update_model();
+ *         }
+ *     }
+ *
+ *     @training experiment {
+ *         @distributed distribution_policy;
+ *         @accelerator accelerator_policy;
+ *         @hybrid quantum_training_value;
+ *     }
+ *
+ * ============================================================================
+ * NEGATIVE TESTS
+ * ============================================================================
+ *
+ * The grammar/test suite must reject:
+ *
+ *     - missing training name;
+ *     - missing annotation name;
+ *     - malformed type clause;
+ *     - malformed initializer;
+ *     - malformed member;
+ *     - malformed requirement;
+ *     - malformed capability;
+ *     - malformed phase;
+ *     - malformed step;
+ *     - incomplete expression.
+ *
+ * It must also ensure that arbitrary ordinary expressions are NOT accepted
+ * merely because `trainingConstruct` was selected.
+ *
+ * ============================================================================
+ * SCALABILITY TESTS
+ * ============================================================================
+ *
+ * Tests must demonstrate that the grammar accepts structurally unbounded:
+ *
+ *     - phases;
+ *     - steps;
+ *     - objectives;
+ *     - metrics;
+ *     - hyperparameters;
+ *     - checkpoints;
+ *     - nested training members;
+ *     - resource requirements;
+ *     - capability requirements;
+ *     - expression complexity.
+ *
+ * Tests must NOT establish artificial universal limits.
+ *
+ * ============================================================================
+ * CROSS-DOMAIN TESTS
+ * ============================================================================
+ *
+ * Required integration coverage:
+ *
+ *     classical + AI
+ *     quantum + AI
+ *     classical + quantum + AI
+ *     AI + data
+ *     AI + distributed
+ *     AI + hardware intent
+ *     AI + networking
+ *     AI + security
+ *     AI + HDL/accelerator intent
+ *
+ * ============================================================================
+ * POCO-REAF TEST
+ * ============================================================================
+ *
+ * The same semantic training source must remain valid when the target changes
+ * between:
+ *
+ *     embedded CPU
+ *     CPU
+ *     multicore CPU
+ *     GPU
+ *     FPGA
+ *     ASIC
+ *     accelerator
+ *     QPU
+ *     simulator
+ *     cluster
+ *     heterogeneous system
+ *     future target
+ *
+ * without modifying this grammar to accommodate the target's capacity.
+ *
+ * ============================================================================
+ * HARD-CODING AUDIT
+ * ============================================================================
+ *
+ * Search this file for and reject universal machine limits such as:
+ *
+ *     MAX_*
+ *     GPU_0
+ *     CPU_0
+ *     QPU_0
+ *     NODE_0
+ *     DEVICE_0
+ *     fixed worker counts
+ *     fixed node counts
+ *     fixed tensor dimensions
+ *     fixed tensor rank
+ *     fixed memory capacities
+ *
+ * A numeric literal in a test/example is acceptable when it is program data,
+ * not a compiler limit.
+ *
+ * ============================================================================
+ * RUST INTEGRATION
+ * ============================================================================
+ *
+ * The grammar itself is target-independent ANTLR4.
+ *
+ * The generated/consuming Rust implementation must remain compatible with:
+ *
+ *     Rust 1.97
+ *     Rust 1.97.1
+ *     Rust 2021
+ *
+ * and must use safe Rust only.
+ *
+ * No `unsafe` implementation is required by this grammar.
+ *
+ * ============================================================================
+ * COMPLETION CRITERIA
+ * ============================================================================
+ *
+ * This file is complete when:
+ *
+ * [ ] AT is used instead of obsolete NANO_ANNOTATION.
+ *
+ * [ ] SEMICOLON matches the canonical lexer vocabulary.
+ *
+ * [ ] Types come only from Types.
+ *
+ * [ ] Expressions come only from Expressions.
+ *
+ * [ ] Statements come only from Statements.
+ *
+ * [ ] No arbitrary expression is a public training construct.
+ *
+ * [ ] Training declarations have a clear syntactic boundary.
+ *
+ * [ ] Resource requirements are distinct from capabilities.
+ *
+ * [ ] Capabilities are distinct from constraints.
+ *
+ * [ ] Constraints are distinct from preferences.
+ *
+ * [ ] Preferences are distinct from hints.
+ *
+ * [ ] Models are not redefined.
+ *
+ * [ ] Datasets are not redefined.
+ *
+ * [ ] Tensors are not redefined.
+ *
+ * [ ] Differentiation is not redefined.
+ *
+ * [ ] No AI framework is hard-coded.
+ *
+ * [ ] No hardware target is hard-coded.
+ *
+ * [ ] No physical resource limit is hard-coded.
+ *
+ * [ ] No quantum gate list is hard-coded.
+ *
+ * [ ] quantum::ir remains the canonical quantum boundary.
+ *
+ * [ ] No second AI/quantum IR is introduced by this grammar.
+ *
+ * [ ] Source spans are preserved downstream.
+ *
+ * [ ] Positive tests exist.
+ *
+ * [ ] Negative tests exist.
+ *
+ * [ ] Boundary tests exist.
+ *
+ * [ ] Scalability tests exist.
+ *
+ * [ ] Cross-domain tests exist.
+ *
+ * [ ] Determinism tests exist.
+ *
+ * [ ] Compatibility tests exist.
+ *
+ * [ ] Rust 1.97/1.97.1 integration passes.
+ *
+ * [ ] Safe-Rust policy remains satisfied.
+ *
+ * ============================================================================
+ */
