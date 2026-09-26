@@ -10,349 +10,118 @@
  *     Communication
  *
  * Status:
- *     Production distributed-communication grammar.
+ *     PRODUCTION SOURCE-GRAMMAR CONTRACT
  *
- * Runtime/compiler baseline:
+ * Language:
+ *     Zamani
+ *
+ * Grammar technology:
+ *     ANTLR4 parser grammar
+ *
+ * Compiler baseline:
  *     Rust 1.97 / Rust 1.97.1
+ *     Rust 2021
  *
  * Safety:
- *     - No embedded Rust actions.
- *     - No semantic predicates.
- *     - No unsafe implementation.
- *     - No filesystem access.
- *     - No network access.
- *     - No hardware access.
- *     - No runtime callbacks.
- *     - No mutable compiler-global state.
- *     - No randomness.
+ *     - This grammar contains no embedded Rust actions.
+ *     - This grammar contains no semantic predicates.
+ *     - This grammar performs no I/O.
+ *     - This grammar performs no network access.
+ *     - This grammar performs no hardware access.
+ *     - This grammar performs no runtime callbacks.
+ *     - This grammar requires no unsafe Rust.
+ *     - Zamani compiler implementation remains safe Rust only.
  *
  * ============================================================================
  * PURPOSE
  * ============================================================================
  *
- * This grammar owns SOURCE-LEVEL COMMUNICATION SYNTAX for Zamani's
- * distributed-computing model.
+ * This grammar owns SOURCE-LEVEL DISTRIBUTED COMMUNICATION SYNTAX.
  *
- * It expresses communication INTENT.
+ * It provides the syntax boundary for communication intent between logical
+ * distributed computational entities.
  *
- * It does not implement communication.
+ * Communication may ultimately be realized as:
  *
- * It does not select or implement:
+ *     - local communication;
+ *     - intra-process communication;
+ *     - inter-process communication;
+ *     - inter-machine communication;
+ *     - cluster communication;
+ *     - cloud communication;
+ *     - edge communication;
+ *     - accelerator communication;
+ *     - CPU/GPU/FPGA communication;
+ *     - quantum-classical communication;
+ *     - distributed quantum communication;
+ *     - future communication mechanisms.
  *
- *     - TCP;
- *     - UDP;
- *     - QUIC;
- *     - RDMA;
- *     - InfiniBand;
- *     - MPI;
- *     - shared-memory transport;
- *     - message brokers;
- *     - cloud transports;
- *     - vendor transports;
- *     - quantum links;
- *     - optical links;
- *     - wireless links;
- *     - future transports.
+ * The grammar describes WHAT communication is requested.
  *
- * Those are downstream networking, hardware, runtime, scheduling, routing,
- * deployment, and resource-realization concerns.
+ * It does not decide HOW that communication is physically implemented.
  *
  * ============================================================================
- * ARCHITECTURAL PIPELINE
+ * ARCHITECTURAL PRINCIPLE
  * ============================================================================
  *
- *     Zamani source
- *          |
- *          v
- *     ZamaniLexer
- *          |
- *          v
- *     ZamaniParser / Distributed parser
- *          |
- *          v
- *     Communication AST
- *          |
- *          +--> name resolution
- *          +--> type checking
- *          +--> effect checking
- *          +--> capability checking
- *          +--> resource analysis
- *          +--> security analysis
- *          +--> communication semantic validation
- *          |
- *          v
- *     canonical semantic representation
- *          |
- *          +--> classical IR
- *          +--> quantum::ir
- *          +--> HDL/hardware representation
- *          +--> distributed communication metadata
- *          |
- *          v
- *     optimization
- *          |
- *          v
- *     routing / scheduling / placement
- *          |
- *          v
- *     networking / hardware realization
- *          |
- *          v
- *     runtime
+ * Source
+ *   |
+ *   v
+ * Lexer
+ *   |
+ *   v
+ * Parser
+ *   |
+ *   v
+ * Domain-neutral AST
+ *   |
+ *   v
+ * Semantic analysis
+ *   |
+ *   +--> name resolution
+ *   +--> type checking
+ *   +--> ownership/lifetime analysis
+ *   +--> effect analysis
+ *   +--> capability analysis
+ *   +--> resource analysis
+ *   +--> security analysis
+ *   +--> distributed communication validation
+ *   |
+ *   v
+ * Canonical semantic representation
+ *   |
+ *   +--> classical IR
+ *   +--> quantum::ir
+ *   +--> HDL/hardware representation
+ *   +--> distributed execution metadata
+ *   |
+ *   v
+ * Optimization
+ *   |
+ *   v
+ * Routing / placement / scheduling
+ *   |
+ *   v
+ * Runtime / deployment
  *
- * `quantum::ir` remains the canonical quantum semantic boundary.
- *
- * This grammar MUST NEVER create, own, or redefine quantum::ir.
- *
- * ============================================================================
- * OWNERSHIP
- * ============================================================================
- *
- * THIS FILE OWNS:
- *
- *     - communication declarations;
- *     - communication operations;
- *     - communication invocation syntax;
- *     - communication endpoints as symbolic references;
- *     - communication payload syntax;
- *     - communication argument syntax;
- *     - communication attributes;
- *     - communication options;
- *     - communication dependencies;
- *     - communication ordering intent;
- *     - communication stream syntax;
- *     - communication request/reply syntax;
- *     - communication publication/subscription syntax;
- *     - communication transfer syntax;
- *     - communication synchronization intent;
- *     - communication scope syntax;
- *     - communication extension syntax.
- *
- * THIS FILE DOES NOT OWN:
- *
- *     - identifiers;
- *     - qualified names;
- *     - expressions;
- *     - types;
- *     - lexer tokens;
- *     - distributed nodes;
- *     - distributed services;
- *     - distributed placement;
- *     - distributed replication;
- *     - distributed consistency;
- *     - network protocols;
- *     - network addresses;
- *     - sockets;
- *     - ports;
- *     - routing;
- *     - scheduling;
- *     - hardware;
- *     - resource discovery;
- *     - resource allocation;
- *     - classical IR;
- *     - quantum::ir;
- *     - QEC;
- *     - ZQN;
- *     - resilience;
- *     - runtime execution.
- *
- * ============================================================================
- * OPEN-WORLD PRINCIPLE
- * ============================================================================
- *
- * Communication must remain extensible.
- *
- * This grammar therefore does NOT create a closed list such as:
- *
- *     SEND
- *     RECEIVE
- *     BROADCAST
- *     MULTICAST
- *     GATHER
- *     SCATTER
- *     REDUCE
- *     PUBLISH
- *     SUBSCRIBE
- *     RPC
- *     RDMA
- *
- * as mandatory lexer keywords.
- *
- * Communication operation identity is represented through canonical names.
- *
- * Examples of semantic operation names include:
- *
- *     distributed::send
- *     distributed::receive
- *     distributed::broadcast
- *     distributed::multicast
- *     distributed::gather
- *     distributed::scatter
- *     distributed::reduce
- *     distributed::publish
- *     distributed::subscribe
- *     distributed::request
- *     distributed::reply
- *     distributed::stream
- *     distributed::transfer
- *     distributed::sync
- *
- * Future operations can therefore be introduced without changing this
- * grammar merely because a new communication abstraction was invented.
+ * The grammar never constructs or modifies an IR.
  *
  * ============================================================================
  * POCO-REAF
  * ============================================================================
  *
- * Communication syntax describes WHAT communication is required.
+ * Communication syntax participates in:
  *
- * It does not permanently encode WHERE or HOW communication occurs.
+ *     Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
  *
- * Therefore this grammar must not require:
+ * A communication statement must remain meaningful when the compiler chooses
+ * a different physical realization.
  *
- *     - a particular host;
- *     - a particular machine;
- *     - a particular network;
- *     - a particular provider;
- *     - a particular transport;
- *     - a particular interface;
- *     - a particular address;
- *     - a particular port;
- *     - a fixed number of endpoints;
- *     - a fixed number of nodes;
- *     - a fixed number of channels;
- *     - a fixed bandwidth;
- *     - a fixed latency;
- *     - a fixed topology.
+ * For example:
  *
- * These may exist as explicit program data when genuinely part of program
- * semantics, but they must never be implicit grammar-level machine limits.
+ *     distributed::send(channel, value, destination);
  *
- * ============================================================================
- * SCALABILITY
- * ============================================================================
- *
- * There are NO language-level finite limits on:
- *
- *     - communication declarations;
- *     - communication operations;
- *     - endpoints;
- *     - arguments;
- *     - payload expressions;
- *     - communication clauses;
- *     - dependencies;
- *     - channels;
- *     - streams;
- *     - requests;
- *     - replies;
- *     - subscriptions;
- *     - publications;
- *     - nested communication scopes;
- *     - qualified-name depth.
- *
- * Lists use:
- *
- *     *
- *     +
- *
- * rather than finite alternatives.
- *
- * Actual limits may arise from:
- *
- *     - parser memory;
- *     - compiler memory;
- *     - runtime memory;
- *     - operating-system limits;
- *     - available network resources;
- *     - hardware capabilities;
- *     - deployment policy.
- *
- * Those are NOT grammar limits.
- *
- * ============================================================================
- * DEPENDENCIES
- * ============================================================================
- *
- * Canonical dependency graph:
- *
- *     ZamaniLexer
- *          |
- *          +--> Names
- *          |
- *          +--> Expressions
- *          |
- *          v
- *     Communication
- *
- * Names owns:
- *
- *     identifier
- *     qualifiedName
- *     nameReference
- *
- * Expressions owns:
- *
- *     expression
- *     expressionList
- *
- * This grammar MUST NOT duplicate those rules.
- *
- * ============================================================================
- * BUILD CONTRACT
- * ============================================================================
- *
- * This is a parser grammar.
- *
- * Canonical options:
- *
- *     tokenVocab = ZamaniLexer;
- *
- * Canonical imports:
- *
- *     Names
- *     Expressions
- *
- * The ANTLR build must make the canonical grammar source/import paths
- * available to the generator.
- *
- * This grammar contains no target-language-specific actions.
- *
- * Therefore generated Rust parser code remains responsible for satisfying
- * the repository's Rust 1.97 / Rust 1.97.1 and `#![forbid(unsafe_code)]`
- * requirements.
- *
- * ============================================================================
- * SEMANTIC BOUNDARY
- * ============================================================================
- *
- * The parser establishes structural syntax.
- *
- * Semantic analysis establishes:
- *
- *     - whether an operation is a communication operation;
- *     - whether endpoints are valid;
- *     - whether source and destination types are compatible;
- *     - whether a payload is serializable;
- *     - whether a communication effect is permitted;
- *     - whether the requested capability exists;
- *     - whether resource requirements can be satisfied;
- *     - whether security policy permits the communication;
- *     - whether communication ordering is satisfiable;
- *     - whether the operation can be realized on the selected target.
- *
- * This grammar does none of those things.
- *
- * ============================================================================
- * NETWORKING BOUNDARY
- * ============================================================================
- *
- * Communication syntax is transport-neutral.
- *
- * For example, a source program may express:
- *
- *     distributed::send(...)
- *
- * without implying:
+ * does NOT imply:
  *
  *     TCP
  *     UDP
@@ -361,197 +130,535 @@
  *     RDMA
  *     InfiniBand
  *     shared memory
- *     vendor transport.
+ *     a particular network card
+ *     a particular machine
+ *     a particular process
+ *     a particular node
+ *     a particular accelerator
  *
- * The networking subsystem chooses or negotiates an appropriate realization.
- *
- * ============================================================================
- * ENDPOINT BOUNDARY
- * ============================================================================
- *
- * Endpoints are symbolic semantic references.
- *
- * This grammar does not define:
- *
- *     IP addresses;
- *     MAC addresses;
- *     sockets;
- *     ports;
- *     physical interfaces;
- *     machine identifiers;
- *     device identifiers.
- *
- * If such information is explicitly represented in source, it is parsed as
- * ordinary language data and must be classified downstream as either:
- *
- *     - semantic data;
- *     - deployment configuration;
- *     - target constraint;
- *     - implementation detail;
- *     - non-portable requirement.
- *
- * The grammar itself must not force any of those interpretations.
+ * The networking, execution, resource, placement, routing, scheduling and
+ * runtime layers determine an appropriate realization.
  *
  * ============================================================================
- * PAYLOAD BOUNDARY
+ * OPEN-WORLD PRINCIPLE
  * ============================================================================
  *
- * Payloads are expressions.
+ * Communication operations are represented by qualified names.
  *
- * This allows communication to work with:
+ * This intentionally avoids a closed enumeration such as:
  *
- *     classical values;
- *     structured values;
- *     generic values;
- *     streams;
- *     tensors;
- *     scientific data;
- *     AI data;
- *     hardware data;
- *     quantum measurement results;
- *     future data abstractions.
+ *     SEND
+ *     RECEIVE
+ *     BROADCAST
+ *     SCATTER
+ *     GATHER
+ *     REDUCE
  *
- * Serialization is NOT owned by this grammar.
+ * as the only legal operations.
+ *
+ * Standard communication forms remain naturally expressible:
+ *
+ *     distributed::send(channel, value, destination);
+ *     distributed::receive(channel);
+ *     distributed::broadcast(value, group);
+ *     distributed::scatter(value, group);
+ *     distributed::gather(group);
+ *     distributed::reduce(value, operation, group);
+ *
+ * Future forms remain syntactically representable:
+ *
+ *     distributed::future_protocol(...);
+ *     vendor::specialized_transport(...);
+ *     domain::collective(...);
+ *
+ * Whether such an operation is defined, supported, experimental, deprecated,
+ * vendor-specific, or invalid is determined by semantic analysis.
+ *
+ * ============================================================================
+ * OWNERSHIP
+ * ============================================================================
+ *
+ * THIS FILE OWNS:
+ *
+ *     - distributed communication declarations;
+ *     - communication statements;
+ *     - communication expressions;
+ *     - communication operations;
+ *     - communication arguments;
+ *     - communication targets;
+ *     - communication attributes;
+ *     - communication contracts;
+ *     - communication relationships;
+ *     - communication blocks;
+ *     - communication modifiers that are syntactically communication-specific.
+ *
+ * THIS FILE DOES NOT OWN:
+ *
+ *     - lexical tokens;
+ *     - identifiers;
+ *     - qualified names;
+ *     - general expressions;
+ *     - expression precedence;
+ *     - general types;
+ *     - general blocks;
+ *     - actor declarations;
+ *     - actor lifecycle semantics;
+ *     - generic concurrency;
+ *     - network protocols;
+ *     - sockets;
+ *     - physical addresses;
+ *     - node discovery;
+ *     - service discovery;
+ *     - routing algorithms;
+ *     - topology realization;
+ *     - resource allocation;
+ *     - scheduling;
+ *     - placement;
+ *     - replication algorithms;
+ *     - consistency algorithms;
+ *     - consensus algorithms;
+ *     - fault-tolerance implementation;
+ *     - security implementation;
+ *     - classical IR;
+ *     - quantum::ir;
+ *     - HDL/hardware IR;
+ *     - QEC;
+ *     - ZQN;
+ *     - HAL;
+ *     - runtime implementation.
+ *
+ * ============================================================================
+ * DEPENDENCIES
+ * ============================================================================
+ *
+ * Canonical reusable syntax is imported rather than redefined.
+ *
+ *     Names
+ *         identifier
+ *         qualifiedName
+ *
+ *     Expressions
+ *         expression
+ *         expressionList
+ *
+ * This grammar MUST NOT redefine those rules.
+ *
+ * ============================================================================
+ * INTEGRATION CONTRACT
+ * ============================================================================
+ *
+ * The canonical composition relationship is:
+ *
+ *     ZamaniLexer
+ *          |
+ *          v
+ *     Communication
+ *          |
+ *          v
+ *     Distributed
+ *          |
+ *          v
+ *     Zamani parser composition
+ *
+ * `distributed.g4` should import this grammar and use:
+ *
+ *     distributedCommunication
+ *
+ * as its communication boundary.
+ *
+ * There must be exactly one production definition of:
+ *
+ *     distributedCommunication
+ *
+ * within the distributed grammar composition.
+ *
+ * ============================================================================
+ * AST CONTRACT
+ * ============================================================================
+ *
+ * The grammar maps communication syntax to a domain-neutral AST operation
+ * representation.
+ *
+ * Conceptually:
+ *
+ *     distributedCommunication
+ *          |
+ *          v
+ *     AST::Operation
+ *          |
+ *          +--> name
+ *          +--> namespace
+ *          +--> operands
+ *          +--> parameters
+ *          +--> results
+ *          +--> attributes
+ *          +--> modifiers
+ *          +--> effects
+ *          +--> capabilities
+ *          +--> source span
+ *
+ * The exact Rust AST type is owned by the frontend AST subsystem.
+ *
+ * This grammar MUST NOT create:
+ *
+ *     DistributedCommunicationAst
+ *     NetworkPacketAst
+ *     TcpSendAst
+ *     MpiSendAst
+ *     QuantumCommunicationAst
+ *
+ * merely because a communication operation is distributed.
+ *
+ * ============================================================================
+ * SEMANTIC CONTRACT
+ * ============================================================================
+ *
+ * Semantic analysis determines:
+ *
+ *     - whether the operation exists;
+ *     - whether its arguments are valid;
+ *     - whether source and destination are compatible;
+ *     - whether the message type is transferable;
+ *     - whether ownership permits the transfer;
+ *     - whether required effects are available;
+ *     - whether required capabilities exist;
+ *     - whether resource requirements can be satisfied;
+ *     - whether security policy permits communication;
+ *     - whether ordering/consistency guarantees are valid;
+ *     - whether a communication operation is local or remote;
+ *     - whether quantum/classical boundaries are valid.
+ *
+ * The parser MUST NOT perform these decisions.
+ *
+ * ============================================================================
+ * IR CONTRACT
+ * ============================================================================
+ *
+ * The grammar does not define a communication IR.
+ *
+ * Communication syntax lowers through the canonical semantic representation.
+ *
+ * Possible downstream consumers include:
+ *
+ *     classical execution IR
+ *     distributed execution metadata
+ *     networking representation
+ *     quantum::ir
+ *     HDL/hardware representation
+ *
+ * There must not be a second competing distributed IR created by this grammar.
  *
  * ============================================================================
  * QUANTUM INTEGRATION
  * ============================================================================
  *
- * Communication may transport or coordinate quantum-related semantic values,
- * but this grammar does not define quantum representation.
+ * Communication can participate in hybrid and distributed quantum programs.
  *
- * Examples include:
+ * Examples:
  *
- *     measurement results;
- *     classical control information;
- *     logical-qubit coordination metadata;
- *     distributed quantum execution requests.
+ *     distributed::send(channel, measurement, destination);
  *
- * Quantum semantics remain owned by the quantum subsystem and ultimately
- * `quantum::ir`.
+ *     distributed::receive(channel);
  *
- * This grammar MUST NOT define:
+ *     distributed::broadcast(classical_result, group);
  *
- *     QubitId
- *     PhysicalQubitId
- *     GateKind
- *     quantum topology
- *     pulse semantics
- *     calibration
- *     QEC
- *     ZQN.
+ * The communication grammar does not define:
  *
- * ============================================================================
- * HDL / HARDWARE INTEGRATION
- * ============================================================================
+ *     - qubit identifiers;
+ *     - physical qubits;
+ *     - quantum gates;
+ *     - quantum topology;
+ *     - entanglement routing;
+ *     - QEC;
+ *     - calibration;
+ *     - pulse scheduling;
+ *     - ZQN.
  *
- * Communication may coordinate hardware or HDL computations.
- *
- * This grammar does not define:
- *
- *     wires;
- *     clocks;
- *     pins;
- *     physical buses;
- *     FPGA resources;
- *     ASIC cells;
- *     physical interfaces.
- *
- * Those belong to HDL/hardware grammar and downstream target systems.
+ * If communication affects quantum computation, semantic lowering eventually
+ * integrates with the canonical `quantum::ir` path.
  *
  * ============================================================================
- * EFFECT INTEGRATION
+ * CLASSICAL / HDL / HARDWARE INTEGRATION
  * ============================================================================
  *
- * Communication may produce effects.
+ * Communication may connect:
  *
- * The grammar does not redefine the effect system.
+ *     classical computation
+ *     quantum computation
+ *     HDL-described components
+ *     hardware accelerators
+ *     distributed services
+ *     storage systems
+ *     future execution substrates
  *
- * Downstream semantic analysis should map communication constructs to the
- * canonical distributed/network effects already owned by:
+ * Hardware realization remains downstream.
  *
- *     grammar/effects/
+ * This grammar MUST NOT encode:
  *
- * and the corresponding semantic/compiler effect model.
+ *     fixed bus widths;
+ *     fixed link counts;
+ *     fixed device counts;
+ *     fixed channels;
+ *     fixed message sizes;
+ *     fixed node counts.
  *
  * ============================================================================
- * RESOURCE INTEGRATION
+ * NETWORKING INTEGRATION
  * ============================================================================
  *
- * Communication may require:
+ * Communication intent may be lowered by the networking subsystem.
  *
- *     bandwidth;
- *     latency bounds;
- *     reliability;
- *     ordering;
- *     capacity;
- *     connectivity;
- *     security;
- *     locality;
- *     energy;
- *     performance.
+ * For example:
  *
- * This grammar does not define those resource semantics.
+ *     distributed::send(c, x, destination);
  *
- * It merely permits expressions/attributes through which the semantic layer
- * can represent them.
+ * may eventually become any valid transport selected by the compiler/runtime.
+ *
+ * The source grammar therefore remains independent of:
+ *
+ *     TCP
+ *     UDP
+ *     QUIC
+ *     MPI
+ *     RDMA
+ *     InfiniBand
+ *     Ethernet
+ *     shared-memory transport
+ *     vendor transport
+ *     future transport.
+ *
+ * ============================================================================
+ * RESOURCE / CAPABILITY INTEGRATION
+ * ============================================================================
+ *
+ * Communication may carry semantic requirements such as:
+ *
+ *     requires capability("communication");
+ *     requires capability("collective.communication");
+ *     requires capability("secure.communication");
+ *
+ * or resource requirements represented through general Zamani constructs.
+ *
+ * This grammar does not decide whether the requirements are satisfiable.
+ *
+ * Resource availability is a semantic/compiler/runtime concern.
  *
  * ============================================================================
  * SECURITY INTEGRATION
  * ============================================================================
  *
- * Communication may interact with:
+ * Communication may carry source-level security intent through attributes or
+ * operation arguments.
  *
- *     identity;
+ * The grammar does not implement:
+ *
+ *     encryption;
  *     authentication;
  *     authorization;
- *     confidentiality;
- *     integrity;
- *     privacy;
- *     trust;
- *     cryptographic requirements.
+ *     key management;
+ *     transport security;
+ *     secure channels.
  *
- * Security semantics remain owned by `grammar/security/` and downstream
- * security analysis.
+ * Security analysis and runtime systems determine realization.
+ *
+ * ============================================================================
+ * SCALABILITY CONTRACT
+ * ============================================================================
+ *
+ * This grammar contains no artificial finite limits.
+ *
+ * It does NOT define:
+ *
+ *     MAX_MESSAGES
+ *     MAX_CHANNELS
+ *     MAX_CONNECTIONS
+ *     MAX_ENDPOINTS
+ *     MAX_NODES
+ *     MAX_ACTORS
+ *     MAX_SERVICES
+ *     MAX_WORKERS
+ *     MAX_GROUP_SIZE
+ *     MAX_REPLICAS
+ *     MAX_MESSAGE_SIZE
+ *     MAX_NETWORK_SIZE
+ *     MAX_DEVICES
+ *     MAX_LINKS
+ *
+ * It also does not define:
+ *
+ *     CPU limits;
+ *     GPU limits;
+ *     FPGA limits;
+ *     QPU limits;
+ *     memory limits;
+ *     bandwidth limits;
+ *     latency limits;
+ *     topology limits.
+ *
+ * Repetition is represented structurally using `*` and `+`.
+ *
+ * Practical limits are evaluated downstream from actual resources and
+ * semantic requirements.
+ *
+ * ============================================================================
+ * HARD-CODING AUDIT
+ * ============================================================================
+ *
+ * Forbidden universal assumptions include:
+ *
+ *     MAX_NODES
+ *     MAX_CHANNELS
+ *     MAX_MESSAGES
+ *     MAX_MESSAGE_SIZE
+ *     MAX_CONNECTIONS
+ *     MAX_DEVICES
+ *     NODE_0
+ *     CHANNEL_0
+ *     DEVICE_0
+ *     CPU_0
+ *     GPU_0
+ *     QPU_0
+ *
+ * Numeric literals remain valid program data.
+ *
+ * For example:
+ *
+ *     distributed::send(channel, value, destination, 3);
+ *
+ * may be valid if the operation's semantics define `3` as an argument.
+ *
+ * The grammar does not reinterpret it as a system-wide limit.
  *
  * ============================================================================
  * DETERMINISM
  * ============================================================================
  *
- * This grammar has:
+ * Parsing is deterministic with respect to the supplied token stream.
  *
- *     - no semantic predicates;
+ * This grammar contains:
+ *
  *     - no actions;
- *     - no I/O;
- *     - no network calls;
- *     - no hardware discovery;
- *     - no runtime calls;
+ *     - no semantic predicates;
+ *     - no external state;
+ *     - no environment queries;
  *     - no randomness;
- *     - no mutable global state.
- *
- * Parsing is therefore a deterministic function of the token stream.
+ *     - no hardware discovery;
+ *     - no network discovery.
  *
  * ============================================================================
  * SOURCE-PRESERVATION CONTRACT
  * ============================================================================
  *
- * AST construction must preserve:
+ * Frontend processing must preserve:
  *
- *     - source spans;
- *     - operation names;
- *     - endpoint ordering;
+ *     - operation name;
+ *     - qualified-name segment ordering;
  *     - argument ordering;
- *     - payload expression structure;
- *     - clause ordering;
- *     - nesting;
- *     - optional trailing separators;
- *     - declaration ordering.
+ *     - nested expression structure;
+ *     - communication block structure;
+ *     - attributes;
+ *     - source spans.
  *
- * Semantic normalization belongs downstream.
+ * Semantic normalization happens after parsing.
+ *
+ * ============================================================================
+ * DIAGNOSTICS
+ * ============================================================================
+ *
+ * Parser diagnostics should identify malformed communication structure.
+ *
+ * Examples:
+ *
+ *     missing operation name;
+ *     missing opening parenthesis;
+ *     missing closing parenthesis;
+ *     malformed argument list;
+ *     missing semicolon;
+ *     malformed communication block.
+ *
+ * Semantic diagnostics, such as unsupported transports or insufficient
+ * resources, are not parser errors.
+ *
+ * ============================================================================
+ * TEST CONTRACT
+ * ============================================================================
+ *
+ * Positive tests must include:
+ *
+ *     distributed::send(channel, value, destination);
+ *     distributed::receive(channel);
+ *     distributed::broadcast(value, group);
+ *     distributed::scatter(value, group);
+ *     distributed::gather(group);
+ *     distributed::reduce(value, operation, group);
+ *
+ * Qualified future operations must also remain parseable:
+ *
+ *     distributed::future_protocol(value, destination);
+ *     vendor::transport(value, destination);
+ *
+ * Nested expressions must remain valid:
+ *
+ *     distributed::send(channel, compute(x + y), destination);
+ *
+ * Empty argument lists are syntactically representable where the general
+ * expression-list contract permits them:
+ *
+ *     distributed::flush();
+ *
+ * Negative tests must include malformed forms such as:
+ *
+ *     distributed::send(;
+ *     distributed::send(channel, value;
+ *     distributed::send(channel value);
+ *     distributed::send(channel, value, destination)
+ *
+ * Boundary/scalability tests must include:
+ *
+ *     - arbitrarily long qualified operation names;
+ *     - arbitrarily many arguments subject to parser/runtime resources;
+ *     - deeply nested expressions subject to implementation resources;
+ *     - many communication operations in one source unit;
+ *     - large communication blocks;
+ *     - generated/future operation names.
+ *
+ * These tests validate absence of grammar-level artificial limits.
+ *
+ * ============================================================================
+ * COMPLETION CRITERIA
+ * ============================================================================
+ *
+ * This file is complete when:
+ *
+ *     [x] Communication owns its source grammar.
+ *     [x] General names are reused.
+ *     [x] General expressions are reused.
+ *     [x] No communication transport is hard-coded.
+ *     [x] No resource maximum is hard-coded.
+ *     [x] Future operation names remain representable.
+ *     [x] Communication can be nested in distributed computation.
+ *     [x] Communication can participate in quantum/classical computation.
+ *     [x] Communication can integrate with networking.
+ *     [x] Communication can integrate with resource/capability analysis.
+ *     [x] Communication can integrate with security analysis.
+ *     [x] No IR is created here.
+ *     [x] No runtime behavior is created here.
+ *     [x] Parser behavior remains deterministic.
+ *     [x] Source ordering can be preserved.
  *
  * ============================================================================
  */
 
+
+/*
+ * ============================================================================
+ * ANTLR COMPOSITION
+ * ============================================================================
+ *
+ * `Communication` is a parser grammar.
+ *
+ * `tokenVocab` points to the single canonical production lexer.
+ */
 parser grammar Communication;
 
 options {
@@ -561,970 +668,133 @@ options {
 import Names, Expressions;
 
 
-/* ============================================================================
- * 1. PUBLIC ENTRY POINT
+/*
+ * ============================================================================
+ * PUBLIC COMMUNICATION ENTRY POINT
  * ============================================================================
  *
- * This is the stable rule consumed by Distributed.
+ * A communication construct is an operation-oriented construct:
+ *
+ *     qualifiedName(argument, ...);
+ *
+ * or a block form:
+ *
+ *     qualifiedName(argument, ...) {
+ *         ...
+ *     }
+ *
+ * The qualified operation name remains open-world.
  */
-
-communicationDeclaration
-    : communicationStatement
-    | communicationBlock
+distributedCommunication
+    : communicationOperation
     ;
 
 
-/* ============================================================================
- * 2. COMMUNICATION STATEMENT
+/*
+ * ============================================================================
+ * COMMUNICATION OPERATION
  * ============================================================================
  *
  * General form:
  *
- *     <operation>(...)
+ *     distributed::send(channel, value, destination);
  *
- * or:
+ *     distributed::receive(channel);
  *
- *     <operation> <argument> ...;
+ *     distributed::broadcast(value, group);
  *
- * The operation is intentionally represented by a qualified name rather than
- * a closed keyword inventory.
+ *     distributed::scatter(value, group);
+ *
+ *     distributed::gather(group);
+ *
+ *     distributed::reduce(value, operation, group);
+ *
+ * A block form is permitted for communication constructs that semantically
+ * contain nested source-level work:
+ *
+ *     distributed::transaction(channel) {
+ *         ...
+ *     }
+ *
+ * The grammar does not decide which operation names permit blocks.
+ * Semantic analysis owns that decision.
  */
-
-communicationStatement
-    : communicationInvocation SEMICOLON
-    | communicationOperationStatement SEMICOLON
+communicationOperation
+    : communicationName
+      LPAREN
+      communicationArguments?
+      RPAREN
+      communicationTerminator
+    | communicationName
+      LPAREN
+      communicationArguments?
+      RPAREN
+      distributedBlock
     ;
 
 
-/* ============================================================================
- * 3. INVOCATION FORM
+/*
  * ============================================================================
+ * COMMUNICATION NAME
+ * ============================================================================
+ *
+ * Qualified names provide the open-world operation namespace.
  *
  * Examples:
  *
- *     distributed::send(value)
- *     distributed::receive(channel)
- *     distributed::broadcast(value, group)
- *     distributed::publish(topic, value)
- *
- * The semantic layer determines the meaning of the operation.
+ *     distributed::send
+ *     distributed::receive
+ *     distributed::broadcast
+ *     vendor::operation
+ *     future::communication::operation
  */
-
-communicationInvocation
+communicationName
     : qualifiedName
-      LPAREN
-      communicationArgumentList?
-      RPAREN
     ;
 
 
-/* ============================================================================
- * 4. OPERATION STATEMENT
+/*
+ * ============================================================================
+ * ARGUMENTS
  * ============================================================================
  *
- * This form permits communication constructs whose syntax is not naturally
- * represented as a function-style invocation.
+ * The general expression grammar owns expression semantics.
  *
- * Examples may include future language extensions with named operands.
+ * This grammar only establishes the communication argument boundary.
+ *
+ * Argument count is unbounded by language design.
  */
-
-communicationOperationStatement
-    : qualifiedName
-      communicationOperand+
-    ;
-
-
-/* ============================================================================
- * 5. OPERANDS
- * ============================================================================
- */
-
-communicationOperand
+communicationArguments
     : expression
-    | qualifiedName
+      (
+          COMMA
+          expression
+      )*
     ;
 
 
-/* ============================================================================
- * 6. ARGUMENT LIST
+/*
+ * ============================================================================
+ * TERMINATION
  * ============================================================================
  *
- * Unbounded by language design.
+ * A simple communication operation is terminated by a semicolon.
  */
-
-communicationArgumentList
-    : communicationArgument
-      (COMMA communicationArgument)*
-      COMMA?
+communicationTerminator
+    : SEMICOLON
     ;
 
 
-/* ============================================================================
- * 7. ARGUMENT
+/*
+ * ============================================================================
+ * COMMUNICATION BLOCK
  * ============================================================================
  *
- * An argument may be:
- *
- *     - an expression;
- *     - a symbolic reference.
- *
- * The expression grammar remains authoritative for expression syntax.
- */
-
-communicationArgument
-    : expression
-    | qualifiedName
-    ;
-
-
-/* ============================================================================
- * 8. COMMUNICATION BLOCK
- * ============================================================================
- *
- * A block provides a structured communication scope.
- *
- * Example semantic forms:
- *
- *     distributed::communication channel {
- *         endpoint ...
- *         payload ...
- *         policy ...
- *     }
- *
- * The actual semantic classification remains downstream.
- */
-
-communicationBlock
-    : qualifiedName
-      qualifiedName
-      LBRACE
-      communicationMember*
-      RBRACE
-    ;
-
-
-/* ============================================================================
- * 9. COMMUNICATION MEMBERS
- * ============================================================================
- *
- * Members are structurally classified rather than closed over a finite
- * vocabulary.
- */
-
-communicationMember
-    : communicationEndpointClause
-    | communicationPayloadClause
-    | communicationSourceClause
-    | communicationDestinationClause
-    | communicationPeerClause
-    | communicationOperationClause
-    | communicationOrderingClause
-    | communicationDeliveryClause
-    | communicationReliabilityClause
-    | communicationSecurityClause
-    | communicationRequirementClause
-    | communicationConstraintClause
-    | communicationPreferenceClause
-    | communicationDependencyClause
-    | communicationAttributeClause
-    | communicationExtensionClause
-    ;
-
-
-/* ============================================================================
- * 10. ENDPOINT
- * ============================================================================
- */
-
-communicationEndpointClause
-    : qualifiedName
-      communicationReferenceList
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 11. SOURCE
- * ============================================================================
- */
-
-communicationSourceClause
-    : qualifiedName
-      qualifiedName
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 12. DESTINATION
- * ============================================================================
- */
-
-communicationDestinationClause
-    : qualifiedName
-      qualifiedName
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 13. PEER
- * ============================================================================
- */
-
-communicationPeerClause
-    : qualifiedName
-      communicationReferenceList
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 14. PAYLOAD
- * ============================================================================
- */
-
-communicationPayloadClause
-    : qualifiedName
-      expression
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 15. OPERATION
- * ============================================================================
- */
-
-communicationOperationClause
-    : qualifiedName
-      communicationInvocation?
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 16. ORDERING
- * ============================================================================
- *
- * Ordering is represented as an expression/reference property.
- *
- * The scheduler remains responsible for realization.
- */
-
-communicationOrderingClause
-    : qualifiedName
-      expression?
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 17. DELIVERY
- * ============================================================================
- *
- * Delivery semantics remain abstract.
- *
- * They are not transport implementations.
- */
-
-communicationDeliveryClause
-    : qualifiedName
-      expression?
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 18. RELIABILITY
- * ============================================================================
- */
-
-communicationReliabilityClause
-    : qualifiedName
-      expression?
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 19. SECURITY
- * ============================================================================
- */
-
-communicationSecurityClause
-    : qualifiedName
-      expression?
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 20. REQUIREMENTS
- * ============================================================================
- *
- * Requirements describe what a valid realization must provide.
- *
- * They do not allocate resources.
- */
-
-communicationRequirementClause
-    : qualifiedName
-      expression
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 21. CONSTRAINTS
- * ============================================================================
- *
- * Constraints describe admissible realizations.
- *
- * They do not select a physical target.
- */
-
-communicationConstraintClause
-    : qualifiedName
-      expression
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 22. PREFERENCES
- * ============================================================================
- *
- * Preferences guide realization without becoming mandatory semantic
- * requirements.
- */
-
-communicationPreferenceClause
-    : qualifiedName
-      expression
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 23. DEPENDENCIES
- * ============================================================================
- *
- * Dependencies describe logical communication ordering/dependency intent.
- *
- * Scheduling remains downstream.
- */
-
-communicationDependencyClause
-    : qualifiedName
-      communicationReferenceList
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 24. ATTRIBUTES
- * ============================================================================
- *
- * Attributes provide structured extensibility without requiring lexer changes.
- */
-
-communicationAttributeClause
-    : qualifiedName
-      LPAREN
-      communicationArgumentList?
-      RPAREN
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 25. EXTENSIONS
- * ============================================================================
- *
- * Future communication-domain constructs may be represented through qualified
- * names and expressions.
- *
- * Semantic validation determines whether an extension is registered,
- * supported, experimental, deprecated, or unknown.
- */
-
-communicationExtensionClause
-    : qualifiedName
-      communicationExtensionValue?
-      SEMICOLON
-    ;
-
-communicationExtensionValue
-    : expression
-    | communicationArgumentList
-    | qualifiedName
-    ;
-
-
-/* ============================================================================
- * 26. REFERENCE LIST
- * ============================================================================
- *
- * No finite endpoint/channel count is imposed.
- */
-
-communicationReferenceList
-    : qualifiedName
-      (COMMA qualifiedName)*
-      COMMA?
-    ;
-
-
-/* ============================================================================
- * 27. NAMED COMMUNICATION OPERATION
- * ============================================================================
- *
- * This rule exists as a semantic integration point for downstream AST
- * construction.
- *
- * It intentionally contains no closed-world operation list.
- */
-
-communicationOperation
-    : qualifiedName
-    ;
-
-
-/* ============================================================================
- * 28. SEND
- * ============================================================================
- *
- * These named rules are compatibility/convenience entry points.
- *
- * They do not define a closed set of communication operations.
- */
-
-communicationSend
-    : qualifiedName
-      LPAREN
-      communicationArgumentList?
-      RPAREN
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 29. RECEIVE
- * ============================================================================
- */
-
-communicationReceive
-    : qualifiedName
-      LPAREN
-      communicationArgumentList?
-      RPAREN
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 30. BROADCAST / MULTICAST FAMILY
- * ============================================================================
- *
- * The syntax remains operation-name driven.
- */
-
-communicationGroupOperation
-    : qualifiedName
-      LPAREN
-      communicationArgumentList?
-      RPAREN
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 31. STREAM
- * ============================================================================
- */
-
-communicationStream
-    : qualifiedName
-      qualifiedName?
-      LPAREN
-      communicationArgumentList?
-      RPAREN
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 32. REQUEST / RESPONSE
- * ============================================================================
- */
-
-communicationRequest
-    : qualifiedName
-      LPAREN
-      communicationArgumentList?
-      RPAREN
-      SEMICOLON
-    ;
-
-communicationResponse
-    : qualifiedName
-      LPAREN
-      communicationArgumentList?
-      RPAREN
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 33. PUBLICATION / SUBSCRIPTION
- * ============================================================================
- */
-
-communicationPublication
-    : qualifiedName
-      LPAREN
-      communicationArgumentList?
-      RPAREN
-      SEMICOLON
-    ;
-
-communicationSubscription
-    : qualifiedName
-      LPAREN
-      communicationArgumentList?
-      RPAREN
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 34. SYNCHRONIZATION
- * ============================================================================
- */
-
-communicationSynchronization
-    : qualifiedName
-      LPAREN
-      communicationArgumentList?
-      RPAREN
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 35. DATA TRANSFER
- * ============================================================================
- */
-
-communicationTransfer
-    : qualifiedName
-      LPAREN
-      communicationArgumentList?
-      RPAREN
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 36. OPTIONAL COMMUNICATION EXPRESSION
- * ============================================================================
- */
-
-optionalCommunicationExpression
-    : expression?
-    ;
-
-
-/* ============================================================================
- * 37. OPTIONAL COMMUNICATION REFERENCE
- * ============================================================================
- */
-
-optionalCommunicationReference
-    : qualifiedName?
-    ;
-
-
-/* ============================================================================
- * 38. COMMUNICATION EXPRESSION LIST
- * ============================================================================
- */
-
-communicationExpressionList
-    : expression
-      (COMMA expression)*
-      COMMA?
-    ;
-
-
-/* ============================================================================
- * 39. COMMUNICATION REFERENCE
- * ============================================================================
- */
-
-communicationReference
-    : qualifiedName
-    ;
-
-
-/* ============================================================================
- * 40. COMMUNICATION QUALIFIED REFERENCE
- * ============================================================================
- */
-
-communicationQualifiedReference
-    : qualifiedName
-    ;
-
-
-/* ============================================================================
- * 41. COMMUNICATION FUTURE RESULT
- * ============================================================================
- *
- * A future is represented syntactically as an invocation/result relation.
- *
- * The runtime determines the actual future implementation.
- */
-
-communicationFuture
-    : qualifiedName
-      LPAREN
-      communicationArgumentList?
-      RPAREN
-    ;
-
-
-/* ============================================================================
- * 42. COMMUNICATION DEPENDENCY
- * ============================================================================
- */
-
-communicationDependency
-    : qualifiedName
-      communicationReferenceList
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 43. COMMUNICATION DATA FLOW
- * ============================================================================
- */
-
-communicationDataFlow
-    : qualifiedName
-      qualifiedName
-      qualifiedName
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 44. COMMUNICATION PIPELINE
- * ============================================================================
- *
- * A pipeline is logical communication/data-flow structure.
- *
- * It does not prescribe a physical topology.
- */
-
-communicationPipeline
-    : qualifiedName
-      qualifiedName
-      LBRACE
-      communicationPipelineStage*
-      RBRACE
-    ;
-
-communicationPipelineStage
-    : qualifiedName
-      communicationReferenceList?
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 45. COMMUNICATION DOMAIN REFERENCE
- * ============================================================================
- */
-
-communicationDomainReference
-    : qualifiedName
-    ;
-
-
-/* ============================================================================
- * 46. COMMUNICATION NAMESPACE REFERENCE
- * ============================================================================
- */
-
-communicationNamespaceReference
-    : qualifiedName
-    ;
-
-
-/* ============================================================================
- * 47. EXTENSION-SAFE COMMUNICATION INVOCATION
- * ============================================================================
- *
- * This is the preferred generic extension point.
- *
- * New communication semantics should normally be represented here instead
- * of requiring a grammar modification.
- */
-
-communicationExtensionInvocation
-    : qualifiedName
-      LPAREN
-      communicationArgumentList?
-      RPAREN
-    ;
-
-
-/* ============================================================================
- * 48. SCALABILITY CONTRACT
- * ============================================================================
- *
- * There are deliberately no grammar productions resembling:
- *
- *     endpoint1
- *     endpoint2
- *     node1
- *     node2
- *     channel1
- *     channel2
- *
- * and no bounded repetitions such as:
- *
- *     item item?
- *     item item item?
- *
- * where those forms would impose artificial machine limits.
- *
- * All scalable collections use unbounded grammar repetition.
- *
- * ============================================================================
- * 49. HARD-CODING AUDIT
- * ============================================================================
- *
- * This grammar contains no:
- *
- *     MAX_NODES
- *     MAX_ENDPOINTS
- *     MAX_CHANNELS
- *     MAX_MESSAGES
- *     MAX_SERVICES
- *     MAX_CONNECTIONS
- *     MAX_BANDWIDTH
- *     MAX_LATENCY
- *     MAX_DEVICES
- *     MAX_THREADS
- *     MAX_QUBITS
- *     fixed host
- *     fixed IP
- *     fixed port
- *     fixed topology
- *     fixed provider
- *     fixed transport.
- *
- * Any future addition introducing such a limit must undergo the grammar
- * hard-coding audit before acceptance.
- *
- * ============================================================================
- * 50. ERROR HANDLING CONTRACT
- * ============================================================================
- *
- * Syntax errors are reported by the generated ANTLR parser.
- *
- * Semantic errors belong downstream.
- *
- * This grammar must not:
- *
- *     - emit diagnostics;
- *     - print to stdout/stderr;
- *     - silently recover invalid semantics;
- *     - convert semantic errors into comments;
- *     - invoke runtime services.
- *
- * ============================================================================
- * 51. AST CONTRACT
- * ============================================================================
- *
- * The frontend AST should expose a canonical communication node containing,
- * at minimum, the semantic equivalents of:
- *
- *     operation
- *     arguments
- *     endpoints
- *     payload
- *     clauses
- *     attributes
- *     source span
- *
- * The grammar itself does not define the AST type.
- *
- * ============================================================================
- * 52. COMPILER CONTRACT
- * ============================================================================
- *
- * Downstream compilation may lower communication into:
- *
- *     classical operations;
- *     distributed operations;
- *     network effects;
- *     resource requirements;
- *     scheduling dependencies;
- *     routing requirements;
- *     hardware communication operations;
- *     quantum/classical coordination metadata.
- *
- * The lowering must preserve source semantics.
- *
- * ============================================================================
- * 53. QUANTUM COMPILER CONTRACT
- * ============================================================================
- *
- * If communication participates in a quantum program:
- *
- *     source
- *       ->
- *     semantic communication model
- *       ->
- *     quantum/classical semantic integration
- *       ->
- *     quantum::ir
- *
- * The grammar MUST NOT directly construct quantum::ir.
- *
- * ============================================================================
- * 54. RUNTIME CONTRACT
- * ============================================================================
- *
- * Runtime communication implementation is completely downstream.
- *
- * The runtime may resolve:
- *
- *     endpoints;
- *     transport;
- *     routes;
- *     scheduling;
- *     retries;
- *     serialization;
- *     security;
- *     resource allocation;
- *     hardware interfaces.
- *
- * None of those decisions are embedded here.
- *
- * ============================================================================
- * 55. TEST CONTRACT
- * ============================================================================
- *
- * Required tests:
- *
- * POSITIVE:
- *
- *     - minimal communication invocation;
- *     - qualified operation;
- *     - arbitrary argument count;
- *     - arbitrary endpoint count;
- *     - payload expression;
- *     - nested communication block;
- *     - stream;
- *     - request/reply;
- *     - publish/subscribe;
- *     - synchronization;
- *     - communication pipeline;
- *     - future operation;
- *     - extension operation.
- *
- * NEGATIVE:
- *
- *     - missing operation;
- *     - missing closing parenthesis;
- *     - malformed argument separator;
- *     - malformed endpoint list;
- *     - missing semicolon;
- *     - malformed block;
- *     - incomplete qualified name.
- *
- * BOUNDARY:
- *
- *     - zero arguments where permitted;
- *     - one argument;
- *     - many arguments;
- *     - one endpoint;
- *     - many endpoints;
- *     - deeply nested scopes;
- *     - long qualified names;
- *     - very large communication blocks.
- *
- * CROSS-DOMAIN:
- *
- *     - classical + communication;
- *     - quantum + communication;
- *     - quantum + classical + communication;
- *     - HDL + communication;
- *     - hardware + communication;
- *     - AI + communication;
- *     - distributed + security + communication;
- *     - distributed + resource + communication.
- *
- * SCALABILITY:
- *
- *     - no fixed endpoint count;
- *     - no fixed operation count;
- *     - no fixed channel count;
- *     - no fixed node count;
- *     - no fixed payload count;
- *     - no fixed topology.
- *
- * DETERMINISM:
- *
- *     identical token streams produce identical parse structures.
- *
- * ROUND-TRIP:
- *
- *     source -> lexer -> parser -> AST -> serializer -> parser
- *
- * must preserve intended communication semantics.
- *
- * ============================================================================
- * 56. COMPLETION CRITERIA
- * ============================================================================
- *
- * This file is COMPLETE when:
- *
- *     [ ] It compiles as an ANTLR parser grammar.
- *     [ ] ZamaniLexer is the canonical token vocabulary.
- *     [ ] Names is the authoritative name grammar.
- *     [ ] Expressions is the authoritative expression grammar.
- *     [ ] No identifier grammar is duplicated.
- *     [ ] No expression grammar is duplicated.
- *     [ ] No network protocol is hard-coded.
- *     [ ] No hardware topology is hard-coded.
- *     [ ] No machine count is hard-coded.
- *     [ ] No resource capacity is hard-coded.
- *     [ ] No runtime action exists.
- *     [ ] No semantic predicate exists.
- *     [ ] No Rust code exists inside the grammar.
- *     [ ] Generated Rust integrates with Rust 1.97/1.97.1.
- *     [ ] The Rust crate forbids unsafe code.
- *     [ ] Distributed.g4 consumes communicationDeclaration instead of
- *         redefining communication syntax.
- *     [ ] The communication AST preserves source information.
- *     [ ] Semantic lowering is tested.
- *     [ ] Classical integration is tested.
- *     [ ] Quantum integration is tested.
- *     [ ] HDL integration is tested.
- *     [ ] Hardware integration is tested.
- *     [ ] Security integration is tested.
- *     [ ] Resource integration is tested.
- *     [ ] Scalability tests pass.
- *     [ ] Determinism tests pass.
- *     [ ] Negative tests pass.
- *     [ ] Round-trip tests pass.
+ * The block rule is intentionally supplied by the canonical distributed
+ * grammar composition.
+ *
+ * `distributedBlock` is not redefined here, preventing competing block
+ * definitions.
  *
  * ============================================================================
  */
