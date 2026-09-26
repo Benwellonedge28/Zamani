@@ -1,1626 +1,2813 @@
 /*
- * ============================================================================
- * Zamani Universal Programming Language
- * ============================================================================
- *
- * File:
- *     grammar/distributed/nodes.g4
- *
- * Grammar:
- *     Nodes
- *
- * Status:
- *     Production distributed-node syntax.
- *
- * Runtime/compiler baseline:
- *     Rust 1.97 / Rust 1.97.1
- *
- * Safety:
- *     - No embedded Rust actions.
- *     - No semantic predicates.
- *     - No unsafe implementation.
- *     - No filesystem access.
- *     - No network access.
- *     - No hardware access.
- *     - No runtime callbacks.
- *     - No mutable compiler-global state.
- *     - No randomness.
- *
- * ============================================================================
- * PURPOSE
- * ============================================================================
- *
- * This grammar defines SOURCE-LEVEL SYNTAX for abstract distributed nodes.
- *
- * A node in Zamani is a logical execution participant.
- *
- * It is NOT inherently:
- *
- *     - a physical computer;
- *     - a CPU;
- *     - a GPU;
- *     - an FPGA;
- *     - an ASIC;
- *     - a QPU;
- *     - a VM;
- *     - a container;
- *     - a cloud instance;
- *     - a network address;
- *     - a host;
- *     - a process;
- *     - a particular machine.
- *
- * Semantic analysis determines what a node declaration means.
- *
- * Runtime and deployment layers determine how that intent is realized.
- *
- * ============================================================================
- * ARCHITECTURAL POSITION
- * ============================================================================
- *
- *     source
- *        |
- *        v
- *     canonical lexer
- *        |
- *        v
- *     Nodes parser
- *        |
- *        v
- *     distributed AST
- *        |
- *        +--> name resolution
- *        +--> type checking
- *        +--> effect checking
- *        +--> capability checking
- *        +--> resource analysis
- *        +--> security analysis
- *        +--> distributed semantic validation
- *        |
- *        v
- *     canonical semantic representation
- *        |
- *        +--> classical IR
- *        +--> quantum::ir
- *        +--> HDL/hardware representation
- *        +--> distributed execution metadata
- *        +--> resource requirements
- *        |
- *        v
- *     optimization
- *        |
- *        v
- *     routing / placement / scheduling
- *        |
- *        v
- *     target realization
- *        |
- *        v
- *     runtime / deployment
- *
- * `quantum::ir` remains the canonical quantum semantic boundary.
- *
- * THIS FILE MUST NEVER:
- *
- *     - construct quantum::ir;
- *     - redefine QubitId;
- *     - redefine PhysicalQubitId;
- *     - define quantum gates;
- *     - define QEC;
- *     - define ZQN;
- *     - perform quantum routing;
- *     - perform hardware discovery.
- *
- * ============================================================================
- * OWNERSHIP
- * ============================================================================
- *
- * THIS FILE OWNS:
- *
- *     - abstract node declaration syntax;
- *     - node scope syntax;
- *     - node-local declaration grouping;
- *     - node references;
- *     - node groups;
- *     - node roles;
- *     - node capabilities as source-level references;
- *     - node requirements as source-level references;
- *     - node constraints as source-level expressions;
- *     - node preferences;
- *     - node metadata;
- *     - node relationships;
- *     - node dependency declarations;
- *     - node lifecycle intent;
- *     - node-local execution intent;
- *     - node-level distributed attributes.
- *
- * THIS FILE DOES NOT OWN:
- *
- *     - identifier lexical syntax;
- *     - qualified-name lexical syntax;
- *     - expressions;
- *     - types;
- *     - resources;
- *     - hardware discovery;
- *     - physical topology;
- *     - network protocols;
- *     - IP addresses;
- *     - ports;
- *     - sockets;
- *     - service discovery;
- *     - placement algorithms;
- *     - scheduling;
- *     - routing;
- *     - optimization;
- *     - deployment;
- *     - runtime execution;
- *     - consensus;
- *     - replication algorithms;
- *     - consistency algorithms;
- *     - fault-tolerance algorithms;
- *     - resilience;
- *     - QEC;
- *     - ZQN;
- *     - quantum::ir.
- *
- * ============================================================================
- * DEPENDENCIES
- * ============================================================================
- *
- * This grammar consumes:
- *
- *     Names
- *     Expressions
- *
- * Names owns:
- *
- *     identifier
- *     qualifiedName
- *
- * Expressions owns:
- *
- *     expression
- *     expressionList
- *
- * This file MUST NOT redefine those rules.
- *
- * ============================================================================
- * SCALABILITY / POCO-REAF
- * ============================================================================
- *
- * There is intentionally NO grammar-level maximum for:
- *
- *     - nodes;
- *     - node groups;
- *     - node relationships;
- *     - roles;
- *     - capabilities;
- *     - requirements;
- *     - constraints;
- *     - preferences;
- *     - metadata entries;
- *     - dependencies;
- *     - nested scopes;
- *     - declarations;
- *     - expression complexity.
- *
- * The grammar therefore does NOT contain:
- *
- *     MAX_NODES
- *     MAX_NODE_COUNT
- *     MAX_CLUSTER_SIZE
- *     MAX_WORKERS
- *     MAX_PROCESSES
- *     MAX_DEVICES
- *     MAX_CORES
- *     MAX_MEMORY
- *     MAX_BANDWIDTH
- *     MAX_LATENCY
- *
- * and does not contain equivalent hidden bounds.
- *
- * Practical limitations belong to:
- *
- *     - parser resource policy;
- *     - compiler resource policy;
- *     - resource management;
- *     - deployment;
- *     - scheduler;
- *     - runtime;
- *     - available hardware.
- *
- * Those are not language-level node cardinality limits.
- *
- * ============================================================================
- * HARDWARE INDEPENDENCE
- * ============================================================================
- *
- * A node declaration MUST NOT require:
- *
- *     host;
- *     hostname;
- *     IP address;
- *     MAC address;
- *     socket;
- *     physical CPU;
- *     GPU;
- *     FPGA;
- *     ASIC;
- *     QPU;
- *     device ID;
- *     machine ID;
- *     cloud provider;
- *     cloud region;
- *     physical rack;
- *     physical topology.
- *
- * Such information, where required, belongs to target/resource/deployment
- * models.
- *
- * ============================================================================
- * OPEN-WORLD DESIGN
- * ============================================================================
- *
- * Node roles, capabilities, requirements, metadata keys, and semantic
- * classifications are represented primarily through names.
- *
- * This deliberately avoids an exhaustive list such as:
- *
- *     CPU_NODE
- *     GPU_NODE
- *     QPU_NODE
- *     FPGA_NODE
- *     CLOUD_NODE
- *     EDGE_NODE
- *     STORAGE_NODE
- *     CONTROL_NODE
- *
- * Such a closed vocabulary would make future computing models require grammar
- * changes.
- *
- * Instead, semantic names remain extensible:
- *
- *     cpu
- *     gpu
- *     quantum
- *     fpga
- *     storage
- *     edge
- *     accelerator
- *     future::architecture
- *
- * Semantic analysis determines their meaning.
- *
- * ============================================================================
- * NODE VS RESOURCE
- * ============================================================================
- *
- * A node is a logical participant.
- *
- * A resource is something that can be required, provided, constrained,
- * preferred, allocated, or consumed.
- *
- * Therefore:
- *
- *     node
- *
- * MUST NOT itself imply:
- *
- *     one CPU
- *     one GPU
- *     one QPU
- *     one machine
- *     one process
- *
- * A node may be realized using:
- *
- *     zero or more implementation resources,
- *
- * subject to downstream semantic and deployment rules.
- *
- * ============================================================================
- * NODE VS PLACEMENT
- * ============================================================================
- *
- * A node declaration identifies an abstract computational participant.
- *
- * Placement determines where that participant may be realized.
- *
- * This grammar therefore permits placement-related intent but does not
- * implement placement.
- *
- * ============================================================================
- * NODE VS NETWORKING
- * ============================================================================
- *
- * A node may participate in communication.
- *
- * This grammar does not select:
- *
- *     TCP
- *     UDP
- *     QUIC
- *     MPI
- *     RDMA
- *     InfiniBand
- *     Ethernet
- *     vendor-specific transports
- *
- * Communication semantics belong to the networking/distributed semantic
- * layers.
- *
- * ============================================================================
- * NODE VS PROCESS
- * ============================================================================
- *
- * A logical node may execute one or more processes/tasks/actors depending on
- * semantic and runtime realization.
- *
- * This grammar does not impose a one-to-one mapping between:
- *
- *     node <-> process
- *
- * or:
- *
- *     node <-> machine.
- *
- * ============================================================================
- * NODE VS QUANTUM
- * ============================================================================
- *
- * A node may host or participate in quantum computation.
- *
- * That does not make the node a physical QPU.
- *
- * Quantum semantics remain owned by the quantum language and canonical
- * `quantum::ir` boundary.
- *
- * ============================================================================
- * DETERMINISM
- * ============================================================================
- *
- * This grammar contains:
- *
- *     - no actions;
- *     - no predicates;
- *     - no I/O;
- *     - no randomness;
- *     - no runtime calls;
- *     - no hardware discovery;
- *     - no network access.
- *
- * Parsing therefore depends only on the supplied token stream.
- *
- * ============================================================================
- * AST CONTRACT
- * ============================================================================
- *
- * The frontend should preserve:
- *
- *     - node declaration order;
- *     - node names;
- *     - qualified names;
- *     - group membership order;
- *     - role order;
- *     - capability order;
- *     - requirement order;
- *     - constraint order;
- *     - preference order;
- *     - metadata order;
- *     - dependency order;
- *     - nested scope structure;
- *     - source spans.
- *
- * The AST may contain structures equivalent to:
- *
- *     NodeDeclaration
- *     NodeReference
- *     NodeGroup
- *     NodeRole
- *     NodeCapability
- *     NodeRequirement
- *     NodeConstraint
- *     NodePreference
- *     NodeMetadata
- *     NodeDependency
- *
- * Those are AST concepts, not grammar-owned runtime implementations.
- *
- * ============================================================================
- * SEMANTIC CONTRACT
- * ============================================================================
- *
- * Parsing answers:
- *
- *     "Is the node declaration structurally valid?"
- *
- * Semantic analysis answers:
- *
- *     "Does this node declaration make semantic sense?"
- *
- * Resource analysis answers:
- *
- *     "Can the requested capabilities/requirements be satisfied?"
- *
- * Placement answers:
- *
- *     "Where may this node be realized?"
- *
- * Scheduling answers:
- *
- *     "When may this node execute its work?"
- *
- * Runtime answers:
- *
- *     "How is this node actually executed?"
- *
- * ============================================================================
- * COMPATIBILITY
- * ============================================================================
- *
- * The distributed grammar currently follows an open-world identifier model.
- *
- * Consequently, this file does not introduce a new lexical NODE token.
- *
- * The first identifier in a node declaration is interpreted by downstream
- * semantic analysis as the contextual declaration keyword.
- *
- * This avoids silently adding a new reserved word to the language.
- *
- * If Zamani later makes `node` a reserved keyword, that must be a language
- * versioning change involving:
- *
- *     lexer authority
- *     grammar authority
- *     compatibility specification
- *     parser tests
- *     migration documentation
- *
- * It must NOT be silently changed only in this file.
- *
- * ============================================================================
- */
+
+* ============================================================================
+* Zamani Universal Programming Language
+* ============================================================================
+* 
+* File:
+* grammar/distributed/nodes.g4
+* 
+* Grammar:
+* Nodes
+* 
+* Status:
+* Production distributed-node syntax contract.
+* 
+* Baseline:
+* Rust 1.97 / Rust 1.97.1
+* Rust edition 2021
+* Safe Rust only; no unsafe implementation is permitted.
+* 
+* ============================================================================
+* PURPOSE
+* ============================================================================
+* 
+* This grammar defines SOURCE-LEVEL SYNTAX for abstract distributed nodes.
+* 
+* A Zamani node is a LOGICAL COMPUTATIONAL PARTICIPANT.
+* 
+* A node is NOT intrinsically:
+* 
+* - a physical machine;
+* - a CPU;
+* - a GPU;
+* - an FPGA;
+* - an ASIC;
+* - a QPU;
+* - a VM;
+* - a container;
+* - a cloud instance;
+* - a process;
+* - a thread;
+* - a network address;
+* - a socket;
+* - a device;
+* - a host;
+* - a rack;
+* - a provider;
+* - a region.
+* 
+* Those are downstream realization concepts.
+* 
+* ============================================================================
+* ARCHITECTURAL POSITION
+* ============================================================================
+* 
+* Zamani source
+*      |
+*      v
+* canonical ZamaniLexer
+*      |
+*      v
+* Nodes parser grammar
+*      |
+*      v
+* domain-neutral frontend AST
+*      |
+*      +--> name resolution
+*      +--> type analysis
+*      +--> effect analysis
+*      +--> capability analysis
+*      +--> resource analysis
+*      +--> security analysis
+*      +--> distributed semantic validation
+*      |
+*      v
+* canonical semantic representation
+*      |
+*      +--> classical computation
+*      +--> quantum computation
+*      |       |
+*      |       +--> quantum::ir
+*      |
+*      +--> HDL / hardware
+*      +--> distributed execution metadata
+*      +--> resource requirements
+*      |
+*      v
+* optimization
+*      |
+*      +--> placement
+*      +--> routing
+*      +--> scheduling
+*      +--> resilience
+*      |
+*      v
+* target realization
+*      |
+*      v
+* runtime / deployment
+* 
+* This file never constructs IR and never performs target realization.
+* 
+* ============================================================================
+* OWNERSHIP
+* ============================================================================
+* 
+* THIS FILE OWNS:
+* 
+* - node declarations;
+* - node names;
+* - node bodies;
+* - node-local semantic members;
+* - node references;
+* - node groups;
+* - abstract node relationships;
+* - abstract node dependencies;
+* - node roles;
+* - node capabilities;
+* - node requirements;
+* - node constraints;
+* - node preferences;
+* - node metadata;
+* - node lifecycle intent;
+* - node execution intent;
+* - reusable node lists and node-reference structures.
+* 
+* THIS FILE DOES NOT OWN:
+* 
+* - lexical identifiers;
+* - keywords;
+* - expressions;
+* - types;
+* - resources;
+* - capabilities as a global subsystem;
+* - physical topology;
+* - placement algorithms;
+* - scheduling algorithms;
+* - network protocols;
+* - service discovery;
+* - replication algorithms;
+* - consistency algorithms;
+* - consensus algorithms;
+* - fault tolerance;
+* - resilience;
+* - hardware discovery;
+* - deployment;
+* - runtime;
+* - quantum::ir;
+* - QEC;
+* - ZQN;
+* - HAL.
+* 
+* ============================================================================
+* CANONICAL DEPENDENCIES
+* ============================================================================
+* 
+* Lexical authority:
+* 
+* grammar/antlr/ZamaniLexer.g4
+* 
+* Lexical composition:
+* 
+* grammar/lexer/tokens.g4
+* 
+* Canonical names:
+* 
+* grammar/core/names.g4
+* 
+* Canonical expressions:
+* 
+* grammar/expressions/expressions.g4
+* 
+* This grammar MUST NOT redefine:
+* 
+* IDENTIFIER
+* identifier
+* qualifiedName
+* expression
+* expressionList
+* operators
+* punctuation
+* 
+* ============================================================================
+* IMPORTANT LEXICAL COMPATIBILITY DECISION
+* ============================================================================
+* 
+* The repository currently does NOT establish a canonical K_NODE lexer token.
+* 
+* Therefore this grammar does NOT invent one.
+* 
+* The contextual word:
+* 
+* node
+* 
+* is represented by the canonical "identifier" rule.
+* 
+* The same rule applies to contextual distributed words such as:
+* 
+* group
+* role
+* capability
+* requires
+* constraint
+* prefer
+* metadata
+* depends
+* relates
+* lifecycle
+* execute
+* 
+* Semantic analysis is responsible for recognizing the contextual spelling.
+* 
+* This is intentional:
+* 
+* no new reserved word
+* no duplicate lexical authority
+* no lexer modification hidden inside a parser grammar.
+* 
+* If Zamani later makes any of these words reserved keywords, the change must
+* be versioned across the canonical lexer, specification, compatibility rules,
+* parser, and tests.
+* 
+* ============================================================================
+* POCO-REAF
+* ============================================================================
+* 
+* Distributed syntax follows:
+* 
+* Program Once
+* Compile Once
+* Run Everywhere
+* Run Anywhere
+* Run Forever
+* 
+* A node declaration expresses portable computational intent.
+* 
+* The grammar imposes NO universal finite limit on:
+* 
+* - node count;
+* - group count;
+* - relationship count;
+* - dependency count;
+* - role count;
+* - capability count;
+* - requirement count;
+* - constraint count;
+* - preference count;
+* - metadata count;
+* - node nesting;
+* - node-reference qualification depth;
+* - node-body size;
+* - graph size.
+* 
+* There is deliberately no:
+* 
+* MAX_NODES
+* MAX_NODE_COUNT
+* MAX_CLUSTER_SIZE
+* MAX_WORKERS
+* MAX_PROCESSES
+* MAX_DEVICES
+* MAX_CORES
+* MAX_MEMORY
+* MAX_BANDWIDTH
+* MAX_LATENCY
+* 
+* or equivalent grammar-level ceiling.
+* 
+* "*" and "+" express unbounded language cardinality.
+* 
+* "Infinity" means that no artificial hardware/resource ceiling is encoded
+* into this syntax. Actual execution remains bounded by available resources,
+* implementation representation, explicit program requirements, and target
+* capabilities.
+* 
+* ============================================================================
+* HARDWARE INDEPENDENCE
+* ============================================================================
+* 
+* This grammar MUST NOT require or select:
+* 
+* CPU identifiers
+* GPU identifiers
+* FPGA identifiers
+* QPU identifiers
+* physical qubit identifiers
+* machine identifiers
+* device identifiers
+* hostnames
+* IP addresses
+* MAC addresses
+* sockets
+* racks
+* cloud providers
+* cloud regions
+* physical links
+* 
+* Target-specific realization belongs downstream.
+* 
+* ============================================================================
+* RESOURCE / CAPABILITY SEPARATION
+* ============================================================================
+* 
+* A node can express:
+* 
+* capabilities
+* requirements
+* constraints
+* preferences
+* 
+* but this grammar does NOT decide whether those conditions are satisfiable.
+* 
+* For example, a semantic layer may interpret:
+* 
+* capability quantum::measurement
+* 
+* or:
+* 
+* requires capability("tensor.compute")
+* 
+* but this grammar does not inspect hardware to determine availability.
+* 
+* Requirement:
+* 
+* what must be satisfied.
+* 
+* Capability:
+* 
+* what a realization provides.
+* 
+* Preference:
+* 
+* what a realization should preferably satisfy.
+* 
+* Constraint:
+* 
+* a condition governing valid realizations or execution.
+* 
+* Placement:
+* 
+* where realization occurs.
+* 
+* Scheduling:
+* 
+* when realization occurs.
+* 
+* Runtime:
+* 
+* how realization executes.
+* 
+* These concepts MUST NOT be collapsed into one parser construct semantically.
+* 
+* ============================================================================
+* DISTRIBUTED NODE VS PHYSICAL TOPOLOGY
+* ============================================================================
+* 
+* A node relationship is an abstract semantic relationship.
+* 
+* For example:
+* 
+* relates producer consumer;
+* 
+* does not mean:
+* 
+* network link;
+* physical cable;
+* TCP connection;
+* RDMA path;
+* InfiniBand link;
+* quantum interconnect.
+* 
+* Physical topology belongs to:
+* 
+* networking/
+* hardware/
+* resources/
+* distributed/placement.g4
+* 
+* and downstream semantic/target systems.
+* 
+* ============================================================================
+* DISTRIBUTED NODE VS PROCESS
+* ============================================================================
+* 
+* This grammar deliberately does not enforce:
+* 
+* one node = one process
+* 
+* or:
+* 
+* one node = one machine.
+* 
+* A logical node may be realized by:
+* 
+* one process;
+* many processes;
+* one accelerator;
+* many accelerators;
+* a heterogeneous collection;
+* a virtual execution domain;
+* another valid future realization.
+* 
+* ============================================================================
+* DISTRIBUTED NODE VS QUANTUM
+* ============================================================================
+* 
+* A node may participate in quantum computation.
+* 
+* It does not thereby become a physical QPU.
+* 
+* Quantum operations remain owned by the quantum domain and lower through:
+* 
+* domain-neutral AST
+*      |
+*      v
+* semantic quantum model
+*      |
+*      v
+* quantum::ir
+* 
+* This grammar MUST NOT:
+* 
+* - define QubitId;
+* - define PhysicalQubitId;
+* - define quantum gates;
+* - define gate sets;
+* - define QEC;
+* - define ZQN;
+* - define calibration;
+* - define quantum routing.
+* 
+* ============================================================================
+* OPEN-WORLD DESIGN
+* ============================================================================
+* 
+* Node roles, capabilities, requirements, lifecycle names, relationship names,
+* metadata keys, and future semantic classifications remain open-world names.
+* 
+* Examples of names that may be understood downstream include:
+* 
+* worker
+* coordinator
+* controller
+* storage
+* accelerator
+* quantum
+* gpu
+* fpga
+* edge
+* cloud
+* future::execution_domain
+* 
+* This grammar does not enumerate them.
+* 
+* A future concept must not require a grammar change merely because its
+* semantic name did not exist when this grammar was written.
+* 
+* ============================================================================
+* DETERMINISM
+* ============================================================================
+* 
+* This grammar contains:
+* 
+* - no actions;
+* - no semantic predicates;
+* - no filesystem access;
+* - no network access;
+* - no environment lookup;
+* - no hardware discovery;
+* - no runtime calls;
+* - no randomness;
+* - no mutable global parser state.
+* 
+* Identical token streams under the same grammar version must produce the same
+* parse structure.
+* 
+* ============================================================================
+* AST CONTRACT
+* ============================================================================
+* 
+* The parser tree must provide sufficient structure for the frontend AST to
+* preserve at least:
+* 
+* - source spans;
+* - declaration ordering;
+* - node name;
+* - qualified-name segment ordering;
+* - member ordering;
+* - group membership ordering;
+* - role ordering;
+* - capability ordering;
+* - requirement ordering;
+* - constraint ordering;
+* - preference ordering;
+* - metadata ordering;
+* - dependency ordering;
+* - relationship ordering;
+* - nested-body structure;
+* - expression structure.
+* 
+* Recommended domain-neutral AST concepts:
+* 
+* NodeDeclaration
+* NodeGroupDeclaration
+* NodeReference
+* NodeMember
+* NodeRole
+* NodeCapability
+* NodeRequirement
+* NodeConstraint
+* NodePreference
+* NodeMetadata
+* NodeDependency
+* NodeRelationship
+* NodeLifecycle
+* NodeExecution
+* 
+* These are frontend semantic structures, not Rust types defined by this file.
+* 
+* ============================================================================
+* SEMANTIC CONTRACT
+* ============================================================================
+* 
+* Parsing answers:
+* 
+* "Is this structurally valid node syntax?"
+* 
+* Semantic analysis answers:
+* 
+* "What does this node mean?"
+* 
+* Name resolution answers:
+* 
+* "Which node/group/declaration does this name denote?"
+* 
+* Resource analysis answers:
+* 
+* "Can the requested resources be satisfied?"
+* 
+* Capability analysis answers:
+* 
+* "Does the selected realization provide the requested capabilities?"
+* 
+* Placement answers:
+* 
+* "Where may the logical node be realized?"
+* 
+* Scheduling answers:
+* 
+* "When may its work execute?"
+* 
+* Runtime answers:
+* 
+* "How is the realization actually executed?"
+* 
+* ============================================================================
+* IR CONTRACT
+* ============================================================================
+* 
+* This grammar has NO direct IR ownership.
+* 
+* A node declaration is lowered through the repository's canonical semantic
+* representation.
+* 
+* Distributed execution metadata may subsequently be represented in the
+* distributed/compiler IR owned by the relevant downstream subsystem.
+* 
+* Classical computations remain on their canonical classical path.
+* 
+* Quantum computations remain on:
+* 
+* semantic model -> quantum::ir
+* 
+* There is no node-specific quantum IR.
+* 
+* ============================================================================
+* COMPATIBILITY CONTRACT
+* ============================================================================
+* 
+* This file intentionally preserves the existing public grammar identity:
+* 
+* parser grammar Nodes;
+* 
+* and the existing filename:
+* 
+* grammar/distributed/nodes.g4
+* 
+* No lexer token is added.
+* 
+* No existing major file is renamed.
+* 
+* The public entry:
+* 
+* nodeDeclaration
+* 
+* remains the integration point for the distributed composition grammar.
+* 
+* The following additional public rules are stable integration points:
+* 
+* nodeDefinition
+* nodeGroupDeclaration
+* nodeReferenceDeclaration
+* nodeDependencyDeclaration
+* nodeRelationshipDeclaration
+* 
+* "distributed.g4" should import "Nodes" and consume the appropriate public
+* rules when its composition is reconciled.
+* 
+* Until that composition change is made, "distributed.g4"'s existing generic
+* distributed container grammar remains a separate parser path. This file
+* does not silently duplicate or modify that grammar.
+* 
+* ============================================================================
+* ERROR MODEL
+* ============================================================================
+* 
+* Syntax errors are parser errors.
+* 
+* The parser MUST NOT attempt to diagnose:
+* 
+* unavailable node;
+* unavailable machine;
+* unavailable network;
+* insufficient memory;
+* insufficient processors;
+* unsupported hardware;
+* unsupported capability;
+* impossible placement;
+* scheduling failure.
+* 
+* Those are semantic/resource/target diagnostics.
+* 
+* This separation allows:
+* 
+* syntactically valid
+* 
+* to remain distinct from:
+* 
+* target infeasible.
+* 
+* ============================================================================
+* SECURITY
+* ============================================================================
+* 
+* Node syntax is declarative.
+* 
+* It MUST NOT execute:
+* 
+* commands;
+* shell operations;
+* network requests;
+* deployment actions;
+* hardware probes;
+* credentials;
+* filesystem operations.
+* 
+* Any executable behavior belongs downstream and must pass the repository's
+* security and capability controls.
+* 
+* ============================================================================
+* PRODUCTION COMPLETION CONTRACT
+* ============================================================================
+* 
+* This file is complete only when:
+* 
+* [x] ownership is explicit;
+* [x] non-ownership is explicit;
+* [x] canonical lexer is reused;
+* [x] canonical names are reused;
+* [x] canonical expressions are reused;
+* [x] no new lexical node token is introduced;
+* [x] no hardware identity is required;
+* [x] no physical topology is required;
+* [x] no finite node limit exists;
+* [x] no finite relationship limit exists;
+* [x] node member ordering is representable;
+* [x] node references are open-world;
+* [x] dependencies are distinct from placement;
+* [x] relationships are distinct from networking;
+* [x] requirements are distinct from capabilities;
+* [x] preferences are distinct from requirements;
+* [x] metadata is non-executable;
+* [x] AST mapping is specified;
+* [x] semantic ownership is specified;
+* [x] IR ownership is downstream;
+* [x] quantum::ir remains canonical;
+* [x] diagnostics are phase-separated;
+* [x] grammar contains no actions;
+* [x] grammar contains no predicates;
+* [x] grammar contains no unsafe Rust;
+* [x] grammar remains deterministic;
+* [x] integration points are stable.
+* 
+* Repository-level completion additionally requires conformance tests in:
+* 
+* grammar/tests/distributed/
+* 
+* including:
+* 
+* positive/
+* negative/
+* boundary/
+* scalability/
+* determinism/
+* compatibility/
+* 
+* ============================================================================
+  */
 
 parser grammar Nodes;
 
 options {
-    tokenVocab = ZamaniLexer;
+tokenVocab = ZamaniLexer;
 }
 
 import Names, Expressions;
 
+/*
+
+* ============================================================================
+* 1. PUBLIC NODE DECLARATION
+* ============================================================================
+* 
+* Canonical source shape:
+* 
+* node worker {
+*     ...
+* }
+* 
+* Because "node" is currently an ordinary identifier rather than a dedicated
+* lexer token, the parser preserves the two-name structural shape and semantic
+* analysis validates the contextual declaration marker.
+* 
+* The grammar intentionally does NOT accept arbitrary additional alternatives
+* here. Keeping one canonical declaration shape prevents the previous
+* ambiguity between:
+* 
+* node definition
+* node reference
+* node group
+* node dependency
+* 
+* from being hidden inside one overloaded entry rule.
+  */
+  nodeDeclaration
+  : nodeDefinition
+  ;
 
 /*
- * ============================================================================
- * 1. PUBLIC ENTRY POINT
- * ============================================================================
- *
- * This is the stable entry rule consumed by Distributed.g4.
- */
-nodeDeclaration
-    : nodeDefinition
-    | nodeReferenceDeclaration
-    | nodeGroupDeclaration
-    | nodeDependencyDeclaration
-    ;
 
-
-/*
- * ============================================================================
- * 2. NODE DEFINITION
- * ============================================================================
- *
- * Canonical conceptual form:
- *
- *     node <name> {
- *         ...
- *     }
- *
- * The spelling `node` remains an identifier at the lexical layer.
- *
- * Semantic analysis MUST verify that the first identifier is the contextual
- * node declaration marker.
- *
- * No physical machine is selected here.
- */
-nodeDefinition
-    : identifier
-      identifier
-      nodeBody?
-    ;
-
+* ============================================================================
+* 2. NODE DEFINITION
+* ============================================================================
+* 
+* Canonical form:
+* 
+* node <name>;
+* 
+* or:
+* 
+* node <name> {
+*     ...
+* }
+* 
+* The body is optional so a logical node may be declared before its members
+* are supplied by another valid declaration mechanism.
+* 
+* Semantic validation determines whether multiple declarations are legal.
+  */
+  nodeDefinition
+  : nodeContextKeyword
+  nodeName
+  nodeBody?
+  SEMICOLON?
+  ;
 
 /*
- * ============================================================================
- * 3. NODE BODY
- * ============================================================================
- *
- * The body may contain zero or more node members.
- *
- * No fixed member count is imposed.
- */
-nodeBody
-    : LBRACE
-      nodeMember*
-      RBRACE
-    ;
 
-
-/*
- * ============================================================================
- * 4. NODE MEMBERS
- * ============================================================================
- *
- * Node members are structurally separated by their contextual leading name.
- *
- * The parser intentionally keeps the vocabulary open.
- */
-nodeMember
-    : nodeRoleDeclaration
-    | nodeCapabilityDeclaration
-    | nodeRequirementDeclaration
-    | nodeConstraintDeclaration
-    | nodePreferenceDeclaration
-    | nodeMetadataDeclaration
-    | nodeDependencyDeclaration
-    | nodeRelationshipDeclaration
-    | nodeLifecycleDeclaration
-    | nodeExecutionDeclaration
-    | nodeGroupMembershipDeclaration
-    | nodeReferenceDeclaration
-    | nodeNestedScope
-    ;
-
+* ============================================================================
+* 3. CONTEXTUAL NODE KEYWORD
+* ============================================================================
+* 
+* This is deliberately an identifier.
+* 
+* The semantic layer validates that its source spelling is the contextual
+* declaration marker for the current language version.
+* 
+* No K_NODE token is invented here.
+  */
+  nodeContextKeyword
+  : identifier
+  ;
 
 /*
- * ============================================================================
- * 5. NODE ROLE
- * ============================================================================
- *
- * Conceptual forms:
- *
- *     role worker;
- *     role coordinator;
- *     role controller;
- *     role custom::role;
- *
- * The role is semantic metadata.
- *
- * It does not force a physical architecture.
- */
-nodeRoleDeclaration
-    : identifier
-      qualifiedName
-      SEMICOLON
-    ;
 
+* ============================================================================
+* 4. NODE NAME
+* ============================================================================
+* 
+* A node declaration introduces one logical name.
+* 
+* Physical identifiers are intentionally excluded.
+  */
+  nodeName
+  : identifier
+  ;
 
 /*
- * ============================================================================
- * 6. NODE CAPABILITY
- * ============================================================================
- *
- * A capability states what a node is expected to provide.
- *
- * Examples:
- *
- *     capability quantum;
- *     capability accelerator::tensor;
- *     capability distributed::storage;
- *
- * Capability availability is validated downstream.
- */
-nodeCapabilityDeclaration
-    : identifier
-      qualifiedName
-      SEMICOLON
-    ;
 
+* ============================================================================
+* 5. NODE BODY
+* ============================================================================
+* 
+* An arbitrary number of node members is permitted.
+* 
+* No grammar-level member count is imposed.
+  /
+  nodeBody
+  : LBRACE
+  nodeMember
+  RBRACE
+  ;
 
 /*
- * ============================================================================
- * 7. NODE REQUIREMENT
- * ============================================================================
- *
- * Requirements express semantic needs.
- *
- * They are deliberately separate from capabilities.
- *
- * A requirement does not imply that the current target can satisfy it.
- */
-nodeRequirementDeclaration
-    : identifier
-      qualifiedName
-      SEMICOLON
-    ;
 
-
-/*
- * ============================================================================
- * 8. NODE CONSTRAINT
- * ============================================================================
- *
- * A constraint contains an expression.
- *
- * The expression is interpreted downstream.
- *
- * This grammar does not decide whether the constraint is:
- *
- *     hard;
- *     soft;
- *     satisfiable;
- *     target-specific;
- *     resource-specific.
- */
-nodeConstraintDeclaration
-    : identifier
-      expression
-      SEMICOLON
-    ;
-
+* ============================================================================
+* 6. NODE MEMBER
+* ============================================================================
+* 
+* Member alternatives are divided by STRUCTURAL SHAPE rather than by a
+* closed vocabulary.
+* 
+* This is the key correction over the previous implementation.
+* 
+* The old grammar contained many alternatives of the form:
+* 
+* identifier qualifiedName SEMICOLON
+* 
+* which are indistinguishable to the parser.
+* 
+* Here:
+* 
+* relation/dependency
+* assignment
+* block
+* simple declaration
+* 
+* have distinct punctuation/shape boundaries.
+* 
+* Semantic analysis determines the meaning of the contextual member name.
+  */
+  nodeMember
+  : nodeDependencyMember
+  | nodeAssignmentMember
+  | nodeBlockMember
+  | nodeSimpleMember
+  ;
 
 /*
- * ============================================================================
- * 9. NODE PREFERENCE
- * ============================================================================
- *
- * A preference is intentionally weaker than a requirement.
- *
- * It represents an optimization/deployment hint rather than a mandatory
- * semantic condition.
- */
-nodePreferenceDeclaration
-    : identifier
-      expression
-      SEMICOLON
-    ;
 
-
-/*
- * ============================================================================
- * 10. NODE METADATA
- * ============================================================================
- *
- * Metadata is structured information attached to a node.
- *
- * Metadata does not automatically become executable behavior.
- */
-nodeMetadataDeclaration
-    : identifier
-      identifier
-      nodeMetadataValue
-      SEMICOLON
-    ;
-
-
-nodeMetadataValue
-    : expression
-    | qualifiedName
-    ;
-
+* ============================================================================
+* 7. SIMPLE NODE MEMBER
+* ============================================================================
+* 
+* General form:
+* 
+* <member-kind> <expression>;
+* 
+* This covers open-world semantic members such as:
+* 
+* role worker;
+* capability quantum::measurement;
+* requires capability("tensor.compute");
+* constraint latency < bound;
+* prefer accelerator::tensor;
+* lifecycle start;
+* execute task;
+* group workers;
+* metadata key;
+* 
+* The exact semantic classification belongs downstream.
+* 
+* A generic expression is used rather than duplicating qualified-name and
+* expression alternatives because a qualified name may itself participate in
+* the canonical expression grammar.
+  */
+  nodeSimpleMember
+  : identifier
+  expression
+  SEMICOLON
+  ;
 
 /*
- * ============================================================================
- * 11. NODE DEPENDENCY
- * ============================================================================
- *
- * A node may depend on another abstract node.
- *
- * This expresses a relationship only.
- *
- * It does not determine:
- *
- *     - execution order;
- *     - network route;
- *     - physical placement;
- *     - scheduling;
- *     - synchronization algorithm.
- */
-nodeDependencyDeclaration
-    : identifier
-      qualifiedName
-      dependencyOperator
-      qualifiedName
-      SEMICOLON
-    ;
 
-
-dependencyOperator
-    : THIN_ARROW
-    | FAT_ARROW
-    ;
-
+* ============================================================================
+* 8. NODE ASSIGNMENT MEMBER
+* ============================================================================
+* 
+* General form:
+* 
+* <member-kind> <name> = <expression>;
+* 
+* Examples:
+* 
+* metadata label = "worker";
+* state value = expression;
+* 
+* The semantic subsystem decides which contextual member kinds permit
+* assignment.
+  */
+  nodeAssignmentMember
+  : identifier
+  identifier
+  ASSIGN
+  expression
+  SEMICOLON
+  ;
 
 /*
- * ============================================================================
- * 12. NODE RELATIONSHIP
- * ============================================================================
- *
- * Open-world relationship syntax.
- *
- * Examples of semantic relationship names may include:
- *
- *     communicates_with
- *     coordinates_with
- *     depends_on
- *     observes
- *     controls
- *     serves
- *
- * The grammar does not enumerate these names.
- */
-nodeRelationshipDeclaration
-    : identifier
-      qualifiedName
-      qualifiedName
-      SEMICOLON
-    ;
 
-
-/*
- * ============================================================================
- * 13. NODE LIFECYCLE
- * ============================================================================
- *
- * Lifecycle intent is source-level intent.
- *
- * Runtime semantics are downstream.
- *
- * Example conceptual forms:
- *
- *     lifecycle start;
- *     lifecycle stop;
- *     lifecycle restart;
- *
- * The lifecycle operation is represented as a qualified name rather than
- * hard-coded runtime behavior.
- */
-nodeLifecycleDeclaration
-    : identifier
-      qualifiedName
-      SEMICOLON
-    ;
-
+* ============================================================================
+* 9. NODE BLOCK MEMBER
+* ============================================================================
+* 
+* General form:
+* 
+* <member-kind> <name> {
+*     ...
+* }
+* 
+* This provides open-world hierarchical organization without encoding a
+* physical hierarchy.
+* 
+* Examples:
+* 
+* scope worker_scope {
+*     ...
+* }
+* 
+* metadata configuration {
+*     ...
+* }
+* 
+* The semantic layer determines which contextual member kinds are legal.
+  */
+  nodeBlockMember
+  : identifier
+  identifier
+  nodeNestedBody
+  ;
 
 /*
- * ============================================================================
- * 14. NODE EXECUTION
- * ============================================================================
- *
- * Execution intent may reference an abstract operation or expression.
- *
- * It does not select a runtime, process, host, machine, or provider.
- */
+
+* ============================================================================
+* 10. NESTED NODE BODY
+* ============================================================================
+* 
+* Nested logical structure is recursive and therefore has no fixed depth.
+  /
+  nodeNestedBody
+  : LBRACE
+  nodeMember
+  RBRACE
+  ;
+
+/*
+
+* ============================================================================
+* 11. NODE DEPENDENCY MEMBER
+* ============================================================================
+* 
+* General form:
+* 
+* depends <source> -> <target>;
+* 
+* or:
+* 
+* depends <source> => <target>;
+* 
+* The relationship is semantic dependency intent.
+* 
+* It does NOT mean:
+* 
+* network route;
+* physical connection;
+* placement;
+* scheduling;
+* communication transport.
+
+*/
+nodeDependencyMember
+: identifier
+nodeReference
+nodeDependencyOperator
+nodeReference
+SEMICOLON
+;
+
+/*
+
+* ============================================================================
+* 12. PUBLIC NODE DEPENDENCY DECLARATION
+* ============================================================================
+* 
+* Kept as a separate stable rule for integration with distributed.g4 and
+* downstream composition grammars.
+  */
+  nodeDependencyDeclaration
+  : nodeDependencyMember
+  ;
+
+/*
+
+* ============================================================================
+* 13. DEPENDENCY OPERATOR
+* ============================================================================
+* 
+* These tokens are already part of the canonical lexer vocabulary.
+* 
+* No new operator is introduced here.
+  */
+  nodeDependencyOperator
+  : ARROW
+  | FAT_ARROW
+  ;
+
+/*
+
+* ============================================================================
+* 14. NODE REFERENCE
+* ============================================================================
+* 
+* A node reference is a canonical qualified name.
+* 
+* Examples:
+* 
+* worker
+* cluster::worker
+* region::cluster::worker
+* future::domain::node
+* 
+* Qualification depth is not bounded by this grammar.
+  */
+  nodeReference
+  : qualifiedName
+  ;
+
+/*
+
+* ============================================================================
+* 15. PUBLIC NODE REFERENCE DECLARATION
+* ============================================================================
+* 
+* General source form:
+* 
+* reference <node>;
+* 
+* The contextual word is an identifier.
+* 
+* This rule is intentionally separate from nodeDeclaration so that the public
+* node declaration entry remains unambiguous.
+  */
+  nodeReferenceDeclaration
+  : identifier
+  nodeReference
+  SEMICOLON
+  ;
+
+/*
+
+* ============================================================================
+* 16. NODE GROUP DECLARATION
+* ============================================================================
+* 
+* Canonical form:
+* 
+* group workers {
+*     member worker_a;
+*     member worker_b;
+* }
+* 
+* Group declarations are NOT included in "nodeDeclaration" because their
+* structural shape overlaps the contextual node-definition shape.
+* 
+* The distributed composition grammar may consume both public entries.
+  */
+  nodeGroupDeclaration
+  : nodeGroupKeyword
+  nodeGroupName
+  nodeGroupBody
+  ;
+
+/*
+
+* ============================================================================
+* 17. NODE GROUP KEYWORD
+* ============================================================================
+  */
+  nodeGroupKeyword
+  : identifier
+  ;
+
+/*
+
+* ============================================================================
+* 18. NODE GROUP NAME
+* ============================================================================
+  */
+  nodeGroupName
+  : identifier
+  ;
+
+/*
+
+* ============================================================================
+* 19. NODE GROUP BODY
+* ============================================================================
+  /
+  nodeGroupBody
+  : LBRACE
+  nodeGroupMember
+  RBRACE
+  ;
+
+/*
+
+* ============================================================================
+* 20. NODE GROUP MEMBER
+* ============================================================================
+* 
+* Group members use structural forms rather than a closed semantic vocabulary.
+  */
+  nodeGroupMember
+  : nodeGroupDependency
+  | nodeGroupAssignment
+  | nodeGroupBlock
+  | nodeGroupSimpleMember
+  ;
+
+/*
+
+* ============================================================================
+* 21. NODE GROUP SIMPLE MEMBER
+* ============================================================================
+  */
+  nodeGroupSimpleMember
+  : identifier
+  expression
+  SEMICOLON
+  ;
+
+/*
+
+* ============================================================================
+* 22. NODE GROUP ASSIGNMENT
+* ============================================================================
+  */
+  nodeGroupAssignment
+  : identifier
+  identifier
+  ASSIGN
+  expression
+  SEMICOLON
+  ;
+
+/*
+
+* ============================================================================
+* 23. NODE GROUP BLOCK
+* ============================================================================
+  /
+  nodeGroupBlock
+  : identifier
+  identifier
+  LBRACE
+  nodeGroupMember
+  RBRACE
+  ;
+
+/*
+
+* ============================================================================
+* 24. NODE GROUP DEPENDENCY
+* ============================================================================
+  */
+  nodeGroupDependency
+  : identifier
+  nodeReference
+  nodeDependencyOperator
+  nodeReference
+  SEMICOLON
+  ;
+
+/*
+
+* ============================================================================
+* 25. NODE ROLE
+* ============================================================================
+* 
+* Stable semantic shape:
+* 
+* role <qualified-name>;
+* 
+* No role enumeration exists in the grammar.
+  */
+  nodeRoleDeclaration
+  : identifier
+  qualifiedName
+  SEMICOLON
+  ;
+
+/*
+
+* ============================================================================
+* 26. NODE CAPABILITY
+* ============================================================================
+* 
+* Stable semantic shape:
+* 
+* capability <qualified-name>;
+* 
+* Capability satisfaction is downstream.
+  */
+  nodeCapabilityDeclaration
+  : identifier
+  qualifiedName
+  SEMICOLON
+  ;
+
+/*
+
+* ============================================================================
+* 27. NODE REQUIREMENT
+* ============================================================================
+* 
+* A requirement may be:
+* 
+* a named capability;
+* a resource expression;
+* a semantic predicate;
+* another requirement expression.
+* 
+* The expression grammar owns the expression itself.
+  */
+  nodeRequirementDeclaration
+  : identifier
+  expression
+  SEMICOLON
+  ;
+
+/*
+
+* ============================================================================
+* 28. NODE CONSTRAINT
+* ============================================================================
+  */
+  nodeConstraintDeclaration
+  : identifier
+  expression
+  SEMICOLON
+  ;
+
+/*
+
+* ============================================================================
+* 29. NODE PREFERENCE
+* ============================================================================
+  */
+  nodePreferenceDeclaration
+  : identifier
+  expression
+  SEMICOLON
+  ;
+
+/*
+
+* ============================================================================
+* 30. NODE METADATA
+* ============================================================================
+* 
+* Metadata is deliberately represented as a name plus expression.
+* 
+* It is not executable configuration.
+  */
+  nodeMetadataDeclaration
+  : identifier
+  identifier
+  ASSIGN
+  expression
+  SEMICOLON
+  ;
+
+/*
+
+* ============================================================================
+* 31. NODE RELATIONSHIP DECLARATION
+* ============================================================================
+* 
+* General form:
+* 
+* relates <left> <right>;
+* 
+* The relationship name remains open-world.
+* 
+* The relationship does not imply a physical network edge.
+  */
+  nodeRelationshipDeclaration
+  : identifier
+  nodeReference
+  nodeReference
+  SEMICOLON
+  ;
+
+/*
+
+* ============================================================================
+* 32. NODE RELATIONSHIP WITH OPERATOR
+* ============================================================================
+* 
+* Optional reusable representation for graph-like semantic relationships:
+* 
+* relates <left> -> <right>;
+* 
+* This remains abstract.
+  */
+  nodeRelationshipEdge
+  : identifier
+  nodeReference
+  nodeDependencyOperator
+  nodeReference
+  SEMICOLON
+  ;
+
+/*
+
+* ============================================================================
+* 33. NODE LIFECYCLE
+* ============================================================================
+* 
+* General form:
+* 
+* lifecycle <operation>;
+* 
+* Lifecycle operation names remain open-world.
+* 
+* This grammar does not enumerate:
+* 
+* start
+* stop
+* restart
+* suspend
+* resume
+* 
+* because those are semantic vocabulary rather than parser infrastructure.
+  */
+  nodeLifecycleDeclaration
+  : identifier
+  qualifiedName
+  SEMICOLON
+  ;
+
+/*
+
+* ============================================================================
+* 34. NODE EXECUTION INTENT
+* ============================================================================
+* 
+* General form:
+* 
+* execute <expression>;
+* 
+* This expresses execution intent without selecting:
+* 
+* process
+* thread
+* CPU
+* GPU
+* QPU
+* host
+* machine
+* provider.
+
+*/
 nodeExecutionDeclaration
-    : identifier
-      expression
-      SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * 15. NODE GROUP MEMBERSHIP
- * ============================================================================
- *
- * A node can belong to an arbitrary number of semantic groups.
- *
- * Group membership does not imply physical cluster membership.
- */
-nodeGroupMembershipDeclaration
-    : identifier
-      qualifiedName
-      SEMICOLON
-    ;
-
+: identifier
+expression
+SEMICOLON
+;
 
 /*
- * ============================================================================
- * 16. NODE REFERENCE
- * ============================================================================
- *
- * A reference names an abstract node without selecting a physical endpoint.
- */
-nodeReferenceDeclaration
-    : identifier
-      qualifiedName
-      SEMICOLON
-    ;
 
-
-/*
- * ============================================================================
- * 17. NODE GROUP
- * ============================================================================
- *
- * Conceptual form:
- *
- *     group <name> {
- *         ...
- *     }
- *
- * There is no finite group size.
- */
-nodeGroupDeclaration
-    : identifier
-      identifier
-      LBRACE
-      nodeGroupMember*
-      RBRACE
-    ;
-
-
-nodeGroupMember
-    : nodeGroupNode
-    | nodeGroupRole
-    | nodeGroupCapability
-    | nodeGroupRequirement
-    | nodeGroupConstraint
-    | nodeGroupPreference
-    | nodeGroupMetadata
-    ;
-
-
-nodeGroupNode
-    : identifier
-      qualifiedName
-      SEMICOLON
-    ;
-
-
-nodeGroupRole
-    : identifier
-      qualifiedName
-      SEMICOLON
-    ;
-
-
-nodeGroupCapability
-    : identifier
-      qualifiedName
-      SEMICOLON
-    ;
-
-
-nodeGroupRequirement
-    : identifier
-      qualifiedName
-      SEMICOLON
-    ;
-
-
-nodeGroupConstraint
-    : identifier
-      expression
-      SEMICOLON
-    ;
-
-
-nodeGroupPreference
-    : identifier
-      expression
-      SEMICOLON
-    ;
-
-
-nodeGroupMetadata
-    : identifier
-      identifier
-      nodeMetadataValue
-      SEMICOLON
-    ;
-
+* ============================================================================
+* 35. NODE GROUP MEMBERSHIP
+* ============================================================================
+* 
+* General form:
+* 
+* group <qualified-node-reference>;
+* 
+* The semantic layer determines membership.
+  */
+  nodeGroupMembershipDeclaration
+  : identifier
+  nodeReference
+  SEMICOLON
+  ;
 
 /*
- * ============================================================================
- * 18. NESTED NODE SCOPE
- * ============================================================================
- *
- * Nested scopes permit hierarchical logical organization.
- *
- * This does not imply a physical hierarchy.
- */
-nodeNestedScope
-    : identifier
-      LBRACE
-      nodeMember*
-      RBRACE
-    ;
 
-
-/*
- * ============================================================================
- * 19. NODE DEPENDENCY RELATIONSHIP
- * ============================================================================
- *
- * Explicit reusable relationship syntax.
- *
- * Example conceptual structure:
- *
- *     dependency a -> b;
- *
- * The meaning of the relationship is resolved semantically.
- */
-nodeDependencyRelationship
-    : identifier
-      qualifiedName
-      dependencyOperator
-      qualifiedName
-      SEMICOLON
-    ;
-
+* ============================================================================
+* 36. NODE RESOURCE REFERENCE
+* ============================================================================
+* 
+* This is intentionally only a source-level reference.
+* 
+* Resource ownership remains in grammar/resources/.
+  */
+  nodeResourceReference
+  : identifier
+  qualifiedName
+  SEMICOLON
+  ;
 
 /*
- * ============================================================================
- * 20. NODE LISTS
- * ============================================================================
- *
- * These rules provide reusable unbounded collections.
- *
- * No finite node-count limit is encoded.
- */
-nodeReferenceList
-    : qualifiedName
-      (COMMA qualifiedName)*
-    ;
 
-
-optionalNodeReferenceList
-    : nodeReferenceList?
-    ;
-
-
-nodeRoleList
-    : qualifiedName
-      (COMMA qualifiedName)*
-    ;
-
-
-optionalNodeRoleList
-    : nodeRoleList?
-    ;
-
-
-nodeCapabilityList
-    : qualifiedName
-      (COMMA qualifiedName)*
-    ;
-
-
-optionalNodeCapabilityList
-    : nodeCapabilityList?
-    ;
-
-
-nodeRequirementList
-    : qualifiedName
-      (COMMA qualifiedName)*
-    ;
-
-
-optionalNodeRequirementList
-    : nodeRequirementList?
-    ;
-
+* ============================================================================
+* 37. NODE TARGET REQUIREMENT
+* ============================================================================
+* 
+* This does NOT select a target.
+* 
+* It provides an abstract target-related requirement to downstream semantic
+* analysis.
+  */
+  nodeTargetRequirement
+  : identifier
+  expression
+  SEMICOLON
+  ;
 
 /*
- * ============================================================================
- * 21. NODE SET EXPRESSION
- * ============================================================================
- *
- * A node set is represented by expressions rather than a fixed number of
- * physical nodes.
- *
- * This allows semantic layers to derive node membership dynamically.
- */
-nodeSetExpression
-    : expression
-    ;
 
+* ============================================================================
+* 38. NODE AVAILABILITY REQUIREMENT
+* ============================================================================
+* 
+* Availability thresholds and semantics are not hard-coded.
+  */
+  nodeAvailabilityRequirement
+  : identifier
+  expression
+  SEMICOLON
+  ;
 
 /*
- * ============================================================================
- * 22. NODE SELECTOR
- * ============================================================================
- *
- * A selector is an abstract semantic expression.
- *
- * It is NOT:
- *
- *     - an IP address;
- *     - a hostname;
- *     - a device ID;
- *     - a physical machine selector.
- *
- * Deployment/resource layers interpret it.
- */
+
+* ============================================================================
+* 39. NODE SCALABILITY REQUIREMENT
+* ============================================================================
+* 
+* Examples of downstream semantic meanings may include:
+* 
+* scale with input
+* elastic
+* distributed
+* resource-aware
+* 
+* The grammar does not define an upper bound.
+  */
+  nodeScalabilityRequirement
+  : identifier
+  expression
+  SEMICOLON
+  ;
+
+/*
+
+* ============================================================================
+* 40. NODE PORTABILITY REQUIREMENT
+* ============================================================================
+* 
+* Portability is represented as semantic intent.
+  */
+  nodePortabilityRequirement
+  : identifier
+  expression
+  SEMICOLON
+  ;
+
+/*
+
+* ============================================================================
+* 41. NODE SECURITY REFERENCE
+* ============================================================================
+* 
+* Security semantics remain owned by grammar/security/.
+  */
+  nodeSecurityReference
+  : identifier
+  qualifiedName
+  SEMICOLON
+  ;
+
+/*
+
+* ============================================================================
+* 42. NODE OBSERVABILITY REFERENCE
+* ============================================================================
+* 
+* Observability semantics remain downstream.
+  */
+  nodeObservabilityReference
+  : identifier
+  qualifiedName
+  SEMICOLON
+  ;
+
+/*
+
+* ============================================================================
+* 43. NODE FAILURE POLICY REFERENCE
+* ============================================================================
+* 
+* The grammar records only an abstract policy reference.
+* 
+* It does not implement:
+* 
+* retry
+* recovery
+* migration
+* failover
+* quarantine
+* escalation
+* rejection
+* 
+* Those outcomes belong to distributed/fault-tolerance/resilience semantics.
+  */
+  nodeFailurePolicyReference
+  : identifier
+  qualifiedName
+  SEMICOLON
+  ;
+
+/*
+
+* ============================================================================
+* 44. NODE POLICY REFERENCE
+* ============================================================================
+  */
+  nodePolicyReference
+  : identifier
+  qualifiedName
+  SEMICOLON
+  ;
+
+/*
+
+* ============================================================================
+* 45. NODE POLICY EXPRESSION
+* ============================================================================
+  */
+  nodePolicyExpression
+  : identifier
+  expression
+  SEMICOLON
+  ;
+
+/*
+
+* ============================================================================
+* 46. NODE CAPABILITY EXPRESSION
+* ============================================================================
+* 
+* This is an expression wrapper, not a capability registry.
+  */
+  nodeCapabilityExpression
+  : expression
+  ;
+
+/*
+
+* ============================================================================
+* 47. NODE REQUIREMENT EXPRESSION
+* ============================================================================
+  */
+  nodeRequirementExpression
+  : expression
+  ;
+
+/*
+
+* ============================================================================
+* 48. NODE CONSTRAINT EXPRESSION
+* ============================================================================
+  */
+  nodeConstraintExpression
+  : expression
+  ;
+
+/*
+
+* ============================================================================
+* 49. NODE PREFERENCE EXPRESSION
+* ============================================================================
+  */
+  nodePreferenceExpression
+  : expression
+  ;
+
+/*
+
+* ============================================================================
+* 50. NODE SELECTOR
+* ============================================================================
+* 
+* A selector is semantic data.
+* 
+* It is not:
+* 
+* an IP address;
+* a hostname;
+* a machine identifier;
+* a device identifier;
+* a physical topology query.
+
+*/
 nodeSelector
-    : qualifiedName
-    | expression
-    ;
-
+: expression
+;
 
 /*
- * ============================================================================
- * 23. NODE TARGET REQUIREMENT
- * ============================================================================
- *
- * A target requirement remains abstract.
- *
- * Example conceptual form:
- *
- *     target requirement;
- *
- * This rule does not select a compiler target or hardware target.
- */
-nodeTargetRequirement
-    : identifier
-      qualifiedName
-      SEMICOLON
-    ;
 
+* ============================================================================
+* 51. NODE SET EXPRESSION
+* ============================================================================
+* 
+* Node-set semantics are delegated to expression/semantic analysis.
+  */
+  nodeSetExpression
+  : expression
+  ;
 
 /*
- * ============================================================================
- * 24. NODE RESOURCE REFERENCE
- * ============================================================================
- *
- * Resource ownership remains outside this grammar.
- *
- * This rule only permits a source-level reference to an abstract resource
- * concept.
- */
-nodeResourceReference
-    : identifier
-      qualifiedName
-      SEMICOLON
-    ;
 
+* ============================================================================
+* 52. NODE REFERENCE LIST
+* ============================================================================
+* 
+* No finite list cardinality is imposed.
+  /
+  nodeReferenceList
+  : nodeReference
+  (COMMA nodeReference)
+  ;
 
 /*
- * ============================================================================
- * 25. NODE CAPABILITY EXPRESSION
- * ============================================================================
- *
- * Capability expressions are deliberately open-ended.
- */
-nodeCapabilityExpression
-    : qualifiedName
-    | expression
-    ;
 
+* ============================================================================
+* 53. OPTIONAL NODE REFERENCE LIST
+* ============================================================================
+  */
+  optionalNodeReferenceList
+  : nodeReferenceList?
+  ;
 
 /*
- * ============================================================================
- * 26. NODE REQUIREMENT EXPRESSION
- * ============================================================================
- */
-nodeRequirementExpression
-    : qualifiedName
-    | expression
-    ;
 
-
-/*
- * ============================================================================
- * 27. NODE CONSTRAINT EXPRESSION
- * ============================================================================
- */
-nodeConstraintExpression
-    : expression
-    ;
-
+* ============================================================================
+* 54. NODE ROLE LIST
+* ============================================================================
+  /
+  nodeRoleList
+  : qualifiedName
+  (COMMA qualifiedName)
+  ;
 
 /*
- * ============================================================================
- * 28. NODE PREFERENCE EXPRESSION
- * ============================================================================
- */
-nodePreferenceExpression
-    : expression
-    ;
 
-
-/*
- * ============================================================================
- * 29. NODE ATTRIBUTE
- * ============================================================================
- *
- * Attributes are source metadata.
- *
- * The semantic layer determines whether an attribute is:
- *
- *     informational;
- *     optimization-related;
- *     deployment-related;
- *     security-related;
- *     experimental;
- *     domain-specific.
- */
-nodeAttribute
-    : identifier
-      (LPAREN expressionList? RPAREN)?
-    ;
-
+* ============================================================================
+* 55. OPTIONAL NODE ROLE LIST
+* ============================================================================
+  */
+  optionalNodeRoleList
+  : nodeRoleList?
+  ;
 
 /*
- * ============================================================================
- * 30. NODE ATTRIBUTE LIST
- * ============================================================================
- */
-nodeAttributeList
-    : nodeAttribute+
-    ;
 
-
-/*
- * ============================================================================
- * 31. NODE DECLARATION WITH ATTRIBUTES
- * ============================================================================
- *
- * This wrapper allows future attribute systems to decorate node declarations
- * without changing node-definition structure.
- */
-attributedNodeDeclaration
-    : nodeAttributeList
-      nodeDeclaration
-    ;
-
+* ============================================================================
+* 56. NODE CAPABILITY LIST
+* ============================================================================
+  /
+  nodeCapabilityList
+  : qualifiedName
+  (COMMA qualifiedName)
+  ;
 
 /*
- * ============================================================================
- * 32. NODE SCOPE CONTENT
- * ============================================================================
- *
- * Stable reusable node scope body.
- */
-nodeScope
-    : LBRACE
-      nodeMember*
-      RBRACE
-    ;
 
+* ============================================================================
+* 57. OPTIONAL NODE CAPABILITY LIST
+* ============================================================================
+  */
+  optionalNodeCapabilityList
+  : nodeCapabilityList?
+  ;
 
 /*
- * ============================================================================
- * 33. NODE REFERENCE PATH
- * ============================================================================
- *
- * A node reference may be arbitrarily qualified:
- *
- *     cluster::frontend
- *     region::service::worker
- *     distributed::node::logical
- *
- * The grammar imposes no qualification depth limit.
- */
-nodeReferencePath
-    : qualifiedName
-    ;
 
+* ============================================================================
+* 58. NODE REQUIREMENT LIST
+* ============================================================================
+  /
+  nodeRequirementList
+  : expression
+  (COMMA expression)
+  ;
 
 /*
- * ============================================================================
- * 34. NODE NAME
- * ============================================================================
- *
- * Node names intentionally reuse the canonical identifier grammar.
- *
- * There is no NodeId, PhysicalNodeId, MachineId, or DeviceId syntax here.
- */
-nodeName
-    : identifier
-    ;
 
+* ============================================================================
+* 59. OPTIONAL NODE REQUIREMENT LIST
+* ============================================================================
+  */
+  optionalNodeRequirementList
+  : nodeRequirementList?
+  ;
 
 /*
- * ============================================================================
- * 35. NODE QUALIFIED NAME
- * ============================================================================
- *
- * Semantic node namespaces remain ordinary qualified names.
- */
-nodeQualifiedName
-    : qualifiedName
-    ;
 
-
-/*
- * ============================================================================
- * 36. NODE COLLECTION
- * ============================================================================
- *
- * A collection is syntactically unbounded.
- */
-nodeCollection
-    : LBRACKET
-      optionalNodeReferenceList
-      RBRACKET
-    ;
-
+* ============================================================================
+* 60. NODE RELATIONSHIP LIST
+* ============================================================================
+  /
+  nodeRelationshipList
+  : nodeReference
+  (COMMA nodeReference)
+  ;
 
 /*
- * ============================================================================
- * 37. NODE MAP ENTRY
- * ============================================================================
- *
- * Generic source-level association.
- *
- * Semantic meaning belongs downstream.
- */
-nodeMapEntry
-    : qualifiedName
-      COLON
-      expression
-    ;
 
+* ============================================================================
+* 61. NODE DEPENDENCY LIST
+* ============================================================================
+  /
+  nodeDependencyList
+  : nodeReference
+  (COMMA nodeReference)
+  ;
 
 /*
- * ============================================================================
- * 38. NODE MAP
- * ============================================================================
- */
-nodeMap
-    : LBRACE
-      nodeMapEntry
-      (COMMA nodeMapEntry)*
-      COMMA?
-      RBRACE
-    ;
 
+* ============================================================================
+* 62. NODE GROUP LIST
+* ============================================================================
+  /
+  nodeGroupList
+  : nodeReference
+  (COMMA nodeReference)
+  ;
 
 /*
- * ============================================================================
- * 39. NODE CONFIGURATION
- * ============================================================================
- *
- * Configuration is semantic metadata, not runtime configuration execution.
- */
-nodeConfiguration
-    : identifier
-      nodeMap
-    ;
 
-
-/*
- * ============================================================================
- * 40. NODE DECLARATION BLOCK
- * ============================================================================
- *
- * General reusable node block.
- */
-nodeDeclarationBlock
-    : LBRACE
-      nodeMember*
-      RBRACE
-    ;
-
+* ============================================================================
+* 63. NODE COLLECTION
+* ============================================================================
+* 
+* Collection size is determined by source and semantic/resource constraints,
+* not by this grammar.
+  */
+  nodeCollection
+  : LBRACKET
+  optionalNodeReferenceList
+  RBRACKET
+  ;
 
 /*
- * ============================================================================
- * 41. NODE RELATIONSHIP LIST
- * ============================================================================
- */
-nodeRelationshipList
-    : qualifiedName
-      (COMMA qualifiedName)*
-    ;
 
-
-/*
- * ============================================================================
- * 42. NODE DEPENDENCY LIST
- * ============================================================================
- */
-nodeDependencyList
-    : qualifiedName
-      (COMMA qualifiedName)*
-    ;
-
+* ============================================================================
+* 64. NODE MAP ENTRY
+* ============================================================================
+  */
+  nodeMapEntry
+  : qualifiedName
+  COLON
+  expression
+  ;
 
 /*
- * ============================================================================
- * 43. NODE GROUP LIST
- * ============================================================================
- */
-nodeGroupList
-    : qualifiedName
-      (COMMA qualifiedName)*
-    ;
 
-
-/*
- * ============================================================================
- * 44. NODE CAPABILITY/REQUIREMENT PAIR
- * ============================================================================
- *
- * This rule is intentionally structural.
- *
- * It does not determine whether the capability satisfies the requirement.
- */
-nodeCapabilityRequirementPair
-    : qualifiedName
-      COLON
-      qualifiedName
-    ;
-
+* ============================================================================
+* 65. NODE MAP
+* ============================================================================
+  /
+  nodeMap
+  : LBRACE
+  nodeMapEntry
+  (COMMA nodeMapEntry)
+  COMMA?
+  RBRACE
+  ;
 
 /*
- * ============================================================================
- * 45. NODE RELATIONSHIP PAIR
- * ============================================================================
- */
-nodeRelationshipPair
-    : qualifiedName
-      dependencyOperator
-      qualifiedName
-    ;
 
-
-/*
- * ============================================================================
- * 46. NODE EDGE
- * ============================================================================
- *
- * This is an abstract graph relationship.
- *
- * It is NOT a physical network edge.
- */
-nodeEdge
-    : qualifiedName
-      dependencyOperator
-      qualifiedName
-      SEMICOLON
-    ;
-
+* ============================================================================
+* 66. NODE CONFIGURATION
+* ============================================================================
+* 
+* Configuration is data.
+* 
+* It does not execute runtime configuration actions.
+  */
+  nodeConfiguration
+  : identifier
+  nodeMap
+  ;
 
 /*
- * ============================================================================
- * 47. NODE GRAPH
- * ============================================================================
- *
- * Arbitrary graph size and topology are permitted syntactically.
- *
- * The actual graph is semantic data and may represent:
- *
- *     dependencies;
- *     communication;
- *     coordination;
- *     data flow;
- *     execution relationships.
- *
- * It does not imply physical topology.
- */
-nodeGraph
-    : identifier
-      LBRACE
-      nodeEdge*
-      RBRACE
-    ;
 
+* ============================================================================
+* 67. NODE DECLARATION BLOCK
+* ============================================================================
+  */
+  nodeDeclarationBlock
+  : nodeBody
+  ;
 
 /*
- * ============================================================================
- * 48. NODE GRAPH MEMBER
- * ============================================================================
- */
-nodeGraphMember
-    : nodeEdge
-    | nodeRelationshipDeclaration
-    ;
 
-
-/*
- * ============================================================================
- * 49. NODE GRAPH BODY
- * ============================================================================
- */
-nodeGraphBody
-    : LBRACE
-      nodeGraphMember*
-      RBRACE
-    ;
-
+* ============================================================================
+* 68. NODE SCOPE
+* ============================================================================
+* 
+* Alias-style structural wrapper retained as an integration point.
+  */
+  nodeScope
+  : nodeBody
+  ;
 
 /*
- * ============================================================================
- * 50. NODE POLICY REFERENCE
- * ============================================================================
- *
- * Policy names are semantic references.
- *
- * This grammar does not implement policy.
- */
-nodePolicyReference
-    : identifier
-      qualifiedName
-      SEMICOLON
-    ;
 
+* ============================================================================
+* 69. NODE QUALIFIED NAME
+* ============================================================================
+* 
+* Canonical name structure remains owned by Names.
+  */
+  nodeQualifiedName
+  : qualifiedName
+  ;
 
 /*
- * ============================================================================
- * 51. NODE POLICY EXPRESSION
- * ============================================================================
- */
-nodePolicyExpression
-    : identifier
-      expression
-      SEMICOLON
-    ;
 
+* ============================================================================
+* 70. NODE REFERENCE PATH
+* ============================================================================
+  */
+  nodeReferencePath
+  : nodeReference
+  ;
 
 /*
- * ============================================================================
- * 52. NODE SECURITY REFERENCE
- * ============================================================================
- *
- * Security semantics belong to the security subsystem.
- */
-nodeSecurityReference
-    : identifier
-      qualifiedName
-      SEMICOLON
-    ;
 
+* ============================================================================
+* 71. NODE NAME LIST
+* ============================================================================
+  /
+  nodeNameList
+  : nodeName
+  (COMMA nodeName)
+  ;
 
 /*
- * ============================================================================
- * 53. NODE OBSERVABILITY REFERENCE
- * ============================================================================
- *
- * Observability semantics belong to telemetry/monitoring infrastructure.
- */
-nodeObservabilityReference
-    : identifier
-      qualifiedName
-      SEMICOLON
-    ;
 
-
-/*
- * ============================================================================
- * 54. NODE FAILURE POLICY REFERENCE
- * ============================================================================
- *
- * This grammar records an abstract reference only.
- *
- * It does not implement:
- *
- *     retry;
- *     restart;
- *     migration;
- *     failover;
- *     recovery;
- *     resilience.
- */
-nodeFailurePolicyReference
-    : identifier
-      qualifiedName
-      SEMICOLON
-    ;
-
+* ============================================================================
+* 72. NODE ATTRIBUTE
+* ============================================================================
+* 
+* Node attributes are represented as source-level metadata references.
+* 
+* Attribute syntax itself remains owned by the canonical attributes grammar.
+  */
+  nodeAttribute
+  : identifier
+  (LPAREN optionalExpressionList RPAREN)?
+  ;
 
 /*
- * ============================================================================
- * 55. NODE AVAILABILITY REQUIREMENT
- * ============================================================================
- *
- * Availability is a semantic requirement.
- *
- * No numerical threshold is imposed here.
- */
-nodeAvailabilityRequirement
-    : identifier
-      expression
-      SEMICOLON
-    ;
 
+* ============================================================================
+* 73. NODE ATTRIBUTE LIST
+* ============================================================================
+  */
+  nodeAttributeList
+  : nodeAttribute+
+  ;
 
 /*
- * ============================================================================
- * 56. NODE SCALABILITY REQUIREMENT
- * ============================================================================
- *
- * Scaling policy is represented as semantic data.
- *
- * No fixed upper bound is encoded.
- */
-nodeScalabilityRequirement
-    : identifier
-      expression
-      SEMICOLON
-    ;
 
-
-/*
- * ============================================================================
- * 57. NODE PORTABILITY REQUIREMENT
- * ============================================================================
- */
-nodePortabilityRequirement
-    : identifier
-      qualifiedName
-      SEMICOLON
-    ;
-
+* ============================================================================
+* 74. ATTRIBUTED NODE DECLARATION
+* ============================================================================
+* 
+* This rule provides a reusable integration boundary.
+* 
+* Attribute ownership remains separate from node semantics.
+  */
+  attributedNodeDeclaration
+  : nodeAttributeList
+  nodeDeclaration
+  ;
 
 /*
- * ============================================================================
- * 58. NODE FUTURE EXTENSION
- * ============================================================================
- *
- * Open extension point.
- *
- * Unknown node-domain declarations must be admitted only where their
- * surrounding distributed grammar explicitly permits extension constructs.
- *
- * Semantic validation determines whether a declaration is recognized.
- */
-nodeExtension
-    : identifier
-      (qualifiedName | expression)
-      SEMICOLON
-    ;
 
+* ============================================================================
+* 75. NODE GRAPH EDGE
+* ============================================================================
+* 
+* This is an ABSTRACT semantic edge.
+* 
+* It does not imply physical network topology.
+  */
+  nodeGraphEdge
+  : nodeReference
+  nodeDependencyOperator
+  nodeReference
+  SEMICOLON
+  ;
 
 /*
- * ============================================================================
- * 59. NODE DECLARATION SEQUENCE
- * ============================================================================
- *
- * Unbounded declaration sequence.
- */
-nodeDeclarationSequence
-    : nodeDeclaration*
-    ;
 
-
-/*
- * ============================================================================
- * 60. NODE GROUP SEQUENCE
- * ============================================================================
- */
-nodeGroupSequence
-    : nodeGroupDeclaration*
-    ;
-
+* ============================================================================
+* 76. NODE GRAPH
+* ============================================================================
+* 
+* Graph size and edge count are unbounded by this grammar.
+* 
+* Graph semantics are downstream.
+  /
+  nodeGraph
+  : identifier
+  LBRACE
+  nodeGraphMember
+  RBRACE
+  ;
 
 /*
- * ============================================================================
- * 61. NODE GRAPH SEQUENCE
- * ============================================================================
- */
-nodeGraphSequence
-    : nodeGraph*
-    ;
 
-
-/*
- * ============================================================================
- * 62. NODE REFERENCE SEQUENCE
- * ============================================================================
- */
-nodeReferenceSequence
-    : qualifiedName*
-    ;
-
+* ============================================================================
+* 77. NODE GRAPH MEMBER
+* ============================================================================
+  */
+  nodeGraphMember
+  : nodeGraphEdge
+  | nodeRelationshipEdge
+  ;
 
 /*
- * ============================================================================
- * 63. NODE ATTRIBUTE SEQUENCE
- * ============================================================================
- */
-nodeAttributeSequence
-    : nodeAttribute*
-    ;
 
+* ============================================================================
+* 78. NODE GRAPH BODY
+* ============================================================================
+  /
+  nodeGraphBody
+  : LBRACE
+  nodeGraphMember
+  RBRACE
+  ;
 
 /*
- * ============================================================================
- * 64. NODE MEMBER SEQUENCE
- * ============================================================================
- */
-nodeMemberSequence
-    : nodeMember*
-    ;
+
+* ============================================================================
+* 79. NODE DECLARATION SEQUENCE
+* ============================================================================
+  /
+  nodeDeclarationSequence
+  : nodeDeclaration
+  ;
+
+/*
+
+* ============================================================================
+* 80. NODE GROUP SEQUENCE
+* ============================================================================
+  /
+  nodeGroupSequence
+  : nodeGroupDeclaration
+  ;
+
+/*
+
+* ============================================================================
+* 81. NODE REFERENCE SEQUENCE
+* ============================================================================
+  /
+  nodeReferenceSequence
+  : nodeReference
+  ;
+
+/*
+
+* ============================================================================
+* 82. NODE ATTRIBUTE SEQUENCE
+* ============================================================================
+  /
+  nodeAttributeSequence
+  : nodeAttribute
+  ;
+
+/*
+
+* ============================================================================
+* 83. NODE MEMBER SEQUENCE
+* ============================================================================
+  /
+  nodeMemberSequence
+  : nodeMember
+  ;
+
+/*
+
+* ============================================================================
+* 84. NODE GROUP MEMBER SEQUENCE
+* ============================================================================
+  /
+  nodeGroupMemberSequence
+  : nodeGroupMember
+  ;
+
+/*
+
+* ============================================================================
+* 85. NODE GRAPH MEMBER SEQUENCE
+* ============================================================================
+  /
+  nodeGraphMemberSequence
+  : nodeGraphMember
+  ;
+
+/*
+
+* ============================================================================
+* 86. NODE EXTENSION
+* ============================================================================
+* 
+* Explicit extension syntax remains open-world.
+* 
+* Unknown semantics are validated downstream.
+  */
+  nodeExtension
+  : identifier
+  expression
+  SEMICOLON
+  ;
+
+/*
+
+* ============================================================================
+* 87. NODE EXTENSION BLOCK
+* ============================================================================
+  /
+  nodeExtensionBlock
+  : identifier
+  identifier
+  LBRACE
+  nodeMember
+  RBRACE
+  ;
+
+/*
+
+* ============================================================================
+* 88. NODE CAPABILITY / REQUIREMENT PAIR
+* ============================================================================
+* 
+* This is structural metadata.
+* 
+* It does not itself perform capability satisfaction.
+  */
+  nodeCapabilityRequirementPair
+  : qualifiedName
+  COLON
+  qualifiedName
+  ;
+
+/*
+
+* ============================================================================
+* 89. NODE RELATIONSHIP PAIR
+* ============================================================================
+  */
+  nodeRelationshipPair
+  : nodeReference
+  nodeDependencyOperator
+  nodeReference
+  ;
+
+/*
+
+* ============================================================================
+* 90. NODE EDGE
+* ============================================================================
+* 
+* Retained as a reusable abstract edge contract.
+  */
+  nodeEdge
+  : nodeReference
+  nodeDependencyOperator
+  nodeReference
+  SEMICOLON
+  ;
+
+/*
+
+* ============================================================================
+* 91. NODE TARGET REFERENCE
+* ============================================================================
+* 
+* A target reference is still abstract source-level data.
+  */
+  nodeTargetReference
+  : qualifiedName
+  ;
+
+/*
+
+* ============================================================================
+* 92. NODE RESOURCE REFERENCE EXPRESSION
+* ============================================================================
+  */
+  nodeResourceReferenceExpression
+  : expression
+  ;
+
+/*
+
+* ============================================================================
+* 93. NODE REQUIREMENT VALUE
+* ============================================================================
+  */
+  nodeRequirementValue
+  : expression
+  ;
+
+/*
+
+* ============================================================================
+* 94. NODE CONSTRAINT VALUE
+* ============================================================================
+  */
+  nodeConstraintValue
+  : expression
+  ;
+
+/*
+
+* ============================================================================
+* 95. NODE PREFERENCE VALUE
+* ============================================================================
+  */
+  nodePreferenceValue
+  : expression
+  ;
+
+/*
+
+* ============================================================================
+* 96. NODE METADATA VALUE
+* ============================================================================
+  */
+  nodeMetadataValue
+  : expression
+  ;
+
+/*
+
+* ============================================================================
+* 97. NODE SELECTOR LIST
+* ============================================================================
+  /
+  nodeSelectorList
+  : nodeSelector
+  (COMMA nodeSelector)
+  ;
+
+/*
+
+* ============================================================================
+* 98. NODE REQUIREMENT LIST EXPRESSION
+* ============================================================================
+  /
+  nodeRequirementExpressionList
+  : expression
+  (COMMA expression)
+  ;
+
+/*
+
+* ============================================================================
+* 99. NODE CAPABILITY LIST EXPRESSION
+* ============================================================================
+  /
+  nodeCapabilityExpressionList
+  : expression
+  (COMMA expression)
+  ;
+
+/*
+
+* ============================================================================
+* 100. NODE PREFERENCE LIST EXPRESSION
+* ============================================================================
+  /
+  nodePreferenceExpressionList
+  : expression
+  (COMMA expression)
+  ;
+
+/*
+
+* ============================================================================
+* 101. NODE CONSTRAINT LIST EXPRESSION
+* ============================================================================
+  /
+  nodeConstraintExpressionList
+  : expression
+  (COMMA expression)
+  ;
+
+/*
+
+* ============================================================================
+* 102. NODE DEPENDENCY RELATIONSHIP
+* ============================================================================
+* 
+* Reusable structural form:
+* 
+* dependency <a> -> <b>;
+
+*/
+nodeDependencyRelationship
+: identifier
+nodeReference
+nodeDependencyOperator
+nodeReference
+SEMICOLON
+;
+
+/*
+
+* ============================================================================
+* 103. NODE RELATIONSHIP RELATION
+* ============================================================================
+* 
+* Generic relation with a named relation kind.
+  */
+  nodeRelationshipRelation
+  : identifier
+  nodeReference
+  nodeReference
+  SEMICOLON
+  ;
+
+/*
+
+* ============================================================================
+* 104. NODE HIERARCHICAL RELATIONSHIP
+* ============================================================================
+* 
+* Hierarchical syntax is logical only.
+  */
+  nodeHierarchicalRelationship
+  : identifier
+  nodeReference
+  nodeReference
+  SEMICOLON
+  ;
+
+/*
+
+* ============================================================================
+* 105. NODE PARTICIPANT
+* ============================================================================
+* 
+* A participant is a logical reference.
+  */
+  nodeParticipant
+  : nodeReference
+  ;
+
+/*
+
+* ============================================================================
+* 106. NODE PARTICIPANT LIST
+* ============================================================================
+  /
+  nodeParticipantList
+  : nodeParticipant
+  (COMMA nodeParticipant)
+  ;
+
+/*
+
+* ============================================================================
+* 107. NODE GROUP REFERENCE
+* ============================================================================
+  */
+  nodeGroupReference
+  : nodeReference
+  ;
+
+/*
+
+* ============================================================================
+* 108. NODE GROUP REFERENCE LIST
+* ============================================================================
+  /
+  nodeGroupReferenceList
+  : nodeGroupReference
+  (COMMA nodeGroupReference)
+  ;
+
+/*
+
+* ============================================================================
+* 109. NODE CAPABILITY REFERENCE
+* ============================================================================
+  */
+  nodeCapabilityReference
+  : qualifiedName
+  ;
+
+/*
+
+* ============================================================================
+* 110. NODE REQUIREMENT REFERENCE
+* ============================================================================
+  */
+  nodeRequirementReference
+  : qualifiedName
+  ;
+
+/*
+
+* ============================================================================
+* 111. NODE POLICY REFERENCE VALUE
+* ============================================================================
+  */
+  nodePolicyReferenceValue
+  : qualifiedName
+  ;
+
+/*
+
+* ============================================================================
+* 112. NODE LIFECYCLE VALUE
+* ============================================================================
+  */
+  nodeLifecycleValue
+  : qualifiedName
+  ;
+
+/*
+
+* ============================================================================
+* 113. NODE EXECUTION VALUE
+* ============================================================================
+  */
+  nodeExecutionValue
+  : expression
+  ;
+
+/*
+
+* ============================================================================
+* 114. NODE METADATA KEY
+* ============================================================================
+  */
+  nodeMetadataKey
+  : qualifiedName
+  ;
+
+/*
+
+* ============================================================================
+* 115. NODE METADATA ENTRY
+* ============================================================================
+  */
+  nodeMetadataEntry
+  : nodeMetadataKey
+  COLON
+  expression
+  ;
+
+/*
+
+* ============================================================================
+* 116. NODE METADATA ENTRY LIST
+* ============================================================================
+  /
+  nodeMetadataEntryList
+  : nodeMetadataEntry
+  (COMMA nodeMetadataEntry)
+  ;
+
+/*
+
+* ============================================================================
+* 117. NODE MAP ENTRY LIST
+* ============================================================================
+  /
+  nodeMapEntryList
+  : nodeMapEntry
+  (COMMA nodeMapEntry)
+  ;
+
+/*
+
+* ============================================================================
+* 118. NODE ATTRIBUTE TARGET
+* ============================================================================
+  */
+  nodeAttributeTarget
+  : nodeReference
+  ;
+
+/*
+
+* ============================================================================
+* 119. NODE ATTRIBUTE TARGET LIST
+* ============================================================================
+  /
+  nodeAttributeTargetList
+  : nodeAttributeTarget
+  (COMMA nodeAttributeTarget)
+  ;
+
+/*
+
+* ============================================================================
+* 120. NODE SEMANTIC VALUE
+* ============================================================================
+* 
+* Generic expression wrapper for downstream semantic classification.
+  */
+  nodeSemanticValue
+  : expression
+  ;
+
+/*
+
+* ============================================================================
+* 121. NODE SEMANTIC VALUE LIST
+* ============================================================================
+  /
+  nodeSemanticValueList
+  : expression
+  (COMMA expression)
+  ;
+
+/*
+
+* ============================================================================
+* 122. NODE POLICY VALUE
+* ============================================================================
+  */
+  nodePolicyValue
+  : expression
+  ;
+
+/*
+
+* ============================================================================
+* 123. NODE FAILURE VALUE
+* ============================================================================
+  */
+  nodeFailureValue
+  : expression
+  ;
+
+/*
+
+* ============================================================================
+* 124. NODE AVAILABILITY VALUE
+* ============================================================================
+  */
+  nodeAvailabilityValue
+  : expression
+  ;
+
+/*
+
+* ============================================================================
+* 125. NODE SCALABILITY VALUE
+* ============================================================================
+  */
+  nodeScalabilityValue
+  : expression
+  ;
+
+/*
+
+* ============================================================================
+* 126. NODE PORTABILITY VALUE
+* ============================================================================
+  */
+  nodePortabilityValue
+  : expression
+  ;
+
+/*
+
+* ============================================================================
+* 127. NODE SECURITY VALUE
+* ============================================================================
+  */
+  nodeSecurityValue
+  : expression
+  ;
+
+/*
+
+* ============================================================================
+* 128. NODE OBSERVABILITY VALUE
+* ============================================================================
+  */
+  nodeObservabilityValue
+  : expression
+  ;
+
+/*
+
+* ============================================================================
+* 129. NODE TARGET VALUE
+* ============================================================================
+  */
+  nodeTargetValue
+  : expression
+  ;
+
+/*
+
+* ============================================================================
+* 130. NODE RESOURCE VALUE
+* ============================================================================
+  */
+  nodeResourceValue
+  : expression
+  ;
+
+/*
+
+* ============================================================================
+* 131. NODE CAPABILITY VALUE
+* ============================================================================
+  */
+  nodeCapabilityValue
+  : expression
+  ;
+
+/*
+
+* ============================================================================
+* 132. NODE REQUIREMENT VALUE
+* ============================================================================
+  */
+  nodeRequirementValueExpression
+  : expression
+  ;
+
+/*
+
+* ============================================================================
+* 133. NODE CONSTRAINT VALUE EXPRESSION
+* ============================================================================
+  */
+  nodeConstraintValueExpression
+  : expression
+  ;
+
+/*
+
+* ============================================================================
+* 134. NODE PREFERENCE VALUE EXPRESSION
+* ============================================================================
+  */
+  nodePreferenceValueExpression
+  : expression
+  ;
+
+/*
+
+* ============================================================================
+* 135. NODE REFERENCE VALUE
+* ============================================================================
+  */
+  nodeReferenceValue
+  : nodeReference
+  ;
+
+/*
+
+* ============================================================================
+* 136. NODE REFERENCE VALUE LIST
+* ============================================================================
+  /
+  nodeReferenceValueList
+  : nodeReference
+  (COMMA nodeReference)
+  ;
+
+/*
+
+* ============================================================================
+* 137. NODE MEMBER VALUE
+* ============================================================================
+* 
+* General expression value used by downstream contextual semantic analysis.
+  */
+  nodeMemberValue
+  : expression
+  ;
+
+/*
+
+* ============================================================================
+* 138. NODE MEMBER VALUE LIST
+* ============================================================================
+  /
+  nodeMemberValueList
+  : expression
+  (COMMA expression)
+  ;
+
+/*
+
+* ============================================================================
+* 139. NODE DECLARATION WITH BODY
+* ============================================================================
+  */
+  nodeDeclarationWithBody
+  : nodeContextKeyword
+  nodeName
+  nodeBody
+  ;
+
+/*
+
+* ============================================================================
+* 140. NODE DECLARATION WITHOUT BODY
+* ============================================================================
+  */
+  nodeDeclarationWithoutBody
+  : nodeContextKeyword
+  nodeName
+  SEMICOLON
+  ;
+
+/*
+
+* ============================================================================
+* 141. NODE REFERENCE PATH LIST
+* ============================================================================
+  /
+  nodeReferencePathList
+  : nodeReferencePath
+  (COMMA nodeReferencePath)
+  ;
+
+/*
+
+* ============================================================================
+* 142. NODE GRAPH EDGE LIST
+* ============================================================================
+  */
+  nodeGraphEdgeList
+  : nodeGraphEdge+
+  ;
+
+/*
+
+* ============================================================================
+* 143. NODE GRAPH EDGE LIST OPTIONAL
+* ============================================================================
+  /
+  optionalNodeGraphEdgeList
+  : nodeGraphEdge
+  ;
+
+/*
+
+* ============================================================================
+* 144. NODE GROUP MEMBER LIST
+* ============================================================================
+  /
+  nodeGroupMemberList
+  : nodeGroupMember
+  ;
+
+/*
+
+* ============================================================================
+* 145. NODE BODY MEMBER LIST
+* ============================================================================
+  /
+  nodeBodyMemberList
+  : nodeMember
+  ;
+
+/*
+
+* ============================================================================
+* 146. NODE QUALIFIED NAME LIST
+* ============================================================================
+  /
+  nodeQualifiedNameList
+  : qualifiedName
+  (COMMA qualifiedName)
+  ;
+
+/*
+
+* ============================================================================
+* 147. NODE EXPRESSION LIST
+* ============================================================================
+* 
+* Delegates expression semantics completely to Expressions.
+  */
+  nodeExpressionList
+  : expressionList
+  ;
+
+/*
+
+* ============================================================================
+* 148. NODE OPTIONAL EXPRESSION LIST
+* ============================================================================
+  */
+  optionalNodeExpressionList
+  : optionalExpressionList
+  ;
+
+/*
+
+* ============================================================================
+* 149. NODE BLOCK
+* ============================================================================
+  */
+  nodeBlock
+  : nodeBody
+  ;
+
+/*
+
+* ============================================================================
+* 150. NODE NESTED SCOPE
+* ============================================================================
+  */
+  nodeNestedScope
+  : nodeNestedBody
+  ;
+
+/*
+
+* ============================================================================
+* FINAL INVARIANTS
+* ============================================================================
+* 
+* This grammar deliberately leaves the following decisions downstream:
+* 
+* node -> physical realization
+* capability -> actual availability
+* requirement -> resource feasibility
+* preference -> optimization priority
+* relationship -> physical communication
+* dependency -> scheduler ordering
+* selector -> placement
+* execution -> runtime
+* 
+* Therefore the same source-level node declaration can be realized on:
+* 
+* one machine;
+* many machines;
+* a cluster;
+* HPC;
+* cloud;
+* edge;
+* heterogeneous hardware;
+* CPU;
+* GPU;
+* FPGA;
+* ASIC;
+* QPU;
+* simulator;
+* future execution targets;
+* 
+* without changing the node grammar merely because the physical realization
+* changes.
+* 
+* No universal resource ceiling is encoded.
+* 
+* No physical topology is encoded.
+* 
+* No device identity is encoded.
+* 
+* No vendor API is encoded.
+* 
+* No runtime action is encoded.
+* 
+* No Rust "unsafe" implementation is required or permitted.
+* 
+* ============================================================================
+  */
