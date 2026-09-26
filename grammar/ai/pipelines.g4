@@ -6,56 +6,57 @@
  * File:
  *     grammar/ai/pipelines.g4
  *
- * Purpose:
- *     Production-ready source grammar for portable AI/ML computation
- *     pipelines.
+ * Grammar:
+ *     AIPipelines
  *
- * Language:
- *     Zamani
+ * Status:
+ *     CANONICAL AI / DATAFLOW / COMPUTATION-PIPELINE LEAF GRAMMAR
+ *
+ * Baseline:
+ *     Rust 1.97 / Rust 1.97.1
+ *     Rust 2021
+ *     Safe Rust only
  *
  * Grammar technology:
- *     ANTLR4
- *
- * Runtime baseline:
- *     Rust 1.97 / Rust 1.97.1
- *     Rust 2021 edition
- *
- * Safety:
- *     This is parser grammar only.
- *     No embedded Rust actions.
- *     No unsafe code.
- *     No filesystem access.
- *     No network access.
- *     No runtime execution.
- *     No hardware discovery.
- *     No machine-specific assumptions.
+ *     ANTLR4 parser grammar
  *
  * ============================================================================
- * ARCHITECTURAL PRINCIPLE
+ * PURPOSE
  * ============================================================================
  *
- * This grammar describes the semantic structure of an AI/ML pipeline.
+ * This file owns the source-level syntax for portable computational pipelines.
  *
- * It does NOT decide:
+ * A pipeline is a target-independent composition of:
  *
- *     - which CPU executes a stage;
- *     - which GPU executes a stage;
- *     - which QPU executes a stage;
- *     - which FPGA executes a stage;
- *     - which ASIC executes a stage;
- *     - how many workers exist;
- *     - how many machines exist;
- *     - how stages are scheduled;
- *     - how stages are physically placed;
- *     - how data is physically transported;
- *     - how models are trained;
- *     - how tensors are represented internally;
- *     - how quantum programs are represented internally;
- *     - how hardware is discovered;
- *     - how resources are allocated.
+ *     computation
+ *     data flow
+ *     dependencies
+ *     control/dataflow regions
+ *     semantic requirements
+ *     capabilities
+ *     constraints
+ *     preferences
+ *     metadata
+ *     provenance
+ *     reproducibility intent
+ *     checkpoint intent
+ *     extensible operations
  *
- * Those responsibilities belong to downstream semantic/compiler/runtime
- * subsystems.
+ * A pipeline may contain computation that is eventually realized as:
+ *
+ *     classical computation
+ *     AI/ML computation
+ *     tensor computation
+ *     quantum computation
+ *     hybrid computation
+ *     HDL/hardware computation
+ *     accelerator computation
+ *     distributed computation
+ *     networking computation
+ *     security computation
+ *     future computational domains
+ *
+ * This grammar deliberately does NOT decide the physical realization.
  *
  * ============================================================================
  * POCO-REAF
@@ -63,149 +64,598 @@
  *
  * Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
  *
- * Pipeline source describes:
+ * Pipeline source describes WHAT the computation means.
  *
- *     computation
- *     dependencies
- *     data flow
- *     control flow
- *     semantic requirements
- *     capabilities
- *     constraints
- *     preferences
- *     portability intent
+ * Later compiler/runtime layers determine:
  *
- * It does not permanently bind those semantics to a particular machine.
+ *     WHERE
+ *     WHEN
+ *     HOW
+ *     ON WHICH TARGET
+ *     USING WHICH RESOURCE
+ *     USING WHICH IMPLEMENTATION
+ *
+ * This grammar therefore MUST NOT encode:
+ *
+ *     MAX_STAGES
+ *     MAX_WORKERS
+ *     MAX_DEVICES
+ *     MAX_NODES
+ *     MAX_GPUS
+ *     MAX_CPUS
+ *     MAX_FPGAS
+ *     MAX_QPUS
+ *     MAX_ACCELERATORS
+ *     MAX_MEMORY
+ *     MAX_TENSOR_RANK
+ *     MAX_PIPELINE_DEPTH
+ *     MAX_STREAMS
+ *     MAX_BATCH_SIZE
+ *     MAX_INPUTS
+ *     MAX_OUTPUTS
+ *     MAX_EDGES
+ *
+ * There is intentionally no grammar-level machine-size ceiling.
+ *
+ * Practical limits belong to:
+ *
+ *     parser implementation
+ *     compiler resources
+ *     runtime resources
+ *     target capabilities
+ *     deployment policy
+ *     resource availability
+ *
+ * Such limits MUST NOT become Zamani language semantics.
+ *
+ * ============================================================================
+ * ARCHITECTURAL POSITION
+ * ============================================================================
+ *
+ *     Zamani source
+ *          |
+ *          v
+ *     ZamaniLexer
+ *          |
+ *          v
+ *     canonical parser
+ *          |
+ *          v
+ *     pipelineConstruct                 <-- THIS FILE
+ *          |
+ *          v
+ *     domain-neutral frontend AST
+ *          |
+ *          v
+ *     semantic analysis
+ *          |
+ *     +----+----------------------+----------------------+
+ *     |                           |                      |
+ *     v                           v                      v
+ * resource/capability        type/effect            dependency
+ * analysis                   analysis               analysis
+ *     |                           |                      |
+ *     +---------------------------+----------------------+
+ *                                 |
+ *                                 v
+ *                       canonical semantic model
+ *                                 |
+ *                    +------------+-------------+
+ *                    |            |             |
+ *                    v            v             v
+ *                classical    quantum::ir   HDL/hardware
+ *                    |            |             |
+ *                    +------------+-------------+
+ *                                 |
+ *                           optimization
+ *                                 |
+ *                       routing / scheduling
+ *                                 |
+ *                         resilience / QEC
+ *                                 |
+ *                                ZQN
+ *                                 |
+ *                                HAL
+ *                                 |
+ *                         target realization
+ *
+ * This file creates no IR.
  *
  * ============================================================================
  * OWNERSHIP
  * ============================================================================
  *
- * OWNS:
+ * THIS FILE OWNS:
  *
- *     pipeline declarations
- *     pipeline references
- *     pipeline invocation syntax
- *     pipeline stages
- *     pipeline dependencies
- *     pipeline inputs
- *     pipeline outputs
- *     pipeline parameters
- *     pipeline locals
- *     branches
- *     joins
- *     streams
- *     batches
- *     windows
- *     checkpoints
- *     provenance intent
- *     reproducibility intent
- *     pipeline requirements
- *     pipeline capabilities
- *     pipeline constraints
- *     pipeline preferences
- *     nested pipeline regions
- *     extensible pipeline operations
+ *     pipelineConstruct
+ *     pipelineDeclaration
+ *     pipelineInvocation
+ *     pipelineReference
+ *     pipelineRegion
+ *     pipelineBody
+ *     pipelineMember
+ *     pipelineAnnotatedMember
+ *     pipeline annotation payload structure
+ *     pipeline dependency-edge structure
+ *     pipeline argument structure
+ *     pipeline nested regions
+ *     pipeline extensibility boundaries
+ *     pipeline compatibility helper rules
  *
- * DOES NOT OWN:
+ * THIS FILE DOES NOT OWN:
  *
- *     lexer definitions
- *     keywords
- *     identifiers
- *     primitive types
- *     general expressions
- *     general statements
- *     models
- *     datasets
- *     tensors
+ *     lexer tokens
+ *     identifier syntax
+ *     general expression syntax
+ *     general type syntax
+ *     ordinary statement syntax
+ *     model semantics
+ *     dataset semantics
+ *     tensor semantics
  *     training algorithms
  *     inference algorithms
- *     differentiation
- *     optimizers
- *     classical IR
- *     quantum::ir
+ *     differentiation algorithms
+ *     quantum operations
+ *     quantum IR
  *     QEC
  *     ZQN
+ *     HDL implementation
  *     hardware discovery
- *     topology
- *     routing
- *     scheduling
- *     runtime execution
- *     simulation
  *     resource allocation
+ *     scheduling
+ *     routing
+ *     optimization
+ *     runtime execution
+ *     physical deployment
  *
  * ============================================================================
- * INTEGRATION CONTRACT
+ * LEXER CONTRACT
  * ============================================================================
  *
- * Canonical lexical layer:
+ * The canonical lexer provides:
  *
- *     ZamaniLexer
+ *     AT
+ *     IDENTIFIER
+ *     LPAREN
+ *     RPAREN
+ *     LBRACE
+ *     RBRACE
+ *     COMMA
+ *     COLON
+ *     SEMICOLON
+ *     ASSIGN
+ *     DOT
+ *     DOUBLE_COLON
+ *     THIN_ARROW
  *
- * Canonical type layer:
+ * Annotation names are NOT lexer keywords.
  *
- *     grammar/types/*
+ * For example:
  *
- * Canonical expression layer:
+ *     @pipeline
+ *     @stage
+ *     @model
+ *     @dataset
+ *     @quantum
+ *     @requires
+ *     @capability
+ *     @constraint
+ *     @preference
  *
- *     grammar/expressions/*
+ * are lexically represented as:
  *
- * Canonical statement layer:
+ *     AT IDENTIFIER
  *
- *     grammar/statements/*
+ * Their semantic meaning is determined downstream.
  *
- * AI-domain consumers:
+ * This avoids a closed AI vocabulary and preserves future extensibility.
  *
- *     grammar/ai/ai.g4
- *     grammar/ai/models.g4
- *     grammar/ai/datasets.g4
- *     grammar/ai/training.g4
- *     grammar/ai/inference.g4
- *     grammar/ai/agents.g4
+ * ============================================================================
+ * IMPORTANT LEXICAL CORRECTION
+ * ============================================================================
  *
- * The public boundary exported by this file is:
+ * The previous version used:
+ *
+ *     NANO_ANNOTATION
+ *
+ * That is NOT used here.
+ *
+ * The canonical annotation boundary is:
+ *
+ *     AT
+ *
+ * followed by an ordinary:
+ *
+ *     IDENTIFIER
+ *
+ * This keeps pipelines consistent with the canonical annotation architecture.
+ *
+ * ============================================================================
+ * TYPE CONTRACT
+ * ============================================================================
+ *
+ * Type syntax belongs to:
+ *
+ *     Types
+ *
+ * This grammar consumes:
+ *
+ *     typeExpression
+ *
+ * It does not create:
+ *
+ *     PipelineType
+ *     StageType
+ *     ModelType
+ *     DeviceType
+ *     TensorType
+ *
+ * as competing type systems.
+ *
+ * ============================================================================
+ * EXPRESSION CONTRACT
+ * ============================================================================
+ *
+ * Expression syntax belongs to:
+ *
+ *     Expressions
+ *
+ * This grammar consumes:
+ *
+ *     expression
+ *
+ * Pipeline expressions may therefore represent:
+ *
+ *     values
+ *     symbolic values
+ *     tensor values
+ *     model values
+ *     dataset values
+ *     quantum-derived values
+ *     hardware-backed values
+ *     resource quantities
+ *     capability expressions
+ *     constraints
+ *     predicates
+ *     schedules
+ *     batch sizes
+ *     window sizes
+ *     stream parameters
+ *     configuration values
+ *
+ * No pipeline-specific expression language is created.
+ *
+ * ============================================================================
+ * STATEMENT CONTRACT
+ * ============================================================================
+ *
+ * Ordinary Zamani statements belong to:
+ *
+ *     Statements
+ *
+ * Pipeline bodies may contain canonical statements.
+ *
+ * This grammar imports Statements rather than inventing:
+ *
+ *     pipelineIf
+ *     pipelineLoop
+ *     pipelineReturn
+ *     pipelineLet
+ *     pipelineMatch
+ *
+ * or another second statement language.
+ *
+ * ============================================================================
+ * DETERMINISTIC STRUCTURAL MODEL
+ * ============================================================================
+ *
+ * Pipeline annotations are intentionally parsed structurally.
+ *
+ * After:
+ *
+ *     AT IDENTIFIER
+ *
+ * the next token determines the structural form:
+ *
+ *     LPAREN       -> argument/directive form
+ *     IDENTIFIER  -> named form
+ *     ASSIGN      -> expression-valued form
+ *     LBRACE      -> region form
+ *     SEMICOLON   -> empty directive
+ *
+ * A dependency edge has an additional explicit:
+ *
+ *     THIN_ARROW
+ *
+ * marker.
+ *
+ * This means the grammar does not need semantic predicates or a list of
+ * annotation keywords to decide which rule applies.
+ *
+ * ============================================================================
+ * REQUIREMENT / CAPABILITY / CONSTRAINT / PREFERENCE
+ * ============================================================================
+ *
+ * These concepts are deliberately NOT separate parser keywords.
+ *
+ * The parser accepts generic annotation structures such as:
+ *
+ *     @requires(capability("tensor.compute"));
+ *     @requires(qubits >= n);
+ *     @capability("quantum.measurement");
+ *     @constraint(latency <= budget);
+ *     @preference(accelerator("quantum"));
+ *
+ * Semantic analysis determines whether an annotation is:
+ *
+ *     requirement
+ *     capability
+ *     constraint
+ *     preference
+ *     hint
+ *     budget
+ *     policy
+ *     metadata
+ *     another registered semantic category
+ *
+ * This prevents the grammar from becoming a fixed dictionary of AI concepts.
+ *
+ * ============================================================================
+ * HARDWARE INDEPENDENCE
+ * ============================================================================
+ *
+ * This file MUST NOT encode:
+ *
+ *     GPU 0
+ *     CPU 0
+ *     QPU 0
+ *     FPGA 0
+ *     node 0
+ *     device 0
+ *     fixed VRAM
+ *     fixed RAM
+ *     fixed worker count
+ *     fixed cluster size
+ *     fixed topology
+ *     fixed register width
+ *     fixed accelerator count
+ *
+ * A pipeline may state:
+ *
+ *     @requires(capability("gpu.compute"));
+ *
+ * but not impose a universal hardware identity.
+ *
+ * Physical realization is downstream.
+ *
+ * ============================================================================
+ * QUANTUM CONTRACT
+ * ============================================================================
+ *
+ * A pipeline may reference quantum computation through:
+ *
+ *     expressions
+ *     types
+ *     operation names
+ *     capabilities
+ *     requirements
+ *     nested computation regions
+ *
+ * This file MUST NOT define:
+ *
+ *     quantum gates
+ *     qubit IDs
+ *     physical qubits
+ *     coupling maps
+ *     quantum topology
+ *     calibration
+ *     QEC
+ *     ZQN
+ *     quantum scheduling
+ *
+ * Quantum semantics ultimately cross:
+ *
+ *     quantum::ir
+ *
+ * as the canonical quantum semantic boundary.
+ *
+ * ============================================================================
+ * HDL / HARDWARE CONTRACT
+ * ============================================================================
+ *
+ * Hardware-oriented pipeline stages may be represented through generic
+ * annotations, expressions, types and capability requirements.
+ *
+ * This grammar does not define:
+ *
+ *     register widths
+ *     bus widths
+ *     clock frequencies
+ *     FPGA resources
+ *     ASIC resources
+ *     physical wiring
+ *     device inventories
+ *
+ * Those belong to:
+ *
+ *     hardware/
+ *     hdl/
+ *     resources/
+ *     compile/
+ *     execution/
+ *
+ * ============================================================================
+ * AI CONTRACT
+ * ============================================================================
+ *
+ * AI-specific concepts remain extensible.
+ *
+ * A pipeline may contain:
+ *
+ *     model execution
+ *     dataset transformation
+ *     training
+ *     inference
+ *     tensor computation
+ *     differentiation
+ *     evaluation
+ *     serving
+ *     orchestration
+ *     accelerator computation
+ *
+ * The grammar does not enumerate framework-specific names.
+ *
+ * For example, the grammar does not reserve:
+ *
+ *     PyTorch
+ *     TensorFlow
+ *     JAX
+ *     CUDA
+ *     ROCm
+ *     ONNX
+ *     XGBoost
+ *
+ * Such names remain ordinary identifiers or semantic library/dialect entities.
+ *
+ * ============================================================================
+ * DISTRIBUTED CONTRACT
+ * ============================================================================
+ *
+ * Pipeline dependency syntax represents logical computation/data dependency.
+ *
+ * It is NOT:
+ *
+ *     physical network topology
+ *     physical node topology
+ *     placement
+ *     routing
+ *     worker allocation
+ *
+ * For example:
+ *
+ *     @edge preprocess -> inference;
+ *
+ * means semantic dependency/dataflow.
+ *
+ * It does not mean:
+ *
+ *     connect machine A to machine B.
+ *
+ * ============================================================================
+ * PROVENANCE CONTRACT
+ * ============================================================================
+ *
+ * The frontend AST must preserve:
+ *
+ *     annotation name
+ *     source spelling
+ *     declaration/reference name
+ *     argument expressions
+ *     types
+ *     initializers
+ *     nested members
+ *     source span
+ *     source provenance
+ *     member order
+ *
+ * This grammar does not invent provenance identifiers.
+ *
+ * ============================================================================
+ * AST CONTRACT
+ * ============================================================================
+ *
+ * The grammar maps into the existing domain-neutral frontend AST.
+ *
+ * The preferred representation is:
+ *
+ *     generic declaration / annotation / region / expression / statement
+ *
+ * rather than a pipeline-specific parallel AST hierarchy.
+ *
+ * A semantic pipeline model may be constructed after parsing.
+ *
+ * No pipeline-specific IR is introduced here.
+ *
+ * ============================================================================
+ * SEMANTIC CONTRACT
+ * ============================================================================
+ *
+ * Semantic analysis must:
+ *
+ *     resolve pipeline names;
+ *     resolve stage names;
+ *     resolve references;
+ *     validate input/output relationships;
+ *     validate dependency edges;
+ *     detect invalid dependency cycles;
+ *     distinguish legal feedback from illegal cycles;
+ *     validate types;
+ *     validate requirements;
+ *     validate capabilities;
+ *     validate constraints;
+ *     validate preferences;
+ *     validate provenance;
+ *     validate reproducibility;
+ *     validate checkpoint semantics;
+ *     validate resource feasibility;
+ *     validate portability;
+ *     validate cross-domain references;
+ *     validate security constraints;
+ *     preserve deterministic semantic ordering.
+ *
+ * None of these decisions are made by this grammar.
+ *
+ * ============================================================================
+ * IR CONTRACT
+ * ============================================================================
+ *
+ * This grammar produces no IR.
+ *
+ * Semantic lowering may eventually produce:
+ *
+ *     classical representation
+ *     AI semantic representation
+ *     dataflow representation
+ *     quantum::ir
+ *     HDL/hardware representation
+ *     distributed representation
+ *
+ * according to the semantics of the contained computation.
+ *
+ * There is no pipeline-specific competing IR defined here.
+ *
+ * ============================================================================
+ * RUNTIME CONTRACT
+ * ============================================================================
+ *
+ * Runtime responsibilities include:
+ *
+ *     resource acquisition
+ *     target discovery
+ *     placement
+ *     scheduling
+ *     execution
+ *     checkpoint realization
+ *     recovery
+ *     streaming transport
+ *     distributed communication
+ *     device management
+ *
+ * This grammar performs none of these.
+ *
+ * ============================================================================
+ * COMPATIBILITY CONTRACT
+ * ============================================================================
+ *
+ * The stable public rule is:
  *
  *     pipelineConstruct
  *
- * The semantic frontend converts the resulting parse tree into the Zamani
- * frontend AST. The compiler then performs semantic lowering.
+ * Existing consumers should integrate through that rule.
  *
- * Quantum stages must ultimately cross the canonical quantum semantic boundary
- * and use quantum::ir. This grammar never defines a second quantum IR.
- *
- * Hardware stages must cross the hardware abstraction boundary.
- *
- * Scheduling belongs to the scheduling subsystem.
- *
- * Optimization belongs to the optimization subsystem.
- *
- * Resource discovery belongs to the resource/hardware layers.
- *
- * Runtime dispatch belongs to execution/runtime.
- *
- * ============================================================================
- * SCALABILITY
- * ============================================================================
- *
- * There are intentionally NO grammar-level constants for:
- *
- *     maximum stages
- *     maximum workers
- *     maximum devices
- *     maximum nodes
- *     maximum tensors
- *     maximum dimensions
- *     maximum batches
- *     maximum streams
- *     maximum pipeline depth
- *     maximum inputs
- *     maximum outputs
- *     maximum edges
- *
- * Repetition is represented by grammar repetition operators.
- *
- * Practical limits are implementation/resource-policy concerns, not language
- * semantics.
+ * Existing helper rule names are retained below where practical as compatibility
+ * surfaces, but the canonical pipeline member implementation is the generic
+ * structural model.
  *
  * ============================================================================
  */
@@ -216,7 +666,9 @@ options {
     tokenVocab = ZamaniLexer;
 }
 
-import Types, Expressions;
+import Types,
+       Expressions,
+       Statements;
 
 
 /* ============================================================================
@@ -224,14 +676,19 @@ import Types, Expressions;
  * ========================================================================== */
 
 /*
- * Stable integration boundary.
+ * Stable public boundary.
  *
- * The canonical AI grammar should delegate pipeline syntax to this rule.
+ * A pipeline construct may be:
+ *
+ *     declaration
+ *     invocation
+ *     reference
+ *     anonymous/nested region
  */
 pipelineConstruct
     : pipelineDeclaration
-    | pipelineReference
     | pipelineInvocation
+    | pipelineReference
     | pipelineRegion
     ;
 
@@ -241,20 +698,32 @@ pipelineConstruct
  * ========================================================================== */
 
 /*
- * Example conceptual forms:
+ * Canonical declaration form:
  *
- *     @pipeline inference {
+ *     @pipeline name {
  *         ...
  *     }
  *
- *     @pipeline inference: SomeType = value;
+ * Also valid structurally:
  *
- * Annotation semantics are validated downstream.
+ *     @pipeline name;
+ *     @pipeline name: PipelineType;
+ *     @pipeline name = expression;
+ *
+ * The annotation name is intentionally not hard-coded.
+ *
+ * Semantic analysis determines whether the annotation denotes a pipeline
+ * declaration.
  */
 pipelineDeclaration
     : pipelineAnnotation
-      identifier
-      pipelineGenericParameters?
+      IDENTIFIER
+      pipelineDeclarationTail
+    ;
+
+
+pipelineDeclarationTail
+    : pipelineGenericCall?
       pipelineTypeClause?
       pipelineInitializer?
       pipelineBody?
@@ -262,29 +731,75 @@ pipelineDeclaration
     ;
 
 
-pipelineAnnotation
-    : NANO_ANNOTATION
+/*
+ * Optional declaration parameterization.
+ *
+ * This is expressed as ordinary expressions rather than a second generic
+ * parameter grammar. Generic type parameterization remains owned by the
+ * canonical type/function systems.
+ */
+pipelineGenericCall
+    : LPAREN
+      pipelineArgumentList?
+      RPAREN
     ;
 
 
-pipelineGenericParameters
-    : genericParameterList
-    ;
-
-
+/*
+ * Canonical type clause.
+ */
 pipelineTypeClause
     : COLON
       typeExpression
     ;
 
 
+/*
+ * Canonical initializer.
+ */
 pipelineInitializer
     : ASSIGN
       expression
     ;
 
 
+/*
+ * Canonical annotation boundary.
+ *
+ * This deliberately uses:
+ *
+ *     AT IDENTIFIER
+ *
+ * and never:
+ *
+ *     NANO_ANNOTATION
+ */
+pipelineAnnotation
+    : AT
+      IDENTIFIER
+    ;
+
+
+/* ============================================================================
+ * PIPELINE BODY
+ * ========================================================================== */
+
+/*
+ * A pipeline body is an ordered semantic region.
+ *
+ * No maximum member count or nesting depth is encoded.
+ */
 pipelineBody
+    : LBRACE
+      pipelineMember*
+      RBRACE
+    ;
+
+
+/*
+ * Anonymous pipeline region.
+ */
+pipelineRegion
     : LBRACE
       pipelineMember*
       RBRACE
@@ -295,81 +810,379 @@ pipelineBody
  * PIPELINE MEMBERS
  * ========================================================================== */
 
+/*
+ * The generic annotation form is the primary pipeline extension mechanism.
+ *
+ * Ordinary statements remain available.
+ *
+ * An annotated statement should be represented by a pipeline directive/region
+ * when it is intended to be interpreted as pipeline metadata or orchestration.
+ *
+ * This avoids trying to classify arbitrary annotation names in the parser.
+ */
 pipelineMember
-    : pipelineInput
-    | pipelineOutput
-    | pipelineParameter
-    | pipelineLocal
-    | pipelineStage
-    | pipelineEdge
-    | pipelineBranch
-    | pipelineJoin
-    | pipelineStream
-    | pipelineBatch
-    | pipelineWindow
-    | pipelineCheckpoint
-    | pipelineRequirement
-    | pipelineCapability
-    | pipelineConstraint
-    | pipelinePreference
-    | pipelineProvenance
-    | pipelineReproducibility
-    | pipelineMetadata
-    | pipelineOperation
-    | pipelineNestedRegion
+    : pipelineAnnotatedMember
     | pipelineStatement
     ;
 
 
+/*
+ * Generic pipeline annotation construct.
+ *
+ * Examples:
+ *
+ *     @stage preprocess { ... }
+ *     @input data: Data;
+ *     @output result: Tensor;
+ *     @model encoder;
+ *     @model encoder(...);
+ *     @requires(qubits >= n);
+ *     @capability(capability("tensor.compute"));
+ *     @checkpoint state;
+ *     @stream(source);
+ *     @batch(size);
+ *     @window(duration);
+ *     @provenance(metadata);
+ *     @custom_operation(value);
+ *
+ * No annotation vocabulary is hard-coded here.
+ */
+pipelineAnnotatedMember
+    : pipelineAnnotation
+      pipelineAnnotationPayload
+    ;
+
+
+/*
+ * Structural dispatch after:
+ *
+ *     AT IDENTIFIER
+ *
+ * The first token of the payload determines the shape.
+ */
+pipelineAnnotationPayload
+    : LPAREN
+      pipelineArgumentList?
+      RPAREN
+      pipelinePostCallTail?
+    | IDENTIFIER
+      pipelineNamedPayloadTail
+    | IDENTIFIER
+      THIN_ARROW
+      pipelineEndpoint
+      pipelineEdgeTail?
+    | ASSIGN
+      expression
+      SEMICOLON
+    | pipelineBody
+    | SEMICOLON
+    ;
+
+
 /* ============================================================================
- * INPUTS
+ * NAMED ANNOTATION PAYLOAD
+ * ========================================================================== */
+
+/*
+ * Examples:
+ *
+ *     @stage preprocess;
+ *     @stage preprocess { ... }
+ *     @input data: Tensor;
+ *     @output result = value;
+ *     @model encoder;
+ *     @requires capability(...);
+ *
+ * A named payload may itself be called.
+ */
+pipelineNamedPayloadTail
+    : LPAREN
+      pipelineArgumentList?
+      RPAREN
+      pipelinePostCallTail?
+    | pipelineNamedDeclarationTail
+    ;
+
+
+pipelineNamedDeclarationTail
+    : pipelineTypeClause?
+      pipelineInitializer?
+      pipelineBody?
+      SEMICOLON?
+    ;
+
+
+/*
+ * The post-call tail permits:
+ *
+ *     @stage(foo) { ... }
+ *     @requires(qubits >= n);
+ *     @operation(value);
+ */
+pipelinePostCallTail
+    : pipelineBody
+    | SEMICOLON
+    ;
+
+
+/* ============================================================================
+ * DEPENDENCY EDGES
+ * ========================================================================== */
+
+/*
+ * Dependency edges are structurally distinguished by:
+ *
+ *     THIN_ARROW
+ *
+ * Example:
+ *
+ *     @edge preprocess -> inference;
+ *
+ * or:
+ *
+ *     @edge preprocess -> inference {
+ *         ...
+ *     }
+ *
+ * This is logical dependency/data flow.
+ *
+ * It is NOT physical topology.
+ */
+pipelineEdgeTail
+    : pipelineEdgePayload?
+      pipelineEdgeTerminator
+    ;
+
+
+pipelineEdgePayload
+    : ASSIGN
+      expression
+    | pipelineBody
+    ;
+
+
+pipelineEdgeTerminator
+    : SEMICOLON
+    | /* empty when a body terminates the construct */
+    ;
+
+
+pipelineEndpoint
+    : pipelineQualifiedReference
+    ;
+
+
+pipelineQualifiedReference
+    : IDENTIFIER
+      (
+          DOT IDENTIFIER
+        | DOUBLE_COLON IDENTIFIER
+      )*
+    ;
+
+
+/* ============================================================================
+ * REFERENCES
+ * ========================================================================== */
+
+/*
+ * Bare pipeline references.
+ *
+ * Examples:
+ *
+ *     inference
+ *     pipelines::inference
+ *     module.pipeline
+ */
+pipelineReference
+    : pipelineQualifiedReference
+    ;
+
+
+/* ============================================================================
+ * INVOCATIONS
+ * ========================================================================== */
+
+/*
+ * Pipeline invocation:
+ *
+ *     inference();
+ *     inference(data);
+ *     module::inference(data, configuration);
+ *
+ * The invocation uses canonical expressions.
+ */
+pipelineInvocation
+    : pipelineQualifiedReference
+      LPAREN
+      pipelineArgumentList?
+      RPAREN
+      SEMICOLON?
+    ;
+
+
+pipelineArgumentList
+    : expression
+      (
+          COMMA
+          expression
+      )*
+    ;
+
+
+/* ============================================================================
+ * NESTED REGIONS
+ * ========================================================================== */
+
+/*
+ * Nested pipeline regions have no grammar-level depth limit.
+ */
+pipelineNestedRegion
+    : pipelineAnnotation
+      pipelineBody
+    ;
+
+
+/* ============================================================================
+ * CANONICAL STATEMENTS
+ * ========================================================================== */
+
+/*
+ * Ordinary Zamani statements remain owned by Statements.
+ *
+ * No pipeline-specific statement language is created.
+ */
+pipelineStatement
+    : statement
+    ;
+
+
+/* ============================================================================
+ * COMPATIBILITY RULES
+ * ============================================================================
+ *
+ * These rules preserve useful public names from the previous pipeline grammar
+ * without making those names separate grammar authorities.
+ *
+ * They all delegate to the canonical structural representation.
+ *
+ * Semantic analysis determines the actual annotation role.
  * ========================================================================== */
 
 pipelineInput
-    : roleAnnotation
-      identifier
-      pipelineValueType?
-      pipelineValueInitializer?
-      SEMICOLON
+    : pipelineAnnotatedMember
     ;
 
-
-/* ============================================================================
- * OUTPUTS
- * ========================================================================== */
 
 pipelineOutput
-    : roleAnnotation
-      identifier
-      pipelineValueType?
-      pipelineValueInitializer?
-      SEMICOLON
+    : pipelineAnnotatedMember
     ;
 
-
-/* ============================================================================
- * PARAMETERS
- * ========================================================================== */
 
 pipelineParameter
-    : roleAnnotation
-      identifier
-      pipelineValueType?
-      pipelineValueInitializer?
-      SEMICOLON
+    : pipelineAnnotatedMember
+    ;
+
+
+pipelineLocal
+    : pipelineAnnotatedMember
+    ;
+
+
+pipelineStage
+    : pipelineAnnotatedMember
+    ;
+
+
+pipelineEdge
+    : pipelineAnnotatedMember
+    ;
+
+
+pipelineBranch
+    : pipelineAnnotatedMember
+    ;
+
+
+pipelineJoin
+    : pipelineAnnotatedMember
+    ;
+
+
+pipelineStream
+    : pipelineAnnotatedMember
+    ;
+
+
+pipelineBatch
+    : pipelineAnnotatedMember
+    ;
+
+
+pipelineWindow
+    : pipelineAnnotatedMember
+    ;
+
+
+pipelineCheckpoint
+    : pipelineAnnotatedMember
+    ;
+
+
+pipelineRequirement
+    : pipelineAnnotatedMember
+    ;
+
+
+pipelineCapability
+    : pipelineAnnotatedMember
+    ;
+
+
+pipelineConstraint
+    : pipelineAnnotatedMember
+    ;
+
+
+pipelinePreference
+    : pipelineAnnotatedMember
+    ;
+
+
+pipelineProvenance
+    : pipelineAnnotatedMember
+    ;
+
+
+pipelineReproducibility
+    : pipelineAnnotatedMember
+    ;
+
+
+pipelineMetadata
+    : pipelineAnnotatedMember
+    ;
+
+
+pipelineOperation
+    : pipelineAnnotatedMember
+    ;
+
+
+pipelineNestedPipeline
+    : pipelineAnnotatedMember
     ;
 
 
 /* ============================================================================
- * LOCAL VALUES
+ * COMPATIBILITY TYPE / VALUE HELPERS
  * ========================================================================== */
 
-pipelineLocal
-    : roleAnnotation
-      identifier
-      pipelineValueType?
-      pipelineValueInitializer?
-      SEMICOLON
+/*
+ * These helper rules intentionally delegate to canonical shared syntax.
+ */
+pipelineType
+    : typeExpression
     ;
 
 
@@ -385,1161 +1198,692 @@ pipelineValueInitializer
     ;
 
 
-/* ============================================================================
- * PIPELINE STAGES
- * ========================================================================== */
-
-/*
- * A stage is a semantic computation boundary.
- *
- * A stage may eventually represent:
- *
- *     classical computation
- *     AI/ML model execution
- *     dataset transformation
- *     tensor computation
- *     quantum computation
- *     accelerator computation
- *     HDL/hardware computation
- *     distributed computation
- *     foreign computation
- *     future Zamani computation
- *
- * This grammar does not decide which one.
- */
-pipelineStage
-    : roleAnnotation
-      identifier
-      pipelineStageType?
-      pipelineStageInitializer?
-      pipelineStageBody?
-      SEMICOLON?
-    ;
-
-
-pipelineStageType
-    : COLON
-      typeExpression
-    ;
-
-
-pipelineStageInitializer
-    : ASSIGN
-      expression
-    ;
-
-
-pipelineStageBody
-    : LBRACE
-      pipelineStageMember*
-      RBRACE
-    ;
-
-
-pipelineStageMember
-    : pipelineStageInput
-    | pipelineStageOutput
-    | pipelineStageParameter
-    | pipelineStageRequirement
-    | pipelineStageCapability
-    | pipelineStageConstraint
-    | pipelineStagePreference
-    | pipelineStageOperation
-    | pipelineStatement
-    ;
-
-
-pipelineStageInput
-    : roleAnnotation
-      identifier
-      pipelineValueType?
-      pipelineValueInitializer?
-      SEMICOLON
-    ;
-
-
-pipelineStageOutput
-    : roleAnnotation
-      identifier
-      pipelineValueType?
-      pipelineValueInitializer?
-      SEMICOLON
-    ;
-
-
-pipelineStageParameter
-    : roleAnnotation
-      identifier
-      pipelineValueType?
-      pipelineValueInitializer?
-      SEMICOLON
-    ;
-
-
-pipelineStageRequirement
-    : roleAnnotation
-      pipelineClauseTarget?
-      ASSIGN?
-      expression
-      SEMICOLON
-    ;
-
-
-pipelineStageCapability
-    : roleAnnotation
-      pipelineClauseTarget?
-      ASSIGN?
-      expression
-      SEMICOLON
-    ;
-
-
-pipelineStageConstraint
-    : roleAnnotation
-      pipelineClauseTarget?
-      ASSIGN?
-      expression
-      SEMICOLON
-    ;
-
-
-pipelineStagePreference
-    : roleAnnotation
-      pipelineClauseTarget?
-      ASSIGN?
-      expression
-      SEMICOLON
-    ;
-
-
-pipelineStageOperation
-    : roleAnnotation
-      pipelineClauseTarget?
-      pipelineOperationPayload?
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * DEPENDENCY EDGES
- * ========================================================================== */
-
-/*
- * An edge expresses semantic dependency/data flow.
- *
- * Example:
- *
- *     @edge preprocess -> inference;
- *
- * This is NOT a physical network link.
- *
- * It does not represent:
- *
- *     CPU topology
- *     GPU topology
- *     QPU connectivity
- *     FPGA routing
- *     network topology
- *     scheduler reservations
- */
-pipelineEdge
-    : roleAnnotation
-      pipelineEndpoint
-      THIN_ARROW
-      pipelineEndpoint
-      pipelineEdgePayload?
-      SEMICOLON
-    ;
-
-
-pipelineEndpoint
-    : qualifiedPipelineReference
-    ;
-
-
-qualifiedPipelineReference
-    : identifier
-      (
-          DOT identifier
-        | DOUBLE_COLON identifier
-      )*
-    ;
-
-
-pipelineEdgePayload
-    : ASSIGN
-      expression
-    | pipelineClauseBody
-    ;
-
-
-/* ============================================================================
- * BRANCHING
- * ========================================================================== */
-
-pipelineBranch
-    : roleAnnotation
-      pipelineClauseTarget?
-      pipelineBranchCondition?
-      pipelineClauseBody
-    ;
-
-
-pipelineBranchCondition
-    : ASSIGN
-      expression
-    ;
-
-
-/* ============================================================================
- * JOINING
- * ========================================================================== */
-
-pipelineJoin
-    : roleAnnotation
-      pipelineClauseTarget?
-      pipelineJoinInputs?
-      pipelineClauseBody?
-      SEMICOLON?
-    ;
-
-
-pipelineJoinInputs
-    : LPAREN
-      optionalExpressionList
-      RPAREN
-    ;
-
-
-/* ============================================================================
- * STREAMING
- * ========================================================================== */
-
-/*
- * Streaming describes semantic streaming intent.
- *
- * It does not select:
- *
- *     network transport
- *     queue implementation
- *     buffer size
- *     number of workers
- *     number of machines
- */
-pipelineStream
-    : roleAnnotation
-      pipelineClauseTarget?
-      pipelineStreamSource?
-      pipelineClauseBody?
-      SEMICOLON?
-    ;
-
-
-pipelineStreamSource
-    : ASSIGN
-      expression
-    ;
-
-
-/* ============================================================================
- * BATCHING
- * ========================================================================== */
-
-/*
- * Batch configuration is expressed through normal expressions.
- *
- * Therefore:
- *
- *     @batch = dynamic_size;
- *
- * does not impose a compile-time machine limit.
- */
-pipelineBatch
-    : roleAnnotation
-      pipelineClauseTarget?
-      pipelineBatchExpression?
-      pipelineClauseBody?
-      SEMICOLON?
-    ;
-
-
-pipelineBatchExpression
-    : ASSIGN
-      expression
-    ;
-
-
-/* ============================================================================
- * WINDOWING
- * ========================================================================== */
-
-/*
- * Window size, stride, time range, count, etc. are semantic expressions.
- *
- * They are not hard-coded resource limits.
- */
-pipelineWindow
-    : roleAnnotation
-      pipelineClauseTarget?
-      pipelineWindowExpression?
-      pipelineClauseBody?
-      SEMICOLON?
-    ;
-
-
-pipelineWindowExpression
-    : ASSIGN
-      expression
-    ;
-
-
-/* ============================================================================
- * CHECKPOINTS
- * ========================================================================== */
-
-/*
- * Checkpoint syntax expresses intent.
- *
- * It does NOT guarantee that arbitrary runtime state can be serialized.
- *
- * The semantic/runtime layer decides whether the checkpoint is:
- *
- *     classical state
- *     compiled program state
- *     reconstructible state
- *     measurement boundary
- *     QEC-supported state
- *     provider-supported state
- *     another explicitly supported state
- */
-pipelineCheckpoint
-    : roleAnnotation
-      pipelineClauseTarget?
-      pipelineInitializerClause?
-      pipelineClauseBody?
-      SEMICOLON?
-    ;
-
-
-/* ============================================================================
- * PROVENANCE
- * ========================================================================== */
-
-pipelineProvenance
-    : roleAnnotation
-      pipelineClauseTarget?
-      pipelineInitializerClause?
-      pipelineClauseBody?
-      SEMICOLON?
-    ;
-
-
-/* ============================================================================
- * REPRODUCIBILITY
- * ========================================================================== */
-
-pipelineReproducibility
-    : roleAnnotation
-      pipelineClauseTarget?
-      pipelineInitializerClause?
-      pipelineClauseBody?
-      SEMICOLON?
-    ;
-
-
-/* ============================================================================
- * METADATA
- * ========================================================================== */
-
-pipelineMetadata
-    : roleAnnotation
-      pipelineClauseTarget?
-      pipelineInitializerClause?
-      pipelineClauseBody?
-      SEMICOLON?
-    ;
-
-
-pipelineInitializerClause
-    : ASSIGN
-      expression
-    ;
-
-
-/* ============================================================================
- * REQUIREMENTS
- * ========================================================================== */
-
-/*
- * Requirement:
- *
- *     "The execution environment must provide X."
- *
- * It does not mean:
- *
- *     "Use device X."
- */
-pipelineRequirement
-    : roleAnnotation
-      pipelineClauseTarget?
-      ASSIGN?
-      expression
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * CAPABILITIES
- * ========================================================================== */
-
-/*
- * Capability:
- *
- *     "This pipeline/stage can use or requires awareness of capability X."
- *
- * Actual capability discovery is downstream.
- */
-pipelineCapability
-    : roleAnnotation
-      pipelineClauseTarget?
-      ASSIGN?
-      expression
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * CONSTRAINTS
- * ========================================================================== */
-
-/*
- * Constraint:
- *
- *     a semantic condition that must remain satisfied.
- *
- * Constraint checking is semantic/compiler responsibility.
- */
-pipelineConstraint
-    : roleAnnotation
-      pipelineClauseTarget?
-      ASSIGN?
-      expression
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * PREFERENCES
- * ========================================================================== */
-
-/*
- * Preference:
- *
- *     an optimization preference rather than a semantic necessity.
- *
- * A preference must never silently become a hard requirement.
- */
-pipelinePreference
-    : roleAnnotation
-      pipelineClauseTarget?
-      ASSIGN?
-      expression
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * EXTENSIBLE PIPELINE OPERATIONS
- * ========================================================================== */
-
-/*
- * Generic operation boundary.
- *
- * This permits future AI dialects and repository extensions without requiring
- * pipelines.g4 to know every future operation.
- *
- * Examples of semantic operations could include:
- *
- *     preprocessing
- *     feature extraction
- *     inference
- *     evaluation
- *     transformation
- *     aggregation
- *     embedding
- *     serving
- *     orchestration
- *     quantum-assisted computation
- *     accelerator execution
- *
- * Their semantic meaning is registered and validated outside this grammar.
- */
-pipelineOperation
-    : roleAnnotation
-      pipelineClauseTarget?
-      pipelineOperationPayload?
-      (
-          pipelineClauseBody
-        | SEMICOLON
-      )
-    ;
-
-
 pipelineOperationPayload
     : ASSIGN
       expression
     | LPAREN
-      optionalExpressionList
+      pipelineArgumentList?
       RPAREN
     ;
 
 
-/* ============================================================================
- * NESTED PIPELINES
- * ========================================================================== */
-
 /*
- * Nested regions provide hierarchical composition.
+ * Existing downstream consumers may use this name.
  *
- * No maximum nesting depth is encoded here.
+ * It is intentionally equivalent to the canonical pipeline body.
  */
-pipelineNestedRegion
-    : roleAnnotation
-      pipelineClauseTarget?
-      pipelineClauseBody
+pipelineContents
+    : pipelineBody
     ;
 
-
-pipelineRegion
-    : LBRACE
-      pipelineMember*
-      RBRACE
-    ;
-
-
-pipelineClauseBody
-    : LBRACE
-      pipelineMember*
-      RBRACE
-    ;
-
-
-/* ============================================================================
- * REFERENCES
- * ========================================================================== */
-
-pipelineReference
-    : qualifiedPipelineReference
-    ;
-
-
-/* ============================================================================
- * INVOCATIONS
- * ========================================================================== */
-
-pipelineInvocation
-    : qualifiedPipelineReference
-      LPAREN
-      optionalExpressionList
-      RPAREN
-    ;
-
-
-/* ============================================================================
- * GENERIC CLAUSE TARGET
- * ========================================================================== */
-
-pipelineClauseTarget
-    : identifier
-    ;
-
-
-/* ============================================================================
- * ANNOTATION BOUNDARY
- * ========================================================================== */
-
-/*
- * The canonical lexer owns annotation lexical structure.
- *
- * Semantic analysis determines whether a particular annotation is:
- *
- *     @pipeline
- *     @stage
- *     @input
- *     @output
- *     @parameter
- *     @edge
- *     @branch
- *     @join
- *     @stream
- *     @batch
- *     @window
- *     @checkpoint
- *     @requires
- *     @capability
- *     @constraint
- *     @preference
- *     @provenance
- *     @reproducible
- *     or another registered dialect annotation.
- *
- * This avoids creating a second keyword/lexer system inside the AI grammar.
- */
-roleAnnotation
-    : NANO_ANNOTATION
-    ;
-
-
-/* ============================================================================
- * PIPELINE STATEMENTS
- * ========================================================================== */
-
-/*
- * Pipeline regions may contain canonical Zamani statements where the semantic
- * model permits statements.
- *
- * Statement ownership remains in grammar/statements.
- */
-pipelineStatement
-    : statement
-    ;
-
-
-/* ============================================================================
- * PUBLIC HELPER BOUNDARIES
- * ========================================================================== */
 
 pipelineMembers
     : pipelineMember*
     ;
 
 
-pipelineContents
-    : pipelineBody
-    ;
-
-
 pipelineArguments
-    : optionalExpressionList
-    ;
-
-
-pipelineType
-    : typeExpression
+    : pipelineArgumentList
     ;
 
 
 /* ============================================================================
- * SEMANTIC CONTRACT
- * ========================================================================== */
-
-/*
- * SEMANTIC ANALYSIS MUST:
+ * SEMANTIC ROLE EXAMPLES
+ * ============================================================================
  *
- *     - normalize annotation names;
- *     - validate annotation categories;
- *     - reject duplicate names where prohibited;
- *     - resolve stage references;
- *     - resolve pipeline references;
- *     - resolve input/output bindings;
- *     - validate type compatibility;
- *     - validate dependency relationships;
- *     - detect invalid cycles;
- *     - distinguish legal streaming feedback from illegal dependency cycles;
- *     - validate branch conditions;
- *     - validate joins;
- *     - validate requirements;
- *     - validate capabilities;
- *     - validate constraints;
- *     - validate preferences;
- *     - validate provenance;
- *     - validate reproducibility declarations;
- *     - validate checkpoint semantics;
- *     - validate cross-domain values;
- *     - preserve source provenance;
- *     - preserve deterministic semantic ordering;
- *     - reject unsupported target-specific assumptions;
- *     - reject accidental resource hard-coding.
+ * The following are examples of valid structural forms.
  *
+ * They are NOT parser-level reserved keywords.
  *
- * RESOURCE MODEL:
+ * --------------------------------------------------------------------------
  *
- * Requirements, capabilities, constraints and preferences are distinct.
+ * Pipeline declaration:
  *
- * For example:
+ *     @pipeline inference {
+ *         ...
+ *     }
  *
- *     requires quantum
+ * --------------------------------------------------------------------------
  *
- * must NOT automatically mean:
+ * Input:
  *
- *     use QPU-X
+ *     @input data: Dataset;
  *
- * or:
+ * --------------------------------------------------------------------------
  *
- *     allocate 32 qubits
+ * Output:
  *
- * or:
+ *     @output result: Tensor;
  *
- *     use topology Y
+ * --------------------------------------------------------------------------
  *
- * Those decisions belong downstream.
+ * Stage:
  *
+ *     @stage preprocess {
+ *         ...
+ *     }
  *
- * HARDWARE:
+ * --------------------------------------------------------------------------
  *
- * A pipeline may semantically request hardware capabilities, but this grammar
- * must never discover or bind hardware.
+ * Model:
  *
+ *     @model encoder;
  *
- * QUANTUM:
+ * --------------------------------------------------------------------------
  *
- * A pipeline may contain a quantum stage.
+ * Model invocation:
  *
- * The grammar does not define quantum operations.
+ *     @model encoder(input);
  *
- * Quantum syntax is handled by the quantum grammar/domain and semantic lowering
- * ultimately reaches:
+ * --------------------------------------------------------------------------
  *
- *     quantum::ir
+ * Dependency:
  *
- * as the canonical quantum semantic boundary.
+ *     @edge preprocess -> inference;
  *
+ * --------------------------------------------------------------------------
  *
- * QEC:
+ * Requirement:
  *
- * This grammar may express a semantic requirement or preference involving
- * error-correction capability.
+ *     @requires(qubits >= n);
  *
- * It does NOT implement QEC.
+ * --------------------------------------------------------------------------
  *
+ * Capability:
  *
- * ZQN:
+ *     @capability(capability("tensor.compute"));
  *
- * This grammar may express a semantic requirement involving noise/fault
- * awareness.
+ * --------------------------------------------------------------------------
  *
- * It does NOT define or model ZQN faults.
+ * Constraint:
  *
+ *     @constraint(latency <= budget);
  *
- * SCHEDULING:
+ * --------------------------------------------------------------------------
  *
- * Pipeline dependencies can inform scheduling.
+ * Preference:
  *
- * This grammar does not produce schedules.
+ *     @preference(accelerator("quantum"));
  *
+ * --------------------------------------------------------------------------
  *
- * OPTIMIZATION:
+ * Streaming:
  *
- * Preferences can inform optimization.
+ *     @stream(source);
  *
- * This grammar does not optimize.
+ * --------------------------------------------------------------------------
  *
+ * Batching:
  *
- * RUNTIME:
+ *     @batch(batch_size);
  *
- * The runtime consumes lowered semantic representations.
+ * --------------------------------------------------------------------------
  *
- * This grammar never executes a pipeline.
- */
-
-
-/* ============================================================================
- * CROSS-DOMAIN CONTRACT
- * ========================================================================== */
-
-/*
- * AI + CLASSICAL
+ * Window:
  *
- * Classical expressions and values enter through the canonical expression and
- * type systems.
+ *     @window(window_spec);
  *
+ * --------------------------------------------------------------------------
  *
- * AI + QUANTUM
+ * Checkpoint:
  *
- * A stage can refer to quantum computation semantically without importing the
- * quantum grammar here.
+ *     @checkpoint(state);
  *
- * This prevents:
+ * --------------------------------------------------------------------------
  *
- *     pipelines.g4 -> quantum.g4 -> pipelines.g4
+ * Provenance:
  *
- * cycles.
+ *     @provenance(metadata);
  *
+ * --------------------------------------------------------------------------
  *
- * AI + HDL / HARDWARE
+ * Reproducibility:
  *
- * Hardware computation is referenced semantically and lowered through the
- * hardware/HDL domain.
+ *     @reproducible(configuration);
  *
+ * --------------------------------------------------------------------------
  *
- * AI + DISTRIBUTED
+ * Nested pipeline:
  *
- * Distributed execution is represented as intent/requirements and resolved by
- * distributed execution/resource subsystems.
+ *     @pipeline nested {
+ *         ...
+ *     }
  *
+ * --------------------------------------------------------------------------
  *
- * AI + ACCELERATORS
+ * Arbitrary future operation:
  *
- * Accelerator capability is expressed semantically.
+ *     @future_operation(value);
  *
- * Device discovery and placement are downstream.
+ * The grammar accepts the structure without knowing what the operation means.
  *
+ * Semantic registration determines whether it is valid.
  *
- * AI + NETWORKING
+ * ============================================================================
+ * CROSS-DOMAIN EXAMPLES
+ * ============================================================================
  *
- * Networking requirements can be expressed as semantic requirements.
+ * Classical:
  *
- * Network protocols and endpoints remain owned by networking grammar and
- * runtime layers.
+ *     @stage classical {
+ *         let result = input + offset;
+ *     }
  *
+ * AI:
  *
- * AI + SECURITY
+ *     @stage inference {
+ *         @model model(input);
+ *     }
  *
- * Security requirements can be represented semantically.
+ * Quantum:
  *
- * Identity, cryptography, permissions and trust semantics remain owned by the
- * security domain.
- */
-
-
-/* ============================================================================
- * NO-CIRCULARITY CONTRACT
- * ========================================================================== */
-
-/*
- * This file MUST NOT import:
+ *     @stage quantum {
+ *         @requires(qubits >= n);
+ *         @requires(capability("quantum.measurement"));
+ *         @operation(custom_quantum_operation);
+ *     }
  *
- *     AI.g4
- *     models.g4
- *     datasets.g4
- *     training.g4
- *     inference.g4
- *     tensors.g4
- *     quantum/*.g4
- *     hardware/*.g4
- *     distributed/*.g4
- *     networking/*.g4
- *     runtime grammars
+ * Hardware:
  *
- * Instead it imports only canonical shared grammar foundations:
+ *     @stage accelerator {
+ *         @requires(capability("accelerator.compute"));
+ *     }
  *
- *     Types
- *     Expressions
+ * HDL:
  *
- * The canonical AI grammar delegates to:
+ *     @stage hardware {
+ *         @requires(capability("hardware.synthesis"));
+ *     }
  *
- *     pipelineConstruct
+ * Distributed:
  *
- * rather than pipelines.g4 importing the canonical AI grammar.
- */
-
-
-/* ============================================================================
+ *     @stage distributed {
+ *         @requires(capability("distributed.compute"));
+ *     }
+ *
+ * Hybrid:
+ *
+ *     @stage hybrid {
+ *         @requires(capability("quantum.measurement"));
+ *         @model classical_model;
+ *     }
+ *
+ * The grammar does not need to import each of those domains.
+ *
+ * ============================================================================
+ * SCALABILITY CONTRACT
+ * ============================================================================
+ *
+ * These constructs are deliberately unbounded by grammar-level constants:
+ *
+ *     pipelineMember*
+ *     pipelineArgumentList
+ *     pipelineBody
+ *     pipelineQualifiedReference
+ *     nested pipeline regions
+ *     dependency edges
+ *
+ * Therefore the language does not impose a fixed:
+ *
+ *     stage count
+ *     edge count
+ *     input count
+ *     output count
+ *     worker count
+ *     node count
+ *     device count
+ *     model count
+ *     tensor count
+ *     stream count
+ *     batch count
+ *     nesting count
+ *
+ * A finite implementation may still have parser/runtime resource limits.
+ *
+ * Those limits are implementation policies and MUST NOT be encoded as source
+ * language semantics.
+ *
+ * ============================================================================
  * DETERMINISM CONTRACT
- * ========================================================================== */
-
-/*
- * The grammar:
+ * ============================================================================
  *
- *     does not generate random values;
- *     does not choose devices;
- *     does not choose workers;
- *     does not choose execution order;
- *     does not generate seeds;
- *     does not generate schedules;
- *     does not allocate resources.
+ * For identical source and language version:
  *
- * Identical source must produce equivalent parse structures.
+ *     identical source
+ *          ->
+ *     identical token sequence
+ *          ->
+ *     equivalent parse tree
+ *          ->
+ *     equivalent AST structure
  *
- * Any deterministic execution requirement must be represented explicitly and
- * validated downstream.
- */
-
-
-/* ============================================================================
- * PROVENANCE CONTRACT
- * ========================================================================== */
-
-/*
- * Source locations, source identity and parse provenance must be retained by
- * the frontend AST.
+ * This grammar contains:
  *
- * pipelines.g4 itself does not create provenance identifiers.
+ *     no semantic predicates
+ *     no embedded actions
+ *     no random behavior
+ *     no target discovery
+ *     no hardware discovery
+ *     no runtime state
+ *     no resource allocation
  *
- * This prevents parser-level identifiers from becoming a second provenance
- * system.
- */
-
-
-/* ============================================================================
+ * ============================================================================
+ * ERROR CONTRACT
+ * ============================================================================
+ *
+ * Syntax diagnostics belong to the parser.
+ *
+ * Semantic diagnostics belong to semantic analysis.
+ *
+ * The grammar MUST NOT silently invent:
+ *
+ *     stages
+ *     dependencies
+ *     resources
+ *     devices
+ *     workers
+ *     values
+ *     types
+ *     capabilities
+ *
+ * Missing or malformed source must remain diagnosable.
+ *
+ * ============================================================================
+ * SECURITY CONTRACT
+ * ============================================================================
+ *
+ * This grammar:
+ *
+ *     performs no I/O;
+ *     performs no network operations;
+ *     performs no process execution;
+ *     performs no filesystem operations;
+ *     performs no hardware access;
+ *     performs no dynamic loading;
+ *     performs no runtime execution.
+ *
+ * Generated compiler/runtime code must remain safe Rust.
+ *
+ * ============================================================================
  * VERSIONING CONTRACT
- * ========================================================================== */
-
-/*
- * Pipeline syntax is governed by Zamani language versioning.
+ * ============================================================================
  *
- * New pipeline operations should preferably be introduced through:
+ * New pipeline semantic roles SHOULD preferably be introduced through:
  *
  *     registered annotations
  *     dialects
+ *     semantic registries
  *     versioned semantic contracts
  *
- * rather than by repeatedly introducing machine-specific grammar rules.
+ * rather than adding a parser alternative for every new AI framework or
+ * hardware vendor.
  *
- * Deprecated syntax must be handled through the repository's compatibility
- * and migration policy.
- */
-
-
-/* ============================================================================
- * ERROR CONTRACT
- * ========================================================================== */
-
-/*
- * Syntax errors are handled by ANTLR's parser diagnostics.
+ * Existing syntax must be retained or migrated according to the repository's
+ * compatibility policy.
  *
- * Semantic errors belong to the frontend/semantic diagnostic system.
+ * ============================================================================
+ * NO-CIRCULARITY CONTRACT
+ * ============================================================================
  *
- * This grammar MUST NOT encode semantic failures as comments.
+ * This grammar imports ONLY:
  *
- * It MUST NOT silently recover by inventing:
+ *     Types
+ *     Expressions
+ *     Statements
  *
- *     stages
- *     devices
- *     workers
- *     resources
+ * It MUST NOT import:
+ *
+ *     AI
+ *     Models
+ *     Datasets
+ *     Training
+ *     Inference
+ *     Tensors
+ *     Agents
+ *     Quantum
+ *     Hardware
+ *     Distributed
+ *     Networking
+ *
+ * merely to obtain generic syntax.
+ *
+ * The dependency direction remains:
+ *
+ *     canonical shared grammar
+ *             |
+ *             v
+ *       AIPipelines
+ *             |
+ *             v
+ *      semantic analysis
+ *
+ * This prevents circular grammar dependencies.
+ *
+ * ============================================================================
+ * INTEGRATION WITH AI.G4
+ * ============================================================================
+ *
+ * `ai.g4` is the AI composition boundary.
+ *
+ * It should expose pipeline syntax through:
+ *
+ *     pipelineConstruct
+ *
+ * at the canonical parser composition layer.
+ *
+ * It should NOT duplicate pipeline productions.
+ *
+ * If the root parser directly imports AIPipelines, that root composition remains
+ * authoritative and AI.g4 remains a semantic/domain composition boundary.
+ *
+ * The important invariant is:
+ *
+ *     exactly one implementation of pipeline syntax.
+ *
+ * ============================================================================
+ * INTEGRATION WITH MODELS / DATASETS / TRAINING / INFERENCE
+ * ============================================================================
+ *
+ * This grammar references those domains only through:
+ *
+ *     identifiers
+ *     expressions
  *     types
- *     dependencies
- *     hardware
- *     values
- */
-
-
-/* ============================================================================
+ *     capabilities
+ *     requirements
+ *     semantic annotations
+ *
+ * It does not import their grammars.
+ *
+ * Therefore:
+ *
+ *     pipeline -> model
+ *     pipeline -> dataset
+ *     pipeline -> training
+ *     pipeline -> inference
+ *
+ * does not create grammar cycles.
+ *
+ * ============================================================================
+ * INTEGRATION WITH QUANTUM
+ * ============================================================================
+ *
+ * Quantum stages remain generic pipeline computation.
+ *
+ * The lowering chain is:
+ *
+ *     pipeline AST
+ *          |
+ *          v
+ *     semantic quantum operation
+ *          |
+ *          v
+ *     quantum::ir
+ *          |
+ *          v
+ *     optimization
+ *          |
+ *          v
+ *     routing
+ *          |
+ *          v
+ *     scheduling
+ *          |
+ *          v
+ *     QEC / resilience / ZQN
+ *          |
+ *          v
+ *     HAL
+ *          |
+ *          v
+ *     target
+ *
+ * No second quantum IR is created by this grammar.
+ *
+ * ============================================================================
+ * INTEGRATION WITH HARDWARE / HDL
+ * ============================================================================
+ *
+ * Hardware intent remains semantic.
+ *
+ * Pipeline syntax can require:
+ *
+ *     capability("gpu.compute")
+ *     capability("fpga.synthesis")
+ *     capability("hardware.synthesis")
+ *
+ * without selecting a physical target.
+ *
+ * Hardware/HDL grammars remain the owners of their domain-specific source
+ * constructs.
+ *
+ * ============================================================================
+ * INTEGRATION WITH RESOURCES
+ * ============================================================================
+ *
+ * Pipeline annotations can carry resource expressions:
+ *
+ *     @requires(memory >= required_memory);
+ *     @requires(qubits >= n);
+ *     @requires(capability("tensor.compute"));
+ *
+ * The resource subsystem determines feasibility.
+ *
+ * The pipeline grammar never converts those expressions into hard-coded
+ * compiler limits.
+ *
+ * ============================================================================
+ * INTEGRATION WITH EXECUTION
+ * ============================================================================
+ *
+ * Pipeline dependency and region semantics may later inform:
+ *
+ *     scheduling
+ *     placement
+ *     concurrency
+ *     checkpointing
+ *     recovery
+ *     streaming
+ *     distributed execution
+ *
+ * This grammar does not perform those operations.
+ *
+ * ============================================================================
  * TEST CONTRACT
- * ========================================================================== */
-
-/*
- * Positive tests:
+ * ============================================================================
+ *
+ * Required positive tests:
  *
  *     minimal pipeline
  *     typed pipeline
- *     untyped pipeline
- *     pipeline with inputs
- *     pipeline with outputs
- *     pipeline with parameters
- *     pipeline with locals
- *     pipeline with multiple stages
- *     pipeline with multiple edges
- *     pipeline with branch
- *     pipeline with join
- *     pipeline with stream
- *     pipeline with batch
- *     pipeline with window
- *     pipeline with checkpoint
- *     pipeline with provenance
- *     pipeline with reproducibility
- *     pipeline with requirements
- *     pipeline with capabilities
- *     pipeline with constraints
- *     pipeline with preferences
- *     nested pipelines
+ *     initialized pipeline
+ *     empty pipeline
+ *     nested pipeline
  *     pipeline invocation
- *     generic pipeline operation
+ *     pipeline reference
+ *     named stage
+ *     typed input
+ *     typed output
+ *     model reference
+ *     model invocation
+ *     dependency edge
+ *     edge with payload
+ *     branch directive
+ *     join directive
+ *     stream directive
+ *     batch directive
+ *     window directive
+ *     checkpoint directive
+ *     provenance directive
+ *     reproducibility directive
+ *     requirement directive
+ *     capability directive
+ *     constraint directive
+ *     preference directive
+ *     arbitrary future annotation
+ *     ordinary statement
+ *     classical stage
+ *     quantum stage
+ *     HDL/hardware stage
+ *     distributed stage
+ *     hybrid stage
  *
+ * Required negative syntax tests:
  *
- * Cross-domain positive tests:
+ *     missing annotation name
+ *     missing declaration name
+ *     malformed argument list
+ *     malformed dependency arrow
+ *     missing dependency target
+ *     malformed type clause
+ *     malformed initializer
+ *     missing closing body
+ *     missing closing argument list
+ *     malformed qualified reference
  *
- *     classical + AI
- *     AI + quantum
- *     AI + hardware
- *     AI + HDL
- *     AI + distributed
- *     AI + accelerator
- *     AI + networking
- *     AI + security
- *     classical + quantum + AI
- *     quantum + hardware + AI
- *     classical + quantum + hardware + distributed + AI
+ * Required semantic negative tests:
  *
- *
- * Negative syntax tests:
- *
- *     missing pipeline name
- *     missing annotation
- *     malformed body
- *     malformed edge
- *     missing edge target
- *     malformed invocation
- *     malformed type
- *     malformed expression
- *     malformed branch
- *     malformed join
- *     malformed stream
- *     malformed batch
- *     malformed window
- *
- *
- * Semantic negative tests:
- *
- *     duplicate names
- *     unresolved stage
- *     unresolved pipeline
- *     invalid dependency
- *     invalid type connection
+ *     duplicate pipeline name
+ *     duplicate stage name
+ *     unresolved reference
+ *     invalid edge endpoint
  *     illegal dependency cycle
- *     invalid branch
- *     invalid join
+ *     incompatible input/output types
  *     contradictory requirements
  *     impossible constraints
- *     unsupported capabilities
- *     invalid checkpoint semantics
+ *     unsupported capability
+ *     invalid checkpoint
  *     invalid cross-domain value
- *     accidental hardware binding
  *
+ * Required scalability tests:
  *
- * Scalability tests:
+ *     one stage
+ *     many stages
+ *     one edge
+ *     many edges
+ *     many inputs
+ *     many outputs
+ *     many arguments
+ *     deeply nested regions
+ *     large expressions
+ *     symbolic resource quantities
  *
- *     arbitrary stage count
- *     arbitrary edge count
- *     arbitrary input count
- *     arbitrary output count
- *     arbitrary nested depth
- *     arbitrary batch expression
- *     arbitrary stream composition
- *     arbitrary window expression
+ * The tests must not define those cases as language maximums.
  *
- * Tests must not mistake test-harness memory/time limits for language limits.
+ * Required determinism tests:
  *
+ *     same source -> same token sequence
+ *     same source -> equivalent parse tree
+ *     repeated parse -> equivalent AST
  *
- * Determinism tests:
+ * Required compatibility tests:
  *
- *     identical source -> identical token sequence
- *     identical source -> equivalent parse tree
- *     repeated parsing -> equivalent AST
+ *     existing pipeline declarations
+ *     existing pipeline invocations
+ *     existing annotation spellings
+ *     migration from legacy annotation representation
  *
- *
- * Round-trip tests:
- *
- *     source
- *       ->
- *     lexer
- *       ->
- *     parser
- *       ->
- *     AST
- *       ->
- *     canonical printer/serializer
- *       ->
- *     parser
- *
- * Semantic meaning must be preserved.
- */
-
-
-/* ============================================================================
+ * ============================================================================
  * HARD-CODING AUDIT
- * ========================================================================== */
-
-/*
- * Forbidden:
+ * ============================================================================
  *
- *     MAX_STAGES
- *     MAX_WORKERS
- *     MAX_DEVICES
- *     MAX_GPUS
- *     MAX_QUBITS
- *     MAX_NODES
- *     MAX_BATCH
- *     MAX_STREAMS
- *     MAX_TENSORS
- *     MAX_DIMENSIONS
+ * This file contains no universal constants for:
  *
- * Forbidden:
+ *     qubits
+ *     CPUs
+ *     cores
+ *     threads
+ *     GPUs
+ *     FPGAs
+ *     QPUs
+ *     devices
+ *     nodes
+ *     workers
+ *     memory
+ *     tensor rank
+ *     tensor dimensions
+ *     pipeline stages
+ *     pipeline edges
+ *     pipeline depth
  *
- *     device IDs
- *     machine IDs
- *     CPU counts
- *     GPU counts
- *     QPU counts
- *     FPGA counts
- *     fixed topology
- *     physical addresses
- *     network addresses
- *     fixed memory capacities
- *     fixed accelerator counts
+ * It contains no physical device IDs.
  *
- * No such values are encoded by this grammar.
- */
-
-
-/* ============================================================================
+ * It contains no vendor-specific target requirements.
+ *
+ * It contains no scheduling implementation.
+ *
+ * It contains no placement implementation.
+ *
+ * It contains no runtime implementation.
+ *
+ * ============================================================================
  * COMPLETION CRITERIA
- * ========================================================================== */
-
-/*
- * This file is complete when ALL of the following are true:
+ * ============================================================================
  *
- *     1. The grammar compiles with the canonical ZamaniLexer.
+ * This file is complete when:
+ *
+ *     1. AIPipelines compiles against the canonical ZamaniLexer.
  *
  *     2. Types resolves to the canonical type grammar.
  *
  *     3. Expressions resolves to the canonical expression grammar.
  *
- *     4. pipelineConstruct is the stable public integration boundary.
+ *     4. Statements resolves to the canonical statement grammar.
  *
- *     5. AI.g4 delegates pipeline syntax to pipelineConstruct.
+ *     5. pipelineConstruct is the sole public pipeline entry point.
  *
- *     6. No duplicate pipeline grammar exists elsewhere.
+ *     6. No second pipeline grammar exists elsewhere.
  *
- *     7. No circular grammar dependency exists.
+ *     7. No NANO_ANNOTATION dependency remains.
  *
- *     8. No machine-specific resource assumptions exist.
+ *     8. No local identifier token/rule is redefined.
  *
- *     9. No fixed stage/device/worker/node limits exist.
+ *     9. No pipeline-specific expression grammar exists.
  *
- *    10. No quantum IR is created here.
+ *    10. No pipeline-specific type system exists.
  *
- *    11. quantum::ir remains the canonical quantum semantic boundary.
+ *    11. No universal hardware limits are encoded.
  *
- *    12. No QEC implementation exists here.
+ *    12. Requirements/capabilities/constraints/preferences remain semantically
+ *        distinct even though their lexical structure is generic.
  *
- *    13. No ZQN implementation exists here.
+ *    13. Dependency edges remain logical rather than physical topology.
  *
- *    14. No scheduling implementation exists here.
+ *    14. Quantum semantics ultimately use quantum::ir.
  *
- *    15. No optimization implementation exists here.
+ *    15. No QEC implementation exists here.
  *
- *    16. No hardware discovery exists here.
+ *    16. No ZQN implementation exists here.
  *
- *    17. No runtime execution exists here.
+ *    17. No scheduler implementation exists here.
  *
- *    18. Cross-domain composition is possible through canonical types and
- *        expressions.
+ *    18. No hardware discovery exists here.
  *
- *    19. Positive tests exist.
+ *    19. No runtime execution exists here.
  *
- *    20. Negative tests exist.
+ *    20. Positive tests exist.
  *
- *    21. Boundary tests exist.
+ *    21. Negative tests exist.
  *
- *    22. Scalability tests exist.
+ *    22. Boundary tests exist.
  *
- *    23. Determinism tests exist.
+ *    23. Scalability tests exist.
  *
- *    24. Round-trip tests exist where the repository's printer/serializer
- *        supports them.
+ *    24. Determinism tests exist.
  *
- *    25. Semantic diagnostics reject invalid pipeline constructs.
+ *    25. Compatibility tests exist.
  *
- *    26. Rust-side integration remains compatible with Rust 1.97/1.97.1.
+ *    26. AST mapping is documented.
  *
- *    27. No unsafe Rust is required by this grammar.
+ *    27. Semantic mapping is documented.
  *
- *    28. Documentation identifies this file as the owner of pipeline syntax.
+ *    28. IR mapping is documented.
  *
- *    29. Future pipeline dialects can extend semantic operation registration
- *        without requiring a machine-specific rewrite of this grammar.
+ *    29. Downstream consumers are documented.
  *
+ *    30. Hard-coding audit passes.
+ *
+ * ============================================================================
+ * END OF FILE
  * ============================================================================
  */
