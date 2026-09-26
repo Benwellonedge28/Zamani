@@ -3,319 +3,165 @@
  * Zamani Universal Programming Language
  * ============================================================================
  *
- * File:
- *     grammar/resources/preferences.g4
+ * FILE
+ * ----
+ * grammar/resources/preferences.g4
  *
- * Grammar kind:
- *     ANTLR4 parser grammar
+ * GRAMMAR
+ * -------
+ * ResourcePreferences
  *
- * Grammar name:
- *     ResourcePreferences
+ * STATUS
+ * ------
+ * CANONICAL RESOURCE-PREFERENCE LEAF GRAMMAR
  *
- * Runtime/compiler baseline:
- *     Rust 1.97 / Rust 1.97.1
- *     Rust 2021
- *     safe Rust only
- *     no unsafe Rust
+ * BASELINE
+ * --------
+ * Rust 1.97 / Rust 1.97.1
+ * Rust 2021
  *
- * ============================================================================
- * PURPOSE
- * ============================================================================
+ * SAFETY
+ * ------
+ * Grammar-only.
  *
- * This file defines the canonical SOURCE-LEVEL RESOURCE PREFERENCE
- * COMPOSITION GRAMMAR for Zamani.
+ * This grammar contains:
  *
- * A preference expresses desirable resource realization characteristics
- * without turning those characteristics into mandatory requirements.
- *
- * Preferences may describe:
- *
- *     - preferred resource properties;
- *     - preferred capabilities;
- *     - preferred targets;
- *     - preferred performance;
- *     - preferred latency;
- *     - preferred throughput;
- *     - preferred bandwidth;
- *     - preferred energy behaviour;
- *     - preferred power behaviour;
- *     - preferred reliability;
- *     - preferred resilience;
- *     - preferred portability;
- *     - preferred scalability;
- *     - preferred cost;
- *     - preferred placement characteristics;
- *     - preferred resource relationships;
- *     - preferred execution characteristics;
- *     - conditional preferences;
- *     - preference weights;
- *     - preference priorities;
- *     - preference scopes;
- *     - preference groups;
- *     - extensible future preference properties.
- *
- * The grammar describes PREFERENCE INTENT.
- *
- * It does NOT decide:
- *
- *     - which machine is selected;
- *     - which device is selected;
- *     - which CPU is selected;
- *     - which GPU is selected;
- *     - which FPGA is selected;
- *     - which QPU is selected;
- *     - how many physical resources exist;
- *     - how resources are allocated;
- *     - how routing is performed;
- *     - how scheduling is performed;
- *     - how optimization is performed;
- *     - whether a preference can be satisfied;
- *     - whether a preference is globally optimal.
- *
- * Those decisions belong to semantic analysis, compilation, optimization,
- * resource management, routing, scheduling, hardware abstraction, and
- * runtime layers.
+ *   - no embedded Rust;
+ *   - no parser actions;
+ *   - no semantic predicates;
+ *   - no filesystem access;
+ *   - no network access;
+ *   - no hardware discovery;
+ *   - no resource allocation;
+ *   - no runtime execution;
+ *   - no unsafe Rust requirement.
  *
  * ============================================================================
- * ARCHITECTURAL POSITION
+ * 1. PURPOSE
+ * ============================================================================
+ *
+ * This file owns the SOURCE-SYNTAX LEAF CONTRACT for RESOURCE PREFERENCES.
+ *
+ * A resource preference expresses desirable realization characteristics.
+ *
+ * A preference is NOT a requirement.
+ *
+ * A preference is NOT a constraint.
+ *
+ * A preference is NOT a hint.
+ *
+ * A preference MAY be traded off by downstream optimization/resource-selection
+ * machinery according to the semantic policy of the program, compilation
+ * profile, deployment environment, or execution environment.
+ *
+ * This grammar therefore describes:
+ *
+ *     WHAT IS PREFERRED
+ *
+ * and never:
+ *
+ *     WHICH PHYSICAL RESOURCE MUST BE USED.
+ *
+ * ============================================================================
+ * 2. ARCHITECTURAL POSITION
  * ============================================================================
  *
  *     Zamani source
  *          |
  *          v
- *       lexer
+ *     ZamaniLexer
  *          |
  *          v
- *       parser
+ *     ZamaniParser
  *          |
  *          v
- *   ResourcePreferences
+ *     Resources
  *          |
  *          v
- *      frontend AST
+ *     ResourcePreferences
  *          |
  *          v
- *   semantic analysis
+ *     Domain-neutral AST
  *          |
  *          v
- * resource-preference model
+ *     semantic resource model
  *          |
- *     +----+----+-------------------+
- *     |         |                   |
- *     v         v                   v
- *  compiler  optimizer          resource manager
- *     |         |                   |
- *     +---------+-------------------+
- *               |
- *               v
- *        scheduling/routing
- *               |
- *               v
- *          hardware HAL
- *               |
- *               v
- *             runtime
+ *     +----+---------+----------+-------------+
+ *     |              |          |             |
+ *     v              v          v             v
+ *  compiler      optimizer   scheduler      runtime
+ *     |              |          |             |
+ *     +--------------+----------+-------------+
+ *                    |
+ *                    v
+ *             target realization
+ *                    |
+ *       +------------+------------+
+ *       |            |            |
+ *       v            v            v
+ *      CPU          GPU          QPU
+ *       |            |            |
+ *      FPGA       accelerator   future target
+ *
+ * This file is upstream of all physical realization.
  *
  * ============================================================================
- * OWNERSHIP
+ * 3. SINGLE-AUTHORITY RULE
  * ============================================================================
  *
- * THIS FILE OWNS:
+ * RESOURCE PREFERENCE OWNERSHIP IS DELIBERATELY SPLIT.
  *
- *     - resource preference entry points;
- *     - resource preference composition;
- *     - resource preference expressions;
- *     - resource preference groups;
- *     - resource preference attributes;
- *     - preference scope;
- *     - preference condition;
- *     - preference weight;
- *     - preference priority;
- *     - preference objective metadata;
- *     - preference ordering metadata;
- *     - extensible preference properties;
- *     - resource-scoped preference syntax.
+ * grammar/resources/resources.g4
+ *     owns the concrete universal resource statement:
  *
- * THIS FILE DOES NOT OWN:
+ *         prefer <resource-expression> ;
  *
- *     - lexical tokens;
- *     - identifiers;
- *     - qualified names;
- *     - general expressions;
- *     - expression precedence;
- *     - general types;
- *     - generic constraints;
- *     - generic requirements;
- *     - capability identity;
- *     - resource identity;
- *     - resource declarations;
- *     - resource allocation;
- *     - target discovery;
- *     - hardware discovery;
- *     - calibration;
- *     - topology;
- *     - routing;
- *     - scheduling algorithms;
- *     - optimization algorithms;
- *     - QEC;
- *     - ZQN;
- *     - quantum::ir;
- *     - classical IR;
- *     - simulation;
- *     - runtime implementation;
- *     - deployment implementation.
+ *     and the resource-domain composition boundary.
  *
- * ============================================================================
- * NON-DUPLICATION CONTRACT
- * ============================================================================
+ * grammar/resources/preferences.g4
+ *     owns the reusable preference payload/block syntax:
  *
- * The canonical expression architecture owns:
+ *         resourcePreferenceSpecification
+ *         resourcePreferenceClause
+ *         resourcePreferenceProperty
+ *         resourcePreferenceValue
+ *         resourcePreferenceCondition
+ *         resourcePreferenceObjective
+ *         resourcePreferenceOrdering
+ *         resourcePreferenceMetadata
+ *         resourcePreferenceGroupBody
  *
- *     expression
+ * grammar/resources/resource-expressions.g4
+ *     owns:
  *
- * The canonical resource expression architecture owns:
+ *         resourceExpression
  *
- *     resourceExpression
+ * grammar/core/names.g4
+ *     owns:
  *
- * Therefore this file MUST NOT redefine:
+ *         identifier
+ *         qualifiedName
  *
- *     expression
- *     assignmentExpression
- *     binaryExpression
- *     logicalOrExpression
- *     logicalAndExpression
- *     equalityExpression
- *     relationalExpression
- *     additiveExpression
- *     multiplicativeExpression
- *     unaryExpression
- *     primaryExpression
+ * This file MUST NOT redefine:
  *
- * Resource preference values and conditions consume:
+ *         resourcePreference
+ *         resourcePreferenceExpression
+ *         resourceExpression
+ *         expression
+ *         identifier
+ *         qualifiedName
  *
- *     resourceExpression
- *
- * This guarantees that resource preferences use exactly the same expression
- * syntax and semantics as the rest of Zamani.
+ * This prevents circular or duplicate ownership.
  *
  * ============================================================================
- * REQUIREMENT / CONSTRAINT / PREFERENCE / HINT SEPARATION
+ * 4. IMPORTS
  * ============================================================================
  *
- * REQUIREMENT
- *     Mandatory condition required for a valid realization.
+ * ResourceExpressions is imported because every preference value and condition
+ * must use the canonical Zamani resource-expression architecture.
  *
- * CONSTRAINT
- *     Mandatory condition restricting valid realizations.
- *
- * PREFERENCE
- *     Desirable condition or objective that may be traded off.
- *
- * HINT
- *     Advisory information that may be ignored.
- *
- * A preference MUST NOT become a requirement merely because it is expressed
- * strongly, given a high priority, or assigned a high weight.
- *
- * Semantic analysis owns the policy determining how preferences are optimized.
- *
- * ============================================================================
- * POCO-REAF
- * ============================================================================
- *
- * Resource preferences MUST preserve:
- *
- *     Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
- *
- * Therefore this grammar MUST NOT encode:
- *
- *     MAX_CPUS
- *     MAX_CORES
- *     MAX_THREADS
- *     MAX_GPUS
- *     MAX_FPGAS
- *     MAX_QUBITS
- *     MAX_NODES
- *     MAX_MEMORY
- *     MAX_DEVICES
- *     MAX_ACCELERATORS
- *
- * It also MUST NOT encode:
- *
- *     physical device identifiers;
- *     physical addresses;
- *     fixed topology;
- *     provider-specific device names;
- *     fixed machine sizes.
- *
- * A preference may instead refer to symbolic values such as:
- *
- *     workload_size
- *     requested_parallelism
- *     latency_budget
- *     energy_budget
- *     available_capacity
- *     required_memory
- *
- * without imposing a machine-specific upper bound.
- *
- * ============================================================================
- * OPEN-WORLD DESIGN
- * ============================================================================
- *
- * Preference properties MUST remain open-world.
- *
- * The grammar must therefore allow semantic properties introduced by:
- *
- *     - future Zamani versions;
- *     - domain extensions;
- *     - dialects;
- *     - vendors;
- *     - hardware families;
- *     - execution environments;
- *     - future computing paradigms.
- *
- * The parser preserves the symbolic property.
- *
- * Semantic validation determines whether the property is known, supported,
- * deprecated, experimental, dialect-specific, or unknown.
- *
- * ============================================================================
- * SECURITY
- * ============================================================================
- *
- * Preference expressions are declarative.
- *
- * Parsing a preference MUST NOT:
- *
- *     - access the filesystem;
- *     - access the network;
- *     - inspect hardware;
- *     - discover devices;
- *     - allocate resources;
- *     - execute external commands;
- *     - invoke runtime APIs.
- *
- * Runtime and compilation systems may later interpret the resulting semantic
- * representation under their own security policies.
- *
- * ============================================================================
- * SCALABILITY
- * ============================================================================
- *
- * This grammar imposes no finite machine-resource limit.
- *
- * Repetition is represented using ANTLR repetition operators.
- *
- * Preference groups may contain an arbitrary number of preference entries.
- *
- * Preference properties are symbolic.
- *
- * Preference values are expressions.
- *
- * Therefore the grammar can represent preferences for workloads ranging from
- * extremely small programs to arbitrarily large programs, subject only to
- * implementation/resource availability downstream.
+ * Names is imported because preference property names and group names use the
+ * canonical name system.
  *
  * ============================================================================
  */
@@ -326,115 +172,32 @@ options {
     tokenVocab = ZamaniLexer;
 }
 
-import ResourceExpressions;
+import ResourceExpressions, Names;
 
 
 /*
  * ============================================================================
- * 1. PUBLIC ENTRY POINT
+ * 5. PUBLIC REUSABLE PREFERENCE PAYLOAD
  * ============================================================================
  *
- * A preference section contains zero or more preferences.
+ * This is the primary public entry point owned by this file.
  *
- * There is intentionally no grammar-level cardinality limit.
- */
-resourcePreferences
-    : resourcePreferenceItem*
-    ;
-
-
-/*
- * ============================================================================
- * 2. PREFERENCE ITEM
- * ============================================================================
- */
-
-resourcePreferenceItem
-    : resourcePreference
-    | resourcePreferenceGroup
-    ;
-
-
-/*
- * ============================================================================
- * 3. CANONICAL RESOURCE PREFERENCE
- * ============================================================================
+ * A parent grammar may use:
  *
- * Canonical compact form:
+ *     resourcePreferenceSpecification
  *
- *     preference resource latency <= latency_budget;
+ * after its own preference introducer.
  *
- *     preference resource throughput >= required_throughput;
+ * Example intended composition:
  *
- *     preference resource energy <= energy_budget;
- *
- *     preference resource capability_value == preferred_capability;
- *
- * The expression remains target-independent.
- *
- * Semantic analysis determines the objective represented by the expression.
- */
-resourcePreference
-    : K_PREFERENCE
-      K_RESOURCE
-      resourcePreferenceExpression
-      SEMI
-    ;
-
-
-/*
- * ============================================================================
- * 4. RESOURCE-SCOPED PREFERENCE
- * ============================================================================
- *
- * This form permits a symbolic scope to be associated with the preference.
- *
- * Example:
- *
- *     preference resource compute {
- *         objective = throughput >= desired_throughput;
+ *     prefer {
+ *         objective = latency <= latency_budget;
+ *         priority = latency_priority;
+ *         weight = latency_weight;
  *     };
  *
- * The scope is symbolic and does not identify a physical resource.
- */
-resourceScopedPreference
-    : K_PREFERENCE
-      K_RESOURCE
-      resourcePreferenceScope
-      resourcePreferenceSpecification
-      SEMI?
-    ;
-
-
-/*
- * ============================================================================
- * 5. PREFERENCE SCOPE
- * ============================================================================
+ * The concrete `prefer` statement remains owned by Resources.
  *
- * A scope is an abstract semantic reference.
- *
- * It may refer to:
- *
- *     program;
- *     module;
- *     function;
- *     operation;
- *     resource;
- *     resource group;
- *     execution region;
- *     logical domain;
- *     another semantic scope.
- *
- * The semantic layer resolves its meaning.
- */
-resourcePreferenceScope
-    : resourceExpression
-    ;
-
-
-/*
- * ============================================================================
- * 6. PREFERENCE SPECIFICATION
  * ============================================================================
  */
 
@@ -447,77 +210,268 @@ resourcePreferenceSpecification
 
 /*
  * ============================================================================
- * 7. PREFERENCE CLAUSE
+ * 6. PREFERENCE CLAUSE
  * ============================================================================
  *
- * Preference clauses deliberately use symbolic property names rather than a
- * closed keyword catalogue.
+ * Preference clauses are intentionally open-world.
  *
- * This allows future preference dimensions without changing the grammar.
+ * The language therefore does not need a new lexer keyword whenever a new
+ * optimization dimension is introduced.
  *
  * Examples:
  *
  *     objective = latency <= latency_budget;
- *
- *     priority = requested_priority;
- *
+ *     priority = priority_value;
  *     weight = preference_weight;
- *
  *     scope = execution_region;
- *
- *     when = workload_condition;
- *
+ *     when = workload_size > threshold;
  *     tie_breaker = energy <= energy_budget;
+ *     portability = portability_goal;
+ *     scalability = scalability_goal;
+ *     metadata::origin = developer;
+ *     vendor::accelerator::metric = desired_value;
  *
- *     portability = portability_score;
+ * Semantic analysis determines whether a property is:
  *
- *     custom::future_metric = target_value;
+ *     - standard;
+ *     - experimental;
+ *     - dialect-specific;
+ *     - vendor-specific;
+ *     - deprecated;
+ *     - unknown.
+ *
+ * ============================================================================
  */
+
 resourcePreferenceClause
-    : resourcePreferenceProperty
-      ASSIGN
-      resourcePreferenceValue
-      SEMI
+    : resourcePreferenceObjective
+    | resourcePreferenceOrdering
+    | resourcePreferenceCondition
+    | resourcePreferenceMetadata
+    | resourcePreferencePropertyAssignment
     ;
 
 
 /*
  * ============================================================================
- * 8. PREFERENCE PROPERTY
+ * 7. GENERIC PROPERTY ASSIGNMENT
  * ============================================================================
  *
- * The property name is open-world.
+ * This is the open-world extension point.
  *
- * A property can be:
+ * It deliberately does not enumerate:
  *
- *     objective
- *     priority
- *     weight
- *     scope
- *     when
- *     tie_breaker
+ *     latency
+ *     throughput
+ *     bandwidth
+ *     energy
+ *     power
+ *     reliability
+ *     resilience
+ *     cost
+ *     portability
+ *     scalability
+ *
+ * Those concepts may be represented by symbolic property names and interpreted
+ * by semantic analysis.
+ *
+ * This avoids turning every optimization dimension into a parser keyword.
+ * ============================================================================
+ */
+
+resourcePreferencePropertyAssignment
+    : resourcePreferenceProperty
+      ASSIGN
+      resourcePreferenceValue
+      SEMICOLON
+    ;
+
+
+/*
+ * ============================================================================
+ * 8. OBJECTIVE
+ * ============================================================================
+ *
+ * An objective identifies the expression being preferred.
+ *
+ * The value remains a canonical resource expression.
+ *
+ * Examples:
+ *
+ *     objective = latency <= latency_budget;
+ *
+ *     objective = throughput >= desired_throughput;
+ *
+ *     objective = energy <= energy_budget;
+ *
+ *     objective = capability("tensor.compute");
+ *
+ * The grammar does not decide whether the expression is actually a valid
+ * objective. That is semantic analysis.
+ * ============================================================================
+ */
+
+resourcePreferenceObjective
+    : resourcePreferenceObjectiveName
+      ASSIGN
+      resourcePreferenceValue
+      SEMICOLON
+    ;
+
+
+resourcePreferenceObjectiveName
+    : OBJECTIVE
+    | identifier
+    ;
+
+
+/*
+ * ============================================================================
+ * 9. ORDERING / PRIORITY / WEIGHT
+ * ============================================================================
+ *
+ * Ordering metadata expresses how preferences may be considered relative to
+ * other preferences.
+ *
+ * The grammar deliberately accepts expressions rather than a closed numeric
+ * domain.
+ *
+ * This allows the semantic layer to determine whether a value represents:
+ *
+ *     - an integer priority;
+ *     - a real-valued weight;
+ *     - a symbolic optimization class;
+ *     - a domain-specific ordering;
+ *     - another future representation.
+ *
+ * No source-level maximum or minimum exists.
+ * ============================================================================
+ */
+
+resourcePreferenceOrdering
+    : resourcePreferenceOrderingName
+      ASSIGN
+      resourcePreferenceValue
+      SEMICOLON
+    ;
+
+
+resourcePreferenceOrderingName
+    : PRIORITY
+    | WEIGHT
+    | ORDER
+    | identifier
+    ;
+
+
+/*
+ * ============================================================================
+ * 10. CONDITIONAL PREFERENCE
+ * ============================================================================
+ *
+ * `when` is represented as a property assignment rather than a separate
+ * executable control-flow construct.
+ *
+ * Example:
+ *
+ *     when = workload_size > threshold;
+ *
+ * The expression is declarative.
+ *
+ * Parsing it MUST NOT evaluate it.
+ *
+ * Semantic analysis determines:
+ *
+ *     - whether it is boolean;
+ *     - which symbols it references;
+ *     - which scope it applies to;
+ *     - whether the referenced information is available.
+ * ============================================================================
+ */
+
+resourcePreferenceCondition
+    : resourcePreferenceConditionName
+      ASSIGN
+      resourcePreferenceValue
+      SEMICOLON
+    ;
+
+
+resourcePreferenceConditionName
+    : WHEN
+    | identifier
+    ;
+
+
+/*
+ * ============================================================================
+ * 11. PREFERENCE PROPERTY
+ * ============================================================================
+ *
+ * Preference properties use the canonical open-world naming model.
+ *
+ * Supported examples include:
+ *
  *     latency
  *     throughput
  *     energy
  *     reliability
  *     portability
  *     scalability
- *     custom::future_property
+ *     performance::latency
+ *     quantum::fidelity
+ *     accelerator::throughput
+ *     vendor::future_metric
  *
- * The grammar does not reserve a finite list.
+ * Namespace depth is unbounded by the language architecture.
+ *
+ * The parser does not decide whether a property is known.
+ * ============================================================================
  */
+
 resourcePreferenceProperty
     : qualifiedPreferenceName
     ;
 
 
+qualifiedPreferenceName
+    : preferenceNameSegment
+      (
+          DOT preferenceNameSegment
+        | DOUBLE_COLON preferenceNameSegment
+      )*
+    ;
+
+
+preferenceNameSegment
+    : identifier
+    ;
+
+
 /*
  * ============================================================================
- * 9. PREFERENCE VALUE
+ * 12. PREFERENCE VALUE
  * ============================================================================
  *
- * Values use the canonical resource expression grammar.
+ * Every value is a canonical resource expression.
+ *
+ * This means preference syntax inherits the same:
+ *
+ *     arithmetic;
+ *     comparison;
+ *     logical;
+ *     call;
+ *     indexing;
+ *     member-access;
+ *     literal;
+ *     generic expression
+ *
+ * architecture as the rest of Zamani.
+ *
+ * This file MUST NOT create a second expression language.
+ * ============================================================================
  */
+
 resourcePreferenceValue
     : resourceExpression
     ;
@@ -525,510 +479,860 @@ resourcePreferenceValue
 
 /*
  * ============================================================================
- * 10. PREFERENCE EXPRESSION
+ * 13. PREFERENCE METADATA
  * ============================================================================
  *
- * The compact preference form delegates completely to the canonical resource
- * expression grammar.
+ * Metadata is syntactically identical to an open-world property assignment.
  *
- * This prevents a second comparison/logical/arithmetic language from emerging.
+ * Semantic analysis decides whether metadata affects:
+ *
+ *     optimization;
+ *     diagnostics;
+ *     provenance;
+ *     tooling;
+ *     compatibility;
+ *     deployment policy.
+ *
+ * Metadata MUST NOT silently change a preference into a requirement.
+ * ============================================================================
  */
-resourcePreferenceExpression
-    : resourceExpression
+
+resourcePreferenceMetadata
+    : resourcePreferenceMetadataName
+      ASSIGN
+      resourcePreferenceValue
+      SEMICOLON
     ;
 
 
-/*
- * ============================================================================
- * 11. PREFERENCE GROUP
- * ============================================================================
- *
- * Groups allow multiple preferences to be represented together.
- *
- * No fixed group size exists.
- *
- * Example:
- *
- *     preference group performance {
- *         objective = throughput >= desired_throughput;
- *         tie_breaker = latency <= latency_budget;
- *         weight = performance_weight;
- *     };
- *
- * The group name is symbolic.
- */
-resourcePreferenceGroup
-    : K_PREFERENCE
-      K_GROUP
-      preferenceGroupName
-      resourcePreferenceSpecification
-      SEMI?
-    ;
-
-
-/*
- * ============================================================================
- * 12. PREFERENCE GROUP NAME
- * ============================================================================
- */
-
-preferenceGroupName
+resourcePreferenceMetadataName
     : qualifiedPreferenceName
     ;
 
 
 /*
  * ============================================================================
- * 13. QUALIFIED PREFERENCE NAME
+ * 14. PREFERENCE GROUP BODY
  * ============================================================================
  *
- * Preference namespaces are open-ended.
+ * A group contains an arbitrary number of preference clauses.
  *
- * Examples:
+ * No finite group size is encoded.
  *
- *     objective
+ * The group itself is a semantic collection. It is not a scheduling group,
+ * execution group, hardware group, or physical device group.
  *
- *     performance.objective
- *
- *     zamani::performance::objective
- *
- *     vendor::accelerator::throughput
- *
- *     future::resource::metric
- *
- * Namespace depth is intentionally unbounded by the grammar.
+ * ============================================================================
  */
-qualifiedPreferenceName
-    : identifier
-      (
-          DOT identifier
-        | DOUBLE_COLON identifier
-      )*
+
+resourcePreferenceGroupBody
+    : LBRACE
+      resourcePreferenceClause*
+      RBRACE
     ;
 
 
 /*
  * ============================================================================
- * 14. OBJECTIVE PREFERENCE
+ * 15. PREFERENCE GROUP ENTRY
  * ============================================================================
  *
- * This rule provides a semantic naming boundary for the most common
- * preference property while keeping the value generic.
+ * This reusable boundary allows a parent resource grammar to attach its own
+ * group introducer while keeping the body owned here.
  *
- * Example:
- *
- *     objective = latency <= latency_budget;
- *
- * No finite set of objective types is encoded.
+ * The concrete group statement remains outside this file.
+ * ============================================================================
  */
-resourcePreferenceObjective
-    : identifier
-      ASSIGN
-      resourcePreferenceValue
-      SEMI
+
+resourcePreferenceGroupEntry
+    : resourcePreferenceGroupName
+      resourcePreferenceGroupBody
+    ;
+
+
+resourcePreferenceGroupName
+    : qualifiedPreferenceName
     ;
 
 
 /*
  * ============================================================================
- * 15. CONDITIONAL PREFERENCE
+ * 16. PREFERENCE CONDITION VALUE
  * ============================================================================
  *
- * A conditional preference allows a preference to apply only when an
- * expression evaluates to the relevant semantic condition.
+ * Explicit semantic boundary for consumers that need to distinguish a
+ * condition from an ordinary preference value.
  *
- * Example:
- *
- *     preference resource {
- *         when = workload_size > threshold;
- *         objective = latency <= latency_budget;
- *     };
- *
- * The condition is interpreted by semantic analysis.
- *
- * It does not cause runtime execution during parsing.
+ * No boolean grammar is duplicated.
+ * ============================================================================
  */
-resourceConditionalPreference
-    : K_PREFERENCE
-      K_RESOURCE
-      resourcePreferenceSpecification
-      SEMI?
+
+resourcePreferenceConditionValue
+    : resourceExpression
     ;
 
 
 /*
  * ============================================================================
- * 16. PREFERENCE METADATA
+ * 17. PREFERENCE OBJECTIVE VALUE
  * ============================================================================
- *
- * Metadata remains symbolic and extensible.
- *
- * Example:
- *
- *     preference resource {
- *         objective = throughput >= desired_throughput;
- *         metadata::origin = "developer";
- *     };
- *
- * Metadata does not itself alter the semantic meaning unless the downstream
- * semantic model explicitly recognizes it.
  */
-resourcePreferenceMetadata
-    : resourcePreferenceProperty
-      ASSIGN
-      resourcePreferenceValue
-      SEMI
+
+resourcePreferenceObjectiveValue
+    : resourceExpression
     ;
 
 
 /*
  * ============================================================================
- * 17. PREFERENCE LIST
+ * 18. PREFERENCE ORDERING VALUE
+ * ============================================================================
+ */
+
+resourcePreferenceOrderingValue
+    : resourceExpression
+    ;
+
+
+/*
+ * ============================================================================
+ * 19. PREFERENCE METADATA VALUE
+ * ============================================================================
+ */
+
+resourcePreferenceMetadataValue
+    : resourceExpression
+    ;
+
+
+/*
+ * ============================================================================
+ * 20. PREFERENCE LIST
  * ============================================================================
  *
- * Useful when a parent grammar wants to consume preferences as a list.
- */
-resourcePreferenceList
-    : resourcePreferenceItem
-      resourcePreferenceItem*
-    ;
-
-
-/*
- * ============================================================================
- * 18. OPTIONAL PREFERENCE LIST
- * ============================================================================
- */
-
-optionalResourcePreferenceList
-    : resourcePreferenceList?
-    ;
-
-
-/*
- * ============================================================================
- * 19. RESOURCE PREFERENCE EXPRESSION LIST
- * ============================================================================
- */
-
-resourcePreferenceExpressionList
-    : resourcePreferenceExpression
-      (
-          COMMA resourcePreferenceExpression
-      )*
-      COMMA?
-    ;
-
-
-/*
- * ============================================================================
- * 20. PREFERENCE PROPERTY LIST
- * ============================================================================
+ * Lists are unbounded at the language level.
  *
- * Arbitrary property cardinality.
+ * The implementation may impose operational resource limits when parsing or
+ * compiling hostile/oversized input, but those are implementation safeguards,
+ * not language semantics.
+ * ============================================================================
  */
-resourcePreferencePropertyList
+
+resourcePreferenceClauseList
     : resourcePreferenceClause*
     ;
 
 
 /*
  * ============================================================================
- * 21. WEIGHT / PRIORITY / ORDERING
+ * 21. OPTIONAL PREFERENCE SPECIFICATION
  * ============================================================================
- *
- * These are intentionally expressed through symbolic property names rather
- * than dedicated lexer keywords.
- *
- * Consequently the language can evolve from:
- *
- *     weight = expression;
- *
- * to future domain-specific preference systems without modifying this grammar.
- *
- * The semantic layer determines:
- *
- *     whether the value is valid;
- *     whether it is numeric;
- *     whether it is ordered;
- *     whether it is comparable;
- *     whether it is meaningful for the selected optimization policy.
- *
- * No source-level maximum or minimum is imposed here.
  */
 
-
-/*
- * ============================================================================
- * 22. PREFERENCE ATTRIBUTE
- * ============================================================================
- *
- * Attributes remain delegated to the canonical attribute architecture when
- * integrated by a parent grammar.
- *
- * This rule intentionally does not recreate attribute syntax.
- *
- * Parent grammars may attach their canonical attributes around preference
- * declarations.
- */
-
-
-/*
- * ============================================================================
- * 23. PREFERENCE EXPRESSION BOUNDARY
- * ============================================================================
- *
- * This rule is an explicit semantic boundary used by consumers that need to
- * distinguish a preference expression from an ordinary resource expression.
- *
- * It does not create a new expression language.
- */
-resourcePreferenceCondition
-    : resourceExpression
+optionalResourcePreferenceSpecification
+    : resourcePreferenceSpecification?
     ;
 
 
 /*
  * ============================================================================
- * 24. PREFERENCE TARGET EXPRESSION
+ * 22. PREFERENCE GROUP LIST
  * ============================================================================
- *
- * Targets remain abstract.
- *
- * A target expression may describe a preferred computational category without
- * selecting a concrete device.
- *
- * Example:
- *
- *     target = accelerator;
- *
- *     target = quantum;
- *
- *     target = heterogeneous;
- *
- * Concrete target realization is outside this grammar.
  */
-resourcePreferenceTargetExpression
-    : resourceExpression
+
+resourcePreferenceGroupList
+    : resourcePreferenceGroupEntry*
     ;
 
 
 /*
  * ============================================================================
- * 25. PREFERENCE CAPABILITY EXPRESSION
+ * 23. RESOURCE PREFERENCE EXTENSION
  * ============================================================================
  *
- * Capability syntax itself belongs to the canonical capability grammar.
+ * An extension is deliberately represented through the same open-world
+ * property mechanism.
  *
- * This rule only provides a resource-preference expression boundary.
- */
-resourcePreferenceCapabilityExpression
-    : resourceExpression
-    ;
-
-
-/*
- * ============================================================================
- * 26. PREFERENCE RESOURCE EXPRESSION
- * ============================================================================
- *
- * This rule exists for downstream grammars that need an explicitly named
- * resource-preference expression boundary.
- */
-resourcePreferenceResourceExpression
-    : resourceExpression
-    ;
-
-
-/*
- * ============================================================================
- * 27. PREFERENCE EXTENSION
- * ============================================================================
- *
- * Extension properties use the same open-world property mechanism.
+ * This supports future domains without modifying the universal preference
+ * grammar merely because a new resource type appears.
  *
  * Examples:
  *
- *     vendor::gpu::occupancy = desired_occupancy;
+ *     quantum::fidelity = target_fidelity;
+ *     gpu::occupancy = desired_occupancy;
+ *     fpga::throughput = desired_throughput;
+ *     future::resource::metric = desired_metric;
  *
- *     vendor::qpu::queue_time = queue_budget;
- *
- *     future::accelerator::metric = desired_value;
- *
- * The grammar does not validate the namespace.
+ * The grammar does not know whether those properties exist.
+ * ============================================================================
  */
+
 resourcePreferenceExtension
     : qualifiedPreferenceName
       ASSIGN
       resourcePreferenceValue
-      SEMI
+      SEMICOLON
     ;
 
 
 /*
  * ============================================================================
- * 28. PREFERENCE CONTRACT
+ * 24. PREFERENCE CONTRACT BODY
  * ============================================================================
  *
- * A contract groups preference information without making it a requirement.
+ * A contract is only a grouping mechanism here.
+ *
+ * It does NOT convert preferences into requirements.
+ *
+ * The semantic layer preserves:
+ *
+ *     requirement != constraint != preference != hint
+ *
+ * ============================================================================
+ */
+
+resourcePreferenceContractBody
+    : resourcePreferenceSpecification
+    ;
+
+
+/*
+ * ============================================================================
+ * 25. PREFERENCE SCOPE VALUE
+ * ============================================================================
+ *
+ * Scope remains symbolic.
+ *
+ * It does not identify:
+ *
+ *     CPU 0
+ *     GPU 0
+ *     QPU 0
+ *     physical qubit 0
+ *     memory bank 0
+ *     network node 0
+ *
+ * A scope such as:
+ *
+ *     program
+ *     module
+ *     function
+ *     operation
+ *     execution_region
+ *
+ * is interpreted semantically.
+ * ============================================================================
+ */
+
+resourcePreferenceScopeValue
+    : resourceExpression
+    ;
+
+
+/*
+ * ============================================================================
+ * 26. PREFERENCE TARGET VALUE
+ * ============================================================================
+ *
+ * A preference may express a desired target category.
+ *
+ * It MUST NOT force physical target selection at parse time.
+ *
+ * Examples:
+ *
+ *     target = quantum;
+ *     target = accelerator;
+ *     target = heterogeneous;
+ *
+ * Since resource target semantics already have an owner in resources.g4,
+ * this file merely supplies the reusable value boundary.
+ * ============================================================================
+ */
+
+resourcePreferenceTargetValue
+    : resourceExpression
+    ;
+
+
+/*
+ * ============================================================================
+ * 27. PREFERENCE CAPABILITY VALUE
+ * ============================================================================
+ *
+ * Capability syntax remains owned by the resource capability architecture.
+ *
+ * This rule exists only as a reusable preference boundary.
+ * ============================================================================
+ */
+
+resourcePreferenceCapabilityValue
+    : resourceExpression
+    ;
+
+
+/*
+ * ============================================================================
+ * 28. SEMANTIC DISTINCTION
+ * ============================================================================
+ *
+ * A parser consumer MUST preserve the following distinction:
+ *
+ *     preference
+ *         |
+ *         +--> objective
+ *         +--> condition
+ *         +--> ordering
+ *         +--> metadata
+ *         +--> extension property
+ *
+ * None of these is a requirement.
+ *
+ * None of these is a constraint.
+ *
+ * None of these is a hint.
+ *
+ * Semantic analysis owns the distinction.
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * 29. POCO-REAF CONTRACT
+ * ============================================================================
+ *
+ * This grammar is explicitly designed for:
+ *
+ *     Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
+ *
+ * It therefore contains NO language-level maximum for:
+ *
+ *     CPUs
+ *     cores
+ *     threads
+ *     GPUs
+ *     FPGAs
+ *     ASICs
+ *     QPUs
+ *     qubits
+ *     nodes
+ *     devices
+ *     accelerators
+ *     memory
+ *     storage
+ *     registers
+ *     vector width
+ *     tensor rank
+ *     tensor dimensions
+ *     network size
+ *     timelines
+ *     resource groups
+ *     preference groups
+ *     preference clauses
+ *
+ * In particular, this file contains no:
+ *
+ *     MAX_QUBITS
+ *     MAX_CPUS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_NODES
+ *     MAX_MEMORY
+ *     MAX_THREADS
+ *     MAX_TENSOR_RANK
+ *     MAX_REGISTER_WIDTH
+ *     MAX_NETWORK_SIZE
+ *     MAX_DEVICE_COUNT
+ *
+ * ============================================================================
+ * 30. HARDWARE INDEPENDENCE
+ * ============================================================================
+ *
+ * Preference syntax MUST NOT encode a physical realization.
+ *
+ * Therefore this file does not contain universal syntax for:
+ *
+ *     physical_cpu(0)
+ *     physical_gpu(0)
+ *     physical_qubit(0)
+ *     memory_bank(0)
+ *     device_address(...)
+ *     fixed_topology(...)
+ *     vendor_device(...)
+ *
+ * If a target-specific realization is required, that realization belongs to
+ * the downstream target/resource/placement architecture and must remain
+ * distinguishable from portable source preference semantics.
+ *
+ * ============================================================================
+ * 31. RESOURCE AVAILABILITY
+ * ============================================================================
+ *
+ * A preference can mention symbolic availability information:
+ *
+ *     available_capacity
+ *     available_memory
+ *     available_parallelism
+ *     availability
+ *
+ * The grammar does not inspect those values.
+ *
+ * Availability is supplied later by:
+ *
+ *     compiler;
+ *     resource manager;
+ *     target description;
+ *     runtime environment;
+ *     deployment environment;
+ *     hardware abstraction layer.
+ *
+ * ============================================================================
+ * 32. SCALABILITY
+ * ============================================================================
+ *
+ * The grammar uses recursive/open composition and ANTLR repetition rather than
+ * finite resource cardinalities.
+ *
+ * This means:
+ *
+ *     one preference
+ *
+ * and:
+ *
+ *     arbitrarily many preferences
+ *
+ * have the same language architecture.
+ *
+ * "Infinity" here means:
+ *
+ *     no artificial language-level ceiling.
+ *
+ * It does not claim physically infinite hardware or infinite compiler memory.
+ *
+ * ============================================================================
+ * 33. DETERMINISM
+ * ============================================================================
+ *
+ * Preference syntax is declarative.
+ *
+ * Parsing the same source with the same language version MUST produce the same
+ * syntactic structure.
+ *
+ * Preference optimization order is NOT determined by parser alternative order.
+ *
+ * Semantic analysis must explicitly interpret:
+ *
+ *     priority;
+ *     weight;
+ *     objective;
+ *     tie-breaking;
+ *     conflicting preferences.
+ *
+ * ============================================================================
+ * 34. CONFLICTING PREFERENCES
+ * ============================================================================
+ *
+ * The grammar permits multiple preferences even when their semantic objectives
+ * conflict.
  *
  * Example:
  *
- *     preference resource {
+ *     objective = throughput >= desired_throughput;
+ *     tie_breaker = energy <= energy_budget;
+ *
+ * or:
+ *
+ *     performance::latency = latency_goal;
+ *     performance::energy = energy_goal;
+ *
+ * Conflict resolution is NOT grammar behavior.
+ *
+ * The semantic/resource optimization layer must define the applicable policy.
+ *
+ * ============================================================================
+ * 35. REQUIREMENT / CONSTRAINT / PREFERENCE / HINT BOUNDARY
+ * ============================================================================
+ *
+ * The following are intentionally separate concepts:
+ *
+ *     REQUIRES
+ *         mandatory feasibility condition
+ *
+ *     CONSTRAINT
+ *         mandatory realization restriction
+ *
+ *     PREFER
+ *         desirable objective that may be traded off
+ *
+ *     HINT
+ *         advisory information that may be ignored
+ *
+ * A high preference priority MUST NOT change its category into REQUIRES.
+ *
+ * A preference weight MUST NOT change its category into CONSTRAINT.
+ *
+ * This category distinction belongs to the semantic model.
+ *
+ * ============================================================================
+ * 36. QUANTUM INTEGRATION
+ * ============================================================================
+ *
+ * Quantum programs may express preferences such as:
+ *
+ *     fidelity;
+ *     latency;
+ *     throughput;
+ *     energy;
+ *     coherence-related metrics;
+ *     error-related metrics;
+ *     communication cost;
+ *     routing cost;
+ *     execution duration.
+ *
+ * This grammar does not know how those metrics are implemented.
+ *
+ * Quantum preference consequences may eventually influence:
+ *
+ *     quantum::ir;
+ *     optimization;
+ *     routing;
+ *     scheduling;
+ *     resilience;
+ *     QEC;
+ *     ZQN;
+ *     HAL.
+ *
+ * No preference rule in this file directly depends on quantum::ir.
+ *
+ * ============================================================================
+ * 37. CLASSICAL INTEGRATION
+ * ============================================================================
+ *
+ * The same syntax can express preferences over:
+ *
+ *     latency;
+ *     throughput;
+ *     memory;
+ *     vectorization;
+ *     energy;
+ *     parallelism;
+ *     portability;
+ *     scalability;
+ *     cost.
+ *
+ * Classical backend selection remains downstream.
+ *
+ * ============================================================================
+ * 38. HDL / HARDWARE INTEGRATION
+ * ============================================================================
+ *
+ * Preferences may describe desired hardware characteristics without encoding
+ * a particular implementation.
+ *
+ * Examples:
+ *
+ *     timing::latency = desired_latency;
+ *     power::budget = power_budget;
+ *     reliability::goal = reliability_goal;
+ *     throughput = desired_throughput;
+ *
+ * This grammar does not define:
+ *
+ *     wire widths;
+ *     fixed register widths;
+ *     fixed FPGA resources;
+ *     fixed ASIC structures;
+ *     fixed clock counts;
+ *     fixed physical placement.
+ *
+ * ============================================================================
+ * 39. DISTRIBUTED / NETWORKING INTEGRATION
+ * ============================================================================
+ *
+ * Preferences may express:
+ *
+ *     latency;
+ *     bandwidth;
+ *     throughput;
+ *     communication_cost;
+ *     locality;
+ *     portability;
+ *     energy;
+ *     resilience.
+ *
+ * Node count and network topology remain downstream resource/target data.
+ *
+ * ============================================================================
+ * 40. AI / DATA INTEGRATION
+ * ============================================================================
+ *
+ * Preferences may apply to:
+ *
+ *     training;
+ *     inference;
+ *     tensor computation;
+ *     accelerator use;
+ *     memory behavior;
+ *     data movement;
+ *     latency;
+ *     throughput;
+ *     energy;
+ *     scalability.
+ *
+ * Framework-specific concepts remain outside this universal grammar.
+ *
+ * ============================================================================
+ * 41. SECURITY
+ * ============================================================================
+ *
+ * Parsing preference syntax must be side-effect free.
+ *
+ * This file does not:
+ *
+ *     - inspect hardware;
+ *     - contact services;
+ *     - read secrets;
+ *     - resolve providers;
+ *     - execute optimization;
+ *     - allocate resources.
+ *
+ * Security policy is enforced downstream.
+ *
+ * ============================================================================
+ * 42. AST CONTRACT
+ * ============================================================================
+ *
+ * The frontend AST should preserve, at minimum:
+ *
+ *     preference kind;
+ *     source span;
+ *     clauses;
+ *     property name;
+ *     value expression;
+ *     condition expression;
+ *     objective expression;
+ *     ordering metadata;
+ *     metadata/extensions;
+ *     lexical/source locations.
+ *
+ * The AST must remain domain-neutral.
+ *
+ * It must not contain:
+ *
+ *     GPU-specific structures;
+ *     QPU-specific structures;
+ *     physical-device IDs;
+ *     physical-qubit IDs;
+ *     vendor-specific realization state.
+ *
+ * ============================================================================
+ * 43. SEMANTIC CONTRACT
+ * ============================================================================
+ *
+ * Semantic analysis must:
+ *
+ *     - classify standard and extension properties;
+ *     - type-check values;
+ *     - validate dimensions/units where applicable;
+ *     - validate objective expressions;
+ *     - validate condition expressions;
+ *     - preserve preference category;
+ *     - detect invalid or contradictory metadata;
+ *     - preserve source spans;
+ *     - report unsupported properties according to language-version policy.
+ *
+ * Semantic analysis MAY use target information later.
+ *
+ * The parser must not.
+ *
+ * ============================================================================
+ * 44. IR CONTRACT
+ * ============================================================================
+ *
+ * This grammar defines NO IR.
+ *
+ * Preference information is lowered by semantic/resource analysis into the
+ * repository's canonical resource-intent representation.
+ *
+ * A preference may influence downstream:
+ *
+ *     optimization;
+ *     target selection;
+ *     placement;
+ *     routing;
+ *     scheduling;
+ *     resilience;
+ *     runtime policy.
+ *
+ * It must never require a second domain-specific IR merely because its
+ * preferred realization concerns quantum, HDL, GPU, FPGA, or another target.
+ *
+ * ============================================================================
+ * 45. DIAGNOSTICS CONTRACT
+ * ============================================================================
+ *
+ * Parser diagnostics should identify malformed syntax only.
+ *
+ * Examples:
+ *
+ *     missing property name;
+ *     missing assignment operator;
+ *     missing value;
+ *     missing semicolon;
+ *     unbalanced preference block.
+ *
+ * Semantic diagnostics handle:
+ *
+ *     unknown standard property;
+ *     invalid property type;
+ *     invalid objective;
+ *     invalid condition;
+ *     incompatible dimensions;
+ *     unsupported dialect property;
+ *     conflicting semantic requirements.
+ *
+ * Resource infeasibility is NOT a syntax error.
+ *
+ * ============================================================================
+ * 46. COMPATIBILITY CONTRACT
+ * ============================================================================
+ *
+ * Stable preference property spellings are compatibility-sensitive.
+ *
+ * Adding a new open-world property does not require changing this grammar.
+ *
+ * Removing or changing the meaning of a standardized property requires a
+ * language-version/deprecation policy.
+ *
+ * Vendor/dialect properties should use qualified namespaces where appropriate.
+ *
+ * Example:
+ *
+ *     vendor::family::metric
+ *
+ * rather than adding vendor-specific global keywords.
+ *
+ * ============================================================================
+ * 47. PERFORMANCE CONTRACT
+ * ============================================================================
+ *
+ * The grammar must remain structurally simple:
+ *
+ *     property -> assignment -> expression
+ *
+ * Open-world names use bounded local alternatives followed by repetition.
+ *
+ * No semantic lookup occurs during parsing.
+ *
+ * No target discovery occurs during parsing.
+ *
+ * This prevents resource preference syntax from introducing target-dependent
+ * parser behavior.
+ *
+ * ============================================================================
+ * 48. TEST CONTRACT
+ * ============================================================================
+ *
+ * This file is complete only when the following tests exist in the resource
+ * preference test suite.
+ *
+ * POSITIVE
+ * --------
+ *
+ *     prefer latency <= latency_budget;
+ *     prefer throughput >= desired_throughput;
+ *     prefer energy <= energy_budget;
+ *
+ *     prefer {
  *         objective = latency <= latency_budget;
- *         weight = latency_weight;
- *         portability = portability_score;
  *     };
  *
- * The semantic layer preserves the preference status.
- */
-resourcePreferenceContract
-    : K_PREFERENCE
-      K_RESOURCE
-      resourcePreferenceSpecification
-      SEMI?
-    ;
-
-
-/*
- * ============================================================================
- * 29. PREFERENCE ASSERTION BOUNDARY
- * ============================================================================
+ *     prefer {
+ *         objective = throughput >= desired_throughput;
+ *         priority = preference_priority;
+ *         weight = preference_weight;
+ *     };
  *
- * This is intentionally only a syntax boundary.
+ *     prefer {
+ *         performance::latency = latency_goal;
+ *         performance::throughput = throughput_goal;
+ *     };
  *
- * Whether a preference can be evaluated is a semantic question.
- */
-resourcePreferenceAssertion
-    : resourcePreferenceCondition
-    ;
-
-
-/*
- * ============================================================================
- * 30. HARD-CODING BOUNDARY
- * ============================================================================
+ *     prefer {
+ *         quantum::fidelity = desired_fidelity;
+ *         quantum::latency = latency_budget;
+ *     };
  *
- * The following concepts MUST remain semantic expressions:
+ *     prefer {
+ *         vendor::future::metric = desired_value;
+ *     };
  *
- *     resource count
- *     resource capacity
- *     machine size
- *     memory capacity
- *     qubit count
- *     processor count
- *     accelerator count
- *     node count
- *     topology size
- *     workload size
- *     throughput
- *     latency
- *     energy
- *     reliability
- *     scalability
+ * NEGATIVE
+ * --------
  *
- * This grammar contains no finite constants representing any of them.
+ *     prefer { = value; };
+ *     prefer { property = ; };
+ *     prefer { property value; };
+ *     prefer { property = value };
  *
- * Any literal appearing inside a resource expression is a program-level value
- * and MUST NOT be interpreted by this grammar as a machine-size limit.
+ *     malformed qualified property names;
+ *     malformed nested blocks;
+ *     missing delimiters.
  *
- * ============================================================================
- * SEMANTIC CONTRACT
- * ============================================================================
+ * BOUNDARY
+ * --------
  *
- * Every parsed preference must preserve at least these semantic distinctions:
+ *     zero clauses;
+ *     one clause;
+ *     many clauses;
+ *     deeply qualified symbolic properties;
+ *     deeply nested expressions;
+ *     large symbolic quantities.
  *
- *     preference identity
- *     preference expression
- *     preference scope
- *     preference condition
- *     preference properties
- *     preference metadata
+ * SCALABILITY
+ * ----------
  *
- * The semantic layer must additionally preserve the fact that the construct
- * is a PREFERENCE rather than a REQUIREMENT or CONSTRAINT.
+ *     many preferences;
+ *     many groups;
+ *     large expressions;
+ *     arbitrarily large symbolic resource quantities;
+ *     large cross-domain preference sets.
+ *
+ * HARD-CODING
+ * -----------
+ *
+ * Static validation must reject accidental introduction of universal resource
+ * limits or equivalent fixed-capacity grammar constructs.
  *
  * ============================================================================
- * IR CONTRACT
+ * 49. COMPLETION CRITERIA
  * ============================================================================
  *
- * This grammar MUST NOT define a canonical IR.
+ * This file is COMPLETE when:
  *
- * The parser produces syntax/AST information.
+ *     [x] Preference payload ownership is isolated.
+ *     [x] No duplicate resourcePreference statement is defined.
+ *     [x] No duplicate resourcePreferenceExpression is defined.
+ *     [x] Canonical resourceExpression is reused.
+ *     [x] Canonical names are reused.
+ *     [x] Actual repository token names are used.
+ *     [x] Open-world properties are supported.
+ *     [x] Qualified property namespaces are supported.
+ *     [x] Preference category remains distinct from requirements/constraints.
+ *     [x] No physical target is selected.
+ *     [x] No machine-size limit is encoded.
+ *     [x] No Rust code is embedded.
+ *     [x] No unsafe Rust is required.
+ *     [x] AST requirements are defined.
+ *     [x] Semantic requirements are defined.
+ *     [x] IR ownership remains downstream.
+ *     [x] Cross-domain integration is defined.
+ *     [x] Diagnostics are separated from resource feasibility.
+ *     [x] Compatibility behavior is defined.
+ *     [x] Positive/negative/boundary/scalability tests are specified.
  *
- * Semantic analysis lowers that information into the repository's canonical
- * resource-intent representation.
- *
- * If a preference affects quantum compilation, its semantic consequences may
- * eventually influence:
- *
- *     quantum::ir
- *     optimization
- *     routing
- *     scheduling
- *     hardware selection
- *     runtime policy
- *
- * but this grammar does not directly depend on quantum::ir.
- *
- * ============================================================================
- * CROSS-DOMAIN CONTRACT
- * ============================================================================
- *
- * The same preference syntax must be usable for:
- *
- *     classical
- *     quantum
- *     hybrid
- *     HDL
- *     CPU
- *     GPU
- *     FPGA
- *     ASIC
- *     accelerator
- *     distributed
- *     AI/ML
- *     networking
- *     storage
- *     memory
- *     embedded
- *     HPC
- *     future domains
- *
- * Domain-specific grammars may specialize preference attachment, but they
- * MUST NOT redefine the universal preference semantics.
- *
- * ============================================================================
- * COMPLETION CRITERIA
- * ============================================================================
- *
- * This file is complete when:
- *
- *     1. It compiles as an ANTLR4 parser grammar.
- *
- *     2. Its imported ResourceExpressions grammar resolves successfully.
- *
- *     3. Its token vocabulary resolves through ZamaniLexer.
- *
- *     4. It introduces no duplicate general expression grammar.
- *
- *     5. It introduces no machine-size constants.
- *
- *     6. It supports arbitrary preference-group cardinality.
- *
- *     7. It supports open-world preference properties.
- *
- *     8. It preserves preference-vs-requirement-vs-constraint semantics.
- *
- *     9. It can be consumed by resources.g4.
- *
- *    10. It can be reused by future resource-domain grammars without
- *        redefining the preference model.
- *
- *    11. Positive, negative, boundary, scalability, and cross-domain tests
- *        pass.
- *
- *    12. No Rust semantic action or unsafe code exists in the grammar.
+ * Remaining integration work belongs to the parent composition grammar, not
+ * to this leaf file.
  *
  * ============================================================================
  */
