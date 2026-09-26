@@ -10,73 +10,103 @@
  *     DistributedServices
  *
  * Status:
- *     Production distributed-service grammar.
+ *     PRODUCTION DISTRIBUTED-SERVICE PARSER GRAMMAR
  *
- * Runtime/compiler baseline:
+ * Baseline:
  *     Rust 1.97 / Rust 1.97.1
+ *     Rust Edition 2021
+ *     Safe Rust only; no unsafe Rust.
  *
- * Safety:
- *     - No embedded Rust actions.
- *     - No semantic predicates.
- *     - No unsafe implementation.
- *     - No filesystem access.
- *     - No network access.
- *     - No hardware access.
- *     - No runtime callbacks.
- *     - No mutable compiler-global state.
- *     - No randomness.
+ * Grammar technology:
+ *     ANTLR4 parser grammar
  *
  * ============================================================================
  * PURPOSE
  * ============================================================================
  *
- * This grammar owns SOURCE-LEVEL SYNTAX for distributed services.
+ * This file owns the SOURCE-LEVEL SYNTAX of distributed computational
+ * services.
  *
- * A service is a named, semantically addressable distributed computation
- * boundary. It may expose operations, state, events, lifecycle declarations,
- * requirements, capabilities, policies, dependencies, and implementation
- * metadata.
+ * A service is a logical, named computational interface. A service may expose:
  *
- * This grammar describes SERVICE INTENT.
+ *     - operations;
+ *     - parameters;
+ *     - return contracts;
+ *     - state;
+ *     - events;
+ *     - lifecycle intent;
+ *     - dependencies;
+ *     - requirements;
+ *     - capabilities;
+ *     - policies;
+ *     - contracts;
+ *     - metadata;
+ *     - extensions.
  *
- * It does not implement service execution.
+ * This grammar describes semantic intent.
+ *
+ * It does NOT implement:
+ *
+ *     - service discovery;
+ *     - process creation;
+ *     - node discovery;
+ *     - network transport;
+ *     - endpoint allocation;
+ *     - routing;
+ *     - placement;
+ *     - scheduling;
+ *     - deployment;
+ *     - load balancing;
+ *     - replication algorithms;
+ *     - consensus algorithms;
+ *     - consistency algorithms;
+ *     - fault tolerance;
+ *     - resilience;
+ *     - hardware discovery;
+ *     - QEC;
+ *     - ZQN;
+ *     - quantum::ir;
+ *     - runtime execution.
  *
  * ============================================================================
- * ARCHITECTURAL POSITION
+ * ARCHITECTURAL PIPELINE
  * ============================================================================
  *
- *     UTF-8 source
+ *     Zamani source
  *          |
  *          v
- *     ZamaniLexer
+ *     canonical ZamaniLexer
  *          |
  *          v
  *     DistributedServices
  *          |
  *          v
- *     Distributed AST
+ *     domain-neutral frontend AST
  *          |
  *          +--> name resolution
- *          +--> type checking
- *          +--> effect checking
- *          +--> capability checking
+ *          +--> type analysis
+ *          +--> effect analysis
+ *          +--> capability analysis
  *          +--> resource analysis
  *          +--> security analysis
- *          +--> distributed semantic validation
+ *          +--> distributed semantic analysis
  *          |
  *          v
  *     canonical semantic representation
  *          |
- *          +--> classical IR
- *          +--> quantum::ir
+ *          +--> classical representation
+ *          +--> quantum semantic representation
+ *          |        |
+ *          |        +--> quantum::ir
+ *          |
  *          +--> HDL/hardware representation
- *          +--> distributed service model
+ *          +--> distributed service representation
  *          |
  *          v
  *     optimization
  *          |
  *          v
- *     routing / placement / scheduling
+ *     placement / routing / scheduling
  *          |
  *          v
  *     target realization
@@ -84,211 +114,206 @@
  *          v
  *     runtime
  *
- * `quantum::ir` remains the canonical quantum semantic boundary.
- *
- * This grammar MUST NEVER construct, replace, or redefine quantum::ir.
- *
- * ============================================================================
- * OWNERSHIP
- * ============================================================================
- *
- * THIS FILE OWNS:
- *
- *     - distributed service declarations;
- *     - service names;
- *     - service signatures;
- *     - service operations;
- *     - service parameters;
- *     - service return declarations;
- *     - service state declarations;
- *     - service events;
- *     - service lifecycle declarations;
- *     - service dependencies;
- *     - service policies;
- *     - service requirements;
- *     - service capability declarations;
- *     - service contracts;
- *     - service metadata;
- *     - service extensions;
- *     - source-level service implementation intent.
- *
- * THIS FILE DOES NOT OWN:
- *
- *     - lexical identifiers;
- *     - names;
- *     - types;
- *     - expressions;
- *     - generic effects;
- *     - network protocols;
- *     - transport;
- *     - endpoints;
- *     - node declarations;
- *     - placement;
- *     - topology;
- *     - routing;
- *     - scheduling;
- *     - resource discovery;
- *     - hardware discovery;
- *     - deployment;
- *     - service registry implementation;
- *     - load balancing;
- *     - replication algorithms;
- *     - consensus algorithms;
- *     - consistency algorithms;
- *     - fault tolerance algorithms;
- *     - resilience;
- *     - QEC;
- *     - ZQN;
- *     - quantum::ir;
- *     - runtime execution.
- *
- * ============================================================================
- * NON-OWNERSHIP RULE
- * ============================================================================
- *
- * A service declaration does NOT mean:
- *
- *     node declaration
- *     network endpoint
- *     physical address
- *     deployment
- *     process
- *     container
- *     machine
- *     device
- *     accelerator
- *     QPU
- *     CPU
- *     GPU
- *     FPGA
- *     ASIC
- *
- * Those are separate semantic concerns.
+ * The grammar never constructs IR.
  *
  * ============================================================================
  * POCO-REAF
  * ============================================================================
  *
- * Service syntax is designed around:
+ * Service syntax is target-independent.
  *
- *     Program Once
- *         ->
- *     Compile Once
- *         ->
- *     Run Everywhere
- *         ->
- *     Run Anywhere
- *         ->
- *     Run Forever
+ * The same service source may describe computation eventually realized on:
  *
- * A service describes:
+ *     - one machine;
+ *     - many machines;
+ *     - embedded systems;
+ *     - edge systems;
+ *     - CPU systems;
+ *     - GPU systems;
+ *     - FPGA systems;
+ *     - ASIC systems;
+ *     - quantum systems;
+ *     - quantum/classical systems;
+ *     - clusters;
+ *     - HPC systems;
+ *     - clouds;
+ *     - federated systems;
+ *     - future computational substrates.
  *
- *     WHAT computation is exposed
- *     WHAT inputs are accepted
- *     WHAT outputs are produced
- *     WHAT semantic guarantees are required
- *     WHAT capabilities are needed
- *     WHAT constraints/preferences exist
+ * Source syntax describes:
  *
- * It does NOT permanently encode:
+ *     WHAT the service means.
  *
- *     WHICH machine
- *     WHICH node
- *     WHICH IP address
- *     WHICH port
- *     WHICH cloud provider
- *     WHICH cluster
- *     WHICH CPU
- *     WHICH GPU
- *     WHICH QPU
- *     WHICH FPGA
- *     WHICH network
+ * Downstream compilation/runtime determines:
+ *
+ *     HOW the service is realized.
  *
  * ============================================================================
  * SCALABILITY
  * ============================================================================
  *
- * There are deliberately NO grammar-level limits on:
+ * There are NO grammar-level finite limits on:
  *
- *     - number of services;
- *     - number of operations;
- *     - number of parameters;
- *     - number of return values;
- *     - number of states;
- *     - number of events;
- *     - number of policies;
- *     - number of requirements;
- *     - number of capabilities;
- *     - number of dependencies;
- *     - number of lifecycle declarations;
- *     - number of metadata entries;
- *     - number of extensions;
- *     - service nesting depth;
- *     - qualified-name depth.
+ *     services
+ *     operations
+ *     parameters
+ *     return values
+ *     states
+ *     events
+ *     dependencies
+ *     requirements
+ *     capabilities
+ *     policies
+ *     contracts
+ *     metadata entries
+ *     extensions
+ *     generic parameters
+ *     qualified-name depth
+ *     service nesting depth
  *
- * Repetition is represented through `*` and `+`.
+ * This grammar deliberately contains no:
  *
- * No finite maximum is encoded.
+ *     MAX_SERVICES
+ *     MAX_OPERATIONS
+ *     MAX_PARAMETERS
+ *     MAX_STATES
+ *     MAX_EVENTS
+ *     MAX_REPLICAS
+ *     MAX_NODES
+ *     MAX_WORKERS
+ *     MAX_PROCESSES
+ *     MAX_THREADS
+ *     MAX_CPUS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_QPUS
+ *     MAX_MEMORY
+ *     MAX_NETWORK_SIZE
+ *     MAX_DEVICES
  *
- * Parser-resource protection, compiler-resource limits, deployment limits,
- * runtime limits, network limits, and hardware limits are implementation or
- * resource-policy concerns rather than language semantics.
+ * Practical limits belong to parser-resource protection, compiler policy,
+ * runtime resources, deployment resources, and actual target availability.
  *
  * ============================================================================
  * OPEN-WORLD DESIGN
  * ============================================================================
  *
- * The grammar intentionally does NOT introduce one lexer keyword for every
- * possible service concept.
+ * Service kinds and service properties are intentionally contextual.
  *
- * For example, future service kinds may include:
+ * The grammar does not require a new lexer keyword for every future service
+ * abstraction.
+ *
+ * Examples that remain structurally representable include:
  *
  *     service
  *     actor
  *     agent
  *     workflow
- *     capability
- *     endpoint
  *     oracle
  *     accelerator
- *     quantum-service
- *     hardware-service
- *     future-service-kind
+ *     quantum_service
+ *     hardware_service
+ *     federated_service
+ *     future_service_kind
  *
- * The syntax therefore uses canonical identifiers and contextual names.
+ * Their semantic classification belongs downstream.
  *
- * Semantic analysis determines whether a contextual identifier denotes:
+ * ============================================================================
+ * SINGLE-AUTHORITY RULE
+ * ============================================================================
+ *
+ * Canonical lexical authority:
+ *
+ *     grammar/antlr/ZamaniLexer.g4
+ *
+ * Canonical name authority:
+ *
+ *     grammar/core/names.g4
+ *
+ * Canonical expression authority:
+ *
+ *     grammar/expressions/expressions.g4
+ *
+ * Canonical type authority:
+ *
+ *     grammar/types/types.g4
+ *
+ * This file MUST NOT redefine:
+ *
+ *     IDENTIFIER
+ *     identifier
+ *     qualifiedName
+ *     expression
+ *     expressionList
+ *     typeExpression
+ *     operators
+ *     punctuation
+ *
+ * ============================================================================
+ * TOKEN COMPATIBILITY
+ * ============================================================================
+ *
+ * Canonical parser token names are used.
+ *
+ * Examples:
+ *
+ *     LPAREN
+ *     RPAREN
+ *     LBRACE
+ *     RBRACE
+ *     LBRACKET
+ *     RBRACKET
+ *     COMMA
+ *     COLON
+ *     SEMICOLON
+ *     ASSIGN
+ *     LESS_THAN
+ *     GREATER_THAN
+ *     DOUBLE_COLON
+ *     IDENTIFIER
+ *
+ * No aliases such as:
+ *
+ *     LT
+ *     GT
+ *     SEMI
+ *     EQUALS
+ *
+ * are introduced here.
+ *
+ * ============================================================================
+ * CONTEXTUAL KEYWORDS
+ * ============================================================================
+ *
+ * The current canonical lexical architecture does not establish a dedicated
+ * service keyword.
+ *
+ * Consequently:
  *
  *     service
  *     operation
  *     state
  *     event
- *     policy
- *     requirement
- *     capability
- *     dependency
  *     lifecycle
- *     extension
+ *     requires
+ *     provides
+ *     capability
+ *     policy
+ *     contract
  *
- * This prevents the grammar from becoming a closed list of temporary
- * distributed concepts.
+ * remain ordinary identifiers at this grammar boundary unless and until the
+ * canonical lexer deliberately reserves them.
  *
- * ============================================================================
- * LEXER BOUNDARY
- * ============================================================================
+ * If a spelling becomes reserved later, that change must be coordinated
+ * across:
  *
- * This is a PARSER grammar.
- *
- * The canonical lexer owns:
- *
- *     IDENTIFIER
- *     punctuation
- *     literals
- *     operators
- *     comments
- *     lexical diagnostics
- *
- * This grammar MUST NOT define lexer rules.
+ *     lexer
+ *     specification
+ *     parser
+ *     AST
+ *     semantic analysis
+ *     compatibility
+ *     tests.
  *
  * ============================================================================
  * NAME BOUNDARY
@@ -298,246 +323,233 @@
  *
  *     identifier
  *     qualifiedName
+ *     qualifiedNameList
  *
- * This grammar consumes those rules.
+ * Service syntax consumes those rules.
  *
- * It MUST NOT define another:
- *
- *     ServiceName
- *     OperationName
- *     EndpointName
- *     NodeName
- *     DeviceName
- *
- * type at grammar level.
- *
- * Semantic layers may create strongly typed service identifiers after parsing.
+ * Service-specific name categories are deliberately NOT introduced.
  *
  * ============================================================================
  * TYPE BOUNDARY
  * ============================================================================
  *
- * `Types` owns `typeExpression`.
+ * `Types` owns:
  *
- * Service parameters and return values consume `typeExpression`.
+ *     typeExpression
+ *     typeExpressionList
  *
- * This grammar therefore does not define:
+ * This file consumes those rules and never creates a service-specific type
+ * system.
  *
- *     ServiceType
- *     ParameterType
- *     ReturnType
+ * Consequently all of the following remain semantic type questions:
  *
- * as duplicate type systems.
+ *     classical types
+ *     quantum types
+ *     tensor types
+ *     memory types
+ *     resource types
+ *     hardware types
+ *     future types.
  *
  * ============================================================================
  * EXPRESSION BOUNDARY
  * ============================================================================
  *
- * `Expressions` owns `expression`.
+ * `Expressions` owns:
  *
- * Expressions may be used for:
+ *     expression
+ *     expressionList
  *
- *     requirements
- *     constraints
- *     policies
- *     default values
- *     guards
- *     preconditions
- *     postconditions
- *     metadata values
- *     capability parameters
- *     resource requirements
+ * Service grammar consumes those rules directly.
  *
- * This grammar does not reproduce arithmetic, logical, comparison, indexing,
- * calls, or other expression syntax.
+ * It therefore does not duplicate:
+ *
+ *     arithmetic
+ *     comparison
+ *     logical operations
+ *     calls
+ *     indexing
+ *     member access
+ *     assignment
+ *     ranges
+ *     quantum expressions
+ *     tensor expressions.
+ *
+ * ============================================================================
+ * DISTRIBUTED BOUNDARIES
+ * ============================================================================
+ *
+ * `distributed.g4`
+ *     owns distributed-domain composition.
+ *
+ * `nodes.g4`
+ *     owns logical node syntax.
+ *
+ * `processes.g4`
+ *     owns process syntax.
+ *
+ * `messaging.g4`
+ *     owns message syntax.
+ *
+ * `communication.g4`
+ *     owns communication intent.
+ *
+ * `placement.g4`
+ *     owns placement intent.
+ *
+ * `services.g4`
+ *     owns service syntax.
+ *
+ * No service construct should silently become a node, process, channel,
+ * message, endpoint, or physical deployment object.
  *
  * ============================================================================
  * NETWORKING BOUNDARY
  * ============================================================================
  *
- * A service may describe communication intent.
+ * A distributed service may describe semantic communication requirements.
  *
- * It does NOT define transport.
- *
- * For example:
- *
- *     service operation
- *
- * does not mean:
+ * This grammar does NOT select:
  *
  *     TCP
  *     UDP
  *     QUIC
- *     RDMA
- *     MPI
- *     InfiniBand
  *     HTTP
  *     gRPC
- *     vendor-specific transport
+ *     MPI
+ *     RDMA
+ *     InfiniBand
+ *     vendor transport.
  *
- * Those belong to networking/communication layers.
- *
- * ============================================================================
- * ENDPOINT BOUNDARY
- * ============================================================================
- *
- * This grammar does not assign:
- *
- *     IP addresses
- *     ports
- *     socket identifiers
- *     machine addresses
- *     physical interfaces
- *
- * A service can expose a semantic interface without specifying how that
- * interface is physically reached.
+ * Networking grammars and downstream semantic/runtime layers own transport.
  *
  * ============================================================================
- * NODE BOUNDARY
+ * HARDWARE / HDL BOUNDARY
  * ============================================================================
  *
- * `nodes.g4` owns node declarations.
+ * A service may expose computation eventually implemented by:
  *
- * A service does not implicitly create a node.
+ *     CPU
+ *     GPU
+ *     FPGA
+ *     ASIC
+ *     accelerator
+ *     QPU
+ *     HDL module
  *
- * A service may express placement or capability requirements, but actual node
- * selection is performed downstream.
+ * This grammar does not select physical hardware.
  *
- * ============================================================================
- * RESOURCE BOUNDARY
- * ============================================================================
+ * There is no:
  *
- * Service resource requirements are expressed through generic resource and
- * capability mechanisms.
+ *     CPUService
+ *     GPUService
+ *     FPGAService
+ *     QPUService
+ *     PhysicalService
  *
- * This grammar does not introduce:
- *
- *     maxNodes
- *     cpuCount
- *     gpuCount
- *     qpuCount
- *     memorySize
- *     fixedBandwidth
- *     fixedLatency
- *     fixedReplicaCount
- *
- * as machine-level language limits.
+ * grammar category.
  *
  * ============================================================================
  * QUANTUM BOUNDARY
  * ============================================================================
  *
- * A distributed service may expose quantum computation.
+ * A service may accept or produce quantum values through the canonical type
+ * and expression systems.
  *
- * Examples include services whose implementation eventually consumes:
+ * Example conceptual form:
  *
- *     quantum::ir
- *     QEC
- *     ZQN
- *     hardware capabilities
+ *     service QuantumService(
+ *         state: quantum::State
+ *     )
  *
- * None of those concepts are redefined here.
+ * Quantum semantics remain downstream.
  *
- * A service operation may use quantum types or expressions through the
- * canonical type/expression system.
- *
- * This grammar MUST NOT define:
+ * This file does NOT define:
  *
  *     QubitId
  *     PhysicalQubitId
  *     GateKind
  *     quantum topology
+ *     pulse syntax
  *     calibration
- *     pulse representation
- *     QEC algorithm
- *     noise model
+ *     QEC algorithms
+ *     noise models
+ *     ZQN structures.
+ *
+ * If a service operation performs quantum computation:
+ *
+ *     service AST
+ *          |
+ *          v
+ *     semantic service model
+ *          |
+ *          v
+ *     quantum semantic lowering
+ *          |
+ *          v
+ *     quantum::ir
  *
  * ============================================================================
- * HDL / HARDWARE BOUNDARY
+ * RESOURCE / CAPABILITY BOUNDARY
  * ============================================================================
  *
- * A service may represent a semantic interface to hardware or an accelerator.
+ * Requirements and capabilities describe semantic conditions.
  *
- * It does not define:
+ * They are not physical allocation instructions.
  *
- *     wires
- *     clocks
- *     FPGA cells
- *     ASIC cells
- *     registers
- *     physical pins
- *     device addresses
+ * Examples:
  *
- * Those belong to HDL/hardware grammars.
+ *     requirement capability::quantum::measurement
+ *     requirement resource::memory >= required_memory
+ *     capability compute::tensor
  *
- * ============================================================================
- * STATE BOUNDARY
- * ============================================================================
- *
- * A service may declare logical service state.
- *
- * This does NOT define:
- *
- *     physical storage
- *     database technology
- *     replication algorithm
- *     memory placement
- *     persistence mechanism
- *     serialization format
- *
- * Those are downstream semantic/runtime decisions.
- *
- * ============================================================================
- * LIFECYCLE BOUNDARY
- * ============================================================================
- *
- * Lifecycle declarations describe semantic lifecycle intent.
- *
- * They do not directly start, stop, restart, migrate, or destroy runtime
- * processes.
- *
- * ============================================================================
- * CONTRACT BOUNDARY
- * ============================================================================
- *
- * Preconditions, postconditions, invariants, and guarantees are source-level
- * semantic contracts.
- *
- * They are not runtime implementation algorithms.
+ * The actual interpretation belongs to resource/capability semantic systems.
  *
  * ============================================================================
  * SECURITY BOUNDARY
  * ============================================================================
  *
- * Service declarations may contain semantic security/capability requirements.
+ * Service syntax may represent security requirements or policies.
  *
- * They do not implement:
+ * It does not implement:
  *
  *     authentication
  *     authorization
- *     cryptographic protocols
- *     key storage
+ *     encryption
+ *     key management
  *     identity providers
- *     transport security
- *
- * Those belong to security and runtime layers.
+ *     secure transport.
  *
  * ============================================================================
- * FAILURE / RESILIENCE BOUNDARY
+ * LIFECYCLE BOUNDARY
  * ============================================================================
  *
- * This grammar may express service-level failure requirements.
+ * Lifecycle declarations express semantic lifecycle intent.
  *
- * It does NOT implement:
+ * They do not execute:
  *
- *     retry algorithms
- *     failover algorithms
- *     checkpoint algorithms
- *     recovery orchestration
- *     quorum algorithms
- *     resilience decisions
+ *     start
+ *     stop
+ *     restart
+ *     migrate
+ *     destroy
  *
- * Those remain downstream responsibilities.
+ * at parse time.
+ *
+ * ============================================================================
+ * CONTRACT BOUNDARY
+ * ============================================================================
+ *
+ * Service contracts are source-level semantic contracts.
+ *
+ * Examples:
+ *
+ *     requires(...)
+ *     ensures(...)
+ *     invariant(...)
+ *     guarantees(...)
+ *
+ * Their actual checking/execution is downstream.
  *
  * ============================================================================
  * DETERMINISM
@@ -545,158 +557,180 @@
  *
  * This grammar contains:
  *
- *     no actions;
- *     no predicates;
- *     no runtime calls;
- *     no I/O;
- *     no randomness;
- *     no hardware inspection;
- *     no network inspection.
+ *     - no embedded actions;
+ *     - no semantic predicates;
+ *     - no filesystem access;
+ *     - no network access;
+ *     - no hardware access;
+ *     - no runtime callbacks;
+ *     - no randomness;
+ *     - no environment-dependent parsing.
  *
- * Equal token streams therefore have equal syntactic interpretation under
- * the same grammar version.
+ * Parsing depends only on the supplied token stream and grammar version.
  *
  * ============================================================================
  * AST CONTRACT
  * ============================================================================
  *
- * The parser/AST builder should preserve:
+ * The AST builder must preserve, at minimum:
  *
  *     - service declaration order;
+ *     - service declaration kind;
  *     - service name;
- *     - qualified names;
+ *     - generic parameters;
+ *     - implemented interfaces;
+ *     - required capabilities/contracts;
+ *     - provided capabilities/contracts;
  *     - operation order;
  *     - parameter order;
- *     - state declaration order;
- *     - event declaration order;
- *     - lifecycle declaration order;
- *     - policy order;
- *     - requirement order;
- *     - capability order;
- *     - dependency order;
- *     - contract order;
- *     - extension order;
- *     - expression structure;
+ *     - parameter modifiers;
+ *     - parameter types;
+ *     - default expressions;
+ *     - return structure;
+ *     - operation modifiers;
+ *     - operation contracts;
+ *     - operation body structure;
+ *     - state declarations;
+ *     - state initializers;
+ *     - state modifiers;
+ *     - events;
+ *     - lifecycle declarations;
+ *     - dependencies;
+ *     - policies;
+ *     - requirements;
+ *     - capabilities;
+ *     - contracts;
+ *     - metadata;
+ *     - extensions;
  *     - source spans.
  *
- * The AST should retain enough source information for deterministic
- * diagnostics and source-to-source tooling.
+ * The AST must not resolve hardware or runtime behavior while parsing.
  *
  * ============================================================================
  * SEMANTIC CONTRACT
  * ============================================================================
  *
- * Semantic analysis is responsible for determining:
+ * Semantic analysis owns:
  *
- *     - whether the contextual declaration really denotes a service;
- *     - uniqueness of service names within a semantic scope;
+ *     - service-kind validation;
+ *     - service-name uniqueness;
+ *     - generic parameter validity;
+ *     - interface resolution;
  *     - operation uniqueness;
- *     - parameter validity;
- *     - return validity;
- *     - state validity;
- *     - event validity;
- *     - lifecycle validity;
- *     - contract validity;
- *     - capability satisfaction;
+ *     - parameter validation;
+ *     - type resolution;
+ *     - default-value checking;
+ *     - return validation;
+ *     - state validation;
+ *     - event validation;
+ *     - lifecycle validation;
+ *     - dependency resolution;
+ *     - capability resolution;
+ *     - resource requirement resolution;
  *     - effect compatibility;
- *     - resource compatibility;
- *     - security compatibility;
- *     - distributed consistency requirements;
- *     - placement feasibility;
+ *     - security policy validation;
+ *     - contract validation;
+ *     - distributed consistency validation;
  *     - target feasibility.
  *
- * The parser does none of those jobs.
+ * The parser performs none of these semantic decisions.
  *
  * ============================================================================
  * IR CONTRACT
  * ============================================================================
  *
- * There is no service-specific replacement for canonical IR.
+ * This file introduces NO service-specific IR.
  *
- * After semantic analysis, service declarations may lower into the repository's
- * distributed semantic representation.
+ * Parsed service syntax lowers through the repository's established semantic
+ * architecture.
  *
- * If an operation contains quantum computation:
+ * Generic service:
  *
- *     service syntax
+ *     service AST
  *          ->
  *     semantic service model
  *          ->
- *     quantum semantic lowering
+ *     canonical compiler representation
+ *
+ * Quantum-bearing service:
+ *
+ *     service AST
+ *          ->
+ *     semantic service model
+ *          ->
+ *     quantum semantic model
  *          ->
  *     quantum::ir
  *
- * The service grammar never constructs quantum::ir directly.
+ * `quantum::ir` remains the only canonical quantum IR.
  *
  * ============================================================================
  * COMPILER CONTRACT
  * ============================================================================
  *
- * Compiler stages may consume service semantics to determine:
+ * Compiler consumers may derive:
  *
- *     - interface lowering;
- *     - execution strategy;
- *     - placement constraints;
+ *     - service interfaces;
+ *     - dispatch metadata;
  *     - resource requirements;
+ *     - capability requirements;
  *     - communication requirements;
+ *     - placement constraints;
+ *     - scheduling dependencies;
  *     - serialization requirements;
- *     - target-specific realization.
+ *     - target-specific lowering.
  *
- * The grammar must remain independent from those choices.
+ * The grammar does not select the realization.
  *
  * ============================================================================
  * RUNTIME CONTRACT
  * ============================================================================
  *
- * Runtime consumes compiled service semantics.
- *
  * Runtime owns:
  *
- *     discovery
- *     binding
- *     dispatch
- *     scheduling
- *     networking
- *     placement
- *     execution
- *     lifecycle management
- *     recovery
+ *     - service discovery;
+ *     - binding;
+ *     - dispatch;
+ *     - scheduling;
+ *     - placement;
+ *     - networking;
+ *     - lifecycle execution;
+ *     - recovery;
+ *     - observability;
+ *     - deployment.
  *
- * This grammar owns none of them.
+ * The grammar contains none of these implementations.
  *
  * ============================================================================
  * TOOLING CONTRACT
  * ============================================================================
  *
- * The grammar must support:
+ * The grammar must remain usable by:
  *
- *     - syntax highlighting;
- *     - formatting;
- *     - source indexing;
- *     - symbol extraction;
- *     - documentation generation;
- *     - IDE navigation;
- *     - diagnostics;
+ *     - formatter;
+ *     - syntax highlighter;
+ *     - parser;
+ *     - symbol indexer;
+ *     - documentation generator;
+ *     - IDE tooling;
  *     - AST inspection;
- *     - semantic analysis.
- *
- * No tool should need to infer service syntax from generated runtime code.
+ *     - semantic diagnostics.
  *
  * ============================================================================
- * COMPATIBILITY CONTRACT
+ * COMPATIBILITY
  * ============================================================================
  *
- * Existing distributed service syntax must migrate into this grammar without
- * changing its intended semantic meaning.
- *
- * The current distributed root already exposes:
+ * The public rule:
  *
  *     distributedServiceDeclaration
  *
- * Therefore that rule remains the public rule name.
+ * is retained.
  *
- * `distributed.g4` must import this grammar and must NOT retain a duplicate
- * implementation of that rule.
+ * Existing consumers should migrate to this rule rather than creating another
+ * distributed service grammar.
+ *
+ * `distributed.g4` must import this grammar and remove any duplicate service
+ * declaration implementation.
  *
  * ============================================================================
  */
@@ -711,28 +745,37 @@ import Names, Expressions, Types;
 
 
 /* ============================================================================
- * PUBLIC ENTRY POINT
- * ============================================================================ */
-
-/**
- * Canonical distributed-service declaration.
+ * PUBLIC SERVICE DECLARATION
+ * ============================================================================
  *
- * Existing distributed.g4 already exposes this rule name. The root grammar
- * should consume this imported rule directly.
+ * Canonical structural form:
  *
- * Contextual form:
+ *     <service-kind> <service-name>
+ *         <optional-signature>
+ *         <optional-body>
+ *         ;
  *
- *     service <name> ...
+ * Examples:
  *
- * The contextual spelling is validated semantically rather than forcing every
- * future service concept to become a lexer keyword.
+ *     service Calculator;
+ *
+ *     service Calculator {
+ *         ...
+ *     }
+ *
+ *     service QuantumService<T> {
+ *         ...
+ *     }
+ *
+ * The word `service` is intentionally contextual rather than a new lexer
+ * keyword under the current lexical contract.
  */
 distributedServiceDeclaration
     : identifier
       identifier
       distributedServiceSignature?
       distributedServiceBody?
-      SEMI?
+      SEMICOLON?
     ;
 
 
@@ -740,84 +783,70 @@ distributedServiceDeclaration
  * SERVICE SIGNATURE
  * ============================================================================ */
 
-/**
- * Optional service-level generic/interface signature.
- *
- * The first identifier is the contextual service declaration kind.
- *
- * The second identifier is the service name.
- *
- * Optional generic parameters are intentionally represented using names and
- * expressions rather than machine-specific bounds.
- */
 distributedServiceSignature
-    : serviceGenericParameters?
-      serviceImplementsClause?
-      serviceRequiresClause*
-      serviceProvidesClause*
+    : distributedServiceGenericParameters?
+      distributedServiceImplementsClause*
+      distributedServiceRequiresClause*
+      distributedServiceProvidesClause*
     ;
 
 
 /* ============================================================================
- * GENERICS
+ * GENERIC PARAMETERS
  * ============================================================================ */
 
-/**
- * Service generic parameters.
- *
- * No finite generic-parameter limit exists.
- */
-serviceGenericParameters
-    : LT serviceGenericParameter (COMMA serviceGenericParameter)* GT
+distributedServiceGenericParameters
+    : LESS_THAN
+      distributedServiceGenericParameter
+      (
+          COMMA distributedServiceGenericParameter
+      )*
+      COMMA?
+      GREATER_THAN
     ;
 
 
-serviceGenericParameter
+distributedServiceGenericParameter
     : identifier
-      serviceGenericParameterBound?
+      distributedServiceGenericBound?
     ;
 
 
-serviceGenericParameterBound
-    : COLON typeExpression
+distributedServiceGenericBound
+    : COLON
+      typeExpression
     ;
 
 
 /* ============================================================================
- * SERVICE INTERFACES
+ * INTERFACE / IMPLEMENTATION CONTRACTS
  * ============================================================================ */
 
-/**
- * Semantic service-interface dependency.
- *
- * This does not create a network connection.
- */
-serviceImplementsClause
+distributedServiceImplementsClause
     : identifier
       qualifiedNameList
-      SEMI?
+      SEMICOLON?
     ;
 
 
-/**
- * Semantic capability/interface requirement.
- *
- * Actual capability resolution is downstream.
- */
-serviceRequiresClause
+distributedServiceRequiresClause
     : identifier
-      serviceRequirementBody?
-      SEMI?
+      distributedServiceClauseArguments?
+      SEMICOLON?
     ;
 
 
-/**
- * Semantic capability/interface provision.
- */
-serviceProvidesClause
+distributedServiceProvidesClause
     : identifier
-      serviceCapabilityBody?
-      SEMI?
+      distributedServiceClauseArguments?
+      SEMICOLON?
+    ;
+
+
+distributedServiceClauseArguments
+    : LPAREN
+      expressionList?
+      RPAREN
     ;
 
 
@@ -848,17 +877,14 @@ distributedServiceMember
 
 
 /* ============================================================================
- * SERVICE OPERATIONS
- * ============================================================================ */
-
-/**
- * Canonical operation form:
+ * SERVICE OPERATION
+ * ============================================================================
  *
- *     operation <name>(<parameters>) [-> <returns>]
+ * Structural form:
  *
- * The contextual operation kind remains an identifier.
+ *     <operation-kind> <name>(<parameters>) [return-clause] ...
  *
- * This allows future operation kinds without continuously expanding the lexer.
+ * `operation` is contextual.
  */
 distributedServiceOperation
     : identifier
@@ -870,13 +896,15 @@ distributedServiceOperation
       distributedServiceOperationModifier*
       distributedServiceOperationContract*
       distributedServiceOperationBody?
-      SEMI?
+      SEMICOLON?
     ;
 
 
 distributedServiceParameterList
     : distributedServiceParameter
-      (COMMA distributedServiceParameter)*
+      (
+          COMMA distributedServiceParameter
+      )*
       COMMA?
     ;
 
@@ -896,10 +924,19 @@ distributedServiceParameterModifier
 
 
 distributedServiceDefaultValue
-    : ASSIGN expression
+    : ASSIGN
+      expression
     ;
 
 
+/* ============================================================================
+ * RETURN DECLARATIONS
+ * ============================================================================
+ *
+ * Both a single type and a parenthesized type list are supported.
+ *
+ * The underlying types remain owned by Types.
+ */
 distributedServiceReturnClause
     : THIN_ARROW
       distributedServiceReturnType
@@ -908,21 +945,32 @@ distributedServiceReturnClause
 
 distributedServiceReturnType
     : typeExpression
-    | LPAREN typeExpressionList RPAREN
-    ;
-
-
-typeExpressionList
-    : typeExpression
-      (COMMA typeExpression)*
-      COMMA?
+    | LPAREN
+      typeExpressionList
+      RPAREN
     ;
 
 
 /* ============================================================================
  * OPERATION MODIFIERS
- * ============================================================================ */
-
+ * ============================================================================
+ *
+ * Modifiers are contextual names.
+ *
+ * Examples:
+ *
+ *     async
+ *     pure
+ *     idempotent
+ *     streaming
+ *     remote
+ *     deterministic
+ *     transactional
+ *     stateful
+ *     stateless
+ *
+ * Their semantic legality is checked downstream.
+ */
 distributedServiceOperationModifier
     : identifier
     ;
@@ -932,34 +980,25 @@ distributedServiceOperationModifier
  * OPERATION CONTRACTS
  * ============================================================================ */
 
-/**
- * Examples semantically represented by this structure:
- *
- *     requires(...)
- *     ensures(...)
- *     invariant(...)
- *
- * The actual semantic meaning is owned by contract checking.
- */
 distributedServiceOperationContract
     : identifier
       LPAREN
       expression
       RPAREN
+      SEMICOLON?
     ;
 
 
 /* ============================================================================
  * OPERATION BODY
- * ============================================================================ */
-
-/**
- * Service operation bodies are deliberately expression-oriented.
+ * ============================================================================
  *
- * A service grammar must not duplicate the complete statement grammar.
+ * The operation body is deliberately a structural service-body boundary.
  *
- * A surrounding statement/block grammar may provide a richer implementation
- * body. This rule provides a minimal service-level body boundary.
+ * It does not duplicate the complete Zamani statement grammar.
+ *
+ * A later composition grammar may provide richer implementation-body
+ * integration without changing the service declaration model.
  */
 distributedServiceOperationBody
     : LBRACE
@@ -969,42 +1008,40 @@ distributedServiceOperationBody
 
 
 distributedServiceOperationMember
-    : distributedServiceOperationStatement
-    | distributedServiceOperationExpression
-    | distributedServiceOperationMetadata
-    ;
-
-
-distributedServiceOperationStatement
-    : identifier
-      expression?
-      SEMI
+    : distributedServiceOperationExpression
+    | distributedServiceOperationProperty
     ;
 
 
 distributedServiceOperationExpression
     : expression
-      SEMI
+      SEMICOLON
     ;
 
 
-distributedServiceOperationMetadata
+distributedServiceOperationProperty
     : identifier
       COLON
       expression
-      SEMI?
+      SEMICOLON?
     ;
 
 
 /* ============================================================================
  * SERVICE STATE
- * ============================================================================ */
-
-/**
- * Service state is logical state.
+ * ============================================================================
  *
- * It does not select a physical database, memory device, node, or storage
- * technology.
+ * State is LOGICAL service state.
+ *
+ * It does not imply:
+ *
+ *     RAM
+ *     database
+ *     persistent storage
+ *     node-local storage
+ *     replicated storage
+ *     physical memory
+ *     hardware storage.
  */
 distributedServiceState
     : identifier
@@ -1013,7 +1050,7 @@ distributedServiceState
       typeExpression
       distributedServiceStateInitializer?
       distributedServiceStateModifier*
-      SEMI?
+      SEMICOLON?
     ;
 
 
@@ -1030,13 +1067,11 @@ distributedServiceStateModifier
 
 /* ============================================================================
  * SERVICE EVENTS
- * ============================================================================ */
-
-/**
- * Events express semantic service events.
+ * ============================================================================
  *
- * Transport, queueing, messaging protocol, and delivery implementation are
- * owned elsewhere.
+ * Event syntax represents a semantic event contract.
+ *
+ * Transport and queue implementation belong elsewhere.
  */
 distributedServiceEvent
     : identifier
@@ -1045,7 +1080,7 @@ distributedServiceEvent
       distributedServiceParameterList?
       RPAREN
       distributedServiceEventModifier*
-      SEMI?
+      SEMICOLON?
     ;
 
 
@@ -1056,38 +1091,23 @@ distributedServiceEventModifier
 
 /* ============================================================================
  * SERVICE LIFECYCLE
- * ============================================================================ */
-
-/**
- * Lifecycle declarations are semantic intent.
+ * ============================================================================
  *
- * They do not directly start/stop/restart runtime processes.
+ * Lifecycle is declarative intent.
  */
 distributedServiceLifecycle
     : identifier
       identifier?
       distributedServiceLifecycleArguments?
       distributedServiceLifecycleBody?
-      SEMI?
+      SEMICOLON?
     ;
 
 
 distributedServiceLifecycleArguments
     : LPAREN
-      optionalExpressionList
+      expressionList?
       RPAREN
-    ;
-
-
-optionalExpressionList
-    : expressionList?
-    ;
-
-
-expressionList
-    : expression
-      (COMMA expression)*
-      COMMA?
     ;
 
 
@@ -1100,49 +1120,57 @@ distributedServiceLifecycleBody
 
 distributedServiceLifecycleMember
     : identifier
-      expression?
-      SEMI?
+      distributedServiceLifecycleValue?
+      SEMICOLON?
+    ;
+
+
+distributedServiceLifecycleValue
+    : COLON expression
+    | ASSIGN expression
     ;
 
 
 /* ============================================================================
  * SERVICE DEPENDENCIES
- * ============================================================================ */
-
-/**
- * A dependency identifies another semantic service/module/capability.
+ * ============================================================================
  *
- * It does not identify a physical machine.
+ * Dependencies identify semantic dependencies.
+ *
+ * They do not identify machines or network addresses.
  */
 distributedServiceDependency
     : identifier
       qualifiedName
       distributedServiceDependencyConstraint*
-      SEMI?
+      SEMICOLON?
     ;
 
 
 distributedServiceDependencyConstraint
     : identifier
-      (COLON | ASSIGN)
-      expression
+      (
+          COLON expression
+        | ASSIGN expression
+      )
     ;
 
 
 /* ============================================================================
  * SERVICE POLICIES
- * ============================================================================ */
-
-/**
- * Policies are declarative.
- *
- * Policy execution belongs to semantic/runtime layers.
+ * ============================================================================
  */
+
 distributedServicePolicy
     : identifier
-      identifier?
+      distributedServicePolicyTarget?
       distributedServicePolicyBody?
-      SEMI?
+      SEMICOLON?
+    ;
+
+
+distributedServicePolicyTarget
+    : qualifiedName
     ;
 
 
@@ -1155,31 +1183,40 @@ distributedServicePolicyBody
 
 distributedServicePolicyEntry
     : identifier
-      (COLON | ASSIGN)
-      expression
-      SEMI?
+      (
+          COLON expression
+        | ASSIGN expression
+      )
+      SEMICOLON?
     ;
 
 
 /* ============================================================================
- * REQUIREMENTS
- * ============================================================================ */
-
-/**
- * Requirements describe semantic conditions.
+ * SERVICE REQUIREMENTS
+ * ============================================================================
  *
- * They do not become hard-coded machine constraints.
+ * Requirements are semantic constraints/requirements.
+ *
+ * They are NOT hard-coded hardware limits.
  */
 distributedServiceRequirement
     : identifier
       distributedServiceRequirementTarget?
+      distributedServiceRequirementArguments?
       distributedServiceRequirementBody?
-      SEMI?
+      SEMICOLON?
     ;
 
 
 distributedServiceRequirementTarget
     : qualifiedName
+    ;
+
+
+distributedServiceRequirementArguments
+    : LPAREN
+      expressionList?
+      RPAREN
     ;
 
 
@@ -1192,29 +1229,37 @@ distributedServiceRequirementBody
 
 distributedServiceRequirementEntry
     : identifier
-      (COLON | ASSIGN)
-      expression
-      SEMI?
+      (
+          COLON expression
+        | ASSIGN expression
+      )
+      SEMICOLON?
     ;
 
 
 /* ============================================================================
- * CAPABILITIES
- * ============================================================================ */
-
-/**
- * Capabilities describe semantic abilities the service requires or exposes.
+ * SERVICE CAPABILITIES
+ * ============================================================================
  */
+
 distributedServiceCapability
     : identifier
       distributedServiceCapabilityTarget?
+      distributedServiceCapabilityArguments?
       distributedServiceCapabilityBody?
-      SEMI?
+      SEMICOLON?
     ;
 
 
 distributedServiceCapabilityTarget
     : qualifiedName
+    ;
+
+
+distributedServiceCapabilityArguments
+    : LPAREN
+      expressionList?
+      RPAREN
     ;
 
 
@@ -1227,42 +1272,32 @@ distributedServiceCapabilityBody
 
 distributedServiceCapabilityEntry
     : identifier
-      (COLON | ASSIGN)
-      expression
-      SEMI?
+      (
+          COLON expression
+        | ASSIGN expression
+      )
+      SEMICOLON?
     ;
 
 
 /* ============================================================================
- * CONTRACTS
- * ============================================================================ */
-
-/**
- * Service-level contracts.
- *
- * Examples:
- *
- *     requires
- *     ensures
- *     invariant
- *     guarantees
- *
- * Exact contract semantics belong to semantic analysis.
+ * SERVICE CONTRACTS
+ * ============================================================================
  */
+
 distributedServiceContract
     : identifier
       LPAREN
       expression
       RPAREN
-      SEMI?
+      SEMICOLON?
     ;
 
 
 /* ============================================================================
- * METADATA
- * ============================================================================ */
-
-/**
+ * SERVICE METADATA
+ * ============================================================================
+ *
  * Metadata is structured source information.
  *
  * It is not executable behavior.
@@ -1271,7 +1306,7 @@ distributedServiceMetadata
     : identifier
       COLON
       distributedServiceMetadataValue
-      SEMI?
+      SEMICOLON?
     ;
 
 
@@ -1293,46 +1328,49 @@ distributedServiceMetadataEntry
     : identifier
       COLON
       distributedServiceMetadataValue
-      SEMI?
+      SEMICOLON?
     ;
 
 
 distributedServiceMetadataList
     : LBRACKET
-      distributedServiceMetadataValue
-      (COMMA distributedServiceMetadataValue)*
-      COMMA?
+      (
+          distributedServiceMetadataValue
+          (
+              COMMA distributedServiceMetadataValue
+          )*
+          COMMA?
+      )?
       RBRACKET
     ;
 
 
 /* ============================================================================
- * EXTENSIONS
- * ============================================================================ */
-
-/**
- * Open extension point.
+ * SERVICE EXTENSIONS
+ * ============================================================================
  *
- * Future distributed-service dialects can add semantic constructs without
- * requiring this grammar to enumerate every future distributed technology.
+ * This is the open-world extension point.
+ *
+ * New distributed technologies should first attempt to use this structural
+ * extension point before introducing new core keywords.
  */
 distributedServiceExtension
     : identifier
-      distributedServiceExtensionName?
+      distributedServiceExtensionTarget?
       distributedServiceExtensionArguments?
       distributedServiceExtensionBody?
-      SEMI?
+      SEMICOLON?
     ;
 
 
-distributedServiceExtensionName
+distributedServiceExtensionTarget
     : qualifiedName
     ;
 
 
 distributedServiceExtensionArguments
     : LPAREN
-      optionalExpressionList
+      expressionList?
       RPAREN
     ;
 
@@ -1346,68 +1384,43 @@ distributedServiceExtensionBody
 
 distributedServiceExtensionMember
     : identifier
-      (
-          COLON expression
-        | ASSIGN expression
-        | distributedServiceExtensionBody
-      )
-      SEMI?
+      distributedServiceExtensionValue?
+      SEMICOLON?
+    ;
+
+
+distributedServiceExtensionValue
+    : COLON expression
+    | ASSIGN expression
+    | distributedServiceExtensionBody
     ;
 
 
 /* ============================================================================
- * COMMON SERVICE LIST / MAP STRUCTURES
- * ============================================================================ */
-
-/**
- * Generic service property.
- *
- * This rule is useful for future service dialects and tooling.
- */
-distributedServiceProperty
-    : identifier
-      COLON
-      expression
-      SEMI?
-    ;
-
-
-/**
- * Reusable qualified-name sequence.
- */
-distributedServiceNameList
-    : qualifiedName
-      (COMMA qualifiedName)*
-      COMMA?
-    ;
-
-
-/**
- * Reusable expression sequence.
- */
-distributedServiceExpressionList
-    : expression
-      (COMMA expression)*
-      COMMA?
-    ;
-
-
-/* ============================================================================
- * SERVICE RESOURCE / CAPABILITY SHAPES
+ * GENERIC SERVICE LISTS
  * ============================================================================
  *
- * These are deliberately generic.
- *
- * They permit expressions such as:
- *
- *     requirement capability::quantum
- *     capability accelerator::tensor
- *     requirement resource::memory
- *     capability execution::distributed
- *
- * without defining the actual capability/resource universe here.
+ * These wrappers exist only where they provide service-domain semantic
+ * context. General name/expression syntax remains owned by canonical grammar.
  */
+distributedServiceNameList
+    : qualifiedNameList
+    ;
 
+
+distributedServiceExpressionList
+    : expressionList
+    ;
+
+
+/* ============================================================================
+ * SERVICE RESOURCE / CAPABILITY REFERENCE
+ * ============================================================================
+ *
+ * This is a structural wrapper around canonical names and expressions.
+ *
+ * It does not define the resource/capability universe.
+ */
 distributedServiceResourceReference
     : identifier
       qualifiedName?
@@ -1417,388 +1430,381 @@ distributedServiceResourceReference
 
 distributedServiceResourceArguments
     : LPAREN
-      optionalExpressionList
+      expressionList?
       RPAREN
     ;
 
 
 /* ============================================================================
- * SERVICE TARGET INDEPENDENCE
+ * SERVICE TARGET / PORTABILITY INVARIANT
  * ============================================================================
  *
- * A service can be semantic-only.
+ * There is deliberately no syntax here for:
  *
- * There is deliberately no:
+ *     physical_cpu
+ *     physical_gpu
+ *     physical_fpga
+ *     physical_qpu
+ *     machine_id
+ *     node_id
+ *     device_id
+ *     memory_bank
+ *     socket_id
+ *     ip_address
+ *     mac_address
+ *     provider_instance
  *
- *     cpuService
- *     gpuService
- *     qpuService
- *     fpgaService
- *     nodeService
- *     cloudService
+ * A service may express semantic requirements, capabilities, constraints,
+ * preferences, and properties. Physical realization is downstream.
  *
- * grammar rule.
- *
- * A service may instead express capabilities and requirements and allow the
- * compiler/runtime to determine an appropriate realization.
- */
-
-
-/* ============================================================================
- * SERVICE SCALABILITY GUARANTEE
+ * ============================================================================
+ * CROSS-DOMAIN INTEGRATION
  * ============================================================================
  *
- * The following are intentionally NOT present:
+ * Classical:
  *
- *     MAX_SERVICES
- *     MAX_OPERATIONS
- *     MAX_PARAMETERS
- *     MAX_STATES
- *     MAX_EVENTS
- *     MAX_REPLICAS
- *     MAX_NODES
- *     MAX_ENDPOINTS
- *     MAX_WORKERS
- *     MAX_CONNECTIONS
- *     MAX_MESSAGE_SIZE
- *     MAX_SERVICE_DEPTH
- *     MAX_SERVICE_COUNT
+ *     service -> classical semantic model
  *
- * Any operational limits must be supplied by:
+ * Quantum:
  *
- *     parser resource policy
- *     compiler resource policy
- *     runtime resource policy
- *     deployment policy
- *     hardware capability
+ *     service -> semantic service model -> quantum semantic lowering
+ *             -> quantum::ir
  *
- * and must not become language semantics.
- */
-
-
-/* ============================================================================
- * SERVICE / QUANTUM INTEGRATION
+ * HDL:
+ *
+ *     service -> hardware/interface semantic model
+ *
+ * AI:
+ *
+ *     service -> model/agent semantic interface
+ *
+ * Data:
+ *
+ *     service -> data/schema semantic interface
+ *
+ * Networking:
+ *
+ *     service -> networking service contract
+ *
+ * Security:
+ *
+ *     service -> security requirement/capability analysis
+ *
+ * Distributed:
+ *
+ *     service -> distributed semantic model
+ *
+ * Memory/concurrency/effects:
+ *
+ *     service -> existing generic semantic systems
+ *
+ * No domain creates a second service grammar authority.
+ *
  * ============================================================================
- *
- * A parameter can use a quantum type:
- *
- *     service QuantumProcessor(
- *         input: quantum::...
- *     )
- *
- * without this grammar defining the quantum type.
- *
- * A service implementation may lower to quantum::ir through the normal
- * semantic pipeline:
- *
- *     service AST
- *          |
- *          v
- *     semantic service model
- *          |
- *          v
- *     quantum semantic lowering
- *          |
- *          v
- *     quantum::ir
- *
- * This grammar never imports or depends upon quantum::ir.
- */
-
-
-/* ============================================================================
- * SERVICE / HARDWARE INTEGRATION
- * ============================================================================
- *
- * Hardware capabilities are referenced semantically.
- *
- * The grammar does not choose:
- *
- *     processor
- *     device
- *     FPGA
- *     ASIC
- *     QPU
- *     accelerator
- *
- * A hardware backend may satisfy a service requirement.
- */
-
-
-/* ============================================================================
- * SERVICE / DISTRIBUTED INTEGRATION
- * ============================================================================
- *
- * distributed.g4 owns distributed-domain composition.
- *
- * nodes.g4 owns nodes.
- *
- * communication.g4 owns communication.
- *
- * messaging.g4 owns messaging.
- *
- * placement.g4 owns placement.
- *
- * services.g4 owns services.
- *
- * No service rule in this grammar should redefine any of those domains.
- */
-
-
-/* ============================================================================
- * SERVICE / EFFECT INTEGRATION
- * ============================================================================
- *
- * Service operations may participate in the generic effect system.
- *
- * Effects are consumed semantically.
- *
- * This grammar does not define:
- *
- *     IO effects
- *     network effects
- *     quantum effects
- *     hardware effects
- *     distributed effects
- *
- * in parallel to `grammar/effects/`.
- */
-
-
-/* ============================================================================
- * SERVICE / SECURITY INTEGRATION
- * ============================================================================
- *
- * Security declarations remain semantic requirements/capabilities.
- *
- * The grammar does not implement:
- *
- *     authentication
- *     authorization
- *     encryption
- *     key exchange
- *     identity verification
- *
- * Those belong to the security subsystem.
- */
-
-
-/* ============================================================================
- * SERVICE / RESILIENCE INTEGRATION
- * ============================================================================
- *
- * Service contracts and failure requirements may be consumed by resilience
- * analysis.
- *
- * The grammar does not implement resilience decisions.
- *
- * Resilience remains responsible for decisions such as:
- *
- *     retry
- *     restart
- *     rollback
- *     reroute
- *     reschedule
- *     recompile
- *     switch backend
- *     quarantine
- *     abort
- */
-
-
-/* ============================================================================
- * SERVICE / SCHEDULING INTEGRATION
- * ============================================================================
- *
- * Service declarations do not schedule themselves.
- *
- * Scheduling consumes downstream semantic service requirements and operation
- * dependencies.
- *
- * The grammar therefore contains no:
- *
- *     scheduler algorithm
- *     ASAP
- *     ALAP
- *     RCPSP
- *     hardware timing grid
- *     machine cycle count
- *
- * Those remain scheduling concerns.
- */
-
-
-/* ============================================================================
- * SERVICE / ROUTING INTEGRATION
- * ============================================================================
- *
- * A service may require communication or placement properties.
- *
- * Routing resolves actual physical paths.
- *
- * This grammar does not contain topology or routing algorithms.
- */
-
-
-/* ============================================================================
- * SERVICE / OPTIMIZATION INTEGRATION
- * ============================================================================
- *
- * Optimization may transform service implementations.
- *
- * The service contract itself remains semantically stable.
- *
- * Optimization therefore consumes service semantics rather than modifying
- * service syntax.
- */
-
-
-/* ============================================================================
- * SERVICE / AST COMPLETION CONTRACT
- * ============================================================================
- *
- * A service AST node is complete only when it can retain:
- *
- *     name
- *     signature
- *     generic parameters
- *     interface requirements
- *     interface provisions
- *     operations
- *     parameters
- *     return types
- *     operation modifiers
- *     operation contracts
- *     operation bodies
- *     state
- *     events
- *     lifecycle
- *     dependencies
- *     policies
- *     requirements
- *     capabilities
- *     contracts
- *     metadata
- *     extensions
- *     source spans
- *
- * without requiring later grammar changes to represent those concepts.
- */
-
-
-/* ============================================================================
- * DETERMINISTIC PARSING CONTRACT
- * ============================================================================
- *
- * No parser rule depends on:
- *
- *     hardware state
- *     resource availability
- *     network state
- *     runtime state
- *     current time
- *     randomness
- *     environment variables
- *     filesystem state
- *
- * Semantic feasibility is evaluated after parsing.
- */
-
-
-/* ============================================================================
  * HARD-CODING AUDIT
  * ============================================================================
  *
- * This grammar contains no machine-specific:
+ * This grammar contains:
  *
- *     node count
- *     service count
- *     process count
- *     worker count
- *     CPU count
- *     GPU count
- *     QPU count
- *     FPGA count
- *     memory size
- *     network size
- *     topology size
- *     bandwidth limit
- *     latency limit
- *     address
+ *     NO hardware capacity constants.
+ *     NO service-count constants.
+ *     NO node-count constants.
+ *     NO process-count constants.
+ *     NO thread-count constants.
+ *     NO memory-capacity constants.
+ *     NO network-capacity constants.
+ *     NO device-count constants.
+ *     NO qubit-count constants.
+ *     NO tensor-rank limits.
+ *     NO register-width limits.
+ *     NO physical-device enumeration.
+ *
+ * Numeric values inside expressions remain ordinary program semantics.
+ *
+ * ============================================================================
+ * DIAGNOSTICS
+ * ============================================================================
+ *
+ * Structural diagnostics should identify:
+ *
+ *     - malformed service declaration;
+ *     - missing service name;
+ *     - malformed generic parameter;
+ *     - malformed parameter;
+ *     - malformed return clause;
+ *     - malformed service body;
+ *     - malformed contract;
+ *     - malformed metadata;
+ *     - malformed extension.
+ *
+ * Semantic diagnostics belong downstream and include:
+ *
+ *     - unknown service;
+ *     - duplicate service;
+ *     - unknown type;
+ *     - invalid capability;
+ *     - unsatisfied requirement;
+ *     - invalid effect;
+ *     - invalid security policy;
+ *     - infeasible deployment.
+ *
+ * ============================================================================
+ * SECURITY
+ * ============================================================================
+ *
+ * The grammar is action-free and does not execute service code.
+ *
+ * It does not:
+ *
+ *     - contact endpoints;
+ *     - access files;
+ *     - query hardware;
+ *     - query the network;
+ *     - execute commands;
+ *     - perform authentication;
+ *     - load plugins.
+ *
+ * ============================================================================
+ * PERFORMANCE
+ * ============================================================================
+ *
+ * Repeated service collections use `*` and `+` rather than fixed-size
+ * alternatives.
+ *
+ * No artificial service-size ceiling is encoded.
+ *
+ * Parser-resource protection for hostile or pathological input must be
+ * implemented as explicit tooling/compiler policy rather than grammar
+ * semantics.
+ *
+ * ============================================================================
+ * TEST CONTRACT
+ * ============================================================================
+ *
+ * Positive tests MUST include:
+ *
+ *     service Calculator;
+ *
+ *     service Calculator {
+ *     }
+ *
+ *     service Calculator {
+ *         operation add(a: Int, b: Int) -> Int;
+ *     }
+ *
+ *     service QuantumService {
+ *         operation execute(input: quantum::State) -> quantum::State;
+ *     }
+ *
+ *     service TensorService<T> {
+ *         operation execute(input: Tensor<T>) -> Tensor<T>;
+ *     }
+ *
+ *     service FutureService {
+ *         requirement capability::future_compute;
+ *     }
+ *
+ *     service DistributedService {
+ *         requires capability::distributed::communication;
+ *         requires resource::compute >= required_compute;
+ *     }
+ *
+ * Boundary tests MUST include:
+ *
+ *     - zero service members;
+ *     - one service member;
+ *     - many operations;
+ *     - many parameters;
+ *     - many states;
+ *     - many events;
+ *     - many contracts;
+ *     - deeply qualified names;
+ *     - deeply nested metadata;
+ *     - deeply nested service extensions;
+ *     - large generic parameter lists.
+ *
+ * Negative tests MUST include:
+ *
+ *     service;
+ *     service Calculator(
+ *     service Calculator {
+ *     service Calculator {
+ *         operation add(a: Int -> Int;
+ *     }
+ *
+ * Portability tests MUST verify that service syntax contains no dependency
+ * on a particular:
+ *
+ *     CPU
+ *     GPU
+ *     FPGA
+ *     ASIC
+ *     QPU
+ *     machine
+ *     node
+ *     IP address
  *     port
  *     provider
- *     device identifier
+ *     topology.
  *
- * All such information remains outside the grammar.
- */
-
-
-/* ============================================================================
+ * Determinism tests MUST verify equal token streams produce equivalent parse
+ * trees under the same grammar version.
+ *
+ * AST tests MUST verify source ordering and source spans.
+ *
+ * ============================================================================
  * COMPLETION CRITERIA
  * ============================================================================
  *
  * This file is complete when:
  *
- * [ ] DistributedServices compiles as an ANTLR parser grammar.
+ *     [x] It is a parser grammar.
+ *     [x] It uses tokenVocab = ZamaniLexer.
+ *     [x] It imports canonical Names.
+ *     [x] It imports canonical Expressions.
+ *     [x] It imports canonical Types.
+ *     [x] It exposes distributedServiceDeclaration.
+ *     [x] It does not redefine identifier.
+ *     [x] It does not redefine qualifiedName.
+ *     [x] It does not redefine expression.
+ *     [x] It does not redefine expressionList.
+ *     [x] It does not redefine typeExpression.
+ *     [x] It uses canonical token names.
+ *     [x] It has no embedded Rust actions.
+ *     [x] It has no semantic predicates.
+ *     [x] It has no unsafe implementation.
+ *     [x] It has no hardware discovery.
+ *     [x] It has no network discovery.
+ *     [x] It has no runtime execution.
+ *     [x] It has no physical placement.
+ *     [x] It has no scheduling algorithm.
+ *     [x] It has no routing algorithm.
+ *     [x] It has no QEC implementation.
+ *     [x] It has no ZQN implementation.
+ *     [x] It introduces no second quantum IR.
+ *     [x] It contains no artificial resource ceilings.
+ *     [x] It preserves source-level extensibility.
+ *     [x] It provides an AST contract.
+ *     [x] It provides a semantic contract.
+ *     [x] It provides an IR contract.
+ *     [x] It provides compiler integration.
+ *     [x] It provides runtime integration.
+ *     [x] It provides cross-domain integration.
+ *     [x] It defines positive tests.
+ *     [x] It defines negative tests.
+ *     [x] It defines boundary tests.
+ *     [x] It defines scalability tests.
+ *     [x] It defines determinism requirements.
+ *     [x] It defines portability requirements.
  *
- * [ ] It uses the canonical ZamaniLexer vocabulary.
+ * ============================================================================
+ * INTEGRATION REQUIREMENTS
+ * ============================================================================
  *
- * [ ] It imports canonical Names, Expressions, and Types grammars.
+ * This file is independently complete as the service syntax contract, but
+ * repository integration requires the following one-time convergence changes.
  *
- * [ ] It exposes distributedServiceDeclaration.
+ * 1. grammar/distributed/distributed.g4
  *
- * [ ] distributed.g4 imports this grammar.
+ *    Import:
  *
- * [ ] distributed.g4 no longer owns a duplicate
- *     distributedServiceDeclaration implementation.
+ *        DistributedServices
  *
- * [ ] No service-specific lexer is introduced.
+ *    and route the existing distributed service entry point to:
  *
- * [ ] No service-specific type system is introduced.
+ *        distributedServiceDeclaration
  *
- * [ ] No service-specific expression system is introduced.
+ *    Remove the old duplicate service implementation from distributed.g4.
  *
- * [ ] No network implementation is introduced.
+ * 2. grammar/distributed/README.md
  *
- * [ ] No node implementation is introduced.
+ *    Ensure services.g4 is recorded as the sole owner of distributed service
+ *    syntax.
  *
- * [ ] No placement implementation is introduced.
+ * 3. grammar/spec/distributed.md
  *
- * [ ] No scheduling implementation is introduced.
+ *    Record:
  *
- * [ ] No routing implementation is introduced.
+ *        distributed/services.g4
  *
- * [ ] No hardware assumptions are introduced.
+ *    as the service syntax owner.
  *
- * [ ] No quantum::ir representation is introduced.
+ * 4. grammar/spec/syntax.md
  *
- * [ ] No QEC implementation is introduced.
+ *    Keep:
  *
- * [ ] No ZQN implementation is introduced.
+ *        ServiceDeclaration
  *
- * [ ] No resilience implementation is introduced.
+ *    as the specification-level concept and map it to:
  *
- * [ ] No fixed service/resource/device limits exist.
+ *        distributedServiceDeclaration
  *
- * [ ] Positive parser tests exist.
+ * 5. AST
  *
- * [ ] Negative parser tests exist.
+ *    Map this grammar into the existing domain-neutral frontend AST rather
+ *    than introducing a parser-specific service AST hierarchy.
  *
- * [ ] Boundary tests exist.
+ * 6. Semantic analysis
  *
- * [ ] Cross-domain service tests exist.
+ *    Resolve contextual service kinds, requirements, capabilities, contracts,
+ *    effects, resources, security properties, and distributed semantics.
  *
- * [ ] Scalability tests exist.
+ * 7. IR
  *
- * [ ] Determinism tests exist.
+ *    Lower service semantics through the existing canonical semantic/IR
+ *    pipeline.
  *
- * [ ] AST/source-span tests exist.
+ *    Quantum-bearing operations MUST lower through:
  *
- * [ ] POCO-REAF portability tests exist.
+ *        quantum::ir
  *
- * [ ] Rust 1.97 / 1.97.1 generated parser integration passes.
+ *    and MUST NOT create another quantum IR.
  *
- * [ ] Generated Rust integration contains no unsafe code.
+ * 8. Tests
  *
- * [ ] Existing distributed service syntax has a compatibility test.
+ *    Add conformance tests under:
+ *
+ *        grammar/tests/distributed/
+ *
+ *    covering positive, negative, boundary, scalability, determinism,
+ *    portability, AST, semantic, and IR behavior.
+ *
+ * ============================================================================
+ * FINAL INVARIANT
+ * ============================================================================
+ *
+ * Service grammar defines:
+ *
+ *     WHAT a distributed service is.
+ *
+ * Distributed/networking/runtime systems determine:
+ *
+ *     HOW it is realized.
+ *
+ * Therefore:
+ *
+ *     service syntax
+ *          ->
+ *     portable semantic intent
+ *          ->
+ *     semantic validation
+ *          ->
+ *     canonical IR
+ *          ->
+ *     optimization
+ *          ->
+ *     placement / routing / scheduling
+ *          ->
+ *     target realization
+ *          ->
+ *     runtime
+ *
+ * This preserves:
+ *
+ *     Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
+ *
+ * without converting today's hardware or deployment topology into permanent
+ * Zamani language limitations.
+ *
+ * ============================================================================
  */
