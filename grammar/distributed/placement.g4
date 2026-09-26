@@ -7,12 +7,18 @@
  *     grammar/distributed/placement.g4
  *
  * Grammar:
- *     Distributed placement
+ *     DistributedPlacement
  *
- * Grammar kind:
+ * Status:
+ *     PRODUCTION DISTRIBUTED-PLACEMENT COMPOSITION GRAMMAR
+ *
+ * Language:
+ *     Zamani
+ *
+ * Grammar technology:
  *     ANTLR4 parser grammar
  *
- * Target:
+ * Compiler baseline:
  *     Rust 1.97 / Rust 1.97.1
  *     Rust 2021
  *
@@ -24,315 +30,593 @@
  *     - No network access.
  *     - No hardware access.
  *     - No runtime callbacks.
- *     - No mutable compiler-global state.
  *     - No randomness.
+ *     - No mutable parser-global state.
  *
  * ============================================================================
  * PURPOSE
  * ============================================================================
  *
- * This file defines SOURCE-LEVEL DISTRIBUTED PLACEMENT INTENT.
+ * This file defines the DISTRIBUTED-DOMAIN ENTRY BOUNDARY for placement.
  *
- * It answers:
+ * It does NOT create a second placement language.
  *
- *     "What placement relationships, requirements, constraints,
- *      preferences, capabilities, and mobility properties does this
- *      distributed computation express?"
+ * The reusable placement-clause vocabulary is owned by:
  *
- * It does NOT answer:
+ *     grammar/resources/placement.g4
  *
- *     "Which physical machine will execute it?"
+ * This file adds only the distributed-domain wrapper needed to associate
+ * placement intent with a distributed semantic subject.
  *
- * Physical realization is downstream.
+ * Conceptually:
+ *
+ *     distributed placement declaration
+ *             |
+ *             +--> distributed subject
+ *             |
+ *             +--> canonical resource placement specification
+ *
+ * The resulting syntax can express placement intent for:
+ *
+ *     nodes
+ *     processes
+ *     services
+ *     actors
+ *     tasks
+ *     channels
+ *     messages
+ *     replicated computations
+ *     partitions
+ *     distributed data
+ *     distributed quantum workloads
+ *     accelerators
+ *     hardware/software computations
+ *     future distributed computational entities
+ *
+ * without requiring a new placement grammar for every domain.
  *
  * ============================================================================
- * OWNERSHIP
+ * CRITICAL OWNERSHIP DECISION
  * ============================================================================
  *
- * THIS FILE OWNS
+ * THIS FILE OWNS:
  *
- *     - distributed placement declarations;
- *     - placement subjects;
- *     - placement domains;
- *     - placement locations;
- *     - placement selectors;
+ *     - distributed placement declaration framing;
+ *     - distributed placement naming;
+ *     - distributed placement subject association;
+ *     - distributed placement generic parameters;
+ *     - distributed placement composition entry points.
+ *
+ * THIS FILE DOES NOT OWN:
+ *
+ *     - generic placement clauses;
  *     - placement requirements;
  *     - placement constraints;
  *     - placement preferences;
  *     - placement hints;
- *     - placement affinity;
- *     - placement anti-affinity;
- *     - co-location;
- *     - separation;
- *     - locality;
- *     - topology-property intent;
- *     - resource-class intent;
- *     - capability intent;
  *     - placement policies;
+ *     - placement replication properties;
+ *     - placement mobility properties;
+ *     - placement elasticity properties;
  *     - placement groups;
- *     - placement alternatives;
- *     - migration intent;
- *     - elasticity intent;
- *     - replica placement intent;
- *     - placement metadata.
+ *     - placement relations;
+ *     - placement target syntax;
+ *     - placement resource expressions.
  *
- * THIS FILE DOES NOT OWN
+ * Those remain owned by:
  *
- *     - identifiers;
- *     - qualified names;
- *     - expressions;
- *     - types;
- *     - lexical tokens;
- *     - node discovery;
- *     - service discovery;
- *     - resource discovery;
- *     - hardware discovery;
- *     - topology construction;
- *     - routing;
- *     - scheduling;
- *     - optimization;
- *     - replication algorithms;
- *     - consensus;
- *     - consistency algorithms;
- *     - fault-tolerance algorithms;
- *     - runtime dispatch;
- *     - deployment;
- *     - network transport;
- *     - quantum::ir;
- *     - QEC;
- *     - ZQN;
- *     - resilience.
+ *     grammar/resources/placement.g4
  *
- * ============================================================================
- * ARCHITECTURAL POSITION
- * ============================================================================
+ * This prevents:
  *
- *     source
- *       |
- *       v
- *     lexer
- *       |
- *       v
  *     distributed/placement.g4
- *       |
- *       v
- *     placement syntax
- *       |
- *       v
- *     AST
- *       |
- *       +--> name resolution
- *       +--> type checking
- *       +--> capability checking
- *       +--> resource analysis
- *       +--> semantic validation
- *       |
- *       v
+ *              +
+ *     resources/placement.g4
+ *
+ * from becoming two competing placement authorities.
+ *
+ * ============================================================================
+ * PLACEMENT DOMAIN SEPARATION
+ * ============================================================================
+ *
+ * The repository contains several placement-related domains:
+ *
+ *     grammar/resources/placement.g4
+ *         Generic resource-placement intent.
+ *
+ *     grammar/distributed/placement.g4
+ *         Distributed-domain placement association.
+ *
+ *     grammar/execution/placement.g4
+ *         Execution-placement intent.
+ *
+ *     grammar/hardware/placement.g4
+ *         Hardware-domain placement structures.
+ *
+ * These files MUST NOT become independent semantic placement systems.
+ *
+ * They are domain-specific syntax boundaries that eventually lower into the
+ * common semantic placement model.
+ *
+ * The dependency direction is:
+ *
+ *     domain syntax
+ *          |
+ *          v
+ *     common semantic placement model
+ *          |
+ *          +--> resource analysis
+ *          +--> target selection
+ *          +--> topology analysis
+ *          +--> routing
+ *          +--> scheduling
+ *          +--> deployment
+ *          +--> runtime
+ *
+ * ============================================================================
+ * ARCHITECTURAL PIPELINE
+ * ============================================================================
+ *
+ *     Zamani source
+ *          |
+ *          v
+ *     canonical ZamaniLexer
+ *          |
+ *          v
+ *     DistributedPlacement
+ *          |
+ *          v
+ *     domain-neutral frontend AST
+ *          |
+ *          +--> name resolution
+ *          +--> type analysis
+ *          +--> effect analysis
+ *          +--> capability analysis
+ *          +--> resource analysis
+ *          +--> distributed semantic analysis
+ *          +--> security analysis
+ *          |
+ *          v
  *     canonical semantic representation
- *       |
- *       +--> resource model
- *       +--> distributed IR
- *       +--> quantum::ir integration where applicable
- *       |
- *       +--> placement
- *       +--> routing
- *       +--> scheduling
- *       +--> hardware realization
- *       |
- *       v
+ *          |
+ *          +--> classical representation
+ *          +--> quantum::ir
+ *          +--> HDL/hardware representation
+ *          +--> distributed representation
+ *          +--> resource/placement representation
+ *          |
+ *          v
+ *     optimization
+ *          |
+ *          +--> placement realization
+ *          +--> routing
+ *          +--> scheduling
+ *          +--> resilience
+ *          |
+ *          v
+ *     target lowering
+ *          |
+ *          v
+ *     HAL / deployment
+ *          |
+ *          v
  *     runtime
  *
- * This grammar does NOT call any of those downstream systems.
+ * This grammar never constructs, modifies, or selects an IR.
  *
  * ============================================================================
  * POCO-REAF
  * ============================================================================
  *
- * Distributed placement MUST preserve:
+ * Distributed placement participates in:
  *
  *     Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
  *
- * Therefore the grammar MUST NOT require:
+ * Placement therefore expresses semantic intent rather than a permanent
+ * physical machine assignment.
  *
- *     - a fixed node count;
- *     - a fixed service count;
- *     - a fixed process count;
+ * The grammar MUST NOT require:
+ *
+ *     - a fixed number of nodes;
+ *     - a fixed number of processes;
+ *     - a fixed number of services;
+ *     - a fixed number of workers;
+ *     - a fixed number of devices;
+ *     - a fixed number of CPUs;
+ *     - a fixed number of GPUs;
+ *     - a fixed number of FPGAs;
+ *     - a fixed number of QPUs;
+ *     - a fixed number of qubits;
+ *     - a fixed memory capacity;
  *     - a fixed cluster size;
  *     - a fixed topology;
- *     - a fixed node identifier;
  *     - a fixed hostname;
  *     - a fixed IP address;
- *     - a fixed network port;
+ *     - a fixed port;
  *     - a fixed cloud provider;
  *     - a fixed region;
- *     - a fixed CPU count;
- *     - a fixed GPU count;
- *     - a fixed QPU count;
- *     - a fixed FPGA count;
- *     - a fixed memory capacity;
- *     - a fixed bandwidth;
- *     - a fixed latency.
- *
- * Physical properties may be expressed only as:
- *
- *     - semantic requirements;
- *     - constraints;
- *     - capabilities;
- *     - preferences;
- *     - hints;
- *     - symbolic selectors;
- *     - resource expressions;
- *     - target-independent properties.
+ *     - a fixed physical device identifier.
  *
  * ============================================================================
- * OPEN-WORLD DESIGN
+ * UNBOUNDED SCALABILITY
  * ============================================================================
  *
- * Distributed placement deliberately does not introduce a closed inventory
- * of node/device/provider types.
+ * There are deliberately NO grammar-level constants such as:
  *
- * Examples such as:
+ *     MAX_NODES
+ *     MAX_PROCESSES
+ *     MAX_SERVICES
+ *     MAX_WORKERS
+ *     MAX_DEVICES
+ *     MAX_CPUS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_QPUS
+ *     MAX_QUBITS
+ *     MAX_MEMORY
+ *     MAX_THREADS
+ *     MAX_PLACEMENTS
+ *     MAX_REGIONS
+ *     MAX_GROUPS
  *
- *     cpu
- *     gpu
- *     qpu
- *     fpga
- *     accelerator
- *     memory
- *     numa
- *     rack
- *     zone
- *     region
- *     cluster
+ * The grammar uses repetition and expressions instead of finite hardware
+ * capacities.
  *
- * are represented as identifiers.
+ * Therefore the same syntax can describe:
  *
- * This permits future resources without changing this grammar merely because
- * a new hardware or deployment class appears.
+ *     one logical participant
+ *     one machine
+ *     one accelerator
+ *     many machines
+ *     large clusters
+ *     HPC systems
+ *     federated systems
+ *     heterogeneous systems
+ *     distributed quantum systems
+ *     future computational substrates
  *
- * ============================================================================
- * CANONICAL DEPENDENCIES
- * ============================================================================
+ * subject only to actual semantic and resource availability.
  *
- * Names:
+ * "Infinity" here means:
  *
- *     identifier
- *     qualifiedName
- *     nameReference
+ *     no artificial language-level finite ceiling.
  *
- * Expressions:
- *
- *     expression
- *     expressionList
- *
- * This grammar MUST NOT redefine those rules.
- *
- * ============================================================================
- * BUILD CONTRACT
- * ============================================================================
- *
- * This parser grammar is intended to be composed with the canonical Zamani
- * lexer and shared parser grammar components.
- *
- * The canonical aggregate grammar MUST expose:
- *
- *     distributedPlacementDeclaration
- *
- * as the public entry rule.
- *
- * The distributed aggregate grammar should delegate its placement alternative
- * to this rule rather than redefining placement syntax.
+ * It does not claim that a particular compiler, parser, runtime, operating
+ * system, or physical deployment has infinite resources.
  *
  * ============================================================================
- * IMPORTANT INTEGRATION RULE
+ * HARD-CODING PROHIBITION
  * ============================================================================
  *
- * grammar/distributed/distributed.g4 already owns the distributed-domain
- * aggregate and already identifies:
+ * This grammar MUST NOT encode universal limits equivalent to:
  *
- *     distributedPlacementDeclaration
+ *     MAX_QUBITS
+ *     MAX_CPUS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_NODES
+ *     MAX_MEMORY
+ *     MAX_THREADS
+ *     MAX_TENSOR_RANK
+ *     MAX_REGISTER_WIDTH
+ *     MAX_NETWORK_SIZE
+ *     MAX_DEVICE_COUNT
  *
- * as part of its public distributed syntax.
+ * Nor may it encode equivalent physical assumptions such as:
  *
- * Therefore the final aggregate grammar MUST import/include this file and
- * delegate to:
+ *     exactly 8 CPUs
+ *     exactly 32 GPUs
+ *     exactly 1024 qubits
+ *     exactly 64 GB memory
+ *     exactly 32-bit registers
+ *     exactly N nodes
  *
- *     distributedPlacementDeclaration
+ * A number appearing in an expression remains PROGRAM DATA.
  *
- * It MUST NOT define a second competing placement grammar.
+ * For example:
+ *
+ *     placement::replicas = replica_count;
+ *
+ * is semantic program intent.
+ *
+ * It is not a compiler-wide maximum.
  *
  * ============================================================================
- * SEMANTIC BOUNDARY
+ * REQUIREMENT / CONSTRAINT / PREFERENCE / HINT
  * ============================================================================
  *
- * Parsing determines structural validity.
+ * The semantic model MUST preserve these distinctions:
  *
- * Semantic analysis determines:
+ *     REQUIREMENT
+ *         Must be satisfied.
  *
- *     - what a placement subject means;
- *     - whether a location exists semantically;
- *     - whether a capability is valid;
- *     - whether a requirement is satisfiable;
- *     - whether constraints conflict;
- *     - whether a preference is optional;
- *     - whether a placement is legal;
- *     - whether migration is permitted;
- *     - whether replication placement is compatible with consistency;
- *     - whether quantum resources can satisfy the request;
- *     - whether hardware can realize the request.
+ *     CONSTRAINT
+ *         Restricts legal realizations.
  *
- * None of those decisions belong in this grammar.
+ *     PREFERENCE
+ *         Desirable but non-mandatory.
+ *
+ *     HINT
+ *         Advisory information that may be ignored.
+ *
+ * These distinctions are inherited from the canonical resource-placement
+ * grammar.
+ *
+ * This file MUST NOT reinterpret one category as another.
+ *
+ * ============================================================================
+ * TARGET INDEPENDENCE
+ * ============================================================================
+ *
+ * Valid portable intent includes concepts such as:
+ *
+ *     placement::scope = execution_region;
+ *
+ *     placement::affinity = service_a, service_b;
+ *
+ *     placement::anti_affinity = replica_group;
+ *
+ *     placement::target = accelerator;
+ *
+ *     placement::replicas = replica_count;
+ *
+ *     placement::migration = migration_policy;
+ *
+ *     placement::elasticity = workload_size;
+ *
+ *     placement::latency = latency_budget;
+ *
+ *     placement::capability = capability_requirement;
+ *
+ * Physical realization is downstream.
+ *
+ * The grammar does not decide which machine, node, CPU, GPU, FPGA, QPU,
+ * memory bank, network link, or physical qubit satisfies those expressions.
  *
  * ============================================================================
  * QUANTUM INTEGRATION
  * ============================================================================
  *
- * Distributed placement may refer to logical quantum resources.
+ * Distributed placement may apply to:
  *
- * It MUST NOT define:
+ *     logical quantum workloads;
+ *     logical qubits;
+ *     logical registers;
+ *     distributed circuits;
+ *     quantum/classical services;
+ *     quantum accelerators;
+ *     distributed quantum execution.
+ *
+ * This grammar MUST NOT define:
  *
  *     QubitId
  *     PhysicalQubitId
  *     GateKind
  *     quantum topology
+ *     coupling maps
+ *     SWAP insertion
+ *     pulse placement
  *     calibration
- *     pulse semantics
  *     QEC algorithms
  *     ZQN noise models
  *
- * Any quantum semantic representation ultimately belongs to quantum::ir.
+ * Quantum semantics continue through:
  *
- * Distributed placement merely contributes placement intent.
+ *     quantum::ir
+ *
+ * Placement contributes intent only.
  *
  * ============================================================================
- * HARDWARE / HDL INTEGRATION
+ * HDL / HARDWARE INTEGRATION
  * ============================================================================
  *
- * Placement may refer symbolically to hardware/resource classes.
+ * Distributed placement may refer semantically to:
+ *
+ *     hardware classes;
+ *     accelerator classes;
+ *     memory domains;
+ *     compute domains;
+ *     interconnect domains;
+ *     capability domains.
  *
  * It MUST NOT define:
  *
- *     wires;
- *     clocks;
- *     FPGA cells;
- *     ASIC cells;
- *     physical addresses;
- *     register files;
- *     device inventory.
+ *     physical FPGA cells;
+ *     ASIC coordinates;
+ *     physical pins;
+ *     physical registers;
+ *     physical memory addresses;
+ *     device inventory;
+ *     vendor-specific placement coordinates.
  *
- * Those belong to HDL/hardware/resource layers.
+ * Hardware realization remains downstream.
+ *
+ * ============================================================================
+ * NETWORKING INTEGRATION
+ * ============================================================================
+ *
+ * Placement is not routing.
+ *
+ * Placement may express:
+ *
+ *     locality;
+ *     affinity;
+ *     anti-affinity;
+ *     topology-related requirements;
+ *     latency-related intent.
+ *
+ * It does not construct:
+ *
+ *     network paths;
+ *     packets;
+ *     routes;
+ *     sockets;
+ *     ports;
+ *     transport protocols.
+ *
+ * Those belong to networking/routing/runtime layers.
+ *
+ * ============================================================================
+ * REPLICATION INTEGRATION
+ * ============================================================================
+ *
+ * Replication and placement remain separate semantic concepts.
+ *
+ * Replication says:
+ *
+ *     how many logical realizations are required or permitted.
+ *
+ * Placement says:
+ *
+ *     what placement relationships those realizations should satisfy.
+ *
+ * This file therefore does not reimplement:
+ *
+ *     grammar/distributed/replication.g4
+ *
+ * Instead, placement properties may refer to replication-related semantic
+ * values through the canonical resource-placement property mechanism.
+ *
+ * ============================================================================
+ * MIGRATION / ELASTICITY
+ * ============================================================================
+ *
+ * Migration and elasticity are expressed as placement properties.
+ *
+ * This grammar does not implement:
+ *
+ *     migration algorithms;
+ *     checkpointing;
+ *     state transfer;
+ *     failover;
+ *     rescheduling;
+ *     autoscaling;
+ *     load balancing.
+ *
+ * Those belong to semantic/runtime/deployment systems.
  *
  * ============================================================================
  * DETERMINISM
  * ============================================================================
  *
- * No actions.
- * No predicates.
- * No I/O.
- * No randomness.
- * No runtime calls.
+ * This grammar contains:
  *
- * Parse results depend only on the token stream.
+ *     - no actions;
+ *     - no semantic predicates;
+ *     - no filesystem access;
+ *     - no network access;
+ *     - no hardware queries;
+ *     - no runtime callbacks;
+ *     - no randomness.
+ *
+ * Parsing depends only on:
+ *
+ *     - the supplied token stream;
+ *     - the selected Zamani language version;
+ *     - the imported grammar contracts.
+ *
+ * ============================================================================
+ * SOURCE-PRESERVATION CONTRACT
+ * ============================================================================
+ *
+ * Frontend AST construction must preserve:
+ *
+ *     - declaration source span;
+ *     - placement name;
+ *     - subject expression;
+ *     - generic parameter ordering;
+ *     - placement-clause ordering;
+ *     - nested expression structure;
+ *     - source spans of all child constructs.
+ *
+ * The parser MUST NOT perform:
+ *
+ *     - name resolution;
+ *     - resource discovery;
+ *     - capability lookup;
+ *     - placement selection;
+ *     - target selection.
+ *
+ * ============================================================================
+ * AST CONTRACT
+ * ============================================================================
+ *
+ * Conceptually, the frontend AST should contain:
+ *
+ *     DistributedPlacementDeclaration
+ *         name
+ *         generic_parameters
+ *         subject
+ *         specification
+ *         source_span
+ *
+ * The nested placement specification should lower to the same placement
+ * semantic representation used by the resource subsystem.
+ *
+ * This wrapper MUST NOT create a second DistributedPlacementClause hierarchy
+ * if the frontend already has a canonical placement-clause representation.
+ *
+ * ============================================================================
+ * SEMANTIC CONTRACT
+ * ============================================================================
+ *
+ * Semantic analysis is responsible for:
+ *
+ *     - resolving the placement declaration name;
+ *     - resolving the placement subject;
+ *     - validating generic parameters;
+ *     - resolving placement properties;
+ *     - distinguishing requirements/constraints/preferences/hints;
+ *     - checking placement compatibility;
+ *     - checking resource availability;
+ *     - checking capabilities;
+ *     - checking topology requirements;
+ *     - checking distributed consistency implications;
+ *     - checking replication interactions;
+ *     - checking migration legality;
+ *     - checking elasticity legality;
+ *     - checking quantum placement compatibility;
+ *     - checking hardware capability compatibility.
+ *
+ * None of those checks belong in parser actions.
+ *
+ * ============================================================================
+ * IR CONTRACT
+ * ============================================================================
+ *
+ * This grammar defines NO IR.
+ *
+ * Placement semantics must lower into the repository's canonical semantic
+ * representation.
+ *
+ * Quantum-related placement information ultimately integrates with:
+ *
+ *     quantum::ir
+ *
+ * rather than creating:
+ *
+ *     DistributedQuantumPlacementIR
+ *
+ * or another competing quantum intermediate representation.
+ *
+ * ============================================================================
+ * COMPATIBILITY CONTRACT
+ * ============================================================================
+ *
+ * The stable public rule remains:
+ *
+ *     distributedPlacementDeclaration
+ *
+ * The file remains:
+ *
+ *     grammar/distributed/placement.g4
+ *
+ * No filename rename is required.
+ *
+ * The previous distributed placement body was internally duplicating resource
+ * placement constructs. The replacement deliberately preserves the public
+ * distributed entry point while delegating clause ownership to
+ * ResourcePlacement.
  *
  * ============================================================================
  */
@@ -343,44 +627,76 @@ options {
     tokenVocab = ZamaniLexer;
 }
 
-import Names, Expressions;
+/*
+ * ResourcePlacement is the canonical reusable placement-clause authority.
+ *
+ * Names and Expressions remain direct dependencies because the distributed
+ * wrapper owns its declaration name, generic parameters, and subject.
+ *
+ * ResourcePlacement itself owns resource-placement expressions and clauses.
+ */
+import Names, Expressions, ResourcePlacement;
 
 
 /* ============================================================================
- * 1. PUBLIC ENTRY POINT
+ * 1. PUBLIC DISTRIBUTED PLACEMENT DECLARATION
  * ============================================================================
  *
- * Stable public rule consumed by distributed.g4.
+ * Canonical source shape:
  *
- * Canonical shape:
+ *     placement Policy {
+ *         placement::scope = execution_region;
+ *         placement::target = accelerator;
+ *     }
  *
- *     placement <name> { ... }
+ * Subject-associated form:
  *
- * The spelling/classification of the contextual word "placement" is validated
- * by semantic analysis where the repository's open-world identifier model
- * requires contextual keywords.
+ *     placement Policy(workload) {
+ *         placement::scope = execution_region;
+ *     }
+ *
+ * Generic form:
+ *
+ *     placement Policy<N> {
+ *         placement::replicas = N;
+ *     }
+ *
+ * Generic + subject form:
+ *
+ *     placement Policy<N>(workload) {
+ *         placement::replicas = N;
+ *     }
+ *
+ * The word "placement" remains contextual at this boundary because the
+ * repository's canonical lexer does not establish a dedicated distributed
+ * placement token.
+ *
+ * Semantic analysis MUST verify that the first identifier has the contextual
+ * spelling required by this construct.
  */
-
 distributedPlacementDeclaration
-    : identifier
+    : distributedPlacementKeyword
       identifier
-      distributedPlacementHeader?
-      LBRACE
-      distributedPlacementMember*
-      RBRACE
+      distributedPlacementGenericParameters?
+      distributedPlacementSubjectClause?
+      resourcePlacementSpecification
     ;
 
 
 /* ============================================================================
- * 2. PLACEMENT HEADER
+ * 2. CONTEXTUAL PLACEMENT KEYWORD
  * ============================================================================
+ *
+ * The distributed grammar deliberately does not invent a new lexer token.
+ *
+ * This keeps the parser compatible with the repository's open-world lexical
+ * model and prevents a distributed-only keyword from becoming a second lexical
+ * authority.
+ *
+ * Semantic validation establishes the contextual meaning.
  */
-
-distributedPlacementHeader
-    : distributedPlacementGenericParameters?
-      distributedPlacementScopeClause?
-      distributedPlacementSubjectClause?
-      distributedPlacementAttributeList?
+distributedPlacementKeyword
+    : identifier
     ;
 
 
@@ -388,30 +704,28 @@ distributedPlacementHeader
  * 3. GENERIC PARAMETERS
  * ============================================================================
  *
- * Generic parameters represent semantic parameters.
+ * These are semantic parameters, not hardware limits.
  *
- * They are not hardware limits.
- *
- * Example:
- *
- *     placement ClusterPolicy<N> { ... }
- *
- * N may later be resolved from program semantics, compilation context,
- * deployment context, or available resources.
+ * No finite parameter count is encoded.
  */
-
 distributedPlacementGenericParameters
     : LESS_THAN
       distributedPlacementGenericParameter
       (COMMA distributedPlacementGenericParameter)*
+      COMMA?
       GREATER_THAN
     ;
+
 
 distributedPlacementGenericParameter
     : identifier
       distributedPlacementGenericBound?
-      (ASSIGN expression)?
+      (
+          ASSIGN
+          expression
+      )?
     ;
+
 
 distributedPlacementGenericBound
     : COLON
@@ -420,761 +734,566 @@ distributedPlacementGenericBound
 
 
 /* ============================================================================
- * 4. PLACEMENT SCOPE
+ * 4. DISTRIBUTED PLACEMENT SUBJECT
  * ============================================================================
+ *
+ * Parentheses make subject association structurally unambiguous.
+ *
+ * Examples:
+ *
+ *     placement WorkerPolicy(worker) { ... }
+ *
+ *     placement QuantumPolicy(quantum_workload) { ... }
+ *
+ *     placement ServicePolicy(service::api) { ... }
+ *
+ * The subject is an expression rather than a closed domain-specific name.
  */
-
-distributedPlacementScopeClause
-    : identifier
-      distributedPlacementScopeValue
-    ;
-
-distributedPlacementScopeValue
-    : qualifiedName
-    | expression
-    ;
-
-
-/* ============================================================================
- * 5. PLACEMENT SUBJECT
- * ============================================================================
- */
-
 distributedPlacementSubjectClause
-    : identifier
-      distributedPlacementSubject
-    ;
-
-distributedPlacementSubject
-    : qualifiedName
-    | distributedPlacementSelector
-    | expression
-    ;
-
-
-/* ============================================================================
- * 6. ATTRIBUTE LIST
- * ============================================================================
- */
-
-distributedPlacementAttributeList
     : LPAREN
-      distributedPlacementAttribute
-      (COMMA distributedPlacementAttribute)*
+      expressionList?
       RPAREN
     ;
 
-distributedPlacementAttribute
+
+/* ============================================================================
+ * 5. CANONICAL PLACEMENT SPECIFICATION
+ * ============================================================================
+ *
+ * This is a transparent wrapper around:
+ *
+ *     ResourcePlacement.resourcePlacementSpecification
+ *
+ * No second clause grammar is created here.
+ */
+distributedPlacementSpecification
+    : resourcePlacementSpecification
+    ;
+
+
+/* ============================================================================
+ * 6. CANONICAL PLACEMENT CLAUSE
+ * ============================================================================
+ *
+ * This transparent wrapper allows distributed consumers to refer to placement
+ * clauses through a distributed-domain public name without creating a second
+ * semantic clause hierarchy.
+ */
+distributedPlacementClause
+    : resourcePlacementClause
+    ;
+
+
+/* ============================================================================
+ * 7. CANONICAL PLACEMENT CLAUSE LIST
+ * ============================================================================
+ *
+ * The list is unbounded at the language level.
+ */
+distributedPlacementClauseList
+    : distributedPlacementClause*
+    ;
+
+
+/* ============================================================================
+ * 8. OPTIONAL SPECIFICATION
+ * ============================================================================
+ *
+ * Useful to higher-level distributed grammars that need to attach optional
+ * placement intent to another declaration.
+ */
+optionalDistributedPlacementSpecification
+    : distributedPlacementSpecification?
+    ;
+
+
+/* ============================================================================
+ * 9. PLACEMENT REFERENCE
+ * ============================================================================
+ *
+ * A placement declaration may be referenced by name by higher-level
+ * distributed constructs.
+ *
+ * This is only structural name syntax.
+ *
+ * Semantic resolution determines whether the name actually denotes a
+ * DistributedPlacementDeclaration.
+ */
+distributedPlacementReference
     : qualifiedName
-      (
-          ASSIGN expression
-        | LPAREN expressionList? RPAREN
-      )?
     ;
 
 
 /* ============================================================================
- * 7. PLACEMENT BODY
+ * 10. PLACEMENT REFERENCE LIST
  * ============================================================================
+ *
+ * No finite number of placement policies is imposed.
  */
-
-distributedPlacementMember
-    : distributedPlacementBinding
-    | distributedPlacementGroup
-    | distributedPlacementDomain
-    | distributedPlacementRelation
-    | distributedPlacementRequirement
-    | distributedPlacementConstraint
-    | distributedPlacementPreference
-    | distributedPlacementHint
-    | distributedPlacementPolicy
-    | distributedPlacementAlternative
-    | distributedPlacementReplica
-    | distributedPlacementMigration
-    | distributedPlacementElasticity
-    | distributedPlacementCapability
-    | distributedPlacementProperty
+distributedPlacementReferenceList
+    : distributedPlacementReference
+      (COMMA distributedPlacementReference)*
+      COMMA?
     ;
 
 
 /* ============================================================================
- * 8. DIRECT PLACEMENT BINDING
+ * 11. SUBJECT LIST
  * ============================================================================
  *
- * Examples conceptually include:
+ * Useful for consumers that want to associate the same placement declaration
+ * with multiple logical distributed entities.
  *
- *     place worker to region
- *     bind service to node_class
- *
- * The grammar does not interpret the physical meaning.
+ * This is a structural helper only.
  */
-
-distributedPlacementBinding
-    : identifier
-      distributedPlacementSubject
-      distributedPlacementBindingOperator
-      distributedPlacementLocation
-      SEMICOLON
-    ;
-
-distributedPlacementBindingOperator
-    : identifier
-    ;
-
-
-/* ============================================================================
- * 9. PLACEMENT LOCATION
- * ============================================================================
- *
- * Locations remain symbolic.
- *
- * A location can represent:
- *
- *     - logical region;
- *     - resource class;
- *     - capability domain;
- *     - topology domain;
- *     - deployment scope;
- *     - backend-provided location.
- */
-
-distributedPlacementLocation
-    : qualifiedName
-    | distributedPlacementSelector
-    | LPAREN expression RPAREN
-    ;
-
-
-/* ============================================================================
- * 10. SELECTORS
- * ============================================================================
- *
- * Selectors are expressions describing a set of possible placement targets.
- *
- * They do not enumerate physical infrastructure.
- */
-
-distributedPlacementSelector
-    : LBRACKET
-      distributedPlacementSelectorExpression
-      RBRACKET
-    ;
-
-distributedPlacementSelectorExpression
+distributedPlacementSubjectList
     : expression
+      (COMMA expression)*
+      COMMA?
     ;
 
 
 /* ============================================================================
- * 11. GROUPS
- * ============================================================================
- */
-
-distributedPlacementGroup
-    : identifier
-      identifier
-      distributedPlacementGroupMode?
-      distributedPlacementGroupSubjectList
-      SEMICOLON?
-    ;
-
-distributedPlacementGroupMode
-    : identifier
-    ;
-
-distributedPlacementGroupSubjectList
-    : LBRACE
-      distributedPlacementSubjectItem*
-      RBRACE
-    ;
-
-distributedPlacementSubjectItem
-    : distributedPlacementSubject
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 12. DOMAINS
+ * 12. SEMANTIC CATEGORY BOUNDARY
  * ============================================================================
  *
- * A domain is a symbolic placement domain.
+ * The following concepts are inherited from ResourcePlacement:
  *
- * It is not a topology declaration.
- */
-
-distributedPlacementDomain
-    : identifier
-      identifier
-      distributedPlacementDomainAttributes?
-      LBRACE
-      distributedPlacementDomainMember*
-      RBRACE
-    ;
-
-distributedPlacementDomainAttributes
-    : LPAREN
-      distributedPlacementAttributeList?
-      RPAREN
-    ;
-
-distributedPlacementDomainMember
-    : distributedPlacementLocation
-      SEMICOLON
-    | distributedPlacementRequirement
-    | distributedPlacementConstraint
-    | distributedPlacementPreference
-    | distributedPlacementProperty
-    ;
-
-
-/* ============================================================================
- * 13. RELATIONSHIPS
+ *     relation
+ *     scope
+ *     target
+ *     requirement
+ *     constraint
+ *     preference
+ *     hint
+ *     policy
+ *     replication
+ *     mobility
+ *     elasticity
+ *     group
+ *     property
+ *
+ * Distributed placement MUST NOT redefine those categories.
+ *
+ * Semantic analysis may interpret them in the distributed domain.
+ *
  * ============================================================================
- */
-
-distributedPlacementRelation
-    : distributedPlacementAffinity
-    | distributedPlacementAntiAffinity
-    | distributedPlacementCoLocation
-    | distributedPlacementSeparation
-    | distributedPlacementLocality
-    | distributedPlacementAdjacency
-    | distributedPlacementDistance
-    | distributedPlacementAvoidance
-    ;
-
-
-/* ----------------------------------------------------------------------------
- * Affinity
- * ----------------------------------------------------------------------------
- */
-
-distributedPlacementAffinity
-    : identifier
-      distributedPlacementRelationSubject
-      distributedPlacementRelationOperator
-      distributedPlacementRelationSubject
-      SEMICOLON
-    ;
-
-
-/* ----------------------------------------------------------------------------
- * Anti-affinity
- * ----------------------------------------------------------------------------
- */
-
-distributedPlacementAntiAffinity
-    : identifier
-      distributedPlacementRelationSubject
-      distributedPlacementRelationOperator
-      distributedPlacementRelationSubject
-      SEMICOLON
-    ;
-
-
-/* ----------------------------------------------------------------------------
- * Co-location
- * ----------------------------------------------------------------------------
- */
-
-distributedPlacementCoLocation
-    : identifier
-      distributedPlacementRelationSubject
-      distributedPlacementRelationOperator
-      distributedPlacementRelationSubject
-      SEMICOLON
-    ;
-
-
-/* ----------------------------------------------------------------------------
- * Separation
- * ----------------------------------------------------------------------------
- */
-
-distributedPlacementSeparation
-    : identifier
-      distributedPlacementRelationSubject
-      distributedPlacementRelationOperator
-      distributedPlacementRelationSubject
-      SEMICOLON
-    ;
-
-
-/* ----------------------------------------------------------------------------
- * Locality
- * ----------------------------------------------------------------------------
- */
-
-distributedPlacementLocality
-    : identifier
-      distributedPlacementRelationSubject
-      distributedPlacementRelationOperator
-      distributedPlacementLocation
-      SEMICOLON
-    ;
-
-
-/* ----------------------------------------------------------------------------
- * Adjacency
- * ----------------------------------------------------------------------------
- */
-
-distributedPlacementAdjacency
-    : identifier
-      distributedPlacementRelationSubject
-      distributedPlacementRelationOperator
-      distributedPlacementRelationSubject
-      SEMICOLON
-    ;
-
-
-/* ----------------------------------------------------------------------------
- * Distance
- * ----------------------------------------------------------------------------
- */
-
-distributedPlacementDistance
-    : identifier
-      distributedPlacementRelationSubject
-      distributedPlacementDistanceOperator
-      expression
-      SEMICOLON
-    ;
-
-distributedPlacementDistanceOperator
-    : LESS_THAN
-    | LESS_EQUAL
-    | GREATER_THAN
-    | GREATER_EQUAL
-    | ASSIGN
-    ;
-
-
-/* ----------------------------------------------------------------------------
- * Avoidance
- * ----------------------------------------------------------------------------
- */
-
-distributedPlacementAvoidance
-    : identifier
-      distributedPlacementRelationSubject
-      distributedPlacementRelationOperator
-      distributedPlacementRelationSubject
-      SEMICOLON
-    ;
-
-distributedPlacementRelationSubject
-    : distributedPlacementSubject
-    | distributedPlacementLocation
-    ;
-
-distributedPlacementRelationOperator
-    : identifier
-    ;
-
-
-/* ============================================================================
- * 14. REQUIREMENTS
+ * 13. OPEN-WORLD EXTENSION
  * ============================================================================
  *
- * Requirements are mandatory semantic conditions.
- */
-
-distributedPlacementRequirement
-    : identifier
-      distributedPlacementRequirementBody
-      SEMICOLON
-    ;
-
-distributedPlacementRequirementBody
-    : distributedPlacementResourceRequirement
-    | distributedPlacementCapabilityRequirement
-    | distributedPlacementLocationRequirement
-    | distributedPlacementTopologyRequirement
-    | distributedPlacementExpressionRequirement
-    ;
-
-distributedPlacementResourceRequirement
-    : identifier
-      distributedPlacementResourceSelector
-    ;
-
-distributedPlacementCapabilityRequirement
-    : identifier
-      distributedPlacementCapabilitySelector
-    ;
-
-distributedPlacementLocationRequirement
-    : distributedPlacementSubject
-      distributedPlacementRequirementOperator
-      distributedPlacementLocation
-    ;
-
-distributedPlacementTopologyRequirement
-    : identifier
-      distributedPlacementTopologySelector
-    ;
-
-distributedPlacementExpressionRequirement
-    : expression
-    ;
-
-distributedPlacementRequirementOperator
-    : identifier
-    ;
-
-distributedPlacementResourceSelector
-    : qualifiedName
-    | distributedPlacementSelector
-    | expression
-    ;
-
-distributedPlacementCapabilitySelector
-    : qualifiedName
-    | distributedPlacementSelector
-    | expression
-    ;
-
-distributedPlacementTopologySelector
-    : qualifiedName
-    | distributedPlacementSelector
-    | expression
-    ;
-
-
-/* ============================================================================
- * 15. CONSTRAINTS
+ * Because ResourcePlacement uses qualified names and expressions, new
+ * distributed placement dimensions can be represented without adding:
+ *
+ *     - a new lexer keyword;
+ *     - a new hardware enumeration;
+ *     - a new finite resource table;
+ *     - a new machine-size constant.
+ *
+ * Examples remain semantically expressible through canonical placement
+ * properties:
+ *
+ *     placement::locality
+ *     placement::affinity
+ *     placement::anti_affinity
+ *     placement::co_location
+ *     placement::separation
+ *     placement::scope
+ *     placement::target
+ *     placement::capability
+ *     placement::replicas
+ *     placement::migration
+ *     placement::elasticity
+ *     placement::latency
+ *     placement::bandwidth
+ *     placement::reliability
+ *     placement::energy
+ *
+ * The grammar intentionally does not enumerate this property inventory.
+ *
+ * ============================================================================
+ * 14. RESOURCE / CAPABILITY INTEGRATION
  * ============================================================================
  *
- * Constraints restrict legal realizations.
+ * Placement values may reference resource expressions through the canonical
+ * ResourcePlacement grammar.
  *
- * They do not themselves choose a realization.
- */
-
-distributedPlacementConstraint
-    : identifier
-      distributedPlacementConstraintBody
-      SEMICOLON
-    ;
-
-distributedPlacementConstraintBody
-    : distributedPlacementConstraintExpression
-    | distributedPlacementConstraintRelation
-    | distributedPlacementConstraintScope
-    ;
-
-distributedPlacementConstraintExpression
-    : expression
-    ;
-
-distributedPlacementConstraintRelation
-    : distributedPlacementRelationSubject
-      distributedPlacementConstraintOperator
-      distributedPlacementRelationSubject
-    ;
-
-distributedPlacementConstraintScope
-    : distributedPlacementSubject
-      distributedPlacementConstraintOperator
-      distributedPlacementLocation
-    ;
-
-distributedPlacementConstraintOperator
-    : ASSIGN
-    | NOT_EQUAL
-    | LESS_THAN
-    | LESS_EQUAL
-    | GREATER_THAN
-    | GREATER_EQUAL
-    | identifier
-    ;
-
-
-/* ============================================================================
- * 16. PREFERENCES
+ * This permits semantic requirements such as:
+ *
+ *     placement::resource = required_resources;
+ *
+ *     placement::capability = capability("tensor.compute");
+ *
+ *     placement::capability = capability("quantum.measurement");
+ *
+ *     placement::scope = execution_region;
+ *
+ * without turning those into physical hardware assignments.
+ *
+ * Resource availability is resolved downstream.
+ *
+ * ============================================================================
+ * 15. DISTRIBUTED NODE INTEGRATION
  * ============================================================================
  *
- * Preferences are non-mandatory.
+ * A placement subject may semantically resolve to an entity declared by:
  *
- * A compiler may satisfy them when possible without treating them as semantic
- * requirements.
- */
-
-distributedPlacementPreference
-    : identifier
-      distributedPlacementPreferenceBody
-      SEMICOLON
-    ;
-
-distributedPlacementPreferenceBody
-    : distributedPlacementPreferenceExpression
-    | distributedPlacementPreferenceRelation
-    ;
-
-distributedPlacementPreferenceExpression
-    : expression
-    ;
-
-distributedPlacementPreferenceRelation
-    : distributedPlacementRelationSubject
-      distributedPlacementPreferenceOperator
-      distributedPlacementLocation
-    ;
-
-distributedPlacementPreferenceOperator
-    : ASSIGN
-    | identifier
-    ;
-
-
-/* ============================================================================
- * 17. HINTS
+ *     grammar/distributed/nodes.g4
+ *
+ * This file does not import or duplicate node declarations.
+ *
+ * Node identity remains logical.
+ *
+ * A node declaration does not automatically imply:
+ *
+ *     physical machine;
+ *     CPU;
+ *     GPU;
+ *     FPGA;
+ *     QPU;
+ *     hostname;
+ *     network address.
+ *
+ * ============================================================================
+ * 16. PROCESS / SERVICE / ACTOR INTEGRATION
  * ============================================================================
  *
- * Hints are advisory.
+ * A placement subject may resolve to entities declared by:
  *
- * A hint MUST NOT become an implicit semantic requirement.
- */
-
-distributedPlacementHint
-    : identifier
-      distributedPlacementHintBody
-      SEMICOLON
-    ;
-
-distributedPlacementHintBody
-    : expression
-    | distributedPlacementHintRelation
-    ;
-
-distributedPlacementHintRelation
-    : distributedPlacementRelationSubject
-      distributedPlacementHintOperator
-      distributedPlacementLocation
-    ;
-
-distributedPlacementHintOperator
-    : ASSIGN
-    | identifier
-    ;
-
-
-/* ============================================================================
- * 18. POLICIES
+ *     grammar/distributed/processes.g4
+ *     grammar/distributed/services.g4
+ *     grammar/distributed/actors.g4
+ *
+ * No declaration grammar is duplicated here.
+ *
+ * ============================================================================
+ * 17. COMMUNICATION INTEGRATION
  * ============================================================================
  *
- * Policies describe source-level placement intent.
+ * Placement may semantically constrain communication-related locality,
+ * affinity, topology requirements, or latency preferences.
  *
- * They do not implement placement algorithms.
- */
-
-distributedPlacementPolicy
-    : identifier
-      identifier
-      distributedPlacementPolicyBody
-      SEMICOLON?
-    ;
-
-distributedPlacementPolicyBody
-    : expression
-    | LBRACE
-      distributedPlacementPolicyItem*
-      RBRACE
-    ;
-
-distributedPlacementPolicyItem
-    : distributedPlacementRequirement
-    | distributedPlacementConstraint
-    | distributedPlacementPreference
-    | distributedPlacementHint
-    | distributedPlacementProperty
-    ;
-
-
-/* ============================================================================
- * 19. ALTERNATIVES
+ * It does not define:
+ *
+ *     channels;
+ *     messages;
+ *     endpoints;
+ *     protocols;
+ *     routes;
+ *     packet formats.
+ *
+ * Those remain owned by:
+ *
+ *     distributed/communication.g4
+ *     distributed/channels.g4
+ *     distributed/messages.g4
+ *     networking/*
+ *
+ * ============================================================================
+ * 18. REPLICATION INTEGRATION
  * ============================================================================
  *
- * An alternative represents a set of semantically acceptable placement
- * choices.
+ * `placement::replicas` and related placement properties describe placement
+ * intent associated with replicated semantic objects.
  *
- * The grammar does not choose which alternative wins.
- */
-
-distributedPlacementAlternative
-    : identifier
-      LBRACE
-      distributedPlacementAlternativeItem+
-      RBRACE
-    ;
-
-distributedPlacementAlternativeItem
-    : distributedPlacementLocation
-      distributedPlacementAlternativeWeight?
-      SEMICOLON
-    ;
-
-distributedPlacementAlternativeWeight
-    : identifier
-      expression
-    ;
-
-
-/* ============================================================================
- * 20. REPLICA PLACEMENT
+ * They do not replace:
+ *
+ *     grammar/distributed/replication.g4
+ *
+ * Replication semantics remain owned by that grammar and its semantic layer.
+ *
+ * ============================================================================
+ * 19. TOPOLOGY INTEGRATION
  * ============================================================================
  *
- * This expresses WHERE replicas may/should be placed.
+ * Placement may refer to topology-related semantic properties.
  *
- * It does not implement replication.
+ * This grammar does not define:
  *
- * Replica count is an expression rather than a grammar-level constant.
- */
-
-distributedPlacementReplica
-    : identifier
-      distributedPlacementReplicaBody
-      SEMICOLON
-    ;
-
-distributedPlacementReplicaBody
-    : distributedPlacementReplicaCount?
-      distributedPlacementReplicaLocation?
-      distributedPlacementReplicaPolicy*
-    ;
-
-distributedPlacementReplicaCount
-    : identifier
-      expression
-    ;
-
-distributedPlacementReplicaLocation
-    : identifier
-      distributedPlacementLocation
-    ;
-
-distributedPlacementReplicaPolicy
-    : identifier
-      expression?
-    ;
-
-
-/* ============================================================================
- * 21. MIGRATION
+ *     nodes;
+ *     edges;
+ *     links;
+ *     graph traversal;
+ *     routes;
+ *     topology algorithms.
+ *
+ * Topology remains downstream/domain-owned.
+ *
+ * ============================================================================
+ * 20. ROUTING INTEGRATION
  * ============================================================================
  *
- * Migration is intent only.
+ * Placement answers:
  *
- * Actual migration belongs to runtime/deployment infrastructure.
- */
-
-distributedPlacementMigration
-    : identifier
-      distributedPlacementMigrationBody
-      SEMICOLON
-    ;
-
-distributedPlacementMigrationBody
-    : distributedPlacementMigrationMode?
-      distributedPlacementMigrationSource?
-      distributedPlacementMigrationDestination?
-      distributedPlacementMigrationCondition?
-    ;
-
-distributedPlacementMigrationMode
-    : identifier
-    ;
-
-distributedPlacementMigrationSource
-    : identifier
-      distributedPlacementLocation
-    ;
-
-distributedPlacementMigrationDestination
-    : identifier
-      distributedPlacementLocation
-    ;
-
-distributedPlacementMigrationCondition
-    : identifier
-      expression
-    ;
-
-
-/* ============================================================================
- * 22. ELASTICITY
+ *     WHERE / UNDER WHICH LOCATION RELATIONSHIPS?
+ *
+ * Routing answers:
+ *
+ *     HOW DOES DATA OR COMPUTATION MOVE?
+ *
+ * Therefore this grammar contains no routing algorithm and no route syntax.
+ *
+ * ============================================================================
+ * 21. SCHEDULING INTEGRATION
  * ============================================================================
  *
- * Elasticity expresses whether placement may adapt to resource availability.
+ * Placement answers spatial/logical intent.
  *
- * No finite machine capacity is encoded here.
- */
-
-distributedPlacementElasticity
-    : identifier
-      distributedPlacementElasticityBody
-      SEMICOLON
-    ;
-
-distributedPlacementElasticityBody
-    : distributedPlacementElasticityMode
-      distributedPlacementElasticityCondition*
-    ;
-
-distributedPlacementElasticityMode
-    : identifier
-    ;
-
-distributedPlacementElasticityCondition
-    : identifier
-      expression
-    ;
-
-
-/* ============================================================================
- * 23. CAPABILITIES
+ * Scheduling answers temporal/resource-order realization.
+ *
+ * This grammar therefore does not own:
+ *
+ *     schedules;
+ *     clocks;
+ *     deadlines;
+ *     dispatch order;
+ *     critical paths;
+ *     resource allocation algorithms.
+ *
+ * ============================================================================
+ * 22. QUANTUM IR INTEGRATION
  * ============================================================================
  *
- * Capabilities describe properties that placement may require or prefer.
+ * When a placement subject participates in quantum computation:
  *
- * Capability realization belongs to the capability/resource system.
- */
-
-distributedPlacementCapability
-    : identifier
-      distributedPlacementCapabilityBody
-      SEMICOLON
-    ;
-
-distributedPlacementCapabilityBody
-    : distributedPlacementCapabilityReference
-    | distributedPlacementCapabilityAssignment
-    ;
-
-distributedPlacementCapabilityReference
-    : qualifiedName
-    ;
-
-distributedPlacementCapabilityAssignment
-    : qualifiedName
-      ASSIGN
-      expression
-    ;
-
-
-/* ============================================================================
- * 24. PROPERTIES
+ *     distributed placement
+ *          |
+ *          v
+ *     semantic placement model
+ *          |
+ *          v
+ *     quantum semantic analysis
+ *          |
+ *          v
+ *     quantum::ir
+ *          |
+ *          v
+ *     routing / scheduling / QEC / ZQN / HAL
+ *
+ * This file never creates another quantum IR.
+ *
+ * ============================================================================
+ * 23. HARDWARE / HDL INTEGRATION
  * ============================================================================
  *
- * Generic placement properties keep this grammar extensible.
+ * Hardware and HDL systems may consume the semantic placement result.
+ *
+ * They determine:
+ *
+ *     target realization;
+ *     resource mapping;
+ *     topology realization;
+ *     synthesis;
+ *     routing;
+ *     physical implementation.
+ *
+ * This grammar remains hardware-independent.
+ *
+ * ============================================================================
+ * 24. AST COMPLETION CONTRACT
+ * ============================================================================
+ *
+ * This file is complete independently when:
+ *
+ *     [x] distributedPlacementDeclaration is stable;
+ *     [x] declaration naming is defined;
+ *     [x] generic parameters are defined;
+ *     [x] subject association is defined;
+ *     [x] canonical ResourcePlacement is reused;
+ *     [x] no second placement-clause hierarchy is introduced;
+ *     [x] no lexical rules are defined;
+ *     [x] no semantic predicates are required;
+ *     [x] no target-specific actions exist;
+ *     [x] no physical resource limits exist.
+ *
+ * The AST contract is:
+ *
+ *     DistributedPlacementDeclaration
+ *         name
+ *         generic_parameters
+ *         subject
+ *         placement_specification
+ *         source_span
+ *
+ * The nested placement specification is the existing canonical placement
+ * representation, not a distributed-only copy.
+ *
+ * ============================================================================
+ * 25. SEMANTIC COMPLETION CONTRACT
+ * ============================================================================
+ *
+ * Semantic analysis must establish:
+ *
+ *     - declaration identity;
+ *     - subject identity;
+ *     - generic parameter validity;
+ *     - placement property validity;
+ *     - requirement/constraint/preference/hint category;
+ *     - resource compatibility;
+ *     - capability compatibility;
+ *     - topology compatibility;
+ *     - replication compatibility;
+ *     - migration compatibility;
+ *     - elasticity compatibility;
+ *     - quantum compatibility;
+ *     - hardware compatibility;
+ *     - portability.
+ *
+ * ============================================================================
+ * 26. DIAGNOSTIC CONTRACT
+ * ============================================================================
+ *
+ * Parser diagnostics should remain structural.
+ *
+ * Examples of semantic diagnostics belong downstream:
+ *
+ *     unknown placement declaration;
+ *     unresolved subject;
+ *     incompatible placement requirement;
+ *     unsatisfied capability;
+ *     conflicting placement constraints;
+ *     invalid replication/placement combination;
+ *     unsupported migration policy;
+ *     unsupported target capability.
+ *
+ * The parser MUST NOT inspect hardware to produce these diagnostics.
+ *
+ * ============================================================================
+ * 27. SCALABILITY TEST CONTRACT
+ * ============================================================================
+ *
+ * Conformance tests must cover:
+ *
+ *     placement P {}
+ *
+ *     placement P(workload) {}
+ *
+ *     placement P<N> {}
+ *
+ *     placement P<N>(workload) {}
+ *
+ * and arbitrarily many canonical placement clauses.
+ *
+ * Tests must verify that there is no grammar-level upper bound on:
+ *
+ *     placement declarations;
+ *     generic parameters;
+ *     placement clauses;
+ *     expression complexity;
+ *     qualified-name depth;
+ *     distributed subjects.
+ *
+ * ============================================================================
+ * 28. HARD-CODING AUDIT
+ * ============================================================================
+ *
+ * This file contains no:
+ *
+ *     MAX_QUBITS
+ *     MAX_CPUS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_NODES
+ *     MAX_MEMORY
+ *     MAX_THREADS
+ *     MAX_TENSOR_RANK
+ *     MAX_REGISTER_WIDTH
+ *     MAX_NETWORK_SIZE
+ *     MAX_DEVICE_COUNT
+ *
+ * It also contains no physical device identifiers or topology constants.
+ *
+ * ============================================================================
+ * 29. INTEGRATION CONTRACT
+ * ============================================================================
+ *
+ * grammar/distributed/distributed.g4
+ *     MUST consume:
+ *
+ *         distributedPlacementDeclaration
+ *
+ *     and MUST NOT redefine placement syntax.
+ *
+ * grammar/resources/resources.g4
+ *     remains the resource-domain composition authority.
+ *
+ * grammar/resources/placement.g4
+ *     remains the canonical generic placement-clause authority.
+ *
+ * grammar/distributed/replication.g4
+ *     remains the replication authority.
+ *
+ * grammar/distributed/topology.g4
+ *     if/when present, remains the distributed-topology authority.
+ *
+ * grammar/execution/placement.g4
+ *     remains execution-placement syntax and does not get imported here.
+ *
+ * grammar/hardware/placement.g4
+ *     remains hardware-domain placement syntax and does not get imported here.
+ *
+ * These domains converge semantically rather than by duplicating grammar.
+ *
+ * ============================================================================
+ * 30. BUILD / RUST CONTRACT
+ * ============================================================================
+ *
+ * This grammar contains no Rust code.
+ *
+ * Generated parser integration must satisfy:
+ *
+ *     Rust 1.97
+ *     Rust 1.97.1
+ *     Rust 2021
+ *
+ * with:
+ *
+ *     no unsafe Rust;
+ *     no embedded target-specific parser actions;
+ *     no semantic predicates requiring runtime Rust state.
+ *
+ * Recommended validation:
+ *
+ *     cargo +1.97.1 check
+ *     cargo +1.97.1 test
+ *     cargo +1.97.1 clippy -- -D warnings
+ *
+ * The grammar itself must remain target-language neutral.
+ *
+ * ============================================================================
+ * 31. FINAL INVARIANTS
+ * ============================================================================
+ *
+ *     ONE distributed placement entry point:
+ *
+ *         distributedPlacementDeclaration
+ *
+ *     ONE reusable generic placement-clause authority:
+ *
+ *         ResourcePlacement
+ *
+ *     ONE canonical resource semantic model downstream.
+ *
+ *     ONE canonical quantum IR:
+ *
+ *         quantum::ir
+ *
+ *     NO physical hardware limits.
+ *
+ *     NO hard-coded device counts.
+ *
+ *     NO routing implementation.
+ *
+ *     NO scheduling implementation.
+ *
+ *     NO QEC implementation.
+ *
+ *     NO ZQN implementation.
+ *
+ *     NO runtime execution.
+ *
+ *     NO unsafe Rust.
+ *
+ *     NO second placement language.
+ *
+ * ============================================================================
  */
-
-distributedPlacementProperty
-    : qualifiedName
-      (
-          ASSIGN expression
-        | LPAREN expressionList? RPAREN
-      )
-      SEMICOLON
-    ;
