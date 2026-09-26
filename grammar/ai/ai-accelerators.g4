@@ -1,82 +1,59 @@
 /*
  * ============================================================================
- * Zamani Universal Programming Language
+ * Zamani Programming Language
  * ============================================================================
  *
  * File:
  *     grammar/ai/ai-accelerators.g4
  *
+ * Grammar:
+ *     AIAccelerators
+ *
  * Status:
- *     Production AI-accelerator parser grammar.
+ *     Canonical AI-accelerator source grammar
  *
- * Grammar technology:
- *     ANTLR4 parser grammar
- *
- * Rust integration baseline:
+ * Language/runtime baseline:
  *     Rust 1.97 / Rust 1.97.1
  *     Rust edition 2021
  *
  * Safety:
+ *     - Grammar only.
  *     - No embedded Rust actions.
  *     - No semantic predicates.
- *     - No target-specific implementation.
+ *     - No unsafe code.
  *     - No filesystem access.
  *     - No network access.
- *     - No device access.
+ *     - No hardware discovery.
  *     - No runtime execution.
- *     - No unsafe Rust.
  *
  * ============================================================================
  * PURPOSE
  * ============================================================================
  *
- * This file owns the SOURCE-LEVEL AI ACCELERATOR SYNTAX BOUNDARY.
+ * This file owns the SOURCE-LEVEL syntax boundary for accelerator-oriented
+ * AI computation.
  *
- * It describes AI computation that may benefit from accelerator capabilities
- * without binding the program to a particular physical accelerator.
+ * It describes portable computational intent rather than a particular:
  *
- * Supported semantic intent includes:
+ *     CPU
+ *     GPU
+ *     NPU
+ *     TPU
+ *     FPGA
+ *     ASIC
+ *     QPU
+ *     accelerator device
+ *     device identifier
+ *     memory hierarchy
+ *     execution unit
+ *     warp/wavefront
+ *     vector width
+ *     physical topology
+ *     vendor implementation
  *
- *     - accelerator-backed AI computation;
- *     - AI accelerator regions;
- *     - accelerator kernels;
- *     - accelerator operations;
- *     - accelerator invocation;
- *     - accelerator data movement intent;
- *     - accelerator execution intent;
- *     - accelerator resource requirements;
- *     - accelerator capability requirements;
- *     - accelerator constraints;
- *     - accelerator preferences;
- *     - accelerator hints;
- *     - accelerator portability;
- *     - accelerator interoperability;
- *     - accelerator/quantum interaction;
- *     - accelerator/HDL interaction;
- *     - accelerator/distributed execution;
- *     - accelerator/classical execution;
- *     - accelerator model execution;
- *     - accelerator tensor execution.
- *
- * The grammar deliberately describes COMPUTATIONAL INTENT rather than:
- *
- *     - a particular GPU;
- *     - a particular NPU;
- *     - a particular TPU;
- *     - a particular FPGA;
- *     - a particular ASIC;
- *     - a particular accelerator vendor;
- *     - a particular device;
- *     - a particular device ID;
- *     - a particular memory capacity;
- *     - a particular number of accelerators;
- *     - a particular number of execution units;
- *     - a particular vector width;
- *     - a particular warp/wavefront width;
- *     - a particular topology;
- *     - a particular queue;
- *     - a particular driver;
- *     - a particular deployment.
+ * Accelerator realization belongs downstream to semantic analysis,
+ * capability/resource resolution, optimization, scheduling, routing,
+ * deployment, HAL and runtime infrastructure.
  *
  * ============================================================================
  * ARCHITECTURAL POSITION
@@ -85,68 +62,57 @@
  *     Zamani source
  *          |
  *          v
- *     ZamaniTokens
+ *     ZamaniLexer
  *          |
  *          v
- *     canonical parser
+ *     parser
  *          |
- *          +-----------------------------+
- *          |                             |
- *          v                             v
- *     Expressions / Types          AI accelerator syntax
- *          |                             |
- *          +-------------+---------------+
- *                        |
- *                        v
- *                    Frontend AST
- *                        |
- *                        v
- *                 Semantic analysis
- *                        |
- *          +-------------+--------------+
- *          |                            |
- *          v                            v
- *    AI semantic model         capability/resource model
- *          |                            |
- *          +-------------+--------------+
- *                        |
- *                        v
- *              canonical semantic IR
- *                        |
- *          +-------------+---------------------+
- *          |             |                     |
- *          v             v                     v
- *     Classical IR   quantum::ir       hardware semantics
- *          |             |                     |
- *          +-------------+---------------------+
- *                        |
- *                        v
- *                   Optimization
- *                        |
- *                        v
- *                   Scheduling
- *                        |
- *                        v
- *              Routing / placement
- *                        |
- *                        v
- *                   Hardware HAL
- *                        |
- *                        v
- *                     Runtime
+ *          v
+ *     AIAccelerators
+ *          |
+ *          v
+ *     domain-neutral frontend AST
+ *          |
+ *          v
+ *     semantic analysis
+ *          |
+ *          +--> type analysis
+ *          +--> effect analysis
+ *          +--> capability analysis
+ *          +--> resource analysis
+ *          +--> portability analysis
+ *          |
+ *          v
+ *     canonical semantic model / IR
+ *          |
+ *          +--> classical lowering
+ *          +--> quantum lowering
+ *          +--> hardware lowering
+ *          +--> distributed lowering
+ *          |
+ *          v
+ *     optimization
+ *          |
+ *          v
+ *     scheduling / routing / placement
+ *          |
+ *          v
+ *     HAL / target realization
+ *          |
+ *          v
+ *     runtime
  *
- * THIS FILE NEVER CONSTRUCTS:
+ * This grammar does NOT create:
  *
- *     classical IR
- *     quantum::ir
- *     HDL IR
- *     hardware IR
- *     QEC state
- *     ZQN state
- *     scheduler state
- *     placement state
- *     runtime state
- *     device state
+ *     - an AI accelerator IR;
+ *     - a second quantum IR;
+ *     - quantum::ir;
+ *     - hardware state;
+ *     - device state;
+ *     - scheduler state;
+ *     - routing state;
+ *     - QEC state;
+ *     - ZQN state.
  *
  * ============================================================================
  * OWNERSHIP
@@ -154,77 +120,65 @@
  *
  * THIS FILE OWNS:
  *
- *     - AI accelerator source syntax;
- *     - accelerator computation boundaries;
+ *     - accelerator declaration syntax;
  *     - accelerator region syntax;
- *     - accelerator kernel syntax;
- *     - accelerator operation syntax;
+ *     - kernel declaration syntax;
+ *     - operation declaration syntax;
  *     - accelerator invocation syntax;
- *     - accelerator dataflow intent;
- *     - accelerator execution intent;
- *     - accelerator requirement wrappers;
- *     - accelerator capability wrappers;
- *     - accelerator constraint wrappers;
- *     - accelerator preference wrappers;
- *     - accelerator hint wrappers;
- *     - accelerator portability intent;
- *     - accelerator interoperability intent;
- *     - stable parser entry points for AI accelerator consumers.
+ *     - accelerator interface/port syntax;
+ *     - accelerator resource-intent syntax;
+ *     - accelerator capability-intent syntax;
+ *     - accelerator constraint syntax;
+ *     - accelerator preference syntax;
+ *     - accelerator hint syntax;
+ *     - accelerator portability boundaries;
+ *     - accelerator interoperability boundaries.
  *
  * THIS FILE DOES NOT OWN:
  *
- *     - lexer definitions;
+ *     - lexical tokens;
  *     - identifiers;
- *     - literals;
- *     - general expression precedence;
- *     - general type syntax;
- *     - tensor implementation;
- *     - tensor storage;
- *     - model implementation;
- *     - training algorithms;
- *     - inference algorithms;
+ *     - expressions;
+ *     - types;
+ *     - ordinary statements;
+ *     - tensors;
+ *     - models;
+ *     - training;
+ *     - inference;
  *     - automatic differentiation;
- *     - compiler optimization;
+ *     - memory implementation;
  *     - scheduling;
  *     - routing;
- *     - placement;
+ *     - optimization;
  *     - hardware discovery;
- *     - hardware calibration;
- *     - accelerator drivers;
  *     - device allocation;
- *     - resource allocation;
+ *     - compiler target selection;
  *     - runtime dispatch;
- *     - classical IR;
- *     - quantum::ir;
+ *     - quantum operations;
  *     - QEC;
  *     - ZQN.
  *
  * ============================================================================
- * LEXER CONTRACT
+ * LEXICAL CONTRACT
  * ============================================================================
  *
- * The canonical lexical authority is:
+ * The production parser consumes:
  *
- *     grammar/lexer/tokens.g4
+ *     ZamaniLexer
  *
- * Grammar name:
+ * not ZamaniTokens directly.
  *
- *     ZamaniTokens
+ * ZamaniTokens is the canonical lexical composition vocabulary; ZamaniLexer
+ * is the production lexer exposed to parser grammars.
  *
- * This grammar therefore uses:
+ * Accelerator concepts remain identifiers/semantic values rather than an
+ * ever-growing lexer keyword list.
  *
- *     tokenVocab = ZamaniTokens;
- *
- * This file MUST NOT define lexer rules.
- *
- * AI accelerator vocabulary is intentionally NOT expanded into an exhaustive
- * list of lexer keywords.
- *
- * In particular, the following remain semantic names:
+ * Therefore names such as:
  *
  *     GPU
- *     TPU
  *     NPU
+ *     TPU
  *     FPGA
  *     ASIC
  *     CUDA
@@ -234,301 +188,18 @@
  *     Metal
  *     TensorCore
  *     accelerator_family
- *     accelerator_name
- *     vendor_operation
  *
- * They may appear as identifiers or qualified names where syntactically valid.
+ * are not hard-coded accelerator keywords.
  *
- * AI-specific declarations use NANO_ANNOTATION rather than introducing a
- * growing collection of AI accelerator keywords.
+ * ============================================================================
+ * ANNOTATION CONTRACT
+ * ============================================================================
+ *
+ * Accelerator annotations use the canonical annotation structure:
+ *
+ *     AT IDENTIFIER
  *
  * Examples:
- *
- *     @accelerator
- *     @kernel
- *     @requires
- *     @capability
- *     @constraint
- *     @preference
- *     @hint
- *     @target
- *
- * Semantic analysis validates the normalized annotation name.
- *
- * ============================================================================
- * EXPRESSION CONTRACT
- * ============================================================================
- *
- * General expressions are owned by:
- *
- *     grammar/expressions/expressions.g4
- *
- * This grammar consumes:
- *
- *     expression
- *
- * and MUST NOT redefine:
- *
- *     arithmetic;
- *     comparison;
- *     logical operators;
- *     bitwise operators;
- *     assignment;
- *     calls;
- *     indexing;
- *     member access;
- *     ranges;
- *     lambdas;
- *     comprehensions;
- *     conditional expressions.
- *
- * ============================================================================
- * TYPE CONTRACT
- * ============================================================================
- *
- * General type syntax is owned by:
- *
- *     grammar/types/types.g4
- *
- * This grammar consumes:
- *
- *     typeExpression
- *
- * and MUST NOT create a competing AI type system.
- *
- * Accelerator-facing values may semantically be:
- *
- *     scalars
- *     vectors
- *     matrices
- *     tensors
- *     model values
- *     dataset values
- *     quantum-derived values
- *     hardware-backed values
- *     streams
- *     buffers
- *     user-defined values
- *
- * Their semantic representation is downstream.
- *
- * ============================================================================
- * RESOURCE CONTRACT
- * ============================================================================
- *
- * Resource semantics are owned by the hardware/resource layer.
- *
- * This grammar may express resource INTENT, but it does not allocate resources.
- *
- * Distinctions must remain explicit:
- *
- *     requirement
- *     capability
- *     constraint
- *     preference
- *     hint
- *     target
- *     resource
- *     capacity
- *     availability
- *     placement
- *
- * A requirement such as:
- *
- *     @requires(accelerator::tensor)
- *
- * MUST NOT mean:
- *
- *     use GPU 0
- *
- * or:
- *
- *     use exactly one accelerator.
- *
- * ============================================================================
- * POCO-REAF CONTRACT
- * ============================================================================
- *
- * Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
- *
- * AI accelerator syntax describes:
- *
- *     WHAT computation is intended.
- *     WHAT capabilities are useful.
- *     WHAT requirements are necessary.
- *     WHAT constraints must be respected.
- *     WHAT implementation choices are preferred.
- *     WHAT interoperability boundaries exist.
- *
- * It does NOT permanently encode:
- *
- *     WHICH physical device executes it.
- *     HOW MANY devices execute it.
- *     WHICH memory hierarchy is used.
- *     WHICH topology is used.
- *     WHICH vendor implementation is selected.
- *
- * Those decisions belong to:
- *
- *     semantic analysis;
- *     resource resolution;
- *     target selection;
- *     optimization;
- *     scheduling;
- *     placement;
- *     hardware abstraction;
- *     deployment;
- *     runtime.
- *
- * ============================================================================
- * SCALABILITY CONTRACT
- * ============================================================================
- *
- * There are NO grammar-level finite limits for:
- *
- *     - accelerators;
- *     - kernels;
- *     - operations;
- *     - arguments;
- *     - tensors;
- *     - tensor dimensions;
- *     - tensor rank;
- *     - models;
- *     - model parameters;
- *     - batches;
- *     - sequences;
- *     - workers;
- *     - devices;
- *     - nodes;
- *     - streams;
- *     - execution regions;
- *     - resources;
- *     - capabilities;
- *     - requirements;
- *     - constraints;
- *     - preferences;
- *     - hints.
- *
- * Repetition is structural through ANTLR repetition operators:
- *
- *     *
- *     +
- *
- * Quantities are expressions.
- *
- * There is deliberately no:
- *
- *     MAX_ACCELERATORS
- *     MAX_DEVICES
- *     MAX_KERNELS
- *     MAX_ARGUMENTS
- *     MAX_TENSORS
- *     MAX_DIMENSIONS
- *     MAX_RANK
- *     MAX_WORKERS
- *     MAX_THREADS
- *     MAX_LANES
- *     MAX_WARPS
- *     MAX_MEMORY
- *     MAX_VRAM
- *     MAX_SHARED_MEMORY
- *
- * "Infinity" therefore means:
- *
- *     no artificial finite machine-scale ceiling is imposed by this grammar.
- *
- * Actual execution remains bounded only by available resources and explicit
- * implementation/runtime policies.
- *
- * ============================================================================
- * SECURITY CONTRACT
- * ============================================================================
- *
- * Names, annotations, properties, targets and capabilities are syntax/data.
- *
- * The parser MUST NOT interpret them as:
- *
- *     shell commands;
- *     executable code;
- *     filesystem paths;
- *     network requests;
- *     device commands;
- *     driver commands;
- *     memory operations.
- *
- * Semantic/runtime layers must perform explicit validation before acting on
- * any externally supplied value.
- *
- * ============================================================================
- * CROSS-DOMAIN CONTRACT
- * ============================================================================
- *
- * AI accelerator computation may interact semantically with:
- *
- *     classical computation
- *     quantum computation
- *     HDL/hardware
- *     distributed computation
- *     networking
- *     cryptography
- *     future domains
- *
- * This grammar only establishes syntactic boundaries.
- *
- * In particular:
- *
- *     AI accelerator -> quantum::ir
- *
- * is a semantic lowering concern.
- *
- * This grammar MUST NOT import or construct quantum::ir.
- *
- * ============================================================================
- */
-
-parser grammar AIAccelerators;
-
-options {
-    tokenVocab = ZamaniTokens;
-}
-
-import Types, Expressions;
-
-
-/* ============================================================================
- * 1. PUBLIC ENTRY POINT
- * ============================================================================
- *
- * Stable entry point for the AI accelerator domain.
- *
- * The canonical AI grammar should expose this rule through its AI-domain
- * composition layer.
- */
-aiAcceleratorConstruct
-    : aiAcceleratorDeclaration
-    | aiAcceleratorRegion
-    | aiAcceleratorKernelDeclaration
-    | aiAcceleratorOperationDeclaration
-    | aiAcceleratorInvocation
-    | aiAcceleratorRequirement
-    | aiAcceleratorCapability
-    | aiAcceleratorConstraint
-    | aiAcceleratorPreference
-    | aiAcceleratorHint
-    | aiAcceleratorTarget
-    | aiAcceleratorReference
-    ;
-
-
-/* ============================================================================
- * 2. ANNOTATION BOUNDARY
- * ============================================================================
- *
- * NANO_ANNOTATION is supplied by the canonical lexer.
- *
- * The parser deliberately does not attempt to inspect the textual annotation
- * value. Semantic analysis is responsible for recognizing standard annotation
- * names such as:
  *
  *     @accelerator
  *     @kernel
@@ -540,58 +211,265 @@ aiAcceleratorConstruct
  *     @hint
  *     @target
  *
- * This keeps the lexical layer open for future accelerator dialects.
+ * The grammar deliberately does NOT enumerate these names.
+ *
+ * The annotation name is semantic data.
+ *
+ * Semantic analysis decides whether an annotation is:
+ *
+ *     recognized;
+ *     deprecated;
+ *     experimental;
+ *     dialect-provided;
+ *     valid in the current context.
+ *
+ * ============================================================================
+ * EXPRESSION CONTRACT
+ * ============================================================================
+ *
+ * General expression syntax is owned by:
+ *
+ *     grammar/expressions/expressions.g4
+ *
+ * This file consumes:
+ *
+ *     expression
+ *     expressionList
+ *     argumentList
+ *
+ * It MUST NOT redefine:
+ *
+ *     arithmetic
+ *     logical operations
+ *     comparison
+ *     assignment
+ *     calls
+ *     indexing
+ *     member access
+ *     ranges
+ *     lambdas
+ *     conditional expressions
+ *     precedence
+ *
+ * ============================================================================
+ * TYPE CONTRACT
+ * ============================================================================
+ *
+ * General type syntax is owned by the canonical Types grammar.
+ *
+ * This file consumes:
+ *
+ *     typeExpression
+ *
+ * It MUST NOT introduce an accelerator-specific competing type system.
+ *
+ * ============================================================================
+ * PORTABILITY CONTRACT
+ * ============================================================================
+ *
+ * Source syntax describes:
+ *
+ *     computation
+ *     intent
+ *     requirements
+ *     capabilities
+ *     constraints
+ *     preferences
+ *     hints
+ *
+ * It does not permanently select:
+ *
+ *     device 0
+ *     GPU 0
+ *     CPU 0
+ *     QPU 0
+ *     FPGA 0
+ *     a physical memory bank
+ *     a physical execution unit
+ *     a vendor driver
+ *     a fixed topology
+ *
+ * ============================================================================
+ * POCO-REAF CONTRACT
+ * ============================================================================
+ *
+ * Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
+ *
+ * No grammar-level maximum is imposed on:
+ *
+ *     accelerators
+ *     devices
+ *     kernels
+ *     operations
+ *     arguments
+ *     tensors
+ *     dimensions
+ *     tensor rank
+ *     workers
+ *     streams
+ *     regions
+ *     resources
+ *     capabilities
+ *     requirements
+ *     constraints
+ *     preferences
+ *     pipeline stages
+ *     distributed nodes
+ *
+ * No identifiers such as:
+ *
+ *     MAX_GPUS
+ *     MAX_ACCELERATORS
+ *     MAX_DEVICES
+ *     MAX_KERNELS
+ *     MAX_THREADS
+ *     MAX_MEMORY
+ *     MAX_TENSOR_RANK
+ *
+ * may become language-level capacity limits.
+ *
+ * A numeric value in source is program semantics.
+ *
+ * A machine capacity is a property discovered and validated downstream.
+ *
+ * ============================================================================
+ * RESOURCE SEMANTICS
+ * ============================================================================
+ *
+ * These concepts remain distinct:
+ *
+ *     requirement
+ *     capability
+ *     constraint
+ *     preference
+ *     hint
+ *     implementation decision
+ *
+ * For example:
+ *
+ *     @requires(capability("tensor.compute"));
+ *     @requires(memory >= required_memory);
+ *     @requires(qubits >= n);
+ *
+ * expresses semantic intent.
+ *
+ * It does NOT select:
+ *
+ *     GPU 0
+ *     QPU 0
+ *     physical qubit 17
+ *     a particular memory bank
+ *     a particular vendor.
+ *
+ * ============================================================================
+ * CROSS-DOMAIN CONTRACT
+ * ============================================================================
+ *
+ * Accelerator computations may interact with:
+ *
+ *     classical
+ *     quantum
+ *     HDL
+ *     hardware
+ *     distributed
+ *     networking
+ *     security
+ *     data
+ *     AI
+ *
+ * Such interactions are represented through ordinary expressions, types,
+ * annotations and semantic operations.
+ *
+ * Quantum lowering remains:
+ *
+ *     accelerator semantics
+ *          |
+ *          v
+ *     canonical quantum semantic model
+ *          |
+ *          v
+ *     quantum::ir
+ *
+ * This file never defines a second quantum IR.
+ *
+ * ============================================================================
  */
-aiAcceleratorAnnotation
-    : NANO_ANNOTATION
+
+parser grammar AIAccelerators;
+
+options {
+    tokenVocab = ZamaniLexer;
+}
+
+import Types, Expressions, Statements;
+
+
+/* ============================================================================
+ * 1. PUBLIC ENTRY POINT
+ * ============================================================================
+ *
+ * Stable entry point consumed by the AI composition layer.
+ */
+aiAcceleratorConstruct
+    : aiAcceleratorDeclaration
+    | aiAcceleratorRegion
+    | aiAcceleratorKernelDeclaration
+    | aiAcceleratorOperationDeclaration
+    | aiAcceleratorInvocation
+    | aiAcceleratorBinding
+    | aiAcceleratorRequirement
+    | aiAcceleratorCapability
+    | aiAcceleratorConstraint
+    | aiAcceleratorPreference
+    | aiAcceleratorHint
+    | aiAcceleratorTarget
     ;
 
 
 /* ============================================================================
- * 3. QUALIFIED NAME
+ * 2. CANONICAL ANNOTATION
  * ============================================================================
  *
- * Open-ended semantic paths are supported.
+ * The lexer supplies AT.
+ * The canonical identifier rule supplies identifier.
+ */
+aiAcceleratorAnnotation
+    : AT identifier
+    ;
+
+
+/* ============================================================================
+ * 3. GENERIC ANNOTATION ARGUMENTS
+ * ============================================================================
+ *
+ * This permits extensibility without adding lexer keywords.
+ */
+aiAcceleratorAnnotationArguments
+    : LPAREN argumentList? RPAREN
+    ;
+
+
+/* ============================================================================
+ * 4. ACCELERATOR DECLARATION
+ * ============================================================================
  *
  * Examples:
  *
- *     accelerator
- *     accelerator::tensor
- *     accelerator::matrix
- *     vendor::accelerator
- *     vendor::accelerator::operation
- *     future::ai::accelerator
- *
- * There is no fixed qualification depth.
- */
-aiAcceleratorQualifiedName
-    : identifier
-      (
-          DOUBLE_COLON identifier
-      )*
-    ;
-
-
-/* ============================================================================
- * 4. DECLARATION
- * ============================================================================
- *
- * Canonical source form:
- *
- *     @accelerator AcceleratorName {
+ *     @accelerator MatrixEngine {
  *         ...
  *     }
  *
- * The semantic layer validates that the annotation is the accelerator
- * declaration annotation.
+ *     @accelerator Engine<T, Shape> {
+ *         ...
+ *     }
  *
- * The grammar does not restrict accelerator kind.
+ * The annotation name is resolved semantically.
  */
 aiAcceleratorDeclaration
     : aiAcceleratorAnnotation
       identifier
       aiAcceleratorGenericParameters?
-      aiAcceleratorDeclarationMetadata*
+      aiAcceleratorDeclarationAnnotations*
       aiAcceleratorBody
     ;
 
@@ -600,23 +478,15 @@ aiAcceleratorDeclaration
  * 5. GENERIC PARAMETERS
  * ============================================================================
  *
- * Genericity allows accelerator abstractions to remain independent of
- * machine-specific dimensions.
+ * Generic parameters may represent types, symbolic dimensions, policies or
+ * other semantic parameters.
  *
- * Examples:
- *
- *     @accelerator MatrixEngine<T, Rows, Columns>
- *
- * Values remain semantic expressions.
- *
- * No finite generic-parameter count is imposed.
+ * There is no finite parameter-count restriction.
  */
 aiAcceleratorGenericParameters
     : LT
       aiAcceleratorGenericParameter
-      (
-          COMMA aiAcceleratorGenericParameter
-      )*
+      (COMMA aiAcceleratorGenericParameter)*
       GT
     ;
 
@@ -624,7 +494,7 @@ aiAcceleratorGenericParameters
 aiAcceleratorGenericParameter
     : identifier
       (
-          COLON aiAcceleratorQualifiedName
+          COLON typeExpression
       )?
       (
           ASSIGN expression
@@ -633,28 +503,21 @@ aiAcceleratorGenericParameter
 
 
 /* ============================================================================
- * 6. DECLARATION METADATA
+ * 6. DECLARATION ANNOTATIONS
  * ============================================================================
  *
- * Metadata is deliberately open-ended.
- *
- * It does not alter the grammar's resource model.
+ * Metadata remains syntactic data.
+ * Semantic validation happens downstream.
  */
-aiAcceleratorDeclarationMetadata
+aiAcceleratorDeclarationAnnotations
     : aiAcceleratorAnnotation
-      (
-          LPAREN
-          aiAcceleratorArgumentList?
-          RPAREN
-      )?
+      aiAcceleratorAnnotationArguments?
     ;
 
 
 /* ============================================================================
  * 7. ACCELERATOR BODY
  * ============================================================================
- *
- * An accelerator may contain an arbitrary number of semantic members.
  */
 aiAcceleratorBody
     : LBRACE
@@ -664,27 +527,19 @@ aiAcceleratorBody
 
 
 aiAcceleratorBodyItem
-    : aiAcceleratorMemberAnnotation*
-      (
-          aiAcceleratorInterface
-        | aiAcceleratorPort
-        | aiAcceleratorKernelDeclaration
-        | aiAcceleratorOperationDeclaration
-        | aiAcceleratorRegion
-        | aiAcceleratorRequirement
-        | aiAcceleratorCapability
-        | aiAcceleratorConstraint
-        | aiAcceleratorPreference
-        | aiAcceleratorHint
-        | aiAcceleratorTarget
-        | aiAcceleratorResourceReference
-        | aiAcceleratorProperty
-      )
-    ;
-
-
-aiAcceleratorMemberAnnotation
-    : aiAcceleratorAnnotation
+    : aiAcceleratorInterface
+    | aiAcceleratorPort
+    | aiAcceleratorKernelDeclaration
+    | aiAcceleratorOperationDeclaration
+    | aiAcceleratorRegion
+    | aiAcceleratorRequirement
+    | aiAcceleratorCapability
+    | aiAcceleratorConstraint
+    | aiAcceleratorPreference
+    | aiAcceleratorHint
+    | aiAcceleratorTarget
+    | aiAcceleratorBinding
+    | statement
     ;
 
 
@@ -692,15 +547,10 @@ aiAcceleratorMemberAnnotation
  * 8. INTERFACE
  * ============================================================================
  *
- * Interfaces describe semantic communication boundaries.
+ * An interface describes a semantic boundary.
  *
- * They do not define:
- *
- *     PCI;
- *     physical pins;
- *     physical buses;
- *     fixed network topology;
- *     device addresses.
+ * It does not describe physical pins, buses, PCI addresses, memory banks or
+ * vendor-specific interconnects.
  */
 aiAcceleratorInterface
     : aiAcceleratorAnnotation
@@ -716,9 +566,7 @@ aiAcceleratorInterface
 aiAcceleratorInterfaceInheritance
     : EXTENDS
       aiAcceleratorQualifiedName
-      (
-          COMMA aiAcceleratorQualifiedName
-      )*
+      (COMMA aiAcceleratorQualifiedName)*
     ;
 
 
@@ -730,31 +578,18 @@ aiAcceleratorInterfaceItem
 
 
 /* ============================================================================
- * 9. PORTS
+ * 9. PORT
  * ============================================================================
  *
- * A port describes a semantic data/control boundary.
- *
- * Shape expressions are expressions rather than fixed integers.
+ * Shape and width are expressions/types, not fixed hardware capacities.
  */
 aiAcceleratorPort
     : aiAcceleratorAnnotation
       identifier
-      aiAcceleratorPortDirection?
       aiAcceleratorPortType?
       aiAcceleratorPortShape?
       aiAcceleratorPortMetadata*
       SEMICOLON
-    ;
-
-
-aiAcceleratorPortDirection
-    : aiAcceleratorDirectionAnnotation
-    ;
-
-
-aiAcceleratorDirectionAnnotation
-    : aiAcceleratorAnnotation
     ;
 
 
@@ -772,11 +607,7 @@ aiAcceleratorPortShape
 
 aiAcceleratorPortMetadata
     : aiAcceleratorAnnotation
-      (
-          LPAREN
-          aiAcceleratorArgumentList?
-          RPAREN
-      )?
+      aiAcceleratorAnnotationArguments?
     ;
 
 
@@ -786,80 +617,29 @@ aiAcceleratorPortMetadata
  *
  * A kernel is a semantic computation unit.
  *
- * It does NOT imply:
+ * The grammar does not prescribe:
  *
- *     one GPU kernel;
- *     one hardware execution unit;
- *     one thread;
- *     one warp;
- *     one workgroup;
- *     one invocation.
- *
- * Those interpretations belong downstream.
+ *     CUDA
+ *     OpenCL
+ *     SIMD width
+ *     warp size
+ *     execution-unit count
+ *     vendor instruction set
  */
 aiAcceleratorKernelDeclaration
     : aiAcceleratorAnnotation
       identifier
-      aiAcceleratorGenericParameters?
-      LPAREN
       aiAcceleratorParameterList?
-      RPAREN
       aiAcceleratorReturnType?
-      aiAcceleratorKernelMetadata*
-      aiAcceleratorKernelBody
-    ;
-
-
-aiAcceleratorKernelMetadata
-    : aiAcceleratorAnnotation
-      (
-          LPAREN
-          aiAcceleratorArgumentList?
-          RPAREN
-      )?
-    ;
-
-
-aiAcceleratorKernelBody
-    : LBRACE
-      aiAcceleratorExecutionItem*
-      RBRACE
-    ;
-
-
-/* ============================================================================
- * 11. OPERATION DECLARATION
- * ============================================================================
- *
- * Operations are intentionally open-ended.
- *
- * There is no finite list of AI operations.
- *
- * Therefore new algorithms and accelerator families do not require grammar
- * changes.
- */
-aiAcceleratorOperationDeclaration
-    : aiAcceleratorAnnotation
-      identifier
-      aiAcceleratorGenericParameters?
-      LPAREN
-      aiAcceleratorParameterList?
-      RPAREN
-      aiAcceleratorReturnType?
-      aiAcceleratorOperationMetadata*
-      (
-          aiAcceleratorOperationBody
-        | SEMICOLON
-      )
+      aiAcceleratorDeclarationAnnotations*
+      aiAcceleratorBody
     ;
 
 
 aiAcceleratorParameterList
-    : aiAcceleratorParameter
-      (
-          COMMA aiAcceleratorParameter
-      )*
-      COMMA?
+    : LPAREN
+      aiAcceleratorParameter*
+      RPAREN
     ;
 
 
@@ -875,174 +655,143 @@ aiAcceleratorParameter
 
 
 aiAcceleratorReturnType
-    : THIN_ARROW typeExpression
-    ;
-
-
-aiAcceleratorOperationMetadata
-    : aiAcceleratorAnnotation
-      (
-          LPAREN
-          aiAcceleratorArgumentList?
-          RPAREN
-      )?
-    ;
-
-
-aiAcceleratorOperationBody
-    : LBRACE
-      aiAcceleratorExecutionItem*
-      RBRACE
+    : COLON typeExpression
     ;
 
 
 /* ============================================================================
- * 12. EXECUTION ITEM
+ * 11. OPERATION DECLARATION
  * ============================================================================
  *
- * Execution syntax remains deliberately general.
+ * Operations remain open-ended semantic operations.
  *
- * This allows an accelerator operation to contain:
+ * This is intentionally NOT:
  *
- *     expressions;
- *     invocations;
- *     nested accelerator regions;
- *     requirements;
- *     capabilities;
- *     dataflow declarations;
- *     annotations;
+ *     acceleratorOperation
+ *         : GEMM
+ *         | CONV
+ *         | ...
  *
- * without creating a second statement grammar.
+ * New operations therefore do not require grammar changes.
  */
-aiAcceleratorExecutionItem
-    : aiAcceleratorExecutionAnnotation*
+aiAcceleratorOperationDeclaration
+    : aiAcceleratorAnnotation
+      identifier
+      aiAcceleratorParameterList?
+      aiAcceleratorReturnType?
+      aiAcceleratorDeclarationAnnotations*
       (
-          aiAcceleratorRegion
-        | aiAcceleratorInvocation SEMICOLON?
-        | aiAcceleratorRequirement
-        | aiAcceleratorCapability
-        | aiAcceleratorConstraint
-        | aiAcceleratorPreference
-        | aiAcceleratorHint
-        | aiAcceleratorTarget
-        | expression SEMICOLON
+          aiAcceleratorBody
         | SEMICOLON
       )
     ;
 
 
-aiAcceleratorExecutionAnnotation
-    : aiAcceleratorAnnotation
-    ;
-
-
 /* ============================================================================
- * 13. ACCELERATOR REGION
+ * 12. REGION
  * ============================================================================
  *
- * A region identifies computation intended for accelerator-aware realization.
- *
- * Example semantic form:
- *
- *     @region {
- *         ...
- *     }
- *
- * The annotation is intentionally open and validated semantically.
+ * A region is an accelerator-oriented computation boundary.
  */
 aiAcceleratorRegion
     : aiAcceleratorAnnotation
-      aiAcceleratorRegionQualifier*
-      LBRACE
-      aiAcceleratorExecutionItem*
-      RBRACE
+      identifier?
+      aiAcceleratorRegionArguments?
+      aiAcceleratorBody
     ;
 
 
-aiAcceleratorRegionQualifier
-    : LPAREN
-      aiAcceleratorArgumentList?
-      RPAREN
+aiAcceleratorRegionArguments
+    : LPAREN argumentList? RPAREN
     ;
 
 
 /* ============================================================================
- * 14. INVOCATION
+ * 13. INVOCATION
  * ============================================================================
- *
- * Accelerator invocation is based on an open semantic qualified name.
  *
  * Examples:
  *
- *     accelerator::matmul(a, b)
- *     tensor_accelerator::convolution(input, weights)
- *     vendor::accelerator::operation(value)
+ *     @accelerator(kernel);
+ *     @kernel compute(data);
  *
- * The parser does not determine whether the name denotes:
- *
- *     - a built-in accelerator operation;
- *     - a library operation;
- *     - a user operation;
- *     - a dialect operation;
- *     - a future accelerator abstraction.
+ * The expression grammar owns the argument expressions.
  */
 aiAcceleratorInvocation
-    : aiAcceleratorQualifiedName
-      LPAREN
-      aiAcceleratorArgumentList?
-      RPAREN
-    ;
-
-
-aiAcceleratorArgumentList
-    : expression
-      (
-          COMMA expression
-      )*
-      COMMA?
-    ;
-
-
-/* ============================================================================
- * 15. ACCELERATOR REFERENCE
- * ============================================================================
- *
- * A reference identifies an abstract accelerator semantic entity.
- *
- * It does not select a physical device.
- */
-aiAcceleratorReference
-    : aiAcceleratorQualifiedName
-    ;
-
-
-/* ============================================================================
- * 16. REQUIREMENTS
- * ============================================================================
- *
- * Requirements express semantic necessity.
- *
- * Example:
- *
- *     @requires(accelerator::tensor)
- *
- * The semantic layer determines whether the requirement is satisfiable.
- */
-aiAcceleratorRequirement
     : aiAcceleratorAnnotation
-      LPAREN
-      aiAcceleratorRequirementBody?
-      RPAREN
+      aiAcceleratorInvocationTarget
+      aiAcceleratorCallArguments?
       SEMICOLON?
     ;
 
 
-aiAcceleratorRequirementBody
-    : expression
-      (
-          COMMA expression
-      )*
-      COMMA?
+aiAcceleratorInvocationTarget
+    : identifier
+    ;
+
+
+aiAcceleratorCallArguments
+    : LPAREN argumentList? RPAREN
+    ;
+
+
+/* ============================================================================
+ * 14. BINDING
+ * ============================================================================
+ *
+ * Generic semantic binding.
+ */
+aiAcceleratorBinding
+    : aiAcceleratorAnnotation
+      identifier
+      aiAcceleratorTypeClause?
+      ASSIGN
+      expression
+      SEMICOLON
+    ;
+
+
+aiAcceleratorTypeClause
+    : COLON typeExpression
+    ;
+
+
+/* ============================================================================
+ * 15. QUALIFIED NAME
+ * ============================================================================
+ *
+ * Qualification depth is unbounded by the grammar.
+ *
+ * Examples:
+ *
+ *     accelerator
+ *     accelerator::tensor
+ *     vendor::accelerator
+ *     future::domain::accelerator::operation
+ *
+ * Names remain semantic values.
+ */
+aiAcceleratorQualifiedName
+    : identifier
+      (DOUBLE_COLON identifier)*
+    ;
+
+
+/* ============================================================================
+ * 16. REQUIREMENT
+ * ============================================================================
+ *
+ * Requirement expresses something necessary for valid realization.
+ */
+aiAcceleratorRequirement
+    : aiAcceleratorAnnotation
+      aiAcceleratorContractArguments
+      SEMICOLON?
+    ;
+
+
+aiAcceleratorContractArguments
+    : LPAREN argumentList? RPAREN
     ;
 
 
@@ -1050,33 +799,14 @@ aiAcceleratorRequirementBody
  * 17. CAPABILITY
  * ============================================================================
  *
- * Capability expressions describe required or declared capabilities.
+ * Capability describes required/provided semantic functionality.
  *
- * They do not perform capability discovery.
+ * It does not identify a physical device.
  */
 aiAcceleratorCapability
     : aiAcceleratorAnnotation
-      LPAREN
-      aiAcceleratorCapabilityBody?
-      RPAREN
+      aiAcceleratorContractArguments
       SEMICOLON?
-    ;
-
-
-aiAcceleratorCapabilityBody
-    : aiAcceleratorQualifiedName
-      (
-          ASSIGN expression
-      )?
-      (
-          COMMA aiAcceleratorCapabilityArgument
-      )*
-      COMMA?
-    ;
-
-
-aiAcceleratorCapabilityArgument
-    : expression
     ;
 
 
@@ -1084,25 +814,12 @@ aiAcceleratorCapabilityArgument
  * 18. CONSTRAINT
  * ============================================================================
  *
- * A constraint restricts valid realization.
- *
- * It is not equivalent to a requirement or preference.
+ * Constraints restrict valid realization.
  */
 aiAcceleratorConstraint
     : aiAcceleratorAnnotation
-      LPAREN
-      aiAcceleratorConstraintBody
-      RPAREN
+      aiAcceleratorContractArguments
       SEMICOLON?
-    ;
-
-
-aiAcceleratorConstraintBody
-    : expression
-      (
-          COMMA expression
-      )*
-      COMMA?
     ;
 
 
@@ -1110,15 +827,11 @@ aiAcceleratorConstraintBody
  * 19. PREFERENCE
  * ============================================================================
  *
- * Preferences are advisory optimization intent.
- *
- * They MUST NOT be interpreted as hard requirements.
+ * Preference is weaker than a requirement or hard constraint.
  */
 aiAcceleratorPreference
     : aiAcceleratorAnnotation
-      LPAREN
-      aiAcceleratorArgumentList?
-      RPAREN
+      aiAcceleratorContractArguments
       SEMICOLON?
     ;
 
@@ -1127,609 +840,220 @@ aiAcceleratorPreference
  * 20. HINT
  * ============================================================================
  *
- * Hints are advisory.
- *
- * An implementation may ignore them without changing program semantics.
+ * Hints may guide implementation without changing program meaning.
  */
 aiAcceleratorHint
     : aiAcceleratorAnnotation
-      LPAREN
-      aiAcceleratorArgumentList?
-      RPAREN
+      aiAcceleratorContractArguments
       SEMICOLON?
     ;
 
 
 /* ============================================================================
- * 21. TARGET
+ * 21. TARGET INTENT
  * ============================================================================
  *
- * A target is symbolic.
+ * This is a semantic target requirement/description boundary.
  *
- * It may describe an accepted implementation family or abstract execution
- * environment, but it must not be confused with a physical device selection.
- *
- * Examples:
- *
- *     @target(accelerator)
- *     @target(gpu)
- *     @target(quantum)
- *     @target(heterogeneous)
- *     @target(custom::accelerator)
+ * It does NOT mean that parsing selects a physical device.
  */
 aiAcceleratorTarget
     : aiAcceleratorAnnotation
-      LPAREN
-      aiAcceleratorTargetBody?
-      RPAREN
-      SEMICOLON?
-    ;
-
-
-aiAcceleratorTargetBody
-    : aiAcceleratorQualifiedName
-      (
-          COMMA expression
-      )*
-      COMMA?
-    ;
-
-
-/* ============================================================================
- * 22. RESOURCE REFERENCE
- * ============================================================================
- *
- * This provides a syntactic bridge to abstract resource semantics.
- *
- * It does not redefine grammar/hardware/resources.g4.
- */
-aiAcceleratorResourceReference
-    : aiAcceleratorAnnotation
-      LPAREN
-      aiAcceleratorQualifiedName
-      (
-          COMMA expression
-      )*
-      COMMA?
-      RPAREN
+      aiAcceleratorContractArguments
       SEMICOLON?
     ;
 
 
 /* ============================================================================
- * 23. PROPERTY
+ * 22. PROPERTY
  * ============================================================================
  *
- * Open property syntax allows accelerator dialects to evolve without
- * continually expanding the lexical vocabulary.
- *
- * Example:
- *
- *     @property(name, value)
- *
- * The semantic layer decides whether the property is:
- *
- *     standard;
- *     dialect-defined;
- *     experimental;
- *     target-defined;
- *     invalid.
+ * Generic accelerator property metadata.
  */
 aiAcceleratorProperty
     : aiAcceleratorAnnotation
-      LPAREN
-      aiAcceleratorArgumentList?
-      RPAREN
-      SEMICOLON?
-    ;
-
-
-/* ============================================================================
- * 24. AI / TENSOR DATA BOUNDARY
- * ============================================================================
- *
- * AI accelerator computations commonly operate on tensors, but tensor
- * semantics remain owned by:
- *
- *     grammar/ai/tensors.g4
- *
- * and the canonical type/expression grammars.
- *
- * This grammar therefore only establishes an accelerator-facing tensor
- * boundary.
- */
-aiAcceleratorTensorBinding
-    : aiAcceleratorAnnotation
-      identifier
-      COLON
-      typeExpression
+      identifier?
       (
           ASSIGN expression
       )?
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 25. MODEL BOUNDARY
- * ============================================================================
- *
- * AI model semantics remain owned by:
- *
- *     grammar/ai/models.g4
- *
- * This rule allows accelerator syntax to reference an existing model value
- * without redefining model syntax.
- */
-aiAcceleratorModelBinding
-    : aiAcceleratorAnnotation
-      identifier
-      COLON
-      typeExpression
-      (
-          ASSIGN expression
-      )?
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 26. DATAFLOW BOUNDARY
- * ============================================================================
- *
- * Accelerator dataflow is represented semantically rather than through a
- * hardware-specific memory model.
- *
- * This avoids imposing:
- *
- *     host memory;
- *     device memory;
- *     shared memory;
- *     local memory;
- *     cache levels;
- *     fixed transfer mechanisms.
- */
-aiAcceleratorDataflow
-    : aiAcceleratorAnnotation
-      LPAREN
-      aiAcceleratorDataflowBody?
-      RPAREN
-      SEMICOLON?
-    ;
-
-
-aiAcceleratorDataflowBody
-    : expression
-      (
-          COMMA expression
-      )*
-      COMMA?
-    ;
-
-
-/* ============================================================================
- * 27. EXECUTION POLICY BOUNDARY
- * ============================================================================
- *
- * Execution policy is represented as semantic annotation data.
- *
- * It must not encode a physical execution-unit count.
- */
-aiAcceleratorExecutionPolicy
-    : aiAcceleratorAnnotation
-      LPAREN
-      aiAcceleratorArgumentList?
-      RPAREN
       SEMICOLON?
     ;
 
 
 /* ============================================================================
- * 28. DISTRIBUTED ACCELERATOR BOUNDARY
+ * 23. INTEROPERABILITY BRIDGE
  * ============================================================================
  *
- * AI accelerator computation may be distributed.
+ * Accelerator syntax can carry arbitrary expression values.
  *
- * This grammar describes intent only.
+ * This permits semantic integration with:
  *
- * Node discovery, placement, partitioning and communication scheduling remain
- * distributed/runtime responsibilities.
+ *     classical
+ *     quantum
+ *     HDL
+ *     distributed
+ *     networking
+ *     data
+ *     security
+ *
+ * without importing those domains into the accelerator grammar.
  */
-aiAcceleratorDistributed
+aiAcceleratorInterop
     : aiAcceleratorAnnotation
-      LPAREN
-      aiAcceleratorArgumentList?
-      RPAREN
-      LBRACE
-      aiAcceleratorExecutionItem*
-      RBRACE
-    ;
-
-
-/* ============================================================================
- * 29. QUANTUM-ACCELERATOR BOUNDARY
- * ============================================================================
- *
- * AI computation may interact with quantum computation.
- *
- * This rule creates only a syntactic interoperability boundary.
- *
- * Semantic lowering MUST route quantum operations through the canonical
- * quantum semantic pipeline and ultimately quantum::ir.
- *
- * This grammar does not define qubits, gates, circuits, QEC or ZQN.
- */
-aiAcceleratorQuantumBoundary
-    : aiAcceleratorAnnotation
-      LPAREN
-      aiAcceleratorArgumentList?
-      RPAREN
-      LBRACE
-      aiAcceleratorExecutionItem*
-      RBRACE
-    ;
-
-
-/* ============================================================================
- * 30. HARDWARE / HDL BOUNDARY
- * ============================================================================
- *
- * AI accelerator syntax may reference hardware/HDL abstractions.
- *
- * Hardware declarations themselves remain owned by:
- *
- *     grammar/hardware/*
- *     grammar/hdl/*
- *
- * This grammar does not duplicate those declarations.
- */
-aiAcceleratorHardwareBoundary
-    : aiAcceleratorAnnotation
-      LPAREN
-      aiAcceleratorArgumentList?
-      RPAREN
-      LBRACE
-      aiAcceleratorExecutionItem*
-      RBRACE
-    ;
-
-
-/* ============================================================================
- * 31. CLASSICAL INTEROPERABILITY
- * ============================================================================
- *
- * Accelerator computation naturally consumes ordinary Zamani expressions.
- *
- * This rule exists as an explicit semantic boundary, not as a new expression
- * language.
- */
-aiAcceleratorClassicalBoundary
-    : aiAcceleratorAnnotation
-      LPAREN
-      aiAcceleratorArgumentList?
-      RPAREN
       expression
       SEMICOLON?
     ;
 
 
 /* ============================================================================
- * 32. OPEN DIALECT BOUNDARY
+ * 24. RESOURCE VALUE
  * ============================================================================
  *
- * Future accelerator dialects may introduce annotations without requiring
- * modifications to this grammar.
+ * Explicit expression bridge for resource-oriented tooling.
  *
- * Dialect registration and validation belong to the dialect subsystem.
+ * Resource semantics are evaluated downstream.
  */
-aiAcceleratorDialectConstruct
-    : aiAcceleratorAnnotation
-      aiAcceleratorDialectPayload?
-    ;
-
-
-aiAcceleratorDialectPayload
-    : LPAREN
-      aiAcceleratorArgumentList?
-      RPAREN
-    | LBRACE
-      aiAcceleratorExecutionItem*
-      RBRACE
-    ;
-
-
-/* ============================================================================
- * 33. TYPE-SAFE NAMED ARGUMENT SUPPORT
- * ============================================================================
- *
- * Named accelerator arguments remain ordinary identifiers and expressions.
- *
- * Example:
- *
- *     accelerator::op(input = value, precision = p)
- *
- * Whether a callable accepts named arguments is a semantic/type-checking
- * concern.
- */
-aiAcceleratorNamedArgument
-    : identifier
-      ASSIGN
-      expression
-    ;
-
-
-/* ============================================================================
- * 34. EXTENSIBLE INVOCATION ARGUMENT
- * ============================================================================
- *
- * The argument grammar allows both ordinary and named arguments.
- *
- * No finite argument count is imposed.
- */
-aiAcceleratorInvocationArgument
-    : aiAcceleratorNamedArgument
-    | expression
-    ;
-
-
-aiAcceleratorInvocationArgumentList
-    : aiAcceleratorInvocationArgument
-      (
-          COMMA aiAcceleratorInvocationArgument
-      )*
-      COMMA?
-    ;
-
-
-/* ============================================================================
- * 35. GENERALIZED INVOCATION
- * ============================================================================
- *
- * This is kept separate from aiAcceleratorInvocation so future semantic
- * analysis can distinguish ordinary accelerator calls from calls requiring
- * named-argument interpretation.
- */
-aiAcceleratorGeneralInvocation
-    : aiAcceleratorQualifiedName
-      LPAREN
-      aiAcceleratorInvocationArgumentList?
-      RPAREN
-    ;
-
-
-/* ============================================================================
- * 36. OPTIONAL RESOURCE QUANTITY
- * ============================================================================
- *
- * Quantities are expressions.
- *
- * Examples:
- *
- *     workload_size
- *     tensor_elements
- *     model_size * batch_size
- *     available_capacity
- *     symbolic_requirement
- *
- * No fixed numeric upper bound exists here.
- */
-aiAcceleratorQuantity
+aiAcceleratorResourceExpression
     : expression
     ;
 
 
 /* ============================================================================
- * 37. CAPABILITY PROPERTY
+ * 25. CAPABILITY VALUE
  * ============================================================================
- *
- * Capability properties remain open.
  */
-aiAcceleratorCapabilityProperty
-    : aiAcceleratorQualifiedName
-      (
-          ASSIGN expression
-      )?
+aiAcceleratorCapabilityExpression
+    : expression
     ;
 
 
 /* ============================================================================
- * 38. CAPABILITY PROPERTY LIST
+ * 26. CONSTRAINT VALUE
  * ============================================================================
  */
-aiAcceleratorCapabilityPropertyList
-    : aiAcceleratorCapabilityProperty
-      (
-          COMMA aiAcceleratorCapabilityProperty
-      )*
-      COMMA?
+aiAcceleratorConstraintExpression
+    : expression
     ;
 
 
 /* ============================================================================
- * 39. CAPABILITY DECLARATION
+ * 27. PREFERENCE VALUE
  * ============================================================================
- *
- * A capability declaration describes semantic capability metadata.
- *
- * It does not perform runtime capability discovery.
  */
-aiAcceleratorCapabilityDeclaration
-    : aiAcceleratorAnnotation
-      identifier
-      (
-          ASSIGN
-          aiAcceleratorCapabilityPropertyList
-      )?
-      SEMICOLON?
+aiAcceleratorPreferenceExpression
+    : expression
     ;
 
 
 /* ============================================================================
- * 40. REQUIREMENT DECLARATION
+ * 28. PORTABILITY VALUE
  * ============================================================================
- *
- * Requirement values remain expressions.
  */
-aiAcceleratorRequirementDeclaration
-    : aiAcceleratorAnnotation
-      identifier
-      (
-          ASSIGN
-          expression
-      )?
-      SEMICOLON?
+aiAcceleratorPortabilityExpression
+    : expression
     ;
 
 
 /* ============================================================================
- * 41. PORTABILITY DECLARATION
+ * 29. COMPLETION CONTRACT
  * ============================================================================
  *
- * Portability intent remains semantic metadata.
- */
-aiAcceleratorPortability
-    : aiAcceleratorAnnotation
-      LPAREN
-      aiAcceleratorArgumentList?
-      RPAREN
-      SEMICOLON?
-    ;
-
-
-/* ============================================================================
- * 42. SCALABILITY DECLARATION
- * ============================================================================
+ * This file is complete only when:
  *
- * The program may express scaling relationships without embedding a fixed
- * machine size.
+ * [ ] ZamaniLexer is the parser token vocabulary.
  *
- * Examples:
+ * [ ] AT is supplied by the canonical annotation lexer component.
  *
- *     @scalable(problem_size)
- *     @scalable(batch_size * model_size)
+ * [ ] IDENTIFIER is the canonical identifier token.
  *
- * Semantic analysis interprets the expression.
- */
-aiAcceleratorScalability
-    : aiAcceleratorAnnotation
-      LPAREN
-      expression
-      RPAREN
-      SEMICOLON?
-    ;
-
-
-/* ============================================================================
- * 43. PERFORMANCE INTENT
- * ============================================================================
+ * [ ] No local identifier token is defined.
  *
- * Performance is intent, not a guarantee.
- */
-aiAcceleratorPerformance
-    : aiAcceleratorAnnotation
-      LPAREN
-      aiAcceleratorArgumentList?
-      RPAREN
-      SEMICOLON?
-    ;
-
-
-/* ============================================================================
- * 44. LATENCY INTENT
- * ============================================================================
+ * [ ] General expressions are owned by Expressions.
  *
- * Timing/scheduling remains downstream.
- */
-aiAcceleratorLatency
-    : aiAcceleratorAnnotation
-      LPAREN
-      aiAcceleratorArgumentList?
-      RPAREN
-      SEMICOLON?
-    ;
-
-
-/* ============================================================================
- * 45. ENERGY INTENT
- * ============================================================================
- */
-aiAcceleratorEnergy
-    : aiAcceleratorAnnotation
-      LPAREN
-      aiAcceleratorArgumentList?
-      RPAREN
-      SEMICOLON?
-    ;
-
-
-/* ============================================================================
- * 46. RELIABILITY INTENT
- * ============================================================================
+ * [ ] General types are owned by Types.
  *
- * Reliability requirements may later participate in resilience/resource
- * analysis, but this grammar does not own resilience decisions.
- */
-aiAcceleratorReliability
-    : aiAcceleratorAnnotation
-      LPAREN
-      aiAcceleratorArgumentList?
-      RPAREN
-      SEMICOLON?
-    ;
-
-
-/* ============================================================================
- * 47. COMPLETION / INTEGRATION CONTRACT
- * ============================================================================
+ * [ ] General statements are owned by Statements.
  *
- * This grammar is complete when:
+ * [ ] No accelerator-specific expression grammar is introduced.
  *
- *     1. ANTLR accepts it using ZamaniTokens.
+ * [ ] No accelerator-specific type system is introduced.
  *
- *     2. Types and Expressions parser grammars are available to the build.
+ * [ ] No fixed accelerator list is encoded.
  *
- *     3. No lexer rule is added here.
+ * [ ] No GPU/NPU/TPU/FPGA/ASIC vendor list is encoded.
  *
- *     4. No embedded Rust action exists here.
+ * [ ] No physical device identifier is required.
  *
- *     5. No semantic predicate exists here.
+ * [ ] No fixed accelerator count exists.
  *
- *     6. No hardware/device selection occurs here.
+ * [ ] No fixed kernel count exists.
  *
- *     7. No resource allocation occurs here.
+ * [ ] No fixed operation count exists.
  *
- *     8. No scheduling occurs here.
+ * [ ] No fixed argument count exists.
  *
- *     9. No optimization occurs here.
+ * [ ] No fixed tensor rank exists.
  *
- *     10. No quantum IR construction occurs here.
+ * [ ] No fixed tensor dimension exists.
  *
- *     11. No QEC or ZQN logic occurs here.
+ * [ ] No fixed worker count exists.
  *
- *     12. No machine-size limit occurs here.
+ * [ ] No fixed device count exists.
  *
- *     13. AI semantic analysis can distinguish annotations from ordinary
- *         identifiers and validate their normalized meaning.
+ * [ ] No fixed memory capacity exists.
  *
- *     14. The canonical AI parser exposes `aiAcceleratorConstruct`.
+ * [ ] No fixed execution-unit count exists.
  *
- *     15. The frontend AST has a stable representation for the resulting
- *         accelerator syntax without storing target-specific runtime state.
+ * [ ] No fixed vector width exists.
  *
- *     16. Semantic lowering can produce canonical semantic operations and
- *         resource/effect metadata.
+ * [ ] No fixed topology exists.
  *
- *     17. Quantum-related operations are lowered through the canonical
- *         quantum semantic boundary and ultimately quantum::ir.
+ * [ ] No MAX_* machine-capacity constant exists.
  *
- *     18. Hardware realization is delegated to hardware/capability/target
- *         infrastructure.
+ * [ ] Requirements remain distinct from capabilities.
  *
- *     19. Scheduling remains delegated to scheduling.
+ * [ ] Capabilities remain distinct from preferences.
  *
- *     20. Optimization remains delegated to optimization.
+ * [ ] Constraints remain distinct from implementation decisions.
  *
- *     21. Runtime dispatch remains delegated to runtime.
+ * [ ] Target selection remains downstream.
+ *
+ * [ ] Resource allocation remains downstream.
+ *
+ * [ ] Scheduling remains downstream.
+ *
+ * [ ] Routing remains downstream.
+ *
+ * [ ] Optimization remains downstream.
+ *
+ * [ ] Hardware discovery remains downstream.
+ *
+ * [ ] Runtime execution remains downstream.
+ *
+ * [ ] Quantum lowering remains downstream.
+ *
+ * [ ] quantum::ir remains the canonical quantum IR boundary.
+ *
+ * [ ] No QEC logic exists here.
+ *
+ * [ ] No ZQN logic exists here.
+ *
+ * [ ] No unsafe Rust is introduced by the grammar.
+ *
+ * [ ] Rust 1.97 / 1.97.1 compatibility is maintained by the implementation
+ *     toolchain.
+ *
+ * [ ] Positive tests exist.
+ *
+ * [ ] Negative tests exist.
+ *
+ * [ ] Boundary tests exist.
+ *
+ * [ ] Scalability tests exist.
+ *
+ * [ ] Determinism tests exist.
+ *
+ * [ ] Compatibility tests exist.
  *
  * ============================================================================
  * END OF FILE
