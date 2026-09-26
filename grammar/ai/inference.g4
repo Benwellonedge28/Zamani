@@ -6,61 +6,63 @@
  * File:
  *     grammar/ai/inference.g4
  *
+ * Grammar:
+ *     Inference
+ *
  * Status:
- *     Production-ready AI / ML inference-domain parser grammar.
+ *     CANONICAL AI INFERENCE LEAF GRAMMAR
  *
- * Grammar technology:
- *     ANTLR4 parser grammar
- *
- * Language/runtime baseline:
+ * Baseline:
  *     Rust 1.97 / Rust 1.97.1
- *     Rust edition 2021
- *
- * Safety:
- *     - Parser grammar only.
- *     - No embedded Rust actions.
- *     - No semantic predicates.
- *     - No target-specific implementation.
- *     - No filesystem access.
- *     - No network access.
- *     - No runtime execution.
- *     - No unsafe implementation.
+ *     Rust 2021
+ *     Safe Rust only
  *
  * ============================================================================
- *
  * PURPOSE
  * ============================================================================
  *
- * This file owns the SOURCE-LEVEL SYNTACTIC BOUNDARY for AI/ML inference.
+ * This file owns the SOURCE-LEVEL SYNTAX of AI/ML inference intent.
  *
- * It expresses inference intent without encoding:
+ * It describes:
  *
- *     - a particular model framework;
- *     - a particular inference engine;
- *     - a particular CPU;
- *     - a particular GPU;
- *     - a particular TPU;
- *     - a particular NPU;
- *     - a particular accelerator;
- *     - a particular device;
- *     - a fixed batch size;
- *     - a fixed sequence length;
- *     - a fixed tensor rank;
- *     - a fixed tensor dimension;
- *     - a fixed memory capacity;
- *     - a fixed number of workers;
- *     - a fixed deployment topology;
- *     - a fixed network topology.
+ *     - inference declarations;
+ *     - inference invocations;
+ *     - model references;
+ *     - inference inputs;
+ *     - inference outputs;
+ *     - preprocessing;
+ *     - postprocessing;
+ *     - decoding;
+ *     - inference configuration;
+ *     - inference execution policy;
+ *     - resource requirements;
+ *     - capability requirements;
+ *     - constraints;
+ *     - preferences;
+ *     - inference-local regions;
+ *     - ordinary Zamani statements inside inference regions.
  *
- * The grammar describes inference intent.
+ * It does NOT implement:
  *
- * Semantic analysis determines what the inference operation means.
- *
- * Compilation, optimization, scheduling, resource management, hardware
- * realization, deployment and runtime determine HOW that intent is realized.
+ *     - model execution;
+ *     - model storage;
+ *     - tensor storage;
+ *     - training;
+ *     - optimization algorithms;
+ *     - automatic differentiation;
+ *     - scheduling;
+ *     - placement;
+ *     - accelerator selection;
+ *     - hardware discovery;
+ *     - deployment;
+ *     - runtime execution;
+ *     - classical IR;
+ *     - quantum::ir;
+ *     - QEC;
+ *     - ZQN;
+ *     - HAL.
  *
  * ============================================================================
- *
  * ARCHITECTURAL POSITION
  * ============================================================================
  *
@@ -70,410 +72,394 @@
  *     ZamaniLexer
  *          |
  *          v
- *     Canonical parser
+ *     ZamaniParser
  *          |
- *          +-----------------------------+
- *          |                             |
- *          v                             v
- *     Types / Expressions           AI inference
- *          |                             |
- *          +-------------+---------------+
- *                        |
- *                        v
- *                  Frontend AST
- *                        |
- *                        v
- *              Semantic / Type Analysis
- *                        |
- *                        v
- *                 AI Semantic Model
- *                        |
- *          +-------------+-------------+
- *          |                           |
- *          v                           v
- *      Classical                   Quantum
- *       semantics                  semantics
- *          |                           |
- *          +-------------+-------------+
- *                        |
- *                        v
- *                Canonical semantic IR
- *                        |
- *                 Optimization
- *                        |
- *                   Scheduling
- *                        |
- *                 Target lowering
- *                        |
- *                     Runtime
- *
- * inference.g4 MUST NOT construct IR.
+ *          v
+ *     AI composition
+ *          |
+ *          v
+ *     Inference
+ *          |
+ *          v
+ *     domain-neutral AST
+ *          |
+ *          v
+ *     semantic analysis
+ *          |
+ *          +------------------------------+
+ *          |                              |
+ *          v                              v
+ *     AI semantic model          resource/capability model
+ *          |                              |
+ *          +--------------+---------------+
+ *                         |
+ *                         v
+ *                canonical semantic IR
+ *                         |
+ *                 optimization
+ *                         |
+ *              routing/scheduling
+ *                         |
+ *                 target lowering
+ *                         |
+ *                      runtime
  *
  * ============================================================================
- *
  * OWNERSHIP
  * ============================================================================
  *
  * THIS FILE OWNS:
  *
- *     - inference declaration syntax;
- *     - inference invocation syntax;
- *     - inference region syntax;
- *     - inference input/output boundaries;
- *     - inference model-reference boundaries;
- *     - inference configuration boundaries;
- *     - inference preprocessing/postprocessing boundaries;
- *     - inference decoding boundaries;
- *     - inference validation/evaluation hooks;
- *     - inference resource/capability/constraint boundaries;
- *     - inference execution-intent boundaries;
- *     - inference-local annotations;
- *     - inference-local composition.
+ *     inferenceConstruct
+ *     inferenceDeclaration
+ *     inferenceInvocation
+ *     inferenceBody
+ *     inferenceMember
+ *     inferenceDirective
+ *     inference resource/capability/constraint/preference boundaries
  *
  * THIS FILE DOES NOT OWN:
  *
- *     - lexical tokens;
- *     - identifiers;
- *     - literals;
- *     - general expressions;
- *     - general types;
- *     - model definitions;
- *     - tensor definitions;
- *     - dataset definitions;
- *     - training algorithms;
- *     - optimizer algorithms;
- *     - automatic differentiation;
- *     - numerical kernels;
- *     - AI runtime implementation;
- *     - compiler optimization;
- *     - scheduling;
- *     - resource discovery;
- *     - resource allocation;
- *     - hardware discovery;
- *     - hardware topology;
- *     - accelerator selection;
- *     - deployment;
- *     - networking;
- *     - canonical IR;
- *     - classical IR;
- *     - quantum::ir;
- *     - QEC;
- *     - ZQN;
- *     - hardware calibration.
+ *     identifiers
+ *     paths
+ *     literals
+ *     general expressions
+ *     general types
+ *     statements
+ *     models
+ *     datasets
+ *     tensors
+ *     training
+ *     agents
+ *     hardware
+ *     networking
+ *     distributed placement
+ *     deployment
+ *     IR
  *
  * ============================================================================
- *
- * LEXER POLICY
+ * LEXICAL CONTRACT
  * ============================================================================
  *
- * This grammar deliberately does NOT introduce new AI inference keywords.
+ * The canonical lexer owns:
  *
- * Inference vocabulary such as:
+ *     AT : '@'
  *
- *     @inference
- *     @infer
- *     @model
- *     @input
- *     @output
- *     @decode
- *     @preprocess
- *     @postprocess
- *     @batch
- *     @stream
- *     @deterministic
- *     @stochastic
- *     @temperature
- *     @sampling
- *     @resource
- *     @requires
- *     @capability
- *     @constraint
- *     @preference
- *     @target
- *     @placement
+ * This grammar therefore MUST NOT use NANO_ANNOTATION.
  *
- * is represented through the repository's generic NANO_ANNOTATION mechanism.
+ * Annotation names remain composed from:
  *
- * Semantic analysis owns the validation of annotation names and meanings.
+ *     AT
+ *     identifier
  *
- * This prevents the lexer from becoming a closed list of AI frameworks,
- * algorithms, vendors or temporary implementation concepts.
+ * Reserved language keywords used for resource contracts are consumed through
+ * their canonical lexer tokens:
+ *
+ *     REQUIRES
+ *     CAPABILITY
+ *     CONSTRAINT
+ *     PREFER
+ *     HINT
+ *
+ * No new lexer token is introduced here.
  *
  * ============================================================================
- *
- * POCO-REAF CONTRACT
- * ============================================================================
- *
- * An inference declaration describes WHAT inference means.
- *
- * It may describe:
- *
- *     - which model/value is used;
- *     - which inputs are supplied;
- *     - which outputs are required;
- *     - preprocessing;
- *     - postprocessing;
- *     - decoding;
- *     - execution semantics;
- *     - determinism requirements;
- *     - numerical requirements;
- *     - quality requirements;
- *     - latency requirements;
- *     - resource requirements;
- *     - capability requirements;
- *     - portability constraints;
- *     - execution preferences.
- *
- * It must not silently mean:
- *
- *     "run on GPU 0"
- *
- * or:
- *
- *     "use exactly N devices"
- *
- * or:
- *
- *     "use exactly N cores"
- *
- * or:
- *
- *     "require exactly X GB memory".
- *
- * Such details belong to resource/target/deployment/runtime semantics.
- *
- * ============================================================================
- *
- * SCALABILITY CONTRACT
- * ============================================================================
- *
- * There are NO grammar-level finite limits for:
- *
- *     - inference declarations;
- *     - models;
- *     - inputs;
- *     - outputs;
- *     - tensors;
- *     - tensor rank;
- *     - tensor dimensions;
- *     - sequence length;
- *     - batch size;
- *     - generated outputs;
- *     - inference stages;
- *     - preprocessing stages;
- *     - postprocessing stages;
- *     - decoding stages;
- *     - execution workers;
- *     - devices;
- *     - accelerators;
- *     - nodes;
- *     - replicas;
- *     - streams.
- *
- * Repetition is structural.
- *
- * Practical limits belong to:
- *
- *     - compiler configuration;
- *     - resource availability;
- *     - scheduling;
- *     - target capabilities;
- *     - runtime policy;
- *     - deployment policy.
- *
- * ============================================================================
- *
  * TYPE CONTRACT
  * ============================================================================
  *
- * This grammar reuses:
+ * General type syntax is owned by:
+ *
+ *     Types
+ *
+ * This file consumes:
  *
  *     typeExpression
  *
- * from the canonical type grammar.
- *
- * inference.g4 MUST NOT define another type system.
+ * It MUST NOT define an inference-specific competing type system.
  *
  * ============================================================================
- *
  * EXPRESSION CONTRACT
  * ============================================================================
  *
- * General expressions are owned by the canonical expression grammar.
+ * General expressions are owned by:
  *
- * This grammar therefore reuses:
+ *     Expressions
+ *
+ * This file consumes:
  *
  *     expression
+ *     argumentList
  *
- * for:
+ * Model references, dataset references, tensor expressions, quantum-derived
+ * values and hardware-backed values therefore remain ordinary semantic values.
  *
- *     - model references;
- *     - input expressions;
- *     - output expressions;
- *     - configuration;
- *     - decoding;
- *     - preprocessing;
- *     - postprocessing;
- *     - constraints;
- *     - resource requirements;
- *     - capabilities;
- *     - preferences;
- *     - execution conditions;
- *     - arbitrary future inference semantics.
+ * This prevents dependency cycles such as:
+ *
+ *     Inference -> Models -> Inference
+ *     Inference -> Datasets -> Inference
  *
  * ============================================================================
- *
- * MODEL INTEGRATION
+ * STATEMENT CONTRACT
  * ============================================================================
  *
- * inference.g4 does NOT import models.g4.
+ * Inference regions may contain ordinary Zamani statements.
  *
- * Model declarations are owned by:
+ * The canonical statement composition grammar is therefore imported.
  *
- *     grammar/ai/models.g4
+ * This permits:
  *
- * Inference consumes model VALUES/REFERENCES through expressions.
+ *     inference
+ *         -> classical computation
+ *         -> quantum computation
+ *         -> measurement
+ *         -> classical decision
+ *         -> inference
  *
- * This prevents:
- *
- *     inference -> models -> inference
- *
- * dependency cycles.
- *
- * The semantic resolver connects an inference model reference to its model
- * declaration.
+ * without introducing an AI-specific statement language.
  *
  * ============================================================================
- *
- * DATASET INTEGRATION
+ * POCO-REAF
  * ============================================================================
  *
- * inference.g4 does NOT import datasets.g4.
+ * This grammar imposes NO universal limit on:
  *
- * Dataset declarations are owned by:
+ *     models
+ *     inputs
+ *     outputs
+ *     tensors
+ *     tensor rank
+ *     tensor dimensions
+ *     batch size
+ *     sequence length
+ *     inference calls
+ *     inference stages
+ *     workers
+ *     devices
+ *     accelerators
+ *     nodes
+ *     replicas
+ *     streams
+ *     generated values
  *
- *     grammar/ai/datasets.g4
+ * There are no:
  *
- * Inference may consume dataset-derived values through ordinary expressions.
+ *     MAX_MODELS
+ *     MAX_INPUTS
+ *     MAX_OUTPUTS
+ *     MAX_BATCH_SIZE
+ *     MAX_SEQUENCE_LENGTH
+ *     MAX_TENSOR_RANK
+ *     MAX_DEVICES
+ *     MAX_GPUS
+ *     MAX_CPUS
+ *     MAX_WORKERS
+ *     MAX_NODES
  *
- * Dataset storage, streaming, sharding and placement remain outside this file.
+ * or equivalent grammar-level ceilings.
+ *
+ * Any practical limitation belongs to compiler, runtime, target capability,
+ * resource availability, deployment policy or operating environment.
  *
  * ============================================================================
- *
- * TENSOR INTEGRATION
+ * RESOURCE / CAPABILITY SEPARATION
  * ============================================================================
  *
- * inference.g4 does NOT define a competing tensor grammar.
+ * The source language distinguishes:
  *
- * Tensor types and tensor expressions are represented through:
+ *     requirement
+ *     capability
+ *     constraint
+ *     preference
+ *     hint
  *
- *     typeExpression
- *     expression
+ * A requirement such as:
  *
- * Tensor semantics are resolved downstream.
+ *     requires capability("tensor.compute")
+ *
+ * does not select a physical accelerator.
+ *
+ * The grammar MUST NOT encode:
+ *
+ *     GPU 0
+ *     CPU 3
+ *     device 17
+ *     QPU 2
+ *
+ * as universal inference semantics.
+ *
+ * Physical realization belongs downstream.
  *
  * ============================================================================
+ * HARDWARE INDEPENDENCE
+ * ============================================================================
  *
+ * Inference syntax is target-independent.
+ *
+ * The same inference source may ultimately be lowered to:
+ *
+ *     CPU
+ *     multicore CPU
+ *     GPU
+ *     FPGA
+ *     ASIC
+ *     NPU
+ *     TPU
+ *     QPU-assisted execution
+ *     distributed systems
+ *     heterogeneous systems
+ *     future execution targets
+ *
+ * without changing the source grammar merely because the hardware changed.
+ *
+ * ============================================================================
  * QUANTUM INTEGRATION
  * ============================================================================
  *
- * An inference computation may consume or produce values originating from
- * quantum computation.
+ * Inference may consume quantum-derived values through ordinary expressions.
  *
- * This grammar does NOT import quantum grammar.
+ * This grammar does NOT define:
  *
- * The semantic layer may resolve expressions to:
+ *     qubits
+ *     gates
+ *     physical qubits
+ *     quantum topology
+ *     routing
+ *     QEC
+ *     ZQN
  *
- *     classical values;
- *     quantum-derived values;
- *     hybrid values;
- *     hardware-backed values.
+ * Quantum semantics remain owned by the quantum subsystem and ultimately:
  *
- * If an inference operation contains quantum computation, that computation
- * remains owned by the quantum language/IR boundary.
- *
- * quantum::ir remains the canonical quantum semantic boundary.
- *
- * ============================================================================
- *
- * HARDWARE / ACCELERATOR INTEGRATION
- * ============================================================================
- *
- * This grammar may express:
- *
- *     @requires
- *     @capability
- *     @constraint
- *     @preference
- *     @resource
- *
- * but does not select hardware.
- *
- * For example, the grammar permits semantic declarations equivalent to:
- *
- *     @requires tensor_compute;
- *     @capability low_latency;
- *     @preference energy_efficiency;
- *
- * without requiring:
- *
- *     GPU0
- *     TPU7
- *     NPU2
- *     device_17
- *
- * Hardware realization is owned downstream.
+ *     quantum::ir
  *
  * ============================================================================
- *
- * SEMANTIC VALIDATION CONTRACT
+ * HDL / HARDWARE INTEGRATION
  * ============================================================================
  *
- * The grammar MUST accept syntax.
+ * Inference may require capabilities provided by hardware or HDL realizations.
  *
- * Semantic analysis MUST validate:
+ * It does not define:
  *
- *     - annotation names;
- *     - declaration identity;
- *     - duplicate inference declarations;
- *     - model references;
- *     - input references;
- *     - output references;
- *     - type compatibility;
- *     - input/output compatibility;
- *     - configuration validity;
- *     - resource requirement validity;
- *     - capability compatibility;
- *     - constraint consistency;
- *     - unsupported execution combinations;
- *     - portability violations;
- *     - invalid inference modes.
+ *     register widths
+ *     bus widths
+ *     memory-bank counts
+ *     FPGA resource counts
+ *     accelerator counts
+ *     physical wiring
+ *     clock topology
  *
- * The parser must not attempt these checks.
+ * Those belong to:
+ *
+ *     hardware/
+ *     hdl/
+ *     resources/
+ *     compile/
+ *     execution/
  *
  * ============================================================================
- *
- * DETERMINISM CONTRACT
+ * AST CONTRACT
  * ============================================================================
  *
- * Parsing must be deterministic for the same:
+ * Every inference declaration MUST preserve:
  *
- *     source;
- *     grammar version;
- *     lexer version;
- *     parser configuration.
+ *     - source span;
+ *     - annotation/name;
+ *     - declaration name;
+ *     - declared type, if present;
+ *     - initializer, if present;
+ *     - ordered members;
+ *     - directive names;
+ *     - directive targets;
+ *     - directive arguments;
+ *     - nested regions;
+ *     - expressions;
+ *     - statements;
+ *     - source provenance.
  *
- * Runtime stochasticity such as sampling is NOT a parsing concern.
+ * The AST MUST remain domain-neutral.
  *
- * A semantic declaration such as:
+ * This grammar does NOT require a parallel inference-specific IR.
  *
- *     @deterministic
+ * ============================================================================
+ * SEMANTIC CONTRACT
+ * ============================================================================
  *
- * or:
+ * Semantic analysis is responsible for:
  *
- *     @stochastic
+ *     - validating @inference / @infer;
+ *     - resolving model references;
+ *     - resolving dataset references;
+ *     - resolving tensor types;
+ *     - checking input/output compatibility;
+ *     - checking inference configuration;
+ *     - checking duplicate names;
+ *     - checking directive applicability;
+ *     - validating requirements;
+ *     - validating capabilities;
+ *     - validating constraints;
+ *     - distinguishing preferences from requirements;
+ *     - checking portability;
+ *     - checking determinism;
+ *     - checking stochastic execution policy;
+ *     - checking resource availability;
+ *     - checking target capability compatibility.
  *
- * is interpreted downstream.
+ * The parser performs none of those semantic checks.
+ *
+ * ============================================================================
+ * IR CONTRACT
+ * ============================================================================
+ *
+ * This grammar produces no IR.
+ *
+ * Semantic inference operations must map into the repository's canonical
+ * semantic representation.
+ *
+ * If inference interacts with quantum computation:
+ *
+ *     inference syntax
+ *          |
+ *          v
+ *     semantic analysis
+ *          |
+ *          v
+ *     quantum::ir
+ *
+ * There MUST NOT be an AI-specific second quantum IR.
+ *
+ * ============================================================================
+ * DETERMINISM
+ * ============================================================================
+ *
+ * Parsing is deterministic for a fixed:
+ *
+ *     source
+ *     lexer
+ *     grammar
+ *     parser configuration
+ *
+ * Runtime sampling, stochastic inference, randomness and model nondeterminism
+ * are semantic/runtime concerns and MUST NOT affect parsing.
+ *
+ * ============================================================================
+ * SAFETY
+ * ============================================================================
+ *
+ * This grammar contains:
+ *
+ *     - no embedded Rust;
+ *     - no semantic predicates;
+ *     - no target-specific actions;
+ *     - no filesystem access;
+ *     - no network access;
+ *     - no runtime execution;
+ *     - no hardware discovery;
+ *     - no unsafe implementation.
+ *
+ * Generated/consuming Rust code must remain compatible with:
+ *
+ *     Rust 1.97 / Rust 1.97.1
+ *     Rust 2021
+ *     safe Rust only
  *
  * ============================================================================
  */
@@ -484,7 +470,9 @@ options {
     tokenVocab = ZamaniLexer;
 }
 
-import Types, Expressions;
+import Types,
+       Expressions,
+       Statements;
 
 
 /* ============================================================================
@@ -492,13 +480,17 @@ import Types, Expressions;
  * ========================================================================== */
 
 /**
- * Public parser boundary for inference-domain syntax.
+ * Complete inference-domain construct.
  *
- * The semantic layer determines whether the annotation represents:
+ * The two public forms are deliberately structurally distinct:
  *
- *     @inference
- *     @infer
- *     or another registered inference construct.
+ *     @inference Name { ... }
+ *
+ * and:
+ *
+ *     @infer Model(args...);
+ *
+ * This avoids treating arbitrary expressions as inference constructs.
  */
 inferenceConstruct
     : inferenceDeclaration
@@ -507,60 +499,55 @@ inferenceConstruct
 
 
 /* ============================================================================
- * 2. INFERENCE DECLARATION
+ * 2. DECLARATION
  * ========================================================================== */
 
 /**
  * Canonical inference declaration.
  *
- * Conceptual form:
+ * Examples:
  *
- *     @inference RunModel {
+ *     @inference classify {
  *         ...
  *     }
  *
- * The grammar intentionally does not require the annotation text to be a
- * particular hard-coded keyword.
+ *     @inference classify: Result {
+ *         ...
+ *     }
  *
- * Semantic validation must establish that the annotation is registered as an
- * inference declaration annotation.
+ *     @inference classify = model {
+ *         ...
+ *     }
+ *
+ * The semantic layer validates the annotation spelling.
  */
 inferenceDeclaration
-    : NANO_ANNOTATION
+    : AT
+      inferenceDeclarationAnnotation
       identifier
-      inferenceTypeClause?
+      inferenceDeclarationType?
       inferenceInitializer?
       inferenceBody
     ;
 
 
-/**
- * Optional declared result/type boundary.
- */
-inferenceTypeClause
+inferenceDeclarationAnnotation
+    : identifier
+    ;
+
+
+inferenceDeclarationType
     : COLON
       typeExpression
     ;
 
 
-/**
- * Optional declaration initializer.
- *
- * Example semantic form:
- *
- *     @inference Run = someInferenceExpression {
- *         ...
- *     }
- */
 inferenceInitializer
     : ASSIGN
       expression
     ;
 
 
-/**
- * Inference body.
- */
 inferenceBody
     : LBRACE
       inferenceMember*
@@ -569,597 +556,523 @@ inferenceBody
 
 
 /* ============================================================================
- * 3. INFERENCE MEMBERS
+ * 3. INVOCATION
  * ========================================================================== */
 
 /**
- * An inference body can contain inference-specific annotated clauses or
- * ordinary Zamani statements.
+ * Inference invocation.
  *
- * This is important for hybrid programs because inference orchestration may
- * contain ordinary classical control flow.
+ * Examples:
+ *
+ *     @infer(model, input);
+ *
+ *     @infer classifier(input, context);
+ *
+ *     @infer pipeline(input);
+ *
+ * The invocation target and arguments are expressions/semantic references.
+ */
+inferenceInvocation
+    : AT
+      inferenceInvocationAnnotation
+      LPAREN
+      argumentList?
+      RPAREN
+      SEMI?
+    ;
+
+
+inferenceInvocationAnnotation
+    : identifier
+    ;
+
+
+/* ============================================================================
+ * 4. INFERENCE MEMBERS
+ * ========================================================================== */
+
+/**
+ * Inference bodies may contain:
+ *
+ *     inference directives;
+ *     resource contracts;
+ *     ordinary Zamani statements.
+ *
+ * This is the primary AI/classical/hybrid integration boundary.
  */
 inferenceMember
-    : inferenceClause
+    : inferenceDirective
+    | inferenceResourceContract
+    | inferenceCapabilityContract
+    | inferenceConstraintContract
+    | inferencePreferenceContract
+    | inferenceHintContract
     | statement
     ;
 
 
 /* ============================================================================
- * 4. GENERIC INFERENCE CLAUSE
+ * 5. GENERIC INFERENCE DIRECTIVE
  * ========================================================================== */
 
 /**
- * Generic extensible inference clause.
- *
- * Supported semantic forms include, but are not limited to:
- *
- *     @model model;
- *     @input x: Tensor<Float>;
- *     @output y: Tensor<Float>;
- *     @preprocess normalize { ... }
- *     @postprocess decode { ... }
- *     @decode result = decoder(...);
- *     @resource requirement = ...;
- *     @requires capability;
- *     @constraint condition;
- *     @preference preference;
- *     @batch size;
- *     @stream source;
- *     @deterministic;
- *     @stochastic;
- *
- * The grammar intentionally does not enumerate every future inference concept.
- *
- * Annotation semantics are versioned outside the lexer.
- */
-inferenceClause
-    : NANO_ANNOTATION
-      inferenceClauseTarget?
-      inferenceTypeClause?
-      inferenceInitializer?
-      inferenceBodyOrTerminator
-    ;
-
-
-/**
- * Optional semantic target of a clause.
+ * Extensible inference-local directive.
  *
  * Examples:
  *
- *     @model model
- *     @input features
- *     @output prediction
- *     @decoder decoder
+ *     @model classifier;
+ *     @input features: Tensor<Float>;
+ *     @output prediction: Tensor<Float>;
+ *     @preprocess normalize;
+ *     @postprocess decode;
+ *     @decode decoder;
+ *     @batch batch_size;
+ *     @stream input;
+ *     @context context;
+ *     @configuration config;
+ *
+ * The directive name is intentionally not converted into a lexer keyword.
+ *
+ * Semantic analysis owns the registered directive vocabulary.
  */
-inferenceClauseTarget
+inferenceDirective
+    : AT
+      inferenceDirectiveName
+      inferenceDirectivePayload?
+      SEMI?
+    ;
+
+
+inferenceDirectiveName
     : identifier
     ;
 
 
-/**
- * A clause either contains a nested body or terminates as a declaration /
- * expression-style statement.
- */
-inferenceBodyOrTerminator
-    : inferenceBody
-    | SEMICOLON
+inferenceDirectivePayload
+    : inferenceDirectiveCall
+    | inferenceDirectiveBinding
+    | inferenceDirectiveTypedBinding
+    | inferenceDirectiveAssignment
+    | inferenceDirectiveTarget
+    | inferenceDirectiveRegion
     ;
 
 
-/* ============================================================================
- * 5. INFERENCE INVOCATION
- * ========================================================================== */
+inferenceDirectiveCall
+    : LPAREN
+      argumentList?
+      RPAREN
+    ;
 
-/**
- * Invocation boundary.
- *
- * The actual invocation semantics remain ordinary Zamani expression semantics.
- *
- * Conceptual forms include:
- *
- *     @infer model(input);
- *
- *     @infer model(input, context);
- *
- *     @infer pipeline(input);
- *
- *     @infer expression;
- *
- * This allows future inference invocation forms without changing the lexer.
- */
-inferenceInvocation
-    : NANO_ANNOTATION
+
+inferenceDirectiveBinding
+    : identifier
+      inferenceDirectiveCall?
+    ;
+
+
+inferenceDirectiveTypedBinding
+    : identifier
+      COLON
+      typeExpression
+      inferenceDirectiveCall?
+    ;
+
+
+inferenceDirectiveAssignment
+    : identifier?
+      ASSIGN
       expression
-      SEMICOLON
     ;
 
 
-/* ============================================================================
- * 6. MODEL REFERENCE
- * ========================================================================== */
-
-/**
- * Model references are expressions rather than grammar-level model objects.
- *
- * Semantic analysis resolves the expression to a model value.
- */
-inferenceModelReference
+inferenceDirectiveTarget
     : expression
     ;
 
 
-/* ============================================================================
- * 7. INPUT BOUNDARY
- * ========================================================================== */
-
-/**
- * Input declaration/reference boundary.
- *
- * Inputs may originate from:
- *
- *     - scalar values;
- *     - vectors;
- *     - matrices;
- *     - tensors;
- *     - streams;
- *     - datasets;
- *     - classical computation;
- *     - quantum-derived measurements;
- *     - hardware interfaces;
- *     - distributed sources.
- *
- * The source type is determined semantically.
- */
-inferenceInput
-    : NANO_ANNOTATION
-      identifier
-      inferenceTypeClause?
-      inferenceInitializer?
-      SEMICOLON
+inferenceDirectiveRegion
+    : LBRACE
+      inferenceMember*
+      RBRACE
     ;
 
 
 /* ============================================================================
- * 8. OUTPUT BOUNDARY
+ * 6. RESOURCE CONTRACT
  * ========================================================================== */
 
 /**
- * Output declaration/reference boundary.
- */
-inferenceOutput
-    : NANO_ANNOTATION
-      identifier
-      inferenceTypeClause?
-      inferenceInitializer?
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 9. PREPROCESSING
- * ========================================================================== */
-
-/**
- * Preprocessing is intentionally represented as an expression or nested
- * semantic region.
- *
- * It may include:
- *
- *     normalization;
- *     tokenization;
- *     resizing;
- *     feature construction;
- *     encoding;
- *     filtering;
- *     classical computation;
- *     hardware preprocessing;
- *     future transformations.
- */
-inferencePreprocess
-    : NANO_ANNOTATION
-      inferenceClauseTarget?
-      inferenceInitializer?
-      inferenceBodyOrTerminator
-    ;
-
-
-/* ============================================================================
- * 10. POSTPROCESSING
- * ========================================================================== */
-
-/**
- * Postprocessing may include:
- *
- *     decoding;
- *     normalization;
- *     projection;
- *     filtering;
- *     aggregation;
- *     conversion;
- *     classical computation;
- *     quantum-derived result processing.
- */
-inferencePostprocess
-    : NANO_ANNOTATION
-      inferenceClauseTarget?
-      inferenceInitializer?
-      inferenceBodyOrTerminator
-    ;
-
-
-/* ============================================================================
- * 11. DECODING
- * ========================================================================== */
-
-/**
- * Decoding semantics are implementation-independent.
- *
- * The grammar does not hard-code:
- *
- *     greedy decoding;
- *     beam width;
- *     sampling count;
- *     temperature;
- *     top-k;
- *     top-p;
- *     any particular algorithm.
- *
- * Those can be represented as ordinary expressions/configuration values.
- */
-inferenceDecoding
-    : NANO_ANNOTATION
-      inferenceClauseTarget?
-      inferenceInitializer?
-      inferenceBodyOrTerminator
-    ;
-
-
-/* ============================================================================
- * 12. EXECUTION MODE
- * ========================================================================== */
-
-/**
- * Execution-mode declarations are intentionally annotation-based.
- *
- * Possible semantic modes include:
- *
- *     deterministic;
- *     stochastic;
- *     streaming;
- *     batched;
- *     interactive;
- *     online;
- *     offline;
- *     speculative;
- *     adaptive;
- *     distributed;
- *     asynchronous;
- *     synchronous;
- *     quantum-assisted;
- *     hybrid.
- *
- * The semantic registry owns the actual mode vocabulary.
- */
-inferenceExecutionMode
-    : NANO_ANNOTATION
-      inferenceClauseTarget?
-      inferenceInitializer?
-      inferenceBodyOrTerminator
-    ;
-
-
-/* ============================================================================
- * 13. RESOURCE REQUIREMENTS
- * ========================================================================== */
-
-/**
- * Resource requirements are declarations, not allocations.
- *
- * Examples of semantic categories include:
- *
- *     compute;
- *     memory;
- *     storage;
- *     bandwidth;
- *     latency;
- *     throughput;
- *     energy;
- *     reliability;
- *     accelerator capability.
- *
- * No physical capacity is encoded here.
- */
-inferenceResourceRequirement
-    : NANO_ANNOTATION
-      inferenceClauseTarget?
-      inferenceTypeClause?
-      inferenceInitializer?
-      inferenceBodyOrTerminator
-    ;
-
-
-/* ============================================================================
- * 14. CAPABILITY REQUIREMENTS
- * ========================================================================== */
-
-/**
- * Capability requirements describe WHAT the execution environment must
- * support, without naming a concrete device.
- */
-inferenceCapabilityRequirement
-    : NANO_ANNOTATION
-      inferenceClauseTarget?
-      inferenceInitializer?
-      inferenceBodyOrTerminator
-    ;
-
-
-/* ============================================================================
- * 15. CONSTRAINTS
- * ========================================================================== */
-
-/**
- * Constraints describe semantic restrictions.
+ * Hard resource requirement.
  *
  * Examples:
  *
- *     quality;
- *     latency;
- *     precision;
- *     numerical stability;
- *     privacy;
- *     reliability;
- *     portability;
- *     determinism.
+ *     requires memory >= required_memory;
+ *     requires throughput >= required_throughput;
+ *     requires latency <= latency_budget;
  *
- * Constraint interpretation belongs to semantic/resource analysis.
+ * The expression is semantic data.
+ *
+ * No physical resource is selected here.
  */
-inferenceConstraint
-    : NANO_ANNOTATION
-      inferenceClauseTarget?
-      inferenceInitializer?
-      inferenceBodyOrTerminator
+inferenceResourceContract
+    : REQUIRES
+      expression
+      SEMI?
     ;
 
 
 /* ============================================================================
- * 16. PREFERENCES
+ * 7. CAPABILITY CONTRACT
  * ========================================================================== */
 
 /**
- * Preferences are non-mandatory optimization hints.
+ * Capability requirement.
  *
- * A preference MUST NOT be interpreted as a hard requirement unless semantic
- * analysis explicitly says so.
+ * Examples:
+ *
+ *     capability("tensor.compute");
+ *     capability("streaming");
+ *     capability("quantum.measurement");
+ *
+ * Capability satisfaction is determined downstream.
  */
-inferencePreference
-    : NANO_ANNOTATION
-      inferenceClauseTarget?
-      inferenceInitializer?
-      inferenceBodyOrTerminator
+inferenceCapabilityContract
+    : CAPABILITY
+      expression
+      SEMI?
     ;
 
 
 /* ============================================================================
- * 17. QUALITY / ACCEPTANCE CONTRACT
+ * 8. CONSTRAINT CONTRACT
  * ========================================================================== */
 
 /**
- * Quality declarations can express semantic acceptance conditions.
- *
- * The actual metric and threshold types are expressions.
- *
- * No fixed metric or fixed threshold is encoded into the grammar.
+ * Hard semantic constraint.
  */
-inferenceQuality
-    : NANO_ANNOTATION
-      inferenceClauseTarget?
-      inferenceInitializer?
-      inferenceBodyOrTerminator
+inferenceConstraintContract
+    : CONSTRAINT
+      expression
+      SEMI?
     ;
 
 
 /* ============================================================================
- * 18. FAILURE / FALLBACK CONTRACT
+ * 9. PREFERENCE CONTRACT
  * ========================================================================== */
 
 /**
- * Inference may describe fallback intent.
+ * Non-binding optimization preference.
  *
- * Actual resilience decisions remain owned by the resilience subsystem.
- *
- * This grammar merely provides a syntactic boundary for semantic declarations.
+ * A preference MUST NOT silently become a hard requirement.
  */
-inferenceFallback
-    : NANO_ANNOTATION
-      inferenceClauseTarget?
-      inferenceInitializer?
-      inferenceBodyOrTerminator
+inferencePreferenceContract
+    : PREFER
+      expression
+      SEMI?
     ;
 
 
 /* ============================================================================
- * 19. STATE / CONTEXT
+ * 10. HINT CONTRACT
  * ========================================================================== */
 
 /**
- * Inference context can represent semantic state required by an inference
- * computation.
+ * Non-semantic implementation hint.
  *
- * It does not imply serialization of arbitrary machine or quantum state.
+ * Hints may influence optimization or lowering but cannot redefine program
+ * meaning.
  */
-inferenceContext
-    : NANO_ANNOTATION
-      inferenceClauseTarget?
-      inferenceTypeClause?
-      inferenceInitializer?
-      inferenceBodyOrTerminator
+inferenceHintContract
+    : HINT
+      expression
+      SEMI?
     ;
 
 
 /* ============================================================================
- * 20. BATCHING / STREAMING
+ * 11. COMMON EXPLICIT INFERENCE ROLES
  * ========================================================================== */
 
 /**
- * Batch and stream configuration remain expressions.
+ * These rules provide stable semantic anchors for tooling and AST mapping.
  *
- * This deliberately permits:
+ * They intentionally reuse the generic directive representation.
  *
- *     static batching;
- *     dynamic batching;
- *     adaptive batching;
- *     streaming;
- *     micro-batching;
- *     provider-specific future strategies.
- *
- * No finite batch-size limit is encoded.
+ * A future inference dialect can extend the directive registry without
+ * changing the lexer.
  */
-inferenceBatching
-    : NANO_ANNOTATION
-      inferenceClauseTarget?
-      inferenceInitializer?
-      inferenceBodyOrTerminator
+
+inferenceModelDirective
+    : AT
+      inferenceModelName
+      inferenceDirectivePayload?
+      SEMI?
     ;
 
 
-inferenceStreaming
-    : NANO_ANNOTATION
-      inferenceClauseTarget?
-      inferenceInitializer?
-      inferenceBodyOrTerminator
+inferenceModelName
+    : identifier
     ;
 
 
-/* ============================================================================
- * 21. PRECISION / NUMERICAL POLICY
- * ========================================================================== */
+inferenceInputDirective
+    : AT
+      inferenceInputName
+      inferenceDirectivePayload?
+      SEMI?
+    ;
 
-/**
- * Numerical policy may describe semantic precision intent.
- *
- * The grammar does not enumerate hardware formats.
- *
- * Semantic analysis may resolve:
- *
- *     precision;
- *     numerical stability;
- *     mixed precision;
- *     exactness;
- *     approximation;
- *     quantization intent.
- */
-inferenceNumericalPolicy
-    : NANO_ANNOTATION
-      inferenceClauseTarget?
-      inferenceTypeClause?
-      inferenceInitializer?
-      inferenceBodyOrTerminator
+
+inferenceInputName
+    : identifier
+    ;
+
+
+inferenceOutputDirective
+    : AT
+      inferenceOutputName
+      inferenceDirectivePayload?
+      SEMI?
+    ;
+
+
+inferenceOutputName
+    : identifier
     ;
 
 
 /* ============================================================================
- * 22. DETERMINISM / STOCHASTICITY
+ * 12. PREPROCESSING
  * ========================================================================== */
 
 /**
- * Determinism and stochasticity are semantic properties.
+ * Preprocessing is an inference directive rather than a fixed algorithm list.
+ *
+ * This allows:
+ *
+ *     normalize
+ *     tokenize
+ *     encode
+ *     resize
+ *     transform
+ *     custom preprocessing
+ *
+ * without making every operation a language keyword.
  */
-inferenceReproducibility
-    : NANO_ANNOTATION
-      inferenceClauseTarget?
-      inferenceInitializer?
-      inferenceBodyOrTerminator
+inferencePreprocessDirective
+    : AT
+      inferencePreprocessName
+      inferenceDirectivePayload?
+      SEMI?
+    ;
+
+
+inferencePreprocessName
+    : identifier
     ;
 
 
 /* ============================================================================
- * 23. DISTRIBUTED INFERENCE
+ * 13. POSTPROCESSING
  * ========================================================================== */
 
-/**
- * Distributed inference is expressed without hard-coding:
- *
- *     node count;
- *     worker count;
- *     replica count;
- *     topology;
- *     device IDs;
- *     network addresses.
- *
- * Placement and realization belong downstream.
- */
-inferenceDistributed
-    : NANO_ANNOTATION
-      inferenceClauseTarget?
-      inferenceInitializer?
-      inferenceBodyOrTerminator
+inferencePostprocessDirective
+    : AT
+      inferencePostprocessName
+      inferenceDirectivePayload?
+      SEMI?
+    ;
+
+
+inferencePostprocessName
+    : identifier
     ;
 
 
 /* ============================================================================
- * 24. ADAPTIVE / DYNAMIC INFERENCE
+ * 14. DECODING
  * ========================================================================== */
 
-/**
- * Supports semantic declarations for inference that may adapt according to:
- *
- *     input;
- *     observed quality;
- *     resource availability;
- *     runtime capabilities;
- *     model state;
- *     execution context.
- *
- * Actual adaptation belongs to the semantic/runtime layers.
- */
-inferenceAdaptive
-    : NANO_ANNOTATION
-      inferenceClauseTarget?
-      inferenceInitializer?
-      inferenceBodyOrTerminator
+inferenceDecodeDirective
+    : AT
+      inferenceDecodeName
+      inferenceDirectivePayload?
+      SEMI?
+    ;
+
+
+inferenceDecodeName
+    : identifier
     ;
 
 
 /* ============================================================================
- * 25. INTEROPERABILITY
+ * 15. EXECUTION POLICY
  * ========================================================================== */
 
 /**
- * Inference may interoperate with:
+ * Execution policies remain semantic directives.
  *
- *     classical computation;
- *     quantum computation;
- *     HDL/hardware;
- *     accelerators;
- *     distributed services;
- *     external systems.
+ * Possible registered names include:
  *
- * This rule provides the syntactic boundary only.
+ *     deterministic
+ *     stochastic
+ *     streaming
+ *     batched
+ *     adaptive
+ *     online
+ *     offline
+ *     synchronous
+ *     asynchronous
+ *
+ * No finite enumeration is embedded in the grammar.
  */
-inferenceInteroperability
-    : NANO_ANNOTATION
-      inferenceClauseTarget?
-      inferenceInitializer?
-      inferenceBodyOrTerminator
+inferenceExecutionDirective
+    : AT
+      inferenceExecutionName
+      inferenceDirectivePayload?
+      SEMI?
+    ;
+
+
+inferenceExecutionName
+    : identifier
     ;
 
 
 /* ============================================================================
- * 26. EXTENSION / DIALECT BOUNDARY
+ * 16. NUMERICAL POLICY
+ * ========================================================================== */
+
+inferenceNumericalDirective
+    : AT
+      inferenceNumericalName
+      inferenceDirectivePayload?
+      SEMI?
+    ;
+
+
+inferenceNumericalName
+    : identifier
+    ;
+
+
+/* ============================================================================
+ * 17. QUALITY / ACCEPTANCE
+ * ========================================================================== */
+
+inferenceQualityDirective
+    : AT
+      inferenceQualityName
+      inferenceDirectivePayload?
+      SEMI?
+    ;
+
+
+inferenceQualityName
+    : identifier
+    ;
+
+
+/* ============================================================================
+ * 18. CONTEXT / STATE
+ * ========================================================================== */
+
+inferenceContextDirective
+    : AT
+      inferenceContextName
+      inferenceDirectivePayload?
+      SEMI?
+    ;
+
+
+inferenceContextName
+    : identifier
+    ;
+
+
+/* ============================================================================
+ * 19. DISTRIBUTED / ADAPTIVE EXECUTION
+ * ========================================================================== */
+
+inferenceDistributedDirective
+    : AT
+      inferenceDistributedName
+      inferenceDirectivePayload?
+      SEMI?
+    ;
+
+
+inferenceDistributedName
+    : identifier
+    ;
+
+
+inferenceAdaptiveDirective
+    : AT
+      inferenceAdaptiveName
+      inferenceDirectivePayload?
+      SEMI?
+    ;
+
+
+inferenceAdaptiveName
+    : identifier
+    ;
+
+
+/* ============================================================================
+ * 20. INTEROPERABILITY
  * ========================================================================== */
 
 /**
- * Future inference dialects may introduce new annotations without modifying
- * this grammar.
+ * Interoperability is expression-based.
  *
- * Dialect validation belongs to the dialect/semantic subsystem.
+ * AI inference may consume:
+ *
+ *     classical values;
+ *     dataset values;
+ *     tensor values;
+ *     quantum-derived values;
+ *     hardware-backed values;
+ *     distributed values.
+ *
+ * No domain-specific IR is introduced here.
  */
-inferenceExtension
-    : NANO_ANNOTATION
-      inferenceClauseTarget?
-      inferenceTypeClause?
-      inferenceInitializer?
-      inferenceBodyOrTerminator
+inferenceInteroperabilityDirective
+    : AT
+      inferenceInteroperabilityName
+      inferenceDirectivePayload?
+      SEMI?
+    ;
+
+
+inferenceInteroperabilityName
+    : identifier
+    ;
+
+
+/* ============================================================================
+ * 21. EXTENSION / DIALECT BOUNDARY
+ * ========================================================================== */
+
+/**
+ * Future AI dialects may register additional directives.
+ *
+ * The parser preserves their structure.
+ *
+ * Semantic/dialect validation determines whether a directive is legal.
+ */
+inferenceExtensionDirective
+    : AT
+      inferenceExtensionName
+      inferenceDirectivePayload?
+      SEMI?
+    ;
+
+
+inferenceExtensionName
+    : identifier
     ;
