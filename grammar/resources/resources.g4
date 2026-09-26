@@ -3,145 +3,306 @@
  * Zamani Universal Programming Language
  * ============================================================================
  *
- * File:
- *     grammar/resources/resources.g4
+ * FILE
+ * ----
+ * grammar/resources/resources.g4
  *
- * Grammar:
- *     ANTLR4 parser grammar
+ * GRAMMAR
+ * -------
+ * parser grammar Resources
  *
- * Grammar identity:
- *     Resources
- *
- * Baseline:
- *     Rust 1.97 / Rust 1.97.1
- *     Rust 2021
- *
- * Safety:
- *     Grammar-only.
- *     No embedded Rust.
- *     No semantic predicates.
- *     No parser actions.
- *     No filesystem access.
- *     No network access.
- *     No hardware access.
- *     No unsafe Rust requirement.
- *
- * ============================================================================
  * STATUS
+ * ------
+ * CANONICAL RESOURCE ORCHESTRATOR
+ *
+ * PURPOSE
+ * -------
+ * This file is the SINGLE source-level orchestration grammar for the
+ * `grammar/resources/` subsystem.
+ *
+ * It composes the independent resource grammar components into one coherent
+ * resource-language surface.
+ *
+ * This file is intentionally the ORCHESTRATOR.
+ *
+ * It is therefore responsible for:
+ *
+ *   - the universal resource entry point;
+ *   - resource-item dispatch;
+ *   - resource declaration composition;
+ *   - universal resource clause composition;
+ *   - integration of specialized resource components;
+ *   - stable parser-level ownership boundaries.
+ *
+ * It is NOT responsible for:
+ *
+ *   - lexical definitions;
+ *   - identifiers;
+ *   - general expressions;
+ *   - type definitions;
+ *   - hardware discovery;
+ *   - physical allocation;
+ *   - placement algorithms;
+ *   - scheduling;
+ *   - routing;
+ *   - optimization;
+ *   - QEC;
+ *   - ZQN;
+ *   - HAL;
+ *   - runtime resource management;
+ *   - backend implementation;
+ *   - resource availability computation.
+ *
+ * ============================================================================
+ * IMPLEMENTATION BASELINE
  * ============================================================================
  *
- * CANONICAL UNIVERSAL RESOURCE GRAMMAR
+ * ANTLR4 parser grammar
+ * Rust 2021
+ * Rust 1.97 / Rust 1.97.1
  *
- * This file is the SINGLE concrete source-level owner for universal resource
- * intent in Zamani.
+ * This grammar contains:
  *
- * It is intentionally NOT a hardware allocator, scheduler, router, runtime,
- * resource manager, HAL, QEC implementation, ZQN implementation, or IR.
+ *   - no embedded Rust;
+ *   - no parser actions;
+ *   - no semantic predicates;
+ *   - no unsafe code;
+ *   - no filesystem access;
+ *   - no network access;
+ *   - no hardware access.
+ *
+ * The generated parser must remain usable by the safe-Rust frontend.
  *
  * ============================================================================
  * ARCHITECTURAL POSITION
  * ============================================================================
  *
- *                         Zamani source
- *                              |
- *                              v
- *                         ZamaniLexer
- *                              |
- *                              v
- *                       Zamani parser
- *                              |
- *                              v
- *                    +--------------------+
- *                    |     Resources      |
- *                    +--------------------+
- *                              |
- *             +----------------+----------------+
- *             |                                 |
- *             v                                 v
- *       ResourceExpressions                   Names
- *             |                                 |
- *             +----------------+----------------+
- *                              |
- *                              v
- *                         Frontend AST
- *                              |
- *                              v
- *                    Semantic resource model
- *                              |
- *       +----------------------+----------------------+
- *       |                      |                      |
- *       v                      v                      v
- *  requirements          capabilities            constraints
- *       |                      |                      |
- *       +----------------------+----------------------+
- *                              |
- *                              v
- *                    canonical semantic model
- *                              |
- *          +-------------------+-------------------+
- *          |                   |                   |
- *          v                   v                   v
- *      classical           quantum::ir        HDL/hardware
- *         IR                                      IR
- *          |                   |                   |
- *          +-------------------+-------------------+
- *                              |
- *                              v
- *                    optimization / lowering
- *                              |
- *                 +------------+------------+
- *                 |            |            |
- *                 v            v            v
- *              routing     scheduling   resilience
- *                 |            |            |
- *                 +------------+------------+
- *                              |
- *                             ZQN
- *                              |
- *                             HAL
- *                              |
- *                      target realization
+ *                     Zamani source
+ *                           |
+ *                           v
+ *                      ZamaniLexer
+ *                           |
+ *                           v
+ *                    parser composition
+ *                           |
+ *                           v
+ *              +-------------------------+
+ *              |       Resources         |
+ *              |   THIS ORCHESTRATOR     |
+ *              +-------------------------+
+ *                           |
+ *       +-------------------+-------------------+
+ *       |                   |                   |
+ *       v                   v                   v
+ * ResourceExpressions     Names       specialized resource
+ *       |                                      grammars
+ *       |                                           |
+ *       +-------------------+-----------------------+
+ *                           |
+ *                           v
+ *                    Domain-neutral AST
+ *                           |
+ *                           v
+ *                  structural validation
+ *                           |
+ *                           v
+ *                    semantic analysis
+ *                           |
+ *             +-------------+-------------+
+ *             |             |             |
+ *             v             v             v
+ *         resources     capabilities   constraints
+ *             |             |             |
+ *             +-------------+-------------+
+ *                           |
+ *                           v
+ *                  canonical semantic model
+ *                           |
+ *             +-------------+-------------+
+ *             |             |             |
+ *             v             v             v
+ *         classical     quantum::ir    HDL/hardware
+ *             |             |             |
+ *             +-------------+-------------+
+ *                           |
+ *                           v
+ *                   optimization/lowering
+ *                           |
+ *              +------------+------------+
+ *              |            |            |
+ *              v            v            v
+ *           routing     scheduling   resilience
+ *              |            |            |
+ *              +------------+------------+
+ *                           |
+ *                          ZQN
+ *                           |
+ *                          HAL
+ *                           |
+ *                    target realization
  *
  * ============================================================================
- * CORE PRINCIPLE
+ * AUTHORITY
  * ============================================================================
  *
- * Resource syntax expresses:
+ * Normative language meaning:
  *
- *     WHAT computation requires
- *     WHAT capabilities are required
- *     WHAT constraints must hold
- *     WHAT resources are involved
- *     WHAT properties are preferred
- *     WHAT scaling behavior is intended
+ *     grammar/specification/
  *
- * Resource syntax does NOT express:
+ * Focused resource contracts:
  *
- *     WHICH physical CPU
- *     WHICH physical core
- *     WHICH physical GPU
- *     WHICH physical FPGA
- *     WHICH physical ASIC
- *     WHICH physical QPU
- *     WHICH physical qubit
- *     WHICH physical memory bank
- *     WHICH physical network node
- *     WHICH cloud instance
+ *     grammar/spec/
  *
- * Physical realization belongs downstream.
+ * Canonical syntax:
+ *
+ *     grammar/Zamani.g4
+ *     grammar/resources/resources.g4
+ *
+ * Resource expression foundation:
+ *
+ *     grammar/resources/resource-expressions.g4
+ *
+ * Name foundation:
+ *
+ *     grammar/core/names.g4
+ *
+ * Current implementation conformance:
+ *
+ *     grammar/grammar.md
+ *
+ * Historical / extended design:
+ *
+ *     grammar/Zamani-Grammar.md
+ *
+ * This file MUST NOT become a second semantic or IR authority.
+ *
+ * ============================================================================
+ * SINGLE-SOURCE-OF-TRUTH RULE
+ * ============================================================================
+ *
+ * THIS FILE OWNS THE UNIVERSAL RESOURCE COMPOSITION BOUNDARY.
+ *
+ * It owns the resource-language entry points that other resource grammars
+ * consume.
+ *
+ * Specialized resource grammars own their specialized internal syntax.
+ *
+ * A specialized grammar MUST NOT redefine a rule owned here.
+ *
+ * In particular, specialized grammars MUST NOT independently redefine:
+ *
+ *     resources
+ *     resourceItem
+ *     resourceDeclaration
+ *     resourceKindClause
+ *     resourceSpecification
+ *     resourceClause
+ *     resourceRequirement
+ *     resourceConstraint
+ *     resourcePreference
+ *     resourceHint
+ *     resourceCapability
+ *     resourceTarget
+ *     resourceReservation
+ *     resourceAcquisition
+ *     resourceRelease
+ *     resourceGroup
+ *     resourceContract
+ *     resourceProfile
+ *
+ * If a specialized grammar currently declares one of these names, it must be
+ * converted into a delegate/component whose public entry rule has a unique
+ * specialized name.
+ *
+ * This avoids ANTLR imported-rule collisions and prevents parallel resource
+ * language authorities.
+ *
+ * ============================================================================
+ * IMPORT POLICY
+ * ============================================================================
+ *
+ * ResourceExpressions and Names are foundational dependencies.
+ *
+ * Specialized resource grammars are imported only when their public entry
+ * rules are independent of the universal rules owned by this file.
+ *
+ * The intended dependency direction is:
+ *
+ *     Names
+ *       |
+ *       v
+ *     Expressions
+ *       |
+ *       v
+ *     ResourceExpressions
+ *       |
+ *       +-------------------------------+
+ *       |                               |
+ *       v                               v
+ * specialized resource grammars     Resources
+ *                                       |
+ *                                       v
+ *                                Zamani composition root
+ *
+ * No child resource grammar may import this file.
+ *
+ * This prevents:
+ *
+ *     resources.g4 <-> child.g4
+ *
+ * import cycles.
+ *
+ * ============================================================================
+ * OPEN-WORLD RESOURCE MODEL
+ * ============================================================================
+ *
+ * Resource kinds are semantic names.
+ *
+ * The grammar MUST NOT enumerate a closed hardware vocabulary.
+ *
+ * Therefore this grammar does not establish a finite list of:
+ *
+ *     CPU
+ *     GPU
+ *     FPGA
+ *     ASIC
+ *     QPU
+ *     accelerator
+ *     memory device
+ *     storage device
+ *     network device
+ *     node
+ *     future architecture
+ *
+ * A resource kind is represented by source-level name syntax.
+ *
+ * Examples:
+ *
+ *     compute
+ *     memory
+ *     accelerator
+ *     quantum::logical_qubit
+ *     quantum::physical_qubit
+ *     tensor::compute
+ *     hardware::accelerator
+ *     future::architecture::resource
+ *
+ * Semantic analysis determines whether a named resource kind exists and what
+ * it means.
  *
  * ============================================================================
  * POCO-REAF
  * ============================================================================
  *
- * This grammar is a foundational component of:
+ * Resource syntax is part of:
  *
  *     Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
  *
- * Resource intent MUST remain target-independent wherever the programmer has
- * not explicitly requested a target-specific realization.
+ * The source program expresses WHAT it needs.
  *
- * A portable source program may therefore express:
+ * It does not implicitly express WHICH physical resource realizes it.
+ *
+ * Examples of portable intent:
  *
  *     requires qubits >= logical_qubits;
  *
@@ -155,15 +316,15 @@
  *
  *     prefer latency <= latency_budget;
  *
- *     target = quantum;
+ * Such values are program semantics.
  *
- * without binding the source program to a particular machine.
+ * They are NOT compiler-wide limits.
  *
  * ============================================================================
  * HARD-CODING PROHIBITION
  * ============================================================================
  *
- * This grammar MUST NOT define or imply:
+ * This grammar MUST NOT encode:
  *
  *     MAX_QUBITS
  *     MAX_CPUS
@@ -177,156 +338,147 @@
  *     MAX_NETWORK_SIZE
  *     MAX_DEVICE_COUNT
  *
- * Nor may it encode equivalent indirect limits such as:
+ * It also MUST NOT encode equivalent indirect limits such as:
  *
  *     exactly 32 CPUs
  *     exactly 1024 qubits
  *     exactly 64 GB memory
  *     exactly 24 GB VRAM
  *     exactly 32-bit registers
- *     exactly N network nodes
+ *     exactly N nodes
  *
- * Numeric literals occurring inside resource expressions are PROGRAM VALUES,
- * not universal machine limits.
+ * Numeric values in source programs remain program values.
  *
- * Example:
+ * For example:
  *
  *     requires qubits >= 1024;
  *
- * is valid program intent.
+ * is valid semantic intent.
  *
- * It does NOT establish:
+ * It does not create:
  *
  *     MAX_QUBITS = 1024
  *
  * ============================================================================
- * UNBOUNDED SCALABILITY
+ * UNBOUNDED LANGUAGE SCALABILITY
  * ============================================================================
  *
- * Lists and nested structures use ANTLR repetition:
+ * The grammar imposes no language-level maximum on:
+ *
+ *     resources
+ *     resource items
+ *     resource clauses
+ *     requirements
+ *     constraints
+ *     capabilities
+ *     preferences
+ *     hints
+ *     properties
+ *     resource groups
+ *     contracts
+ *     profiles
+ *     expressions
+ *     name-path depth
+ *     nested resource structures
+ *
+ * Repetition uses ANTLR's:
  *
  *     *
  *     +
  *
- * and recursive composition.
- *
- * There is deliberately no language-level maximum number of:
- *
- *     resources
- *     properties
- *     requirements
- *     constraints
- *     capabilities
- *     groups
- *     contracts
- *     profiles
- *     resource expressions
- *     resource hierarchy levels
+ * and recursive composition where appropriate.
  *
  * "Infinity" means:
  *
- *     unbounded by the language architecture.
+ *     no artificial language-level ceiling.
  *
- * It does not claim physically infinite hardware.
+ * It does not mean that physical hardware, memory, parser stacks, compiler
+ * memory, operating-system limits, or deployment infrastructure are infinite.
  *
- * Physical limits are determined by:
- *
- *     target availability
- *     compiler resources
- *     runtime resources
- *     deployment resources
- *     security policy
- *     implementation limits
+ * Those are implementation and target constraints.
  *
  * ============================================================================
- * SINGLE SOURCE OF TRUTH
+ * RESOURCE SEMANTIC CATEGORIES
  * ============================================================================
  *
- * THIS FILE OWNS:
+ * The resource subsystem distinguishes:
  *
- *     resources
- *     resourceItem
- *     resourceDeclaration
- *     resourceKindClause
- *     resourceSpecification
- *     resourceBodyItem
- *     resourceClause
- *     resourceQuantityClause
- *     resourceReferenceClause
- *     resourceRequirement
- *     resourceConstraint
- *     resourcePreference
- *     resourceHint
- *     resourceCapability
- *     resourceTarget
- *     resourceCapacityClause
- *     resourceAvailabilityClause
- *     resourcePortabilityClause
- *     resourceScalabilityClause
- *     resourcePerformanceClause
- *     resourceLatencyClause
- *     resourceThroughputClause
- *     resourceBandwidthClause
- *     resourceEnergyClause
- *     resourcePowerClause
- *     resourceReliabilityClause
- *     resourceResilienceClause
- *     resourceCostClause
- *     resourceReservation
- *     resourceAcquisition
- *     resourceRelease
- *     resourceDerivation
- *     resourceGroup
- *     resourceContract
- *     resourceProfile
- *     resourcePropertyClause
+ *     declaration
+ *     requirement
+ *     constraint
+ *     capability
+ *     preference
+ *     hint
+ *     target intent
+ *     reservation
+ *     acquisition
+ *     release
+ *     derivation
+ *     group
+ *     contract
+ *     profile
  *
- * THIS FILE DOES NOT OWN:
+ * These concepts MUST NOT be collapsed.
  *
- *     identifier
- *     qualifiedName
- *     expression
- *     resourceExpression
- *     arithmetic
- *     logical operators
- *     comparison precedence
- *     literals
- *     type syntax
- *     hardware discovery
- *     target selection algorithms
- *     placement
- *     routing
- *     scheduling
- *     optimization
- *     QEC
- *     ZQN
- *     HAL
- *     runtime resource management
- *     classical IR
- *     quantum::ir
- *     HDL IR
+ * In particular:
+ *
+ *     requirement != capability
+ *     capability != preference
+ *     preference != hint
+ *     requirement != implementation decision
+ *     resource intent != physical allocation
  *
  * ============================================================================
- * IMPORTS
+ * RESOURCE VS HARDWARE
  * ============================================================================
  *
- * ResourceExpressions:
+ * This grammar may describe:
  *
- *     grammar/resources/resource-expressions.g4
+ *     compute
+ *     memory
+ *     storage
+ *     accelerator
+ *     quantum resources
+ *     network resources
+ *     interconnect
+ *     energy
+ *     power
+ *     performance
+ *     reliability
+ *     resilience
  *
- * owns the resource-expression composition boundary and delegates ordinary
- * expression syntax to the canonical expression grammar.
+ * It does not choose:
  *
- * Names:
+ *     CPU 0
+ *     GPU 0
+ *     FPGA 0
+ *     QPU 0
+ *     physical qubit 0
+ *     memory bank 0
+ *     network node 0
  *
- *     grammar/core/names.g4
+ * Physical realization is downstream.
  *
- * owns:
+ * ============================================================================
+ * RESOURCE DECLARATION
+ * ============================================================================
  *
- *     identifier
- *     qualifiedName
+ * A resource declaration introduces a symbolic resource concept.
  *
- * No resource-specific expression or name implementation is duplicated here.
+ * The name is logical unless a later, explicitly target-specific construct
+ * states otherwise.
+ *
+ * Examples:
+ *
+ *     resource compute;
+ *
+ *     resource memory: memory;
+ *
+ *     resource accelerator: accelerator;
+ *
+ *     resource qpu: quantum::qpu;
+ *
+ * A declaration does not allocate a device.
  *
  * ============================================================================
  */
@@ -342,16 +494,12 @@ import ResourceExpressions, Names;
 
 /*
  * ============================================================================
- * 1. RESOURCE SECTION
+ * UNIVERSAL RESOURCE ENTRY POINT
  * ============================================================================
  *
- * A resource section may contain zero or more resource items.
+ * This is the single complete resource subsystem entry point.
  *
- * Cardinality is intentionally unbounded at the language level.
- *
- * This rule is the principal composition entry point for resource-aware
- * grammars that want a complete sequence.
- *
+ * It deliberately contains no fixed number of items.
  * ============================================================================
  */
 
@@ -362,13 +510,13 @@ resources
 
 /*
  * ============================================================================
- * 2. RESOURCE ITEM
+ * UNIVERSAL RESOURCE DISPATCH
  * ============================================================================
  *
- * Every universal resource construct enters through this rule.
+ * Every complete resource construct enters through resourceItem.
  *
- * Domain grammars should consume resourceItem rather than duplicating this
- * alternative list.
+ * Specialized grammars integrate through their unique public entry rules.
+ *
  * ============================================================================
  */
 
@@ -380,10 +528,10 @@ resourceItem
     | resourceHint
     | resourceCapability
     | resourceTarget
-    | resourceDerivation
     | resourceReservation
     | resourceAcquisition
     | resourceRelease
+    | resourceDerivation
     | resourceGroup
     | resourceContract
     | resourceProfile
@@ -392,27 +540,14 @@ resourceItem
 
 /*
  * ============================================================================
- * 3. RESOURCE DECLARATION
+ * RESOURCE DECLARATION
  * ============================================================================
  *
- * Examples:
+ * Syntax:
  *
- *     resource compute;
+ *     resource <name> [ : <kind> ] [ <specification> ] ;
  *
- *     resource memory: memory;
- *
- *     resource accelerator: accelerator {
- *         quantity = workload_size;
- *     };
- *
- *     resource qpu: quantum::qpu {
- *         requires capability("quantum.measurement");
- *     };
- *
- * The resource identifier is symbolic.
- *
- * It is NOT a physical device identifier.
- *
+ * The symbolic resource name is not a physical identifier.
  * ============================================================================
  */
 
@@ -428,29 +563,13 @@ resourceDeclaration
 
 /*
  * ============================================================================
- * 4. RESOURCE KIND
+ * RESOURCE KIND
  * ============================================================================
  *
- * Resource kinds are OPEN-WORLD semantic names.
+ * Resource kinds are open-world qualified semantic names.
  *
- * The grammar does not enumerate:
- *
- *     cpu
- *     gpu
- *     fpga
- *     qpu
- *     accelerator
- *     memory
- *     storage
- *     network
- *     future devices
- *
- * Those remain semantic names.
- *
- * Standard identifiers are accepted through qualifiedName.
- *
- * Reserved language words that can legitimately occur as domain names are
- * handled by resourceNamePath below.
+ * The semantic layer decides whether a kind is known, imported, provided by a
+ * dialect, or supplied by a target capability registry.
  *
  * ============================================================================
  */
@@ -460,62 +579,48 @@ resourceKindClause
     ;
 
 
-/*
- * ============================================================================
- * 5. OPEN RESOURCE NAME PATH
- * ============================================================================
- *
- * Normal resource namespaces use the canonical name system:
- *
- *     compute
- *     compute::gpu
- *     quantum::logical_qubit
- *     accelerator::tensor
- *     future::resource
- *
- * Resource names remain open-world.
- *
- * This rule does NOT define a finite list of resource kinds.
- *
- * The small reserved-token bridge exists only because certain existing
- * Zamani domain words, such as `quantum` and `gpu`, are reserved lexer tokens
- * rather than IDENTIFIER tokens.
- *
- * New resource kinds remain ordinary identifiers.
- *
- * ============================================================================
- */
-
 resourceNamePath
     : resourceNameSegment
       (DOUBLE_COLON resourceNameSegment)*
     ;
 
 
+/*
+ * ============================================================================
+ * RESOURCE NAME SEGMENT
+ * ============================================================================
+ *
+ * Normally a resource kind is an identifier.
+ *
+ * Some Zamani domain words may already be reserved lexical tokens. They may
+ * therefore be accepted as resource-name segments where the language's
+ * lexical contract permits their use as semantic resource names.
+ *
+ * This list is intentionally kept minimal.
+ *
+ * It MUST NOT become a resource-kind enumeration.
+ *
+ * ============================================================================
+ */
+
 resourceNameSegment
     : identifier
     | QUANTUM
-    | GPU
     | NANO
-    | AGENT
-    | CIRCUIT
-    | RESOURCE
-    | RESOURCES
+    | MEMORY
     | CAPABILITY
     | TARGET
-    | MEMORY
+    | RESOURCE
+    | RESOURCES
     ;
 
 
 /*
  * ============================================================================
- * 6. RESOURCE SPECIFICATION
+ * RESOURCE SPECIFICATION
  * ============================================================================
  *
- * A resource specification contains zero or more resource clauses.
- *
- * No resource-count limit is encoded.
- *
+ * A specification is an unbounded collection of resource clauses.
  * ============================================================================
  */
 
@@ -526,16 +631,6 @@ resourceSpecification
     ;
 
 
-/*
- * ============================================================================
- * 7. RESOURCE BODY ITEM
- * ============================================================================
- *
- * Attributes may precede any resource clause.
- *
- * ============================================================================
- */
-
 resourceBodyItem
     : resourceAttributes?
       resourceClause
@@ -544,19 +639,12 @@ resourceBodyItem
 
 /*
  * ============================================================================
- * 8. RESOURCE ATTRIBUTES
+ * RESOURCE ATTRIBUTES
  * ============================================================================
  *
  * Attributes are metadata.
  *
- * They do not execute operations.
- *
- * Example:
- *
- *     @portable
- *     @domain("quantum")
- *     resource qpu: quantum::qpu;
- *
+ * They do not perform resource allocation.
  * ============================================================================
  */
 
@@ -581,11 +669,13 @@ resourceAttributeArguments
 
 /*
  * ============================================================================
- * 9. RESOURCE CLAUSE
+ * UNIVERSAL RESOURCE CLAUSE
  * ============================================================================
  *
- * This is the internal composition boundary used by resource declarations,
- * groups, contracts, and profiles.
+ * This is the principal internal dispatch boundary.
+ *
+ * Specialized resource domains are represented by unique specialized public
+ * rules once their component grammars are normalized.
  *
  * ============================================================================
  */
@@ -617,29 +707,30 @@ resourceClause
     | resourceReleaseClause
     | resourceDerivationClause
     | resourceGroupClause
+    | resourceContractClause
+    | resourceProfileClause
     | resourcePropertyClause
     ;
 
 
 /*
  * ============================================================================
- * 10. QUANTITY
+ * GENERIC RESOURCE QUANTITY
  * ============================================================================
  *
- * Quantity is a canonical expression.
+ * A quantity is an expression.
  *
- * Examples:
+ * It may be:
  *
- *     quantity = input.count;
+ *     literal
+ *     symbolic
+ *     computed
+ *     generic
+ *     dependent
+ *     input-derived
+ *     runtime-derived
  *
- *     quantity = workload_size * element_size;
- *
- *     quantity = logical_qubits + ancilla_qubits;
- *
- *     quantity = problem_size;
- *
- * The grammar does not evaluate the expression.
- *
+ * The grammar never evaluates it.
  * ============================================================================
  */
 
@@ -653,43 +744,29 @@ resourceQuantityClause
 
 /*
  * ============================================================================
- * 11. RESOURCE REFERENCE
+ * RESOURCE REFERENCE
  * ============================================================================
  *
- * This references an ABSTRACT resource.
- *
- * It does not select a physical resource.
- *
+ * A resource reference identifies a logical resource expression.
  * ============================================================================
  */
 
 resourceReferenceClause
-    : USE
-      RESOURCE
-      resourceNamePath
+    : REFERENCE
+      ASSIGN
+      resourceSelector
       SEMICOLON
     ;
 
 
 /*
  * ============================================================================
- * 12. REQUIREMENTS
+ * REQUIREMENT
  * ============================================================================
  *
- * A requirement is mandatory semantic intent.
+ * Requirements state what must be satisfied.
  *
- * It must not silently degrade into a preference or hint.
- *
- * Examples:
- *
- *     requires qubits >= logical_qubits;
- *
- *     requires memory >= required_memory;
- *
- *     requires capability("tensor.compute");
- *
- *     requires nodes >= required_nodes;
- *
+ * They are not hardware-selection commands.
  * ============================================================================
  */
 
@@ -701,31 +778,23 @@ resourceRequirement
 
 
 resourceRequirementExpression
-    : resourceCapabilityCall
-    | resourceExpression
+    : resourceExpression
     ;
 
 
 resourceRequirementClause
-    : resourceRequirement
+    : REQUIRES
+      resourceRequirementExpression
+      SEMICOLON
     ;
 
 
 /*
  * ============================================================================
- * 13. CONSTRAINTS
+ * CONSTRAINT
  * ============================================================================
  *
- * A constraint restricts valid realizations.
- *
- * Examples:
- *
- *     constraint latency <= latency_budget;
- *
- *     constraint energy <= energy_budget;
- *
- *     constraint reliability >= required_reliability;
- *
+ * Constraints state conditions that must hold.
  * ============================================================================
  */
 
@@ -737,25 +806,23 @@ resourceConstraint
 
 
 resourceConstraintExpression
-    : resourceCapabilityCall
-    | resourceExpression
+    : resourceExpression
     ;
 
 
 resourceConstraintClause
-    : resourceConstraint
+    : CONSTRAINT
+      resourceConstraintExpression
+      SEMICOLON
     ;
 
 
 /*
  * ============================================================================
- * 14. PREFERENCES
+ * PREFERENCE
  * ============================================================================
  *
- * Preferences are advisory.
- *
- * They must never silently become hard requirements.
- *
+ * Preferences influence target realization without becoming requirements.
  * ============================================================================
  */
 
@@ -767,23 +834,23 @@ resourcePreference
 
 
 resourcePreferenceExpression
-    : resourceCapabilityCall
-    | resourceExpression
+    : resourceExpression
     ;
 
 
 resourcePreferenceClause
-    : resourcePreference
+    : PREFER
+      resourcePreferenceExpression
+      SEMICOLON
     ;
 
 
 /*
  * ============================================================================
- * 15. HINTS
+ * HINT
  * ============================================================================
  *
- * Hints are advisory implementation guidance.
- *
+ * Hints communicate non-binding implementation guidance.
  * ============================================================================
  */
 
@@ -795,37 +862,26 @@ resourceHint
 
 
 resourceHintExpression
-    : resourceCapabilityCall
-    | resourceExpression
+    : resourceExpression
     ;
 
 
 resourceHintClause
-    : resourceHint
+    : HINT
+      resourceHintExpression
+      SEMICOLON
     ;
 
 
 /*
  * ============================================================================
- * 16. CAPABILITY
+ * CAPABILITY
  * ============================================================================
  *
- * Capabilities are OPEN-WORLD semantic names.
+ * Capability syntax remains open-world.
  *
- * Examples:
- *
- *     capability("quantum.measurement");
- *
- *     capability("quantum.mid_circuit_measurement");
- *
- *     capability("tensor.compute");
- *
- *     capability("distributed.execution");
- *
- *     capability("hardware.reconfiguration");
- *
- * The grammar does not enumerate capabilities.
- *
+ * The identity may refer to a compiler-known capability, target capability,
+ * dialect capability, domain capability, or future capability.
  * ============================================================================
  */
 
@@ -837,9 +893,15 @@ resourceCapability
 
 
 resourceCapabilityValue
-    : resourceCapabilityCallArguments
-    | resourceNamePath
-    | resourceExpression
+    : resourceExpression
+    ;
+
+
+resourceCapabilityClause
+    : CAPABILITY
+      resourceCapabilityCallArguments?
+      resourceCapabilityValue
+      SEMICOLON
     ;
 
 
@@ -850,42 +912,19 @@ resourceCapabilityCallArguments
     ;
 
 
-resourceCapabilityCall
-    : CAPABILITY
-      resourceCapabilityCallArguments
-    ;
-
-
-resourceCapabilityClause
-    : resourceCapability
-    ;
-
-
 /*
  * ============================================================================
- * 17. TARGET INTENT
+ * TARGET INTENT
  * ============================================================================
  *
- * Target intent is abstract.
+ * Target intent identifies an abstract execution domain.
  *
- * It does not select a physical target.
- *
- * Examples:
- *
- *     target = quantum;
- *
- *     target = gpu;
- *
- *     target = accelerator;
- *
- *     target = compute::accelerator;
- *
+ * It does not select a physical device.
  * ============================================================================
  */
 
 resourceTarget
     : TARGET
-      ASSIGN
       resourceTargetExpression
       SEMICOLON
     ;
@@ -898,37 +937,21 @@ resourceTargetExpression
 
 
 resourceTargetSymbol
-    : resourceNamePath
-    | QUANTUM
-    | GPU
-    | NANO
-    | AGENT
-    | CIRCUIT
+    : identifier
+    | qualifiedName
     ;
 
 
 resourceTargetClause
-    : resourceTarget
+    : TARGET
+      resourceTargetExpression
+      SEMICOLON
     ;
 
 
 /*
  * ============================================================================
- * 18. CAPACITY
- * ============================================================================
- *
- * Capacity is represented by an expression.
- *
- * The actual capacity may be supplied by:
- *
- *     compile-time context
- *     target description
- *     runtime environment
- *     resource manager
- *     hardware capability model
- *
- * Parsing does not inspect any of those systems.
- *
+ * CAPACITY
  * ============================================================================
  */
 
@@ -942,13 +965,12 @@ resourceCapacityClause
 
 /*
  * ============================================================================
- * 19. AVAILABILITY
+ * AVAILABILITY
  * ============================================================================
  *
- * Availability can be dynamic.
+ * Availability is a semantic condition.
  *
- * This grammar only records the expression.
- *
+ * The parser does not inspect the actual machine.
  * ============================================================================
  */
 
@@ -962,11 +984,7 @@ resourceAvailabilityClause
 
 /*
  * ============================================================================
- * 20. PORTABILITY
- * ============================================================================
- *
- * Portability is semantic intent, not target discovery.
- *
+ * PORTABILITY
  * ============================================================================
  */
 
@@ -980,19 +998,10 @@ resourcePortabilityClause
 
 /*
  * ============================================================================
- * 21. SCALABILITY
+ * SCALABILITY
  * ============================================================================
  *
- * Examples:
- *
- *     scalability = input.size;
- *
- *     scalability = workload_size * parallelism;
- *
- *     scalability = problem_size;
- *
- * No finite scaling ceiling is encoded.
- *
+ * Scaling remains semantic and unbounded.
  * ============================================================================
  */
 
@@ -1006,7 +1015,7 @@ resourceScalabilityClause
 
 /*
  * ============================================================================
- * 22. PERFORMANCE
+ * PERFORMANCE
  * ============================================================================
  */
 
@@ -1020,7 +1029,7 @@ resourcePerformanceClause
 
 /*
  * ============================================================================
- * 23. LATENCY
+ * LATENCY
  * ============================================================================
  */
 
@@ -1034,7 +1043,7 @@ resourceLatencyClause
 
 /*
  * ============================================================================
- * 24. THROUGHPUT
+ * THROUGHPUT
  * ============================================================================
  */
 
@@ -1048,7 +1057,7 @@ resourceThroughputClause
 
 /*
  * ============================================================================
- * 25. BANDWIDTH
+ * BANDWIDTH
  * ============================================================================
  */
 
@@ -1062,7 +1071,7 @@ resourceBandwidthClause
 
 /*
  * ============================================================================
- * 26. ENERGY
+ * ENERGY
  * ============================================================================
  */
 
@@ -1076,7 +1085,7 @@ resourceEnergyClause
 
 /*
  * ============================================================================
- * 27. POWER
+ * POWER
  * ============================================================================
  */
 
@@ -1090,14 +1099,7 @@ resourcePowerClause
 
 /*
  * ============================================================================
- * 28. RELIABILITY
- * ============================================================================
- *
- * Reliability intent may be consumed by resilience, ZQN, QEC, hardware,
- * scheduling, or runtime analysis.
- *
- * This grammar does not implement any of those systems.
- *
+ * RELIABILITY
  * ============================================================================
  */
 
@@ -1111,7 +1113,12 @@ resourceReliabilityClause
 
 /*
  * ============================================================================
- * 29. RESILIENCE
+ * RESILIENCE
+ * ============================================================================
+ *
+ * Resilience states and outcomes remain semantic vocabulary.
+ *
+ * This grammar does not perform recovery.
  * ============================================================================
  */
 
@@ -1125,13 +1132,7 @@ resourceResilienceClause
 
 /*
  * ============================================================================
- * 30. COST
- * ============================================================================
- *
- * Cost remains abstract.
- *
- * No currency, vendor, cloud provider, or pricing model is hard-coded.
- *
+ * COST
  * ============================================================================
  */
 
@@ -1145,223 +1146,192 @@ resourceCostClause
 
 /*
  * ============================================================================
- * 31. RESERVATION
+ * RESERVATION
  * ============================================================================
  *
- * Reservation is DECLARATIVE.
- *
- * Parsing does not reserve anything.
- *
+ * Reservation syntax is declarative intent.
  * ============================================================================
  */
 
 resourceReservation
     : RESERVE
-      RESOURCE
       resourceExpression
       SEMICOLON
     ;
 
 
 resourceReservationClause
-    : resourceReservation
+    : RESERVATION
+      ASSIGN
+      resourceExpression
+      SEMICOLON
     ;
 
 
 /*
  * ============================================================================
- * 32. ACQUISITION
- * ============================================================================
- *
- * Acquisition is source-level intent.
- *
- * Actual acquisition belongs to an authorized compiler/runtime/deployment
- * subsystem.
- *
+ * ACQUISITION
  * ============================================================================
  */
 
 resourceAcquisition
     : ACQUIRE
-      RESOURCE
       resourceExpression
       SEMICOLON
     ;
 
 
 resourceAcquisitionClause
-    : resourceAcquisition
+    : ACQUISITION
+      ASSIGN
+      resourceExpression
+      SEMICOLON
     ;
 
 
 /*
  * ============================================================================
- * 33. RELEASE
- * ============================================================================
- *
- * Release is source-level intent.
- *
- * Parsing itself has no side effects.
- *
+ * RELEASE
  * ============================================================================
  */
 
 resourceRelease
     : RELEASE
-      RESOURCE
       resourceExpression
       SEMICOLON
     ;
 
 
 resourceReleaseClause
-    : resourceRelease
+    : RELEASE_KW
+      resourceExpression
+      SEMICOLON
     ;
 
 
 /*
  * ============================================================================
- * 34. RESOURCE DERIVATION
+ * DERIVATION
  * ============================================================================
  *
- * Derived values are symbolic.
- *
- * Example:
- *
- *     derive required_memory = elements * element_size;
- *
- * The grammar does not evaluate the expression.
- *
+ * Resource relationships may be derived from program expressions.
  * ============================================================================
  */
 
 resourceDerivation
     : DERIVE
-      identifier
-      ASSIGN
       resourceExpression
       SEMICOLON
     ;
 
 
 resourceDerivationClause
-    : resourceDerivation
+    : DERIVE
+      resourceExpression
+      SEMICOLON
     ;
 
 
 /*
  * ============================================================================
- * 35. RESOURCE GROUP
- * ============================================================================
- *
- * Groups are logical source-level collections.
- *
- * They do NOT imply:
- *
- *     physical co-location
- *     physical topology
- *     same machine
- *     same device
- *     same memory
- *
- * unless downstream semantic/target realization explicitly establishes that.
- *
+ * RESOURCE GROUP
  * ============================================================================
  */
 
 resourceGroup
-    : RESOURCE
-      GROUP
-      identifier
-      resourceSpecification
-      SEMICOLON?
+    : RESOURCE_GROUP
+      resourceGroupClauseBody
+      SEMICOLON
     ;
 
 
 resourceGroupClause
-    : resourceGroup
+    : RESOURCE_GROUP
+      resourceGroupClauseBody
+      SEMICOLON
+    ;
+
+
+resourceGroupClauseBody
+    : resourceExpression
     ;
 
 
 /*
  * ============================================================================
- * 36. RESOURCE CONTRACT
+ * RESOURCE CONTRACT
  * ============================================================================
  *
- * A contract groups resource intent into a named semantic unit.
- *
- * It does not define a separate resource language.
- *
+ * A contract is a declarative collection of resource semantics.
  * ============================================================================
  */
 
 resourceContract
-    : RESOURCE
-      CONTRACT
-      identifier
-      resourceSpecification
-      SEMICOLON?
+    : CONTRACT
+      resourceContractClauseBody
+      SEMICOLON
     ;
 
 
 resourceContractClause
-    : resourceContract
+    : CONTRACT
+      resourceContractClauseBody
+      SEMICOLON
+    ;
+
+
+resourceContractClauseBody
+    : resourceExpression
     ;
 
 
 /*
  * ============================================================================
- * 37. RESOURCE PROFILE
- * ============================================================================
- *
- * A profile is a named portable collection of resource intent.
- *
- * Profiles do not select physical hardware.
- *
+ * RESOURCE PROFILE
  * ============================================================================
  */
 
 resourceProfile
-    : RESOURCE
-      PROFILE
-      identifier
-      resourceSpecification
-      SEMICOLON?
+    : PROFILE
+      resourceProfileClauseBody
+      SEMICOLON
     ;
 
 
 resourceProfileClause
-    : resourceProfile
+    : PROFILE
+      resourceProfileClauseBody
+      SEMICOLON
+    ;
+
+
+resourceProfileClauseBody
+    : resourceExpression
     ;
 
 
 /*
  * ============================================================================
- * 38. OPEN-WORLD RESOURCE PROPERTY
+ * GENERIC PROPERTY
  * ============================================================================
  *
- * Properties are semantic names.
+ * Property names remain open-world.
  *
- * This avoids turning every future resource metric into a language keyword.
+ * The grammar does not enumerate:
  *
- * Examples:
+ *     cpu_count
+ *     gpu_count
+ *     qubit_count
+ *     memory_gb
+ *     register_width
+ *     tensor_rank
  *
- *     property memory.bandwidth = required_bandwidth;
- *
- *     property quantum.fidelity = required_fidelity;
- *
- *     property accelerator.occupancy = desired_occupancy;
- *
- *     property future::resource::metric = value;
- *
- * The property name is not interpreted by the parser.
- *
+ * Such properties are semantic data.
  * ============================================================================
  */
 
 resourcePropertyClause
-    : PROPERTY
-      qualifiedName
+    : qualifiedName
       ASSIGN
       resourceExpression
       SEMICOLON
@@ -1370,839 +1340,595 @@ resourcePropertyClause
 
 /*
  * ============================================================================
- * 39. CANONICAL RESOURCE EXPRESSION INTEGRATION
+ * SPECIALIZED COMPONENT INTEGRATION
  * ============================================================================
  *
- * IMPORTANT:
+ * The following resource components exist as independent files and MUST be
+ * integrated without duplicating universal ownership:
  *
- * `resourceExpression` is OWNED by:
+ *     budgets.g4
+ *     capabilities.g4
+ *     constraints.g4
+ *     energy.g4
+ *     hints.g4
+ *     latency.g4
+ *     negotiation.g4
+ *     performance.g4
+ *     placement.g4
+ *     portability.g4
+ *     preferences.g4
+ *     reliability.g4
+ *     requirements.g4
+ *     resource-expressions.g4
+ *     resource.g4
+ *     scalability.g4
  *
- *     grammar/resources/resource-expressions.g4
+ * The integration invariant is:
  *
- * This file intentionally does NOT redefine it.
+ *     Resources
+ *        |
+ *        +--> universal entry points
+ *        |
+ *        +--> specialized component entry points
  *
- * That prevents a second expression grammar from appearing here.
+ * Specialized files MUST expose unique public entry rules.
  *
- * All of the following therefore retain the canonical Zamani expression
- * semantics:
- *
- *     arithmetic
- *     comparison
- *     logical operators
- *     function calls
- *     indexing
- *     member access
- *     literals
- *     assignment semantics where applicable
- *     precedence
- *
- * ============================================================================
- */
-
-resourceExpressionList
-    : resourceExpression
-      (COMMA resourceExpression)*
-      COMMA?
-    ;
-
-
-/*
- * ============================================================================
- * 40. RESOURCE VALUE / CAPABILITY HELPERS
- * ============================================================================
- *
- * These are structural bridges only.
- *
- * They do not define a second expression language.
+ * They MUST NOT redefine a universal rule owned above.
  *
  * ============================================================================
- */
-
-resourceCapabilityCall
-    : CAPABILITY
-      LPAREN
-      resourceExpressionList?
-      RPAREN
-    ;
-
-
-/*
- * ============================================================================
- * 41. RESOURCE INTENT COMPOSITION HELPERS
+ * COMPONENT OWNERSHIP CONTRACT
  * ============================================================================
  *
- * These aliases are intentionally small and stable.
+ * budgets.g4
  *
- * They allow other grammar components to depend on named resource concepts
- * without copying the concrete resource grammar.
+ *     Owns specialized resource-budget syntax.
+ *
+ * capabilities.g4
+ *
+ *     Owns detailed capability composition/predicate syntax.
+ *
+ * constraints.g4
+ *
+ *     Owns detailed constraint forms.
+ *
+ * energy.g4
+ *
+ *     Owns detailed energy-domain syntax.
+ *
+ * hints.g4
+ *
+ *     Owns detailed hint metadata and grouping.
+ *
+ * latency.g4
+ *
+ *     Owns detailed latency syntax.
+ *
+ * negotiation.g4
+ *
+ *     Owns resource negotiation syntax.
+ *
+ * performance.g4
+ *
+ *     Owns detailed performance objectives and metrics.
+ *
+ * placement.g4
+ *
+ *     Owns abstract placement intent.
+ *
+ * portability.g4
+ *
+ *     Owns portability contracts.
+ *
+ * preferences.g4
+ *
+ *     Owns detailed preference syntax.
+ *
+ * reliability.g4
+ *
+ *     Owns detailed reliability syntax.
+ *
+ * requirements.g4
+ *
+ *     Owns detailed requirement expressions.
+ *
+ * resource-expressions.g4
+ *
+ *     Owns resource-expression composition.
+ *
+ * resource.g4
+ *
+ *     Owns singular reusable ResourceIntent syntax only.
+ *
+ * scalability.g4
+ *
+ *     Owns detailed scaling declarations and relationships.
+ *
+ * None of these components owns the complete resource subsystem.
  *
  * ============================================================================
- */
-
-resourceRequirementIntent
-    : resourceRequirement
-    ;
-
-
-resourceConstraintIntent
-    : resourceConstraint
-    ;
-
-
-resourcePreferenceIntent
-    : resourcePreference
-    ;
-
-
-resourceHintIntent
-    : resourceHint
-    ;
-
-
-resourceCapabilityIntent
-    : resourceCapability
-    ;
-
-
-resourceTargetIntent
-    : resourceTarget
-    ;
-
-
-resourceDerivationIntent
-    : resourceDerivation
-    ;
-
-
-resourceReservationIntent
-    : resourceReservation
-    ;
-
-
-resourceAcquisitionIntent
-    : resourceAcquisition
-    ;
-
-
-resourceReleaseIntent
-    : resourceRelease
-    ;
-
-
-resourceGroupIntent
-    : resourceGroup
-    ;
-
-
-resourceContractIntent
-    : resourceContract
-    ;
-
-
-resourceProfileIntent
-    : resourceProfile
-    ;
-
-
-/*
- * ============================================================================
- * 42. CROSS-DOMAIN INTEGRATION CONTRACT
+ * RESOURCE-INTENT INTEGRATION
  * ============================================================================
  *
- * CLASSICAL
- * ----------
+ * `resource.g4` is intentionally a leaf component.
  *
- * Resource intent may describe:
+ * Its grammar identity MUST be unique, e.g.:
  *
- *     scalar compute
- *     vector compute
- *     matrix compute
- *     tensor compute
+ *     ResourceIntent
+ *
+ * It MUST NOT declare:
+ *
+ *     Resources
+ *
+ * It MUST NOT define:
+ *
+ *     resources
+ *     resourceItem
+ *     resourceDeclaration
+ *
+ * The orchestrator remains the owner of those rules.
+ *
+ * ============================================================================
+ * EXPRESSION INTEGRATION
+ * ============================================================================
+ *
+ * Every resource-valued expression must ultimately flow through:
+ *
+ *     resourceExpression
+ *
+ * from:
+ *
+ *     resource-expressions.g4
+ *
+ * Resource grammars MUST NOT introduce a competing arithmetic or logical
+ * expression language.
+ *
+ * General expressions remain owned by:
+ *
+ *     grammar/expressions/
+ *
+ * ============================================================================
+ * NAME INTEGRATION
+ * ============================================================================
+ *
+ * Names are imported from:
+ *
+ *     grammar/core/names.g4
+ *
+ * This file MUST NOT redefine:
+ *
+ *     identifier
+ *     qualifiedName
+ *
+ * ============================================================================
+ * TYPE INTEGRATION
+ * ============================================================================
+ *
+ * Resource declarations may refer semantically to resource-related types.
+ *
+ * Type syntax remains owned by:
+ *
+ *     grammar/types/
+ *
+ * This grammar must not duplicate:
+ *
+ *     typeExpression
+ *     genericType
+ *     resourceType
+ *
+ * ============================================================================
+ * CLASSICAL INTEGRATION
+ * ============================================================================
+ *
+ * Classical resource requirements may express:
+ *
+ *     compute
  *     memory
  *     storage
+ *     vectorization
  *     parallelism
+ *     accelerator capability
+ *     latency
  *     throughput
  *
- * No processor architecture is hard-coded.
+ * The resource grammar does not decide whether a CPU, GPU, accelerator, or
+ * other target realizes those requirements.
  *
+ * ============================================================================
+ * QUANTUM INTEGRATION
+ * ============================================================================
  *
- * QUANTUM
- * -------
+ * Quantum resource intent may express semantic requirements such as:
  *
- * Resource intent may describe:
+ *     quantum::logical_qubit
+ *     quantum::physical_qubit
+ *     quantum::measurement
+ *     quantum::dynamic_control
+ *     quantum::error_correction
+ *     quantum::coherence
  *
- *     logical qubits
- *     quantum memory
- *     measurement capability
- *     mid-circuit measurement
- *     dynamic control
- *     error-correction capability
- *     reliability
- *     resilience
+ * No physical qubit numbering is encoded.
  *
- * It MUST NOT encode:
+ * No fixed qubit count is encoded.
  *
- *     physical qubit IDs
- *     coupling maps
- *     fixed QPU size
- *     vendor-native gate inventory
- *     calibration data
+ * No gate list is encoded.
  *
- * Quantum information eventually crosses the existing:
+ * No coupling topology is encoded.
+ *
+ * Quantum semantics ultimately cross the canonical:
  *
  *     quantum::ir
  *
  * boundary.
  *
- * No second quantum IR is introduced here.
+ * This grammar MUST NOT create:
  *
- *
- * HDL / HARDWARE
- * --------------
- *
- * Resource intent may describe:
- *
- *     compute capacity
- *     memory capacity
- *     interfaces
- *     timing
- *     throughput
- *     accelerator intent
- *     reconfiguration capability
- *
- * It must not hard-code:
- *
- *     wire [31:0]
- *     fixed register width
- *     fixed FPGA size
- *     fixed LUT count
- *     fixed BRAM count
- *     fixed physical topology
- *
- *
- * HYBRID
- * ------
- *
- * The same resource model may span:
- *
- *     classical host
- *     quantum accelerator
- *     hardware accelerator
- *     distributed services
- *
- * without creating a second resource language.
- *
- *
- * DISTRIBUTED
- * -----------
- *
- * Resource expressions may represent:
- *
- *     node requirements
- *     communication requirements
- *     bandwidth
- *     latency
- *     replication
- *     storage
- *     availability
- *
- * No node-count ceiling is encoded.
- *
- *
- * AI / DATA
- * --------
- *
- * Resource intent may represent:
- *
- *     tensor computation
- *     accelerator capability
- *     memory requirements
- *     bandwidth
- *     training resources
- *     inference resources
- *     data capacity
- *
- * Framework-specific names remain identifiers/library semantics.
+ *     QuantumResourceIR
+ *     ResourceIR
+ *     QuantumCapabilityIR
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 43. AST CONTRACT
- * ============================================================================
- *
- * This grammar must lower into the repository's domain-neutral frontend AST.
- *
- * Every resource node must preserve, as applicable:
- *
- *     source span
- *     resource identity
- *     resource kind
- *     intent category
- *     expression
- *     attributes
- *     nested clauses
- *     property names
- *     ordering where semantically observable
- *
- * The parser MUST NOT create:
- *
- *     PhysicalResource
- *     PhysicalQubit
- *     CpuDevice
- *     GpuDevice
- *     FpgaDevice
- *     QpuDevice
- *     CloudInstance
- *
- * merely because a resource kind happens to name such a concept.
- *
- * Physical realization belongs downstream.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 44. SEMANTIC CONTRACT
- * ============================================================================
- *
- * Semantic analysis owns:
- *
- *     name resolution
- *     resource-kind resolution
- *     duplicate detection
- *     type checking
- *     unit/dimensional checking
- *     capability resolution
- *     requirement satisfiability
- *     constraint validation
- *     preference interpretation
- *     hint interpretation
- *     target compatibility
- *     capacity analysis
- *     availability analysis
- *     scalability analysis
- *     portability analysis
- *     resource negotiation
- *     lifecycle validation
- *     dependency analysis
- *
- * The grammar only preserves the information required for those phases.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 45. REQUIREMENT / CONSTRAINT / PREFERENCE / HINT SEMANTICS
- * ============================================================================
- *
- * REQUIREMENT
- * -----------
- *
- * Must be satisfied for a valid realization.
- *
- *
- * CONSTRAINT
- * ----------
- *
- * Restricts the set of valid realizations.
- *
- *
- * CAPABILITY
- * ----------
- *
- * Describes an ability/property that may be required, available, or queried
- * semantically.
- *
- *
- * PREFERENCE
- * ----------
- *
- * Advisory optimization information.
- *
- * It MUST NOT become a hard requirement merely because an optimizer chooses
- * to consider it.
- *
- *
- * HINT
- * ----
- *
- * Advisory implementation guidance.
- *
- * It MAY be ignored while preserving program correctness.
- *
- *
- * TARGET
- * ------
- *
- * Abstract target intent.
- *
- * It is not necessarily a physical device selection.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 46. ALLOCATION / RESERVATION / ACQUISITION / RELEASE
- * ============================================================================
- *
- * The existence of these syntactic constructs does NOT grant the parser
- * permission to perform the corresponding operation.
- *
- * Parsing must never:
- *
- *     allocate resources
- *     reserve resources
- *     acquire resources
- *     release resources
- *     discover hardware
- *     contact a cloud provider
- *     contact a QPU
- *     inspect runtime state
- *
- * These constructs become semantic instructions/intent for authorized
- * downstream systems.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 47. RESOURCE LIFECYCLE
- * ============================================================================
- *
- * The semantic lifecycle is conceptually:
- *
- *     declaration
- *         |
- *         v
- *     requirement / capability analysis
- *         |
- *         v
- *     negotiation
- *         |
- *         v
- *     realization
- *         |
- *         v
- *     acquisition / reservation
- *         |
- *         v
- *     execution
- *         |
- *         v
- *     release
- *
- * The grammar only represents source intent.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 48. COMPILER / OPTIMIZER INTEGRATION
- * ============================================================================
- *
- * Compiler phases may consume resource intent for:
- *
- *     target-independent optimization
- *     specialization
- *     vectorization
- *     parallelization
- *     accelerator selection
- *     memory planning
- *     distributed partitioning
- *     quantum decomposition
- *     scheduling
- *     routing
- *
- * None of those algorithms belongs in this grammar.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 49. QUANTUM / QEC / ZQN INTEGRATION
+ * HDL / HARDWARE INTEGRATION
  * ============================================================================
  *
  * Resource syntax may express:
  *
+ *     accelerator
+ *     programmable logic
+ *     memory
+ *     interconnect
+ *     timing
+ *     power
  *     reliability
- *     resilience
- *     error-correction capability
- *     fault-tolerance requirements
- *     noise-related requirements
  *
- * QEC remains responsible for:
+ * HDL syntax remains responsible for:
  *
- *     code construction
- *     syndrome processing
- *     decoding
- *     correction
+ *     modules
+ *     ports
+ *     signals
+ *     nets
+ *     registers
+ *     pipelines
+ *     timing
+ *     state machines
  *
- * ZQN remains responsible for:
- *
- *     noise
- *     fault
- *     uncertainty
- *     reliability modeling
- *     resilience semantics
- *
- * Resource grammar does not duplicate either subsystem.
+ * Hardware realization remains downstream.
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 50. HDL / HARDWARE INTEGRATION
+ * DISTRIBUTED INTEGRATION
  * ============================================================================
  *
- * Hardware grammars may specialize resource semantics.
+ * Resource syntax may express:
  *
- * Universal resource intent remains owned here.
+ *     nodes
+ *     communication
+ *     bandwidth
+ *     locality
+ *     replication
+ *     storage
+ *     availability
  *
- * Hardware-specific information such as:
- *
- *     actual width
- *     actual capacity
- *     actual topology
- *     actual timing
- *     actual device identity
- *
- * belongs to target realization.
+ * No fixed node count is encoded.
  *
  * ============================================================================
- */
-
-
-/*
+ * AI / DATA INTEGRATION
  * ============================================================================
- * 51. DETERMINISM CONTRACT
+ *
+ * Resource expressions may depend on:
+ *
+ *     workload size
+ *     tensor shape
+ *     model size
+ *     dataset size
+ *     batch size
+ *     accelerator capability
+ *
+ * These are semantic values rather than compiler hardware limits.
+ *
+ * ============================================================================
+ * RESILIENCE INTEGRATION
+ * ============================================================================
+ *
+ * Resource semantics may participate in resilience analysis.
+ *
+ * Supported semantic states include:
+ *
+ *     Unknown
+ *     Healthy
+ *     Degraded
+ *     Unstable
+ *     Unavailable
+ *     Recovering
+ *     Quarantined
+ *     Retired
+ *
+ * Supported semantic outcomes include:
+ *
+ *     ACCEPT
+ *     DEGRADED_ACCEPT
+ *     RETRY
+ *     RECOVER
+ *     ESCALATE
+ *     REJECT
+ *
+ * The grammar only carries declarative information.
+ *
+ * Recovery remains a downstream responsibility.
+ *
+ * ============================================================================
+ * TARGET INDEPENDENCE
+ * ============================================================================
+ *
+ * A resource declaration is target-independent unless an explicit
+ * target-specific language construct is used.
+ *
+ * The compiler may later resolve:
+ *
+ *     resource intent
+ *         ->
+ *     available capabilities
+ *         ->
+ *     target candidates
+ *         ->
+ *     resource realization
+ *         ->
+ *     placement
+ *         ->
+ *     scheduling
+ *         ->
+ *     execution
+ *
+ * This separation is fundamental to POCO-REAF.
+ *
+ * ============================================================================
+ * AST CONTRACT
+ * ============================================================================
+ *
+ * Resource syntax maps to the domain-neutral frontend AST.
+ *
+ * The AST must preserve, where applicable:
+ *
+ *     resource kind
+ *     resource name
+ *     resource expression
+ *     requirement
+ *     constraint
+ *     capability
+ *     preference
+ *     hint
+ *     target intent
+ *     property
+ *     source span
+ *     attributes
+ *
+ * The AST MUST NOT contain:
+ *
+ *     physical device handles
+ *     physical addresses
+ *     scheduler state
+ *     routing state
+ *     calibration state
+ *     QEC state
+ *     ZQN state
+ *     HAL handles
+ *
+ * ============================================================================
+ * SEMANTIC CONTRACT
+ * ============================================================================
+ *
+ * Semantic analysis is responsible for:
+ *
+ *     name resolution
+ *     kind resolution
+ *     expression typing
+ *     capability resolution
+ *     requirement checking
+ *     constraint checking
+ *     preference preservation
+ *     hint preservation
+ *     resource relationship checking
+ *     target compatibility
+ *     satisfiability
+ *     availability analysis
+ *
+ * Syntax alone must not determine target availability.
+ *
+ * ============================================================================
+ * IR CONTRACT
+ * ============================================================================
+ *
+ * This grammar creates no IR.
+ *
+ * Resource syntax is lowered through the canonical semantic model.
+ *
+ * Resource information may contribute to:
+ *
+ *     classical IR
+ *     quantum::ir
+ *     HDL/hardware semantic representation
+ *     distributed execution representation
+ *
+ * according to the semantic domain.
+ *
+ * There is no:
+ *
+ *     ResourceIR
+ *
+ * created merely because this grammar exists.
+ *
+ * ============================================================================
+ * COMPILER CONTRACT
+ * ============================================================================
+ *
+ * The compiler consumes semantic resource intent to determine whether a
+ * candidate target can satisfy the program.
+ *
+ * It may perform:
+ *
+ *     capability discovery
+ *     resource planning
+ *     target selection
+ *     placement
+ *     lowering
+ *     scheduling
+ *     routing
+ *     resilience planning
+ *
+ * Those operations are downstream and must not alter source-level meaning.
+ *
+ * ============================================================================
+ * RUNTIME CONTRACT
+ * ============================================================================
+ *
+ * Runtime systems may inspect resource availability and execute the compiled
+ * realization.
+ *
+ * Runtime state must never be used to reinterpret the source grammar.
+ *
+ * ============================================================================
+ * DETERMINISM CONTRACT
  * ============================================================================
  *
  * Parsing must depend only on:
  *
  *     source text
- *     token stream
+ *     lexer vocabulary
+ *     grammar composition
  *     grammar version
- *     explicit parser configuration
+ *     explicitly selected dialect
  *
- * Parsing MUST NOT depend on:
+ * Parsing must NOT depend on:
  *
- *     hardware availability
- *     runtime state
- *     filesystem contents
+ *     CPU count
+ *     GPU count
+ *     QPU availability
+ *     filesystem state
  *     network state
  *     current time
  *     randomness
- *     cloud-provider state
- *     QPU state
- *     calibration state
- *
- * Identical source and lexer configuration must produce equivalent parse
- * structures.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 52. SECURITY CONTRACT
- * ============================================================================
- *
- * Resource syntax is untrusted input.
- *
- * Parsing must not imply:
- *
- *     filesystem access
- *     network access
- *     process execution
- *     device access
- *     shell execution
- *     backend invocation
- *     cloud API calls
+ *     runtime resource state
  *     hardware discovery
  *
- * Semantic evaluation must occur only in explicitly authorized compiler or
- * runtime services.
- *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 53. DIAGNOSTIC CONTRACT
+ * DIAGNOSTIC CONTRACT
  * ============================================================================
  *
- * SYNTAX errors belong to the parser.
+ * Syntax diagnostics belong to the parser.
  *
- * Examples:
+ * Semantic diagnostics include:
  *
- *     resource;
- *     requires;
- *     constraint;
- *     target =;
- *     resource memory: ;
- *     resource group;
- *
- * SEMANTIC errors belong downstream.
- *
- * Examples:
- *
- *     unknown resource
- *     unsupported capability
+ *     unknown resource kind
+ *     invalid resource property
+ *     invalid expression type
  *     unsatisfied requirement
- *     violated constraint
- *     incompatible target
- *     impossible realization
- *     invalid dimensional relationship
+ *     unsupported capability
+ *     incompatible constraint
+ *     unavailable target
  *
- * Parser recovery MUST NOT silently transform:
+ * Runtime diagnostics include:
  *
- *     requirement -> preference
- *     constraint -> hint
- *     capability -> target
+ *     resource exhaustion
+ *     runtime unavailability
+ *     deployment failure
+ *     recovery failure
  *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 54. DIALECT CONTRACT
- * ============================================================================
- *
- * Dialects may extend resource semantics through the repository's explicit
- * dialect mechanism.
- *
- * A dialect must not silently redefine the meaning of universal constructs:
- *
- *     resource
- *     requires
- *     constraint
- *     prefer
- *     hint
- *     capability
- *     target
- *
- * New semantic resource kinds and properties should normally be represented
- * as open-world names rather than new parser keywords.
+ * These categories must not be conflated.
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 55. VERSIONING / COMPATIBILITY
+ * SOURCE-SPAN CONTRACT
  * ============================================================================
  *
- * Adding a new RESOURCE KIND:
+ * Source spans must remain recoverable for:
  *
- *     normally requires no grammar change.
+ *     resource declarations
+ *     resource names
+ *     kinds
+ *     requirements
+ *     constraints
+ *     capabilities
+ *     preferences
+ *     hints
+ *     target expressions
+ *     properties
+ *     values
  *
- * Adding a new CAPABILITY NAME:
+ * This supports:
  *
- *     normally requires no grammar change.
- *
- * Adding a new PROPERTY NAME:
- *
- *     normally requires no grammar change.
- *
- * Adding a new hardware vendor:
- *
- *     must not require a universal grammar change.
- *
- * Adding a new accelerator:
- *
- *     must not require a universal grammar change.
- *
- * Adding a new QPU:
- *
- *     must not require a universal grammar change.
- *
- * Adding a new computational substrate:
- *
- *     should normally use an existing open-world resource structure.
- *
- * Grammar changes are reserved for genuinely new syntax.
+ *     diagnostics
+ *     IDE tooling
+ *     formatting
+ *     refactoring
+ *     provenance
+ *     compatibility analysis
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 56. INTEGRATION WITH OTHER EXISTING FILES
+ * SECURITY CONTRACT
  * ============================================================================
  *
- * grammar/Zamani.g4
- * -----------------
+ * Parsing resource syntax must not:
  *
- * Remains the canonical composition root.
+ *     discover hardware
+ *     open devices
+ *     access the network
+ *     allocate memory on behalf of a target
+ *     execute external commands
+ *     evaluate untrusted resource expressions
  *
- * It should import/compose Resources rather than duplicating resource rules.
- *
- *
- * grammar/resources/resource-expressions.g4
- * -----------------------------------------
- *
- * Owns resourceExpression.
- *
- * This file consumes it.
- *
- *
- * grammar/core/names.g4
- * ---------------------
- *
- * Owns identifier and qualifiedName.
- *
- * This file consumes them.
- *
- *
- * grammar/statements/resource.g4
- * ------------------------------
- *
- * Must remain a thin adapter:
- *
- *     resourceStatement
- *         : resourceItem
- *         ;
- *
- * It must not reproduce this file's alternatives.
- *
- *
- * grammar/declarations/resources.g4
- * ---------------------------------
- *
- * Must converge on this resource model rather than define another universal
- * resource declaration language.
- *
- *
- * grammar/hardware/resources.g4
- * -----------------------------
- *
- * May specialize hardware resource realization but must not replace this
- * universal source-level model.
- *
- *
- * grammar/quantum/quantum-resources.g4
- * ------------------------------------
- *
- * May specialize quantum resource semantics while preserving this universal
- * resource boundary.
- *
- *
- * grammar/hybrid/
- * ---------------
- *
- * May consume this model for classical/quantum/hardware combinations.
- *
- *
- * grammar/distributed/
- * --------------------
- *
- * May attach node/network/storage requirements without creating another
- * resource language.
- *
- *
- * grammar/compile/
- * ----------------
- *
- * Consumes resource intent during target-independent compilation and target
- * realization.
- *
- *
- * grammar/execution/
- * -----------------
- *
- * Consumes semantic resource information during scheduling, deployment,
- * runtime adaptation, and lifecycle management.
+ * Evaluation occurs in controlled semantic/compiler/runtime phases.
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 57. IR CONTRACT
+ * PERFORMANCE CONTRACT
  * ============================================================================
  *
- * This grammar defines NO IR.
+ * The grammar must remain compositional and deterministic.
  *
- * Resource syntax lowers conceptually as:
+ * Resource lists use parser repetition rather than generated fixed-size
+ * alternatives.
  *
- *     source
- *       |
- *       v
- *     parser
- *       |
- *       v
- *     frontend AST
- *       |
- *       v
- *     semantic resource model
- *       |
- *       +------------------+------------------+
- *       |                  |                  |
- *       v                  v                  v
- *   classical          quantum            HDL/hardware
- *      IR             quantum::ir              IR
- *       |                  |                  |
- *       +------------------+------------------+
- *                          |
- *                          v
- *                  optimization/lowering
- *                          |
- *                    routing/scheduling
- *                          |
- *                      resilience
- *                          |
- *                         ZQN
- *                          |
- *                         HAL
- *                          |
- *                   target realization
+ * Resource expressions delegate to the canonical expression grammar.
  *
- * No second quantum IR is introduced.
+ * Resource kinds use recursive qualified-name composition rather than a fixed
+ * vocabulary.
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 58. TEST CONTRACT
+ * VALIDATION CONTRACT
  * ============================================================================
  *
- * POSITIVE
- * --------
+ * grammar/validation/ must verify:
  *
- * The following forms are intended to be valid:
+ *     - grammar identity is Resources;
+ *     - tokenVocab is ZamaniLexer;
+ *     - ResourceExpressions is imported;
+ *     - Names is imported;
+ *     - no universal resource rule is duplicated by a child grammar;
+ *     - no second Resources grammar exists;
+ *     - no Resource rule is introduced here;
+ *     - no fixed hardware capacity is encoded;
+ *     - no physical device enumeration is encoded;
+ *     - no physical qubit numbering is encoded;
+ *     - no fixed topology is encoded;
+ *     - no fixed tensor rank is encoded;
+ *     - no fixed register width is encoded;
+ *     - no semantic predicates exist;
+ *     - no parser actions exist;
+ *     - parser entry points are composable;
+ *     - resource expressions use the canonical resource expression boundary;
+ *     - names use the canonical name boundary;
+ *     - source spans remain recoverable;
+ *     - parser behavior is deterministic.
+ *
+ * ============================================================================
+ * TEST CONTRACT
+ * ============================================================================
+ *
+ * Required positive resource tests include:
  *
  *     resource compute;
  *
  *     resource memory: memory;
  *
- *     resource accelerator: accelerator {
- *         quantity = workload_size;
- *     };
+ *     resource accelerator: accelerator;
+ *
+ *     resource qpu: quantum::qpu;
  *
  *     requires qubits >= logical_qubits;
  *
@@ -2212,239 +1938,191 @@ resourceProfileIntent
  *
  *     requires capability("tensor.compute");
  *
- *     constraint latency <= latency_budget;
+ *     prefer latency <= latency_budget;
  *
- *     constraint energy <= energy_budget;
+ *     hint capability("gpu.compute");
  *
- *     prefer latency <= preferred_latency;
+ *     target quantum;
  *
- *     hint locality;
+ *     target classical;
  *
- *     target = quantum;
+ *     target future::architecture;
  *
- *     target = gpu;
+ * Required scalable forms include:
  *
- *     target = accelerator;
+ *     resource future::domain::resource;
  *
- *     derive required_memory = elements * element_size;
+ *     resource quantum::logical_qubit;
  *
- *     resource group compute {
- *         quantity = workload_size;
- *     }
+ *     resource tensor::compute;
  *
- *     resource contract portable_compute {
- *         requires capability("tensor.compute");
- *         scalability = workload_size;
- *     }
+ *     resource hardware::accelerator;
  *
- *     resource profile quantum_execution {
- *         requires qubits >= logical_qubits;
- *         requires capability("quantum.measurement");
- *     }
+ *     resource distributed::communication;
  *
- *     resource accelerator: accelerator {
- *         property tensor::throughput = required_throughput;
- *         property memory::capacity = required_memory;
- *     };
+ * Required boundary tests include:
  *
- * NEGATIVE
- * --------
+ *     one resource;
+ *     many resources;
+ *     large property sets;
+ *     deeply qualified names;
+ *     symbolic quantities;
+ *     computed quantities;
+ *     nested resource specifications.
  *
- * The following should be rejected:
+ * Required negative tests include:
  *
- *     resource;
+ *     missing resource name;
+ *     missing kind;
+ *     malformed qualified name;
+ *     missing expression;
+ *     missing semicolon;
+ *     malformed property assignment;
+ *     malformed requirement;
+ *     malformed constraint;
+ *     malformed target.
  *
- *     requires;
- *
- *     constraint;
- *
- *     prefer;
- *
- *     hint;
- *
- *     target =;
- *
- *     resource memory: ;
- *
- *     derive = value;
- *
- *     resource group;
- *
- *     resource contract;
- *
- *     resource profile;
- *
- * BOUNDARY
- * --------
- *
- * Test:
- *
- *     one resource
- *     many resources
- *     nested groups
- *     nested contracts
- *     nested profiles
- *     large property sets
- *     large requirement sets
- *     large capability sets
- *     symbolic quantities
- *     derived quantities
- *     quantum resources
- *     classical resources
- *     accelerator resources
- *     distributed resources
- *     HDL/hardware resources
- *
- * No test may establish an artificial universal maximum.
- *
- * SCALABILITY
- * ----------
- *
- * Examples should include symbolic expressions such as:
- *
- *     required_qubits
- *     workload_size
- *     problem_size * element_size
- *     nodes_required
- *     available_memory
- *     parallelism
- *
- * and should verify that the grammar imposes no fixed machine-size ceiling.
- *
- * DETERMINISM
- * -----------
- *
- * Identical source and parser configuration must produce equivalent parse
- * structures regardless of:
- *
- *     hardware
- *     runtime state
- *     cloud availability
- *     QPU availability
- *     network state
+ * Required portability tests must verify that adding a new semantic resource
+ * kind does not require changing this grammar.
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 59. HARD-CODING AUDIT
+ * HARD-CODING AUDIT
  * ============================================================================
  *
- * This grammar intentionally contains:
+ * This file contains no universal hardware-size constants.
  *
- *     NO MAX_QUBITS
- *     NO MAX_CPUS
- *     NO MAX_GPUS
- *     NO MAX_FPGAS
- *     NO MAX_NODES
- *     NO MAX_MEMORY
- *     NO MAX_THREADS
- *     NO MAX_TENSOR_RANK
- *     NO MAX_REGISTER_WIDTH
- *     NO MAX_NETWORK_SIZE
- *     NO MAX_DEVICE_COUNT
+ * Forbidden concepts include:
  *
- * It also contains no:
+ *     MAX_QUBITS
+ *     MAX_CPUS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_NODES
+ *     MAX_MEMORY
+ *     MAX_THREADS
+ *     MAX_TENSOR_RANK
+ *     MAX_REGISTER_WIDTH
+ *     MAX_NETWORK_SIZE
+ *     MAX_DEVICE_COUNT
  *
- *     physical device ID
- *     physical qubit ID
- *     physical address
- *     fixed topology
- *     fixed register width
- *     fixed memory size
- *     fixed node count
- *     fixed accelerator count
- *
- * The only finite alternatives in this file concern EXISTING LEXICAL
- * KEYWORDS that must be accepted where those keywords can occur as symbolic
- * resource names. They do not constitute a finite resource-kind vocabulary.
+ * No resource grammar rule may be introduced later that encodes an equivalent
+ * fixed limit.
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 60. RUST 1.97 / 1.97.1 CONTRACT
+ * COMPATIBILITY CONTRACT
  * ============================================================================
  *
- * This grammar itself contains no Rust.
+ * Existing stable resource syntax remains valid unless an explicit language
+ * compatibility process changes it.
  *
- * Generated parser integration must remain compatible with:
+ * New resource kinds should normally be introduced as semantic names rather
+ * than new lexer keywords.
  *
- *     Rust 1.97
- *     Rust 1.97.1
- *     Rust 2021
+ * Therefore:
  *
- * and must use safe Rust only.
+ *     future::resource
  *
- * No `unsafe` implementation is required by this grammar.
+ * can be represented without modifying the universal resource grammar.
+ *
+ * Introducing a new reserved keyword requires:
+ *
+ *     lexical specification update
+ *     compatibility review
+ *     lexer update
+ *     parser conformance
+ *     documentation update
+ *     tests
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 61. COMPLETION CRITERIA
+ * NO-REWORK COMPLETION CONTRACT
  * ============================================================================
  *
- * This file is structurally COMPLETE when:
+ * This file is complete as the resource ORCHESTRATOR when all of the following
+ * are true:
  *
- *     [x] Grammar identity is Resources.
- *     [x] This file is the canonical universal resource owner.
- *     [x] ResourceExpressions is imported.
- *     [x] Names is imported.
- *     [x] No resourceExpression duplicate is defined.
- *     [x] No identifier duplicate is defined.
- *     [x] No qualifiedName duplicate is defined.
- *     [x] Requirements are distinct from preferences.
- *     [x] Constraints are distinct from requirements.
- *     [x] Hints are distinct from preferences.
- *     [x] Capabilities are open-world.
- *     [x] Targets are abstract.
- *     [x] Quantities are expressions.
- *     [x] Properties are open-world.
- *     [x] Resource groups are recursively compositional.
- *     [x] Resource contracts are recursively compositional.
- *     [x] Resource profiles are recursively compositional.
- *     [x] No machine-size limit is encoded.
- *     [x] No physical device is selected.
- *     [x] No hardware discovery occurs.
- *     [x] No allocation occurs during parsing.
- *     [x] No scheduling occurs during parsing.
- *     [x] No routing occurs during parsing.
- *     [x] No QEC occurs during parsing.
- *     [x] No ZQN implementation occurs during parsing.
- *     [x] No second quantum IR is created.
- *     [x] No embedded Rust exists.
- *     [x] No unsafe Rust requirement exists.
- *     [x] Cross-domain integration is explicit.
- *     [x] AST integration is explicit.
- *     [x] Semantic integration is explicit.
- *     [x] IR integration is explicit.
- *     [x] Compiler/runtime boundaries are explicit.
+ * [ ] Resources is the only universal resource parser grammar.
  *
- * Repository-level completion additionally requires:
+ * [ ] The file is the only owner of `resources`.
  *
- *     [ ] Zamani.g4 imports/consumes Resources.
- *     [ ] statements/resource.g4 consumes resourceItem.
- *     [ ] declarations/resources.g4 converges on this resource model.
- *     [ ] ANTLR generation succeeds.
- *     [ ] generated parser compiles on Rust 1.97.1.
- *     [ ] resource positive tests pass.
- *     [ ] resource negative tests pass.
- *     [ ] scalability tests pass.
- *     [ ] determinism tests pass.
- *     [ ] cross-domain tests pass.
- *     [ ] AST coverage is complete.
- *     [ ] semantic coverage is complete.
- *     [ ] canonical IR/resource metadata coverage is complete.
+ * [ ] The file is the only owner of `resourceItem`.
  *
- * Those repository-wide checks are intentionally NOT hidden inside this
- * grammar file.
+ * [ ] Universal resource categories have one owner.
+ *
+ * [ ] ResourceExpressions is the expression boundary.
+ *
+ * [ ] Names is the name boundary.
+ *
+ * [ ] Specialized resource grammars expose unique public entry rules.
+ *
+ * [ ] No imported grammar redefines a universal rule owned here.
+ *
+ * [ ] `resource.g4` has a unique grammar identity such as ResourceIntent.
+ *
+ * [ ] No child resource grammar imports Resources.
+ *
+ * [ ] No resource grammar introduces a second resource IR.
+ *
+ * [ ] No resource grammar contains physical hardware allocation semantics.
+ *
+ * [ ] No resource grammar contains fixed machine-size limits.
+ *
+ * [ ] Quantum resource intent remains compatible with canonical quantum::ir.
+ *
+ * [ ] Classical, quantum, HDL, distributed, AI, data, networking and future
+ *     domains can express resource requirements through semantic names.
+ *
+ * [ ] Source spans are preserved by the frontend AST.
+ *
+ * [ ] Semantic validation is downstream of parsing.
+ *
+ * [ ] Target availability is downstream of semantic analysis.
+ *
+ * [ ] Routing, scheduling, resilience, QEC, ZQN and HAL remain downstream.
+ *
+ * [ ] Positive tests exist.
+ *
+ * [ ] Negative tests exist.
+ *
+ * [ ] Boundary tests exist.
+ *
+ * [ ] Scalability tests exist.
+ *
+ * [ ] Determinism tests exist.
+ *
+ * [ ] Compatibility tests exist.
+ *
+ * [ ] Hard-coding audit passes.
+ *
+ * [ ] ANTLR generation succeeds.
+ *
+ * [ ] Rust generated-parser integration succeeds on Rust 1.97 / 1.97.1.
+ *
+ * [ ] Safe Rust only is used downstream.
+ *
+ * ============================================================================
+ * FINAL INVARIANT
+ * ============================================================================
+ *
+ * This file answers:
+ *
+ *     "What resource-language construct is this, and which specialized
+ *      resource component owns its internal structure?"
+ *
+ * It does NOT answer:
+ *
+ *     "Which physical resource should execute it?"
+ *
+ *     "How should the resource be allocated?"
+ *
+ *     "How should the computation be routed?"
+ *
+ *     "How should it be scheduled?"
+ *
+ *     "How should QEC be performed?"
+ *
+ *     "Which QPU, CPU, GPU, FPGA or node should be selected?"
+ *
+ * Those decisions remain downstream.
  *
  * ============================================================================
  */
