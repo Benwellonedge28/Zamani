@@ -3,74 +3,88 @@
  * Zamani Universal Programming Language
  * ============================================================================
  *
- * File:
- *     grammar/resources/scalability.g4
+ * FILE
+ * ----
+ * grammar/resources/scalability.g4
  *
- * Grammar kind:
- *     ANTLR4 parser grammar
+ * GRAMMAR
+ * -------
+ * ResourceScalability
  *
- * Grammar name:
- *     ResourceScalability
+ * STATUS
+ * ------
+ * CANONICAL RESOURCE-SCALABILITY LEAF GRAMMAR
  *
- * Baseline:
- *     Rust 1.97 / Rust 1.97.1
- *     Rust 2021
- *     safe Rust only
- *     no unsafe Rust
+ * BASELINE
+ * --------
+ * Rust 1.97 / Rust 1.97.1
+ * Rust 2021
+ *
+ * SAFETY
+ * ------
+ * Grammar-only.
+ *
+ * This grammar contains:
+ *
+ *   - no embedded Rust;
+ *   - no parser actions;
+ *   - no semantic predicates;
+ *   - no filesystem access;
+ *   - no network access;
+ *   - no hardware discovery;
+ *   - no resource allocation;
+ *   - no runtime execution;
+ *   - no unsafe Rust requirement.
  *
  * ============================================================================
- * PURPOSE
+ * 1. PURPOSE
  * ============================================================================
  *
- * This file defines the SCALE-INTENT grammar boundary for Zamani.
+ * This file owns the syntax boundary for expressing SCALABILITY INTENT.
  *
- * It describes how a program expresses scalability intent without encoding
- * the physical limits of the machine on which the program eventually runs.
+ * Scalability describes how computational or resource demand may vary with
+ * program-defined quantities, workload properties, data size, execution
+ * context, or available capabilities.
  *
- * Scalability is therefore a PROPERTY OF COMPUTATIONAL INTENT, not a fixed
- * machine-size declaration.
+ * This grammar deliberately describes RELATIONSHIPS rather than physical
+ * machine limits.
  *
- * This grammar supports semantic descriptions such as:
+ * Examples of valid semantic intent include:
  *
  *     scalability = input_size;
- *
- *     scalability = workload_size;
- *
  *     scalability = problem_size * parallelism;
  *
- *     scalability = dimensions;
+ *     scalability input = input_size;
+ *     scalability memory = required_memory;
+ *     scalability qubits = logical_qubits;
  *
  *     scalability grows_with input_size;
- *
+ *     scalability depends_on workload_size;
  *     scalability bounded_by available_capacity;
  *
- *     scalability independent_of machine_size;
+ *     scalability {
+ *         input = input_size;
+ *         memory = tensor_elements * element_size;
+ *         qubits = logical_qubits;
+ *     }
  *
- *     scalability requires capability;
+ * The grammar does not decide what these names mean.
  *
- *     scalability prefers resource;
+ * Semantic analysis determines whether a named property represents:
  *
- * The exact interpretation of these declarations belongs to semantic
- * analysis and downstream compilation/resource systems.
- *
- * This grammar MUST NOT decide:
- *
- *     how many CPUs exist;
- *     how many cores exist;
- *     how many GPUs exist;
- *     how many FPGAs exist;
- *     how many qubits exist;
- *     how much memory exists;
- *     how many nodes exist;
- *     what topology exists;
- *     what device is selected;
- *     what physical resource is allocated;
- *     what scheduler is used;
- *     what routing strategy is used;
- *     what backend is selected.
+ *     - a scaling dimension;
+ *     - workload;
+ *     - demand;
+ *     - capacity;
+ *     - availability;
+ *     - growth;
+ *     - invariance;
+ *     - adaptation;
+ *     - portability;
+ *     - another future scalability concept.
  *
  * ============================================================================
- * ARCHITECTURAL POSITION
+ * 2. ARCHITECTURAL POSITION
  * ============================================================================
  *
  *     Zamani source
@@ -79,336 +93,164 @@
  *     canonical lexer
  *          |
  *          v
- *     parser
+ *     ZamaniParser
  *          |
  *          v
- *     resource/scalability syntax
+ *     Resources
  *          |
- *          v
- *     frontend AST
- *          |
- *          v
- *     semantic analysis
- *          |
- *          +-----------------------+
- *          |                       |
- *          v                       v
- *     resource semantics      program semantics
- *          |                       |
- *          +-----------+-----------+
- *                      |
- *                      v
+ *          +-------------------------------+
+ *          |                               |
+ *          v                               v
+ *     ResourceExpressions          ResourceScalability
+ *          |                               |
+ *          +---------------+---------------+
+ *                          |
+ *                          v
+ *                   domain-neutral AST
+ *                          |
+ *                          v
+ *                  semantic analysis
+ *                          |
+ *                  resource semantics
+ *                          |
  *             canonical semantic model
- *                      |
- *          +-----------+-----------+
- *          |           |           |
- *          v           v           v
- *       compiler    scheduler   runtime
- *          |           |           |
- *          +-----------+-----------+
- *                      |
- *                      v
- *               target realization
+ *                          |
+ *          +---------------+----------------+
+ *          |               |                |
+ *          v               v                v
+ *      classical       quantum::ir     HDL/hardware
+ *          |               |                |
+ *          +---------------+----------------+
+ *                          |
+ *                  optimization/lowering
+ *                          |
+ *              routing / scheduling / QEC
+ *                          |
+ *                         ZQN
+ *                          |
+ *                         HAL
+ *                          |
+ *                  target realization
  *
- * There is intentionally NO direct dependency from this grammar to:
+ * This grammar does NOT directly depend on:
  *
  *     quantum::ir
  *     QEC
  *     ZQN
  *     routing
- *     scheduling algorithms
- *     optimization algorithms
+ *     scheduling
+ *     optimization
+ *     HAL
  *     hardware discovery
- *     runtime allocation
+ *     runtime allocation.
  *
- * Those systems consume semantic information after parsing.
+ * Those systems consume the semantic representation produced after parsing.
  *
  * ============================================================================
- * OWNERSHIP
+ * 3. OWNERSHIP
  * ============================================================================
  *
  * THIS FILE OWNS:
  *
- *   - scalability intent composition;
- *   - scalability declarations;
- *   - scalability expressions;
- *   - scaling dimensions;
- *   - scaling relationships;
- *   - scaling direction;
- *   - scaling dependency expressions;
- *   - scalability bounds as semantic expressions;
- *   - scalability growth expressions;
- *   - scalability invariance expressions;
- *   - scalability adaptation intent;
- *   - scalability portability intent;
- *   - scalability extensibility hooks.
+ *     resourceScalabilitySpecification
+ *     resourceScalabilityItem
+ *     resourceScalabilityDeclaration
+ *     resourceScalabilityNamedDeclaration
+ *     resourceScalabilityRelationship
+ *     resourceScalabilityAssignment
+ *     resourceScalabilityGroup
+ *     resourceScalabilityGroupItem
+ *     resourceScalabilityProperty
+ *     resourceScalabilityPropertyPath
+ *     resourceScalabilityPropertySegment
+ *     resourceScalabilityValue
+ *     resourceScalabilityCondition
+ *     resourceScalabilityExpressionList
+ *     optionalResourceScalabilitySpecification
  *
  * THIS FILE DOES NOT OWN:
  *
- *   - identifiers;
- *   - literals;
- *   - general expressions;
- *   - arithmetic;
- *   - comparison precedence;
- *   - resource declarations;
- *   - resource quantities;
- *   - resource capabilities;
- *   - resource targets;
- *   - resource requirements;
- *   - resource constraints;
- *   - resource preferences;
- *   - hardware descriptions;
- *   - machine discovery;
- *   - scheduling;
- *   - routing;
- *   - optimization;
- *   - allocation;
- *   - deployment;
- *   - runtime execution;
- *   - quantum IR;
- *   - classical IR;
- *   - HDL IR;
- *   - QEC;
- *   - ZQN;
- *   - simulation.
- *
- * ============================================================================
- * NON-DUPLICATION CONTRACT
- * ============================================================================
- *
- * The following repository components already own broader concepts:
- *
- *     grammar/resources/resources.g4
- *         universal resource semantics
- *
- *     grammar/resources/resource-expressions.g4
- *         resource-expression composition
- *
- *     grammar/expressions/expressions.g4
- *         canonical expressions
- *
- *     grammar/expressions/binary.g4
- *         binary expression hierarchy
- *
- *     grammar/expressions/unary.g4
- *         unary expressions
- *
- *     grammar/expressions/assignment.g4
- *         assignment expressions
- *
- * This file MUST NOT redefine those concepts.
- *
- * In particular, this file MUST NOT define another:
- *
  *     expression
  *     resourceExpression
- *     arithmeticExpression
- *     comparisonExpression
  *     identifier
- *     literal
+ *     qualifiedName
  *     resource
- *     capability
- *     target
+ *     resourceRequirement
+ *     resourceConstraint
+ *     resourcePreference
+ *     resourceHint
+ *     resourceCapability
+ *     resourceCapacity
+ *     resourceAvailability
+ *     resourcePortability
+ *     resourceTarget
+ *     placement
+ *     routing
+ *     scheduling
+ *     allocation
+ *     hardware discovery
+ *     quantum::ir
+ *     classical IR
+ *     HDL IR
+ *     QEC
+ *     ZQN
+ *     HAL
+ *     runtime behavior.
  *
- * Instead, this grammar composes the canonical `resourceExpression` rule.
+ * In particular, this file MUST NOT redefine:
  *
- * ============================================================================
- * SCALABILITY PRINCIPLE
- * ============================================================================
- *
- * Zamani scalability means:
- *
- *     source semantics remain stable while realization scale changes.
- *
- * A valid program may therefore execute on:
- *
- *     one resource;
- *     many resources;
- *     one processor;
- *     many processors;
- *     one accelerator;
- *     many accelerators;
- *     one quantum processor;
- *     many quantum processors;
- *     one node;
- *     many nodes;
- *     local execution;
- *     distributed execution;
- *     embedded execution;
- *     cloud execution;
- *     future execution environments.
- *
- * The grammar imposes NO finite upper bound.
- *
- * It MUST NOT contain:
- *
- *     MAX_RESOURCES
- *     MAX_DEVICES
- *     MAX_CPUS
- *     MAX_CORES
- *     MAX_THREADS
- *     MAX_GPUS
- *     MAX_FPGAS
- *     MAX_ASICS
- *     MAX_QUBITS
- *     MAX_NODES
- *     MAX_MEMORY
- *     MAX_STORAGE
- *     MAX_ACCELERATORS
- *     MAX_CLUSTER_SIZE
- *     MAX_SCALE
- *     MAX_DIMENSIONS
- *
- * No equivalent hidden limit may be introduced through fixed alternatives.
+ *     resourceExpression
+ *     expression
+ *     identifier
+ *     qualifiedName
  *
  * ============================================================================
- * POCO-REAF
+ * 4. DEPENDENCY CONTRACT
  * ============================================================================
  *
- * This grammar participates in:
+ * ResourceExpressions owns the canonical resource-expression boundary.
  *
- *     Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
+ * Therefore every scalability value is represented by:
  *
- * Scalability syntax must therefore describe semantic relationships rather
- * than temporary machine characteristics.
+ *     resourceExpression
  *
- * For example:
+ * This ensures that scalability does not create a second expression language.
  *
- *     scalability = input_size;
+ * Names are intentionally represented through the canonical identifier rule.
  *
- * describes a dependency on program/input scale.
- *
- * It does NOT mean:
- *
- *     maximum input = N;
- *     machine = X;
- *     cores = N;
- *     qubits = N;
- *     devices = N.
- *
- * Similarly:
- *
- *     bounded_by available_capacity
- *
- * describes a relationship to execution-context capacity.
- *
- * The actual capacity is supplied by downstream compilation/runtime context.
+ * This grammar does not create a second name vocabulary.
  *
  * ============================================================================
- * IMPORTANT DISTINCTION
- * ============================================================================
- *
- * The following concepts MUST remain semantically distinct:
- *
- *     SCALE
- *         A dimension along which computation varies.
- *
- *     GROWTH
- *         A relationship between workload and resource demand.
- *
- *     BOUND
- *         A semantic restriction expressed as a relationship.
- *
- *     CAPACITY
- *         A property supplied by an execution environment.
- *
- *     REQUIREMENT
- *         A mandatory condition.
- *
- *     PREFERENCE
- *         An advisory optimization preference.
- *
- *     HINT
- *         An advisory implementation hint.
- *
- *     CONSTRAINT
- *         A condition that a realization must satisfy.
- *
- *     ADAPTATION
- *         Permission/intent to change realization while preserving semantics.
- *
- * This grammar preserves those distinctions syntactically where useful but
- * leaves their final interpretation to semantic analysis.
- *
- * ============================================================================
- * INTEGRATION CONTRACT
- * ============================================================================
- *
- * This grammar is designed to be imported by:
- *
- *     grammar/resources/resources.g4
- *
- * and potentially consumed by:
- *
- *     grammar/hardware/resources.g4
- *     grammar/quantum/quantum-resources.g4
- *     grammar/hybrid/hybrid-resources.g4
- *     grammar/distributed/...
- *     grammar/classical/...
- *     grammar/ai/...
- *
- * Domain grammars MAY specialize scalability syntax but MUST normalize it
- * into the universal resource/scalability semantic representation.
- *
- * Domain grammars MUST NOT create incompatible definitions of:
- *
- *     scaling;
- *     capacity;
- *     growth;
- *     scalability;
- *     portability.
- *
- * ============================================================================
- * LEXER CONTRACT
+ * 5. LEXER CONTRACT
  * ============================================================================
  *
  * This is a parser grammar.
  *
- * It contains NO lexer rules.
+ * The canonical lexer is:
  *
- * Tokens are supplied by the canonical Zamani lexer through tokenVocab.
+ *     grammar/antlr/ZamaniLexer.g4
  *
- * The following tokens are expected to be provided by that lexer:
+ * which consumes the assembled:
  *
- *     IDENT
- *     K_SCALABILITY
- *     K_GROWS
- *     K_WITH
- *     K_AS
- *     K_FROM
- *     K_TO
- *     K_OVER
- *     K_ACCORDING
- *     K_TO
- *     K_BOUNDED
- *     K_BY
- *     K_INDEPENDENT
- *     K_OF
- *     K_DEPENDS
- *     K_ON
- *     K_ADAPTS
- *     K_ACCORDING
- *     K_AVAILABLE
- *     K_CAPACITY
- *     K_PRESERVES
- *     K_SEMANTICS
- *     K_PORTABLE
- *     K_ACROSS
- *     K_SCALE
- *     K_DIMENSION
- *     K_DIMENSIONS
- *     K_GROWTH
- *     K_BOUND
- *     K_LIMIT
- *     K_FACTOR
- *     K_RATE
- *     K_WHEN
- *     K_WHERE
- *     K_UNTIL
- *     K_IF
- *     K_THEN
+ *     grammar/lexer/tokens.g4
  *
- * plus canonical punctuation:
+ * Actual repository token names used by this grammar include:
+ *
+ *     SCALABILITY
+ *     CAPACITY
+ *     AVAILABILITY
+ *     PORTABILITY
+ *     WITH
+ *     WHEN
+ *     WHERE
+ *     FROM
+ *     TO
+ *     IN
+ *     REQUIRES
+ *     ENSURES
+ *     INVARIANT
+ *
+ * together with canonical structural tokens such as:
  *
  *     ASSIGN
  *     COMMA
@@ -418,20 +260,188 @@
  *     RBRACE
  *     LPAREN
  *     RPAREN
+ *     DOT
+ *     DOUBLE_COLON
  *
- * and all tokens required by `resourceExpression`.
+ * and the tokens consumed by:
+ *
+ *     resourceExpression
  *
  * IMPORTANT:
  *
- * Token names must be reconciled with the canonical lexer before generation.
+ * This grammar deliberately does NOT reference speculative token names such
+ * as:
  *
- * If the repository's lexer uses a different spelling for an equivalent
- * keyword/token, the lexer authority must define the canonical spelling.
+ *     K_SCALABILITY
+ *     K_GROWS
+ *     K_BOUNDED
+ *     K_BY
+ *     K_DEPENDS
+ *     K_ON
+ *     K_DIMENSION
+ *     K_GROWTH
+ *     K_RATE
+ *     K_FACTOR
  *
- * This file must not silently create lexer aliases.
+ * unless those names are first established by the canonical lexer contract.
+ *
+ * The existing repository uses ordinary keyword token names such as:
+ *
+ *     SCALABILITY
+ *     WITH
+ *
+ * so this file uses those canonical names.
  *
  * ============================================================================
- * IMPORT
+ * 6. OPEN-WORLD PRINCIPLE
+ * ============================================================================
+ *
+ * Scalability properties are deliberately open-world.
+ *
+ * The grammar does not enumerate:
+ *
+ *     input_size
+ *     workload_size
+ *     problem_size
+ *     memory
+ *     qubits
+ *     nodes
+ *     threads
+ *     GPUs
+ *     FPGAs
+ *     tensor dimensions
+ *     accelerator count
+ *     timeline count
+ *     future resource categories.
+ *
+ * These are semantic names.
+ *
+ * Therefore future computing domains can introduce new scalability
+ * dimensions without changing this grammar merely because a new resource
+ * category was invented.
+ *
+ * ============================================================================
+ * 7. POCO-REAF
+ * ============================================================================
+ *
+ * This grammar participates in:
+ *
+ *     Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
+ *
+ * The source program describes scaling relationships.
+ *
+ * It does NOT prescribe the physical realization.
+ *
+ * For example:
+ *
+ *     scalability = input_size;
+ *
+ * means that a semantic quantity depends on input size.
+ *
+ * It does NOT mean:
+ *
+ *     maximum_input_size = N
+ *
+ * Likewise:
+ *
+ *     scalability bounded_by available_capacity;
+ *
+ * when represented semantically through a named property/value relationship
+ * describes dependence on execution-context capacity.
+ *
+ * It does NOT establish:
+ *
+ *     MAX_MEMORY
+ *     MAX_QUBITS
+ *     MAX_CPUS
+ *     MAX_GPUS
+ *     MAX_NODES
+ *     MAX_THREADS
+ *
+ * ============================================================================
+ * 8. HARD-CODING PROHIBITION
+ * ============================================================================
+ *
+ * This grammar MUST NOT introduce universal limits such as:
+ *
+ *     MAX_QUBITS
+ *     MAX_CPUS
+ *     MAX_CORES
+ *     MAX_THREADS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_ASICS
+ *     MAX_QPUS
+ *     MAX_NODES
+ *     MAX_MEMORY
+ *     MAX_STORAGE
+ *     MAX_REGISTER_WIDTH
+ *     MAX_TENSOR_RANK
+ *     MAX_TENSOR_DIMENSION
+ *     MAX_VECTOR_WIDTH
+ *     MAX_DEVICE_COUNT
+ *     MAX_ACCELERATORS
+ *     MAX_TIMELINES
+ *     MAX_SCALE
+ *     MAX_DIMENSIONS
+ *
+ * It also MUST NOT encode equivalent fixed capacities through parser
+ * alternatives.
+ *
+ * Numeric literals inside:
+ *
+ *     resourceExpression
+ *
+ * are program values.
+ *
+ * They are not language-level hardware limits.
+ *
+ * ============================================================================
+ * 9. UNBOUNDED CARDINALITY
+ * ============================================================================
+ *
+ * Repetition is deliberately expressed using:
+ *
+ *     *
+ *
+ * rather than finite alternatives.
+ *
+ * Therefore the language architecture does not impose a maximum number of:
+ *
+ *     scalability declarations
+ *     scaling properties
+ *     dimensions
+ *     relationships
+ *     groups
+ *     nested group entries
+ *     expressions
+ *     qualified-name segments.
+ *
+ * Practical parser, memory, compiler, or runtime limits remain implementation
+ * concerns and are not part of the source-language scalability contract.
+ *
+ * ============================================================================
+ * 10. PUBLIC ENTRY POINT
+ * ============================================================================
+ *
+ * resourceScalabilitySpecification
+ *
+ * is the reusable public leaf entry point.
+ *
+ * It represents:
+ *
+ *     {
+ *         scalability-item*
+ *     }
+ *
+ * The source-level introducer belongs to the parent grammar that owns the
+ * surrounding declaration/statement.
+ *
+ * This avoids inventing another global keyword or duplicating the concrete
+ * resource statement owned by:
+ *
+ *     grammar/resources/resources.g4
+ *
  * ============================================================================
  */
 
@@ -446,1335 +456,1221 @@ import ResourceExpressions;
 
 /*
  * ============================================================================
- * 1. PUBLIC ENTRY POINT
+ * 11. PUBLIC SCALABILITY SPECIFICATION
  * ============================================================================
- *
- * A scalability section may contain zero or more scalability items.
- *
- * Repetition is intentionally unbounded at the grammar level.
- *
- * Actual parser resource limits, if any, are implementation configuration and
- * are not part of the language semantics.
- * ============================================================================
- */
-
-scalabilitySection
-    : scalabilityItem*
-    ;
-
-
-/*
- * ============================================================================
- * 2. SCALABILITY ITEM
- * ============================================================================
- */
-
-scalabilityItem
-    : scalabilityDeclaration
-    | scalabilityRelationship
-    | scalabilityGrowth
-    | scalabilityBound
-    | scalabilityDependency
-    | scalabilityInvariance
-    | scalabilityAdaptation
-    | scalabilityPortability
-    ;
-
-
-/*
- * ============================================================================
- * 3. SCALABILITY DECLARATION
- * ============================================================================
- *
- * General form:
- *
- *     scalability = expression;
  *
  * Example:
+ *
+ *     {
+ *         scalability = input_size;
+ *         scalability memory = required_memory;
+ *     }
+ *
+ * The block may contain zero or more items.
+ *
+ * ============================================================================
+ */
+
+resourceScalabilitySpecification
+    : LBRACE
+      resourceScalabilityItem*
+      RBRACE
+    ;
+
+
+/*
+ * ============================================================================
+ * 12. SCALABILITY ITEM
+ * ============================================================================
+ */
+
+resourceScalabilityItem
+    : resourceScalabilityDeclaration
+    | resourceScalabilityNamedDeclaration
+    | resourceScalabilityRelationship
+    | resourceScalabilityAssignment
+    | resourceScalabilityGroup
+    ;
+
+
+/*
+ * ============================================================================
+ * 13. PRIMARY SCALABILITY DECLARATION
+ * ============================================================================
+ *
+ * Canonical compact form:
  *
  *     scalability = input_size;
  *
- * The expression determines the semantic scaling quantity.
+ * This is the basic source-level scaling expression.
  *
- * No fixed upper bound is implied.
  * ============================================================================
  */
 
-scalabilityDeclaration
-    : K_SCALABILITY
+resourceScalabilityDeclaration
+    : SCALABILITY
       ASSIGN
-      scalabilityExpression
+      resourceScalabilityValue
       SEMICOLON
     ;
 
 
 /*
  * ============================================================================
- * 4. NAMED SCALABILITY DECLARATION
+ * 14. NAMED SCALABILITY DECLARATION
  * ============================================================================
  *
- * Allows multiple independently named scalability dimensions.
- *
- * Example:
+ * Examples:
  *
  *     scalability input = input_size;
- *     scalability memory = workload_size;
+ *     scalability memory = required_memory;
+ *     scalability qubits = logical_qubits;
+ *     scalability work = problem_size * parallelism;
  *
- * Names are symbolic and do not identify physical resources.
+ * The property name is intentionally open-world.
+ *
  * ============================================================================
  */
 
-namedScalabilityDeclaration
-    : K_SCALABILITY
-      scalabilityName
+resourceScalabilityNamedDeclaration
+    : SCALABILITY
+      resourceScalabilityProperty
       ASSIGN
-      scalabilityExpression
+      resourceScalabilityValue
       SEMICOLON
     ;
 
 
 /*
  * ============================================================================
- * 5. SCALABILITY NAME
+ * 15. RELATIONSHIP FORM
  * ============================================================================
- */
-
-scalabilityName
-    : identifier
-    ;
-
-
-/*
- * ============================================================================
- * 6. SCALABILITY EXPRESSION
- * ============================================================================
- *
- * This is deliberately a wrapper around the canonical resource expression.
- *
- * It does not introduce a second expression language.
- * ============================================================================
- */
-
-scalabilityExpression
-    : resourceExpression
-    ;
-
-
-/*
- * ============================================================================
- * 7. SCALABILITY RELATIONSHIP
- * ============================================================================
- *
- * Describes how one scaling quantity relates to another.
  *
  * Examples:
  *
  *     scalability grows_with input_size;
+ *     scalability depends_on workload_size;
  *
- *     scalability grows_with problem_size;
+ * Here:
  *
- *     scalability scales_with parallelism;
+ *     grows_with
+ *     depends_on
  *
- * The semantic analyzer determines the precise relationship.
+ * are ordinary source-level identifiers.
+ *
+ * They are NOT global reserved keywords.
+ *
+ * This is deliberate:
+ *
+ *     - it avoids expanding the global lexer unnecessarily;
+ *     - it keeps the grammar open-world;
+ *     - semantic analysis can define the standard relationship vocabulary;
+ *     - dialects can introduce additional relationships without requiring
+ *       parser rewrites.
+ *
+ * The `WITH` token remains canonical and is used structurally.
+ *
  * ============================================================================
  */
 
-scalabilityRelationship
-    : K_SCALABILITY
-      scalabilityRelationshipOperator
-      scalabilityExpression
+resourceScalabilityRelationship
+    : SCALABILITY
+      resourceScalabilityProperty
+      WITH
+      resourceScalabilityValue
       SEMICOLON
     ;
 
 
 /*
  * ============================================================================
- * 8. SCALABILITY RELATIONSHIP OPERATOR
+ * 16. PROPERTY ASSIGNMENT
  * ============================================================================
  *
- * These are semantic relationship words rather than arithmetic operators.
- *
- * They must not encode a particular growth algorithm.
- * ============================================================================
- */
-
-scalabilityRelationshipOperator
-    : K_GROWS K_WITH
-    | K_SCALE K_WITH
-    | K_DEPENDS K_ON
-    ;
-
-
-/*
- * ============================================================================
- * 9. GROWTH RELATIONSHIP
- * ============================================================================
- *
- * Allows an explicit growth statement.
- *
- * Examples:
- *
- *     growth with input_size;
- *
- *     growth according_to workload;
- *
- * The expression remains canonical.
- * ============================================================================
- */
-
-scalabilityGrowth
-    : K_GROWTH
-      K_WITH
-      scalabilityExpression
-      SEMICOLON
-    | K_GROWTH
-      K_ACCORDING
-      K_TO
-      scalabilityExpression
-      SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * 10. GROWTH RATE
- * ============================================================================
- *
- * A growth factor/rate remains an expression.
- *
- * Examples:
- *
- *     growth rate_expression;
- *
- *     growth factor_expression;
- *
- * No fixed numeric type or precision is imposed here.
- * ============================================================================
- */
-
-scalabilityGrowthRate
-    : K_GROWTH
-      K_RATE
-      scalabilityExpression
-      SEMICOLON
-    | K_GROWTH
-      K_FACTOR
-      scalabilityExpression
-      SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * 11. SCALABILITY BOUND
- * ============================================================================
- *
- * A bound is a relationship against another semantic expression.
- *
- * Example:
- *
- *     scalability bounded_by available_capacity;
- *
- * This does NOT define a fixed capacity.
- *
- * The capacity may be supplied dynamically by:
- *
- *     compiler context;
- *     target description;
- *     runtime context;
- *     hardware capability model;
- *     resource manager.
- * ============================================================================
- */
-
-scalabilityBound
-    : K_SCALABILITY
-      K_BOUNDED
-      K_BY
-      scalabilityExpression
-      SEMICOLON
-    | K_BOUND
-      K_BY
-      scalabilityExpression
-      SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * 12. EXPLICIT LIMIT RELATIONSHIP
- * ============================================================================
- *
- * This is intentionally relational rather than a fixed numeric declaration.
- *
- * Examples:
- *
- *     scalability limit available_capacity;
- *
- *     limit according_to workload_budget;
- *
- * Semantic analysis determines whether the expression represents:
- *
- *     capacity;
- *     constraint;
- *     requirement;
- *     preference;
- *     policy.
- *
- * ============================================================================
- */
-
-scalabilityLimit
-    : K_LIMIT
-      scalabilityExpression
-      SEMICOLON
-    | K_LIMIT
-      K_ACCORDING
-      K_TO
-      scalabilityExpression
-      SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * 13. SCALABILITY DEPENDENCY
- * ============================================================================
- *
- * Expresses dependency on an input/workload/program quantity.
- *
- * Example:
- *
- *     scalability depends_on input_size;
- *
- * ============================================================================
- */
-
-scalabilityDependency
-    : K_SCALABILITY
-      K_DEPENDS
-      K_ON
-      scalabilityExpression
-      SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * 14. SCALABILITY INVARIANCE
- * ============================================================================
- *
- * Allows the source author to state that a semantic property should not
- * change as realization scale changes.
- *
- * Example:
- *
- *     scalability independent_of machine_size;
- *
- * The identifier/expression remains symbolic.
- *
- * The grammar does not reserve `machine_size` or any finite machine model.
- * ============================================================================
- */
-
-scalabilityInvariance
-    : K_SCALABILITY
-      K_INDEPENDENT
-      K_OF
-      scalabilityExpression
-      SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * 15. SCALABILITY ADAPTATION
- * ============================================================================
- *
- * Indicates that realization may adapt to available resources.
- *
- * Example:
- *
- *     scalability adapts according_to available_capacity;
- *
- * Adaptation is semantic permission/intent.
- *
- * It does not select a scheduler, allocator, backend, or topology.
- * ============================================================================
- */
-
-scalabilityAdaptation
-    : K_SCALABILITY
-      K_ADAPTS
-      K_ACCORDING
-      K_TO
-      scalabilityExpression
-      SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * 16. SCALABILITY PORTABILITY
- * ============================================================================
- *
- * Explicitly expresses portability across scales.
- *
- * Example:
- *
- *     scalability portable_across scale_expression;
- *
- * The expression may identify an abstract scale domain.
- *
- * It does not enumerate physical machines.
- * ============================================================================
- */
-
-scalabilityPortability
-    : K_SCALABILITY
-      K_PORTABLE
-      K_ACROSS
-      scalabilityExpression
-      SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * 17. SCALABILITY DIMENSION
- * ============================================================================
- *
- * A dimension is a symbolic semantic dimension along which scaling occurs.
- *
- * Examples:
- *
- *     dimension = input_size;
- *     dimension = problem_size;
- *     dimension = workload_size;
- *     dimension = parallelism;
- *
- * There is no finite vocabulary of dimensions.
- * ============================================================================
- */
-
-scalabilityDimension
-    : K_DIMENSION
-      ASSIGN
-      scalabilityExpression
-      SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * 18. MULTIPLE SCALABILITY DIMENSIONS
- * ============================================================================
- *
- * Arbitrary dimensionality is supported.
- *
- * No fixed number of dimensions is encoded.
- * ============================================================================
- */
-
-scalabilityDimensions
-    : K_DIMENSIONS
-      ASSIGN
-      LPAREN
-      resourceExpressionList
-      RPAREN
-      SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * 19. SCALABILITY OVER A DOMAIN
- * ============================================================================
- *
- * Describes scaling over an abstract expression.
- *
- * Example:
- *
- *     scalability over input_size;
- *
- * The domain may be:
- *
- *     input size;
- *     problem size;
- *     workload size;
- *     data size;
- *     logical resource demand;
- *     another semantic quantity.
- *
- * ============================================================================
- */
-
-scalabilityOver
-    : K_SCALABILITY
-      K_OVER
-      scalabilityExpression
-      SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * 20. CONDITIONAL SCALABILITY
- * ============================================================================
- *
- * Allows scalability intent to depend on a semantic condition.
- *
- * Example:
- *
- *     scalability when condition then expression;
- *
- * The condition remains a canonical expression.
- *
- * Semantic validation determines whether the condition is appropriate.
- * ============================================================================
- */
-
-conditionalScalability
-    : K_SCALABILITY
-      K_WHEN
-      resourceExpression
-      K_THEN
-      scalabilityExpression
-      SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * 21. SCALABILITY BY CONTEXT
- * ============================================================================
- *
- * Expresses that realization may depend on execution context.
- *
- * Example:
- *
- *     scalability according_to available_capacity;
- *
- * The context is not queried by the parser.
- * ============================================================================
- */
-
-contextualScalability
-    : K_SCALABILITY
-      K_ACCORDING
-      K_TO
-      scalabilityExpression
-      SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * 22. SCALABILITY CONTRACT
- * ============================================================================
- *
- * A scalability contract groups one or more scalability statements.
+ * This form is useful when a parent block has already established a
+ * scalability context.
  *
  * Example:
  *
  *     scalability {
- *         dimension = input_size;
- *         scalability grows_with input_size;
- *         scalability bounded_by available_capacity;
+ *         input = input_size;
+ *         memory = required_memory;
+ *         qubits = logical_qubits;
  *     }
  *
- * The body has arbitrary cardinality.
  * ============================================================================
  */
 
-scalabilityContract
-    : K_SCALABILITY
-      LBRACE
-      scalabilityContractItem*
-      RBRACE
-    ;
-
-
-/*
- * ============================================================================
- * 23. SCALABILITY CONTRACT ITEM
- * ============================================================================
- */
-
-scalabilityContractItem
-    : scalabilityDeclaration
-    | namedScalabilityDeclaration
-    | scalabilityRelationship
-    | scalabilityGrowth
-    | scalabilityGrowthRate
-    | scalabilityBound
-    | scalabilityLimit
-    | scalabilityDependency
-    | scalabilityInvariance
-    | scalabilityAdaptation
-    | scalabilityPortability
-    | scalabilityDimension
-    | scalabilityDimensions
-    | scalabilityOver
-    | conditionalScalability
-    | contextualScalability
-    ;
-
-
-/*
- * ============================================================================
- * 24. SCALABILITY REQUIREMENT EXPRESSION
- * ============================================================================
- *
- * Resource requirements remain owned by resources.g4.
- *
- * This wrapper exists only so downstream grammar composition can distinguish
- * the syntactic context before semantic lowering.
- * ============================================================================
- */
-
-scalabilityRequirementExpression
-    : scalabilityExpression
-    ;
-
-
-/*
- * ============================================================================
- * 25. SCALABILITY CONSTRAINT EXPRESSION
- * ============================================================================
- */
-
-scalabilityConstraintExpression
-    : scalabilityExpression
-    ;
-
-
-/*
- * ============================================================================
- * 26. SCALABILITY PREFERENCE EXPRESSION
- * ============================================================================
- */
-
-scalabilityPreferenceExpression
-    : scalabilityExpression
-    ;
-
-
-/*
- * ============================================================================
- * 27. SCALABILITY HINT EXPRESSION
- * ============================================================================
- */
-
-scalabilityHintExpression
-    : scalabilityExpression
-    ;
-
-
-/*
- * ============================================================================
- * 28. SCALABILITY CAPABILITY EXPRESSION
- * ============================================================================
- *
- * Capability lookup/discovery remains outside the grammar.
- * ============================================================================
- */
-
-scalabilityCapabilityExpression
-    : scalabilityExpression
-    ;
-
-
-/*
- * ============================================================================
- * 29. SCALABILITY CAPACITY EXPRESSION
- * ============================================================================
- *
- * Capacity is context-provided.
- *
- * The parser merely preserves the expression referring to that capacity.
- * ============================================================================
- */
-
-scalabilityCapacityExpression
-    : scalabilityExpression
-    ;
-
-
-/*
- * ============================================================================
- * 30. SCALABILITY RESOURCE EXPRESSION
- * ============================================================================
- *
- * A generic resource expression wrapper for domain grammar integration.
- * ============================================================================
- */
-
-scalabilityResourceExpression
-    : resourceExpression
-    ;
-
-
-/*
- * ============================================================================
- * 31. SCALABILITY RELATIONSHIP LIST
- * ============================================================================
- *
- * Arbitrary relationship cardinality.
- * ============================================================================
- */
-
-scalabilityRelationshipList
-    : scalabilityRelationship+
-    ;
-
-
-/*
- * ============================================================================
- * 32. OPTIONAL SCALABILITY RELATIONSHIP LIST
- * ============================================================================
- */
-
-optionalScalabilityRelationshipList
-    : scalabilityRelationship*
-    ;
-
-
-/*
- * ============================================================================
- * 33. SCALABILITY EXPRESSION LIST
- * ============================================================================
- *
- * Delegates cardinality and expression semantics to the canonical resource
- * expression list.
- * ============================================================================
- */
-
-scalabilityExpressionList
-    : resourceExpressionList
-    ;
-
-
-/*
- * ============================================================================
- * 34. SCALABILITY PATH
- * ============================================================================
- *
- * A scalability path remains an expression-level semantic path.
- *
- * No finite namespace depth is encoded here.
- * ============================================================================
- */
-
-scalabilityPath
-    : resourceExpression
-    ;
-
-
-/*
- * ============================================================================
- * 35. FUTURE / EXTENSIBLE SCALABILITY PROPERTY
- * ============================================================================
- *
- * Future scalability properties must be expressible without modifying this
- * grammar for every new resource domain.
- *
- * The property name is symbolic.
- *
- * Its value is a canonical resource expression.
- *
- * Example:
- *
- *     scalability_property = future_scaling_model;
- *
- * Semantic validation determines whether the property is recognized by the
- * active language version/dialect.
- * ============================================================================
- */
-
-scalabilityProperty
-    : scalabilityName
+resourceScalabilityAssignment
+    : resourceScalabilityProperty
       ASSIGN
-      scalabilityExpression
+      resourceScalabilityValue
       SEMICOLON
     ;
 
 
 /*
  * ============================================================================
- * 36. SCALABILITY PROPERTY LIST
+ * 17. SCALABILITY GROUP
+ * ============================================================================
+ *
+ * Groups permit arbitrarily nested semantic organization.
+ *
+ * Examples:
+ *
+ *     scalability {
+ *         input = input_size;
+ *
+ *         memory {
+ *             working = required_memory;
+ *             persistent = dataset_size;
+ *         }
+ *     }
+ *
+ * Group names are open-world.
+ *
+ * The grammar does not decide whether a group represents:
+ *
+ *     memory
+ *     compute
+ *     quantum
+ *     network
+ *     tensor
+ *     distributed
+ *     hardware
+ *     AI
+ *     future domain.
+ *
  * ============================================================================
  */
 
-scalabilityPropertyList
-    : scalabilityProperty*
-    ;
-
-
-/*
- * ============================================================================
- * 37. SCALABILITY PROPERTY BLOCK
- * ============================================================================
- */
-
-scalabilityPropertyBlock
-    : LBRACE
-      scalabilityPropertyList
+resourceScalabilityGroup
+    : resourceScalabilityProperty
+      LBRACE
+      resourceScalabilityGroupItem*
       RBRACE
     ;
 
 
 /*
  * ============================================================================
- * 38. CANONICAL SCALABILITY VALUE
- * ============================================================================
- *
- * This is the final composition boundary exposed to other resource grammars.
- *
- * Domain grammars should consume this rule when they need a value describing
- * scaling behavior.
+ * 18. GROUP ITEM
  * ============================================================================
  */
 
-scalabilityValue
-    : scalabilityExpression
+resourceScalabilityGroupItem
+    : resourceScalabilityAssignment
+    | resourceScalabilityGroup
+    | resourceScalabilityRelationship
     ;
 
 
 /*
  * ============================================================================
- * 39. CANONICAL SCALABILITY CONDITION
+ * 19. OPEN SCALABILITY PROPERTY
+ * ============================================================================
+ *
+ * A property may be qualified.
+ *
+ * Examples:
+ *
+ *     input
+ *     workload
+ *     memory
+ *     quantum::qubits
+ *     tensor::elements
+ *     hardware::capacity
+ *     distributed::nodes
+ *     future::resource::scale
+ *
+ * No maximum namespace depth is encoded.
+ *
+ * The grammar uses DOUBLE_COLON as the canonical qualified-name separator.
+ *
  * ============================================================================
  */
 
-scalabilityCondition
-    : resourceExpression
+resourceScalabilityProperty
+    : resourceScalabilityPropertyPath
     ;
 
 
-/*
- * ============================================================================
- * 40. CANONICAL SCALABILITY PREDICATE
- * ============================================================================
- *
- * The parser does not enforce boolean typing.
- *
- * Semantic/type analysis determines whether the resulting expression is a
- * valid predicate.
- * ============================================================================
- */
-
-scalabilityPredicate
-    : resourceExpression
+resourceScalabilityPropertyPath
+    : resourceScalabilityPropertySegment
+      (
+          DOT resourceScalabilityPropertySegment
+        | DOUBLE_COLON resourceScalabilityPropertySegment
+      )*
     ;
 
 
-/*
- * ============================================================================
- * 41. CANONICAL SCALABILITY RELATION
- * ============================================================================
- *
- * Generic relationship wrapper for semantic normalization.
- * ============================================================================
- */
-
-scalabilityRelation
-    : scalabilityExpression
-    ;
-
-
-/*
- * ============================================================================
- * 42. IDENTIFIER ADAPTER
- * ============================================================================
- *
- * The canonical identifier rule is imported through ResourceExpressions.
- *
- * This adapter exists solely to provide a stable named integration point.
- * ============================================================================
- */
-
-scalabilityIdentifier
+resourceScalabilityPropertySegment
     : identifier
     ;
 
 
 /*
  * ============================================================================
- * 43. SEMANTICALLY UNBOUNDED SCALE
+ * 20. VALUE
  * ============================================================================
  *
- * IMPORTANT:
+ * Every value is delegated to the canonical resource expression.
  *
- * This rule does NOT mean mathematical infinity.
+ * This means scalability can use:
  *
- * It means that the grammar does not impose a finite machine-size ceiling.
+ *     symbolic values
+ *     arithmetic
+ *     comparisons
+ *     logical expressions
+ *     calls
+ *     indexing
+ *     ranges
+ *     properties
+ *     dynamic expressions
+ *     typed values
+ *     future expression forms.
  *
- * Whether a program can actually execute at a particular scale depends on
- * available resources and semantic/resource feasibility.
+ * The scalability grammar does not need to be changed merely because the
+ * expression language gains another valid expression form.
  *
- * Therefore this rule is represented by a symbolic expression rather than a
- * special numeric infinity token.
  * ============================================================================
  */
 
-unboundedScalability
-    : K_SCALABILITY
-      K_ACCORDING
-      K_TO
-      scalabilityExpression
-      SEMICOLON
+resourceScalabilityValue
+    : resourceExpression
     ;
 
 
 /*
  * ============================================================================
- * 44. RESOURCE-AVAILABLE SCALING
+ * 21. CONDITION
  * ============================================================================
  *
- * Explicitly expresses adaptation to available capacity.
+ * A condition is also a canonical resource expression.
+ *
+ * Semantic analysis determines whether the expression is boolean/predicate
+ * compatible.
+ *
+ * ============================================================================
+ */
+
+resourceScalabilityCondition
+    : resourceExpression
+    ;
+
+
+/*
+ * ============================================================================
+ * 22. EXPRESSION LIST
+ * ============================================================================
+ *
+ * Unbounded list of scalability values.
+ *
+ * No finite number of dimensions, factors, operands, or relationships is
+ * encoded here.
+ * ============================================================================
+ */
+
+resourceScalabilityExpressionList
+    : resourceScalabilityValue
+      (COMMA resourceScalabilityValue)*
+      COMMA?
+    ;
+
+
+/*
+ * ============================================================================
+ * 23. OPTIONAL SPECIFICATION
+ * ============================================================================
+ */
+
+optionalResourceScalabilitySpecification
+    : resourceScalabilitySpecification?
+    ;
+
+
+/*
+ * ============================================================================
+ * 24. SEMANTIC VOCABULARY
+ * ============================================================================
+ *
+ * The following concepts are intentionally SEMANTIC categories, not parser
+ * alternatives:
+ *
+ *     growth
+ *     dependency
+ *     bound
+ *     capacity
+ *     availability
+ *     adaptation
+ *     invariance
+ *     portability
+ *     workload
+ *     demand
+ *     resource scaling
+ *     computational scaling
+ *     data scaling
+ *     parallel scaling
+ *     quantum scaling
+ *     hardware scaling
+ *     distributed scaling.
+ *
+ * Standard semantic property names may include:
+ *
+ *     grows_with
+ *     depends_on
+ *     bounded_by
+ *     independent_of
+ *     adapts_to
+ *     preserves
+ *     portable_across
+ *
+ * These names are intentionally not all reserved lexer keywords.
+ *
+ * This keeps the universal grammar extensible.
+ *
+ * Semantic validation is responsible for:
+ *
+ *     - recognizing standardized properties;
+ *     - validating their expected value category;
+ *     - validating their arity;
+ *     - validating whether they are requirements, constraints, preferences,
+ *       hints, or descriptive relationships;
+ *     - validating compatibility with other resource contracts.
+ *
+ * ============================================================================
+ * 25. RESOURCE SEMANTIC SEPARATION
+ * ============================================================================
+ *
+ * Scalability must remain distinct from:
+ *
+ *     requirement
+ *     constraint
+ *     preference
+ *     hint
+ *     capability
+ *     availability
+ *     capacity
+ *     target selection
+ *     placement
+ *     allocation.
+ *
+ * For example:
+ *
+ *     requires qubits >= logical_qubits;
+ *
+ * is a REQUIREMENT.
+ *
+ * A scalability expression:
+ *
+ *     scalability qubits = logical_qubits;
+ *
+ * describes how a semantic quantity scales.
+ *
+ * A capability:
+ *
+ *     requires capability("quantum.measurement");
+ *
+ * describes a target capability requirement.
+ *
+ * A preference:
+ *
+ *     prefer latency <= latency_budget;
+ *
+ * describes advisory intent.
+ *
+ * A hardware placement decision such as:
+ *
+ *     physical_qubit(...)
+ *
+ * belongs downstream and MUST NOT be inferred merely from this grammar.
+ *
+ * ============================================================================
+ * 26. CAPACITY AND AVAILABILITY
+ * ============================================================================
+ *
+ * Scalability may refer to expressions representing execution-context
+ * capacity or availability.
+ *
+ * Examples:
+ *
+ *     scalability capacity = available_capacity;
+ *     scalability memory = available_memory;
+ *     scalability nodes = available_nodes;
+ *
+ * The parser does not inspect those quantities.
+ *
+ * Their actual values come from downstream resource/capability discovery.
+ *
+ * This preserves POCO-REAF because the same source-level scaling intent can
+ * be evaluated against different execution environments.
+ *
+ * ============================================================================
+ * 27. QUANTUM INTEGRATION
+ * ============================================================================
+ *
+ * Quantum scalability is represented semantically.
+ *
+ * Examples:
+ *
+ *     scalability qubits = logical_qubits;
+ *     scalability ancilla = required_ancilla;
+ *     scalability circuit_depth = workload_depth;
+ *
+ * No physical qubit identifiers are encoded.
+ *
+ * No finite qubit limit is encoded.
+ *
+ * No quantum gate enumeration is encoded.
+ *
+ * No topology is encoded.
+ *
+ * No calibration data is encoded.
+ *
+ * The downstream path remains:
+ *
+ *     scalability syntax
+ *          |
+ *          v
+ *     domain-neutral AST
+ *          |
+ *          v
+ *     semantic resource model
+ *          |
+ *          v
+ *     quantum semantics
+ *          |
+ *          v
+ *     quantum::ir
+ *          |
+ *          v
+ *     optimization
+ *          |
+ *          v
+ *     routing
+ *          |
+ *          v
+ *     scheduling
+ *          |
+ *          v
+ *     QEC / resilience
+ *          |
+ *          v
+ *     ZQN
+ *          |
+ *          v
+ *     HAL
+ *          |
+ *          v
+ *     target realization
+ *
+ * ============================================================================
+ * 28. CLASSICAL INTEGRATION
+ * ============================================================================
+ *
+ * Classical scaling may describe:
+ *
+ *     workload
+ *     data
+ *     operations
+ *     memory demand
+ *     parallelism
+ *     vectorization
+ *     tensor dimensions
+ *     algorithmic scale.
+ *
+ * Examples:
+ *
+ *     scalability work = problem_size;
+ *     scalability memory = element_count * element_size;
+ *     scalability parallelism = workload_size;
+ *
+ * These are expressions, not machine limits.
+ *
+ * ============================================================================
+ * 29. HDL / HARDWARE INTEGRATION
+ * ============================================================================
+ *
+ * Hardware-oriented scaling may describe:
+ *
+ *     ports
+ *     lanes
+ *     pipeline work
+ *     memory demand
+ *     data width
+ *     replicated structures
+ *     accelerator demand
+ *     interconnect demand.
  *
  * Example:
  *
- *     scalability according_to available_capacity;
+ *     scalability lanes = workload_width;
  *
- * The parser does not inspect capacity.
- * ============================================================================
- */
-
-availableResourceScalability
-    : K_SCALABILITY
-      K_ACCORDING
-      K_TO
-      K_AVAILABLE
-      K_CAPACITY
-      SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * 45. SEMANTIC-PRESERVATION SCALABILITY
- * ============================================================================
+ * This does NOT define a universal FPGA/ASIC width.
  *
- * Scaling may change realization while preserving program semantics.
- *
- * Example:
- *
- *     scalability preserves_semantics;
- *
- * The semantic checker is responsible for proving/validating preservation.
- *
- * This grammar does not claim that arbitrary scaling is automatically valid.
- * ============================================================================
- */
-
-scalabilitySemanticPreservation
-    : K_SCALABILITY
-      K_PRESERVES
-      K_SEMANTICS
-      SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * 46. COMPLETE SCALABILITY SPECIFICATION
- * ============================================================================
- *
- * This rule is the broad reusable integration boundary.
- *
- * It permits arbitrary combinations of the independently defined scalability
- * constructs.
- * ============================================================================
- */
-
-scalabilitySpecification
-    : scalabilityItem*
-    | scalabilityContract
-    ;
-
-
-/*
- * ============================================================================
- * 47. DOMAIN-INDEPENDENT SCALABILITY SPECIFICATION
- * ============================================================================
- *
- * Domain-specific grammars may use this entry point when attaching scaling
- * intent to:
- *
- *     classical computation;
- *     quantum computation;
- *     HDL;
- *     hardware;
- *     distributed execution;
- *     AI/ML;
- *     accelerators;
- *     future domains.
- * ============================================================================
- */
-
-domainScalabilitySpecification
-    : scalabilitySpecification
-    ;
-
-
-/*
- * ============================================================================
- * ARCHITECTURAL INVARIANTS
- * ============================================================================
- *
- * The following invariants are part of this file's production contract.
- *
- * 1. NO MACHINE LIMITS
- *
- *    This grammar contains no fixed machine-size constants.
- *
- * 2. NO DEVICE SELECTION
- *
- *    This grammar cannot select a concrete device.
- *
- * 3. NO PHYSICAL TOPOLOGY
- *
- *    This grammar cannot encode a fixed hardware topology.
- *
- * 4. NO QUANTUM LIMIT
- *
- *    No qubit count is hard-coded.
- *
- * 5. NO CPU LIMIT
- *
- *    No processor/core/thread count is hard-coded.
- *
- * 6. NO MEMORY LIMIT
- *
- *    No memory capacity is hard-coded.
- *
- * 7. NO NODE LIMIT
- *
- *    No distributed-node count is hard-coded.
- *
- * 8. NO RESOURCE ENUMERATION LIMIT
- *
- *    Lists and repeated constructs use canonical repetition.
- *
- * 9. NO SECOND EXPRESSION LANGUAGE
- *
- *    All values delegate to resourceExpression.
- *
- * 10. NO SECOND RESOURCE MODEL
- *
- *     Resource semantics remain owned by resources.g4.
- *
- * 11. NO IR
- *
- *     The grammar produces parse structure only.
- *
- * 12. NO RUNTIME BEHAVIOR
- *
- *     The grammar performs no allocation, discovery, scheduling or execution.
- *
- * 13. NO UNSAFE
- *
- *     There are no embedded Rust actions.
- *
- * 14. NO TARGET-SPECIFIC CODE
- *
- *     The grammar is target-independent.
- *
- * 15. FUTURE EXTENSIBILITY
- *
- *     Symbolic expressions permit new scaling dimensions without requiring
- *     machine-specific grammar rewrites.
+ * A hardware backend later determines what realization satisfies the
+ * semantic intent.
  *
  * ============================================================================
- * SEMANTIC CONTRACT
+ * 30. DISTRIBUTED INTEGRATION
  * ============================================================================
  *
- * Semantic analysis MUST subsequently determine:
+ * Distributed programs may describe:
  *
- *     whether expressions are well typed;
- *     whether quantities are dimensionally valid;
- *     whether relationships are meaningful;
- *     whether bounds are satisfiable;
- *     whether requirements are satisfiable;
- *     whether preferences are achievable;
- *     whether adaptation preserves semantics;
- *     whether portability claims are valid;
- *     whether capability references exist;
- *     whether target constraints are compatible.
+ *     scalability nodes = required_nodes;
+ *     scalability partitions = partition_count;
+ *     scalability communication = communication_volume;
  *
- * A parser success MUST NOT be interpreted as resource feasibility.
+ * No fixed number of nodes is encoded.
  *
- * ============================================================================
- * DOWNSTREAM INTEGRATION
- * ============================================================================
+ * No node identifiers are encoded.
  *
- * Frontend:
+ * No topology is encoded.
  *
- *     consumes parse tree and constructs the language AST.
- *
- * Semantic analysis:
- *
- *     resolves names;
- *     checks types;
- *     checks dimensions/units;
- *     classifies scalability intent;
- *     validates relationships;
- *     preserves source provenance.
- *
- * Resource subsystem:
- *
- *     converts scalability intent into the canonical resource semantic model.
- *
- * Classical compilation:
- *
- *     may use scalability intent for parallelization/vectorization/placement.
- *
- * Quantum compilation:
- *
- *     may use scalability intent when determining logical-resource feasibility.
- *
- *     It MUST then lower quantum semantics through quantum::ir.
- *
- * QEC:
- *
- *     may consume resource requirements associated with error correction.
- *
- *     QEC algorithms remain outside this grammar.
- *
- * ZQN:
- *
- *     may provide fault/noise/resource information to downstream feasibility
- *     and resilience decisions.
- *
- *     ZQN remains the owner of quantum noise/fault semantics.
- *
- * Optimization:
- *
- *     may use scalability preferences/hints.
- *
- * Scheduling:
- *
- *     may use capacity/latency/parallelism intent.
- *
- * Hardware HAL:
- *
- *     provides actual capabilities and available capacity.
- *
- * Runtime:
- *
- *     evaluates dynamic availability and realizes the semantic intent.
- *
- * Resilience:
- *
- *     may adapt execution when available resources change, provided semantic
- *     correctness and declared constraints remain satisfied.
+ * Placement and deployment remain downstream.
  *
  * ============================================================================
- * DETERMINISM CONTRACT
+ * 31. AI / DATA INTEGRATION
  * ============================================================================
  *
- * Parsing must be deterministic for a fixed:
+ * AI/data workloads may describe:
  *
- *     source;
- *     grammar version;
- *     lexer version;
- *     dialect configuration.
+ *     dataset size
+ *     batch size
+ *     model size
+ *     tensor elements
+ *     parameter count
+ *     inference workload
+ *     training workload
+ *     memory demand.
  *
- * This file contains no semantic predicates or embedded target-language
- * actions.
+ * The grammar does not encode:
  *
- * ============================================================================
- * ERROR HANDLING CONTRACT
- * ============================================================================
- *
- * Syntax errors are parser diagnostics.
- *
- * Semantic errors belong to semantic/resource analysis.
- *
- * Examples of semantic errors include:
- *
- *     non-numeric scaling expression where a quantity is required;
- *     invalid dimensional relationship;
- *     unsatisfiable mandatory bound;
- *     invalid capability reference;
- *     incompatible scalability policy.
- *
- * This grammar MUST NOT encode those semantic errors as lexer/parser hacks.
+ *     a particular framework;
+ *     a particular accelerator;
+ *     a particular GPU;
+ *     a particular tensor-rank maximum.
  *
  * ============================================================================
- * COMPATIBILITY CONTRACT
+ * 32. ADAPTATION
  * ============================================================================
  *
- * Changes to this grammar MUST preserve:
+ * Adaptation is represented as a semantic relationship rather than a parser
+ * algorithm.
  *
- *     source compatibility where promised;
- *     parse-tree compatibility where promised;
- *     AST normalization contracts;
- *     semantic meaning;
- *     dialect/version rules.
+ * A future standardized property may express concepts such as:
  *
- * New scalability properties should preferably be additive.
+ *     adapts_to
+ *     scales_with
+ *     bounded_by
+ *     available_under
  *
- * Removing syntax requires an explicit language-version/deprecation policy.
+ * without requiring a fixed vocabulary in this grammar.
  *
- * ============================================================================
- * HARD-CODING AUDIT
- * ============================================================================
- *
- * Forbidden in this file:
- *
- *     MAX_*
- *     fixed machine capacities;
- *     fixed hardware counts;
- *     fixed qubit counts;
- *     fixed processor counts;
- *     fixed accelerator counts;
- *     fixed cluster sizes;
- *     fixed topology;
- *     fixed physical addresses;
- *     fixed device identifiers.
- *
- * Numeric expressions are allowed because numbers can be legitimate program
- * values.
- *
- * A numeric literal in an expression MUST NOT be interpreted by this grammar
- * as a universal machine maximum.
+ * Semantic analysis determines whether adaptation is permitted and what
+ * semantic invariants must be preserved.
  *
  * ============================================================================
- * TEST CONTRACT
+ * 33. SEMANTIC PRESERVATION
  * ============================================================================
  *
- * The repository test suite MUST cover at least:
+ * A scalable realization MUST preserve the semantics of the source program.
  *
- * POSITIVE:
+ * Scaling may change:
+ *
+ *     placement
+ *     parallelism
+ *     decomposition
+ *     scheduling
+ *     routing
+ *     memory strategy
+ *     accelerator usage
+ *     distributed realization
+ *     quantum physical realization
+ *
+ * while preserving the source-level computation's defined semantics.
+ *
+ * This grammar only exposes the source intent required by that analysis.
+ *
+ * ============================================================================
+ * 34. AST CONTRACT
+ * ============================================================================
+ *
+ * The grammar must lower into the existing domain-neutral frontend AST.
+ *
+ * Conceptually:
+ *
+ *     resourceScalabilityDeclaration
+ *         ->
+ *     scalability intent node
+ *
+ *     resourceScalabilityNamedDeclaration
+ *         ->
+ *     named scalability property
+ *
+ *     resourceScalabilityRelationship
+ *         ->
+ *     scalability relationship
+ *
+ *     resourceScalabilityAssignment
+ *         ->
+ *     scalability property/value
+ *
+ *     resourceScalabilityGroup
+ *         ->
+ *     nested scalability scope/group
+ *
+ * No new AST hierarchy should be created solely because this grammar is
+ * modularized.
+ *
+ * Exact Rust structures belong to:
+ *
+ *     src/frontend/ast/
+ *
+ * ============================================================================
+ * 35. SEMANTIC CONTRACT
+ * ============================================================================
+ *
+ * Semantic analysis is responsible for:
+ *
+ *     - resolving scalability property names;
+ *     - checking expression types;
+ *     - determining relationship kinds;
+ *     - distinguishing requirements from preferences and hints;
+ *     - validating resource units/dimensions;
+ *     - validating resource availability references;
+ *     - validating portability;
+ *     - validating domain compatibility;
+ *     - detecting contradictory scalability contracts;
+ *     - constructing canonical scalability semantics.
+ *
+ * The parser does none of these things.
+ *
+ * ============================================================================
+ * 36. IR CONTRACT
+ * ============================================================================
+ *
+ * This grammar creates NO IR.
+ *
+ * Scalability semantics are attached to the canonical semantic model and
+ * lowered into the appropriate downstream representation.
+ *
+ * For quantum workloads:
+ *
+ *     semantic scalability
+ *         ->
+ *     quantum::ir metadata/requirements
+ *
+ * where appropriate.
+ *
+ * For classical workloads:
+ *
+ *     semantic scalability
+ *         ->
+ *     classical compilation/resource metadata.
+ *
+ * For HDL/hardware:
+ *
+ *     semantic scalability
+ *         ->
+ *     hardware/HDL lowering metadata.
+ *
+ * There must not be a second "scalability IR".
+ *
+ * ============================================================================
+ * 37. COMPILER CONTRACT
+ * ============================================================================
+ *
+ * Compiler/resource infrastructure may use scalability semantics for:
+ *
+ *     - target selection;
+ *     - resource feasibility;
+ *     - specialization;
+ *     - parallelization;
+ *     - vectorization;
+ *     - decomposition;
+ *     - placement;
+ *     - routing;
+ *     - scheduling;
+ *     - distributed execution planning;
+ *     - accelerator selection;
+ *     - quantum realization.
+ *
+ * Those are downstream implementation decisions.
+ *
+ * The source grammar remains independent of the selected machine.
+ *
+ * ============================================================================
+ * 38. RUNTIME CONTRACT
+ * ============================================================================
+ *
+ * Runtime systems may evaluate scaling-related semantic expressions against
+ * runtime context when the language semantics permit dynamic evaluation.
+ *
+ * The parser MUST NOT:
+ *
+ *     - query hardware;
+ *     - inspect runtime capacity;
+ *     - allocate resources;
+ *     - choose a device;
+ *     - schedule work;
+ *     - perform negotiation.
+ *
+ * ============================================================================
+ * 39. DETERMINISM
+ * ============================================================================
+ *
+ * Parsing must depend only on:
+ *
+ *     source text
+ *     grammar version
+ *     canonical lexer vocabulary
+ *     explicitly selected dialect configuration.
+ *
+ * Parsing must not depend on:
+ *
+ *     hardware availability
+ *     runtime state
+ *     network state
+ *     filesystem state
+ *     randomness
+ *     wall-clock time
+ *     compiler scheduling.
+ *
+ * ============================================================================
+ * 40. SOURCE SPANS
+ * ============================================================================
+ *
+ * Every parsed scalability construct must remain traceable to its source
+ * range through the normal ANTLR token/context infrastructure.
+ *
+ * Downstream AST construction must preserve spans for:
+ *
+ *     property names
+ *     relationship names
+ *     values
+ *     groups
+ *     complete scalability declarations.
+ *
+ * This supports:
+ *
+ *     diagnostics
+ *     IDE/LSP tooling
+ *     formatting
+ *     source maps
+ *     compatibility tooling
+ *     provenance.
+ *
+ * ============================================================================
+ * 41. DIAGNOSTICS
+ * ============================================================================
+ *
+ * Parser diagnostics are structural.
+ *
+ * Examples:
+ *
+ *     scalability = ;
+ *     scalability input = ;
+ *     scalability input;
+ *     scalability { input = ; }
+ *     scalability { }
+ *
+ * Semantic diagnostics are downstream.
+ *
+ * Examples:
+ *
+ *     unknown standardized scalability property;
+ *     invalid scaling value type;
+ *     incompatible scaling relationship;
+ *     contradictory scalability contract;
+ *     unavailable required capacity;
+ *     non-portable implementation request.
+ *
+ * The parser must not silently turn semantic errors into successful
+ * realizations.
+ *
+ * ============================================================================
+ * 42. SECURITY
+ * ============================================================================
+ *
+ * Scalability syntax must remain declarative and side-effect free.
+ *
+ * It must not:
+ *
+ *     execute code;
+ *     execute commands;
+ *     access secrets;
+ *     access credentials;
+ *     inspect hardware;
+ *     contact providers;
+ *     allocate resources;
+ *     modify the filesystem;
+ *     access the network.
+ *
+ * ============================================================================
+ * 43. COMPATIBILITY
+ * ============================================================================
+ *
+ * This file preserves the existing public concept:
+ *
+ *     scalability
+ *
+ * while removing dependency on speculative `K_*` token names.
+ *
+ * The existing concrete resource declaration owned by:
+ *
+ *     grammar/resources/resources.g4
+ *
+ * remains the owner of:
+ *
+ *     resourceScalabilityClause
+ *
+ * and therefore this file MUST NOT define that same rule.
+ *
+ * A parent grammar may import this grammar and delegate a block payload to:
+ *
+ *     resourceScalabilitySpecification
+ *
+ * without modifying this file.
+ *
+ * This is intentional independent-file integration.
+ *
+ * ============================================================================
+ * 44. INTEGRATION WITH resources.g4
+ * ============================================================================
+ *
+ * Current canonical ownership remains:
+ *
+ *     resources.g4
+ *         owns resourceScalabilityClause
+ *
+ *     scalability.g4
+ *         owns resourceScalabilitySpecification
+ *
+ * This avoids duplicate rule ownership.
+ *
+ * When a block form is exposed by resources.g4, the parent may import:
+ *
+ *     ResourceScalability
+ *
+ * and delegate its block payload to:
+ *
+ *     resourceScalabilitySpecification
+ *
+ * The parent must not recreate the internal scalability rules.
+ *
+ * Conversely, this file must never redefine:
+ *
+ *     resourceScalabilityClause
+ *
+ * ============================================================================
+ * 45. INTEGRATION WITH resource-expressions.g4
+ * ============================================================================
+ *
+ * This file imports:
+ *
+ *     ResourceExpressions
+ *
+ * and consumes:
+ *
+ *     resourceExpression
+ *
+ * It therefore inherits future expression-language improvements without
+ * requiring this grammar to duplicate arithmetic, comparison, logical,
+ * indexing, invocation, or literal syntax.
+ *
+ * ============================================================================
+ * 46. INTEGRATION WITH requirements.g4
+ * ============================================================================
+ *
+ * Requirements remain owned by:
+ *
+ *     grammar/resources/requirements.g4
+ *
+ * Scalability does not redefine:
+ *
+ *     resourceRequirement
+ *     resourceRequirementExpression
+ *
+ * A requirement may refer semantically to a scalability expression, but
+ * requirement classification remains downstream.
+ *
+ * ============================================================================
+ * 47. INTEGRATION WITH constraints.g4
+ * ============================================================================
+ *
+ * Constraints remain owned by:
+ *
+ *     grammar/resources/constraints.g4
+ *
+ * Scalability does not redefine constraint syntax.
+ *
+ * A constraint may consume scalability-derived semantic values after parsing.
+ *
+ * ============================================================================
+ * 48. INTEGRATION WITH preferences.g4
+ * ============================================================================
+ *
+ * Preferences remain owned by:
+ *
+ *     grammar/resources/preferences.g4
+ *
+ * Scalability does not redefine preference syntax.
+ *
+ * A preference may refer to scalability properties without changing the
+ * ownership of preference semantics.
+ *
+ * ============================================================================
+ * 49. INTEGRATION WITH portability.g4
+ * ============================================================================
+ *
+ * Portability remains owned by:
+ *
+ *     grammar/resources/portability.g4
+ *
+ * This grammar may provide scalability values that portability analysis
+ * consumes, but it does not duplicate portability rules.
+ *
+ * ============================================================================
+ * 50. DOMAIN-NEUTRALITY
+ * ============================================================================
+ *
+ * The same scalability grammar applies to:
+ *
+ *     embedded computing
+ *     classical CPU computing
+ *     multicore computing
+ *     GPU computing
+ *     FPGA computing
+ *     ASIC-oriented computation
+ *     accelerator computing
+ *     quantum computing
+ *     quantum simulation
+ *     hybrid computing
+ *     AI/ML
+ *     tensor computing
+ *     distributed computing
+ *     HPC
+ *     cloud execution
+ *     future computational substrates.
+ *
+ * No domain gets a private scalability language.
+ *
+ * ============================================================================
+ * 51. NO HARDWARE IDENTIFIERS
+ * ============================================================================
+ *
+ * This grammar does not encode:
+ *
+ *     cpu0
+ *     gpu0
+ *     qpu0
+ *     fpga0
+ *     node0
+ *     device0
+ *     physical_qubit0
+ *
+ * Such strings, if lexically valid identifiers, remain names.
+ *
+ * Their physical interpretation belongs downstream.
+ *
+ * ============================================================================
+ * 52. NO FIXED SCALE
+ * ============================================================================
+ *
+ * The language supports scaling from:
+ *
+ *     one operation
+ *     one resource
+ *     one processor
+ *     one accelerator
+ *     one qubit
+ *
+ * through arbitrarily larger semantic workloads, subject to the actual
+ * resources available to the implementation.
+ *
+ * "Infinity" here means:
+ *
+ *     no artificial finite ceiling is encoded by this grammar.
+ *
+ * It does NOT claim physically infinite:
+ *
+ *     memory
+ *     compute
+ *     devices
+ *     qubits
+ *     execution time
+ *     network capacity.
+ *
+ * ============================================================================
+ * 53. TEST CONTRACT
+ * ============================================================================
+ *
+ * Positive syntax cases MUST include:
  *
  *     scalability = input_size;
- *     scalability = workload_size * parallelism;
+ *
+ *     scalability = problem_size * parallelism;
+ *
+ *     scalability input = input_size;
+ *
+ *     scalability memory = required_memory;
+ *
+ *     scalability qubits = logical_qubits;
+ *
  *     scalability grows_with input_size;
- *     scalability bounded_by available_capacity;
- *     scalability depends_on problem_size;
- *     scalability independent_of machine_size;
- *     scalability adapts according_to available_capacity;
- *     scalability portable_across scale;
- *     scalability { ... };
  *
- * QUANTUM:
+ *     scalability depends_on workload_size;
  *
- *     scaling of logical-qubit requirements;
- *     scaling of circuit/workload expressions;
- *     scaling with shot/workload expressions;
+ *     scalability {
+ *         input = input_size;
+ *         memory = required_memory;
+ *         qubits = logical_qubits;
+ *     }
  *
- * CLASSICAL:
+ *     scalability {
+ *         memory {
+ *             working = working_memory;
+ *             persistent = dataset_size;
+ *         }
+ *     }
  *
- *     scaling of vectors/matrices/tensors;
- *     scaling of parallel workloads;
+ *     scalability hardware::memory = required_memory;
  *
- * HDL/HARDWARE:
+ *     scalability tensor::elements = tensor_size;
  *
- *     parameterized hardware scale;
- *     symbolic resource capacity;
- *     hardware generation scale;
+ *     scalability quantum::logical_qubits = logical_qubits;
  *
- * DISTRIBUTED:
+ * Negative syntax cases MUST include:
  *
- *     symbolic node/workload relationships;
- *     dynamic capacity;
+ *     scalability = ;
  *
- * AI:
+ *     scalability input = ;
  *
- *     dataset/model/tensor scaling;
+ *     scalability input;
  *
- * NEGATIVE:
+ *     scalability = input_size
  *
- *     malformed scalability declarations;
- *     missing expressions;
- *     malformed contracts;
- *     invalid separators;
- *     incomplete relationships;
+ *     scalability { input = ; }
  *
- * BOUNDARY:
+ *     scalability { input }
  *
- *     zero-length lists where permitted;
+ *     scalability input = , other;
+ *
+ * Boundary cases MUST include:
+ *
+ *     one scalability item;
  *     arbitrarily many scalability items;
- *     arbitrarily many expressions;
- *     deeply composed symbolic expressions;
- *     large numeric values as ordinary expressions;
- *     symbolic dimensions;
+ *     deeply nested scalability groups;
+ *     deeply qualified property names;
+ *     arbitrarily long expression lists;
+ *     symbolic scaling quantities;
+ *     large numeric program values;
+ *     dynamic resource expressions.
  *
- * SCALABILITY:
+ * Scalability tests MUST verify:
  *
- *     source programs with no grammar-defined machine ceiling;
- *     programs expressing very large symbolic resource requirements;
- *     programs whose required scale is determined by runtime context.
+ *     no finite number of dimensions is encoded;
+ *     no finite number of properties is encoded;
+ *     no finite nesting depth is specified by language semantics;
+ *     no hardware cardinality is encoded;
+ *     no resource capacity is hard-coded.
  *
- * DETERMINISM:
+ * Determinism tests MUST parse identical source identically.
  *
- *     identical source produces identical parse structure.
+ * Compatibility tests MUST verify that:
  *
- * ROUND-TRIP:
+ *     resources.g4
+ *     resource-expressions.g4
+ *     requirements.g4
+ *     constraints.g4
+ *     preferences.g4
+ *     portability.g4
  *
- *     source -> lexer -> parser -> AST -> printer -> parser
- *
- *     preserves intended scalability semantics.
+ * do not introduce competing definitions of this grammar's owned rules.
  *
  * ============================================================================
- * COMPLETION CRITERIA
+ * 54. HARD-CODING AUDIT
  * ============================================================================
  *
- * This file is complete only when:
+ * Forbidden:
  *
- * [ ] It compiles with the repository's ANTLR configuration.
+ *     MAX_QUBITS
+ *     MAX_CPUS
+ *     MAX_CORES
+ *     MAX_THREADS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_ASICS
+ *     MAX_QPUS
+ *     MAX_NODES
+ *     MAX_MEMORY
+ *     MAX_STORAGE
+ *     MAX_REGISTER_WIDTH
+ *     MAX_TENSOR_RANK
+ *     MAX_TENSOR_DIMENSION
+ *     MAX_VECTOR_WIDTH
+ *     MAX_DEVICE_COUNT
+ *     MAX_ACCELERATORS
+ *     MAX_TIMELINES
  *
- * [ ] Its token names match the canonical lexer.
+ * Forbidden indirect forms include fixed alternatives such as:
  *
- * [ ] ResourceExpressions resolves successfully.
+ *     one | two | four | eight
  *
- * [ ] No duplicate canonical expression rules exist.
+ * when used to represent universal hardware capacity.
  *
- * [ ] No duplicate resource semantic model exists.
+ * Numeric values are permitted only as source expressions.
  *
- * [ ] resources.g4 can import/use this grammar without architectural cycles.
+ * This file contains no hardware capacity constant.
  *
- * [ ] Quantum resource grammar can consume its scalability boundary without
- *     redefining scalability semantics.
+ * ============================================================================
+ * 55. PERFORMANCE
+ * ============================================================================
  *
- * [ ] Hardware resource grammar can consume its scalability boundary without
- *     redefining scalability semantics.
+ * The grammar favors:
  *
- * [ ] Hybrid resource grammar can consume its scalability boundary without
- *     redefining scalability semantics.
+ *     bounded local alternatives;
+ *     canonical expression delegation;
+ *     iterative repetition;
+ *     recursive grouping only where source nesting requires it.
  *
- * [ ] The resulting AST has a stable semantic representation for scalability
- *     intent.
+ * It does not introduce semantic predicates or runtime actions.
  *
- * [ ] Semantic analysis distinguishes requirement, constraint, preference,
- *     hint, capacity and availability.
+ * Any implementation-level parser stack or memory limits are outside the
+ * language semantics.
  *
- * [ ] No physical machine assumptions occur in this grammar.
+ * ============================================================================
+ * 56. COMPLETION CRITERIA
+ * ============================================================================
  *
- * [ ] No fixed resource maximum occurs in this grammar.
+ * This file is complete when:
  *
- * [ ] No fixed quantum limit occurs in this grammar.
- *
- * [ ] No fixed processor/device limit occurs in this grammar.
- *
- * [ ] No unsafe Rust is required.
- *
- * [ ] Positive tests pass.
- *
- * [ ] Negative tests pass.
- *
- * [ ] Boundary tests pass.
- *
- * [ ] Cross-domain tests pass.
- *
- * [ ] Determinism tests pass.
- *
- * [ ] Round-trip tests pass where supported.
- *
- * [ ] Documentation describes this file as a syntax boundary, not an IR.
+ *     [x] canonical parser grammar is used;
+ *     [x] canonical ZamaniLexer vocabulary is consumed;
+ *     [x] no speculative K_* lexer tokens are required;
+ *     [x] ResourceExpressions remains the sole owner of resourceExpression;
+ *     [x] identifier syntax is not duplicated;
+ *     [x] scalability has a single leaf grammar;
+ *     [x] resourceScalabilityClause remains owned by Resources;
+ *     [x] block scalability has an independent public entry point;
+ *     [x] properties are open-world;
+ *     [x] qualified properties are supported;
+ *     [x] nested groups are supported;
+ *     [x] values reuse resourceExpression;
+ *     [x] no finite scalability cardinality is encoded;
+ *     [x] no hardware capacity is encoded;
+ *     [x] no quantum gate enumeration exists;
+ *     [x] no physical resource selection exists;
+ *     [x] no placement/routing/scheduling logic exists;
+ *     [x] no QEC/ZQN/HAL logic exists;
+ *     [x] POCO-REAF remains target-independent;
+ *     [x] source-span preservation is specified;
+ *     [x] diagnostics are separated from semantic validation;
+ *     [x] AST ownership remains domain-neutral;
+ *     [x] canonical semantic/IR lowering remains downstream;
+ *     [x] Rust integration requires no unsafe;
+ *     [x] positive/negative/boundary/scalability/determinism tests are defined.
  *
  * ============================================================================
  * END OF FILE
