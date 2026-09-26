@@ -10,12 +10,20 @@
  *     Distributed
  *
  * Status:
- *     Production distributed-computing parser grammar.
+ *     Production parser-composition root
  *
- * Rust baseline:
+ * Language:
+ *     Zamani
+ *
+ * ANTLR:
+ *     ANTLR4 parser grammar
+ *
+ * Rust integration baseline:
  *     Rust 1.97 / Rust 1.97.1
+ *     Rust Edition 2021
  *
  * Safety:
+ *     - Grammar-only.
  *     - No embedded Rust actions.
  *     - No semantic predicates.
  *     - No unsafe code.
@@ -23,243 +31,138 @@
  *     - No network access.
  *     - No hardware access.
  *     - No runtime callbacks.
- *     - No mutable global parser state.
  *     - No randomness.
+ *     - No mutable parser-global state.
  *
  * ============================================================================
  * PURPOSE
  * ============================================================================
  *
- * This grammar owns SOURCE-LEVEL DISTRIBUTED COMPUTATION SYNTAX.
+ * This file is the SINGLE DISTRIBUTED-DOMAIN PARSER COMPOSITION ROOT.
  *
- * It describes distributed computational intent and provides a stable syntax
- * boundary between Zamani source code and downstream semantic analysis.
+ * It does NOT implement the individual distributed language features.
  *
- * It does NOT implement:
+ * Individual source-level distributed constructs remain owned by their
+ * existing specialized grammar files under:
  *
- *     - distributed execution;
- *     - process scheduling;
- *     - service discovery;
- *     - node discovery;
- *     - network transport;
- *     - routing;
- *     - placement;
- *     - deployment;
- *     - replication algorithms;
- *     - consensus algorithms;
- *     - consistency algorithms;
- *     - fault-tolerance algorithms;
- *     - distributed storage;
- *     - cloud-provider integration;
- *     - hardware discovery;
- *     - quantum routing;
- *     - quantum::ir;
- *     - QEC;
- *     - ZQN;
- *     - resilience.
+ *     grammar/distributed/
  *
- * Those concerns belong to their respective repository subsystems.
+ * This file composes those grammars into one stable public distributed
+ * language boundary.
  *
  * ============================================================================
- * ARCHITECTURAL PRINCIPLE
+ * ARCHITECTURAL RULE
  * ============================================================================
  *
- *     SOURCE
- *        |
- *        v
- *     LEXER
- *        |
- *        v
- *     PARSER
- *        |
- *        v
- *     FRONTEND AST
- *        |
- *        +--> name resolution
- *        +--> type checking
- *        +--> effect checking
- *        +--> capability checking
- *        +--> resource analysis
- *        +--> security analysis
- *        +--> distributed semantic validation
- *        |
- *        v
- *     CANONICAL SEMANTIC REPRESENTATION
- *        |
- *        +--> classical IR
- *        +--> quantum::ir
- *        +--> HDL/hardware representation
- *        +--> distributed execution metadata
- *        +--> resource requirements
- *        |
- *        v
+ * The architecture is:
+ *
+ *     Zamani source
+ *          |
+ *          v
+ *     canonical Zamani lexer
+ *          |
+ *          v
+ *     Distributed parser composition
+ *          |
+ *          +--> Nodes
+ *          +--> Services
+ *          +--> Processes
+ *          +--> Actors
+ *          +--> Channels
+ *          +--> Communication
+ *          +--> Messaging
+ *          +--> Collective computation
+ *          +--> Replication
+ *          +--> Consistency
+ *          +--> Placement
+ *          +--> Partitioning
+ *          +--> Topology
+ *          +--> Remote execution
+ *          +--> Deployment
+ *          +--> Fault tolerance
+ *          +--> Contracts
+ *          +--> Transactions
+ *          |
+ *          v
+ *     domain-neutral frontend AST
+ *          |
+ *          +--> name resolution
+ *          +--> type analysis
+ *          +--> effect analysis
+ *          +--> capability analysis
+ *          +--> resource analysis
+ *          +--> ownership/lifetime analysis
+ *          +--> security analysis
+ *          +--> distributed semantic analysis
+ *          |
+ *          v
+ *     canonical semantic representation
+ *          |
+ *          +--> classical computation / IR
+ *          +--> quantum::ir
+ *          +--> HDL / hardware representation
+ *          +--> distributed execution metadata
+ *          +--> resource requirements
+ *          |
+ *          v
  *     optimization
- *        |
- *        v
- *     placement / routing / scheduling
- *        |
- *        v
+ *          |
+ *          +--> placement
+ *          +--> routing
+ *          +--> scheduling
+ *          +--> resilience
+ *          +--> deployment
+ *          |
+ *          v
  *     target realization
- *        |
- *        v
+ *          |
+ *          v
  *     runtime
  *
- * The grammar never directly constructs or modifies an IR.
+ * This grammar MUST remain upstream of all implementation decisions.
  *
  * ============================================================================
  * POCO-REAF
  * ============================================================================
  *
- * Distributed syntax follows:
+ * Distributed syntax participates in:
  *
- *     Program Once
- *     Compile Once
- *     Run Everywhere
- *     Run Anywhere
- *     Run Forever
+ *     Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
  *
- * Source code describes semantic intent.
+ * A distributed program describes logical computation and execution intent.
  *
- * Source code MUST NOT require rewriting merely because execution moves
- * between:
+ * It MUST NOT require source rewriting merely because the same program is
+ * realized using:
  *
- *     - one machine;
+ *     - one execution resource;
+ *     - many CPU cores;
+ *     - many processes;
  *     - many machines;
- *     - embedded systems;
- *     - clusters;
- *     - clouds;
+ *     - embedded resources;
+ *     - edge resources;
  *     - HPC systems;
- *     - heterogeneous systems;
- *     - quantum/classical systems;
- *     - future execution architectures.
+ *     - clusters;
+ *     - supercomputers;
+ *     - cloud resources;
+ *     - federated resources;
+ *     - heterogeneous CPU/GPU/FPGA/ASIC resources;
+ *     - quantum-classical resources;
+ *     - distributed quantum resources;
+ *     - future computational substrates.
  *
- * ============================================================================
- * OPEN-WORLD DESIGN
- * ============================================================================
- *
- * Distributed domain concepts are represented primarily through qualified
- * names rather than a closed lexer keyword inventory.
- *
- * Examples:
- *
- *     distributed::node
- *     distributed::service
- *     distributed::worker
- *     distributed::actor
- *     distributed::task
- *     distributed::channel
- *     distributed::message
- *     distributed::send
- *     distributed::receive
- *     distributed::broadcast
- *     distributed::scatter
- *     distributed::gather
- *     distributed::reduce
- *     distributed::replication
- *     distributed::consistency
- *     distributed::partition
- *     distributed::placement
- *     distributed::remote_execution
- *     distributed::migration
- *     distributed::coordination
- *     distributed::consensus
- *     distributed::fault_tolerance
- *     distributed::recovery
- *     distributed::availability
- *
- * A future extension such as:
- *
- *     distributed::future_protocol
- *
- * remains syntactically representable without adding a lexer keyword.
- *
- * Semantic validation determines whether a particular name is defined,
- * supported, deprecated, experimental, vendor-specific, or unknown.
- *
- * ============================================================================
- * OWNERSHIP
- * ============================================================================
- *
- * THIS FILE OWNS:
- *
- *     - distributed source-level containers;
- *     - distributed named entities;
- *     - distributed executable operations;
- *     - distributed bindings;
- *     - distributed relationships;
- *     - distributed dependencies;
- *     - distributed clauses;
- *     - distributed blocks;
- *     - distributed argument lists;
- *     - distributed semantic attributes;
- *     - distributed source-level composition.
- *
- * THIS FILE DOES NOT OWN:
- *
- *     - lexical tokens;
- *     - identifier syntax;
- *     - qualified-name syntax;
- *     - general expression syntax;
- *     - general type syntax;
- *     - memory ownership;
- *     - generic concurrency primitives;
- *     - network protocol syntax;
- *     - hardware topology;
- *     - physical resources;
- *     - device identifiers;
- *     - resource allocation;
- *     - target selection;
- *     - scheduling;
- *     - routing;
- *     - optimization;
- *     - classical IR;
- *     - quantum::ir;
- *     - QEC;
- *     - ZQN;
- *     - resilience;
- *     - runtime execution.
- *
- * ============================================================================
- * DEPENDENCY CONTRACT
- * ============================================================================
- *
- * Canonical dependencies:
- *
- *     ZamaniLexer
- *          |
- *          +--> Names
- *          |      |
- *          |      +--> identifier
- *          |      +--> qualifiedName
- *          |
- *          +--> Expressions
- *                 |
- *                 +--> expression
- *                 +--> expressionList
- *                 +--> optionalExpressionList
- *          |
- *          v
- *     Distributed
- *
- * This grammar MUST NOT redefine:
- *
- *     IDENTIFIER
- *     identifier
- *     qualifiedName
- *     expression
- *     expressionList
- *     operators
- *     punctuation
+ * This grammar therefore describes WHAT distributed computation means,
+ * while downstream systems determine HOW and WHERE it is realized.
  *
  * ============================================================================
  * SCALABILITY CONTRACT
  * ============================================================================
  *
- * No finite machine/resource limits are encoded.
+ * NO LANGUAGE-LEVEL HARDWARE OR DEPLOYMENT CAPACITY IS ENCODED HERE.
  *
- * There is deliberately no:
+ * This file MUST NOT impose:
  *
  *     MAX_NODES
+ *     MAX_PROCESSES
  *     MAX_WORKERS
  *     MAX_SERVICES
  *     MAX_ACTORS
@@ -268,116 +171,629 @@
  *     MAX_MESSAGES
  *     MAX_REPLICAS
  *     MAX_SHARDS
+ *     MAX_PARTITIONS
  *     MAX_REGIONS
  *     MAX_DEVICES
  *     MAX_NETWORKS
- *     MAX_CLUSTER_SIZE
+ *     MAX_CLUSTERS
+ *     MAX_CPUS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_ASICS
+ *     MAX_QPUS
+ *     MAX_THREADS
+ *     MAX_MEMORY
+ *     MAX_STORAGE
+ *     MAX_BANDWIDTH
  *
- * Nor does this grammar encode:
+ * It also MUST NOT encode:
  *
- *     CPU counts
- *     GPU counts
- *     QPU counts
- *     memory sizes
- *     network bandwidth
- *     network addresses
- *     ports
- *     topology sizes
- *     machine IDs
- *     provider IDs
- *     device IDs
+ *     - fixed machine counts;
+ *     - fixed node IDs;
+ *     - fixed CPU IDs;
+ *     - fixed GPU IDs;
+ *     - fixed FPGA IDs;
+ *     - fixed QPU IDs;
+ *     - fixed physical memory addresses;
+ *     - fixed network addresses;
+ *     - fixed ports;
+ *     - fixed cloud-provider inventories;
+ *     - fixed topology sizes.
  *
- * Repetition is represented by ANTLR's `*` and `+`.
+ * Repetition in the composed grammars is represented by normal ANTLR
+ * repetition constructs and therefore does not establish a language-level
+ * capacity.
  *
- * Practical resource limits are owned by:
- *
- *     parser resource policy;
- *     compiler resource policy;
- *     semantic validation;
- *     resource manager;
- *     scheduler;
- *     deployment;
- *     runtime.
+ * Practical limits are implementation/deployment policy, not language
+ * semantics.
  *
  * ============================================================================
- * SEMANTIC BOUNDARY
+ * REQUIREMENT / REALIZATION SEPARATION
  * ============================================================================
  *
- * The parser determines:
+ * Distributed source may express:
  *
- *     "Is the source structurally valid distributed syntax?"
+ *     requirements
+ *     constraints
+ *     capabilities
+ *     preferences
+ *     hints
+ *     logical relationships
+ *     logical topology
+ *     logical placement intent
+ *     execution policies
  *
- * It does not determine:
+ * It MUST NOT silently convert those concepts into:
  *
- *     "Can this deployment actually be realized?"
+ *     physical node selection;
+ *     machine selection;
+ *     transport selection;
+ *     routing;
+ *     scheduling;
+ *     hardware allocation;
+ *     cloud-provider selection.
  *
- *     "Which node executes this task?"
+ * For example, a semantic requirement equivalent to:
  *
- *     "Which transport is used?"
+ *     requires capability("distributed.communication")
  *
- *     "How many replicas exist?"
+ * is not equivalent to:
  *
- *     "Which consistency algorithm is selected?"
+ *     use_machine(0)
  *
- *     "Which scheduler is selected?"
+ * and:
  *
- *     "Which hardware is selected?"
+ *     requires nodes >= n
  *
- *     "Which cloud provider is selected?"
+ * is not a grammar-level maximum of n nodes.
  *
- * Those decisions belong downstream.
+ * Resource/capability interpretation belongs downstream.
+ *
+ * ============================================================================
+ * OPEN-WORLD CONTRACT
+ * ============================================================================
+ *
+ * Distributed computing must remain extensible.
+ *
+ * The distributed grammar MUST NOT require a new lexer keyword whenever a new
+ * distributed abstraction is introduced.
+ *
+ * Existing specialized grammars already provide structured syntax for the
+ * currently defined distributed domains.
+ *
+ * Future semantic concepts may be represented through the language's existing
+ * identifier/qualified-name and expression mechanisms where their owning
+ * grammar explicitly permits extension.
+ *
+ * Examples of semantic names that must not require new lexer tokens merely
+ * because they are new:
+ *
+ *     distributed::federation
+ *     distributed::region
+ *     distributed::shard
+ *     distributed::replica
+ *     distributed::quantum_network
+ *     distributed::edge_region
+ *     distributed::photonic_fabric
+ *     distributed::neuromorphic_region
+ *     distributed::future_architecture
+ *     distributed::future_protocol
+ *
+ * Syntactic acceptance does not imply semantic support.
+ *
+ * Semantic analysis determines whether a construct is:
+ *
+ *     defined
+ *     supported
+ *     experimental
+ *     deprecated
+ *     vendor-specific
+ *     dialect-defined
+ *     extension-defined
+ *     unknown
+ *
+ * ============================================================================
+ * LEXICAL AUTHORITY
+ * ============================================================================
+ *
+ * This grammar does NOT define lexer rules.
+ *
+ * All token spelling and token identity come from the canonical Zamani lexer:
+ *
+ *     ZamaniLexer
+ *
+ * This grammar therefore MUST NOT define:
+ *
+ *     IDENTIFIER
+ *     INTEGER
+ *     FLOAT
+ *     keywords
+ *     operators
+ *     punctuation
+ *     whitespace
+ *     comments
+ *
+ * Domain-specific concepts such as:
+ *
+ *     node
+ *     worker
+ *     service
+ *     actor
+ *     shard
+ *     replica
+ *     federation
+ *
+ * MUST NOT be added to the lexer merely because they are distributed concepts.
+ *
+ * ============================================================================
+ * NAME AUTHORITY
+ * ============================================================================
+ *
+ * Canonical name syntax is owned by:
+ *
+ *     grammar/core/names.g4
+ *
+ * and its canonical parser grammar:
+ *
+ *     Names
+ *
+ * This composition root consumes:
+ *
+ *     identifier
+ *     qualifiedName
+ *
+ * through imported grammar dependencies where required.
+ *
+ * It MUST NOT redefine:
+ *
+ *     identifier
+ *     qualifiedName
+ *     nameSegment
+ *     nameList
+ *     qualifiedNameList
+ *
+ * ============================================================================
+ * EXPRESSION AUTHORITY
+ * ============================================================================
+ *
+ * General expressions remain owned by the canonical expression grammar.
+ *
+ * Distributed grammars consume:
+ *
+ *     expression
+ *     expressionList
+ *     optionalExpressionList
+ *
+ * where their individual contracts require them.
+ *
+ * This file MUST NOT redefine:
+ *
+ *     expression
+ *     expressionList
+ *     operator precedence
+ *     arithmetic
+ *     logical expressions
+ *     indexing
+ *     calls
+ *     member access
+ *
+ * ============================================================================
+ * TYPE AUTHORITY
+ * ============================================================================
+ *
+ * Type syntax remains owned by the canonical type system.
+ *
+ * Distributed grammars may consume type expressions through their existing
+ * imports.
+ *
+ * This file MUST NOT redefine:
+ *
+ *     typeExpression
+ *     generic type syntax
+ *     ownership types
+ *     reference types
+ *     quantum types
+ *     tensor types
+ *     resource types
+ *
+ * ============================================================================
+ * SPECIALIZED GRAMMAR OWNERSHIP
+ * ============================================================================
+ *
+ * The following existing files remain the authoritative source-level owners
+ * of their respective distributed constructs:
+ *
+ *     nodes.g4
+ *         -> Nodes
+ *
+ *     services.g4
+ *         -> DistributedServices
+ *
+ *     processes.g4
+ *         -> Processes
+ *
+ *     actors.g4
+ *         -> DistributedActors
+ *
+ *     channels.g4
+ *         -> DistributedChannels
+ *
+ *     communication.g4
+ *         -> Communication
+ *
+ *     messaging.g4
+ *         -> Messaging
+ *
+ *     collective.g4
+ *         -> Collective
+ *
+ *     replication.g4
+ *         -> Replication
+ *
+ *     consistency.g4
+ *         -> DistributedConsistency
+ *
+ *     placement.g4
+ *         -> DistributedPlacement
+ *
+ *     partitioning.g4
+ *         -> DistributedPartitioning
+ *
+ *     topology.g4
+ *         -> DistributedTopology
+ *
+ *     remote-execution.g4
+ *         -> RemoteExecution
+ *
+ *     deployment.g4
+ *         -> DistributedDeployment
+ *
+ *     fault-tolerance.g4
+ *         -> FaultTolerance
+ *
+ *     contracts.g4
+ *         -> DistributedContracts
+ *
+ *     transactions.g4
+ *         -> DistributedTransactions
+ *
+ * This file MUST NOT duplicate their internal rules.
+ *
+ * ============================================================================
+ * IMPORT GRAPH
+ * ============================================================================
+ *
+ * Canonical composition:
+ *
+ *     Distributed
+ *       |
+ *       +--> Nodes
+ *       +--> DistributedServices
+ *       +--> Processes
+ *       +--> DistributedActors
+ *       +--> DistributedChannels
+ *       +--> Communication
+ *       +--> Messaging
+ *       +--> Collective
+ *       +--> Replication
+ *       +--> DistributedConsistency
+ *       +--> DistributedPlacement
+ *       +--> DistributedPartitioning
+ *       +--> DistributedTopology
+ *       +--> RemoteExecution
+ *       +--> DistributedDeployment
+ *       +--> FaultTolerance
+ *       +--> DistributedContracts
+ *       +--> DistributedTransactions
+ *
+ * Each specialized grammar remains responsible for importing its own
+ * foundational dependencies.
+ *
+ * The composition root therefore does not duplicate:
+ *
+ *     Names
+ *     Expressions
+ *     Types
+ *     Parameters
+ *     Resources
+ *     Concurrency
+ *     Networking
+ *     Hardware
+ *
+ * ============================================================================
+ * CRITICAL COMPOSITION RULE
+ * ============================================================================
+ *
+ * There is ONE canonical public distributed entry point:
+ *
+ *     distributedDeclaration
+ *
+ * This rule is the stable boundary consumed by the higher-level Zamani
+ * composition grammar.
+ *
+ * Do NOT create competing root concepts such as:
+ *
+ *     distributedProgram
+ *     distributedCompilationUnit
+ *     distributedCompleteScope
+ *     distributedCompleteMember
+ *
+ * as alternative versions of the same public entry point.
+ *
+ * If a future parent grammar needs a contextual wrapper, it should wrap:
+ *
+ *     distributedDeclaration
+ *
+ * rather than create another distributed language root.
+ *
+ * ============================================================================
+ * AST CONTRACT
+ * ============================================================================
+ *
+ * This grammar creates NO AST implementation.
+ *
+ * The parser tree produced by this composition root must be mapped by the
+ * frontend to the domain-neutral AST under:
+ *
+ *     src/frontend/ast/
+ *
+ * The AST must preserve, as applicable:
+ *
+ *     - source ordering;
+ *     - declaration ordering;
+ *     - construct kind;
+ *     - source names;
+ *     - qualified-name segments;
+ *     - expression structure;
+ *     - type structure;
+ *     - argument ordering;
+ *     - nested bodies;
+ *     - relationships;
+ *     - dependencies;
+ *     - clauses;
+ *     - properties;
+ *     - source spans;
+ *     - source-level attributes/modifiers.
+ *
+ * The distributed grammar MUST NOT force backend-specific AST nodes merely
+ * because the source construct is distributed.
+ *
+ * A logical distributed task must not automatically become:
+ *
+ *     CpuTask
+ *     GpuTask
+ *     FpgaTask
+ *     QpuTask
+ *     CloudTask
+ *
+ * merely because of parser classification.
+ *
+ * ============================================================================
+ * SEMANTIC CONTRACT
+ * ============================================================================
+ *
+ * After parsing, semantic analysis is responsible for:
+ *
+ *     - name resolution;
+ *     - declaration resolution;
+ *     - type checking;
+ *     - effect checking;
+ *     - capability checking;
+ *     - resource requirement analysis;
+ *     - ownership/lifetime analysis;
+ *     - security analysis;
+ *     - distributed relationship validation;
+ *     - topology validation;
+ *     - placement intent validation;
+ *     - replication validation;
+ *     - consistency validation;
+ *     - fault-tolerance validation;
+ *     - transaction validation;
+ *     - deployment validation;
+ *     - portability analysis.
+ *
+ * The parser does NOT determine whether the requested computation can
+ * actually be realized on a particular deployment.
+ *
+ * ============================================================================
+ * IR CONTRACT
+ * ============================================================================
+ *
+ * This grammar creates NO IR.
+ *
+ * There must be no automatic:
+ *
+ *     DistributedIR
+ *     DistributedTopologyIR
+ *     DistributedNodeIR
+ *     DistributedTaskIR
+ *
+ * introduced merely because syntax originated in this directory.
+ *
+ * Distributed semantic information must lower through the repository's
+ * established canonical semantic/IR architecture.
+ *
+ * Classical computation follows the canonical classical pipeline.
+ *
+ * Quantum computation MUST continue through:
+ *
+ *     quantum::ir
+ *
+ * and MUST NOT create a competing frontend-specific quantum IR.
+ *
+ * Hardware/HDL constructs continue through their established hardware/HDL
+ * representation.
+ *
+ * Distributed execution metadata remains semantic/compiler/runtime metadata
+ * rather than a parser-owned runtime representation.
  *
  * ============================================================================
  * QUANTUM INTEGRATION
  * ============================================================================
  *
- * Distributed quantum programs may use this grammar to express:
+ * Distributed quantum computation is supported by composition, not by
+ * embedding quantum implementation into this grammar.
  *
- *     distributed execution;
- *     logical-state placement;
- *     communication intent;
- *     coordination;
- *     remote operations;
- *     distributed measurement/control intent.
+ * The boundary is:
  *
- * This grammar MUST NOT define:
+ *     distributed source
+ *          |
+ *          v
+ *     domain-neutral AST
+ *          |
+ *          v
+ *     semantic analysis
+ *          |
+ *          v
+ *     quantum::ir
+ *          |
+ *          +--> optimization
+ *          +--> routing
+ *          +--> scheduling
+ *          +--> QEC
+ *          +--> ZQN
+ *          +--> resilience
+ *          +--> HAL
+ *          |
+ *          v
+ *     target realization
+ *
+ * This file MUST NOT define:
  *
  *     QubitId
  *     PhysicalQubitId
  *     GateKind
- *     topology
+ *     native gate sets
+ *     quantum topology
  *     calibration
  *     pulse semantics
+ *     noise channels
  *     QEC algorithms
- *     ZQN noise models
- *
- * `quantum::ir` remains the canonical quantum semantic boundary.
  *
  * ============================================================================
- * HARDWARE / HDL INTEGRATION
+ * QEC / ZQN / RESILIENCE BOUNDARY
  * ============================================================================
  *
- * Distributed syntax may coexist with:
+ * Distributed fault-tolerance syntax may express source-level intent through
+ * the existing specialized grammar:
  *
- *     classical computation;
- *     quantum computation;
- *     HDL;
- *     hardware descriptions;
- *     accelerator descriptions.
+ *     fault-tolerance.g4
  *
- * Hardware-specific realization remains outside this grammar.
+ * It does not implement:
+ *
+ *     retry;
+ *     restart;
+ *     reroute;
+ *     remap;
+ *     reschedule;
+ *     recompile;
+ *     quarantine;
+ *     abort;
+ *     syndrome extraction;
+ *     decoding;
+ *     correction;
+ *     noise simulation.
+ *
+ * Those remain downstream responsibilities.
+ *
+ * The established resilience vocabulary remains semantic/runtime data:
+ *
+ *     Unknown
+ *     Healthy
+ *     Degraded
+ *     Unstable
+ *     Unavailable
+ *     Recovering
+ *     Quarantined
+ *     Retired
+ *
+ * and outcomes:
+ *
+ *     ACCEPT
+ *     DEGRADED_ACCEPT
+ *     RETRY
+ *     RECOVER
+ *     ESCALATE
+ *     REJECT
+ *
+ * They MUST NOT become parser-level implementation decisions.
  *
  * ============================================================================
- * NETWORKING INTEGRATION
+ * MEMORY / CONCURRENCY / NETWORKING BOUNDARIES
  * ============================================================================
  *
- * Distributed communication expresses intent.
+ * Distributed memory remains owned by:
  *
- * For example:
+ *     grammar/memory/distributed-memory.g4
  *
- *     distributed::send(channel, value, destination);
+ * Generic concurrency remains owned by:
  *
- * does not select:
+ *     grammar/concurrency/
+ *
+ * Networking remains owned by:
+ *
+ *     grammar/networking/
+ *
+ * This grammar does not duplicate:
+ *
+ *     ownership;
+ *     borrowing;
+ *     lifetime;
+ *     generic channels;
+ *     generic futures;
+ *     transport protocols;
+ *     network addresses;
+ *     sockets;
+ *     packet formats.
+ *
+ * Distributed grammars consume those concepts where their existing contracts
+ * explicitly require them.
+ *
+ * ============================================================================
+ * HARDWARE / HDL BOUNDARY
+ * ============================================================================
+ *
+ * Distributed computation may target:
+ *
+ *     CPU
+ *     multicore
+ *     GPU
+ *     FPGA
+ *     ASIC
+ *     accelerator
+ *     QPU
+ *     heterogeneous systems
+ *     future systems
+ *
+ * but this grammar does not select or enumerate physical hardware.
+ *
+ * Hardware intent remains owned by:
+ *
+ *     grammar/hardware/
+ *
+ * HDL remains owned by:
+ *
+ *     grammar/hdl/
+ *
+ * A distributed declaration therefore describes logical computation rather
+ * than a physical machine layout.
+ *
+ * ============================================================================
+ * NETWORK BOUNDARY
+ * ============================================================================
+ *
+ * Distributed communication is not transport selection.
+ *
+ * For example, communication syntax may express:
+ *
+ *     send
+ *     receive
+ *     broadcast
+ *     scatter
+ *     gather
+ *     reduce
+ *
+ * but this grammar does not select:
  *
  *     TCP
  *     UDP
@@ -387,10 +803,138 @@
  *     InfiniBand
  *     vendor-specific transport
  *
- * The networking subsystem chooses a valid realization.
+ * Networking/runtime layers determine the realization.
  *
  * ============================================================================
- * DETERMINISM
+ * TOPOLOGY / PLACEMENT BOUNDARY
+ * ============================================================================
+ *
+ * Logical topology and placement intent are distinct from physical realization.
+ *
+ *     topology
+ *         -> logical relationships
+ *
+ *     placement
+ *         -> requirements/preferences/constraints
+ *
+ *     routing
+ *         -> physical/logical path realization
+ *
+ *     scheduling
+ *         -> execution ordering/resource assignment
+ *
+ *     target realization
+ *         -> actual deployment
+ *
+ * This grammar only composes the source-level topology and placement syntax
+ * already owned by:
+ *
+ *     topology.g4
+ *     placement.g4
+ *
+ * ============================================================================
+ * DISTRIBUTED DATA / PARTITIONING BOUNDARY
+ * ============================================================================
+ *
+ * Partitioning remains owned by:
+ *
+ *     partitioning.g4
+ *
+ * It describes logical partitioning intent.
+ *
+ * It does not decide:
+ *
+ *     - storage engine;
+ *     - hash implementation;
+ *     - physical shard placement;
+ *     - machine assignment;
+ *     - network route;
+ *     - replication mechanism.
+ *
+ * ============================================================================
+ * DEPLOYMENT BOUNDARY
+ * ============================================================================
+ *
+ * Deployment syntax remains owned by:
+ *
+ *     deployment.g4
+ *
+ * This composition root only exposes it through the canonical distributed
+ * declaration boundary.
+ *
+ * It does not perform:
+ *
+ *     - provider selection;
+ *     - resource provisioning;
+ *     - machine creation;
+ *     - container creation;
+ *     - process launch;
+ *     - service discovery;
+ *     - network configuration.
+ *
+ * ============================================================================
+ * TRANSACTION BOUNDARY
+ * ============================================================================
+ *
+ * Distributed transactions remain owned by:
+ *
+ *     transactions.g4
+ *
+ * Transaction algorithms and storage semantics remain downstream.
+ *
+ * ============================================================================
+ * CONTRACT BOUNDARY
+ * ============================================================================
+ *
+ * Distributed contracts remain owned by:
+ *
+ *     contracts.g4
+ *
+ * Contract expressions remain ordinary Zamani expressions.
+ *
+ * The parser does not prove contracts.
+ *
+ * ============================================================================
+ * SOURCE COMPATIBILITY
+ * ============================================================================
+ *
+ * This replacement intentionally preserves the existing public rule:
+ *
+ *     distributedDeclaration
+ *
+ * and the existing specialized grammar filenames.
+ *
+ * It removes duplicated composition-root rules rather than renaming the
+ * repository's established distributed files.
+ *
+ * Existing consumers should migrate only their composition point if they were
+ * incorrectly consuming one of the old duplicate root rules.
+ *
+ * Specialized grammar rules remain available through their owning grammars.
+ *
+ * ============================================================================
+ * RUST CONTRACT
+ * ============================================================================
+ *
+ * This file contains no Rust.
+ *
+ * Generated ANTLR Rust parser artifacts must remain compatible with:
+ *
+ *     Rust 1.97
+ *     Rust 1.97.1
+ *     Edition 2021
+ *
+ * The Zamani compiler/frontend must remain safe Rust.
+ *
+ * This grammar imposes no requirement for:
+ *
+ *     unsafe
+ *
+ * and no downstream implementation may use this grammar as justification for
+ * introducing unsafe Rust.
+ *
+ * ============================================================================
+ * DETERMINISM CONTRACT
  * ============================================================================
  *
  * This grammar contains:
@@ -398,29 +942,79 @@
  *     - no actions;
  *     - no semantic predicates;
  *     - no I/O;
- *     - no runtime callbacks;
  *     - no randomness;
- *     - no environment queries;
- *     - no hardware queries.
+ *     - no environment inspection;
+ *     - no hardware inspection;
+ *     - no network access;
+ *     - no runtime callbacks.
  *
- * Parsing therefore depends only on the supplied token stream.
+ * Given the same token stream and grammar version, parsing must be
+ * deterministic.
+ *
+ * Distributed source must therefore parse independently of:
+ *
+ *     - CPU availability;
+ *     - GPU availability;
+ *     - FPGA availability;
+ *     - QPU availability;
+ *     - node count;
+ *     - network state;
+ *     - deployment topology;
+ *     - cloud provider;
+ *     - runtime state;
+ *     - wall-clock time.
  *
  * ============================================================================
- * SOURCE-PRESERVATION CONTRACT
+ * SOURCE-SPAN CONTRACT
  * ============================================================================
  *
- * Frontend AST construction must preserve:
+ * The frontend must preserve source locations for every composed construct
+ * required by diagnostics and tooling.
  *
- *     - source ordering;
- *     - declaration ordering;
- *     - qualified-name segment ordering;
- *     - expression structure;
- *     - argument ordering;
- *     - clause ordering;
- *     - nested block structure;
- *     - source spans.
+ * At minimum this includes:
  *
- * Semantic canonicalization occurs after parsing.
+ *     - declaration start/end;
+ *     - names;
+ *     - qualified names;
+ *     - operation names;
+ *     - arguments;
+ *     - clauses;
+ *     - nested bodies;
+ *     - relationships;
+ *     - dependency edges.
+ *
+ * This grammar itself does not manufacture source spans; the parser/frontend
+ * layer records them from the ANTLR parse tree/token stream.
+ *
+ * ============================================================================
+ * ERROR CONTRACT
+ * ============================================================================
+ *
+ * Parser errors must remain structural diagnostics.
+ *
+ * This grammar must not:
+ *
+ *     - query hardware to decide validity;
+ *     - query resource availability;
+ *     - contact a network service;
+ *     - perform service discovery;
+ *     - perform deployment;
+ *     - perform semantic capability checks.
+ *
+ * A syntactically valid declaration may still be semantically invalid or
+ * unrealizable.
+ *
+ * ============================================================================
+ * ANTLR COMPOSITION
+ * ============================================================================
+ *
+ * All imported grammars use the repository's canonical lexer vocabulary.
+ *
+ * This root therefore imports only parser grammars.
+ *
+ * No lexer grammar is defined here.
+ *
+ * No token vocabulary is redefined here.
  *
  * ============================================================================
  */
@@ -431,1183 +1025,326 @@ options {
     tokenVocab = ZamaniLexer;
 }
 
-import Names, Expressions;
+import
+    Nodes,
+    DistributedServices,
+    Processes,
+    DistributedActors,
+    DistributedChannels,
+    Communication,
+    Messaging,
+    Collective,
+    Replication,
+    DistributedConsistency,
+    DistributedPlacement,
+    DistributedPartitioning,
+    DistributedTopology,
+    RemoteExecution,
+    DistributedDeployment,
+    FaultTolerance,
+    DistributedContracts,
+    DistributedTransactions
+    ;
 
 
 /*
  * ============================================================================
- * 1. PUBLIC ENTRY POINT
+ * CANONICAL PUBLIC ENTRY POINT
  * ============================================================================
  *
- * This rule is the stable entry point used by the higher-level Zamani parser
- * when a distributed declaration or distributed statement is expected.
+ * Every distributed construct enters through this rule when the parent
+ * grammar expects a distributed declaration/construct.
  *
- * No finite number of distributed declarations is imposed.
+ * The alternatives deliberately delegate ownership to the specialized
+ * grammars. No distributed construct is reimplemented here.
+ *
+ * The ordering follows the repository's domain decomposition rather than
+ * hardware scale or implementation preference.
  */
 distributedDeclaration
-    : distributedContainerDeclaration
-    | distributedNamedDeclaration
-    | distributedOperation
-    | distributedBinding
-    | distributedRelationship
-    | distributedDependency
-    | distributedBlock
+    : nodeDeclaration
+    | distributedServiceDeclaration
+    | distributedProcessDeclaration
+    | distributedActorConstruct
+    | distributedChannelDeclaration
+    | distributedCommunication
+    | messagingConstruct
+    | collectiveConstruct
+    | distributedReplicationDeclaration
+    | distributedConsistencyConstruct
+    | distributedPlacementDeclaration
+    | distributedPartitioningDeclaration
+    | distributedTopologyConstruct
+    | distributedRemoteExecutionDeclaration
+    | distributedDeploymentDeclaration
+    | distributedFaultToleranceDeclaration
+    | distributedContractDeclaration
+    | distributedTransactionDeclaration
     ;
 
 
 /*
  * ============================================================================
- * 2. DISTRIBUTED CONTAINER
+ * CANONICAL COMPOSITION ALIAS
  * ============================================================================
  *
- * General form:
+ * Internal parent grammars that need a generic "distributed construct"
+ * spelling may use this rule.
  *
- *     distributed::node worker {
- *         ...
- *     }
- *
- *     distributed::service api {
- *         ...
- *     }
- *
- *     distributed::actor processor {
- *         ...
- *     }
- *
- *     distributed::cluster logical_group {
- *         ...
- *     }
- *
- * The first qualified name is a semantic kind.
- *
- * The parser intentionally does not enumerate all possible kinds.
- *
- * This is what allows future distributed abstractions to be introduced
- * without changing the lexical vocabulary.
+ * It is intentionally an alias of the single public boundary and does not
+ * create another semantic root.
  */
-distributedContainerDeclaration
-    : distributedKind distributedEntityName distributedBlock
+distributedConstruct
+    : distributedDeclaration
     ;
 
 
 /*
- * Semantic kind.
+ * ============================================================================
+ * DISTRIBUTED DECLARATION LIST
+ * ============================================================================
  *
- * Examples:
+ * This is a structural helper, not a competing root.
  *
- *     distributed::node
- *     distributed::service
- *     distributed::task
- *     distributed::worker
- *     distributed::actor
- *     distributed::channel
- *     distributed::state
- *     distributed::partition
- *     distributed::replication
- *     distributed::deployment
- *
- * Semantic analysis owns classification.
+ * No finite number of declarations is imposed.
  */
-distributedKind
-    : qualifiedName
-    ;
-
-
-/*
- * Entity name.
- *
- * Entity names are ordinary Zamani identifiers.
- *
- * This grammar does not create NodeName, ServiceName, WorkerName, etc.
- */
-distributedEntityName
-    : identifier
+distributedDeclarationList
+    : distributedDeclaration*
     ;
 
 
 /*
  * ============================================================================
- * 3. GENERIC NAMED DISTRIBUTED DECLARATION
- * ============================================================================
- *
- * General form:
- *
- *     distributed::task compute;
- *
- *     distributed::service api;
- *
- *     distributed::worker worker;
- *
- *     distributed::future::entity object;
- *
- * The semantic layer determines the meaning of the qualified kind.
- */
-distributedNamedDeclaration
-    : distributedKind distributedEntityName SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * 4. DISTRIBUTED OPERATION
- * ============================================================================
- *
- * General form:
- *
- *     distributed::send(channel, value, destination);
- *
- *     distributed::receive(channel);
- *
- *     distributed::broadcast(message, group);
- *
- *     distributed::migrate(task, target);
- *
- *     distributed::checkpoint(state);
- *
- *     distributed::recover(state);
- *
- *     distributed::coordinate(group);
- *
- *     distributed::consensus(proposal);
- *
- * The operation name is open-world.
- *
- * Future distributed operations therefore do not require grammar changes.
- */
-distributedOperation
-    : distributedOperationName
-      LPAREN
-      optionalExpressionList
-      RPAREN
-      SEMICOLON
-    ;
-
-
-distributedOperationName
-    : qualifiedName
-    ;
-
-
-/*
- * ============================================================================
- * 5. DISTRIBUTED BINDING
- * ============================================================================
- *
- * General form:
- *
- *     distributed::endpoint endpoint = expression;
- *
- *     distributed::state state = expression;
- *
- *     distributed::channel channel = expression;
- *
- *     distributed::future result = expression;
- *
- * The type/meaning of the left-hand qualified kind belongs to semantic
- * analysis.
- */
-distributedBinding
-    : distributedKind
-      identifier
-      ASSIGN
-      expression
-      SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * 6. DISTRIBUTED RELATIONSHIPS
- * ============================================================================
- *
- * Relationships express source-level relationships between named entities.
- *
- * Examples:
- *
- *     distributed::depends_on(task_a, task_b);
- *
- *     distributed::connect(channel, producer, consumer);
- *
- *     distributed::replica_of(copy, original);
- *
- *     distributed::placed_within(worker, region);
- *
- *     distributed::coordinates(controller, group);
- *
- * The actual semantics are downstream.
- */
-distributedRelationship
-    : distributedRelationshipName
-      LPAREN
-      expressionList
-      RPAREN
-      SEMICOLON
-    ;
-
-
-distributedRelationshipName
-    : qualifiedName
-    ;
-
-
-/*
- * ============================================================================
- * 7. DISTRIBUTED DEPENDENCIES
- * ============================================================================
- *
- * Explicit dependency syntax:
- *
- *     distributed::task_a -> distributed::task_b;
- *
- *     distributed::stage_a -> distributed::stage_b;
- *
- * No machine topology is implied.
- *
- * The arrow means semantic dependency/ordering intent.
- *
- * It does NOT mean:
- *
- *     network route;
- *     physical link;
- *     hardware connection;
- *     scheduling decision.
- */
-distributedDependency
-    : qualifiedName
-      THIN_ARROW
-      qualifiedName
-      SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * 8. DISTRIBUTED BLOCK
- * ============================================================================
- *
- * General form:
- *
- *     distributed::scope {
- *         ...
- *     }
- *
- * The block is intentionally recursive.
- *
- * This permits arbitrarily deep semantic composition subject only to
- * implementation/resource limits rather than a language-level fixed depth.
- */
-distributedBlock
-    : distributedBlockHeader
-      LBRACE
-      distributedMember*
-      RBRACE
-    ;
-
-
-distributedBlockHeader
-    : qualifiedName
-    ;
-
-
-/*
- * ============================================================================
- * 9. DISTRIBUTED MEMBER
- * ============================================================================
- *
- * The alternatives are deliberately structured around distinct syntactic
- * shapes.
- *
- * The grammar does NOT maintain separate closed alternatives such as:
- *
- *     nodeDeclaration
- *     serviceDeclaration
- *     workerDeclaration
- *     actorDeclaration
- *     ...
- *
- * because doing so would turn every future distributed abstraction into a
- * grammar-maintenance operation.
- *
- * Instead:
- *
- *     semantic kind + structural form
- *
- * is parsed here and classified later.
- */
-distributedMember
-    : distributedContainerDeclaration
-    | distributedNamedDeclaration
-    | distributedOperation
-    | distributedBinding
-    | distributedRelationship
-    | distributedDependency
-    | distributedBlock
-    ;
-
-
-/*
- * ============================================================================
- * 10. ARGUMENT LIST
- * ============================================================================
- *
- * This rule is provided as a stable distributed-domain wrapper.
- *
- * It delegates expression syntax to the canonical expression grammar.
- */
-distributedArgumentList
-    : expressionList
-    ;
-
-
-optionalDistributedArgumentList
-    : distributedArgumentList?
-    ;
-
-
-/*
- * ============================================================================
- * 11. DISTRIBUTED ENTITY REFERENCE
- * ============================================================================
- *
- * A distributed entity reference is syntactically a normal qualified name.
- *
- * Examples:
- *
- *     worker
- *     group::worker
- *     distributed::worker
- *     distributed::group::worker
- *
- * The semantic layer determines whether the reference denotes:
- *
- *     node
- *     service
- *     task
- *     actor
- *     channel
- *     state
- *     partition
- *     resource
- *     future
- *     deployment
- *     or another distributed object.
- */
-distributedEntityReference
-    : qualifiedName
-    ;
-
-
-/*
- * ============================================================================
- * 12. DISTRIBUTED NAME LIST
- * ============================================================================
- *
- * There is no finite cardinality.
- */
-distributedEntityReferenceList
-    : distributedEntityReference
-      (COMMA distributedEntityReference)*
-      COMMA?
-    ;
-
-
-optionalDistributedEntityReferenceList
-    : distributedEntityReferenceList?
-    ;
-
-
-/*
- * ============================================================================
- * 13. DISTRIBUTED SEMANTIC OPTION
- * ============================================================================
- *
- * General form:
- *
- *     distributed::consistency = expression;
- *
- *     distributed::placement = expression;
- *
- *     distributed::reliability = expression;
- *
- *     distributed::availability = expression;
- *
- *     distributed::latency = expression;
- *
- * The grammar records structure only.
- *
- * It does not interpret the requested property.
- */
-distributedOption
-    : qualifiedName
-      ASSIGN
-      expression
-      SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * 14. DISTRIBUTED OPTION BLOCK
- * ============================================================================
- *
- * Example:
- *
- *     distributed::service api {
- *         distributed::consistency = policy;
- *         distributed::availability = requirement;
- *         distributed::placement = preference;
- *     }
- *
- * Options remain semantic declarations rather than deployment commands.
- */
-distributedOptionBlock
-    : distributedKind
-      distributedEntityName
-      LBRACE
-      distributedOption*
-      RBRACE
-    ;
-
-
-/*
- * ============================================================================
- * 15. REQUIREMENT EXPRESSION
- * ============================================================================
- *
- * Resource requirements belong to the generic resource/capability subsystem.
- *
- * This grammar only provides the distributed syntactic wrapper.
- *
- * Examples:
- *
- *     distributed::requires(resource_expression);
- *
- *     distributed::capability(required_capability);
- *
- *     distributed::constraint(constraint_expression);
- *
- * There is no special syntax for:
- *
- *     CPU count
- *     GPU count
- *     QPU count
- *     node count
- *     memory size
- *     bandwidth
- *
- * unless such concepts are explicitly represented by the repository's
- * resource/capability semantic system.
- */
-distributedRequirement
-    : qualifiedName
-      LPAREN
-      expressionList
-      RPAREN
-      SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * 16. DISTRIBUTED POLICY
- * ============================================================================
- *
- * Policies remain declarative.
- *
- * Examples:
- *
- *     distributed::consistency(policy);
- *     distributed::replication(policy);
- *     distributed::failure_policy(policy);
- *     distributed::recovery(policy);
- *
- * No algorithm is implemented by the grammar.
- */
-distributedPolicy
-    : qualifiedName
-      LPAREN
-      expressionList
-      RPAREN
-      SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * 17. DISTRIBUTED COMMUNICATION
- * ============================================================================
- *
- * Communication is represented as an intent operation.
- *
- * Examples:
- *
- *     distributed::send(channel, value, destination);
- *     distributed::receive(channel);
- *     distributed::broadcast(value, group);
- *     distributed::scatter(value, group);
- *     distributed::gather(group);
- *     distributed::reduce(value, operation, group);
- *
- * Transport selection belongs to networking/runtime layers.
- */
-distributedCommunication
-    : qualifiedName
-      LPAREN
-      expressionList
-      RPAREN
-      SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * 18. DISTRIBUTED REPLICATION
- * ============================================================================
- *
- * Replication intent is represented structurally.
- *
- * Examples:
- *
- *     distributed::replication(state);
- *     distributed::replicate(state, policy);
- *
- * The grammar never requires a finite number of physical copies.
- */
-distributedReplication
-    : qualifiedName
-      LPAREN
-      expressionList
-      RPAREN
-      SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * 19. DISTRIBUTED CONSISTENCY
- * ============================================================================
- *
- * Consistency intent is declarative.
- *
- * Examples:
- *
- *     distributed::consistency(state, policy);
- *
- * The grammar does not implement:
- *
- *     Raft
- *     Paxos
- *     PBFT
- *     CRDT
- *     linearizability
- *     eventual consistency
- *     serializability
- *
- * as runtime algorithms.
- *
- * Those are semantic/runtime concerns.
- */
-distributedConsistency
-    : qualifiedName
-      LPAREN
-      expressionList
-      RPAREN
-      SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * 20. DISTRIBUTED PLACEMENT
- * ============================================================================
- *
- * Placement is an abstract requirement/preference.
- *
- * Examples:
- *
- *     distributed::placement(worker, preference);
- *     distributed::place(task, constraint);
- *
- * It MUST NOT directly identify a physical machine.
- */
-distributedPlacement
-    : qualifiedName
-      LPAREN
-      expressionList
-      RPAREN
-      SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * 21. REMOTE EXECUTION
- * ============================================================================
- *
- * Remote execution is represented as an operation.
- *
- * Examples:
- *
- *     distributed::remote_execution(task, requirement);
- *     distributed::invoke(service, arguments);
- *
- * The grammar does not contain:
- *
- *     host;
- *     IP address;
- *     port;
- *     cloud provider;
- *     machine ID;
- *     device ID.
- */
-distributedRemoteExecution
-    : qualifiedName
-      LPAREN
-      expressionList
-      RPAREN
-      SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * 22. DISTRIBUTED DEPLOYMENT
- * ============================================================================
- *
- * Deployment intent is represented without selecting a physical deployment.
- *
- * Examples:
- *
- *     distributed::deploy(service, requirement);
- *     distributed::deployment(application, policy);
- *
- * Target realization belongs to compilation/deployment/runtime layers.
- */
-distributedDeployment
-    : qualifiedName
-      LPAREN
-      expressionList
-      RPAREN
-      SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * 23. DISTRIBUTED COORDINATION
- * ============================================================================
- *
- * Coordination is semantic intent.
- *
- * Examples:
- *
- *     distributed::coordinate(group);
- *     distributed::barrier(group);
- *     distributed::consensus(proposal);
- *
- * No synchronization algorithm is encoded here.
- */
-distributedCoordination
-    : qualifiedName
-      LPAREN
-      expressionList
-      RPAREN
-      SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * 24. DISTRIBUTED FAILURE / RECOVERY INTENT
- * ============================================================================
- *
- * Failure and recovery are source-level intent only.
- *
- * Examples:
- *
- *     distributed::fault_tolerance(policy);
- *     distributed::recovery(state, policy);
- *     distributed::availability(requirement);
- *
- * Resilience owns actual recovery decisions and execution.
- */
-distributedFailureIntent
-    : qualifiedName
-      LPAREN
-      expressionList
-      RPAREN
-      SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * 25. DISTRIBUTED STATE
- * ============================================================================
- *
- * State syntax remains semantic-neutral.
- *
- * Examples:
- *
- *     distributed::state state = initial_value;
- *
- *     distributed::state state {
- *         ...
- *     }
- *
- * The grammar does not decide:
- *
- *     ownership;
- *     persistence;
- *     replication;
- *     consistency;
- *     serialization;
- *     synchronization;
- *     physical storage.
- */
-distributedState
-    : distributedKind
-      identifier
-      (
-          ASSIGN expression SEMICOLON
-        | distributedBlock
-      )
-    ;
-
-
-/*
- * ============================================================================
- * 26. DISTRIBUTED TASK
- * ============================================================================
- *
- * Task syntax is represented using the open semantic-kind form.
- *
- * Examples:
- *
- *     distributed::task compute {
- *         ...
- *     }
- *
- *     distributed::task compute = callable;
- *
- * The semantic layer determines execution characteristics.
- */
-distributedTask
-    : distributedKind
-      identifier
-      (
-          distributedBlock
-        | ASSIGN expression SEMICOLON
-      )
-    ;
-
-
-/*
- * ============================================================================
- * 27. DISTRIBUTED SERVICE
- * ============================================================================
- *
- * Examples:
- *
- *     distributed::service api {
- *         ...
- *     }
- *
- *     distributed::service worker;
- *
- * No service-discovery mechanism is encoded here.
- */
-distributedService
-    : distributedKind
-      identifier
-      (
-          distributedBlock
-        | SEMICOLON
-      )
-    ;
-
-
-/*
- * ============================================================================
- * 28. DISTRIBUTED ACTOR
- * ============================================================================
- *
- * Actor semantics are delegated to the concurrency/runtime layers.
- */
-distributedActor
-    : distributedKind
-      identifier
-      distributedBlock
-    ;
-
-
-/*
- * ============================================================================
- * 29. DISTRIBUTED CHANNEL
- * ============================================================================
- *
- * Channel syntax is semantic intent.
- *
- * The grammar does not decide:
- *
- *     queue size;
- *     transport;
- *     memory location;
- *     network implementation;
- *     synchronization mechanism.
- */
-distributedChannel
-    : distributedKind
-      identifier
-      (
-          distributedBlock
-        | ASSIGN expression SEMICOLON
-        | SEMICOLON
-      )
-    ;
-
-
-/*
- * ============================================================================
- * 30. DISTRIBUTED MEMBER EXPANSION
- * ============================================================================
- *
- * This rule is the canonical recursive composition boundary.
- *
- * Domain-specific semantic classifiers can recognize:
- *
- *     node
- *     worker
- *     service
- *     actor
- *     task
- *     channel
- *     state
- *     partition
- *     shard
- *     replica
- *     deployment
- *     placement
- *     coordination
- *     recovery
- *     future constructs
- *
- * without requiring this grammar to maintain an ever-growing closed list of
- * keywords.
- */
-distributedMemberExpanded
-    : distributedContainerDeclaration
-    | distributedNamedDeclaration
-    | distributedOperation
-    | distributedBinding
-    | distributedRelationship
-    | distributedDependency
-    | distributedBlock
-    ;
-
-
-/*
- * ============================================================================
- * 31. TOP-LEVEL DISTRIBUTED SCOPE
- * ============================================================================
- *
- * This is the recommended source-level grouping form.
- *
- * Example:
- *
- *     distributed::program application {
- *         ...
- *     }
- *
- * The exact semantic interpretation of `distributed::program` belongs to
- * semantic analysis.
- */
-distributedScope
-    : distributedKind
-      distributedEntityName
-      distributedBlock
-    ;
-
-
-/*
- * ============================================================================
- * 32. DISTRIBUTED PROGRAM
- * ============================================================================
- *
- * Program syntax remains machine independent.
- *
- * Example:
- *
- *     distributed::program application {
- *         distributed::task compute {
- *             ...
- *         }
- *
- *         distributed::service api {
- *             ...
- *         }
- *     }
- */
-distributedProgram
-    : distributedKind
-      distributedEntityName
-      distributedBlock
-    ;
-
-
-/*
- * ============================================================================
- * 33. DISTRIBUTED DOMAIN EXPRESSION
- * ============================================================================
- *
- * Distributed-specific expressions remain ordinary Zamani expressions.
- *
- * This rule exists as an integration boundary so future semantic analysis can
- * identify distributed expressions without creating a second expression AST.
- */
-distributedExpression
-    : expression
-    ;
-
-
-/*
- * ============================================================================
- * 34. DISTRIBUTED EXPRESSION LIST
+ * NON-EMPTY DISTRIBUTED DECLARATION LIST
  * ============================================================================
  */
-distributedExpressionList
-    : expressionList
-    ;
-
-
-optionalDistributedExpressionList
-    : optionalExpressionList
+distributedDeclarationListNonEmpty
+    : distributedDeclaration+
     ;
 
 
 /*
  * ============================================================================
- * 35. DISTRIBUTED QUALIFIED KIND
+ * DISTRIBUTED BLOCK CONTENT
  * ============================================================================
  *
- * This is intentionally an alias boundary rather than a duplicate name
- * implementation.
+ * This helper is deliberately expressed in terms of the canonical declaration
+ * boundary.
+ *
+ * It does not define a second distributed-member union.
  */
-distributedQualifiedKind
-    : qualifiedName
+distributedBlockContent
+    : distributedDeclaration*
     ;
 
 
 /*
  * ============================================================================
- * 36. DISTRIBUTED IDENTIFIER
+ * DISTRIBUTED NON-EMPTY BLOCK CONTENT
+ * ============================================================================
+ */
+distributedNonEmptyBlockContent
+    : distributedDeclaration+
+    ;
+
+
+/*
+ * ============================================================================
+ * COMPLETION CONTRACT
  * ============================================================================
  *
- * Distributed entities use the canonical Zamani identifier rule.
- */
-distributedIdentifier
-    : identifier
-    ;
-
-
-/*
- * ============================================================================
- * 37. DISTRIBUTED MEMBER LIST
- * ============================================================================
+ * This composition root is complete when all of the following remain true:
  *
- * No finite cardinality.
- */
-distributedMemberList
-    : distributedMember*
-    ;
-
-
-/*
- * ============================================================================
- * 38. DISTRIBUTED NON-EMPTY MEMBER LIST
- * ============================================================================
- */
-distributedNonEmptyMemberList
-    : distributedMember+
-    ;
-
-
-/*
- * ============================================================================
- * 39. DISTRIBUTED DECLARATION BODY
- * ============================================================================
- */
-distributedDeclarationBody
-    : LBRACE
-      distributedMember*
-      RBRACE
-    ;
-
-
-/*
- * ============================================================================
- * 40. DISTRIBUTED ARGUMENT BODY
- * ============================================================================
- */
-distributedArgumentBody
-    : LPAREN
-      optionalExpressionList
-      RPAREN
-    ;
-
-
-/*
- * ============================================================================
- * 41. DISTRIBUTED INVOCATION
- * ============================================================================
+ * [1] `distributedDeclaration` is the sole canonical distributed entry point.
  *
- * Explicitly named for higher-level parser composition.
- */
-distributedInvocation
-    : qualifiedName
-      distributedArgumentBody
-      SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * 42. DISTRIBUTED REFERENCE
- * ============================================================================
- */
-distributedReference
-    : qualifiedName
-    ;
-
-
-/*
- * ============================================================================
- * 43. DISTRIBUTED REFERENCE ASSIGNMENT
- * ============================================================================
- */
-distributedReferenceAssignment
-    : distributedReference
-      ASSIGN
-      expression
-      SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * 44. DISTRIBUTED EDGE
- * ============================================================================
+ * [2] Every distributed feature has exactly one owning specialized grammar.
  *
- * Represents semantic dependency/order intent.
- */
-distributedEdge
-    : distributedReference
-      THIN_ARROW
-      distributedReference
-      SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * 45. DISTRIBUTED NESTED SCOPE
- * ============================================================================
- */
-distributedNestedScope
-    : distributedReference
-      distributedDeclarationBody
-    ;
-
-
-/*
- * ============================================================================
- * 46. GENERIC DISTRIBUTED STATEMENT
- * ============================================================================
+ * [3] This file contains no duplicate implementation of specialized rules.
  *
- * This is the stable composition point for future statement-level integration.
- */
-distributedStatement
-    : distributedInvocation
-    | distributedReferenceAssignment
-    | distributedEdge
-    | distributedNestedScope
-    ;
-
-
-/*
- * ============================================================================
- * 47. COMPLETE DISTRIBUTED MEMBER
- * ============================================================================
+ * [4] All specialized grammars consume the canonical Zamani lexer vocabulary.
  *
- * This rule intentionally exposes the canonical union to parent grammars.
- */
-distributedCompleteMember
-    : distributedContainerDeclaration
-    | distributedNamedDeclaration
-    | distributedOperation
-    | distributedBinding
-    | distributedRelationship
-    | distributedDependency
-    | distributedBlock
-    | distributedState
-    | distributedTask
-    | distributedService
-    | distributedActor
-    | distributedChannel
-    | distributedInvocation
-    | distributedReferenceAssignment
-    | distributedEdge
-    ;
-
-
-/*
- * ============================================================================
- * 48. COMPLETE DISTRIBUTED SCOPE
- * ============================================================================
- */
-distributedCompleteScope
-    : distributedKind
-      distributedEntityName
-      LBRACE
-      distributedCompleteMember*
-      RBRACE
-    ;
-
-
-/*
- * ============================================================================
- * 49. COMPLETE DISTRIBUTED PROGRAM
- * ============================================================================
+ * [5] General identifiers and qualified names remain owned by Names.
  *
- * Stable top-level rule for a distributed-only compilation unit.
- */
-distributedCompilationUnit
-    : distributedCompleteScope
-    ;
-
-
-/*
- * ============================================================================
- * 50. SEMANTIC EXTENSION POINT
- * ============================================================================
+ * [6] General expressions remain owned by Expressions.
  *
- * The grammar intentionally permits future distributed constructs through
- * qualified names and structural forms.
+ * [7] General type syntax remains owned by the canonical type grammar.
  *
- * Examples that require NO lexer modification:
+ * [8] Distributed memory remains owned by memory/distributed-memory.g4.
  *
- *     distributed::mesh_group group { ... }
- *     distributed::federation federation { ... }
- *     distributed::quantum_network qnet { ... }
- *     distributed::entanglement_domain domain { ... }
- *     distributed::edge_region region { ... }
- *     distributed::neuromorphic_cluster cluster { ... }
- *     distributed::future_architecture system { ... }
+ * [9] Generic concurrency remains owned by grammar/concurrency/.
  *
- * The semantic registry/capability layer determines whether such constructs
- * are defined.
+ * [10] Networking remains owned by grammar/networking/.
+ *
+ * [11] Hardware remains owned by grammar/hardware/.
+ *
+ * [12] HDL remains owned by grammar/hdl/.
+ *
+ * [13] Quantum semantics continue through `quantum::ir`.
+ *
+ * [14] No distributed-specific competing IR is created by this grammar.
+ *
+ * [15] No fixed machine/resource limits are encoded.
+ *
+ * [16] No physical hardware identifiers are required by the grammar.
+ *
+ * [17] No network transport is selected by the parser.
+ *
+ * [18] No placement algorithm is implemented by the parser.
+ *
+ * [19] No scheduler is implemented by the parser.
+ *
+ * [20] No deployment operation is implemented by the parser.
+ *
+ * [21] No QEC implementation is embedded.
+ *
+ * [22] No ZQN implementation is embedded.
+ *
+ * [23] No resilience implementation is embedded.
+ *
+ * [24] No semantic predicates exist.
+ *
+ * [25] No embedded Rust actions exist.
+ *
+ * [26] No unsafe Rust is required.
+ *
+ * [27] The parser is deterministic.
+ *
+ * [28] Source ordering and source spans can be preserved.
+ *
+ * [29] Existing specialized grammar ownership remains intact.
+ *
+ * [30] Future distributed concepts can be introduced through existing
+ *      extensibility mechanisms without automatically expanding the lexer.
  *
  * ============================================================================
- * END OF GRAMMAR
+ * FINAL ARCHITECTURAL INVARIANT
+ * ============================================================================
+ *
+ * This file is intentionally small in semantic responsibility.
+ *
+ * It is a COMPOSITION ROOT, not a distributed-computing implementation.
+ *
+ * Therefore:
+ *
+ *     distributed/distributed.g4
+ *             =
+ *     composition
+ *
+ * while:
+ *
+ *     distributed/nodes.g4
+ *             =
+ *     node syntax
+ *
+ *     distributed/services.g4
+ *             =
+ *     service syntax
+ *
+ *     distributed/processes.g4
+ *             =
+ *     process syntax
+ *
+ *     distributed/actors.g4
+ *             =
+ *     actor syntax
+ *
+ *     distributed/channels.g4
+ *             =
+ *     channel syntax
+ *
+ *     distributed/communication.g4
+ *             =
+ *     communication syntax
+ *
+ *     distributed/messaging.g4
+ *             =
+ *     messaging syntax
+ *
+ *     distributed/collective.g4
+ *             =
+ *     collective syntax
+ *
+ *     distributed/replication.g4
+ *             =
+ *     replication syntax
+ *
+ *     distributed/consistency.g4
+ *             =
+ *     consistency syntax
+ *
+ *     distributed/placement.g4
+ *             =
+ *     placement syntax
+ *
+ *     distributed/partitioning.g4
+ *             =
+ *     partitioning syntax
+ *
+ *     distributed/topology.g4
+ *             =
+ *     topology syntax
+ *
+ *     distributed/remote-execution.g4
+ *             =
+ *     remote execution syntax
+ *
+ *     distributed/deployment.g4
+ *             =
+ *     distributed deployment composition
+ *
+ *     distributed/fault-tolerance.g4
+ *             =
+ *     fault-tolerance syntax
+ *
+ *     distributed/contracts.g4
+ *             =
+ *     distributed contract syntax
+ *
+ *     distributed/transactions.g4
+ *             =
+ *     distributed transaction syntax
+ *
+ * The whole distributed domain then remains one source-level language
+ * surface, while semantic realization is performed downstream.
+ *
+ * ============================================================================
+ * POCO-REAF FINAL FORM
+ * ============================================================================
+ *
+ *     Program Once
+ *          |
+ *          v
+ *     Compile Once
+ *          |
+ *          v
+ *     Semantic / capability / resource analysis
+ *          |
+ *          v
+ *     Target-independent lowering
+ *          |
+ *          +--> local
+ *          +--> multicore
+ *          +--> many-core
+ *          +--> distributed
+ *          +--> HPC
+ *          +--> cloud
+ *          +--> edge
+ *          +--> CPU/GPU/FPGA/ASIC
+ *          +--> quantum-classical
+ *          +--> distributed quantum
+ *          +--> future substrates
+ *          |
+ *          v
+ *     Run Everywhere
+ *          |
+ *          v
+ *     Run Anywhere
+ *          |
+ *          v
+ *     Run Forever
+ *
+ * subject to the actual program semantics, implementation support and
+ * resources available at realization time.
+ *
  * ============================================================================
  */
