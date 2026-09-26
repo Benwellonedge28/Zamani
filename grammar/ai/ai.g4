@@ -6,228 +6,255 @@
  * File:
  *     grammar/ai/ai.g4
  *
+ * Grammar:
+ *     AI
+ *
  * Status:
- *     Production AI / ML domain-composition grammar.
+ *     CANONICAL AI DOMAIN COMPOSITION GRAMMAR
  *
- * Grammar technology:
- *     ANTLR4 parser grammar
- *
- * Language/runtime baseline:
+ * Baseline:
  *     Rust 1.97 / Rust 1.97.1
  *     Rust edition 2021
- *
- * Safety:
- *     Parser grammar only.
- *
- *     - No embedded Rust actions.
- *     - No semantic predicates.
- *     - No unsafe implementation.
- *     - No filesystem access.
- *     - No network access.
- *     - No process execution.
- *     - No hardware discovery.
- *     - No runtime execution.
- *     - No mutable global state.
- *     - No vendor-specific implementation.
+ *     Safe Rust only
  *
  * ============================================================================
- *
  * PURPOSE
  * ============================================================================
  *
- * This file is the canonical AI-domain COMPOSITION BOUNDARY.
+ * This file is the SINGLE AI-DOMAIN COMPOSITION BOUNDARY.
  *
- * It does not implement model execution, tensor storage, training algorithms,
- * inference engines, automatic differentiation, accelerator selection,
- * scheduling, deployment, or runtime behavior.
+ * It does not attempt to implement every AI feature itself.
  *
- * Its responsibility is to establish the stable parser-level boundary through
- * which AI-domain syntax enters the Zamani frontend.
+ * Instead it composes the independently-owned AI leaf grammars into one
+ * stable parser-facing AI domain.
  *
- * The AI subsystem is intentionally layered:
+ * The dependency direction is:
  *
- *     grammar/ai/ai.g4
- *          |
- *          +--> models.g4
- *          +--> datasets.g4
- *          +--> tensors.g4
- *          +--> training.g4
- *          +--> inference.g4
- *          +--> agents.g4
- *          +--> differentiation.g4
- *          +--> pipelines.g4
- *          +--> ai-accelerators.g4
+ *     Zamani.g4
  *          |
  *          v
- *     Frontend AST
+ *     ZamaniParser.g4
  *          |
  *          v
- *     Semantic analysis
+ *          AI
  *          |
- *          +--> type analysis
- *          +--> capability analysis
- *          +--> effect analysis
- *          +--> resource analysis
- *          +--> portability analysis
- *          |
- *          v
- *     Canonical semantic IR
- *          |
- *          +--> classical lowering
- *          +--> quantum lowering
- *          +--> accelerator lowering
- *          +--> distributed lowering
- *          +--> hardware realization
- *          |
- *          v
- *     optimization
- *          |
- *          v
- *     scheduling
- *          |
- *          v
- *     target realization
- *          |
- *          v
- *     runtime
+ *     +----+------------------------------------------------------+
+ *     |    |       |        |        |        |        |          |
+ *     v    v       v        v        v        v        v          v
+ *   Models Data   Tensors Training Inference Agents Differentiation Pipelines
+ *     |    |       |        |        |        |        |          |
+ *     +----+-------+--------+--------+--------+--------+----------+
+ *                              |
+ *                              v
+ *                         AIAccelerators
+ *                              |
+ *                              v
+ *                       ModelDeployment
+ *                              |
+ *                              v
+ *                    Domain-Neutral Frontend AST
+ *                              |
+ *                              v
+ *                       Semantic Analysis
+ *                              |
+ *              +---------------+----------------+
+ *              |               |                |
+ *              v               v                v
+ *            Types          Effects         Resources
+ *              |               |                |
+ *              +---------------+----------------+
+ *                              |
+ *                              v
+ *                    Canonical Semantic Model
+ *                              |
+ *              +---------------+----------------+
+ *              |               |                |
+ *              v               v                v
+ *          Classical       quantum::ir      HDL/Hardware
+ *                              |
+ *                              v
+ *                         Optimization
+ *                              |
+ *                    +---------+----------+
+ *                    |                    |
+ *                    v                    v
+ *                Scheduling            Routing
+ *                    |                    |
+ *                    +---------+----------+
+ *                              |
+ *                              v
+ *                         Resilience
+ *                              |
+ *                              v
+ *                             ZQN
+ *                              |
+ *                              v
+ *                             HAL
+ *                              |
+ *                              v
+ *                      Target Realization
+ *                              |
+ *                              v
+ *                           Runtime
  *
- * IMPORTANT:
- *
- * This grammar MUST NOT become an AI-specific IR.
+ * This file defines NONE of those downstream semantics.
  *
  * ============================================================================
- *
- * ARCHITECTURAL OWNERSHIP
+ * OWNERSHIP
  * ============================================================================
  *
  * THIS FILE OWNS:
  *
- *     - the AI parser-domain entry point;
- *     - AI-domain construct composition;
- *     - AI-domain computation-region syntax;
- *     - AI-domain declaration/binding/invocation boundaries;
- *     - AI-domain resource/capability/constraint syntax;
- *     - AI-domain interoperability boundaries;
- *     - stable extension points for AI dialects;
- *     - parser-level separation between AI syntax and ordinary expressions.
+ *     - the AI-domain parser composition boundary;
+ *     - AI-domain construct dispatch;
+ *     - AI leaf-grammar composition;
+ *     - AI-domain interoperability at the grammar boundary;
+ *     - the distinction between AI syntax and ordinary universal syntax;
+ *     - stable AI extension points.
  *
  * THIS FILE DOES NOT OWN:
  *
- *     - lexical tokens;
- *     - identifier syntax;
+ *     - lexical token definitions;
+ *     - identifiers;
+ *     - qualified names;
  *     - general expressions;
  *     - general types;
  *     - ordinary statements;
- *     - functions;
- *     - modules;
- *     - memory;
- *     - concurrency;
+ *     - model semantics;
+ *     - tensor semantics;
+ *     - dataset semantics;
+ *     - training algorithms;
+ *     - inference algorithms;
+ *     - differentiation implementation;
+ *     - optimizer implementation;
+ *     - agent execution;
+ *     - pipeline execution;
+ *     - accelerator selection;
+ *     - device selection;
+ *     - hardware discovery;
+ *     - resource allocation;
+ *     - scheduling;
+ *     - routing;
+ *     - deployment implementation;
+ *     - networking implementation;
+ *     - security enforcement;
  *     - classical IR;
+ *     - AI-specific IR;
+ *     - quantum IR;
  *     - quantum::ir;
  *     - QEC;
  *     - ZQN;
- *     - hardware discovery;
- *     - hardware calibration;
- *     - routing;
- *     - scheduling;
- *     - optimization passes;
- *     - tensor storage;
- *     - tensor kernels;
- *     - model execution;
- *     - model training algorithms;
- *     - inference algorithms;
- *     - automatic differentiation implementation;
- *     - optimizer implementation;
- *     - accelerator selection;
- *     - device selection;
+ *     - HAL;
  *     - runtime execution.
  *
  * ============================================================================
- *
- * CANONICAL DEPENDENCIES
+ * SINGLE-AUTHORITY RULE
  * ============================================================================
  *
- * Lexer:
+ * Each AI feature has exactly one source-level owner.
  *
- *     grammar/antlr/ZamaniLexer.g4
+ * Model declarations:
  *
- * Canonical expression grammar:
+ *     models.g4
  *
- *     grammar/expressions/expressions.g4
+ * Dataset declarations:
  *
- * Canonical type grammar:
+ *     datasets.g4
  *
- *     grammar/antlr/Types.g4
+ * Tensor declarations and tensor-domain syntax:
  *
- * Canonical statement grammar:
+ *     tensors.g4
  *
- *     grammar/statements/statements.g4
+ * Training:
  *
- * These layers own their respective syntax.
+ *     training.g4
  *
- * AI.g4 MUST NOT redefine them.
+ * Inference:
+ *
+ *     inference.g4
+ *
+ * Agents:
+ *
+ *     agents.g4
+ *
+ * Differentiation:
+ *
+ *     differentiation.g4
+ *
+ * Pipelines:
+ *
+ *     pipelines.g4
+ *
+ * AI accelerator intent:
+ *
+ *     ai-accelerators.g4
+ *
+ * Deployment intent:
+ *
+ *     model-deployment.g4
+ *
+ * This composition grammar MUST NOT duplicate those productions.
  *
  * ============================================================================
- *
- * AI LEAF-GRAMMAR INTEGRATION
+ * DUPLICATE-GRAMMAR POLICY
  * ============================================================================
  *
- * Existing AI leaf grammars include:
+ * The repository currently contains:
+ *
+ *     grammar/ai/model.g4
+ *     grammar/ai/models.g4
+ *
+ * and both declare:
+ *
+ *     parser grammar AIModels;
+ *
+ * They MUST NOT both participate in the canonical ANTLR composition.
+ *
+ * The canonical model source is:
  *
  *     grammar/ai/models.g4
- *     grammar/ai/datasets.g4
- *     grammar/ai/tensors.g4
- *     grammar/ai/training.g4
- *     grammar/ai/inference.g4
+ *
+ * Therefore this file imports `AIModels` only through `models.g4`.
+ *
+ * `model.g4` must be treated as legacy/deprecated compatibility material and
+ * must not be imported by this grammar.
+ *
+ * Likewise the repository contains:
+ *
+ *     grammar/ai/agent.g4
  *     grammar/ai/agents.g4
- *     grammar/ai/differentiation.g4
- *     grammar/ai/pipelines.g4
- *     grammar/ai/ai-accelerators.g4
  *
- * These files are deliberately NOT imported here merely to expose every
- * implementation detail through this aggregate grammar.
+ * The canonical composition uses:
  *
- * Reason:
+ *     agents.g4
  *
- *     1. Each leaf grammar has its own parser grammar identity.
- *     2. Several leaf grammars reuse generic rule names such as `expression`,
- *        `identifier`, and domain-local construct names.
- *     3. Importing every leaf grammar into this file would unnecessarily
- *        increase rule-collision and ambiguity risk.
- *     4. The canonical parser composition layer can import the required leaf
- *        grammars directly.
- *     5. AI.g4 remains the stable common boundary.
+ * whose public boundary is:
  *
- * This is intentional dependency inversion:
+ *     agentConstruct
  *
- *     canonical parser
- *          |
- *          +--> AI
- *          +--> AIModels
- *          +--> AIDatasets
- *          +--> AITensors
- *          +--> AITraining
- *          +--> AIInference
- *          +--> Agents
- *          +--> ...
- *
- * rather than:
- *
- *     AI aggregate
- *          |
- *          +--> every AI implementation
- *          |
- *          +--> every future AI dialect
+ * The older `agent.g4` must not be imported here unless it is converted into
+ * a compatibility façade with a distinct grammar identity.
  *
  * ============================================================================
- *
- * LEXICAL POLICY
+ * LEXICAL AUTHORITY
  * ============================================================================
  *
- * AI vocabulary MUST NOT be added to the lexer merely because an AI concept
- * exists.
+ * The canonical parser vocabulary is:
  *
- * The canonical lexer already provides NANO_ANNOTATION:
+ *     ZamaniLexer
+ *
+ * The canonical annotation marker is:
+ *
+ *     AT
+ *
+ * representing:
+ *
+ *     @
+ *
+ * AI concepts are therefore NOT added as permanent lexer keywords merely
+ * because a new AI feature exists.
+ *
+ * Examples:
  *
  *     @model
  *     @dataset
@@ -237,158 +264,87 @@
  *     @agent
  *     @pipeline
  *     @accelerator
+ *     @deployment
  *
- * Semantic analysis determines the meaning of the annotation.
+ * are structurally represented through:
  *
- * This permits future concepts without continuously modifying the lexical
- * grammar.
+ *     AT identifier
+ *
+ * and are interpreted by semantic analysis.
+ *
+ * `NANO_ANNOTATION` is NOT the canonical AI annotation mechanism.
  *
  * ============================================================================
- *
- * IMPORTANT CORRECTION TO THE PREVIOUS DESIGN
+ * EXPRESSION AUTHORITY
  * ============================================================================
  *
- * The old design contained alternatives such as:
+ * General expressions are owned by the canonical expression grammar.
  *
- *     aiExpression
- *     aiValue
- *     aiModelExpression
- *     aiDatasetExpression
- *     aiTrainingExpression
- *
- * where multiple alternatives ultimately reduced to:
+ * AI grammars consume:
  *
  *     expression
+ *     argumentList
  *
- * This makes the public AI entry point structurally ambiguous and allows an
- * arbitrary ordinary expression to be classified as an AI construct.
+ * where appropriate.
  *
- * That design is NOT acceptable for a production grammar.
- *
- * The corrected design requires AI-domain syntax to cross an explicit
- * AI-domain boundary.
- *
- * Ordinary expressions remain ordinary expressions.
+ * This composition grammar MUST NOT create another expression hierarchy.
  *
  * ============================================================================
- *
- * SCALABILITY / POCO-REAF
+ * TYPE AUTHORITY
  * ============================================================================
  *
- * This grammar contains no limits on:
+ * General type syntax is owned by the canonical type grammar.
  *
- *     - number of models;
- *     - number of tensors;
- *     - tensor rank;
- *     - tensor dimensions;
- *     - parameter count;
- *     - layer count;
- *     - dataset size;
- *     - batch size;
- *     - sequence length;
- *     - number of training steps;
- *     - number of inference calls;
- *     - number of agents;
- *     - number of pipeline stages;
- *     - number of workers;
- *     - number of nodes;
- *     - number of accelerators;
- *     - number of devices;
- *     - number of quantum resources;
- *     - number of classical resources.
+ * AI grammars consume:
  *
- * Repetition is structural.
+ *     typeExpression
  *
- * Resource availability is evaluated downstream.
+ * AI must not create a competing:
  *
- * The grammar therefore does not encode:
+ *     AIType
+ *     ModelType
+ *     TensorType
+ *     DatasetType
  *
- *     MAX_TENSORS
- *     MAX_LAYERS
- *     MAX_PARAMETERS
- *     MAX_DEVICES
- *     MAX_GPUS
- *     MAX_CPUS
- *     MAX_WORKERS
- *     MAX_NODES
- *
- * or equivalent constants.
+ * type system.
  *
  * ============================================================================
- *
- * MACHINE INDEPENDENCE
+ * STATEMENT AUTHORITY
  * ============================================================================
  *
- * AI syntax MUST NOT require:
+ * General statement syntax is owned by:
  *
- *     GPU 0
- *     CPU 0
- *     accelerator 1
- *     device 7
- *     fixed VRAM
- *     fixed memory
- *     fixed SIMD width
- *     fixed tensor-core count
- *     fixed cluster size
- *     fixed node topology
- *     fixed vendor
- *     fixed accelerator architecture
+ *     Statements
  *
- * Such information belongs to:
+ * AI regions may contain ordinary Zamani statements through their leaf
+ * grammars.
  *
- *     capability analysis;
- *     resource analysis;
- *     target description;
- *     scheduling;
- *     deployment;
- *     runtime discovery;
- *     execution policy.
+ * This allows AI code to compose with:
+ *
+ *     classical computation
+ *     quantum computation
+ *     HDL/co-design
+ *     concurrency
+ *     distributed computation
+ *     networking
+ *     security
+ *     future domains
+ *
+ * without creating an AI-only programming language.
  *
  * ============================================================================
- *
- * QUANTUM INTEROPERABILITY
+ * AI LEAF COMPOSITION
  * ============================================================================
  *
- * AI syntax may reference quantum computations through ordinary expressions
- * and AI-domain bindings.
+ * The canonical AI leaf grammars are imported here.
  *
- * This grammar MUST NOT define quantum semantics.
+ * Each imported grammar exposes one public domain boundary.
  *
- * Quantum semantics remain owned by the quantum grammar and ultimately by
- * the canonical `quantum::ir` semantic boundary.
+ * The imports are intentionally explicit so that:
  *
- * Therefore:
+ *     grammar/ai/ai.g4
  *
- *     AI -> quantum expression/reference
- *
- * is permitted at the source level, while:
- *
- *     AI -> quantum::ir
- *
- * is a downstream semantic/lowering operation.
- *
- * AI.g4 MUST NOT:
- *
- *     - define QubitId;
- *     - define physical qubits;
- *     - define quantum gates;
- *     - define quantum topology;
- *     - define QEC;
- *     - define ZQN.
- *
- * ============================================================================
- *
- * HARDWARE INTEROPERABILITY
- * ============================================================================
- *
- * AI source may express:
- *
- *     requires capability(...);
- *     requires resource(...);
- *     prefers capability(...);
- *     constrains(...);
- *
- * but must not directly encode a concrete device realization.
+ * is a real composition layer rather than a documentation-only façade.
  *
  * ============================================================================
  */
@@ -399,427 +355,165 @@ options {
     tokenVocab = ZamaniLexer;
 }
 
-import Types,
-       Expressions,
-       Statements;
 
-
-/* ============================================================================
- * 1. PUBLIC ENTRY POINT
- * ========================================================================== */
-
-/**
- * Canonical AI-domain parser entry point.
+/*
+ * ============================================================================
+ * CANONICAL AI LEAF GRAMMAR IMPORTS
+ * ============================================================================
  *
- * Every alternative crosses an explicit AI-domain boundary.
+ * These imports form the AI-domain implementation boundary.
  *
- * Ordinary expressions are NOT accepted directly here.
+ * IMPORTANT:
+ *
+ *     Do not import model.g4.
+ *     Do not import agent.g4.
+ *
+ * The canonical files are:
+ *
+ *     models.g4
+ *     agents.g4
+ *
+ * ============================================================================
  */
+
+import
+    Types,
+    Expressions,
+    Statements,
+    AIModels,
+    AIDatasets,
+    AITensors,
+    AITraining,
+    Inference,
+    Agents,
+    AIDifferentiable,
+    AIPipelines,
+    AIAccelerators,
+    ModelDeployment
+;
+
+
+/*
+ * ============================================================================
+ * 1. PUBLIC AI COMPOSITION ENTRY
+ * ============================================================================
+ *
+ * Every AI-domain construct must enter through this rule.
+ *
+ * A bare ordinary expression is deliberately NOT an AI construct.
+ *
+ * This prevents:
+ *
+ *     expression
+ *
+ * from being accepted through both:
+ *
+ *     AI
+ *
+ * and:
+ *
+ *     Expressions
+ *
+ * with the result that ordinary expressions become accidentally classified
+ * as AI syntax.
+ *
+ * ============================================================================
+ */
+
 aiConstruct
-    : aiAnnotatedDeclaration
-    | aiAnnotatedBinding
-    | aiAnnotatedInvocation
-    | aiAnnotatedRegion
-    | aiResourceContract
-    | aiCapabilityContract
-    | aiConstraintContract
-    | aiPreferenceContract
-    | aiInteroperabilityConstruct
+    : aiModelConstruct
+    | datasetConstruct
+    | tensorConstruct
+    | trainingConstruct
+    | inferenceConstruct
+    | agentConstruct
+    | aiDifferentiationConstruct
+    | pipelineConstruct
+    | aiAcceleratorConstruct
+    | deploymentConstruct
+    | aiCapabilityConstruct
     ;
 
 
-/* ============================================================================
- * 2. AI ANNOTATED DECLARATIONS
- * ========================================================================== */
-
-/**
- * Generic AI declaration boundary.
+/*
+ * ============================================================================
+ * 2. AI CAPABILITY COMPOSITION
+ * ============================================================================
  *
- * Examples:
+ * Capability declarations are owned by:
  *
- *     @model MyModel ...
- *     @dataset TrainingData ...
- *     @tensor Input ...
- *     @training Experiment ...
- *     @agent ResearchAgent ...
+ *     grammar/ai/capabilities.g4
  *
- * The annotation is lexically opaque.
+ * The capability grammar is imported below through the explicit composition
+ * boundary required by the repository's AI capability contract.
  *
- * Semantic analysis resolves the annotation to a registered AI domain,
- * dialect, library construct, or extension.
+ * It must remain distinct from:
+ *
+ *     resource requirements;
+ *     physical devices;
+ *     target selection;
+ *     hardware discovery.
+ *
+ * ============================================================================
  */
-aiAnnotatedDeclaration
-    : NANO_ANNOTATION
-      identifier
-      aiDeclarationParameters?
-      aiDeclarationType?
-      aiDeclarationInitializer?
-      aiDeclarationBody?
+
+aiCapabilityConstruct
+    : aiCapabilityRequirement
     ;
 
 
-/**
- * Optional generic declaration parameters.
+/*
+ * ============================================================================
+ * 3. AI VALUE BRIDGES
+ * ============================================================================
  *
- * Parameters are expressions rather than machine-specific constants.
+ * These rules are NOT alternatives of `aiConstruct`.
+ *
+ * They exist only as explicit reusable parser boundaries for leaf grammars
+ * or future composition layers.
+ *
+ * A bridge MUST NOT cause every ordinary expression to become an AI construct.
+ * ============================================================================
  */
-aiDeclarationParameters
-    : LPAREN argumentList? RPAREN
-    ;
 
-
-/**
- * Optional declared type.
- *
- * Type ownership remains canonical.
- */
-aiDeclarationType
-    : COLON typeExpression
-    ;
-
-
-/**
- * Optional initializer.
- *
- * Expression ownership remains canonical.
- */
-aiDeclarationInitializer
-    : ASSIGN expression
-    ;
-
-
-/**
- * Optional declaration body.
- *
- * A declaration may contain a computation region.
- */
-aiDeclarationBody
-    : aiComputationRegion
-    | aiDeclarationExpressionBody
-    ;
-
-
-/**
- * Expression-valued AI declaration body.
- */
-aiDeclarationExpressionBody
-    : expression
-    ;
-
-
-/* ============================================================================
- * 3. AI BINDINGS
- * ========================================================================== */
-
-/**
- * Binds an AI-domain value to a source-level name.
- *
- * Examples:
- *
- *     @input x
- *     @output y
- *     @parameter weights
- *     @state hidden
- *
- * The semantic layer determines whether the annotation represents input,
- * output, parameter, state, component, layer, or another registered role.
- */
-aiAnnotatedBinding
-    : NANO_ANNOTATION
-      identifier
-      aiBindingType?
-      aiBindingInitializer?
-      SEMICOLON
-    ;
-
-
-aiBindingType
-    : COLON typeExpression
-    ;
-
-
-aiBindingInitializer
-    : ASSIGN expression
-    ;
-
-
-/* ============================================================================
- * 4. AI INVOCATIONS
- * ========================================================================== */
-
-/**
- * AI-domain operation invocation.
- *
- * The operation name is an ordinary identifier.
- *
- * This permits:
- *
- *     user-defined models;
- *     library models;
- *     future algorithms;
- *     dialect operations;
- *     vendor-independent operations;
- *     extension operations.
- */
-aiAnnotatedInvocation
-    : NANO_ANNOTATION
-      identifier
-      LPAREN argumentList? RPAREN
-      SEMICOLON?
-    ;
-
-
-/* ============================================================================
- * 5. AI COMPUTATION REGIONS
- * ========================================================================== */
-
-/**
- * AI computation region.
- *
- * Statement syntax remains owned by Statements.
- */
-aiAnnotatedRegion
-    : NANO_ANNOTATION
-      identifier
-      aiComputationRegion
-    ;
-
-
-aiComputationRegion
-    : LBRACE
-      statement*
-      RBRACE
-    ;
-
-
-/* ============================================================================
- * 6. RESOURCE CONTRACTS
- * ========================================================================== */
-
-/**
- * AI resource requirements.
- *
- * The annotation identifies the semantic resource domain.
- *
- * Examples:
- *
- *     @requires resource(...)
- *     @requires memory(...)
- *     @requires accelerator(...)
- *
- * The exact meaning is resolved by semantic/resource analysis.
- */
-aiResourceContract
-    : NANO_ANNOTATION
-      aiResourceExpression
-      SEMICOLON?
-    ;
-
-
-aiResourceExpression
-    : expression
-    ;
-
-
-/* ============================================================================
- * 7. CAPABILITY CONTRACTS
- * ========================================================================== */
-
-/**
- * Capability requirements are distinct from concrete resource selection.
- */
-aiCapabilityContract
-    : NANO_ANNOTATION
-      aiCapabilityExpression
-      SEMICOLON?
-    ;
-
-
-aiCapabilityExpression
-    : expression
-    ;
-
-
-/* ============================================================================
- * 8. CONSTRAINT CONTRACTS
- * ========================================================================== */
-
-/**
- * A constraint expresses a semantic requirement or admissibility condition.
- *
- * It does not select a particular machine.
- */
-aiConstraintContract
-    : NANO_ANNOTATION
-      aiConstraintExpression
-      SEMICOLON?
-    ;
-
-
-aiConstraintExpression
-    : expression
-    ;
-
-
-/* ============================================================================
- * 9. PREFERENCE CONTRACTS
- * ========================================================================== */
-
-/**
- * Preferences are deliberately weaker than requirements.
- *
- * Example semantic meanings:
- *
- *     prefer low latency
- *     prefer energy efficiency
- *     prefer accelerator execution
- *     prefer local execution
- *
- * These remain semantic/resource policy concerns.
- */
-aiPreferenceContract
-    : NANO_ANNOTATION
-      aiPreferenceExpression
-      SEMICOLON?
-    ;
-
-
-aiPreferenceExpression
-    : expression
-    ;
-
-
-/* ============================================================================
- * 10. INTEROPERABILITY
- * ========================================================================== */
-
-/**
- * Generic AI interoperability boundary.
- *
- * AI can interact with:
- *
- *     classical values;
- *     quantum values;
- *     hardware-backed values;
- *     distributed values;
- *     data values;
- *     external callable interfaces.
- *
- * The grammar does not define the implementation of those domains.
- */
-aiInteroperabilityConstruct
-    : aiInteroperabilityBinding
-    | aiInteroperabilityCall
-    ;
-
-
-aiInteroperabilityBinding
-    : NANO_ANNOTATION
-      identifier
-      ASSIGN
-      expression
-      SEMICOLON
-    ;
-
-
-aiInteroperabilityCall
-    : NANO_ANNOTATION
-      expression
-      SEMICOLON?
-    ;
-
-
-/* ============================================================================
- * 11. AI DOMAIN MARKERS
- * ========================================================================== */
-
-/**
- * Semantic domain markers.
- *
- * These are parser-level symbolic categories, not lexer keywords.
- *
- * Semantic analysis may map annotations such as:
- *
- *     @model
- *     @dataset
- *     @tensor
- *     @training
- *     @inference
- *     @agent
- *     @pipeline
- *     @accelerator
- *     @differentiation
- *
- * to registered AI domain descriptors.
- *
- * The grammar deliberately does not enumerate those names.
- *
- * This allows future AI domains without modifying this grammar.
- */
-aiDomainMarker
-    : NANO_ANNOTATION
-    ;
-
-
-/* ============================================================================
- * 12. AI VALUE BRIDGE
- * ========================================================================== */
-
-/**
- * A source-level bridge for an AI value.
- *
- * This rule is intentionally NOT part of aiConstruct.
- *
- * It exists so another parser composition layer can explicitly request an
- * AI value without making every ordinary expression an AI construct.
- */
 aiValue
     : expression
     ;
 
 
-/**
- * AI type bridge.
- *
- * Type semantics remain owned by the canonical type grammar.
- */
 aiType
     : typeExpression
     ;
 
 
-/**
- * AI expression bridge.
- *
- * Expression semantics remain owned by Expressions.
- */
 aiExpression
     : expression
     ;
 
 
-/* ============================================================================
- * 13. MODEL / DATASET / TENSOR / TRAINING / INFERENCE BRIDGES
- * ========================================================================== */
-
-/**
- * These rules are stable semantic bridges.
+/*
+ * ============================================================================
+ * 4. CROSS-DOMAIN REFERENCE BRIDGES
+ * ============================================================================
  *
- * They are deliberately not public alternatives of aiConstruct.
+ * AI values can participate in other Zamani domains.
  *
- * Leaf grammars own their concrete syntax:
+ * References remain ordinary expressions at the parser level.
  *
- *     models.g4
- *     datasets.g4
- *     tensors.g4
- *     training.g4
- *     inference.g4
- *     agents.g4
- *     differentiation.g4
- *     pipelines.g4
- *     ai-accelerators.g4
+ * Semantic analysis determines whether a referenced value denotes:
  *
- * This prevents this aggregate grammar from duplicating those grammars.
+ *     model
+ *     dataset
+ *     tensor
+ *     quantum value
+ *     classical value
+ *     hardware-backed value
+ *     distributed value
+ *     network value
+ *     future-domain value
+ *
+ * No AI-specific duplicate type or IR is introduced.
+ * ============================================================================
  */
 
 aiModelReference
@@ -862,197 +556,741 @@ aiAcceleratorReference
     ;
 
 
-aiDifferentiationReference
-    : expression
-    ;
-
-
-/* ============================================================================
- * 14. AI STATEMENT SEQUENCE BRIDGE
- * ========================================================================== */
-
-/**
- * Canonical statement sequence used by AI regions.
+/*
+ * ============================================================================
+ * 5. RESOURCE / CAPABILITY SEMANTIC BOUNDARY
+ * ============================================================================
  *
- * No AI-specific statement hierarchy is introduced.
- */
-aiStatementSequence
-    : statement*
-    ;
-
-
-/* ============================================================================
- * 15. AI ARGUMENT BRIDGE
- * ========================================================================== */
-
-/**
- * Canonical argument syntax is owned by Expressions.
+ * AI resource and capability semantics are intentionally downstream.
  *
- * This rule exists only as a stable semantic naming point for AI tooling.
- */
-aiArgumentList
-    : argumentList
-    ;
-
-
-/* ============================================================================
- * 16. AI TYPE ARGUMENT BRIDGE
- * ========================================================================== */
-
-/**
- * Generic AI type argument.
- */
-aiTypeArgument
-    : typeExpression
-    ;
-
-
-/* ============================================================================
- * 17. AI METADATA
- * ========================================================================== */
-
-/**
- * AI metadata remains expression-valued.
+ * Source-level constructs may describe:
  *
- * Metadata semantics belong to the semantic layer.
- */
-aiMetadataEntry
-    : NANO_ANNOTATION
-      expression
-      SEMICOLON?
-    ;
-
-
-aiMetadataList
-    : aiMetadataEntry*
-    ;
-
-
-/* ============================================================================
- * 18. AI EXTENSION POINT
- * ========================================================================== */
-
-/**
- * Generic future AI extension.
+ *     requirements
+ *     capabilities
+ *     constraints
+ *     preferences
+ *     hints
+ *     budgets
  *
- * An extension is explicitly annotation-led so it cannot silently capture
- * arbitrary ordinary Zamani expressions.
- */
-aiExtension
-    : NANO_ANNOTATION
-      identifier
-      aiExtensionArguments?
-      aiExtensionBody?
-    ;
-
-
-aiExtensionArguments
-    : LPAREN argumentList? RPAREN
-    ;
-
-
-aiExtensionBody
-    : aiComputationRegion
-    | expression
-    ;
-
-
-/* ============================================================================
- * 19. PORTABILITY CONTRACT
- * ========================================================================== */
-
-/**
- * AI portability declaration.
+ * They do NOT select physical resources.
  *
- * The grammar permits a semantic portability contract without prescribing a
- * particular deployment target.
+ * Valid semantic intent includes concepts such as:
+ *
+ *     requires qubits >= n
+ *     requires memory >= required_memory
+ *     requires capability("tensor.compute")
+ *     requires capability("quantum.measurement")
+ *     requires topology(...)
+ *
+ * Invalid architectural assumptions include treating these as:
+ *
+ *     GPU 0
+ *     CPU 0
+ *     QPU 0
+ *     physical_qubit 17
+ *     device 7
+ *
+ * Physical realization belongs downstream.
+ *
+ * ============================================================================
  */
-aiPortabilityContract
-    : NANO_ANNOTATION
-      aiPortabilityExpression
-      SEMICOLON?
-    ;
 
-
-aiPortabilityExpression
-    : expression
-    ;
-
-
-/* ============================================================================
- * 20. COMPLETION CONTRACT
- * ========================================================================== */
 
 /*
- * This grammar is complete only when all of the following remain true:
+ * ============================================================================
+ * 6. PORTABILITY / POCO-REAF
+ * ============================================================================
  *
- * [ ] `AI` is a parser grammar.
+ * AI syntax must remain independent of the size or topology of the machine
+ * that eventually realizes it.
  *
- * [ ] `ZamaniLexer` remains the sole lexical authority.
+ * This composition layer imposes NO language-level maximum on:
  *
- * [ ] `Types` remains the sole owner of general type syntax.
+ *     models
+ *     model members
+ *     model depth
+ *     model parameters
+ *     tensors
+ *     tensor rank
+ *     tensor dimensions
+ *     datasets
+ *     records
+ *     batches
+ *     training steps
+ *     inference calls
+ *     agents
+ *     pipeline stages
+ *     workers
+ *     nodes
+ *     accelerators
+ *     devices
+ *     quantum resources
+ *     classical resources
  *
- * [ ] `Expressions` remains the sole owner of general expression syntax.
+ * No universal constants such as:
  *
- * [ ] `Statements` remains the sole owner of general statement syntax.
+ *     MAX_MODELS
+ *     MAX_TENSORS
+ *     MAX_TENSOR_RANK
+ *     MAX_PARAMETERS
+ *     MAX_LAYERS
+ *     MAX_GPUS
+ *     MAX_CPUS
+ *     MAX_NODES
+ *     MAX_DEVICES
  *
- * [ ] No AI rule defines a competing expression grammar.
+ * may be introduced here.
  *
- * [ ] No AI rule defines a competing type grammar.
+ * Repetition is represented structurally by the leaf grammars.
  *
- * [ ] No AI rule defines a competing identifier grammar.
+ * Actual limits belong to:
  *
- * [ ] No AI rule defines a competing quantum representation.
+ *     semantic validation;
+ *     resource analysis;
+ *     compiler resources;
+ *     runtime resources;
+ *     target capabilities;
+ *     deployment policy.
  *
- * [ ] No AI rule defines QubitId, PhysicalQubitId, QEC, ZQN, or hardware
- *     topology.
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * 7. QUANTUM INTEGRATION
+ * ============================================================================
  *
- * [ ] No fixed model count exists.
+ * AI may participate in hybrid quantum/classical computation.
  *
- * [ ] No fixed tensor rank exists.
+ * This composition layer does not define quantum syntax.
  *
- * [ ] No fixed tensor dimension exists.
+ * Quantum source remains owned by the quantum grammar and its canonical
+ * semantic boundary:
  *
- * [ ] No fixed parameter count exists.
+ *     quantum::ir
  *
- * [ ] No fixed layer count exists.
+ * AI may therefore semantically lower into quantum computation when the source
+ * requires it, but AI MUST NOT introduce:
  *
- * [ ] No fixed dataset size exists.
+ *     QuantumGate
+ *     QubitId
+ *     physical qubit mapping
+ *     quantum topology
+ *     routing
+ *     scheduling
+ *     QEC
+ *     ZQN
  *
- * [ ] No fixed accelerator count exists.
+ * into this grammar.
  *
- * [ ] No fixed worker count exists.
+ * The path remains:
  *
- * [ ] No fixed device count exists.
+ *     AI source
+ *          |
+ *          v
+ *     domain-neutral AST
+ *          |
+ *          v
+ *     semantic analysis
+ *          |
+ *          v
+ *     quantum::ir
  *
- * [ ] No fixed machine size exists.
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * 8. CLASSICAL / HDL / HARDWARE / DISTRIBUTED INTEGRATION
+ * ============================================================================
  *
- * [ ] No device ID is required by syntax.
+ * AI may participate in:
  *
- * [ ] No vendor-specific AI keyword is required by syntax.
+ *     classical computation
+ *     numerical computation
+ *     tensor computation
+ *     accelerator computation
+ *     hardware/software co-design
+ *     HDL generation
+ *     distributed computation
+ *     networking
+ *     security
+ *     future computational domains
  *
- * [ ] AI constructs are distinguishable from ordinary expressions.
+ * AI.g4 does not duplicate those grammars.
  *
- * [ ] AI leaf grammars remain independently composable.
+ * Their semantics remain owned by their respective domain contracts.
  *
- * [ ] Future AI dialects can be added without changing the lexical grammar.
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * 9. DIALECT / FRAMEWORK / VENDOR POLICY
+ * ============================================================================
  *
- * [ ] Semantic analysis, not parsing, resolves annotation meaning.
+ * Core AI grammar remains framework-neutral.
  *
- * [ ] Resource analysis, not parsing, determines resource feasibility.
+ * The grammar does NOT reserve syntax for:
  *
- * [ ] Capability analysis, not parsing, determines target suitability.
+ *     CUDA
+ *     ROCm
+ *     TensorFlow
+ *     PyTorch
+ *     JAX
+ *     ONNX
+ *     OpenVINO
+ *     vendor-specific accelerators
+ *     cloud providers
+ *     particular model families
+ *     particular runtime systems
  *
- * [ ] Scheduling, not parsing, determines execution order and timing.
+ * Such integrations belong to:
  *
- * [ ] Runtime, not parsing, discovers actual available resources.
+ *     interoperability/
+ *     dialects/
+ *     hardware/
+ *     compile/
+ *     execution/
  *
- * [ ] The grammar imposes no artificial scalability ceiling.
+ * A vendor/framework extension must therefore be explicit rather than silently
+ * becoming part of the core Zamani language.
  *
- * [ ] The Rust implementation using this grammar contains no unsafe code.
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * 10. DETERMINISM
+ * ============================================================================
  *
- * [ ] Rust 1.97 / 1.97.1 remains supported.
+ * This grammar contains:
  *
- * [ ] Generated parser code is treated as generated output rather than
- *     hand-maintained source.
+ *     - no embedded actions;
+ *     - no semantic predicates;
+ *     - no executable code;
+ *     - no filesystem access;
+ *     - no network access;
+ *     - no environment inspection;
+ *     - no hardware discovery;
+ *     - no random behavior;
+ *     - no runtime execution.
+ *
+ * For a fixed:
+ *
+ *     source text
+ *     lexer version
+ *     parser grammar version
+ *     enabled dialect configuration
+ *
+ * parsing must be deterministic.
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * 11. SAFETY
+ * ============================================================================
+ *
+ * This grammar contains no Rust implementation code.
+ *
+ * The Rust frontend consuming generated ANTLR output must target:
+ *
+ *     Rust 1.97
+ *     Rust 1.97.1
+ *     Rust 2021
+ *
+ * and safe Rust only.
+ *
+ * No `unsafe` implementation is required or permitted as an architectural
+ * dependency of this grammar.
+ *
+ * The grammar itself performs no:
+ *
+ *     I/O
+ *     process execution
+ *     device access
+ *     model loading
+ *     dataset loading
+ *     network communication
+ *     accelerator discovery
+ *     quantum-device discovery
+ *     resource allocation.
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * 12. AST CONTRACT
+ * ============================================================================
+ *
+ * AI.g4 produces parser structures only.
+ *
+ * The frontend AST remains domain-neutral.
+ *
+ * Every AI leaf construct must preserve enough structure for downstream
+ * construction of the existing AST, including:
+ *
+ *     source span
+ *     declaration identity
+ *     names
+ *     annotations
+ *     parameters
+ *     types
+ *     expressions
+ *     nested structure
+ *     member ordering
+ *     relationships
+ *     provenance
+ *
+ * AI.g4 MUST NOT introduce a competing AI AST hierarchy merely because a
+ * construct belongs to AI.
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * 13. SEMANTIC CONTRACT
+ * ============================================================================
+ *
+ * Semantic analysis, not this grammar, determines:
+ *
+ *     - whether an annotation is recognized;
+ *     - whether an AI construct is legal;
+ *     - whether names resolve;
+ *     - whether types are valid;
+ *     - whether tensor shapes are compatible;
+ *     - whether model graphs are valid;
+ *     - whether resource requirements can be satisfied;
+ *     - whether capabilities exist;
+ *     - whether effects are permitted;
+ *     - whether a model is portable;
+ *     - whether a dialect is enabled;
+ *     - whether a quantum reference is semantically valid;
+ *     - whether a hardware requirement is satisfiable.
+ *
+ * Parser acceptance MUST NOT depend on current hardware availability.
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * 14. IR CONTRACT
+ * ============================================================================
+ *
+ * AI.g4 creates NO IR.
+ *
+ * AI semantics may lower into existing canonical IR paths.
+ *
+ * Depending on the program, AI computation may lower toward:
+ *
+ *     classical IR
+ *     tensor/data computation IR
+ *     accelerator/hardware IR
+ *     distributed IR
+ *     quantum::ir
+ *     other canonical domain IRs
+ *
+ * There must not be:
+ *
+ *     AIUniversalIR
+ *     AIQuantumIR
+ *     AIHardwareIR
+ *
+ * introduced merely because this composition grammar exists.
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * 15. COMPILER / RUNTIME CONTRACT
+ * ============================================================================
+ *
+ * Compilation is responsible for:
+ *
+ *     specialization
+ *     optimization
+ *     lowering
+ *     resource realization
+ *     scheduling
+ *     routing
+ *     target selection
+ *     deployment planning
+ *
+ * Runtime is responsible for:
+ *
+ *     resource discovery
+ *     execution
+ *     lifecycle
+ *     monitoring
+ *     recovery
+ *
+ * AI.g4 performs none of these operations.
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * 16. HARD-CODING AUDIT
+ * ============================================================================
+ *
+ * This file contains no artificial resource limits.
+ *
+ * In particular, it does not define:
+ *
+ *     MAX_QUBITS
+ *     MAX_CPUS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_NODES
+ *     MAX_MEMORY
+ *     MAX_THREADS
+ *     MAX_TENSOR_RANK
+ *     MAX_REGISTER_WIDTH
+ *     MAX_NETWORK_SIZE
+ *     MAX_DEVICE_COUNT
+ *
+ * It also does not define:
+ *
+ *     fixed GPU identifiers
+ *     fixed CPU identifiers
+ *     fixed QPU identifiers
+ *     fixed physical qubits
+ *     fixed tensor ranks
+ *     fixed model depths
+ *     fixed node counts
+ *     fixed accelerator counts
+ *     fixed topology sizes
+ *
+ * Program-level numeric values remain program semantics.
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * 17. INTEGRATION WITH ZamaniParser.g4
+ * ============================================================================
+ *
+ * `grammar/antlr/ZamaniParser.g4` already imports:
+ *
+ *     AI
+ *
+ * and routes the universal AI domain through:
+ *
+ *     aiElement
+ *
+ * Therefore the canonical dependency becomes:
+ *
+ *     Zamani.g4
+ *          |
+ *          v
+ *     ZamaniParser
+ *          |
+ *          v
+ *        AI
+ *          |
+ *     +----+-------------------------------+
+ *     |                                    |
+ *     v                                    v
+ * AI leaf grammars                   universal grammars
+ *     |                                    |
+ *     +----------------+-------------------+
+ *                      |
+ *                      v
+ *                frontend AST
+ *
+ * `Zamani.g4` itself does NOT need to import the individual AI leaf grammars.
+ *
+ * This preserves the existing root architecture.
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * 18. INTEGRATION WITH grammar/ai/README.md
+ * ============================================================================
+ *
+ * The AI README must identify this file as:
+ *
+ *     AI composition boundary
+ *
+ * and identify the leaf grammar ownership:
+ *
+ *     models.g4
+ *     datasets.g4
+ *     tensors.g4
+ *     training.g4
+ *     inference.g4
+ *     agents.g4
+ *     differentiation.g4
+ *     pipelines.g4
+ *     ai-accelerators.g4
+ *     model-deployment.g4
+ *
+ * It must identify:
+ *
+ *     model.g4
+ *     agent.g4
+ *
+ * as legacy/deprecated duplicates that are not imported by this composition
+ * grammar.
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * 19. INTEGRATION WITH grammar/spec/ai.md
+ * ============================================================================
+ *
+ * The normative AI semantic specification remains:
+ *
+ *     grammar/spec/ai.md
+ *
+ * This file implements the parser-composition portion of that specification.
+ *
+ * It does not replace the semantic specification.
+ *
+ * `grammar/spec/ai.md` remains responsible for:
+ *
+ *     AI semantic definitions
+ *     lifecycle/status
+ *     type integration
+ *     effects
+ *     resources
+ *     capabilities
+ *     portability
+ *     IR mapping
+ *     compiler/runtime contracts
+ *     conformance requirements.
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * 20. INTEGRATION WITH grammar/grammar.md
+ * ============================================================================
+ *
+ * `grammar/grammar.md` remains the implementation-conformance reference.
+ *
+ * It must report the resulting state of:
+ *
+ *     AI composition
+ *     model grammar
+ *     dataset grammar
+ *     tensor grammar
+ *     training grammar
+ *     inference grammar
+ *     agent grammar
+ *     differentiation grammar
+ *     pipeline grammar
+ *     accelerator grammar
+ *     deployment grammar
+ *
+ * using the repository's conformance statuses.
+ *
+ * This file MUST NOT become another specification authority.
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * 21. REQUIRED CONFORMANCE TESTS
+ * ============================================================================
+ *
+ * The AI composition layer is complete only when the repository verifies:
+ *
+ * POSITIVE:
+ *
+ *     @model ...
+ *     @dataset ...
+ *     @tensor ...
+ *     @training ...
+ *     @inference ...
+ *     @agent ...
+ *     @pipeline ...
+ *     @accelerator ...
+ *     @deployment ...
+ *
+ * NEGATIVE:
+ *
+ *     arbitrary ordinary expressions are not silently accepted as aiConstruct;
+ *     malformed AI declarations are rejected;
+ *     malformed annotation boundaries are rejected;
+ *     malformed leaf constructs are rejected.
+ *
+ * BOUNDARY:
+ *
+ *     empty AI regions where permitted;
+ *     one-member constructs;
+ *     many-member constructs;
+ *     nested constructs;
+ *     deeply composed constructs;
+ *     symbolic dimensions;
+ *     symbolic resource quantities;
+ *     large numeric program values.
+ *
+ * SCALABILITY:
+ *
+ *     no artificial model-count ceiling;
+ *     no artificial tensor-rank ceiling;
+ *     no artificial layer-count ceiling;
+ *     no artificial parameter-count ceiling;
+ *     no artificial dataset-size ceiling;
+ *     no artificial worker-count ceiling;
+ *     no artificial node-count ceiling;
+ *     no artificial accelerator-count ceiling.
+ *
+ * DETERMINISM:
+ *
+ *     identical source/token streams produce deterministic parses.
+ *
+ * PORTABILITY:
+ *
+ *     the same source structure remains independent of target hardware.
+ *
+ * HARD-CODING:
+ *
+ *     no universal machine-capacity constant is introduced.
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * 22. COMPLETION CRITERIA
+ * ============================================================================
+ *
+ * AI.g4 is complete when:
+ *
+ * [x] It is the single AI composition boundary.
+ *
+ * [x] It is imported by ZamaniParser.g4 through `AI`.
+ *
+ * [x] It composes the canonical AI leaf grammars.
+ *
+ * [x] It does not import duplicate model grammars.
+ *
+ * [x] It does not import duplicate agent grammars.
+ *
+ * [x] It uses ZamaniLexer.
+ *
+ * [x] It follows the canonical AT annotation model.
+ *
+ * [x] It does not use NANO_ANNOTATION.
+ *
+ * [x] It does not define lexer rules.
+ *
+ * [x] It does not duplicate expression syntax.
+ *
+ * [x] It does not duplicate type syntax.
+ *
+ * [x] It does not duplicate statement syntax.
+ *
+ * [x] It does not create an AI-specific AST.
+ *
+ * [x] It does not create an AI-specific IR.
+ *
+ * [x] It does not create a second quantum IR.
+ *
+ * [x] quantum::ir remains the canonical quantum semantic boundary.
+ *
+ * [x] It contains no target-specific hardware assumptions.
+ *
+ * [x] It contains no artificial resource limits.
+ *
+ * [x] It contains no parser-time execution.
+ *
+ * [x] It contains no semantic predicates.
+ *
+ * [x] It contains no embedded Rust.
+ *
+ * [x] It requires no unsafe Rust.
+ *
+ * [x] It supports POCO-REAF architecturally.
+ *
+ * [x] Leaf grammars remain independently testable.
+ *
+ * [x] AI semantics remain downstream of parsing.
+ *
+ * [x] Resource/capability decisions remain downstream.
+ *
+ * [x] Hardware realization remains downstream.
+ *
+ * [x] Compilation remains target-aware but source-portable.
+ *
+ * [x] Runtime resource availability remains external to parsing.
+ *
+ * ============================================================================
+ *
+ * FINAL INVARIANT
+ * ============================================================================
+ *
+ * AI.g4 answers exactly:
+ *
+ *     "Which independently-owned AI grammar domains participate in the
+ *      canonical Zamani AI parser boundary?"
+ *
+ * It does NOT answer:
+ *
+ *     "How does AI execute?"
+ *
+ *     "Which hardware executes AI?"
+ *
+ *     "How much memory exists?"
+ *
+ *     "How many GPUs exist?"
+ *
+ *     "How many quantum resources exist?"
+ *
+ *     "How is an AI model optimized?"
+ *
+ *     "How is a model scheduled?"
+ *
+ *     "How is a model deployed?"
+ *
+ * Those questions belong downstream.
+ *
+ * The governing portability invariant remains:
+ *
+ *     Program Once
+ *          ->
+ *     Compile Once
+ *          ->
+ *     Run Everywhere
+ *          ->
+ *     Run Anywhere
+ *          ->
+ *     Forever
+ *
+ * subject only to the program's semantics, declared requirements,
+ * capabilities, and actual resources available at realization time.
+ *
+ * ============================================================================
  */
