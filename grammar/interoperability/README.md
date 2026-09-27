@@ -1,181 +1,533 @@
 Zamani Interoperability Grammar
 
-Production Interoperability Architecture
-
-Path
-
-"grammar/interoperability/"
-
-Language
-
-Zamani
-
-Grammar technology
-
-ANTLR-compatible grammar composition
-
-Compiler implementation baseline
-
-- Rust 2021
-- Rust 1.97
-- Rust 1.97.1
-- "unsafe" Rust forbidden
-
-Architectural objective
-
-Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever (POCO-REAF)
+Path: "grammar/interoperability/"
+Primary file: "grammar/interoperability/README.md"
+Status: PRODUCTION-READY ARCHITECTURAL CONTRACT
+Language: Zamani
+Grammar technology: ANTLR grammar composition
+Compiler implementation baseline: Rust 2021, Rust 1.97 / Rust 1.97.1
+Implementation safety: Safe Rust only; "unsafe" Rust is prohibited
+Architectural objective: Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever (POCO-REAF)
 
 ---
 
 1. Purpose
 
-The "grammar/interoperability/" subsystem defines the source-language interoperability boundary of Zamani.
+The "grammar/interoperability/" subsystem defines the source-level interoperability boundary of the Zamani programming language.
 
-It allows a Zamani program to explicitly describe relationships with other programming languages, foreign functions, foreign types, ABIs, binary interfaces, system interfaces, hardware interfaces, quantum formats, HDL formats, foreign runtimes, and future computational ecosystems.
+It provides the syntax and integration contracts required for Zamani programs to interoperate with:
 
-The subsystem exists so that Zamani can integrate with existing and future computational technologies without making those technologies part of Zamani's permanent semantic core.
-
-The central architectural rule is:
-
-«Zamani source describes the semantic boundary and interoperability intent. Downstream compilation, semantic analysis, linking, deployment, runtime, hardware abstraction, and execution systems determine the concrete realization.»
-
-Interoperability syntax MUST therefore distinguish:
-
-- language identity;
-- source-format identity;
-- ABI identity;
-- interface identity;
-- type compatibility;
+- foreign programming languages;
+- foreign functions;
+- foreign types;
+- foreign values;
+- foreign modules;
+- foreign interfaces;
+- foreign runtimes;
+- ABIs;
 - calling conventions;
-- ownership;
-- lifetime;
-- conversion;
-- capability requirements;
-- effect requirements;
-- resource requirements;
-- portability constraints;
-- compatibility requirements;
-- linkage intent;
-- execution intent;
+- system interfaces;
+- C;
+- C++;
+- Rust;
+- Python;
+- Zig;
+- assembly;
+- WebAssembly;
+- OpenQASM;
+- QIR;
+- HDL;
+- hardware interfaces;
+- serialization formats;
+- future languages;
+- future execution environments;
+- future computational substrates.
 
-from implementation-specific facts such as:
+The subsystem exists to make interoperability a language capability, rather than making every external language, compiler, runtime, operating system, processor, device, vendor, or hardware generation part of Zamani's permanent language definition.
 
-- CPU model;
-- GPU model;
-- QPU model;
-- FPGA model;
-- ASIC model;
-- operating system;
-- pointer width;
-- register count;
-- memory capacity;
-- physical address;
-- device ID;
-- machine topology;
-- node count;
-- qubit count;
-- compiler executable;
-- linker executable;
-- library path;
-- runtime process;
-- network location.
+The fundamental rule is:
+
+«Zamani syntax describes the semantic contract of an interoperability boundary. Downstream semantic analysis, ABI lowering, linking, compilation, deployment, runtime, hardware abstraction, and execution determine its concrete realization.»
+
+The grammar therefore describes what the program requires and what boundary it declares, not the implementation mechanism used by a particular machine.
 
 ---
 
-2. Architectural Position
+2. Architectural Authority
 
-The interoperability subsystem is upstream of semantic lowering and downstream execution.
+Interoperability is governed by the existing Zamani authority model.
 
-The intended architecture is:
+The authority order is:
+
+grammar/specification/
+        │
+        ▼
+grammar/spec/
+        │
+        ▼
+grammar/Zamani.g4
+        │
+        ├── grammar/antlr/ZamaniParser.g4
+        │
+        └── grammar/antlr/ZamaniLexer.g4
+        │
+        ▼
+canonical lexical/parser implementation
+        │
+        ▼
+src/frontend/ast/
+        │
+        ▼
+semantic analysis
+        │
+        ▼
+canonical semantic representation
+        │
+        ├── classical semantics / IR
+        ├── quantum::ir
+        └── HDL / hardware semantics / IR
+        │
+        ▼
+optimization / lowering
+        │
+        ▼
+routing / scheduling / resilience / QEC / ZQN
+        │
+        ▼
+HAL / ABI / backend
+        │
+        ▼
+runtime / deployment / target
+
+The responsibilities of the major existing files remain:
+
+File| Authority
+"grammar/DESIGN.md"| Normative grammar architecture
+"grammar/README.md"| Grammar navigation and authority map
+"grammar/Zamani.g4"| Canonical ANTLR composition root
+"grammar/antlr/ZamaniLexer.g4"| Canonical lexer composition
+"grammar/antlr/ZamaniParser.g4"| Canonical parser composition
+"grammar/grammar.md"| Implementation-conformance reference
+"grammar/Zamani-Grammar.md"| Historical/extended design reference
+"grammar/specification/"| Normative language specification
+"grammar/spec/"| Formal subsystem contracts
+"grammar/interoperability/"| Interoperability syntax contracts
+"src/lexer.rs"| Rust lexer implementation
+"src/parser.rs"| Rust parser implementation
+"src/frontend/ast/"| Domain-neutral frontend AST
+"quantum::ir"| Canonical quantum semantic/IR boundary
+
+"grammar/interoperability/README.md" does not supersede "DESIGN.md", the normative specification, or the canonical parser.
+
+It specializes those contracts for interoperability.
+
+---
+
+3. Ownership
+
+3.1 This subsystem owns
+
+"grammar/interoperability/" owns source-level syntax and contracts for:
+
+- foreign-language declarations;
+- foreign-format declarations;
+- FFI declarations;
+- foreign function bindings;
+- foreign type references;
+- foreign value references;
+- foreign interface declarations;
+- adapters;
+- conversion declarations;
+- callback declarations;
+- ABI references;
+- calling-convention references;
+- linkage intent;
+- symbol identity;
+- ownership-transfer intent;
+- lifetime-boundary intent;
+- nullability intent;
+- representation intent;
+- marshaling intent;
+- serialization/deserialization intent;
+- compatibility requirements;
+- interoperability capabilities;
+- interoperability effects;
+- interoperability resource requirements;
+- foreign runtime requirements;
+- source/target format identity;
+- language identity;
+- interface identity;
+- symbol identity;
+- foreign module identity;
+- asynchronous foreign boundaries;
+- streaming boundaries;
+- callback contracts;
+- system-interface contracts;
+- language-specific interoperability extensions;
+- external-format import/export intent;
+- interoperability provenance;
+- interoperability version constraints;
+- loss/compatibility declarations;
+- boundary-level security requirements.
+
+---
+
+3.2 This subsystem does not own
+
+It does not own:
+
+- the canonical lexer;
+- universal identifiers;
+- universal qualified names;
+- ordinary expressions;
+- ordinary types;
+- ordinary functions;
+- ordinary modules;
+- universal declarations;
+- ordinary statements;
+- semantic type checking;
+- ownership checking;
+- lifetime checking;
+- ABI layout computation;
+- ABI implementation;
+- symbol lookup;
+- linker behavior;
+- library discovery;
+- filesystem access;
+- network access;
+- process execution;
+- dynamic loading;
+- runtime invocation;
+- hardware discovery;
+- device selection;
+- CPU selection;
+- GPU selection;
+- FPGA selection;
+- ASIC selection;
+- QPU selection;
+- physical-qubit selection;
+- topology discovery;
+- calibration;
+- scheduling;
+- routing;
+- optimization;
+- QEC;
+- ZQN;
+- HAL implementation;
+- canonical quantum IR;
+- classical IR;
+- HDL/hardware IR;
+- deployment;
+- resource allocation.
+
+Those systems consume interoperability semantics.
+
+They do not become grammar dependencies.
+
+---
+
+4. The Interoperability Boundary
+
+The complete conceptual model is:
 
 Zamani source
-     |
-     v
-canonical lexer
-     |
-     v
-authoritative parser
-     |
-     v
-Zamani AST
-     |
-     v
-interoperability syntax
-     |
-     v
+     │
+     ▼
+interoperability declaration
+     │
+     ├── language identity
+     ├── format identity
+     ├── interface identity
+     ├── symbol identity
+     ├── ABI contract
+     ├── calling convention
+     ├── type contract
+     ├── conversion contract
+     ├── ownership contract
+     ├── lifetime contract
+     ├── effect contract
+     ├── capability contract
+     ├── resource requirements
+     ├── security requirements
+     ├── compatibility requirements
+     └── portability requirements
+     │
+     ▼
+domain-neutral AST
+     │
+     ▼
 semantic analysis
-     |
-     +--------------------+
-     |                    |
-     v                    v
-type analysis       capability/effect analysis
-     |                    |
-     +---------+----------+
-               |
-               v
-       canonical semantic representation
-               |
-       +-------+--------+------------------+
-       |       |        |                  |
-       v       v        v                  v
- classical  quantum   hardware/HDL    distributed/etc.
- IR         ::ir      semantic IR     semantic IR
-       |       |        |                  |
-       +-------+--------+------------------+
-                       |
-                       v
-                 optimization
-                       |
-                       v
-                    routing
-                       |
-                       v
-                  scheduling
-                       |
-                       v
-                    lowering
-                       |
-                       v
-                 ABI/link/runtime
-                       |
-                       v
-                    execution
+     │
+     ├── type checking
+     ├── ownership/lifetime checking
+     ├── capability checking
+     ├── effect checking
+     ├── resource checking
+     ├── compatibility checking
+     └── portability checking
+     │
+     ▼
+canonical semantic model
+     │
+     ▼
+canonical IR/domain representation
+     │
+     ▼
+target-specific realization
 
-The grammar MUST NOT reverse this direction.
+The boundary is deliberately one-directional.
 
-Forbidden dependencies include:
-
-grammar
-  -> runtime
-  -> grammar
-
-grammar
-  -> hardware discovery
-  -> grammar
-
-grammar
-  -> quantum::ir
-  -> grammar
-
-grammar
-  -> linker
-  -> grammar
-
-The grammar establishes syntax.
-
-Semantic infrastructure interprets the syntax.
-
-IR infrastructure represents canonical semantics.
-
-Backends and runtimes realize those semantics.
+The grammar never reaches downward into target implementation.
 
 ---
 
-3. Repository Reality and Existing Integration
+5. POCO-REAF
 
-The repository already contains a specialized interoperability grammar family.
+Interoperability is part of the POCO-REAF architecture:
 
-Current files include:
+Program Once
+      ↓
+Compile Once
+      ↓
+Run Everywhere
+      ↓
+Run Anywhere
+      ↓
+Run Forever
+
+Interoperability must therefore not unnecessarily embed properties of today's target.
+
+For example:
+
+interop language "C"
+
+means:
+
+«The declared boundary follows the C interoperability contract.»
+
+It does not mean:
+
+x86
+x86_64
+ARM
+AArch64
+RISC-V
+Linux
+Windows
+macOS
+64-bit pointers
+specific registers
+specific stack layout
+specific CPU
+
+Those properties belong to downstream target realization.
+
+Similarly:
+
+interop language "OpenQASM"
+
+does not imply:
+
+- a particular QPU;
+- a particular qubit count;
+- a particular coupling graph;
+- physical-qubit identifiers;
+- calibration data;
+- gate durations;
+- routing decisions;
+- error-correction strategy.
+
+---
+
+6. Four Fundamental Interoperability Layers
+
+Interoperability must distinguish four independent layers.
+
+6.1 Language
+
+Examples:
+
+C
+C++
+Rust
+Python
+Zig
+
+A language identifies the semantic/source ecosystem.
+
+---
+
+6.2 Format
+
+Examples:
+
+OpenQASM 3
+QIR
+WebAssembly
+Verilog
+SystemVerilog
+C source
+C header
+
+A format describes representation or interchange.
+
+A format is not necessarily a programming language.
+
+---
+
+6.3 ABI
+
+An ABI describes binary-level compatibility expectations.
+
+Examples may include symbolic ABI identities.
+
+ABI semantics include concepts such as:
+
+- calling sequence;
+- data layout;
+- alignment;
+- symbol conventions;
+- linkage;
+- parameter passing;
+- return conventions;
+- variadic behavior.
+
+The grammar only declares the ABI contract.
+
+It does not implement ABI lowering.
+
+---
+
+6.4 Runtime
+
+A runtime is the execution environment.
+
+It may include:
+
+- a foreign interpreter;
+- a dynamic runtime;
+- a managed environment;
+- a system runtime;
+- a device runtime;
+- a distributed runtime.
+
+Runtime identity must not be confused with language identity.
+
+---
+
+7. No Closed Foreign-Language Enumeration
+
+The interoperability architecture must not require a permanently closed enum such as:
+
+C | Cpp | Python | Rust | Zig | ...
+
+That would make adding a new language a grammar architecture change.
+
+Instead, foreign language identity is conceptually symbolic and extensible.
+
+Examples:
+
+C
+C++
+Rust
+Python
+Zig
+vendor::language
+organization::language
+future::language
+
+The canonical grammar determines the exact identifier syntax.
+
+The semantic model determines validity.
+
+New foreign languages must not require redesigning the universal interoperability model.
+
+---
+
+8. Source-Format Identity
+
+Language identity and source-format identity are separate.
+
+For example:
+
+language "C"
+format "header"
+
+or an equivalent syntax defined by the canonical grammar.
+
+Likewise:
+
+language "OpenQASM"
+format "openqasm3"
+
+A source-format identifier is semantic metadata.
+
+It is not automatically:
+
+- a filename;
+- a filesystem path;
+- a URL;
+- an executable;
+- a process;
+- a network resource.
+
+Parsing must remain inert.
+
+---
+
+9. Canonical Grammar Composition
+
+"grammar/Zamani.g4" remains the single ANTLR composition root.
+
+The interoperability directory must not create another root grammar.
+
+The intended composition is:
+
+grammar/Zamani.g4
+        │
+        ├── ZamaniParser.g4
+        │       │
+        │       ├── universal syntax
+        │       ├── types
+        │       ├── expressions
+        │       ├── declarations
+        │       ├── statements
+        │       ├── functions
+        │       ├── modules
+        │       ├── effects
+        │       ├── memory
+        │       ├── concurrency
+        │       ├── classical
+        │       ├── quantum
+        │       ├── hybrid
+        │       ├── HDL
+        │       ├── hardware
+        │       ├── resources
+        │       ├── distributed
+        │       ├── AI
+        │       ├── data
+        │       ├── networking
+        │       ├── security
+        │       ├── compilation
+        │       ├── execution
+        │       ├── interoperability
+        │       ├── dialects
+        │       ├── macros
+        │       └── metaprogramming
+        │
+        └── ZamaniLexer.g4
+
+The root must not directly import every interoperability subgrammar.
+
+The interoperability composition grammar owns that internal composition.
+
+---
+
+10. Existing Interoperability Files
+
+The repository already contains specialized interoperability material.
+
+Existing files include:
 
 grammar/interoperability/
 ├── AssemblyLanguage.g4
@@ -193,548 +545,436 @@ grammar/interoperability/
 ├── verilog.g4
 └── zig.g4
 
-The repository currently also contains a filename:
+Existing files must be expanded and reconciled rather than unnecessarily renamed.
 
-interoperability.g4 
+A duplicate or accidentally malformed filename must not become a second authority.
 
-with a trailing space.
-
-That filename is structurally invalid for the intended architecture and MUST be renamed to:
+In particular, if the repository contains both:
 
 interoperability.g4
 
-The rename MUST be performed explicitly rather than silently creating another file.
+and a filesystem variant whose name differs only by trailing whitespace or another accidental naming artifact, the artifact must be explicitly reconciled and removed/renamed through repository history rather than silently maintained as another grammar.
 
-The current specialized grammars already express substantial interoperability concepts. For example, the existing C grammar describes C ABI declarations, foreign functions, C-compatible types, callbacks, linkage, ownership, nullability, and ABI attributes.
+The canonical logical file remains:
 
-The current top-level grammar also already contains a "foreignFunctionCall" production.
-
-The older grammar documentation contains another "foreignFunctionCall" form:
-
-foreignFunctionCall:
-    'foreign' IDENTIFIER '::' IDENTIFIER '(' argumentList? ')' ';'
-
-Therefore interoperability work MUST include reconciliation between:
-
-1. "grammar/Zamani.g4";
-2. "grammar/Zamani-Grammar.md";
-3. "grammar/grammar.md";
-4. "grammar/interoperability/interoperability.g4";
-5. specialized interoperability grammars;
-6. the frontend AST;
-7. the parser implementation;
-8. semantic analysis.
-
-No interoperability syntax may be considered production-ready merely because ANTLR accepts it.
+grammar/interoperability/interoperability.g4
 
 ---
 
-4. Ownership
+11. "interoperability.g4"
 
-4.1 This directory owns
+Owns
 
-"grammar/interoperability/" owns source syntax and composition contracts for:
+The composition-level interoperability syntax.
 
-- interoperability declarations;
-- interoperability imports;
-- interoperability exports;
-- foreign declarations;
-- foreign callable references;
-- foreign type references;
-- foreign value references;
-- interface declarations;
+It should compose:
+
+- FFI;
+- foreign functions;
+- foreign types;
+- ABI;
+- calling conventions;
+- language identity;
+- external formats;
 - adapters;
 - conversions;
+- system interfaces;
+- language-specific contracts.
+
+Does not own
+
+It must not redefine:
+
+- identifiers;
+- qualified names;
+- universal expressions;
+- universal types;
+- universal parameters;
+- universal attributes;
+- ordinary functions.
+
+It should delegate those to their canonical owners.
+
+Integration
+
+ZamaniParser.g4
+       ↓
+interoperability.g4
+       ↓
+specialized interoperability delegates
+       ↓
+domain-neutral AST
+
+---
+
+12. "ffi.g4"
+
+"ffi.g4" owns the generic source-level FFI boundary.
+
+The current file already establishes the correct architectural direction: FFI declares a boundary without loading or executing foreign code.
+
+Its complete responsibility is:
+
+FFI declaration
+    ↓
+foreign identity
+    ↓
+callable contract
+    ↓
+type boundary
+    ↓
+ownership/lifetime/effect/capability/resource metadata
+
+It must support, where specified by the canonical grammar:
+
+- FFI interfaces;
+- foreign functions;
 - callbacks;
-- ABI intent;
-- calling-convention intent;
-- linkage intent;
-- ownership-transfer intent;
-- borrowing/lifetime-boundary intent;
-- nullability intent;
-- compatibility declarations;
-- portability requirements;
-- capability requirements;
-- effect requirements;
-- foreign-resource requirements;
-- source-format identity;
-- language identity;
-- foreign interface identity;
-- foreign symbol identity;
-- interoperability metadata;
-- interoperability attributes;
-- asynchronous foreign boundaries;
-- streaming foreign boundaries;
-- cross-language contracts;
-- system-interface contracts;
-- language-specific interoperability composition.
+- adapters;
+- policies;
+- foreign targets;
+- contracts;
+- marshaling;
+- ownership;
+- borrowing;
+- lifetime;
+- nullability;
+- representation;
+- encoding;
+- size expressions;
+- alignment expressions;
+- direction;
+- asynchronous behavior;
+- streaming;
+- effects;
+- requirements;
+- compatibility;
+- security;
+- resources;
+- determinism;
+- version constraints.
+
+Independent completion contract
+
+"ffi.g4" is complete when:
+
+- every FFI construct has a defined syntactic owner;
+- common grammar rules are delegated;
+- foreign identity is symbolic;
+- ABI is delegated to ABI contracts;
+- target implementation is excluded;
+- AST mapping is defined;
+- semantic mapping is defined;
+- IR mapping is defined;
+- source spans are preserved;
+- diagnostics are defined;
+- positive tests exist;
+- negative tests exist;
+- boundary tests exist;
+- scalability tests exist;
+- compatibility tests exist;
+- no hard-coded machine limits exist.
 
 ---
 
-5. Non-Ownership
+13. "foreign-functions.g4"
 
-This directory does NOT own:
+This file owns declarations for externally implemented callable contracts.
 
-- the canonical lexer;
-- token definitions;
-- ordinary identifiers;
-- ordinary qualified names;
-- ordinary expressions;
-- ordinary types;
-- ordinary functions;
-- ordinary modules;
-- canonical AST implementation;
-- semantic type checking;
-- ABI layout computation;
-- calling-convention implementation;
-- symbol resolution;
-- library discovery;
-- filesystem access;
-- network access;
-- process execution;
-- dynamic loading;
-- compiler invocation;
-- linker invocation;
-- runtime invocation;
-- hardware discovery;
-- hardware selection;
-- QPU selection;
-- physical-qubit selection;
-- CPU selection;
-- GPU selection;
-- FPGA selection;
-- ASIC selection;
-- topology discovery;
-- calibration;
-- scheduling;
-- routing;
-- optimization;
-- QEC;
-- ZQN;
-- resilience;
-- simulation;
-- canonical quantum IR;
-- classical IR;
-- hardware IR;
-- deployment;
-- resource allocation.
+A foreign function declaration means:
 
-Those systems consume interoperability semantics.
+«This callable exists outside the Zamani implementation unit and is described by this contract.»
 
-They do not become dependencies of the grammar.
+It does not mean:
 
----
+- load it;
+- execute it;
+- invoke a compiler;
+- invoke a linker;
+- search the filesystem;
+- inspect hardware;
+- inspect the network;
+- dynamically load a library.
 
-6. POCO-REAF Contract
-
-Interoperability MUST preserve:
-
-Program Once
-     ↓
-Compile Once
-     ↓
-Run Everywhere
-     ↓
-Run Anywhere
-     ↓
-Run Forever
-
-A foreign integration MUST NOT force portable Zamani source to contain temporary characteristics of a particular machine.
-
-For example:
-
-interop language "C"
-
-means:
-
-«This boundary follows a C interoperability contract.»
-
-It does NOT mean:
-
-x86
-
-or:
-
-x86_64
-
-or:
-
-ARM
-
-or:
-
-AArch64
-
-or:
-
-RISC-V
-
-or:
-
-Linux
-
-or:
-
-Windows
-
-or:
-
-macOS
-
-or:
-
-32-bit pointer
-
-or:
-
-64-bit pointer
-
-The target ABI determines those properties later.
-
-Likewise:
-
-interop language "OpenQASM"
-
-MUST NOT imply:
-
-- a fixed QPU;
-- a fixed qubit count;
-- a fixed topology;
-- a fixed gate duration;
-- a fixed calibration;
-- a fixed physical-qubit mapping.
-
-OpenQASM interoperability MUST eventually lower through the canonical quantum semantic boundary.
-
----
-
-7. Universal Interoperability Model
-
-Interoperability MUST be modeled as:
-
-Source Program
-    |
-    v
-Boundary Declaration
-    |
-    +-- language identity
-    +-- format identity
-    +-- ABI identity
-    +-- interface identity
-    +-- symbol identity
-    +-- type contract
-    +-- conversion contract
-    +-- ownership contract
-    +-- lifetime contract
-    +-- capability requirements
-    +-- effect requirements
-    +-- compatibility requirements
-    +-- portability requirements
-    |
-    v
-Semantic Analysis
-    |
-    v
-Canonical Representation
-    |
-    v
-Target-specific realization
-
-These concepts MUST remain distinct.
-
-A language is not an ABI.
-
-An ABI is not a library.
-
-A library is not a device.
-
-A device is not a target.
-
-A target is not a runtime.
-
-A runtime is not a physical machine.
-
----
-
-8. Language Identity
-
-Language identity MUST be extensible.
-
-Do NOT implement the language universe as a closed enum such as:
-
-C | Cpp | Python | Rust | ...
-
-because that creates a scalability bottleneck.
-
-Instead, language identities MUST support symbolic or qualified names.
-
-Examples include:
-
-C
-C++
-Rust
-Python
-Zig
-OpenQASM
-Verilog
-SystemVerilog
-Assembly
-
-Future languages MUST be expressible without modifying the fundamental interoperability architecture.
-
-Vendor-specific language extensions SHOULD use qualified namespaces.
-
-Example:
-
-language vendor::language
-
-or an equivalent canonical syntax established by the authoritative grammar.
-
----
-
-9. Source Format Identity
-
-A foreign source format MUST be distinguishable from the programming language itself.
-
-Examples:
-
-language "C"
-source "header"
-
-language "OpenQASM"
-source "openqasm3"
-
-language "SystemVerilog"
-source "sv"
-
-The source identifier is semantic metadata.
-
-It MUST NOT automatically be interpreted as:
-
-- a filename;
-- a filesystem path;
-- a URL;
-- an executable;
-- a network resource.
-
-The grammar is inert.
-
----
-
-10. ABI Contract
-
-ABI declarations describe interoperability requirements.
-
-They MUST NOT calculate:
-
-- structure layout;
-- alignment;
-- pointer width;
-- register allocation;
-- stack layout;
-- calling sequence;
-- binary encoding.
-
-Those belong to ABI analysis and target lowering.
-
-The grammar may express:
-
-abi c
-
-or another symbolic ABI contract.
-
-It MUST allow future ABI families without requiring grammar redesign.
-
----
-
-11. Foreign Functions
-
-Foreign functions are declarations of externally implemented callable contracts.
-
-A foreign declaration MUST distinguish:
-
-declaration
-
-from:
-
-implementation
-
-For example:
+Example conceptual form:
 
 extern "C" fn external_function(value: SomeType) -> ResultType;
 
-declares an interface.
+The declaration belongs in the frontend semantic model.
 
-It does not:
-
-- load the symbol;
-- execute the function;
-- invoke a C compiler;
-- invoke a linker;
-- search the filesystem;
-- access a library;
-- inspect hardware.
-
-The semantic layer MUST verify that the declaration can be safely and correctly realized.
+Resolution occurs downstream.
 
 ---
 
-12. Foreign Types
+14. "foreign-types.g4"
 
-Foreign types MUST support:
+Foreign types must support semantic contracts for:
 
 - named foreign types;
 - opaque types;
 - handles;
 - references;
-- pointer-like contracts;
-- ownership metadata;
+- ownership;
+- borrowing;
 - nullability;
-- lifetime intent;
+- lifetime;
+- representation;
 - ABI compatibility;
-- conversion boundaries.
+- conversion.
 
-The grammar MUST NOT hard-code foreign layout.
-
-For example, an opaque foreign object MUST remain opaque unless downstream semantic information explicitly provides a layout contract.
-
-The grammar MUST NOT assume that:
+The grammar must never assume:
 
 pointer = 64 bits
 
-or any other finite representation.
+or:
+
+word = 32 bits
+
+or:
+
+register = fixed width
+
+Foreign layout is an ABI/backend concern.
+
+An opaque foreign type remains opaque unless semantic information explicitly provides a valid layout contract.
 
 ---
 
-13. Ownership and Lifetime
+15. ABI Integration
 
-Interoperability crosses trust and ownership boundaries.
+"abi.g4" owns ABI syntax.
 
-The grammar must therefore allow semantic intent for:
+It may express a symbolic ABI identity.
 
-- borrowed;
-- owned;
-- transferred;
-- returned;
-- retained;
-- released;
-- immutable;
-- mutable;
-- nullable;
-- non-null;
-- lifetime-bound;
-- callback lifetime;
-- resource lifetime.
+Examples conceptually include:
 
-These are contracts.
+abi "C"
+abi "system"
+abi vendor::abi
 
-They are not implementations.
+The exact syntax remains governed by the canonical grammar.
 
-Actual ownership checking belongs to semantic analysis.
+ABI grammar does not implement:
 
-Actual allocation/deallocation belongs to the appropriate runtime or backend.
+- alignment calculation;
+- structure layout;
+- stack layout;
+- register allocation;
+- calling sequence;
+- machine instruction encoding;
+- binary relocation;
+- linker behavior.
+
+The integration path is:
+
+ABI syntax
+   ↓
+domain-neutral AST
+   ↓
+ABI semantic contract
+   ↓
+target ABI realization
 
 ---
 
-14. Calling Conventions
+16. Calling Conventions
 
-Calling conventions MUST be symbolic and extensible.
+"calling-conventions.g4" owns symbolic calling-convention intent.
 
-The grammar MUST NOT assume that a calling convention corresponds to one architecture.
+A calling convention is not a processor.
 
-Examples may include:
+A calling convention is not a register set.
+
+A calling convention is not a machine instruction sequence.
+
+The grammar may represent symbolic conventions such as:
 
 c
 system
 default
+vendor::convention
 
-and extensible qualified identifiers.
+The final set of standard spellings is determined by the authoritative specification.
 
-Target-specific interpretation belongs to ABI lowering.
+The grammar must not encode:
 
-The grammar MUST NOT encode:
-
-- register names;
+- argument registers;
+- return registers;
 - stack slots;
 - stack alignment;
-- machine instruction sequences;
-- argument registers;
-- return registers.
+- instruction sequences;
+- physical register names.
+
+Those are target-lowering concerns.
 
 ---
 
-15. Variadic Interoperability
+17. Foreign Symbol Identity
 
-Variadic foreign calls MUST be representable without an arbitrary maximum argument count.
+A foreign symbol must be represented as semantic identity.
 
-The grammar MUST support the semantic concept of variadicity.
+A symbol may conceptually contain:
 
-It MUST NOT impose rules such as:
+language
+namespace
+module
+interface
+symbol
+version
+ABI
 
-maximum 8 arguments
+It must not inherently contain:
 
-or:
+physical address
+memory address
+device address
+register address
+process ID
+runtime pointer
 
-maximum 16 arguments
-
-because such values are ABI/runtime properties rather than language-scale limits.
-
-Where the foreign ABI requires:
-
-- sentinel information;
-- promotion rules;
-- format contracts;
-- validation requirements;
-
-those MUST be representable as metadata or semantic contracts.
+Those are implementation artifacts.
 
 ---
 
-16. Callbacks
+18. Linkage
 
-Callbacks are foreign callable contracts crossing the interoperability boundary.
+Interoperability may express linkage intent such as:
 
-The grammar MUST support:
+- external;
+- internal;
+- weak;
+- imported;
+- exported;
+- symbolic;
+- platform-qualified;
+- versioned.
+
+The grammar does not perform linking.
+
+The linker/backend determines whether a declaration can actually be realized.
+
+A source declaration must remain valid independently of the specific linker implementation.
+
+---
+
+19. Ownership
+
+Interoperability crosses memory-management boundaries.
+
+The grammar therefore needs semantic vocabulary for:
+
+borrowed
+owned
+shared
+transferred
+retained
+returned
+released
+
+and equivalent contract forms defined by the language specification.
+
+Ownership is a semantic property.
+
+The grammar only represents the declaration.
+
+Ownership validation belongs to semantic analysis.
+
+Actual allocation/deallocation belongs to the appropriate runtime/backend.
+
+---
+
+20. Lifetime
+
+Foreign boundaries may require lifetime contracts.
+
+Examples include:
+
+- argument lifetime;
+- return lifetime;
+- callback lifetime;
+- retained object lifetime;
+- borrowed lifetime;
+- resource lifetime.
+
+The grammar must allow lifetime intent to be represented without turning lifetime into a machine address or runtime pointer.
+
+Lifetime checking belongs downstream.
+
+---
+
+21. Nullability
+
+Foreign types may require:
+
+nullable
+nonnull
+unknown
+
+or extensible semantic forms.
+
+Nullability is a contract.
+
+It must not automatically imply a particular binary representation.
+
+---
+
+22. Callbacks
+
+Callbacks are callable contracts crossing the interoperability boundary in the opposite direction.
+
+A callback contract must be capable of describing:
 
 - callback identity;
-- callback parameter contracts;
-- callback result contracts;
+- parameters;
+- result;
+- ABI;
 - calling convention;
+- effects;
+- capabilities;
 - ownership;
 - lifetime;
 - nullability;
-- capability requirements;
-- effect requirements.
+- asynchronous behavior;
+- reentrancy requirements;
+- compatibility.
 
-The grammar MUST NOT expose a concrete machine function-pointer representation.
-
-For example, a callback is not inherently:
-
-usize
-
-or:
-
-pointer
-
-or:
-
-64-bit address
-
-The representation is target-dependent.
+A callback must not be modeled as an assumed machine pointer width.
 
 ---
 
-17. Adapters
+23. Variadic Functions
+
+Variadic foreign interfaces must not have arbitrary language-level argument limits.
+
+The grammar must represent the concept of variadicity.
+
+It must not encode:
+
+maximum 8 arguments
+maximum 16 arguments
+maximum 32 arguments
+
+Foreign ABI semantics may require:
+
+- default argument promotion;
+- sentinel conventions;
+- format contracts;
+- validation;
+- ABI-specific lowering.
+
+Those are downstream semantic/backend responsibilities.
+
+---
+
+24. Adapters
 
 Adapters describe semantic transformations between interoperability contracts.
 
-An adapter may conceptually express:
+Conceptually:
 
 adapter Name from InterfaceA to InterfaceB
 
-An adapter declaration is not an implementation.
-
-The grammar does not decide whether the transformation is implemented through:
+An adapter declaration does not specify whether its implementation uses:
 
 - generated code;
 - wrapper functions;
@@ -743,95 +983,578 @@ The grammar does not decide whether the transformation is implemented through:
 - runtime dispatch;
 - compiler lowering;
 - hardware bridges;
-- quantum-classical bridges.
+- quantum/classical bridges.
 
-Those are downstream decisions.
+The adapter is a semantic boundary.
+
+Its implementation belongs downstream.
 
 ---
 
-18. Conversions
+25. Conversions
 
-Conversions MUST be explicit enough for semantic analysis to distinguish:
+Interoperability must distinguish:
 
 - identity conversion;
 - representation conversion;
+- numeric conversion;
 - ownership conversion;
 - borrowing conversion;
-- numeric conversion;
-- serialization;
-- deserialization;
 - ABI conversion;
 - language conversion;
+- serialization;
+- deserialization;
 - quantum/classical conversion;
 - hardware/software conversion.
 
-The grammar MUST NOT silently assume that two foreign types are interchangeable merely because they have similar names.
+Two types with similar names must never automatically become interchangeable.
+
+Conversion validity belongs to semantic analysis.
 
 ---
 
-19. Capability Integration
+26. C Integration — "c.g4"
 
-Interoperability MAY require capabilities.
+"c.g4" owns C-specific interoperability syntax.
+
+It may represent:
+
+- C-compatible declarations;
+- C functions;
+- C types;
+- C callbacks;
+- C linkage;
+- C ABI metadata;
+- C attributes;
+- nullability;
+- ownership contracts;
+- compatibility metadata.
+
+It does not own:
+
+- the complete C language;
+- C preprocessing;
+- C compiler behavior;
+- target ABI implementation;
+- linker behavior;
+- C runtime behavior.
+
+C interoperability is a boundary, not a second C compiler embedded inside Zamani.
+
+---
+
+27. C++ Integration — "cpp.g4"
+
+"cpp.g4" owns C++-specific interoperability contracts.
+
+It must support the semantic requirements needed for:
+
+- C++ symbols;
+- C++ types;
+- C++ callable interfaces;
+- namespaces;
+- linkage;
+- ABI identity;
+- object/lifetime boundaries;
+- compatibility.
+
+C++ ABI details remain downstream.
+
+The grammar must not assume one C++ ABI implementation.
+
+---
+
+28. Python Integration — "python.g4"
+
+"python.g4" represents Python interoperability.
+
+It must distinguish:
+
+Python language
+
+from:
+
+Python runtime
+
+and from:
+
+Python installation
+
+The grammar must not hard-code:
+
+- executable paths;
+- installation paths;
+- one operating system;
+- one interpreter implementation;
+- one machine;
+- one deployment directory.
+
+A version may be expressed as a compatibility requirement where the language specification permits it.
+
+---
+
+29. Rust Integration — "rust.g4"
+
+"rust.g4" represents Rust as a foreign interoperability target.
+
+This must remain distinct from the fact that the Zamani compiler itself is implemented in:
+
+Rust 2021
+Rust 1.97 / 1.97.1
+safe Rust
+
+The implementation language of the compiler does not restrict the source language's interoperability universe.
+
+The Rust interoperability grammar must therefore remain an external-language contract.
+
+---
+
+30. Zig Integration — "zig.g4"
+
+"zig.g4" represents Zig interoperability.
+
+Zig is treated as:
+
+foreign language
+
+not:
+
+hardware target
+
+Compiler version, platform, ABI, linker, runtime, and deployment remain downstream.
+
+---
+
+31. Assembly Integration — "AssemblyLanguage.g4"
+
+Assembly interoperability is necessarily target-sensitive.
+
+However, the interoperability architecture must distinguish:
+
+assembly language family
+
+from:
+
+instruction-set architecture
+
+and:
+
+processor implementation
+
+and:
+
+specific processor model
+
+The universal Zamani grammar must not accidentally turn one assembly dialect into the definition of all machine execution.
+
+Assembly declarations may explicitly be marked target-specific where source semantics genuinely require that specificity.
+
+That specificity must remain explicit rather than leaking into the universal language.
+
+---
+
+32. System Interfaces
+
+Existing:
+
+SystemInterfaces.g4
+system-interfaces.g4
+
+must be reconciled so that only one logical contract owns system-interface syntax.
+
+System interfaces may describe:
+
+- operating-system calls;
+- device interfaces;
+- service interfaces;
+- platform APIs;
+- system resources;
+- process interfaces.
+
+They must not silently select an operating system or machine.
+
+A system-interface requirement is a compatibility/capability contract.
+
+---
+
+33. WebAssembly Integration
+
+WebAssembly interoperability must distinguish:
+
+WebAssembly format
+
+from:
+
+WebAssembly runtime
+
+and:
+
+host environment
+
+The grammar may describe:
+
+- imports;
+- exports;
+- modules;
+- function signatures;
+- compatible value contracts;
+- ABI metadata;
+- serialization;
+- execution requirements.
+
+It must not assume:
+
+- a specific WASM runtime;
+- one host;
+- one CPU;
+- one memory capacity;
+- one deployment topology.
+
+---
+
+34. OpenQASM Integration
+
+"openqasm.g4" owns OpenQASM interoperability syntax.
+
+OpenQASM is an external representation.
+
+It is not the canonical Zamani quantum semantic model.
+
+The integration path is:
+
+OpenQASM source
+       ↓
+OpenQASM interoperability parser
+       ↓
+domain-neutral Zamani representation
+       ↓
+semantic quantum analysis
+       ↓
+quantum::ir
+       ↓
+optimization
+       ↓
+routing
+       ↓
+scheduling
+       ↓
+QEC / resilience
+       ↓
+ZQN
+       ↓
+HAL
+       ↓
+target
+
+The grammar must not create:
+
+OpenQASM IR
+
+as a competing canonical quantum IR.
+
+---
+
+35. QIR Integration
+
+QIR is an interoperability representation.
+
+QIR must not replace:
+
+quantum::ir
+
+as Zamani's canonical quantum semantic boundary.
+
+The relationship is:
+
+Zamani quantum semantics
+        ↕
+quantum::ir
+        ↕
+QIR interoperability adapter
+
+or, where appropriate:
+
+QIR input
+   ↓
+validated import
+   ↓
+canonical quantum semantics
+   ↓
+quantum::ir
+
+The exact direction is determined by the compilation operation.
+
+QIR-specific implementation details must not leak into the universal source grammar.
+
+---
+
+36. Quantum Interoperability Invariants
+
+Interoperability involving quantum computing must never hard-code:
+
+MAX_QUBITS
+MAX_LOGICAL_QUBITS
+MAX_PHYSICAL_QUBITS
+MAX_QPU_COUNT
+MAX_GATE_COUNT
+MAX_CIRCUIT_DEPTH
+MAX_TOPOLOGY_SIZE
+
+The language may express program requirements:
+
+requires qubits >= n
+
+or capabilities:
+
+requires capability("quantum.measurement")
+
+or topology requirements:
+
+requires topology(...)
+
+but the grammar does not establish the available physical resource ceiling.
+
+Physical realization remains downstream.
+
+---
+
+37. HDL Integration
+
+"verilog.g4" and any SystemVerilog-related interoperability material must remain external HDL-format contracts.
+
+The interoperability subsystem may describe:
+
+- HDL source;
+- HDL modules;
+- HDL interfaces;
+- HDL data representation;
+- synthesis compatibility;
+- simulation compatibility;
+- verification interfaces.
+
+It must not replace:
+
+grammar/hdl/
+
+which owns Zamani's native HDL syntax.
+
+The distinction is:
+
+Zamani HDL
+
+versus:
+
+foreign HDL format
+
+---
+
+38. Hardware Interoperability
+
+Foreign hardware interfaces may be described through:
+
+- symbolic interfaces;
+- capabilities;
+- resources;
+- protocols;
+- timing requirements;
+- communication requirements;
+- accelerator interfaces.
+
+They must not encode universal physical assumptions.
+
+Forbidden universal assumptions include:
+
+wire [31:0]
+RAM = 64GB
+VRAM = 24GB
+register = 32-bit
+device 0
+GPU 0
+QPU 0
+
+when used as universal language limits or assumptions.
+
+A concrete value may be valid program data or a deliberately target-specific contract.
+
+It must not silently become a universal language restriction.
+
+---
+
+39. Serialization
+
+"serialization.g4" owns source-level serialization interoperability contracts.
+
+Serialization must distinguish:
+
+semantic value
+
+from:
+
+serialized representation
+
+It may represent:
+
+- encoding identity;
+- schema identity;
+- version;
+- compatibility;
+- endian/order requirements where semantically necessary;
+- nullability;
+- optional fields;
+- extensibility;
+- loss policy;
+- provenance.
+
+The grammar does not perform serialization.
+
+The serializer/deserializer implementation does.
+
+---
+
+40. Lossless Interoperability
+
+Every import/export path must classify semantic fidelity.
+
+At minimum:
+
+lossless
+conditionally_lossless
+lossy
+unsupported
+
+An interoperability adapter must not silently discard semantics.
+
+For example, if a foreign format cannot represent:
+
+- effects;
+- ownership;
+- resource requirements;
+- quantum semantics;
+- timing;
+- precision;
+- security properties;
+- annotations;
+
+the adapter must report the mismatch according to the diagnostics/compatibility contract.
+
+Silent semantic loss is not production-ready interoperability.
+
+---
+
+41. Provenance
+
+Interoperability transformations must preserve provenance where the compiler architecture supports it.
+
+A transformed construct should be traceable to:
+
+source format
+source location
+source version
+foreign language
+foreign symbol
+adapter
+conversion
+target representation
+
+This integrates with the existing source-span and diagnostic architecture.
+
+Provenance belongs to semantic/compiler infrastructure.
+
+The grammar merely provides the syntax necessary to identify the boundary.
+
+---
+
+42. Versioning
+
+Foreign interfaces must support version constraints without forcing a specific version into the universal language.
+
+Examples conceptually include:
+
+language "C"
+version ...
+
+or:
+
+requires compatibility(...)
+
+The exact syntax is governed by the canonical compatibility specification.
+
+Version semantics belong to compatibility analysis.
+
+The grammar must not assume that version numbers are always three-component semantic versions.
+
+Foreign ecosystems may use:
+
+- numeric versions;
+- named revisions;
+- editions;
+- profiles;
+- standards revisions;
+- vendor revisions.
+
+The representation must therefore remain extensible.
+
+---
+
+43. Compatibility
+
+Interoperability compatibility must distinguish:
+
+language compatibility
+format compatibility
+ABI compatibility
+type compatibility
+semantic compatibility
+runtime compatibility
+platform compatibility
+capability compatibility
+security compatibility
+version compatibility
+
+These are not interchangeable.
+
+A declaration may be syntactically valid while being semantically incompatible with the selected target.
+
+That is a semantic/compiler diagnostic, not a parser failure.
+
+---
+
+44. Capabilities
+
+Interoperability may require capabilities.
 
 Examples:
 
-requires capability::ffi
+requires capability("ffi")
+requires capability("network")
+requires capability("quantum")
+requires capability("hardware")
 
-requires capability::network
+The grammar represents the requirement.
 
-requires capability::quantum
+The capability system determines whether the environment satisfies it.
 
-requires capability::hardware
+The grammar must not contain a closed universal hardware inventory.
 
-The grammar describes the requirement.
-
-The capability checker determines whether the target environment satisfies it.
-
-The grammar MUST NOT discover capabilities.
-
-The grammar MUST NOT select devices.
-
-The grammar MUST NOT embed a fixed capability inventory.
+New capabilities must be representable symbolically.
 
 ---
 
-20. Effect Integration
+45. Resources
 
-Foreign calls may have effects.
+Interoperability may depend on resources.
 
 Examples include:
 
-- I/O;
-- network access;
-- hardware access;
-- process interaction;
-- external state mutation;
-- asynchronous execution;
-- quantum execution;
-- system calls.
+- memory;
+- storage;
+- communication;
+- accelerator access;
+- quantum resources;
+- external services;
+- execution capacity.
 
-Interoperability syntax may reference effects.
-
-It MUST NOT implement the effect system.
-
-The canonical effect grammar owns effect declarations.
-
-Interoperability only establishes its boundary requirements.
-
----
-
-21. Resource Integration
-
-Foreign interfaces MAY require resources.
-
-Examples:
-
-resource::memory
-resource::network
-resource::accelerator
-resource::quantum
-
-The grammar MUST distinguish:
+The grammar must distinguish:
 
 requirement
 constraint
@@ -840,1975 +1563,2867 @@ hint
 capability
 resource
 
-These concepts MUST NOT collapse into one mechanism.
-
 For example:
 
-requires quantum
+requires capability("gpu.compute")
 
-does not mean:
+is different from:
 
-requires device "specific-device"
+prefers accelerator(...)
 
-and:
+and different from:
 
-prefers accelerator
+requires memory >= required_memory
 
-does not mean:
-
-use accelerator 0
+and different from a downstream physical placement decision.
 
 ---
 
-22. C Integration
+46. Effects
 
-"c.g4" owns C-specific interoperability syntax.
+Foreign boundaries can introduce effects such as:
 
-The composition grammar MUST consume its declarations through a stable integration boundary.
-
-C grammar MUST NOT own:
-
-- the complete C language;
-- C preprocessing;
-- target ABI implementation;
-- linking;
-- loading;
-- runtime execution.
-
-The current C grammar already establishes this separation and defines C interoperability concepts such as C ABI declarations, foreign functions, callbacks, types, ownership, nullability, linkage, and attributes.
-
-Any C syntax duplicated in "interoperability.g4" MUST be removed or deliberately restricted to composition-level syntax.
-
----
-
-23. C++ Integration
-
-"cpp.g4" owns C++ interoperability-specific syntax.
-
-It MUST integrate with the common interoperability contract rather than duplicate:
-
-- ordinary type syntax;
-- ordinary function syntax;
-- ABI implementation;
-- linker behavior;
-- runtime behavior.
-
-C++ ABI details remain downstream.
-
-C++ interoperability MUST remain target-independent at the source grammar level.
-
----
-
-24. Python Integration
-
-"python.g4" owns Python-specific interoperability syntax.
-
-It MUST distinguish:
-
-Python language identity
-
-from:
-
-Python interpreter implementation
-
-and:
-
-specific Python runtime
-
-The grammar MUST NOT encode:
-
-- a Python installation path;
-- a fixed interpreter;
-- a fixed operating system;
-- a fixed CPython version unless explicitly expressed as a compatibility requirement;
-- a fixed Python executable.
-
----
-
-25. Rust Integration
-
-"rust.g4" owns Rust-specific interoperability syntax.
-
-Zamani's compiler implementation itself remains:
-
-Rust 1.97 / Rust 1.97.1
-Rust 2021
-unsafe forbidden
-
-This does not mean the Zamani source language is restricted to Rust interoperability.
-
-Rust interoperability MUST remain one foreign-language contract among many.
-
-No grammar rule may assume that Rust is the implementation language of every foreign interface.
-
----
-
-26. Zig Integration
-
-"zig.g4" provides Zig-specific interoperability syntax.
-
-Zig must be treated as an external language contract, not as a machine target.
-
-Compiler version, ABI, platform, linker, and runtime decisions remain downstream.
-
----
-
-27. Assembly Integration
-
-"AssemblyLanguage.g4" owns assembly-language interoperability.
-
-Assembly integration is inherently target-sensitive, but the Zamani interoperability boundary MUST distinguish:
-
-assembly language family
-
-from:
-
-specific instruction set
-
-and:
-
-specific processor
-
-Target-specific assembly constraints must not leak into the universal interoperability root.
-
-Assembly source may therefore be explicitly marked as target-specific when required, but target specificity must be represented as semantic metadata rather than hidden in grammar assumptions.
-
----
-
-28. OpenQASM Integration
-
-"openqasm.g4" owns OpenQASM-specific syntax.
-
-Interoperability MUST treat OpenQASM as a quantum-language/format boundary.
-
-The integration path is:
-
-Zamani
-   |
-   v
-OpenQASM interoperability boundary
-   |
-   v
-OpenQASM frontend
-   |
-   v
-canonical quantum::ir
-
-The interoperability grammar MUST NOT define another quantum IR.
-
-It MUST NOT own:
-
-- quantum gates;
-- quantum circuit semantics;
-- physical qubit mapping;
-- routing;
-- scheduling;
-- calibration;
-- QEC;
-- ZQN.
-
-Those belong to the quantum subsystem and downstream compilation layers.
-
----
-
-29. Verilog / HDL Integration
-
-"verilog.g4" owns Verilog-specific interoperability.
-
-HDL interoperability MUST distinguish:
-
-HDL interface contract
-
-from:
-
-hardware implementation
-
-The grammar may express:
-
-- HDL module identity;
-- interface identity;
-- port binding;
-- compatibility;
-- import/export intent;
-- target requirements.
-
-It MUST NOT perform:
-
-- synthesis;
-- place-and-route;
-- timing analysis;
-- FPGA discovery;
-- ASIC selection;
-- clock-tree implementation;
-- physical placement.
-
-Those belong to HDL/hardware compilation infrastructure.
-
----
-
-30. System Interfaces
-
-"system-interfaces.g4" and "SystemInterfaces.g4" MUST be reconciled.
-
-There must ultimately be one authoritative ownership model.
-
-System-interface syntax may describe:
-
-- operating-system interfaces;
+- I/O;
+- network access;
+- external state;
 - system calls;
-- process boundaries;
-- device interfaces;
-- IPC boundaries;
-- platform services.
+- hardware access;
+- process interaction;
+- asynchronous execution;
+- quantum execution.
 
-It MUST NOT itself execute system calls.
+Interoperability syntax may reference these effects.
 
-It MUST NOT open files or sockets during parsing.
+The canonical effect system remains the authority for effect semantics.
 
-It MUST NOT discover operating-system capabilities during parsing.
-
----
-
-31. ABI Grammar
-
-"abi.g4" owns reusable ABI syntax.
-
-"interoperability.g4" owns the composition relationship.
-
-The architecture is:
-
-interoperability.g4
-       |
-       v
-ABI contract
-       |
-       v
-abi.g4
-       |
-       v
-semantic ABI analysis
-       |
-       v
-target-specific ABI lowering
-
-There must be no reverse dependency from ABI implementation into the grammar composition root.
+Interoperability must not create a second effect system.
 
 ---
 
-32. FFI Grammar
+47. Security Boundary
 
-"ffi.g4" owns reusable FFI syntax.
+Foreign interoperability is a security boundary.
 
-The interoperability root MUST compose FFI declarations rather than duplicate every FFI construct.
+Parsing an interoperability declaration must never:
 
-The FFI subsystem MUST remain language-neutral.
-
-Language-specific extensions belong in:
-
-c.g4
-cpp.g4
-python.g4
-rust.g4
-zig.g4
-...
-
----
-
-33. Foreign Functions Grammar
-
-"foreign-functions.g4" owns generic foreign-function constructs.
-
-The architecture MUST avoid having:
-
-foreign-functions.g4
-ffi.g4
-interoperability.g4
-c.g4
-
-all define the same foreign-call production independently.
-
-There must be one conceptual ownership path.
-
-Recommended ownership:
-
-foreign-functions.g4
-    -> generic foreign callable contracts
-
-ffi.g4
-    -> generic FFI boundary
-
-abi.g4
-    -> ABI contracts
-
-c.g4
-    -> C specialization
-
-cpp.g4
-    -> C++ specialization
-
-...
-
-"interoperability.g4" composes them.
-
----
-
-34. No Duplicate Core Grammar
-
-Interoperability grammars MUST reuse canonical definitions for:
-
-- identifiers;
-- qualified names;
-- paths;
-- expressions;
-- types;
-- parameters;
-- arguments;
-- attributes;
-- annotations;
-- generics.
-
-They MUST NOT redefine these concepts.
-
-Canonical ownership remains with the corresponding core grammar files.
-
-This prevents grammar drift and circular dependencies.
-
----
-
-35. AST Contract
-
-The interoperability parser layer MUST lower into AST concepts equivalent to:
-
-InteropDeclaration
-InteropImport
-InteropExport
-InteropBinding
-InteropInterface
-InteropForeignDeclaration
-InteropForeignFunction
-InteropForeignType
-InteropForeignValue
-InteropCallback
-InteropAdapter
-InteropConversion
-InteropLanguage
-InteropSourceFormat
-InteropAbi
-InteropCallingConvention
-InteropLinkage
-InteropOwnership
-InteropLifetime
-InteropNullability
-InteropCapabilityRequirement
-InteropEffectRequirement
-InteropResourceRequirement
-InteropCompatibility
-InteropAttribute
-
-These are AST concepts.
-
-They are NOT IR types.
-
-The AST MUST retain source spans and enough structured information for diagnostics.
-
----
-
-36. Semantic Contract
-
-Semantic analysis MUST validate at least:
-
-- language identity;
-- source-format compatibility;
-- ABI compatibility;
-- function signature compatibility;
-- parameter compatibility;
-- result compatibility;
-- type compatibility;
-- conversion legality;
-- ownership;
-- lifetime;
-- nullability;
-- callback compatibility;
-- linkage;
-- visibility;
-- capability requirements;
-- effect requirements;
-- resource requirements;
-- portability;
-- version compatibility;
-- foreign-boundary safety;
-- target availability.
-
-A syntactically valid interoperability declaration MUST NOT automatically be considered executable.
-
----
-
-37. Canonical IR Contract
-
-Interoperability MUST NOT become an IR.
-
-The correct flow is:
-
-Interoperability AST
-        |
-        v
-semantic validation
-        |
-        v
-canonical semantic representation
-        |
-        +--> classical IR
-        |
-        +--> quantum::ir
-        |
-        +--> hardware/HDL representation
-        |
-        +--> distributed representation
-        |
-        +--> runtime boundary representation
-
-A foreign declaration MUST therefore not create a private:
-
-ForeignQuantumIR
-ForeignHardwareIR
-ForeignCIR
-ForeignPythonIR
-
-inside the grammar.
-
----
-
-38. Quantum Boundary
-
-For quantum interoperability:
-
-grammar/interoperability/openqasm.g4
-
-may parse OpenQASM-specific source constructs.
-
-Semantic lowering MUST ultimately use:
-
-quantum::ir
-
-as the canonical quantum semantic boundary.
-
-Interoperability MUST NOT duplicate:
-
-- "QubitId";
-- gate representations;
-- circuit representations;
-- quantum operation representations;
-- QEC representations;
-- ZQN representations.
-
----
-
-39. QEC Integration
-
-QEC is not owned by interoperability.
-
-If a foreign quantum API exposes QEC operations, interoperability may describe the external interface.
-
-Semantic lowering then maps the resulting computation into the appropriate quantum/QEC subsystem.
-
-Interoperability MUST NOT implement:
-
-- syndrome extraction;
-- decoding;
-- correction;
-- code selection;
-- distance;
-- recovery;
-- QEC scheduling.
-
----
-
-40. ZQN Integration
-
-ZQN describes quantum noise/fault semantics.
-
-Interoperability may describe a foreign interface that exposes noise or fault information.
-
-It MUST NOT duplicate ZQN's:
-
-- fault model;
-- channel model;
-- correlated fault model;
-- leakage semantics;
-- loss semantics;
-- erasure semantics.
-
-A foreign quantum interface may provide data that is adapted into ZQN downstream.
-
----
-
-41. Optimization Integration
-
-Interoperability does not optimize foreign calls.
-
-The optimizer may later:
-
-- inline;
-- specialize;
-- eliminate;
-- fuse;
-- reorder where semantically legal;
-- lower;
-- replace;
-- vectorize;
-- transform.
-
-The grammar must remain independent of those implementation decisions.
-
----
-
-42. Scheduling Integration
-
-Interoperability does not schedule.
-
-A foreign call may impose semantic or resource constraints.
-
-Those constraints are passed to scheduling.
-
-The scheduler determines:
-
-- ordering;
-- timing;
-- resource usage;
-- concurrency;
-- synchronization;
-- execution placement.
-
-No fixed timing or resource count may be encoded in interoperability grammar merely because one foreign implementation currently uses it.
-
----
-
-43. Hardware Integration
-
-Interoperability may express a hardware interface contract.
-
-It must not select:
-
-- CPU;
-- GPU;
-- FPGA;
-- ASIC;
-- QPU;
-- accelerator;
-- physical device.
-
-Hardware abstraction determines available targets.
-
-Compilation determines realization.
-
-Runtime determines deployment.
-
----
-
-44. Security Boundary
-
-Foreign interoperability is an explicit trust boundary.
-
-Parsing MUST be completely inert.
-
-Parsing MUST NOT:
-
+- load arbitrary libraries;
 - execute foreign code;
-- execute compiler commands;
-- load shared libraries;
-- inspect the filesystem;
-- access a network;
-- invoke a process;
-- access environment variables;
+- invoke processes;
+- access credentials;
+- read arbitrary files;
+- access the network;
 - inspect hardware;
-- dereference addresses;
-- create runtime handles.
+- dereference an address;
+- perform dynamic linking;
+- execute an FFI call.
 
-The grammar MUST contain no semantic actions that perform external I/O.
+The parser is inert.
 
----
+Semantic analysis may validate declarations.
 
-45. Rust Safety
-
-The Rust implementation surrounding this grammar MUST compile under:
-
-Rust 1.97
-
-and:
-
-Rust 1.97.1
-
-with:
-
-Rust 2021
-
-and:
-
-#![forbid(unsafe_code)]
-
-or an equivalent repository-level enforcement mechanism.
-
-No interoperability feature may require Rust "unsafe".
-
-External unsafe operations, where unavoidable in a backend, must remain behind an explicitly owned and audited downstream boundary.
-
-The grammar itself must never require unsafe Rust.
+Compilation/linking/runtime may realize them only through explicitly authorized mechanisms.
 
 ---
 
-46. Scalability Contract
+48. No Hidden Execution
 
-The grammar MUST NOT impose arbitrary limits on:
-
-- number of interoperability declarations;
-- number of foreign functions;
-- number of parameters;
-- number of callbacks;
-- number of interfaces;
-- number of adapters;
-- number of conversions;
-- number of languages;
-- number of source formats;
-- number of capabilities;
-- number of effects;
-- number of resources;
-- number of devices;
-- number of nodes;
-- number of cores;
-- number of threads;
-- number of qubits;
-- amount of memory;
-- number of foreign modules.
-
-There must be no:
-
-MAX_FOREIGN_FUNCTIONS
-MAX_INTERFACES
-MAX_DEVICES
-MAX_LANGUAGES
-MAX_PARAMETERS
-
-inside the grammar.
-
-Practical limits are allowed to arise from:
-
-- available memory;
-- parser implementation;
-- compiler resources;
-- operating-system limits;
-- runtime limits;
-- target capabilities.
-
-Those are implementation/environment constraints, not language semantics.
-
----
-
-47. Extensibility
-
-New interoperability domains MUST be addable without redesigning the root.
-
-For example, future files may include:
-
-swift.g4
-java.g4
-kotlin.g4
-fortran.g4
-wasm.g4
-cuda.g4
-opencl.g4
-sycl.g4
-systemc.g4
-vhdl.g4
-spice.g4
-...
-
-The root MUST NOT require an exhaustive enumeration of all possible languages.
-
-New domains should register through the interoperability composition boundary.
-
----
-
-48. Versioning
-
-Interoperability declarations MAY specify compatibility/version constraints.
-
-Version constraints MUST be symbolic and semantic.
-
-The grammar MUST NOT silently interpret:
-
-language "X"
-
-as:
-
-language X version current
-
-when the semantic meaning requires explicit compatibility.
-
-Version compatibility belongs to semantic analysis and compatibility infrastructure.
-
----
-
-49. Target Independence
-
-A portable interoperability declaration should remain portable whenever the external contract itself is portable.
-
-The grammar MUST NOT automatically bind:
-
-language
-
-to:
-
-target
-
-or:
-
-ABI
-
-to:
-
-device
-
-or:
-
-library
-
-to:
-
-path
-
-or:
-
-resource
-
-to:
-
-fixed quantity
-
----
-
-50. Target-Specific Interoperability
-
-Target-specific interoperability is permitted when it is genuinely part of program semantics.
-
-It MUST be represented explicitly.
-
-For example:
-
-requires target capability ...
-
-or an equivalent resource/constraint mechanism.
-
-It must never be hidden in a supposedly portable declaration.
-
-A source program that intentionally depends on a particular target is semantically different from a POCO-REAF portable program.
-
-That distinction must remain visible.
-
----
-
-51. Import and Export Semantics
-
-Interoperability imports and exports describe semantic boundaries.
-
-They do not themselves:
-
-- open files;
-- fetch network resources;
-- load libraries;
-- resolve symbols.
-
-Actual resolution is downstream.
-
-Import source identifiers should therefore be treated as identifiers/references unless an explicit compiler/tooling operation later resolves them.
-
----
-
-52. Linkage
-
-Linkage declarations may express:
-
-- static;
-- dynamic;
-- system;
-- runtime;
-- weak;
-- strong;
-- framework;
-- custom linkage classes.
-
-The grammar MUST NOT implement linking.
-
-Linker selection and binary resolution remain compiler/toolchain responsibilities.
-
----
-
-53. Symbol Identity
-
-External symbol names may differ from Zamani names.
-
-The grammar should support an explicit semantic relationship between:
-
-Zamani name
-
-and:
-
-foreign symbol name
-
-This allows:
-
-Zamani identifier
-    !=
-foreign ABI symbol
-
-without requiring illegal identifier spellings in the Zamani language.
-
----
-
-54. Error Model
-
-Interoperability syntax errors MUST be distinguishable from semantic interoperability errors.
-
-Examples:
-
-Syntax
-
-missing function parameter
-
-Semantic
-
-foreign parameter type incompatible with ABI
-
-Capability
-
-required capability unavailable
-
-Compatibility
-
-foreign interface version incompatible
-
-Security
-
-foreign boundary violates required trust policy
-
-Runtime
-
-symbol unavailable at execution time
-
-The grammar owns syntax diagnostics.
-
-Semantic and runtime layers own their respective diagnostics.
-
----
-
-55. Diagnostics
-
-Interoperability diagnostics MUST preserve:
-
-- source span;
-- declaration identity;
-- foreign language;
-- interface identity;
-- symbol identity;
-- expected contract;
-- actual contract;
-- reason;
-- severity;
-- stable diagnostic code.
-
-Diagnostics MUST NOT depend on machine discovery during parsing.
-
----
-
-56. Determinism
-
-Parsing must be deterministic.
-
-The interoperability grammar MUST contain no:
-
-- random decisions;
-- filesystem-dependent parsing;
-- network-dependent parsing;
-- runtime-dependent parsing;
-- hardware-dependent parsing;
-- semantic actions that inspect external state.
-
-The same source and grammar version MUST produce the same parse structure.
-
----
-
-57. Compatibility With Existing Zamani Syntax
-
-Existing valid interoperability syntax MUST be preserved or migrated explicitly.
-
-The current repository contains legacy forms including:
-
-extern ...
-
-and:
+A syntax such as:
 
 foreign ...
 
-The top-level grammar currently references "foreignFunctionCall".
+must never mean:
 
-The older grammar documentation separately specifies:
+execute now
 
-foreignFunctionCall:
-    'foreign' IDENTIFIER '::' IDENTIFIER '(' argumentList? ')' ';'
+Likewise:
 
-Therefore migration MUST proceed through:
+import foreign ...
 
-inventory
-    ↓
-consumer analysis
-    ↓
-semantic comparison
-    ↓
-canonical form
-    ↓
-compatibility aliases
-    ↓
-deprecation
-    ↓
-eventual removal
+must not imply arbitrary runtime execution.
 
-No syntax should be silently removed.
+Declarations describe interfaces.
+
+Execution occurs through the ordinary Zamani semantic and execution pipeline.
 
 ---
 
-58. Canonical Composition Contract
+49. No Hidden Hardware Discovery
 
-"interoperability.g4" is the composition boundary.
+Interoperability syntax must not cause the grammar or parser to ask:
 
-It should expose reusable rules conceptually equivalent to:
+Which CPU exists?
+Which GPU exists?
+Which QPU exists?
+How many cores exist?
+How much RAM exists?
+How many qubits exist?
+Which FPGA exists?
+Which network exists?
 
-interopItem
-interopDeclaration
-interopImportDeclaration
-interopExportDeclaration
-interopBindingDeclaration
-interopCallStatement
-interopInterfaceDeclaration
-interopForeignDeclaration
-interopTypeDeclaration
-interopValueDeclaration
-interopFunctionDeclaration
-interopCallbackDeclaration
-interopAdapterDeclaration
-interopConversionDeclaration
-interopCapabilityDeclaration
-interopEffectDeclaration
-interopRequirementDeclaration
-interopCompatibilityDeclaration
-interopLinkageDeclaration
-interopResourceDeclaration
+Hardware discovery belongs to:
 
-Specialized grammars contribute their language-specific contracts.
+resource analysis
+target selection
+HAL
+runtime
+deployment
 
-The root composes them.
+depending on the particular operation.
 
 ---
 
-59. Specialized Grammar Ownership Matrix
+50. Domain-Neutral AST Requirement
 
-File| Ownership
-"interoperability.g4"| Composition/root interoperability boundary
-"foreign-functions.g4"| Generic foreign callable declarations
-"ffi.g4"| Generic FFI constructs
-"abi.g4"| ABI contracts
-"c.g4"| C interoperability
-"cpp.g4"| C++ interoperability
-"python.g4"| Python interoperability
-"rust.g4"| Rust interoperability
-"zig.g4"| Zig interoperability
-"openqasm.g4"| OpenQASM interoperability
-"verilog.g4"| Verilog/HDL interoperability
-"AssemblyLanguage.g4"| Assembly interoperability
-"system-interfaces.g4"| Generic system interfaces
-"SystemInterfaces.g4"| Must be reconciled with "system-interfaces.g4"
+All interoperability constructs must map into the existing domain-neutral frontend AST.
 
-There MUST ultimately be one authoritative owner for each semantic grammar concept.
+The interoperability grammar must not introduce a parallel semantic AST architecture.
 
----
+The conceptual mapping is:
 
-60. Required File Corrections
+grammar/interoperability/*
+             ↓
+domain-neutral AST node
+             ↓
+semantic interoperability model
+             ↓
+canonical domain representation
 
-The interoperability directory requires the following structural cleanup.
+The AST should represent concepts such as:
 
-60.1 Rename
+- foreign declaration;
+- interface;
+- callable boundary;
+- type boundary;
+- adapter;
+- conversion;
+- ABI contract;
+- language identity;
+- format identity;
+- compatibility contract.
 
-Rename:
-
-interoperability.g4 
-
-to:
-
-interoperability.g4
-
-The trailing-space filename must not remain.
-
-60.2 Reconcile duplicate system-interface grammars
-
-Reconcile:
-
-SystemInterfaces.g4
-system-interfaces.g4
-
-into one authoritative implementation plus compatibility documentation where required.
-
-60.3 Reconcile duplicate interoperability concepts
-
-Audit:
-
-ffi.g4
-foreign-functions.g4
-abi.g4
-c.g4
-cpp.g4
-interoperability.g4
-
-for duplicated rules.
-
-60.4 Reconcile top-level grammar
-
-Audit "grammar/Zamani.g4" so interoperability declarations are exposed through the canonical composition path rather than through disconnected duplicate rules.
+It should not contain target-specific runtime objects.
 
 ---
 
-61. Integration With "Zamani.g4"
+51. AST Integration Contract
 
-The top-level grammar should consume interoperability through a single authoritative entry point.
+Every production interoperability grammar construct must have a predetermined AST mapping before the grammar construct is considered complete.
 
-Conceptually:
+For every construct define:
 
-declaration
-    |
-    +--> interopItem
-
-or an equivalent composition structure.
-
-It MUST NOT independently reproduce:
-
-foreignFunctionCall
-
-in several unrelated forms.
-
-The canonical interoperability root must own interoperability syntax.
-
----
-
-62. Integration With Core Grammar
-
-Interoperability depends on:
-
-core/names.g4
-core/paths.g4
-core/qualified-names.g4
-core/attributes.g4
-core/metadata.g4
-core/versioning.g4
-core/capabilities.g4
-core/requirements.g4
-core/constraints.g4
-core/hints.g4
-
-where those files exist as canonical owners.
-
-Interoperability MUST consume them.
-
-It must not recreate their definitions.
-
----
-
-63. Integration With Types
-
-Interoperability consumes canonical:
-
-typeExpr
-
-Foreign types are boundary declarations around canonical type references.
-
-It MUST NOT create a competing universal type system.
-
-Foreign-specific type semantics are handled by semantic analysis.
-
----
-
-64. Integration With Expressions
-
-Foreign calls consume the canonical expression and argument grammar.
-
-Interoperability MUST NOT create a second argument-expression grammar.
-
-This ensures:
-
-ordinary call
-foreign call
-callback
-adapter
-conversion
-
-can all share compatible expression semantics.
-
----
-
-65. Integration With Modules
-
-Foreign interfaces may belong to modules.
-
-Module ownership remains with:
-
-grammar/modules/
-
-Interoperability only supplies declarations that can appear within the module system.
-
----
-
-66. Integration With Effects
-
-Foreign calls may declare effects.
-
-Effects remain owned by:
-
-grammar/effects/
-
-Interoperability references effect contracts.
-
-It does not redefine the effect model.
-
----
-
-67. Integration With Resources
-
-Resource requirements remain owned by:
-
-grammar/resources/
-
-Interoperability references them.
-
-It must not create a foreign-specific resource model.
-
----
-
-68. Integration With Security
-
-Security contracts remain owned by:
-
-grammar/security/
-
-Interoperability may declare that an external boundary requires a security capability or trust property.
-
-It does not implement:
-
-- authentication;
-- authorization;
-- cryptography;
-- key management;
-- identity management.
-
----
-
-69. Integration With Runtime
-
-Runtime integration occurs only after semantic lowering.
-
-The grammar MUST NOT directly depend on runtime code.
-
-The intended flow is:
-
-interop AST
-    ↓
+grammar rule
+AST node
+source span
+attributes
+semantic identity
 semantic validation
-    ↓
-canonical representation
-    ↓
-compiler lowering
-    ↓
-runtime boundary
+IR mapping
+diagnostics
+
+No construct should be added with:
+
+«AST mapping will be decided later.»
+
+That violates the independent-file completion requirement.
 
 ---
 
-70. Integration With Compiler
+52. Semantic Integration Contract
 
-The compiler consumes interoperability semantics to determine:
+The semantic layer must validate:
 
-- lowering;
-- symbol resolution;
-- ABI realization;
-- linking;
-- marshaling;
-- adapter generation;
-- target compatibility;
-- runtime dispatch.
-
-The compiler MUST NOT modify grammar ownership.
-
----
-
-71. Integration With Tooling
-
-Tooling should be able to use interoperability metadata for:
-
-- completion;
-- navigation;
-- diagnostics;
-- documentation;
-- symbol inspection;
-- dependency visualization;
-- compatibility analysis;
-- foreign interface inspection.
-
-Tooling MUST NOT execute foreign code simply because a source file is parsed.
-
----
-
-72. Testing Contract
-
-Interoperability tests MUST include:
-
-Positive
-
-- generic foreign declarations;
-- C;
-- C++;
-- Python;
-- Rust;
-- Zig;
-- OpenQASM;
-- Verilog;
-- assembly;
-- system interfaces;
-- callbacks;
-- adapters;
-- conversions;
-- ABI declarations;
-- linkage;
+- language identity;
+- format identity;
+- symbol identity;
+- type compatibility;
+- ABI compatibility;
+- calling convention;
 - ownership;
+- lifetime;
 - nullability;
-- capabilities;
+- conversion;
 - effects;
-- requirements.
+- capabilities;
+- resources;
+- compatibility;
+- security;
+- portability;
+- determinism where required.
 
-Negative
-
-- malformed ABI declarations;
-- invalid function contracts;
-- invalid parameter types;
-- malformed callbacks;
-- malformed adapters;
-- invalid conversions;
-- invalid ownership combinations;
-- invalid lifetime combinations;
-- malformed linkage;
-- malformed imports;
-- invalid compatibility expressions.
-
-Boundary
-
-Test:
-
-- zero foreign declarations;
-- one declaration;
-- many declarations;
-- deeply nested interfaces;
-- long qualified names;
-- large parameter lists;
-- large adapter graphs;
-- large cross-language programs.
-
-Tests MUST NOT use artificial limits as proof of scalability.
+The grammar itself does not perform these checks.
 
 ---
 
-73. Cross-Domain Tests
+53. IR Integration
 
-Mandatory integration examples include:
+Interoperability is not itself a universal IR.
 
-classical + C
+After semantic analysis, an interoperability boundary is lowered into the canonical representation required by the computation.
 
-classical + C++
+Examples:
 
-classical + Python
+foreign classical function
+        ↓
+classical semantic representation / IR
 
-classical + Rust
-
-quantum + OpenQASM
-
-quantum + C
-
-quantum + Python
-
-quantum + hardware
-
-quantum + HDL
-
-classical + quantum + foreign runtime
-
-classical + quantum + HDL + hardware + distributed
-
-The final cross-domain tests must verify that interoperability does not create independent semantic models.
-
----
-
-74. Quantum Semantic Preservation Tests
-
-A Zamani program using OpenQASM interoperability must preserve its quantum meaning through:
-
-source
- ↓
-parser
- ↓
-AST
- ↓
-semantic analysis
- ↓
+foreign quantum program
+        ↓
+quantum semantics
+        ↓
 quantum::ir
 
-The test must verify that interoperability has not introduced:
+foreign HDL
+        ↓
+HDL/hardware semantic representation
 
-- duplicate gate semantics;
-- duplicate qubit IDs;
-- duplicate circuit representations;
-- fixed qubit limits;
-- target-specific mappings.
+foreign distributed interface
+        ↓
+distributed semantic representation
 
----
+There must not be:
 
-75. HDL Semantic Preservation Tests
+interoperability::ir
 
-HDL interoperability must preserve:
-
-module
-ports
-signals
-timing semantics
-hardware interfaces
-
-without accidentally embedding:
-
-specific FPGA
-specific ASIC
-specific device
-specific physical pin
-
-unless explicitly requested by a target-specific semantic contract.
+that becomes a second universal IR competing with canonical domain representations.
 
 ---
 
-76. POCO-REAF Scalability Tests
+54. Canonical Quantum IR Invariant
 
-The same semantic source must be testable against different hypothetical resource contexts.
+All quantum interoperability paths converge on:
+
+quantum::ir
+
+This includes interoperability with:
+
+- OpenQASM;
+- QIR;
+- quantum foreign runtimes;
+- vendor quantum formats;
+- hybrid interfaces.
+
+No interoperability grammar may create a second canonical quantum IR.
+
+---
+
+55. Classical Interoperability
+
+Classical foreign functions/types should lower through canonical classical semantics.
+
+The interoperability subsystem does not need to know whether the eventual realization uses:
+
+- CPU;
+- GPU;
+- accelerator;
+- vector processor;
+- distributed processor;
+- future computational substrate.
+
+That decision belongs downstream.
+
+---
+
+56. Hybrid Interoperability
+
+A foreign boundary may cross:
+
+classical ↔ quantum
+classical ↔ hardware
+quantum ↔ hardware
+software ↔ accelerator
+
+The interoperability layer expresses the contract.
+
+The hybrid semantic subsystem determines the meaning.
+
+The canonical IR layers determine representation.
+
+Routing/scheduling/HAL determine realization.
+
+---
+
+57. HDL/Software Co-Design
+
+Interoperability must support the possibility that one Zamani program coordinates:
+
+software computation
++
+foreign library
++
+accelerator
++
+HDL module
++
+quantum computation
++
+distributed execution
+
+without requiring every component to become part of the core grammar.
+
+The source expresses relationships and contracts.
+
+Downstream systems realize those relationships.
+
+---
+
+58. Calling Convention vs ABI
+
+These concepts must remain separate.
+
+calling convention
+
+describes callable interaction rules.
+
+ABI
+
+describes the broader binary compatibility contract.
+
+One ABI may involve multiple callable conventions.
+
+A calling convention is therefore not an ABI alias.
+
+---
+
+59. Language vs Runtime
+
+Likewise:
+
+Python
+
+is not:
+
+CPython executable
+
+and:
+
+Rust
+
+is not:
+
+rustc binary path
+
+and:
+
+WebAssembly
+
+is not:
+
+specific WASM runtime
+
+The grammar must preserve these distinctions.
+
+---
+
+60. Language vs Platform
+
+The language declaration must not automatically select:
+
+Linux
+Windows
+macOS
+Android
+bare metal
+cloud
+
+A platform requirement is a compatibility/capability concern.
+
+It is not inherently a language identity.
+
+---
+
+61. Symbolic Targets
+
+Foreign targets may be identified symbolically.
+
+They must not be treated as physical resources merely because the syntax contains an identifier.
 
 For example:
 
-small classical target
+foreign::math::sin
 
-large multicore target
+identifies a semantic symbol.
 
-accelerator target
+It does not mean:
 
-quantum target
+memory_address(...)
 
-hybrid target
+or:
 
-distributed target
-
-The source interoperability declaration must not need to change merely because the available resource scale changes.
+device(...)
 
 ---
 
-77. Determinism Tests
+62. Target-Specific Interoperability
 
-Parsing the same interoperability source repeatedly MUST produce equivalent parse trees/ASTs.
+Target-specific declarations are allowed when the programmer genuinely requires them.
 
-Tests must prove that parser output does not depend on:
+They must be explicitly classified.
 
+Conceptually:
+
+portable
+target-specific
+platform-specific
+vendor-specific
+experimental
+
+Target-specific constructs must never silently become universal semantics.
+
+---
+
+63. Vendor Extensions
+
+Vendor-specific interoperability may use qualified names.
+
+Conceptually:
+
+vendor::extension
+
+or equivalent syntax.
+
+Vendor extensions must identify:
+
+- vendor namespace;
+- extension identity;
+- version where applicable;
+- compatibility requirements;
+- semantic mapping;
+- diagnostics;
+- fallback behavior where supported.
+
+A vendor extension must not modify the meaning of existing universal Zamani syntax.
+
+---
+
+64. Dialect Integration
+
+Interoperability must integrate with:
+
+grammar/dialects/
+
+without becoming a second language.
+
+A dialect must specify:
+
+identity
+version
+syntax
+AST mapping
+semantic mapping
+IR mapping
+compatibility
+feature status
+
+Interoperability-specific syntax must not bypass dialect validation.
+
+---
+
+65. Serialization and Data Exchange
+
+Serialization interoperability must integrate with:
+
+grammar/data/
+
+and:
+
+grammar/interoperability/
+
+without duplicating universal data types.
+
+The interoperability layer describes external representation.
+
+The data subsystem owns the language's data semantics.
+
+---
+
+66. Macro Integration
+
+Macros may generate interoperability declarations.
+
+However:
+
+macro expansion
+        ↓
+normal syntax validation
+        ↓
+semantic validation
+
+must remain the order.
+
+Macros must not create an unvalidated FFI escape hatch.
+
+---
+
+67. Metaprogramming Integration
+
+Compile-time reflection or code generation may inspect interoperability contracts where explicitly permitted.
+
+It must not:
+
+- execute arbitrary foreign code during parsing;
+- bypass semantic checks;
+- bypass security checks;
+- invent ABI layouts;
+- fabricate target capabilities.
+
+---
+
+68. Determinism
+
+Parsing interoperability syntax must be deterministic.
+
+Its result must depend only on:
+
+- source text;
+- language version;
+- grammar version;
+- explicitly selected dialects;
+- explicitly supplied configuration that is part of the language contract.
+
+Parsing must not depend on:
+
+- wall-clock time;
+- randomness;
+- hardware;
 - filesystem state;
 - network state;
 - environment variables;
-- device availability;
-- runtime availability;
-- library availability;
-- compiler availability.
+- runtime state;
+- currently installed libraries;
+- currently available devices.
 
 ---
 
-78. Round-Trip Tests
+69. Reproducibility
 
-Where a canonical printer exists:
+Interoperability compilation should preserve enough metadata for reproducible builds where the compiler architecture supports reproducibility.
 
-source
- ↓
-lexer
- ↓
-parser
- ↓
-AST
- ↓
-printer
- ↓
-parser
+Foreign dependencies may contribute:
 
-must preserve interoperability semantics.
+- version;
+- interface identity;
+- ABI;
+- source/format identity;
+- compatibility constraints;
+- provenance.
 
-Formatting may differ.
-
-Semantic meaning must not.
+A build must not silently resolve a different foreign interface merely because the environment happens to contain one.
 
 ---
 
-79. Hard-Coding Audit
+70. Diagnostics
 
-Every interoperability grammar file MUST be audited for:
+Interoperability diagnostics must distinguish at least:
 
-- fixed device IDs;
-- fixed ABI widths;
-- fixed pointer widths;
-- fixed architecture names;
-- fixed machine counts;
-- fixed accelerator counts;
-- fixed qubit counts;
-- fixed node counts;
-- fixed memory sizes;
-- fixed topology;
-- fixed register counts;
-- fixed library paths;
-- fixed executable paths;
-- fixed operating systems;
-- fixed compiler versions where not semantically required.
+lexical error
+syntax error
+unknown foreign language
+unknown format
+invalid symbol
+invalid ABI
+incompatible ABI
+invalid calling convention
+type mismatch
+ownership mismatch
+lifetime mismatch
+nullability mismatch
+conversion failure
+effect violation
+capability violation
+resource violation
+compatibility violation
+unsupported feature
+semantic-loss warning
+security violation
+target-realization failure
 
-Each occurrence must be classified as:
-
-1. language semantic requirement;
-2. interoperability requirement;
-3. target-specific requirement;
-4. resource constraint;
-5. implementation limitation;
-6. test-only limitation;
-7. documentation-only limitation;
-8. accidental hard-coding.
-
-Accidental hard-coding MUST be removed.
+A target-realization failure must not be incorrectly reported as a grammar failure.
 
 ---
 
-80. Security Audit
+71. Error Recovery
 
-The interoperability grammar MUST pass an audit proving that parsing cannot:
+ANTLR/parser error recovery must remain consistent with the global parser architecture.
 
-- execute arbitrary code;
-- invoke foreign functions;
-- access the network;
-- access the filesystem;
-- execute a compiler;
-- execute a linker;
-- load a library;
-- inspect environment variables;
-- inspect hardware;
-- mutate runtime state.
+The interoperability subsystem must not introduce custom recovery semantics that cause the same source construct to parse differently depending on which domain invokes it.
 
-ANTLR semantic actions that violate this boundary MUST NOT be used.
+Recovery must preserve:
+
+- source locations;
+- expected-token information;
+- construct identity;
+- deterministic diagnostics.
 
 ---
 
-81. Dependency Audit
+72. Source Spans
 
-The interoperability grammar MUST depend only on upstream syntax contracts.
+Every interoperability AST construct must preserve source location information sufficient for diagnostics and provenance.
 
-Allowed conceptual dependencies:
+At minimum, source spans should identify:
 
-lexer
-core names
-core paths
-core metadata
-core versioning
-types
-expressions
-functions
-modules
+start
+end
+
+and where supported:
+
+source file
+source unit
+foreign declaration
+foreign symbol
+contract clause
+
+Source spans belong to the frontend AST infrastructure.
+
+---
+
+73. Scalability
+
+The interoperability grammar must scale according to available resources.
+
+There must be no language-level hard-coded maximum for:
+
+foreign languages
+foreign interfaces
+foreign functions
+foreign types
+foreign symbols
+callbacks
+adapters
+conversions
+attributes
+requirements
+capabilities
 effects
 resources
-security metadata
+targets
+formats
+versions
+modules
+parameters
+arguments
 
-Forbidden conceptual dependencies:
+ANTLR repetition and ordinary semantic data structures must represent arbitrary program-defined quantities.
 
-runtime implementation
-hardware implementation
-compiler implementation
-linker implementation
-scheduler
-router
-optimizer
-QEC implementation
-ZQN implementation
-resilience implementation
+Compiler resource exhaustion is an implementation constraint, not a language semantic maximum.
 
 ---
 
-82. Completion Contract for "interoperability/README.md"
+74. Hard-Coding Prohibition
 
-This README is complete when it establishes:
+The interoperability grammar must never introduce universal constants such as:
 
+MAX_FFI_FUNCTIONS
+MAX_FOREIGN_TYPES
+MAX_ABIS
+MAX_CALLBACKS
+MAX_TARGETS
+MAX_LANGUAGES
+MAX_SYMBOLS
+MAX_DEVICES
+MAX_NODES
+MAX_MEMORY
+MAX_THREADS
+MAX_CORES
+MAX_GPUS
+MAX_FPGAS
+MAX_QPUS
+MAX_QUBITS
+
+Similarly prohibited are hidden assumptions such as:
+
+pointer = 64-bit
+register = 32-bit
+address = 64-bit
+machine = little-endian
+CPU = x86
+
+unless explicitly represented as a target-specific interoperability contract.
+
+---
+
+75. Program Values Are Not Language Limits
+
+This distinction is mandatory.
+
+This may be valid:
+
+let n = 1024;
+
+and:
+
+requires memory >= required_memory;
+
+and:
+
+requires qubits >= n;
+
+Those are program semantics.
+
+What is prohibited is:
+
+MAX_QUBITS = 1024
+
+as a universal language restriction.
+
+Likewise:
+
+array<1024>
+
+may be program data.
+
+It must not imply:
+
+«Zamani supports no arrays larger than 1024.»
+
+---
+
+76. Resource Availability
+
+POCO-REAF means that realization may scale with available resources.
+
+Conceptually:
+
+same source semantics
+       │
+       ├── tiny target
+       │
+       ├── ordinary target
+       │
+       ├── accelerator target
+       │
+       ├── heterogeneous target
+       │
+       ├── distributed target
+       │
+       ├── quantum target
+       │
+       └── future target
+
+Interoperability must not force source-level rewriting merely because the available implementation resources differ.
+
+---
+
+77. What Interoperability Must Not Promise
+
+POCO-REAF does not mean that every foreign interface exists on every possible machine.
+
+Instead, it means:
+
+«The source program expresses its semantic contract independently of unnecessary target details, while compilation and deployment determine whether and how that contract can be realized.»
+
+If a target lacks a required capability, the compiler must report that fact through the resource/capability/compatibility architecture.
+
+The source grammar must not pretend that unavailable resources exist.
+
+---
+
+78. Capability Failure vs Syntax Failure
+
+This distinction is critical.
+
+For example:
+
+requires capability("quantum.measurement")
+
+may parse correctly.
+
+If the selected target lacks that capability, the result is a:
+
+capability/target realization failure
+
+not:
+
+syntax error
+
+Similarly, an ABI incompatibility is not a parser error.
+
+---
+
+79. Foreign Library Identity
+
+A library name is not automatically a filesystem path.
+
+A declaration such as:
+
+library "example"
+
+must remain semantic identity.
+
+It must not cause the parser to open:
+
+/path/to/example
+
+Library discovery belongs to compilation/deployment infrastructure.
+
+---
+
+80. Dynamic Loading
+
+Dynamic loading is a downstream concern.
+
+The grammar may describe intent for dynamic linkage where specified.
+
+The grammar must never itself dynamically load a library.
+
+This applies equally to:
+
+- native libraries;
+- plugins;
+- language runtimes;
+- device drivers;
+- quantum runtimes;
+- accelerator libraries.
+
+---
+
+81. FFI and Safe Rust
+
+The Zamani compiler implementation must remain:
+
+Rust 2021
+Rust 1.97 / 1.97.1
+safe Rust
+
+No "unsafe" implementation is required or permitted as part of the grammar/interoperability implementation.
+
+This means:
+
+- no "unsafe" grammar actions;
+- no embedded Rust actions in ANTLR;
+- no raw-pointer-based grammar implementation;
+- no unsafe transmutation;
+- no unsafe aliasing;
+- no manual unsafe memory management.
+
+A foreign ABI may itself describe an unsafe external system, but the Zamani compiler implementation must isolate that fact behind a safe semantic/backend contract.
+
+---
+
+82. FFI Safety Model
+
+The language must not confuse:
+
+foreign interface exists
+
+with:
+
+foreign interface is safe
+
+Safety is determined through:
+
+- type checking;
 - ownership;
-- non-ownership;
-- composition;
-- specialized grammar responsibilities;
-- AST expectations;
-- semantic boundaries;
-- IR boundaries;
-- compiler integration;
-- runtime integration;
-- quantum integration;
-- HDL integration;
-- resource integration;
-- capability integration;
-- effect integration;
-- security boundaries;
-- scalability;
-- POCO-REAF;
+- lifetime;
+- capability analysis;
+- effect analysis;
+- security policy;
+- ABI validation;
+- target validation.
+
+The grammar represents the declaration.
+
+Semantic analysis determines whether it is valid.
+
+---
+
+83. Security Capabilities
+
+Sensitive interoperability operations may require explicit capabilities.
+
+Examples conceptually:
+
+capability("ffi")
+capability("system.interface")
+capability("process.execution")
+capability("native.library")
+capability("hardware.access")
+
+The exact canonical capability vocabulary belongs to the resource/security/capability specifications.
+
+The interoperability grammar must not silently grant capabilities merely because an FFI declaration exists.
+
+---
+
+84. Foreign Calls and Effects
+
+A foreign function may have effects.
+
+For example, a function may perform:
+
+network I/O
+filesystem I/O
+device I/O
+process interaction
+external state mutation
+
+The foreign declaration must integrate with the canonical effect system.
+
+The interoperability grammar does not define a replacement effect language.
+
+---
+
+85. Foreign Types and the Type System
+
+Foreign types integrate with:
+
+grammar/types/
+
+They do not create an independent foreign type system.
+
+The semantic type system must determine:
+
+compatibility
+variance where applicable
+ownership
+conversion
+layout
+ABI representation
+lifetime
+nullability
+
+The grammar only expresses the declaration boundary.
+
+---
+
+86. Foreign Functions and Functions
+
+Foreign functions integrate with:
+
+grammar/functions/
+
+They must not duplicate:
+
+- parameter syntax;
+- generic syntax;
+- ordinary return syntax;
+- ordinary function expressions.
+
+Foreign-specific metadata is layered onto the universal function model.
+
+---
+
+87. Foreign Modules and Modules
+
+Foreign modules integrate with:
+
+grammar/modules/
+
+A foreign module must remain a module boundary rather than creating a parallel module system.
+
+Imports/exports must remain governed by the canonical module architecture.
+
+---
+
+88. Interoperability and Effects
+
+Interoperability metadata may reference:
+
+grammar/effects/
+
+but must not redefine effects.
+
+This ensures that a foreign function and a native function participate in one effect model.
+
+---
+
+89. Interoperability and Memory
+
+Foreign memory contracts integrate with:
+
+grammar/memory/
+
+Ownership and borrowing must therefore use the same semantic model as native Zamani memory.
+
+Interoperability cannot create a second ownership system.
+
+---
+
+90. Interoperability and Resources
+
+Resource requirements integrate with:
+
+grammar/resources/
+
+Examples:
+
+memory requirement
+network requirement
+accelerator capability
+quantum capability
+external-service requirement
+
+The interoperability subsystem references those concepts rather than redefining their global semantics.
+
+---
+
+91. Interoperability and Hardware
+
+Hardware-specific interoperability integrates with:
+
+grammar/hardware/
+
+The hardware subsystem owns:
+
+- capabilities;
+- topology;
+- resource descriptions;
+- device semantics;
+- hardware intent.
+
+Interoperability identifies the external interface.
+
+It does not choose the device.
+
+---
+
+92. Interoperability and Execution
+
+Execution integration belongs to:
+
+grammar/execution/
+
+Interoperability may declare:
+
+- synchronous boundary;
+- asynchronous boundary;
+- streaming;
+- callback;
+- blocking behavior;
+- execution requirements.
+
+Execution semantics belong to the execution subsystem.
+
+---
+
+93. Interoperability and Compilation
+
+Compilation integration belongs to:
+
+grammar/compile/
+
+The compiler may determine:
+
+- linking;
+- ABI lowering;
+- foreign code generation;
+- import/export resolution;
+- target adaptation;
+- cross-compilation.
+
+The grammar only provides the source contract.
+
+---
+
+94. Interoperability and Distributed Computing
+
+Foreign interfaces may cross distributed boundaries.
+
+For example:
+
+service
+RPC
+remote function
+stream
+message
+
+must integrate with:
+
+grammar/distributed/
+grammar/networking/
+
+The interoperability grammar must not create a separate distributed communication model.
+
+---
+
+95. Interoperability and AI
+
+AI systems may expose foreign models/runtimes.
+
+The boundary may describe:
+
+- model interface;
+- tensor interface;
+- inference interface;
+- training interface;
+- runtime compatibility.
+
+AI semantics remain under:
+
+grammar/ai/
+
+The interoperability layer does not become a framework-specific AI grammar.
+
+---
+
+96. Interoperability and Data
+
+External data formats must integrate with:
+
+grammar/data/
+
+Serialization contracts must not redefine native collections/tensors/records.
+
+---
+
+97. Interoperability and Networking
+
+Network-based foreign services integrate with:
+
+grammar/networking/
+
+A network endpoint must not automatically be a physical machine identity.
+
+The source may express a service/interface requirement.
+
+Network discovery and routing remain downstream.
+
+---
+
+98. Interoperability and Security
+
+Security requirements integrate with:
+
+grammar/security/
+
+Interoperability may require:
+
+- authentication;
+- authorization;
+- confidentiality;
+- integrity;
+- provenance;
+- trust;
+- secure execution.
+
+The interoperability subsystem does not implement cryptography.
+
+---
+
+99. Interoperability and Compatibility
+
+All external interfaces must participate in:
+
+grammar/compatibility/
+
+Compatibility must be explicit.
+
+No foreign format should become accepted merely because the parser can recognize its syntax.
+
+---
+
+100. Interoperability and Validation
+
+Validation belongs to:
+
+grammar/validation/
+
+The interoperability validation suite must check:
+
+- grammar ambiguity;
+- duplicate rules;
+- duplicate tokens;
+- unreachable rules;
+- AST coverage;
+- semantic coverage;
+- IR coverage;
+- hard-coded limits;
+- portability;
 - deterministic parsing;
-- testing;
 - compatibility;
-- hard-coding rules;
-- migration requirements;
-- duplicate-file reconciliation.
-
-No subsequent grammar file should need to redefine these architectural boundaries.
+- security boundaries.
 
 ---
 
-83. Completion Contract for "interoperability.g4"
+101. Test Architecture
 
-"interoperability.g4" itself is complete only when:
+Interoperability tests must exist under:
 
-1. It has no trailing-space filename.
-2. It composes the canonical interoperability declarations.
-3. It does not duplicate core grammar.
-4. It does not duplicate specialized language grammar.
-5. It uses canonical identifier/path/type/expression rules.
-6. It is deterministic.
-7. It contains no external I/O.
-8. It contains no target discovery.
-9. It contains no runtime actions.
-10. It contains no unsafe implementation dependency.
-11. It imposes no arbitrary machine-scale limits.
-12. It has parser tests.
-13. It has negative tests.
-14. It has boundary tests.
-15. It has cross-domain tests.
-16. It has round-trip tests where applicable.
-17. Its AST contract is implemented.
-18. Its semantic contract is implemented.
-19. Its integration with "Zamani.g4" is complete.
-20. Its compatibility path for existing foreign syntax is documented.
+grammar/tests/interoperability/
+
+Tests must be divided into:
+
+lexical/
+syntax/
+positive/
+negative/
+boundary/
+scalability/
+determinism/
+compatibility/
+portability/
+diagnostics/
+security/
+formats/
+languages/
+abi/
+ffi/
+callbacks/
+serialization/
+quantum/
+hdl/
 
 ---
 
-84. Completion Contract for Specialized Files
+102. Positive Tests
 
-Each specialized grammar is independently complete only when it declares:
+Positive tests must include at minimum:
+
+- foreign function declaration;
+- foreign type declaration;
+- opaque type;
+- callback;
+- ABI declaration;
+- calling convention;
+- ownership;
+- lifetime;
+- nullability;
+- adapter;
+- conversion;
+- language identity;
+- format identity;
+- compatibility;
+- capability;
+- resource requirement;
+- C;
+- C++;
+- Rust;
+- Python;
+- Zig;
+- WebAssembly;
+- OpenQASM;
+- QIR;
+- HDL;
+- serialization;
+- system interface.
+
+---
+
+103. Negative Tests
+
+Negative tests must include:
+
+- malformed foreign identity;
+- invalid symbol;
+- invalid type boundary;
+- invalid ABI declaration;
+- invalid calling convention;
+- invalid ownership combination;
+- invalid lifetime;
+- invalid conversion;
+- incompatible version;
+- unsupported format;
+- forbidden execution during parsing;
+- invalid capability contract;
+- malformed serialization contract;
+- ambiguous interoperability construct.
+
+---
+
+104. Boundary Tests
+
+Boundary tests must test:
+
+- zero/empty optional clauses where legal;
+- very large identifiers;
+- deeply nested interfaces;
+- large parameter lists;
+- many foreign declarations;
+- many attributes;
+- large conversion contracts;
+- large format metadata;
+- arbitrary symbolic names.
+
+The test suite must not use a finite test size as a language maximum.
+
+---
+
+105. Scalability Tests
+
+Scalability tests must demonstrate that interoperability can represent increasingly large programs without a grammar-imposed ceiling.
+
+Test dimensions include:
+
+foreign declarations
+interfaces
+functions
+types
+callbacks
+adapters
+attributes
+requirements
+effects
+capabilities
+resources
+formats
+symbols
+modules
+
+Any compiler resource ceiling must be reported as an implementation/resource result rather than encoded as a grammar rule.
+
+---
+
+106. Determinism Tests
+
+Given identical:
+
+source
+grammar version
+language version
+dialect configuration
+
+the parser must produce the same structural result.
+
+The parser must not depend on:
+
+network
+filesystem
+hardware
+runtime
+randomness
+time
+foreign library availability
+
+---
+
+107. Compatibility Tests
+
+Compatibility tests must cover:
+
+language version
+format version
+ABI version
+foreign library/interface version
+dialect version
+calling convention
+type representation
+serialization schema
+quantum format version
+HDL format version
+
+Compatibility failures must be explicit and diagnosable.
+
+---
+
+108. Portability Tests
+
+At least one conceptual interoperability program must be checked across different target classes:
+
+tiny classical target
+larger classical target
+GPU/accelerator target
+FPGA target
+distributed target
+quantum target
+hybrid target
+future target
+
+The test verifies that target-specific realization happens downstream.
+
+It must not require source rewriting merely because resource availability changes.
+
+---
+
+109. Quantum Interoperability Tests
+
+Required coverage includes:
+
+- OpenQASM import;
+- OpenQASM export;
+- QIR import;
+- QIR export where supported;
+- generic quantum operation;
+- custom operation;
+- parameterized operation;
+- measurement;
+- mid-circuit measurement;
+- classical feed-forward;
+- quantum/classical boundary;
+- resource requirements;
+- capability requirements;
+- logical-qubit semantics;
+- physical realization metadata;
+- no fixed gate enumeration;
+- no fixed qubit limit.
+
+All quantum semantic lowering must converge on:
+
+quantum::ir
+
+---
+
+110. HDL Interoperability Tests
+
+Required coverage includes:
+
+- Verilog;
+- SystemVerilog where supported;
+- modules;
+- ports;
+- signals;
+- parameters;
+- memories;
+- timing;
+- interfaces;
+- assertions;
+- synthesis metadata;
+- simulation metadata;
+- verification metadata.
+
+No universal fixed hardware width may be established by these tests.
+
+---
+
+111. ABI Tests
+
+ABI tests must distinguish:
+
+ABI identity
+calling convention
+type representation
+layout
+linkage
+symbol naming
+
+and verify that the grammar does not attempt to calculate target-specific layout.
+
+---
+
+112. FFI Tests
+
+FFI tests must verify:
+
+declaration
+binding
+callback
+ownership
+lifetime
+nullability
+marshaling
+conversion
+effects
+capabilities
+resources
+compatibility
+security
+
+---
+
+113. Serialization Tests
+
+Serialization tests must verify:
+
+- schema identity;
+- version;
+- encoding;
+- optional data;
+- extensibility;
+- compatibility;
+- loss classification;
+- provenance.
+
+Silent semantic loss is prohibited.
+
+---
+
+114. Diagnostics Tests
+
+Every interoperability diagnostic category must have at least one test.
+
+Diagnostics must identify the smallest meaningful source span.
+
+For example:
+
+foreign function
+    ↓
+parameter
+    ↓
+foreign type
+
+should identify the actual incompatible construct rather than merely reporting:
+
+interoperability error
+
+---
+
+115. Feature Status
+
+Every interoperability feature must have an explicit status:
+
+STABLE
+EXPERIMENTAL
+PROPOSED
+DEPRECATED
+HISTORICAL
+NOT_IMPLEMENTED
+
+A grammar rule existing in a file does not automatically make the feature stable.
+
+---
+
+116. Promotion Process
+
+A feature progresses through:
+
+Zamani-Grammar.md
+       ↓
+proposal
+       ↓
+semantic design
+       ↓
+AST contract
+       ↓
+canonical grammar
+       ↓
+semantic implementation
+       ↓
+IR contract
+       ↓
+compiler/runtime integration
+       ↓
+tests
+       ↓
+STABLE
+
+A feature must not skip this chain.
+
+---
+
+117. "Zamani-Grammar.md" Relationship
+
+"Zamani-Grammar.md" is retained.
+
+It remains an extended/historical design reference.
+
+It may contain concepts that are:
+
+- proposed;
+- experimental;
+- historical;
+- not implemented.
+
+Those concepts do not automatically become legal interoperability syntax.
+
+Only features promoted through the authoritative process become stable.
+
+---
+
+118. "grammar.md" Relationship
+
+"grammar.md" remains the implementation-conformance reference.
+
+It must distinguish:
+
+SPECIFIED
+IMPLEMENTED
+PARTIALLY IMPLEMENTED
+PLANNED
+DEPRECATED
+
+Interoperability syntax must be reflected there according to actual compiler implementation status.
+
+The existence of an ANTLR production alone does not justify marking it "IMPLEMENTED".
+
+---
+
+119. "DESIGN.md" Relationship
+
+"DESIGN.md" remains the higher-level architecture authority.
+
+This README specializes that architecture for interoperability.
+
+If an interoperability design conflicts with "DESIGN.md", the design conflict must be resolved in the normative architecture rather than silently creating a special interoperability exception.
+
+---
+
+120. "grammar/spec/interoperability.md" Relationship
+
+"grammar/spec/interoperability.md" is the formal interoperability specification.
+
+This README provides:
+
+- repository ownership;
+- file responsibilities;
+- integration contracts;
+- implementation architecture;
+- completion criteria.
+
+"spec/interoperability.md" provides the formal normative language-level contract.
+
+The two must not become competing semantic authorities.
+
+---
+
+121. Specialized File Completion Contract
+
+Every specialized interoperability grammar file is considered complete only when all of the following are defined in advance:
 
 Purpose
+Status
 Owns
 Does Not Own
-Inputs
-Outputs
 Dependencies
 Upstream Contracts
 Downstream Consumers
-Public Grammar Contract
-AST Contract
-Semantic Contract
-IR Integration
+Tokens
+Grammar Rules
+AST Mapping
+Semantic Mapping
+IR Mapping
 Compiler Integration
 Runtime Integration
-Tooling Integration
-Cross-Domain Integration
-Tests
+Security Boundary
+Diagnostics
+Source Spans
+Positive Tests
 Negative Tests
 Boundary Tests
-Compatibility Requirements
-Scalability Requirements
+Scalability Tests
+Determinism Tests
+Compatibility Tests
+Portability Tests
 Hard-Coding Audit
 Completion Criteria
 
-This prevents a later grammar from forcing fundamental redesign of an earlier completed grammar.
+This is the required independent-file contract.
 
 ---
 
-85. Implementation Order
+122. No Re-Editing Cascade
 
-The interoperability subsystem MUST be implemented dependency-first.
+A completed interoperability file must not depend on undocumented future changes in another file.
 
-Recommended order:
+Before declaring a file complete:
 
-1. grammar/interoperability/README.md
-       |
-       v
-2. core/names.g4
-       |
-       v
-3. core/paths.g4
-       |
-       v
-4. core/qualified-names.g4
-       |
-       v
-5. core/metadata.g4
-       |
-       v
-6. core/versioning.g4
-       |
-       v
-7. core/capabilities.g4
-       |
-       v
-8. core/requirements.g4
-       |
-       v
-9. types/
-       |
-       v
-10. expressions/
-       |
-       v
-11. functions/
-       |
-       v
-12. modules/
-       |
-       v
-13. effects/
-       |
-       v
-14. resources/
-       |
-       v
-15. interoperability/abi.g4
-       |
-       v
-16. interoperability/ffi.g4
-       |
-       v
-17. interoperability/foreign-functions.g4
-       |
-       v
-18. interoperability/interoperability.g4
-       |
-       +-------------------+
-       |        |          |
-       v        v          v
-      c.g4   cpp.g4    python.g4
-       |
-       +---- rust.g4
-       |
-       +---- zig.g4
-       |
-       +---- openqasm.g4
-       |
-       +---- verilog.g4
-       |
-       +---- AssemblyLanguage.g4
-       |
-       +---- system-interfaces.g4
-       |
-       v
-19. Zamani.g4 integration
-       |
-       v
-20. AST integration
-       |
-       v
-21. semantic integration
-       |
-       v
-22. compiler integration
-       |
-       v
-23. runtime integration
-       |
-       v
-24. complete cross-domain validation
+1. All imported grammar symbols must already have a defined owner.
+2. All AST nodes must already have a named semantic purpose.
+3. All semantic consumers must be identified.
+4. All IR consumers must be identified.
+5. All diagnostics must have a defined owner.
+6. All tests must have a defined location.
+7. All compatibility behavior must be defined.
+8. All target-specific behavior must have a downstream owner.
+9. All hard-coding risks must be audited.
 
-The exact dependency order must be adjusted if repository inspection reveals an earlier canonical owner.
+If another file later changes implementation details, the completed interoperability contract should remain valid unless the normative language specification itself changes.
 
 ---
 
-86. Required Migration of Existing "foreignFunctionCall"
+123. Cross-Repository Integration Matrix
 
-The existing top-level "foreignFunctionCall" must not remain as an isolated duplicate indefinitely.
-
-The migration target is:
-
-Zamani.g4
-     |
-     v
-interopItem
-     |
-     v
-interop foreign-function contract
-
-The AST must normalize legacy and canonical forms into the same semantic representation where their semantics are equivalent.
-
-This is essential because the repository currently contains multiple historical definitions of foreign-call syntax.
-
----
-
-87. Required Integration With "grammar/grammar.md"
-
-"grammar/grammar.md" currently describes the grammar accepted by the parser implementation and includes a legacy foreign-function form.
-
-After interoperability integration:
-
-"grammar/grammar.md" MUST either:
-
-1. become a generated/derived reference; or
-2. explicitly state that it is a compatibility/reference document.
-
-It MUST NOT silently remain a second authoritative grammar.
+Interoperability concern| Grammar owner| Semantic owner| Downstream owner
+Identifier| "core/"| name resolution| compiler
+Type| "types/"| type system| IR/backend
+Function| "functions/"| function semantics| compiler
+Module| "modules/"| module resolver| compiler
+Effect| "effects/"| effect system| runtime
+Memory| "memory/"| ownership/memory analysis| backend/runtime
+Capability| "resources/" / "security/"| capability analysis| HAL/runtime
+Resource| "resources/"| resource analysis| scheduler/runtime
+ABI| "interoperability/abi.g4"| ABI analysis| backend/linker
+Calling convention| interoperability| ABI analysis| backend
+FFI| "ffi.g4"| semantic FFI model| compiler/runtime
+Foreign type| "foreign-types.g4"| type system| ABI/backend
+Foreign function| "foreign-functions.g4"| function/FFI semantics| linker/runtime
+C| "c.g4"| FFI semantics| C backend
+C++| "cpp.g4"| FFI semantics| C++ backend
+Rust| "rust.g4"| FFI semantics| Rust interoperability
+Python| "python.g4"| runtime/FFI semantics| Python adapter
+Zig| "zig.g4"| FFI semantics| Zig adapter
+WASM| WASM interoperability grammar| format semantics| WASM backend
+OpenQASM| "openqasm.g4"| quantum semantics| "quantum::ir"
+QIR| QIR interoperability grammar| quantum semantics| "quantum::ir" / QIR adapter
+HDL| "verilog.g4" / related| HDL semantics| HDL backend
+Serialization| "serialization.g4"| data/serialization semantics| serializer
+System API| system-interface grammar| capability/effect analysis| runtime/backend
+Security| interoperability + "security/"| security analysis| deployment/runtime
+Compatibility| "compatibility/"| compatibility analysis| compiler/deployment
 
 ---
 
-88. Required Integration With "Zamani-Grammar.md"
+124. Dependency Direction
 
-"Zamani-Grammar.md" must be reconciled with the authoritative grammar source.
+The dependency direction is:
 
-Any foreign interoperability syntax described there must be:
+                    UNIVERSAL ZAMANI
+                          │
+                          ▼
+                 interoperability syntax
+                          │
+                          ▼
+                  domain-neutral AST
+                          │
+                          ▼
+                  semantic analysis
+                          │
+            ┌─────────────┼─────────────┐
+            ▼             ▼             ▼
+          types         effects      resources
+            │             │             │
+            └─────────────┼─────────────┘
+                          ▼
+                canonical semantics
+                          │
+             ┌────────────┼────────────┐
+             ▼            ▼            ▼
+         classical    quantum::ir   HDL/hardware
+             │            │            │
+             └────────────┼────────────┘
+                          ▼
+                    optimization
+                          ▼
+                     lowering
+                          ▼
+                 ABI / backend / HAL
+                          ▼
+                  runtime / target
 
-- implemented;
-- explicitly planned;
-- deprecated;
-- or removed from the normative specification.
+The reverse direction is prohibited.
 
-There must be no documentation-only language feature presented as production syntax.
+For example:
 
----
+grammar → hardware discovery
 
-89. Future-Proofing
+is invalid.
 
-The interoperability root MUST be able to accommodate future computational domains including:
+So is:
 
-- new programming languages;
-- new ABIs;
-- new binary formats;
-- new accelerator interfaces;
-- new quantum formats;
-- new HDL formats;
-- new distributed runtimes;
-- new AI runtimes;
-- new operating systems;
-- new execution models;
-- new memory models;
-- new hardware models;
-- future computing paradigms not yet known.
+grammar → runtime execution
 
-The root must therefore prefer:
+or:
 
-symbolic extension
-qualified namespace
-versioned contract
-capability requirement
-semantic adapter
-
-over:
-
-closed enum
-fixed list
-fixed machine model
-fixed device list
-
----
-
-90. Fundamental Invariants
-
-The interoperability subsystem MUST preserve these invariants.
-
-Invariant 1 — Syntax is not execution
-
-Parsing never executes foreign behavior.
-
-Invariant 2 — Language is not hardware
-
-A foreign language declaration does not select a machine.
-
-Invariant 3 — ABI is not architecture
-
-An ABI contract does not inherently select one processor architecture.
-
-Invariant 4 — Resource is not allocation
-
-A resource requirement does not allocate a physical resource.
-
-Invariant 5 — Capability is not discovery
-
-A capability declaration does not inspect the target.
-
-Invariant 6 — Foreign syntax is not foreign IR
-
-Interoperability AST nodes do not replace canonical IR.
-
-Invariant 7 — OpenQASM is not quantum IR
-
-OpenQASM must eventually lower into "quantum::ir".
-
-Invariant 8 — HDL syntax is not hardware placement
-
-HDL interoperability does not perform synthesis or physical implementation.
-
-Invariant 9 — Portability is explicit
-
-Target-specific dependencies must be visible.
-
-Invariant 10 — Scale is not grammar state
-
-Machine scale must never become a grammar constant.
+grammar → linker invocation
 
 ---
 
-91. Production-Readiness Checklist
+125. No Backend Leakage
 
-The interoperability subsystem is production-ready only when all of the following are true:
+The interoperability grammar must not contain target backend details merely because they are convenient.
 
-- [ ] One authoritative interoperability composition grammar exists.
-- [ ] The trailing-space "interoperability.g4 " filename is removed.
-- [ ] Duplicate system-interface grammars are reconciled.
-- [ ] "Zamani.g4" uses the canonical interoperability boundary.
-- [ ] Legacy foreign syntax is migrated deliberately.
-- [ ] "grammar.md" is reconciled.
-- [ ] "Zamani-Grammar.md" is reconciled.
-- [ ] "README.md" documents ownership.
-- [ ] Specialized grammars have explicit ownership.
-- [ ] Core grammar is not duplicated.
-- [ ] Types are not duplicated.
-- [ ] Expressions are not duplicated.
-- [ ] AST contracts exist.
-- [ ] Semantic contracts exist.
-- [ ] ABI contracts exist.
-- [ ] FFI contracts exist.
-- [ ] Calling conventions are extensible.
-- [ ] Foreign symbols are representable.
-- [ ] Foreign types are representable.
-- [ ] Opaque types are representable.
-- [ ] Callbacks are representable.
-- [ ] Adapters are representable.
-- [ ] Conversions are representable.
-- [ ] Ownership is representable.
-- [ ] Lifetime intent is representable.
-- [ ] Nullability is representable.
-- [ ] Capability requirements are representable.
-- [ ] Effect requirements are representable.
-- [ ] Resource requirements are representable.
-- [ ] Compatibility requirements are representable.
-- [ ] OpenQASM integration preserves "quantum::ir".
-- [ ] HDL integration remains separate from hardware realization.
-- [ ] QEC is not duplicated.
-- [ ] ZQN is not duplicated.
-- [ ] Scheduling is not duplicated.
-- [ ] Routing is not duplicated.
-- [ ] Optimization is not duplicated.
-- [ ] Hardware discovery is not performed by parsing.
-- [ ] Runtime execution is not performed by parsing.
-- [ ] Filesystem access is absent from grammar actions.
-- [ ] Network access is absent from grammar actions.
-- [ ] Rust "unsafe" is not required.
-- [ ] Rust 1.97 is supported.
-- [ ] Rust 1.97.1 is supported.
-- [ ] Rust 2021 is supported.
-- [ ] No arbitrary machine limits exist.
-- [ ] No fixed qubit limits exist.
-- [ ] No fixed device limits exist.
-- [ ] No fixed CPU/GPU/FPGA limits exist.
-- [ ] No fixed topology exists in portable syntax.
-- [ ] No fixed pointer width exists in generic syntax.
-- [ ] No fixed memory size exists in generic syntax.
-- [ ] Deterministic parsing is verified.
+Forbidden examples include universal syntax that assumes:
+
+x86 register
+ARM register
+CUDA block
+GPU 0
+FPGA bank 0
+QPU 0
+physical qubit 7
+memory address 0x...
+
+unless explicitly classified as target-specific source semantics and handled by an appropriate target-specific contract.
+
+---
+
+126. No Vendor Lock-In
+
+The generic FFI architecture must remain vendor-neutral.
+
+Vendor APIs may be represented through:
+
+vendor::namespace
+
+but the universal interoperability model must not be redesigned around one vendor.
+
+---
+
+127. Future-Language Extensibility
+
+A future language must be integrable through:
+
+language identity
+format identity
+ABI contract
+calling convention
+type contract
+function contract
+ownership
+lifetime
+effects
+capabilities
+resources
+compatibility
+security
+AST mapping
+semantic mapping
+IR mapping
+tests
+
+without modifying universal language fundamentals unnecessarily.
+
+---
+
+128. Future-Format Extensibility
+
+A future format must be able to define:
+
+format identity
+version
+parser/importer
+exporter
+semantic mapping
+loss model
+compatibility
+provenance
+tests
+
+without becoming the canonical Zamani semantic representation.
+
+---
+
+129. Future-Target Extensibility
+
+A new target must be able to consume an already-validated interoperability semantic contract.
+
+The grammar should not need to know in advance:
+
+- how many CPUs exist;
+- how many GPUs exist;
+- how many QPUs exist;
+- how much memory exists;
+- how many nodes exist;
+- what future accelerator architectures look like.
+
+This is fundamental to POCO-REAF.
+
+---
+
+130. Interoperability Does Not Guarantee Universal Availability
+
+The language can express an external dependency.
+
+The compiler must still verify that the target environment can realize it.
+
+Therefore:
+
+portable source contract
+
+does not mean:
+
+every machine implements every foreign ecosystem
+
+Instead:
+
+portable semantic source
++
+explicit requirements
++
+target capability analysis
+=
+correct realization or explicit failure
+
+---
+
+131. Runtime Adaptation
+
+Runtime systems may adapt interoperability realization according to:
+
+- available resources;
+- device health;
+- load;
+- network state;
+- service availability;
+- accelerator availability;
+- hardware capability;
+- resilience state.
+
+Such adaptation must preserve source-level semantics.
+
+Runtime adaptation must not silently change the meaning of the Zamani program.
+
+---
+
+132. Resilience
+
+Interoperability may participate in the existing resilience model.
+
+Relevant states include:
+
+Unknown
+Healthy
+Degraded
+Unstable
+Unavailable
+Recovering
+Quarantined
+Retired
+
+and outcomes such as:
+
+ACCEPT
+DEGRADED_ACCEPT
+RETRY
+RECOVER
+ESCALATE
+REJECT
+
+These states belong to resilience/runtime semantics, not to the parser.
+
+Interoperability may expose the contract necessary for those systems to operate.
+
+---
+
+133. QEC and ZQN
+
+Interoperability must not implement QEC or ZQN.
+
+For quantum foreign interfaces:
+
+foreign quantum format
+        ↓
+quantum semantic validation
+        ↓
+quantum::ir
+        ↓
+optimization
+        ↓
+routing
+        ↓
+scheduling
+        ↓
+QEC / resilience
+        ↓
+ZQN
+        ↓
+HAL
+
+The interoperability grammar stops before these implementation layers.
+
+---
+
+134. Routing
+
+Interoperability must not decide physical routing.
+
+For example, it must not turn:
+
+foreign quantum operation
+
+into:
+
+physical qubit 17
+physical qubit 23
+
+during parsing.
+
+Routing belongs downstream.
+
+---
+
+135. Scheduling
+
+Interoperability must not hard-code:
+
+gate duration
+clock cycle
+device latency
+
+unless those values are explicitly part of source-level semantic intent.
+
+Target-specific scheduling remains downstream.
+
+---
+
+136. HAL
+
+The Hardware Abstraction Layer determines actual target capabilities/state.
+
+Interoperability does not replace HAL.
+
+The relationship is:
+
+source interoperability contract
+        ↓
+semantic requirements
+        ↓
+HAL capability query
+        ↓
+target realization
+
+The grammar itself does not query HAL.
+
+---
+
+137. Interoperability and ZQN
+
+ZQN remains responsible for quantum fault/noise semantics.
+
+An external quantum format may contain noise-related information.
+
+That information must be translated into the canonical quantum semantic representation rather than creating a separate interoperability noise IR.
+
+---
+
+138. Interoperability and Provenance
+
+External source provenance should remain available where required:
+
+foreign language
+foreign format
+foreign version
+foreign source location
+foreign symbol
+adapter
+conversion
+
+This enables diagnostics to say where an imported construct originated.
+
+---
+
+139. Interoperability and Semantic Preservation
+
+The highest-priority rule for import/export is:
+
+«Never silently change the meaning of a program.»
+
+If exact semantic preservation is impossible, the compiler must:
+
+1. detect the mismatch;
+2. classify the loss;
+3. report it;
+4. require explicit acceptance where required by the language specification.
+
+---
+
+140. Interoperability and Deterministic Builds
+
+Foreign interface resolution must be compatible with deterministic/reproducible compilation.
+
+A source declaration must not silently bind to different interfaces merely because:
+
+- a machine changed;
+- a library happened to be installed;
+- a network service changed;
+- a different runtime was discovered.
+
+Resolution metadata must be explicit enough for reproducibility.
+
+---
+
+141. Interoperability Manifest Concept
+
+Where the build system supports machine-readable feature manifests, an interoperability feature may declare:
+
+id
+name
+status
+language
+format
+version
+grammar
+tokens
+AST mapping
+semantic mapping
+IR mapping
+compiler consumer
+runtime consumer
+capabilities
+resources
+effects
+security
+compatibility
+loss policy
+tests
+
+This is compatible with the broader Zamani feature-contract architecture.
+
+It does not create a second grammar authority.
+
+---
+
+142. Independent Feature Contract
+
+An interoperability feature is independently complete when the following chain is closed:
+
+source syntax
+      ↓
+token
+      ↓
+grammar rule
+      ↓
+AST node
+      ↓
+semantic construct
+      ↓
+canonical IR/domain representation
+      ↓
+compiler consumer
+      ↓
+runtime/backend consumer
+      ↓
+tests
+
+and the reverse trace is also possible:
+
+backend requirement
+      ↓
+IR requirement
+      ↓
+semantic requirement
+      ↓
+AST requirement
+      ↓
+grammar rule
+      ↓
+source construct
+
+No stable feature should have an unresolved link.
+
+---
+
+143. Production Completion Checklist
+
+The entire interoperability subsystem is production-ready only when:
+
+Architecture
+
+- [ ] "Zamani.g4" remains the single root.
+- [ ] No competing interoperability root exists.
+- [ ] Existing filenames are preserved unless removal is justified.
+- [ ] Interoperability has one ownership boundary.
+- [ ] Dependency direction is correct.
+
+Specification
+
+- [ ] "spec/interoperability.md" defines normative semantics.
+- [ ] This README defines repository ownership/integration.
+- [ ] "Zamani-Grammar.md" does not silently define syntax.
+- [ ] "grammar.md" reports actual implementation status.
+
+Grammar
+
+- [ ] Generic FFI exists.
+- [ ] Foreign functions exist.
+- [ ] Foreign types exist.
+- [ ] ABI syntax exists.
+- [ ] Calling conventions are symbolic.
+- [ ] Language identities are extensible.
+- [ ] Format identities are extensible.
+- [ ] Adapters exist.
+- [ ] Conversions exist.
+- [ ] Callbacks exist.
+- [ ] Serialization contracts exist.
+- [ ] System-interface contracts exist.
+
+AST
+
+- [ ] Every production construct has an AST mapping.
+- [ ] AST remains domain-neutral.
+- [ ] Source spans are preserved.
+- [ ] No target-specific AST leakage exists.
+
+Semantics
+
+- [ ] Type compatibility is defined.
+- [ ] Ownership is defined.
+- [ ] Lifetime is defined.
+- [ ] Nullability is defined.
+- [ ] ABI compatibility is defined.
+- [ ] Effects are integrated.
+- [ ] Capabilities are integrated.
+- [ ] Resources are integrated.
+- [ ] Security is integrated.
+- [ ] Compatibility is integrated.
+
+IR
+
+- [ ] No universal interoperability IR competes with canonical IR.
+- [ ] Classical boundaries reach classical semantics/IR.
+- [ ] Quantum boundaries reach "quantum::ir".
+- [ ] HDL boundaries reach canonical HDL/hardware semantics.
+
+Safety
+
+- [ ] Parsing is inert.
+- [ ] No library loading occurs during parsing.
+- [ ] No process execution occurs during parsing.
+- [ ] No filesystem access occurs during parsing.
+- [ ] No network access occurs during parsing.
+- [ ] No hardware discovery occurs during parsing.
+- [ ] Rust implementation uses safe Rust only.
+- [ ] No "unsafe" Rust is required.
+
+Scalability
+
+- [ ] No hard-coded interoperability maxima exist.
+- [ ] No hard-coded machine assumptions exist.
+- [ ] No fixed foreign-language list exists.
+- [ ] No fixed ABI universe exists.
+- [ ] No fixed target universe exists.
+- [ ] Program-defined quantities remain program semantics.
+
+Testing
+
 - [ ] Positive tests exist.
 - [ ] Negative tests exist.
 - [ ] Boundary tests exist.
 - [ ] Scalability tests exist.
-- [ ] Cross-domain tests exist.
-- [ ] Round-trip tests exist where applicable.
-- [ ] Hard-coding audit passes.
-- [ ] Security audit passes.
-- [ ] Documentation and grammar agree.
-- [ ] AST and grammar agree.
-- [ ] Semantic analysis and AST agree.
-- [ ] Compiler and semantic contracts agree.
-- [ ] Runtime integration occurs only downstream.
-- [ ] Future interoperability extensions do not require redesign of the root.
+- [ ] Determinism tests exist.
+- [ ] Compatibility tests exist.
+- [ ] Portability tests exist.
+- [ ] Diagnostics tests exist.
+- [ ] Security tests exist.
+- [ ] Quantum interoperability tests exist.
+- [ ] HDL interoperability tests exist.
 
 ---
 
-92. Final Architectural Principle
+144. Required Repository Integration
 
-The interoperability subsystem exists to make Zamani more interoperable without making Zamani less universal.
+The interoperability subsystem integrates with the existing repository as follows:
 
-The governing principle is:
+grammar/
+│
+├── DESIGN.md
+│      └── architecture authority
+│
+├── README.md
+│      └── repository navigation/authority
+│
+├── Zamani.g4
+│      └── canonical ANTLR root
+│
+├── grammar.md
+│      └── implementation conformance
+│
+├── Zamani-Grammar.md
+│      └── historical/extended design
+│
+├── specification/
+│      └── normative language specification
+│
+├── spec/
+│      └── formal subsystem contracts
+│
+├── core/
+│      └── identifiers/names/attributes/etc.
+│
+├── types/
+│      └── canonical type system
+│
+├── functions/
+│      └── callable/function semantics
+│
+├── modules/
+│      └── module/import/export semantics
+│
+├── effects/
+│      └── canonical effect system
+│
+├── memory/
+│      └── ownership/lifetime/memory semantics
+│
+├── resources/
+│      └── resource/capability model
+│
+├── security/
+│      └── security policy
+│
+├── compile/
+│      └── compilation/lowering
+│
+├── execution/
+│      └── runtime execution semantics
+│
+├── hardware/
+│      └── hardware intent/capabilities
+│
+├── quantum/
+│      └── quantum syntax/semantics
+│
+├── hdl/
+│      └── native HDL semantics
+│
+├── distributed/
+│      └── distributed semantics
+│
+├── networking/
+│      └── network semantics
+│
+├── data/
+│      └── data semantics
+│
+├── dialects/
+│      └── controlled extensions
+│
+├── compatibility/
+│      └── version/migration compatibility
+│
+├── validation/
+│      └── structural/conformance validation
+│
+└── tests/
+       └── interoperability conformance
 
-«Zamani describes what computation and interoperability relationship is required; the compiler, semantic system, resource system, hardware abstraction, runtime, and deployment system determine how that relationship is realized.»
+---
 
-Therefore:
+145. Repository Implementation Baseline
 
-One Zamani program
-        |
-        v
-One stable semantic meaning
-        |
-        +-------------------+
-        |                   |
-        v                   v
- classical             quantum
-        |                   |
-        +---------+---------+
-                  |
-                  v
-             hybrid
-                  |
-        +---------+----------+
-        |         |          |
-        v         v          v
-       HDL     hardware   distributed
-        |         |          |
-        +---------+----------+
-                  |
-                  v
-             many targets
-                  |
-                  v
-             many scales
-                  |
-                  v
-          many environments
-                  |
-                  v
-          future architectures
+The implementation consuming this grammar is:
 
-Interoperability is therefore a boundary, not a collection of special cases.
+Rust 2021
+Rust 1.97
+Rust 1.97.1
 
-The ultimate invariant is:
+The production baseline is:
 
-Program Once
-Compile Once
-Run Everywhere
-Run Anywhere
-Run Forever
+Rust 1.97.1
 
-while preserving:
+The implementation must use safe Rust.
 
-semantic stability
-hardware independence
-language interoperability
-quantum/classical interoperability
-HDL interoperability
-resource independence
-deterministic parsing
-strong diagnostics
-security
-compatibility
-extensibility
-scalability
-clear ownership
-canonical IR boundaries
+"unsafe" Rust is prohibited.
 
-This is the interoperability foundation required for:
+The grammar must contain no embedded target-language execution actions.
 
-Zamani — From Atom to Everywhere.
+---
+
+146. ANTLR Safety Rule
+
+Interoperability grammar files must remain declarative.
+
+They must not contain actions that:
+
+- invoke Rust;
+- execute shell commands;
+- load libraries;
+- inspect hardware;
+- access the filesystem;
+- access the network;
+- inspect environment variables;
+- execute foreign code.
+
+Semantic actions belong outside the grammar.
+
+---
+
+147. No Semantic Predicates for Environment Discovery
+
+Semantic predicates must not be used to ask whether:
+
+a library exists
+a device exists
+a runtime exists
+a CPU exists
+a GPU exists
+a QPU exists
+a file exists
+a network exists
+
+The parse tree must be independent of target availability.
+
+---
+
+148. Interoperability Is a Contract, Not a Runtime
+
+This subsystem is a language boundary, not an execution engine.
+
+Its job is to say:
+
+WHAT external contract does this source program depend upon?
+
+It is not responsible for:
+
+HOW do we execute it?
+
+---
+
+149. One Language
+
+C, C++, Rust, Python, Zig, WebAssembly, OpenQASM, QIR, Verilog, SystemVerilog, and future external technologies remain interoperability domains.
+
+They do not become separate Zamani languages.
+
+Zamani remains one language with extensible interoperability boundaries.
+
+---
+
+150. One Semantic Architecture
+
+All interoperability must eventually converge on Zamani semantic infrastructure:
+
+foreign syntax
+     ↓
+Zamani AST
+     ↓
+Zamani semantics
+     ↓
+canonical domain representation
+
+No foreign format may become a second semantic authority merely because it is widely used.
+
+---
+
+151. One Quantum Boundary
+
+For every quantum interoperability route:
+
+foreign representation
+        ↓
+semantic quantum model
+        ↓
+quantum::ir
+
+"quantum::ir" remains the canonical quantum boundary.
+
+No second quantum IR is permitted.
+
+---
+
+152. One Resource Model
+
+Interoperability uses the same:
+
+requirement
+constraint
+capability
+preference
+hint
+resource
+
+model as the rest of Zamani.
+
+It must not invent another resource vocabulary.
+
+---
+
+153. One Effect Model
+
+Foreign calls participate in the same effect system as native operations.
+
+There is no separate foreign effect language.
+
+---
+
+154. One Type Model
+
+Foreign types participate in the canonical type system.
+
+There is no independent FFI type universe.
+
+---
+
+155. One Security Model
+
+Foreign interfaces participate in the canonical security/capability system.
+
+There is no hidden privileged mode created merely by writing an FFI declaration.
+
+---
+
+156. One Compatibility Model
+
+Foreign versions and formats participate in the canonical compatibility architecture.
+
+There is no separate ad-hoc version system.
+
+---
+
+157. One Diagnostic Model
+
+Interoperability errors use the common Zamani diagnostic architecture.
+
+They preserve:
+
+- source spans;
+- error categories;
+- contextual information;
+- expected/actual information;
+- provenance where available.
+
+---
+
+158. One Portability Model
+
+Interoperability requirements must remain compatible with the overall portability architecture.
+
+A target-specific dependency must be explicit.
+
+A universal Zamani construct must not become target-specific merely because one backend happens to implement it first.
+
+---
+
+159. Production Architecture
+
+The final interoperability pipeline is:
+
+                         ZAMANI SOURCE
+                              │
+                              ▼
+                     grammar/Zamani.g4
+                              │
+                              ▼
+                           Lexer
+                              │
+                              ▼
+                           Parser
+                              │
+                              ▼
+                    Domain-Neutral AST
+                              │
+                              ▼
+                 Interoperability Analysis
+                              │
+             ┌────────────────┼────────────────┐
+             │                │                │
+             ▼                ▼                ▼
+           Types           Effects        Capabilities
+             │                │                │
+             └────────────────┼────────────────┘
+                              │
+                              ▼
+                    Semantic Validation
+                              │
+                              ▼
+                  Canonical Semantic Model
+                              │
+          ┌───────────────────┼────────────────────┐
+          │                   │                    │
+          ▼                   ▼                    ▼
+      Classical           quantum::ir         HDL/Hardware
+          │                   │                    │
+          └───────────────────┼────────────────────┘
+                              │
+                              ▼
+                         Optimization
+                              │
+                              ▼
+                           Lowering
+                              │
+                    ┌─────────┼─────────┐
+                    ▼         ▼         ▼
+                   ABI      Routing  Scheduling
+                    │         │         │
+                    └─────────┼─────────┘
+                              │
+                              ▼
+                           QEC/ZQN
+                              │
+                              ▼
+                             HAL
+                              │
+                              ▼
+                       Target Realization
+                              │
+           ┌──────────────────┼──────────────────┐
+           │                  │                  │
+          CPU                GPU                FPGA
+           │                  │                  │
+           ├──────────────────┼──────────────────┤
+           │                  │                  │
+          QPU             Distributed       Future Target
+           │                  │                  │
+           └──────────────────┼──────────────────┘
+                              │
+                              ▼
+                           Runtime
+
+---
+
+160. Final Interoperability Principle
+
+The interoperability subsystem exists to preserve this distinction:
+
+WHAT THE PROGRAM MEANS
+
+versus:
+
+HOW ONE PARTICULAR MACHINE REALIZES IT
+
+The grammar owns the first.
+
+Semantic analysis validates the first.
+
+Canonical IR represents the first.
+
+Compiler lowering transforms the first into an implementation.
+
+ABI infrastructure realizes foreign binary contracts.
+
+Routing realizes physical placement.
+
+Scheduling realizes time/resource ordering.
+
+QEC realizes quantum error-correction strategy.
+
+ZQN models quantum fault/noise behavior.
+
+HAL realizes hardware capability/state.
+
+Runtime executes the resulting realization.
+
+Interoperability must not collapse these layers.
+
+---
+
+161. Final POCO-REAF Contract
+
+The interoperability architecture is successful when the same source-level semantic contract can remain stable while realization changes according to available resources:
+
+                    SAME ZAMANI PROGRAM
+                            │
+            ┌───────────────┼────────────────┐
+            │               │                │
+            ▼               ▼                ▼
+         tiny target     ordinary target   large target
+            │               │                │
+            └───────────────┼────────────────┘
+                            │
+                  heterogeneous target
+                            │
+                            ▼
+                       accelerator
+                            │
+                            ▼
+                      quantum/hybrid
+                            │
+                            ▼
+                       distributed
+                            │
+                            ▼
+                     future substrate
+
+The programmer should not have to rewrite portable computation merely because:
+
+- processor count changed;
+- GPU count changed;
+- FPGA capacity changed;
+- QPU capacity changed;
+- memory changed;
+- network topology changed;
+- accelerator availability changed;
+- deployment scale changed.
+
+Those are downstream realization concerns.
+
+---
+
+162. Final Non-Negotiable Rules
+
+1. "grammar/Zamani.g4" remains the canonical ANTLR composition root.
+
+2. "grammar/interoperability/" does not create another root grammar.
+
+3. "grammar/DESIGN.md" remains the normative architecture authority.
+
+4. "grammar/grammar.md" remains the implementation-conformance reference.
+
+5. "grammar/Zamani-Grammar.md" remains historical/extended design material and cannot silently define syntax.
+
+6. Existing interoperability filenames are not unnecessarily renamed.
+
+7. Duplicate or malformed filesystem artifacts must be explicitly reconciled rather than allowed to create competing authorities.
+
+8. Universal grammar rules are not duplicated inside specialized interoperability grammars.
+
+9. Foreign languages are represented through extensible symbolic identities.
+
+10. Foreign formats are distinct from languages.
+
+11. ABIs are distinct from calling conventions.
+
+12. Languages are distinct from runtimes.
+
+13. Libraries are distinct from physical machines.
+
+14. Foreign symbols are symbolic identities, not physical addresses.
+
+15. FFI declarations do not execute foreign code.
+
+16. Parsing never performs library loading.
+
+17. Parsing never performs hardware discovery.
+
+18. Parsing never performs network access.
+
+19. Parsing never performs filesystem access.
+
+20. Parsing never invokes a linker.
+
+21. Parsing never invokes a compiler.
+
+22. Parsing never invokes a runtime.
+
+23. Foreign types integrate with the canonical type system.
+
+24. Foreign functions integrate with the canonical function model.
+
+25. Foreign modules integrate with the canonical module system.
+
+26. Foreign effects integrate with the canonical effect system.
+
+27. Foreign resources integrate with the canonical resource/capability model.
+
+28. Foreign security requirements integrate with the canonical security model.
+
+29. Foreign compatibility integrates with the canonical compatibility system.
+
+30. Interoperability does not create a universal "interoperability::ir".
+
+31. Quantum interoperability always converges on "quantum::ir".
+
+32. OpenQASM is an interoperability format, not a second Zamani semantic model.
+
+33. QIR is an interoperability representation, not a replacement for "quantum::ir".
+
+34. HDL interoperability does not replace native Zamani HDL.
+
+35. No universal hardware capacity may be hard-coded.
+
+36. No universal CPU/GPU/FPGA/QPU/node/thread/memory limit may be encoded.
+
+37. No fixed pointer width may be assumed by the universal grammar.
+
+38. No fixed register width may be assumed by the universal grammar.
+
+39. No fixed topology may be assumed by the universal grammar.
+
+40. Program-defined numeric values remain valid program semantics.
+
+41. Requirements, constraints, capabilities, preferences, hints, and implementation decisions remain distinct.
+
+42. AST representations remain domain-neutral.
+
+43. Source spans are preserved.
+
+44. Semantic validation occurs before target realization.
+
+45. Target realization remains downstream.
+
+46. Routing remains downstream.
+
+47. Scheduling remains downstream.
+
+48. QEC remains downstream.
+
+49. ZQN remains downstream.
+
+50. HAL remains downstream.
+
+51. Macro expansion cannot bypass interoperability validation.
+
+52. Metaprogramming cannot bypass interoperability validation.
+
+53. Dialects cannot silently become separate languages.
+
+54. External-format conversion must classify semantic loss.
+
+55. Silent semantic loss is prohibited.
+
+56. Interoperability parsing is deterministic.
+
+57. Interoperability tests include positive, negative, boundary, scalability, determinism, compatibility, portability, security, and diagnostic coverage.
+
+58. Every stable interoperability feature has a complete syntax → AST → semantic → IR → compiler/runtime → test chain.
+
+59. Rust 1.97.1 is the production implementation baseline.
+
+60. The compiler implementation uses safe Rust only.
+
+61. "unsafe" Rust is prohibited.
+
+62. Compiler/runtime resource exhaustion is not a language-level scalability ceiling.
+
+63. Future languages and formats must be integrable without redesigning universal Zamani semantics.
+
+64. Future hardware must be able to consume existing portable semantics through downstream realization.
+
+65. Interoperability exists to preserve semantic portability, not to freeze today's implementation technology into the language.
+
+---
+
+163. Definition of Done
+
+"grammar/interoperability/" is considered PRODUCTION READY when every stable interoperability feature can be traced:
+
+Source
+  ↓
+Token
+  ↓
+Grammar
+  ↓
+AST
+  ↓
+Semantic Contract
+  ↓
+Canonical IR / Domain Representation
+  ↓
+Compiler Consumer
+  ↓
+Runtime / Backend Consumer
+  ↓
+Diagnostics
+  ↓
+Tests
+
+and backwards:
+
+Backend Requirement
+  ↓
+IR Requirement
+  ↓
+Semantic Requirement
+  ↓
+AST Representation
+  ↓
+Grammar Rule
+  ↓
+Source Construct
+
+with no unresolved ownership boundary.
+
+The final invariant is:
+
+                  PORTABLE ZAMANI MEANING
+                            │
+                            ▼
+                    INTEROPERABILITY
+                            │
+                            ▼
+                     DOMAIN-NEUTRAL AST
+                            │
+                            ▼
+                    SEMANTIC VALIDATION
+                            │
+                            ▼
+                  CANONICAL SEMANTIC MODEL
+                            │
+             ┌──────────────┼──────────────┐
+             ▼              ▼              ▼
+         Classical      quantum::ir   HDL/Hardware
+             │              │              │
+             └──────────────┼──────────────┘
+                            ▼
+                       CANONICAL IR
+                            │
+                            ▼
+                  OPTIMIZATION / LOWERING
+                            │
+             ┌──────────────┼──────────────┐
+             ▼              ▼              ▼
+          ABI/FFI        Routing       Scheduling
+             │              │              │
+             └──────────────┼──────────────┘
+                            ▼
+                        QEC / ZQN
+                            │
+                            ▼
+                           HAL
+                            │
+                            ▼
+                    TARGET REALIZATION
+                            │
+             ┌──────────────┼──────────────┐
+             ▼              ▼              ▼
+            CPU            GPU             QPU
+             │              │              │
+             └──────────────┼──────────────┘
+                            ▼
+                      FUTURE TARGETS
+
+Therefore the permanent interoperability rule is:
+
+«Zamani interoperability describes the contract between Zamani semantics and an external computational ecosystem. It does not make that ecosystem part of the permanent language core, and it does not encode today's machine limitations into tomorrow's source language.»
+
+This is the interoperability foundation required for Zamani to scale from the smallest computation to arbitrarily large computation subject to actual resource availability while preserving:
+
+Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever (POCO-REAF).
