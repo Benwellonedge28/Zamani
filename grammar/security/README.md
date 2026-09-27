@@ -1,8 +1,4 @@
-Worked for 40s
 
-I inspected the actual grammar/security/ tree and the current contents of README.md, security.g4, trust.g4, identifiers.g4, core/attributes.g4, and the security composition contracts. The current README is directionally strong, but it has several integration inconsistencies: its file inventory is stale, it does not fully describe the actual specialized files, it does not clearly resolve the identifiers.g4/identity.g4 ownership relationship, and it needs a more explicit specification → grammar → AST → semantic → IR → compiler → runtime contract.
-
-Below is the replacement for grammar/security/README.md. It keeps the existing filename and does not create another security authority.
 
 # Zamani Security Grammar
 
