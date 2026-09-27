@@ -1,279 +1,540 @@
-Zamani Security Grammar
+Worked for 40s
 
-Production Specification and Integration Contract
+I inspected the actual grammar/security/ tree and the current contents of README.md, security.g4, trust.g4, identifiers.g4, core/attributes.g4, and the security composition contracts. The current README is directionally strong, but it has several integration inconsistencies: its file inventory is stale, it does not fully describe the actual specialized files, it does not clearly resolve the identifiers.g4/identity.g4 ownership relationship, and it needs a more explicit specification → grammar → AST → semantic → IR → compiler → runtime contract.
 
-Path
+Below is the replacement for grammar/security/README.md. It keeps the existing filename and does not create another security authority.
+
+# Zamani Security Grammar
+
+## Production Architecture, Ownership, Integration, Scalability, and Conformance Contract
+
+**Path:** `grammar/security/`
+
+**Status:** Canonical security-domain architecture and integration contract.
+
+**Language:** Zamani
+
+**Implementation baseline:** Rust 1.97 / Rust 1.97.1, Rust 2021
+
+**Safety requirement:** Production Rust MUST NOT use `unsafe`.
+
+**Primary objective:**
+
+> Define portable, target-independent security intent that can scale from the smallest supported execution environment to arbitrarily large computational systems, subject only to actual available resources and capabilities.
+
+Security syntax is part of the single Zamani language. It is not a separate security language.
+
+The security grammar participates in:
+
+```text
+Program Once
+    ↓
+Compile Once
+    ↓
+Run Everywhere
+    ↓
+Anywhere
+    ↓
+Forever
+
+or:
+
+Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
+(POCO-REAF)
+
+
+---
+
+1. Purpose
+
+grammar/security/ owns the source-level syntax required to express security-related intent in Zamani.
+
+It provides syntax for concepts such as:
+
+identities;
+
+principals;
+
+authority;
+
+capabilities;
+
+permissions;
+
+authorization;
+
+security policies;
+
+trust;
+
+cryptographic intent;
+
+key-management intent;
+
+privacy;
+
+provenance;
+
+secure computation;
+
+secrets references;
+
+signatures;
+
+hashes;
+
+zero-knowledge/security proofs;
+
+security constraints;
+
+security metadata;
+
+security requirements;
+
+security preferences;
+
+security composition.
+
+
+Security syntax may apply to:
+
+classical computation;
+
+numerical computation;
+
+AI/ML;
+
+tensor computation;
+
+quantum computation;
+
+hybrid quantum/classical computation;
+
+HDL;
+
+FPGA/ASIC intent;
+
+accelerators;
+
+distributed systems;
+
+networking;
+
+embedded systems;
+
+cloud execution;
+
+future computational substrates.
+
+
+The grammar describes what security properties a program expresses.
+
+It does not implement those properties.
+
+
+---
+
+2. Fundamental Architectural Rule
+
+The security grammar MUST remain separate from target realization.
+
+The source language expresses:
+
+WHAT is required
+WHAT is permitted
+WHAT is trusted
+WHAT must be protected
+WHAT capabilities are required
+WHAT constraints apply
+WHAT security properties must survive execution
+
+It does NOT permanently encode:
+
+WHICH CPU
+WHICH GPU
+WHICH FPGA
+WHICH ASIC
+WHICH QPU
+WHICH node
+WHICH physical qubit
+WHICH enclave
+WHICH TPM
+WHICH HSM
+WHICH cloud provider
+WHICH operating system
+
+The downstream compiler/runtime/target system determines realization.
+
+Therefore:
+
+Security syntax
+      ↓
+Security AST
+      ↓
+Security semantic model
+      ↓
+Capability/resource analysis
+      ↓
+Canonical IR / domain IR
+      ↓
+Optimization
+      ↓
+Routing / scheduling
+      ↓
+Resilience / QEC / ZQN where applicable
+      ↓
+HAL
+      ↓
+Target realization
+      ↓
+Runtime enforcement
+
+
+---
+
+3. Single Language Principle
+
+Security is not a separate language.
+
+The complete Zamani language remains:
+
+ZAMANI
+                        |
+        +---------------+---------------+
+        |               |               |
+     Classical       Quantum           HDL
+        |               |               |
+        +---------------+---------------+
+                        |
+                     Hybrid
+                        |
+        +---------------+---------------+
+        |               |               |
+       AI          Distributed      Networking
+        |               |               |
+        +---------------+---------------+
+                        |
+                    Security
+                        |
+             Common semantic model
+
+Security syntax must therefore reuse the language's canonical:
+
+names;
+
+qualified names;
+
+attributes;
+
+types;
+
+expressions;
+
+effects;
+
+capabilities;
+
+requirements;
+
+constraints;
+
+resources;
+
+source spans;
+
+diagnostics.
+
+
+Security MUST NOT create incompatible replacements for these concepts.
+
+
+---
+
+4. Authority Model
+
+The security directory has exactly one responsibility:
+
+> Own security-domain syntax and its composition contracts.
+
+
+
+The authority hierarchy is:
+
+language specification
+        ↓
+canonical lexical specification
+        ↓
+canonical Zamani grammar
+        ↓
+security grammar components
+        ↓
+frontend AST
+        ↓
+semantic security model
+        ↓
+canonical/domain IR
+        ↓
+compiler
+        ↓
+runtime
+        ↓
+target realization
+
+The following files are NOT competing authorities:
+
+grammar/Zamani.g4
+
+Canonical grammar composition root.
+
+grammar/security/security.g4
+
+Canonical security composition root.
+
+grammar/security/*.g4
+
+Specialized security syntax owners.
+
+grammar/grammar.md
+
+Implementation-conformance documentation.
+
+grammar/Zamani-Grammar.md
+
+Historical/extended design material and proposal source.
+
+Nothing in Zamani-Grammar.md silently becomes legal syntax.
+
+
+---
+
+5. Directory Ownership
+
+The current repository contains the following security files.
 
 grammar/security/
-
-Purpose
-
-This directory defines the source-level security language of Zamani.
-
-It describes portable security intent, identity relationships, authorization intent, cryptographic requirements, privacy requirements, trust relationships, security constraints, and security metadata.
-
-It does not implement security.
-
-The security grammar is therefore a syntax and language-contract layer between Zamani source code and downstream semantic analysis.
-
----
-
-1. Architectural Principle
-
-Zamani security follows the same fundamental rule as the rest of the language:
-
-«Zamani describes computation, intent, requirements, capabilities, constraints, and semantics—not the accidental characteristics of the machine currently executing the program.»
-
-Security declarations must therefore survive changes in:
-
-- CPU architecture;
-- CPU count;
-- core count;
-- thread count;
-- memory capacity;
-- GPU availability;
-- FPGA availability;
-- ASIC implementation;
-- quantum processor;
-- quantum simulator;
-- QPU topology;
-- distributed topology;
-- network topology;
-- cloud provider;
-- embedded platform;
-- operating system;
-- deployment location;
-- execution scale;
-- future hardware.
-
-This is a fundamental requirement for:
-
-Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever (POCO-REAF).
-
----
-
-2. Scope
-
-This directory owns source-level security syntax for:
-
-- identities;
-- principals;
-- principal groups;
-- authority references;
-- identity bindings;
-- capabilities;
-- permissions;
-- authorization intent;
-- cryptographic intent;
-- privacy intent;
-- trust relationships;
-- security constraints;
-- security classifications;
-- security requirements;
-- security preferences;
-- security metadata;
-- security-domain composition.
-
-It may describe security requirements for:
-
-- classical computation;
-- quantum computation;
-- hybrid computation;
-- HDL;
-- hardware;
-- accelerators;
-- distributed computation;
-- networking;
-- data;
-- AI;
-- embedded systems;
-- cloud execution;
-- future computational substrates.
-
----
-
-3. Non-Goals
-
-The grammar does not implement:
-
-- authentication;
-- authorization enforcement;
-- cryptographic execution;
-- key generation;
-- key storage;
-- secret storage;
-- password storage;
-- credential storage;
-- certificate validation;
-- trust evaluation;
-- hardware attestation;
-- secure enclave operation;
-- TPM/HSM operation;
-- operating-system security;
-- network security enforcement;
-- firewall operation;
-- intrusion detection;
-- malware detection;
-- policy execution;
-- capability discovery;
-- hardware discovery;
-- resource allocation;
-- backend selection;
-- quantum error correction;
-- quantum noise modeling;
-- ZQN;
-- quantum routing;
-- quantum scheduling;
-- optimization;
-- runtime recovery;
-- resilience actions.
-
-Those belong to downstream systems.
-
----
-
-4. Directory Ownership
-
-The security directory is divided into specialized ownership boundaries.
-
-security/
 ├── README.md
-├── security.g4
-├── permissions.g4
+├── authorization.g4
 ├── capabilities.g4
-├── identifiers.g4
 ├── cryptography.g4
+├── hashes.g4
+├── identifiers.g4
+├── identity.g4
+├── key-management.g4
+├── permissions.g4
+├── policies.g4
 ├── privacy.g4
+├── provenance.g4
+├── secrets.g4
+├── secure-computation.g4
+├── security-constraints.g4
+├── security.g4
+├── signatures.g4
 ├── trust.g4
-└── security-constraints.g4
+└── zero-knowledge.g4
 
-The exact files present in the repository are authoritative for implementation. This README defines their intended contracts.
+Each file MUST have exactly one primary owner.
 
----
+No file may silently become a second owner of another file's syntax.
 
-5. Composition Root
-
-"security.g4"
-
-"security.g4" is the security composition root.
-
-It must compose, rather than duplicate, the specialized security grammars.
-
-Its ownership is:
-
-- security parser entry points;
-- security declaration aggregation;
-- security-wide composition;
-- security-wide attachment syntax;
-- integration of specialized security grammars;
-- security-domain boundaries.
-
-It must not reimplement:
-
-- identities;
-- capabilities;
-- permissions;
-- cryptography;
-- privacy;
-- trust;
-- security constraints.
-
-The existing composition root already establishes this ownership model and imports the core, type, expression, effect, and specialized security grammar layers.
 
 ---
 
-6. Identity Ownership
+6. security.g4 — Security Composition Root
 
-"identifiers.g4"
+Owns
 
-This file owns source-level:
+security.g4 owns:
 
-- identities;
-- principals;
-- principal groups;
-- identity references;
-- authority references;
-- identity aliases;
-- identity attributes;
-- identity bindings;
-- identity metadata;
-- identity scope;
-- provenance references.
+security parser composition;
 
-It does not authenticate anything.
+security declaration dispatch;
 
-The existing identity grammar explicitly establishes this boundary and keeps authentication, credentials, authorization, trust evaluation, quantum IR, QEC, ZQN, scheduling, routing, and resource allocation outside identity syntax.
+security-file entry;
 
-Important naming rule
+security-domain aggregation;
 
-The file path may be:
+specialized security grammar integration;
 
-grammar/security/identifiers.g4
+stable security parser entry points.
 
-while its parser grammar may be:
 
-parser grammar Identities;
+Does not own
 
-This distinction must be documented and preserved consistently until a deliberate rename/migration is performed.
+It MUST NOT redefine:
 
----
+identities;
 
-7. Capability Ownership
+capabilities;
 
-"capabilities.g4"
+permissions;
 
-This file owns security-specific capability declarations.
+authorization policies;
 
-A capability expresses an authority or permitted operation abstractly.
+cryptography;
 
-Examples include conceptual properties such as:
+hashes;
 
-security::compute
-security::protected_memory
-security::trusted_execution
-security::secure_channel
-security::cryptographic_operation
-security::quantum_execution
+signatures;
 
-These are semantic names, not physical implementations.
+privacy;
 
-A capability must not imply:
+trust;
 
-device = X
-cpu_count = N
-gpu_count = N
-qubit_count = N
-node_count = N
+provenance;
 
-Capability discovery belongs downstream.
+secure computation;
 
-Generic capability syntax remains owned by:
+key management;
 
-grammar/core/capabilities.g4
+zero knowledge;
 
-Security capabilities may specialize or reference the generic capability system but must not create an incompatible second capability model.
+security constraints.
+
+
+The current security.g4 already establishes this composition-root architecture and imports:
+
+Core
+Types
+Expressions
+Effects
+Identities
+SecurityCapabilities
+Permissions
+Cryptography
+Privacy
+Trust
+SecurityConstraints
+
+This composition must remain the single security aggregation boundary.
+
 
 ---
 
-8. Permission Ownership
+7. Identity Ownership
 
-"permissions.g4"
+The repository contains both:
 
-This file owns:
+security/identifiers.g4
+security/identity.g4
 
-- permission declarations;
-- authorization subjects;
-- authorization actions;
-- authorization resources;
-- grants;
-- denials;
-- delegation;
-- attenuation;
-- permission scope;
-- authorization bindings;
-- policy references.
+These MUST NOT become competing identity grammars.
 
-It does not enforce permissions.
+identifiers.g4
+
+This is the authoritative owner of reusable identity/principal syntax where that contract is defined.
+
+It may own:
+
+identity references;
+
+principal references;
+
+authority references;
+
+identity names;
+
+principal groups;
+
+identity bindings;
+
+identity metadata.
+
+
+identity.g4
+
+This file MUST remain an integration façade or compatibility layer if it is retained.
+
+It MUST NOT independently redefine the same identity syntax.
+
+The desired architecture is:
+
+identifiers.g4
+      ↓
+identity.g4 compatibility/integration façade
+      ↓
+security.g4
+
+or, if the existing composition already consumes the Identities grammar:
+
+identifiers.g4
+      ↓
+Identities
+      ↓
+security.g4
+
+Any migration from the current arrangement must preserve source compatibility and must not create duplicate rules.
+
+
+---
+
+8. authorization.g4
+
+Owns authorization-domain syntax.
+
+It may represent:
+
+authorization relationships;
+
+authorization decisions as source intent;
+
+subjects;
+
+actions;
+
+resources;
+
+conditions;
+
+authorization policy references.
+
+
+It MUST NOT perform authorization.
+
+Runtime authorization belongs downstream.
+
+Authorization must remain independent from trust.
+
+Conceptually:
+
+identity
+    +
+trust
+    +
+capability
+    +
+permission
+    +
+policy
+    ↓
+semantic authorization analysis
+
+
+---
+
+9. permissions.g4
+
+Owns permission-oriented syntax.
+
+It may represent:
+
+permissions;
+
+grants;
+
+denials;
+
+delegation;
+
+attenuation;
+
+permission scope;
+
+permission references;
+
+permission bindings.
+
+
+It MUST NOT implement enforcement.
 
 For example:
 
@@ -281,135 +542,401 @@ grant principal::operator permission::execute
 
 is source-level intent.
 
-It does not itself execute an authorization check.
+It does not itself authorize execution.
 
-Runtime authorization belongs to security infrastructure.
-
----
-
-9. Cryptography Ownership
-
-"cryptography.g4"
-
-This file owns cryptographic intent, not cryptographic implementation.
-
-It may express:
-
-- algorithm requirements;
-- cryptographic properties;
-- security-strength requirements;
-- key-reference intent;
-- signature requirements;
-- encryption requirements;
-- hashing requirements;
-- authentication requirements;
-- confidentiality requirements;
-- integrity requirements;
-- post-quantum requirements;
-- cryptographic constraints;
-- cryptographic preferences.
-
-The grammar must remain open to future algorithms.
-
-Therefore it must not make the language permanently dependent on a closed enumeration such as:
-
-AES
-RSA
-SHA256
-TLS
-ML-KEM
-ML-DSA
-
-A standard or mechanism may be represented by an extensible qualified name.
-
-For example:
-
-crypto::post_quantum
-crypto::authenticated_encryption
-future::cryptography::mechanism
-
-The actual implementation is selected downstream.
 
 ---
 
-10. Privacy Ownership
+10. capabilities.g4
 
-"privacy.g4"
+Owns security-specific capability syntax.
 
-This file owns source-level privacy intent.
-
-It may express:
-
-- privacy policies;
-- privacy requirements;
-- privacy constraints;
-- privacy preferences;
-- data classifications;
-- processing purposes;
-- retention requirements;
-- disclosure restrictions;
-- provenance-related privacy requirements;
-- data handling intent.
-
-It must not implement:
-
-- data deletion;
-- anonymization;
-- encryption;
-- access control;
-- storage enforcement;
-- network filtering.
-
-Those are downstream responsibilities.
-
-The existing repository already treats privacy as a distinct security grammar rather than folding it into identity or authorization.
-
----
-
-11. Trust Ownership
-
-"trust.g4"
-
-This file owns source-level descriptions of:
-
-- trust relationships;
-- trust requirements;
-- trust assertions;
-- trust authorities;
-- trust domains;
-- trust preferences;
-- trust references.
-
-It does not determine whether a trust relationship is actually valid.
-
-Trust evaluation requires runtime/environmental evidence and therefore belongs downstream.
-
-The existing trust grammar explicitly separates trust relationships from credential storage, certificate-chain validation, and trust-store implementation.
-
----
-
-12. Security Constraint Ownership
-
-"security-constraints.g4"
-
-This file owns security-specific constraints that cannot appropriately live in the generic constraint grammar.
+Capabilities MUST remain semantic and open-ended.
 
 Examples:
 
-requires confidentiality
-requires integrity
-requires isolation
-requires authenticated execution
-requires protected storage
-requires trusted execution
+security::trusted_execution
+security::protected_memory
+security::secure_channel
+security::attestation
+quantum::secure_execution
+hardware::root_of_trust
 
-Constraints must express requirements rather than implementation choices.
+These names describe capabilities.
+
+They do not select hardware.
+
+Invalid:
+
+use_gpu_0
+use_qpu_3
+use_cpu_7
+
+as the fundamental security capability model.
+
+Capability realization belongs downstream.
+
+Generic capability syntax remains owned by the canonical generic capability system.
+
+
+---
+
+11. cryptography.g4
+
+Owns cryptographic intent.
+
+It may describe:
+
+cryptographic requirements;
+
+security properties;
+
+algorithm references;
+
+cryptographic mechanisms;
+
+encryption intent;
+
+authentication intent;
+
+integrity intent;
+
+confidentiality intent;
+
+post-quantum intent;
+
+cryptographic constraints;
+
+cryptographic preferences.
+
+
+It MUST remain open-world.
+
+Do not permanently enumerate algorithms in grammar rules.
+
+The language must remain usable when new cryptographic mechanisms appear.
+
+For example, symbolic references may represent:
+
+crypto::authenticated_encryption
+crypto::post_quantum
+future::cryptography::mechanism
+
+Actual implementation selection belongs downstream.
+
+
+---
+
+12. hashes.g4
+
+Owns hash-related syntax.
+
+It must describe hash intent/reference rather than implement hashing.
+
+It MUST NOT hard-code a permanently closed list of algorithms as the only legal language constructs.
+
+Semantic analysis determines:
+
+whether the referenced mechanism exists;
+
+whether it satisfies requirements;
+
+whether it is supported by a target;
+
+whether it meets required security properties.
+
+
+
+---
+
+13. signatures.g4
+
+Owns digital-signature intent.
+
+It may express:
+
+signing requirements;
+
+verification requirements;
+
+signature references;
+
+signing identities;
+
+verification identities;
+
+signature properties.
+
+
+It does not perform signing or verification.
+
+Actual cryptographic execution belongs to downstream security infrastructure.
+
+
+---
+
+14. key-management.g4
+
+Owns source-level key-management intent.
+
+It may describe:
+
+symbolic key references;
+
+key lifecycle intent;
+
+key rotation requirements;
+
+key usage constraints;
+
+key access requirements;
+
+key provenance;
+
+key policy references.
+
+
+It MUST NOT become a secret store.
+
+Private key material belongs in secure key-management infrastructure.
+
+
+---
+
+15. secrets.g4
+
+This file defines the boundary around secret references.
+
+Zamani source MUST NOT require permanent embedding of:
+
+passwords;
+
+private keys;
+
+secret keys;
+
+bearer tokens;
+
+API secrets;
+
+session tokens;
+
+recovery secrets;
+
+authentication secrets.
+
+
+Source may reference an abstract secret:
+
+secret::deployment_key
+credential::runtime_identity
+key::application_signing_key
+
+but actual secret material belongs outside ordinary source code.
+
+Parsing a secret reference does not expose or retrieve the secret.
+
+
+---
+
+16. privacy.g4
+
+Owns privacy intent.
+
+It may represent:
+
+privacy policies;
+
+processing purposes;
+
+disclosure restrictions;
+
+retention requirements;
+
+data classifications;
+
+privacy constraints;
+
+privacy preferences;
+
+privacy obligations.
+
+
+It MUST NOT implement:
+
+encryption;
+
+anonymization;
+
+deletion;
+
+access enforcement;
+
+storage enforcement;
+
+network filtering.
+
+
+Those are downstream responsibilities.
+
+
+---
+
+17. provenance.g4
+
+Owns source-level provenance intent.
+
+It may describe:
+
+origin;
+
+lineage;
+
+provenance references;
+
+evidence references;
+
+transformation history;
+
+source attribution;
+
+integrity metadata.
+
+
+Provenance must remain compatible with:
+
+compilation;
+
+optimization;
+
+quantum transformations;
+
+hardware lowering;
+
+distributed execution;
+
+reproducible builds.
+
+
+The grammar records intent/structure; it does not maintain runtime provenance databases.
+
+
+---
+
+18. secure-computation.g4
+
+Owns syntax for secure-computation intent.
+
+This may cover concepts such as:
+
+protected computation;
+
+isolated execution;
+
+secure data processing;
+
+confidential computation;
+
+multi-party computation intent;
+
+protected execution domains;
+
+computation confidentiality/integrity requirements.
+
+
+It MUST remain target-independent.
+
+It must not hard-code a specific:
+
+enclave;
+
+CPU;
+
+accelerator;
+
+cloud provider;
+
+cryptographic implementation.
+
+
+
+---
+
+19. zero-knowledge.g4
+
+Owns source syntax for zero-knowledge/proof-related intent.
+
+It must describe semantic intent and references.
+
+It does not implement:
+
+proving;
+
+verification;
+
+circuits;
+
+proving systems;
+
+cryptographic primitives.
+
+
+Specific proof systems belong downstream.
+
+The grammar must remain extensible to future proof technologies.
+
+
+---
+
+20. policies.g4
+
+Owns reusable security-policy syntax.
+
+Policies may express:
+
+rules;
+
+conditions;
+
+obligations;
+
+requirements;
+
+permissions;
+
+security relationships;
+
+policy composition.
+
+
+Policy syntax must remain distinct from policy evaluation.
+
+The compiler/runtime/security engine evaluates policy semantics after parsing.
+
+
+---
+
+21. security-constraints.g4
+
+Owns security-specific constraints that cannot reasonably belong to the generic constraint system.
+
+Examples include:
+
+requires security::confidentiality
+requires security::integrity
+requires security::isolation
+requires security::trusted_execution
+requires security::protected_memory
+
+A security constraint is a semantic requirement.
+
+It is not a hardware selection.
 
 For example:
 
 requires security::trusted_execution
 
-must not mean:
+does not mean:
 
 use Intel SGX
 
@@ -421,32 +948,1059 @@ or:
 
 use TPM X
 
-Those are implementation possibilities downstream.
+Target realization remains downstream.
+
 
 ---
 
-13. Generic Core Integration
+22. Trust Ownership
 
-Security grammar depends on common language infrastructure.
+Trust syntax belongs exclusively to:
 
-The security grammars must reuse the canonical definitions of:
+grammar/security/trust.g4
 
-names
-qualified names
-paths
-attributes
-metadata
-types
-expressions
-capabilities
-requirements
-constraints
+Trust may express:
 
-from the core grammar system.
+trust relationships;
 
-Security must not create alternative definitions of these constructs.
+trust requirements;
 
-The dependency direction is:
+trust preferences;
+
+trust assertions;
+
+trust references;
+
+trust conditions;
+
+trust scope;
+
+trust evidence references;
+
+trust properties;
+
+trust metadata.
+
+
+Parsing a trust declaration MUST NOT grant trust.
+
+Trust evaluation requires downstream:
+
+identity resolution;
+
+credential validation;
+
+attestation;
+
+evidence validation;
+
+policy evaluation;
+
+capability analysis;
+
+runtime/environmental information.
+
+
+
+---
+
+23. Trust and Identity Are Different
+
+Identity answers:
+
+Who or what is this?
+
+Trust answers:
+
+Under what relationship or security assumption may this entity be relied upon?
+
+Authorization answers:
+
+What is this entity permitted to do?
+
+Capability answers:
+
+What can this environment or entity provide?
+
+These concepts MUST NOT be collapsed into one grammar.
+
+
+---
+
+24. Security and Effects
+
+Security is related to effects but is not the same concept.
+
+The architecture is:
+
+security intent
+    ≠
+security effect
+
+A security requirement might say:
+
+requires security::trusted_execution
+
+while an effect system might describe that a function:
+
+accesses protected resource
+
+The semantic layer may correlate them.
+
+Neither grammar should duplicate the other.
+
+
+---
+
+25. Security and Resources
+
+Security requirements must integrate with:
+
+grammar/resources/
+
+Security may require capabilities/resources such as:
+
+security::protected_memory
+security::secure_channel
+security::trusted_execution
+
+Resource analysis determines whether the selected environment can satisfy them.
+
+Security MUST NOT define limits such as:
+
+MAX_SECURE_NODES
+MAX_IDENTITIES
+MAX_KEYS
+MAX_POLICIES
+MAX_TRUST_RELATIONSHIPS
+
+There is no language-level security capacity ceiling.
+
+
+---
+
+26. Security and Hardware
+
+Security may apply to:
+
+CPU;
+
+GPU;
+
+FPGA;
+
+ASIC;
+
+accelerator;
+
+QPU;
+
+embedded device;
+
+distributed node;
+
+future computational substrate.
+
+
+But security syntax MUST NOT select a physical device.
+
+The correct dependency is:
+
+security requirement
+        ↓
+capability analysis
+        ↓
+resource analysis
+        ↓
+target selection
+        ↓
+deployment
+        ↓
+runtime enforcement
+
+not:
+
+security grammar
+        ↓
+specific hardware
+
+
+---
+
+27. Security and Quantum Computing
+
+Security is allowed to constrain quantum execution.
+
+It may express requirements involving:
+
+security::trusted_execution
+quantum::secure_execution
+quantum::measurement_integrity
+quantum::data_confidentiality
+hardware::attestation
+
+But security MUST NOT define:
+
+QubitId;
+
+PhysicalQubitId;
+
+gate enumerations;
+
+topology;
+
+calibration;
+
+pulse data;
+
+QEC codes;
+
+noise models;
+
+routing;
+
+scheduling.
+
+
+The canonical quantum semantic boundary remains:
+
+quantum::ir
+
+The architecture is:
+
+Zamani source
+      ↓
+security syntax
+      ↓
+frontend AST
+      ↓
+security semantic model
+      ↓
+quantum semantic analysis
+      ↓
+quantum::ir
+      ↓
+optimization
+      ↓
+QEC
+      ↓
+ZQN
+      ↓
+routing
+      ↓
+scheduling
+      ↓
+HAL
+      ↓
+QPU
+
+No second quantum IR may be created in grammar/security/.
+
+
+---
+
+28. Security and Classical Computing
+
+Security must work identically across:
+
+tiny embedded CPU
+single-core CPU
+multicore CPU
+many-core CPU
+GPU
+accelerator
+HPC
+distributed system
+cloud
+future processor
+
+The source security semantics remain target-independent.
+
+
+---
+
+29. Security and HDL
+
+Security syntax may describe requirements for HDL/hardware designs.
+
+For example, a hardware/software design may require:
+
+security::isolated_memory
+security::secure_channel
+security::integrity
+security::trusted_execution
+
+The security grammar does not define the HDL implementation.
+
+HDL remains owned by:
+
+grammar/hdl/
+
+Hardware realization remains owned by:
+
+grammar/hardware/
+
+
+---
+
+30. Security and Distributed Computing
+
+Security may apply to arbitrarily many:
+
+processes;
+
+services;
+
+nodes;
+
+regions;
+
+clusters;
+
+participants;
+
+communication channels.
+
+
+There is no language-level maximum.
+
+Do not encode:
+
+MAX_NODES
+MAX_SERVICES
+MAX_PRINCIPALS
+
+as universal language limits.
+
+Physical deployment size belongs to resource/deployment analysis.
+
+
+---
+
+31. Security and Networking
+
+Security may constrain:
+
+channels;
+
+endpoints;
+
+authentication;
+
+confidentiality;
+
+integrity;
+
+authorization;
+
+trusted communication;
+
+secure transport.
+
+
+Networking syntax remains owned by:
+
+grammar/networking/
+
+Security MUST NOT become a second networking grammar.
+
+
+---
+
+32. Open-World Security
+
+Security must remain open to future technologies.
+
+The grammar MUST NOT permanently enumerate:
+
+vendors;
+
+cloud providers;
+
+identity providers;
+
+trust anchors;
+
+cryptographic mechanisms;
+
+enclaves;
+
+secure processors;
+
+proof systems;
+
+authentication systems;
+
+future security technologies.
+
+
+Prefer extensible semantic references such as:
+
+security::property
+vendor::security::mechanism
+future::security::mechanism
+quantum::security::property
+hardware::security::property
+
+The semantic registry/implementation determines meaning.
+
+
+---
+
+33. No Artificial Security Limits
+
+The grammar imposes no artificial limits on:
+
+identities;
+
+principals;
+
+groups;
+
+authorities;
+
+permissions;
+
+policies;
+
+capabilities;
+
+trust relationships;
+
+credentials references;
+
+security domains;
+
+declarations;
+
+metadata;
+
+evidence references;
+
+security requirements.
+
+
+The following concepts are forbidden as universal language limits:
+
+MAX_IDENTITIES
+MAX_PRINCIPALS
+MAX_POLICIES
+MAX_PERMISSIONS
+MAX_CAPABILITIES
+MAX_KEYS
+MAX_TRUST_RELATIONSHIPS
+MAX_SECURITY_DOMAINS
+MAX_NODES
+MAX_DEVICES
+MAX_QUBITS
+MAX_CPUS
+MAX_GPUS
+MAX_FPGAS
+MAX_MEMORY
+MAX_THREADS
+
+Program-level numeric values remain valid.
+
+For example:
+
+required_threshold = 1024
+
+is program data.
+
+A grammar-level rule such as:
+
+security supports at most 1024 principals
+
+is prohibited.
+
+
+---
+
+34. "Infinity" and Scalability
+
+Zamani cannot promise literal infinite execution on finite hardware.
+
+The production guarantee is:
+
+> The security language introduces no artificial finite ceiling where the underlying semantic concept is unbounded.
+
+
+
+Therefore the same security language must support:
+
+one identity
+
+through:
+
+large distributed security domains
+
+subject only to:
+
+available memory;
+
+compiler resources;
+
+runtime resources;
+
+target capabilities;
+
+deployment constraints;
+
+explicit operational policy.
+
+
+These limits MUST NOT become language semantics.
+
+
+---
+
+35. Requirements, Constraints, Capabilities, Preferences
+
+Security must distinguish:
+
+Requirement
+
+Must be satisfied.
+
+requires security::integrity
+
+Constraint
+
+Limits legal realizations.
+
+requires security::isolated_execution
+
+Capability
+
+Describes what an environment can provide.
+
+security::trusted_execution
+
+Preference
+
+Requests a preferred realization without making it mandatory.
+
+prefer security::hardware_attestation
+
+These concepts MUST NOT be conflated.
+
+A preference must never silently become a mandatory requirement.
+
+A requirement must never silently become a preference.
+
+
+---
+
+36. Source-Level Security vs Enforcement
+
+The parser performs only syntax recognition.
+
+The complete pipeline is:
+
+Source
+  ↓
+Lexer
+  ↓
+Parser
+  ↓
+Frontend AST
+  ↓
+Name resolution
+  ↓
+Type analysis
+  ↓
+Effect analysis
+  ↓
+Security semantic analysis
+  ↓
+Capability/resource analysis
+  ↓
+Canonical semantic representation
+  ↓
+IR
+  ↓
+Compiler
+  ↓
+Runtime
+  ↓
+Security enforcement
+
+Parsing successfully does not mean:
+
+the user is authenticated;
+
+the entity is trusted;
+
+a capability exists;
+
+a permission is granted;
+
+a credential is valid;
+
+a target is secure;
+
+a resource is available.
+
+
+
+---
+
+37. AST Contract
+
+Every security construct must have a predetermined AST/semantic destination before the grammar is considered complete.
+
+The parser must preserve:
+
+construct kind;
+
+source ordering where meaningful;
+
+identifiers;
+
+qualified names;
+
+references;
+
+expressions;
+
+attributes;
+
+policy structure;
+
+requirement structure;
+
+conditions;
+
+metadata;
+
+source spans.
+
+
+Possible semantic concepts include:
+
+SecurityDomain
+Identity
+Principal
+Authority
+Capability
+Permission
+AuthorizationPolicy
+CryptographicIntent
+HashIntent
+SignatureIntent
+KeyManagementIntent
+PrivacyPolicy
+Provenance
+SecureComputationIntent
+TrustRelationship
+TrustRequirement
+TrustPreference
+TrustAssertion
+SecurityConstraint
+SecurityMetadata
+
+These are semantic/AST contracts.
+
+The grammar MUST NOT instantiate runtime security objects.
+
+
+---
+
+38. Semantic Contract
+
+Semantic analysis is responsible for:
+
+name resolution;
+
+identity resolution;
+
+principal resolution;
+
+authority resolution;
+
+capability validation;
+
+permission validation;
+
+policy validation;
+
+trust analysis;
+
+requirement validation;
+
+constraint validation;
+
+cryptographic feasibility;
+
+privacy compatibility;
+
+provenance consistency;
+
+security-effect compatibility;
+
+resource/capability satisfiability;
+
+target compatibility;
+
+conflict detection.
+
+
+The grammar performs none of these operations.
+
+
+---
+
+39. IR Contract
+
+Security MUST NOT create an independent universal execution IR.
+
+Validated security information may become:
+
+semantic metadata;
+
+security constraints;
+
+capability requirements;
+
+resource requirements;
+
+policy metadata;
+
+provenance metadata;
+
+verification metadata;
+
+deployment metadata.
+
+
+It may accompany:
+
+classical IR
+quantum::ir
+HDL/hardware IR
+distributed representations
+deployment representations
+
+The exact representation is owned by the downstream semantic/IR architecture.
+
+The security grammar itself does not define an IR.
+
+
+---
+
+40. Canonical Quantum IR Boundary
+
+The canonical quantum boundary remains:
+
+quantum::ir
+
+Security MUST NOT create:
+
+security::quantum_ir
+quantum_security_ir
+trust_quantum_ir
+
+or another parallel quantum representation.
+
+Security metadata may accompany canonical quantum semantics.
+
+
+---
+
+41. Compiler Contract
+
+The compiler must consume semantic security information rather than infer security meaning from syntax.
+
+Compiler transformations MUST preserve mandatory security semantics.
+
+An optimization may change:
+
+instruction selection;
+
+memory layout;
+
+execution schedule;
+
+physical mapping;
+
+device realization;
+
+communication strategy.
+
+
+It MUST NOT silently remove a mandatory security requirement.
+
+
+---
+
+42. Runtime Contract
+
+Runtime systems may perform:
+
+authentication;
+
+authorization;
+
+trust verification;
+
+credential resolution;
+
+attestation;
+
+capability verification;
+
+policy evaluation;
+
+secure-environment verification;
+
+auditing;
+
+secure resource acquisition.
+
+
+The parser MUST NOT perform these operations.
+
+
+---
+
+43. Resilience Contract
+
+Security metadata must survive:
+
+retry;
+
+restart;
+
+rollback;
+
+checkpoint restoration;
+
+remapping;
+
+rerouting;
+
+rescheduling;
+
+recompilation;
+
+backend changes;
+
+failover;
+
+quarantine;
+
+recovery.
+
+
+A recovery transformation that violates a mandatory security requirement must be rejected downstream.
+
+Security does not own resilience orchestration.
+
+
+---
+
+44. QEC and ZQN Boundary
+
+Security MUST NOT implement quantum error correction.
+
+QEC owns:
+
+error correction;
+
+logical protection;
+
+syndrome processing;
+
+decoding;
+
+correction strategies.
+
+
+ZQN owns quantum fault/noise semantics.
+
+Security may impose security properties over those systems but does not redefine them.
+
+The separation remains:
+
+Security
+   ↓
+security semantics
+
+Quantum
+   ↓
+quantum::ir
+
+QEC
+   ↓
+error correction
+
+ZQN
+   ↓
+noise/fault semantics
+
+Routing
+   ↓
+physical realization
+
+Scheduling
+   ↓
+execution ordering
+
+HAL
+   ↓
+target interface
+
+
+---
+
+45. Determinism
+
+Security parsing must be deterministic.
+
+The grammar MUST contain:
+
+no Rust actions;
+
+no embedded executable code;
+
+no semantic predicates requiring runtime state;
+
+no filesystem access;
+
+no network access;
+
+no randomness;
+
+no hardware discovery;
+
+no credential lookup;
+
+no secret lookup;
+
+no policy evaluation;
+
+no environment inspection.
+
+
+Given the same:
+
+source tokens
++
+grammar version
++
+dialect configuration
+
+the parse result must be deterministic.
+
+
+---
+
+46. Rust Safety Contract
+
+The security grammar contains no Rust implementation.
+
+The generated/frontend Rust implementation MUST:
+
+target Rust 1.97;
+
+remain compatible with Rust 1.97.1;
+
+use Rust 2021;
+
+contain no unsafe;
+
+preserve source spans;
+
+preserve deterministic behavior;
+
+avoid target-specific assumptions.
+
+
+Where applicable, Rust crates should enforce:
+
+#![forbid(unsafe_code)]
+
+The ANTLR grammar itself must remain declarative.
+
+
+---
+
+47. ANTLR Contract
+
+Security grammars are parser grammar components.
+
+They MUST:
+
+use the canonical lexer vocabulary;
+
+reuse canonical imported parser grammars;
+
+avoid duplicate lexer tokens;
+
+avoid embedded Rust actions;
+
+avoid semantic predicates;
+
+avoid runtime behavior;
+
+expose stable public rules where composition requires them.
+
+
+security.g4 remains the security composition root.
+
+trust.g4 remains the trust syntax owner.
+
+No specialized security grammar may silently become another composition root.
+
+
+---
+
+48. Attributes Integration
+
+Security constructs should reuse the canonical attribute grammar.
+
+The current core attribute contract provides:
+
+attribute
+attributeList
+optionalAttributes
+
+and related attribute-value rules.
+
+Security grammars MUST NOT define another generic attribute syntax.
+
+Use the canonical attribute system for metadata such as:
+
+@security::...
+@trust::...
+@privacy::...
+@cryptography::...
+
+The semantic layer decides whether an attribute is:
+
+metadata;
+
+a requirement;
+
+a capability;
+
+a constraint;
+
+a compiler hint;
+
+a security policy annotation.
+
+
+Parsing an attribute does not grant authority.
+
+
+---
+
+49. Generic Core Integration
+
+Security depends on the common grammar foundation.
+
+The intended dependency direction is:
 
 lexer
   ↓
@@ -456,1127 +2010,274 @@ types
   ↓
 expressions
   ↓
+effects/resources
+  ↓
 security
 
-not:
+Security MUST NOT create cycles by redefining core constructs.
 
-security → core → security
+Security-specific concepts may reference generic concepts.
 
----
+Generic concepts remain owned by their canonical grammars.
 
-14. Effects Integration
-
-Security is related to effects but is not equivalent to effects.
-
-The existing repository contains:
-
-grammar/effects/security.g4
-
-which provides security-related effect syntax.
-
-The distinction must remain:
-
-security grammar
-    =
-security intent / declarations / policy semantics
-
-effects/security.g4
-    =
-security-related effects of computation
-
-For example:
-
-security requirement
-
-and:
-
-function has security-sensitive effect
-
-are different semantic concepts.
-
-They may reference one another through canonical semantic analysis, but neither grammar should duplicate the other.
 
 ---
 
-15. Resource Integration
+50. Cross-Domain Integration
 
-Security must integrate with:
+Security must integrate with every Zamani domain without becoming the owner of those domains.
 
-grammar/resources/
+Classical
 
-without taking ownership of resource allocation.
+Security metadata accompanies classical semantics.
 
-Security may state:
+Quantum
 
-requires secure_channel
-requires isolated_execution
-requires protected_memory
+Security metadata accompanies quantum::ir.
 
-Resource analysis determines whether an execution environment can satisfy those requirements.
+HDL
 
-Security grammar must never introduce:
+Security requirements accompany hardware intent.
 
-MAX_SECURE_NODES
-MAX_SECURITY_DOMAINS
-MAX_IDENTITIES
-MAX_KEYS
-MAX_POLICIES
+Hardware
 
-or equivalent source-level capacity limits.
+Security capabilities are analyzed against target capabilities.
 
----
+AI
 
-16. Hardware Integration
+Model/data/training security remains semantic metadata.
 
-Security may apply to:
+Data
 
-- CPU;
-- GPU;
-- FPGA;
-- ASIC;
-- accelerator;
-- quantum processor;
-- embedded device;
-- distributed node;
-- future hardware.
+Privacy, provenance, integrity and access intent accompany data semantics.
 
-But security grammar must not own hardware descriptions.
+Networking
 
-The dependency remains:
+Security requirements constrain communication semantics.
 
-security intent
-      ↓
-semantic security requirements
-      ↓
-hardware capability analysis
-      ↓
-target selection
-      ↓
-deployment
+Distributed
 
-Security must not reverse that relationship.
+Trust, identity, authorization and secure communication apply across arbitrary participants.
+
+Hybrid
+
+Security metadata survives classical/quantum boundaries.
+
+Interoperability
+
+Security requirements must survive foreign-language and format boundaries where semantically representable.
+
 
 ---
 
-17. Quantum Integration
+51. Dialects
 
-Security can protect quantum computation, but it must never become a quantum IR.
+Security dialects MUST NOT silently create another security language.
 
-The canonical quantum semantic boundary remains:
+A dialect must identify:
 
-quantum::ir
+name
+version
+owner
+syntax extension
+semantic extension
+AST mapping
+IR mapping
+compatibility
+feature status
 
-Security syntax may attach:
+Dialect extensions must integrate through the canonical security composition architecture.
 
-- security requirements;
-- trust requirements;
-- privacy requirements;
-- execution restrictions;
-- cryptographic requirements;
-- provenance metadata;
-
-to quantum computations.
-
-However security must not define:
-
-QubitId
-PhysicalQubitId
-GateKind
-QuantumTopology
-Calibration
-QEC codes
-ZQN fault models
-
-The boundary is:
-
-Zamani security syntax
-        ↓
-security semantic model
-        ↓
-quantum::ir + security metadata
-        ↓
-QEC / ZQN / optimization / routing / scheduling
-
-not:
-
-security grammar → quantum implementation
 
 ---
 
-18. QEC Integration
+52. Interoperability
 
-Security grammar does not own QEC.
+Security syntax may interoperate with external systems such as:
 
-QEC remains responsible for quantum error detection/correction.
+cryptographic formats;
 
-Security may express requirements concerning:
+identity systems;
 
-- trusted execution;
-- protected syndrome information;
-- integrity;
-- confidentiality;
-- authenticated control;
-- provenance.
+authorization systems;
 
-Those requirements may accompany canonical quantum semantics.
+attestation systems;
 
-The grammar must not define QEC algorithms or codes.
+hardware security systems;
 
----
+quantum systems;
 
-19. ZQN Integration
+HDL;
 
-Security grammar does not own quantum noise/fault semantics.
+deployment systems.
 
-ZQN remains responsible for:
 
-- fault descriptions;
-- noise models;
-- fault classification;
-- correlated faults;
-- leakage;
-- loss;
-- erasure;
-- calibration-related noise semantics.
+External representations are interoperability formats.
 
-Security may constrain execution against security requirements, but must not redefine ZQN.
+They are not automatically canonical Zamani semantics.
+
 
 ---
 
-20. Optimization Integration
+53. Diagnostics
 
-Security constraints must survive optimization.
+Security diagnostics must distinguish syntax from semantic/environmental failure.
 
-An optimizer may transform implementation while preserving:
-
-security semantics
-
-Mandatory security requirements must never be silently removed because an optimization pass changes the implementation.
-
-Security grammar itself does not perform optimization.
-
----
-
-21. Routing Integration
-
-Routing may change physical realization.
-
-Security requirements remain semantic.
-
-For example:
-
-requires security::trusted_execution
-
-must survive:
-
-logical program
-→ physical mapping
-→ routing
-
-without becoming a fixed machine identity.
-
-Security grammar does not perform routing.
-
----
-
-22. Scheduling Integration
-
-Scheduling may determine:
-
-- execution order;
-- timing;
-- resource occupancy;
-- synchronization;
-- placement timing.
-
-Security requirements may impose semantic restrictions on scheduling.
-
-The grammar does not schedule operations.
-
-Security metadata must be preserved through scheduling.
-
----
-
-23. Resilience Integration
-
-Security constraints are especially important during recovery.
-
-Resilience may consider security when deciding whether to:
-
-- retry;
-- restart;
-- resume;
-- rollback;
-- remap;
-- reroute;
-- reschedule;
-- recompile;
-- switch backend;
-- quarantine;
-- abort.
-
-A recovery action must not silently violate a mandatory security requirement.
-
-However:
-
-security grammar
-
-does not own recovery.
-
-The resilience subsystem remains the decision/orchestration layer.
-
----
-
-24. Runtime Integration
-
-Runtime systems may evaluate:
-
-- credentials;
-- authorization;
-- trust;
-- attestation;
-- security policy;
-- secure execution availability;
-- capability availability.
-
-The parser never performs those operations.
-
-The correct architecture is:
-
-source
- ↓
-lexer
- ↓
-parser
- ↓
-AST
- ↓
-semantic security analysis
- ↓
-canonical semantic representation
- ↓
-compiler
- ↓
-runtime
- ↓
-actual security enforcement
-
----
-
-25. Secret-Material Boundary
-
-Permanent Zamani source code must not be a secret store.
-
-Security grammar must not introduce syntax intended to contain:
-
-- passwords;
-- private keys;
-- secret keys;
-- bearer tokens;
-- session tokens;
-- API secrets;
-- recovery secrets;
-- authentication secrets;
-- raw credentials.
-
-Source may contain symbolic references such as:
-
-key::application_signing_key
-credential::runtime_identity
-secret::deployment_reference
-
-but actual secret material belongs to secure runtime/key-management infrastructure.
-
-This is a semantic security requirement, not merely a documentation recommendation.
-
----
-
-26. Open-World Security
-
-Security must remain extensible.
-
-Do not design the grammar around a permanently closed list of security mechanisms.
-
-Avoid architectural assumptions such as:
-
-supported_crypto = {AES, RSA, ...}
-
-inside grammar rules.
-
-Instead prefer:
-
-qualifiedName
-
-and semantic registries.
-
-Examples:
-
-security::confidentiality
-security::integrity
-security::isolation
-security::trusted_execution
-future::security::property
-vendor::security::mechanism
-quantum::security::property
-hardware::security::property
-
-The grammar therefore remains usable as security technology evolves.
-
----
-
-27. No Hardware Identity Coupling
-
-Portable security declarations must not require physical machine identities.
-
-Avoid source semantics such as:
-
-use_device("device-123")
-
-as the fundamental security model.
-
-A source program may require:
-
-requires security::trusted_execution
-
-while the target environment chooses an implementation capable of satisfying it.
-
-This is essential for POCO-REAF.
-
----
-
-28. No Fixed Security Capacity
-
-There are no grammar-level limits on:
-
-- identities;
-- principals;
-- groups;
-- authorities;
-- permissions;
-- policies;
-- capabilities;
-- trust relationships;
-- security declarations;
-- cryptographic requirements;
-- privacy rules;
-- security domains.
-
-The only practical limits are imposed by:
-
-- parser implementation resources;
-- compiler resources;
-- memory;
-- execution resources;
-- target constraints;
-- configured operational limits.
-
-Such limits must not become language semantics.
-
----
-
-29. "Infinity" Scalability Interpretation
-
-Zamani cannot literally guarantee infinite execution on finite hardware.
-
-The correct language guarantee is:
-
-«The grammar imposes no artificial finite scalability ceiling where the corresponding concept is semantically unbounded.»
-
-Therefore:
-
-tiny machine
-
-and:
-
-very large distributed system
-
-use the same security language.
-
-Scaling is constrained by available resources and downstream target capabilities, not by arbitrary grammar constants.
-
----
-
-30. AST Contract
-
-The parser must preserve:
-
-- declaration kind;
-- source names;
-- qualified names;
-- source spans;
-- attributes;
-- references;
-- expressions;
-- policy structure;
-- ordering where semantically relevant;
-- explicit source intent.
-
-The parser must not directly construct runtime security objects.
-
-The AST may subsequently represent concepts such as:
-
-SecurityDomain
-Identity
-Principal
-PrincipalGroup
-Capability
-Permission
-AuthorizationPolicy
-CryptographicIntent
-PrivacyPolicy
-TrustRelationship
-SecurityConstraint
-SecurityRequirement
-SecurityPreference
-SecurityMetadata
-
----
-
-31. Semantic Contract
-
-Semantic analysis is responsible for determining:
-
-- whether names resolve;
-- whether identities are unique;
-- whether principals resolve;
-- whether permissions exist;
-- whether capabilities exist;
-- whether references are legal;
-- whether policies conflict;
-- whether trust relationships are meaningful;
-- whether requirements are satisfiable;
-- whether cryptographic requirements are implementable;
-- whether privacy constraints are satisfiable;
-- whether security effects are compatible;
-- whether target capabilities can satisfy security requirements.
-
-Parsing must not make those decisions.
-
----
-
-32. Diagnostics
-
-Security diagnostics must distinguish at least:
+At minimum, downstream diagnostics should be able to distinguish:
 
 syntax error
 unknown security name
 invalid security reference
-invalid identity relationship
-invalid principal relationship
-invalid permission relationship
-invalid capability relationship
-invalid policy structure
+invalid identity reference
+invalid principal reference
+invalid authority reference
+invalid capability reference
+invalid permission
+invalid authorization relationship
+invalid policy
 invalid cryptographic requirement
 invalid privacy requirement
 invalid trust relationship
 invalid security constraint
+invalid provenance relationship
 secret-material violation
-unsupported semantic requirement
-unsatisfied target capability
+unsupported security requirement
+unsatisfied capability
+unsatisfied resource requirement
 security-policy conflict
 security-effect conflict
+target incompatibility
+runtime security failure
 
 Diagnostics should preserve:
 
-- source span;
-- diagnostic code;
-- severity;
-- message;
-- related source locations where applicable;
-- machine-readable category;
-- remediation information where available.
+source span;
 
-The grammar itself should remain free of runtime policy evaluation.
+diagnostic code;
 
----
+severity;
 
-33. Determinism
+primary message;
 
-The grammar must contain:
+related locations;
 
-- no embedded Rust actions;
-- no semantic predicates;
-- no filesystem operations;
-- no network access;
-- no environment inspection;
-- no hardware discovery;
-- no randomness;
-- no runtime calls;
-- no secret access.
+machine-readable classification;
 
-The same source and grammar version must produce the same parse result.
+remediation information where applicable.
+
+
 
 ---
 
-34. Rust Safety Contract
+54. Source Span Contract
 
-The Zamani implementation baseline is:
+Every security construct must remain traceable to source locations.
 
-Rust 1.97 / Rust 1.97.1
+At minimum, source spans must be recoverable for:
 
-Production implementation must use:
+security keyword;
 
-#![forbid(unsafe_code)]
+declaration name;
 
-where applicable to Rust crates/modules.
+subject;
 
-No security grammar implementation may require Rust "unsafe".
+target;
 
-ANTLR grammar files themselves must not embed unsafe or runtime-specific Rust actions.
+authority;
 
----
+capability;
 
-35. ANTLR Contract
+permission;
 
-The grammar must remain a declarative ANTLR grammar.
+requirement;
 
-Do not embed:
+preference;
 
-Rust actions
-Rust semantic predicates
-filesystem calls
-network calls
-hardware calls
-runtime calls
-cryptographic operations
+condition;
 
-into grammar rules.
+policy;
 
-Generated parser code belongs to the build/tooling pipeline and must not become a source-level semantic authority.
+trust relationship;
 
----
+evidence reference;
 
-36. Dependency Graph
+metadata;
 
-The intended dependency direction is:
+attributes.
 
-Lexer
-  ↓
-Core
-  ├── names
-  ├── paths
-  ├── attributes
-  ├── metadata
-  ├── capabilities
-  ├── requirements
-  └── constraints
-        ↓
-Types
-        ↓
-Expressions
-        ↓
-Effects
-        ↓
-Security specialized grammars
-        ├── identifiers.g4
-        ├── capabilities.g4
-        ├── permissions.g4
-        ├── cryptography.g4
-        ├── privacy.g4
-        ├── trust.g4
-        └── security-constraints.g4
-                ↓
-        security.g4
-                ↓
-             AST
-                ↓
-       semantic security analysis
-                ↓
-       canonical semantic model
-          ├── classical IR
-          ├── quantum::ir
-          ├── HDL/hardware IR
-          └── distributed IR
-                ↓
-     optimization / routing / scheduling
-                ↓
-        resilience / compilation
-                ↓
-          runtime / deployment
 
-There must be no reverse dependency from:
+This is required for:
 
-IR → grammar
-runtime → grammar
-hardware → grammar
-QEC → grammar
-ZQN → grammar
+compiler diagnostics;
+
+IDE tooling;
+
+security auditing;
+
+provenance;
+
+migration;
+
+semantic diagnostics.
+
+
 
 ---
 
-37. Integration Matrix
+55. Scalability Contract
 
-Component| Security Grammar Relationship
-Lexer| consumes canonical tokens
-Core| provides names, paths, metadata, capabilities, requirements, constraints
-Types| provides canonical types
-Expressions| provides canonical expressions
-Effects| expresses security-related computational effects
-AST| receives parsed security syntax
-Semantic analysis| interprets security semantics
-Classical IR| receives portable security metadata
-"quantum::ir"| receives security metadata/requirements without duplication
-QEC| downstream consumer where relevant
-ZQN| downstream consumer where relevant
-Optimization| must preserve mandatory security semantics
-Routing| must preserve security requirements
-Scheduling| must preserve security requirements
-Hardware HAL| evaluates actual capability satisfaction
-Resources| evaluates resource feasibility
-Resilience| preserves security during recovery decisions
-Compiler| lowers security intent
-Runtime| enforces/evaluates security
-Deployment| binds abstract security requirements to actual environment
-Tooling| validates, formats, diagnoses and documents syntax
-Tests| verify syntax, boundaries and integration
+The grammar uses unbounded structural repetition where the language concept is naturally unbounded:
 
----
+*
++
 
-38. Ownership Rules
+No arbitrary universal limit may be introduced for:
 
-Every security concept must have exactly one grammar owner.
+security declarations;
 
-For example:
+identities;
 
-Identity
-    → identifiers.g4
+principals;
 
-Capability
-    → capabilities.g4
+policies;
 
-Permission
-    → permissions.g4
+permissions;
 
-Cryptographic intent
-    → cryptography.g4
+capabilities;
 
-Privacy
-    → privacy.g4
+trust relationships;
 
-Trust
-    → trust.g4
+metadata;
 
-Security-specific constraints
-    → security-constraints.g4
+references;
 
-Security composition
-    → security.g4
+domains;
 
-If another file needs one of these concepts, it references the owning rule.
+conditions;
 
-It must not redefine it.
+evidence references.
+
+
+The implementation may have operational resource limits.
+
+Those limits must remain implementation/deployment constraints rather than source-language semantics.
+
 
 ---
 
-39. Cross-Domain Security
+56. Hard-Coding Audit
 
-Security syntax must be usable across:
+Every security grammar change MUST be audited for artificial limits.
 
-classical
-quantum
-hybrid
-HDL
-hardware
-distributed
-AI
-data
-networking
-embedded
-accelerator
-cloud
-
-The security layer should therefore operate as a cross-cutting semantic layer.
-
-Example conceptual architecture:
-
-program
-{
-    security requirement security::confidentiality;
-    security requirement security::integrity;
-
-    quantum computation { ... }
-
-    classical computation { ... }
-
-    hardware module { ... }
-}
-
-The exact surface syntax is determined by the composition grammar and canonical declaration rules, not by duplicating domain-specific syntax inside security files.
-
----
-
-40. Quantum Security Example
-
-Security may express:
-
-requires security::trusted_execution;
-requires security::integrity;
-
-around a quantum computation.
-
-It must not require:
-
-q[0]
-q[1]
-device[0]
-backend[0]
-
-as security semantics.
-
-The quantum program remains portable.
-
----
-
-41. Distributed Security Example
-
-A distributed program may require:
-
-requires security::authenticated_channel;
-requires security::integrity;
-requires security::confidentiality;
-
-without specifying:
-
-node 1
-node 2
-node 3
-
-or a fixed cluster size.
-
-The distributed subsystem determines placement.
-
----
-
-42. Hardware Security Example
-
-A hardware/software co-design may require:
-
-requires security::isolated_execution;
-requires security::protected_memory;
-
-without selecting a specific:
-
-- CPU;
-- FPGA;
-- ASIC;
-- secure enclave;
-- memory controller.
-
-Hardware analysis determines a satisfying implementation.
-
----
-
-43. Cryptographic Portability
-
-Cryptographic requirements should preferably describe properties rather than implementations.
-
-Prefer:
-
-requires cryptography::confidentiality;
-requires cryptography::integrity;
-requires cryptography::post_quantum_security;
-
-over permanently coupling application semantics to a particular algorithm.
-
-Algorithm selection can occur during compilation, deployment, negotiation, or runtime according to policy.
-
-When an exact algorithm is genuinely part of program semantics, the semantic layer may preserve that explicit requirement.
-
----
-
-44. Security and POCO-REAF
-
-Security must survive the entire POCO-REAF lifecycle:
-
-Program Once
-    ↓
-Portable security intent
-    ↓
-Compile Once
-    ↓
-Canonical semantic security representation
-    ↓
-Run Everywhere
-    ↓
-Capability/resource evaluation
-    ↓
-Run Anywhere
-    ↓
-Target-specific enforcement
-    ↓
-Run Forever
-    ↓
-Versioned/extensible security semantics
-
-Hardware-specific implementation details must not leak backward into the portable source language unless explicitly requested by the program.
-
----
-
-45. Compatibility
-
-Security syntax must be versioned.
-
-Breaking changes require:
-
-- language-version identification;
-- migration documentation;
-- deprecation period where appropriate;
-- compatibility tests;
-- parser compatibility tests;
-- semantic compatibility tests.
-
-Security concepts must not be removed merely because a specific security technology becomes obsolete.
-
-The semantic abstraction should survive implementation evolution.
-
----
-
-46. Reserved Space
-
-The security namespace must retain extensibility for future concepts.
-
-Reserved conceptual areas include:
-
-security::
-identity::
-principal::
-capability::
-permission::
-authorization::
-cryptography::
-privacy::
-trust::
-attestation::
-provenance::
-isolation::
-integrity::
-confidentiality::
-future::
-vendor::
-
-These are semantic namespace concepts, not necessarily closed keyword lists.
-
----
-
-47. Vendor Extensions
-
-Vendor-specific security features must not contaminate the portable core.
-
-Vendor extensions should use explicit namespaces such as:
-
-vendor::<provider>::security::<feature>
-
-or the repository's canonical dialect mechanism.
-
-Vendor syntax must not become required for portable programs.
-
----
-
-48. Dialect Integration
-
-Future security dialects belong under:
-
-grammar/dialects/
-
-A dialect may extend security semantics without modifying the universal security foundation.
-
-Security grammar must therefore remain stable while dialects evolve.
-
----
-
-49. Error Recovery
-
-The parser must never silently reinterpret malformed security syntax as another security meaning.
-
-Error recovery belongs to frontend/parser configuration.
-
-Security parsing must preserve the distinction between:
-
-valid syntax
-
-and:
-
-invalid syntax
-
-Semantic security failures must not be disguised as syntax recovery.
-
----
-
-50. Security Invariants
-
-The complete security grammar must maintain these invariants:
-
-Invariant 1 — No secrets
-
-Source syntax does not become a secret store.
-
-Invariant 2 — No hardware lock-in
-
-Security requirements do not require a specific machine.
-
-Invariant 3 — No fixed scale
-
-No arbitrary security capacity limits exist in grammar.
-
-Invariant 4 — Open-world security
-
-Future security mechanisms remain representable.
-
-Invariant 5 — Single ownership
-
-Each security concept has one grammar owner.
-
-Invariant 6 — No runtime behavior
-
-Parsing never performs security enforcement.
-
-Invariant 7 — No cryptographic execution
-
-Parsing never executes cryptography.
-
-Invariant 8 — Quantum boundary preserved
-
-Security never becomes a second quantum IR.
-
-Invariant 9 — Semantic preservation
-
-Mandatory security requirements survive lowering.
-
-Invariant 10 — Deterministic parsing
-
-Parsing is deterministic.
-
-Invariant 11 — Safe implementation
-
-Rust implementation uses no "unsafe".
-
-Invariant 12 — Repository integration
-
-Security integrates with existing Zamani architecture instead of creating parallel security infrastructure.
-
----
-
-51. Required Tests
-
-Security grammar tests must include:
-
-tests/security/
-
-and must cover:
-
-Positive
-
-- identity declarations;
-- principals;
-- groups;
-- capabilities;
-- permissions;
-- policies;
-- cryptographic requirements;
-- privacy policies;
-- trust declarations;
-- security constraints;
-- metadata;
-- qualified names;
-- cross-domain security.
-
-Negative
-
-- malformed identity;
-- malformed principal;
-- malformed permission;
-- malformed capability;
-- malformed policy;
-- invalid cryptographic syntax;
-- invalid privacy syntax;
-- invalid trust syntax;
-- invalid security constraint;
-- malformed qualified names;
-- secret-material syntax;
-- duplicate/conflicting constructs where syntax can detect them.
-
-Boundary
-
-Test:
-
-- one identity;
-- many identities;
-- deeply nested policies;
-- long qualified names;
-- large declaration sets;
-- large policy expressions;
-- very large source files.
-
-Tests must not use arbitrary "maximum" language limits as proof of scalability.
-
----
-
-52. Cross-Domain Tests
-
-Security tests must include combinations such as:
-
-classical + security
-quantum + security
-hybrid + security
-HDL + security
-hardware + security
-distributed + security
-networking + security
-AI + security
-data + security
-quantum + classical + security
-quantum + hardware + security
-quantum + distributed + security
-classical + quantum + HDL + hardware + security
-
----
-
-53. POCO-REAF Scalability Tests
-
-The test suite must prove that security syntax does not contain artificial machine-scale assumptions.
-
-Test programs whose security requirements are identical while target descriptions vary independently.
-
-Conceptually:
-
-same source
-   ↓
-tiny classical target
-
-same source
-   ↓
-multicore target
-
-same source
-   ↓
-GPU target
-
-same source
-   ↓
-FPGA target
-
-same source
-   ↓
-quantum target
-
-same source
-   ↓
-distributed target
-
-The grammar must not change merely because the target changes.
-
----
-
-54. Hard-Coding Audit
-
-The following are prohibited in security grammar:
+Reject universal grammar-level constructs such as:
 
 MAX_IDENTITIES
 MAX_PRINCIPALS
-MAX_CAPABILITIES
-MAX_PERMISSIONS
 MAX_POLICIES
 MAX_KEYS
+MAX_CAPABILITIES
+MAX_TRUST_RELATIONSHIPS
+MAX_SECURITY_DOMAINS
 MAX_DEVICES
 MAX_NODES
 MAX_QUBITS
@@ -1584,508 +2285,886 @@ MAX_CPUS
 MAX_GPUS
 MAX_FPGAS
 MAX_MEMORY
+MAX_THREADS
 
-Also prohibit hidden equivalents such as:
+Also reject universal physical identity coupling such as:
 
-identity0
-identity1
-identity2
-...
+CPU_0
+GPU_0
+QPU_0
+FPGA_0
+NODE_0
 
-as grammar-level assumptions.
+when used as the fundamental security resource model.
 
-Fixed values may appear in tests only when they are test fixtures rather than language restrictions.
+Explicit program data is not prohibited.
 
----
-
-55. Security Semantic Preservation
-
-Compilation must preserve mandatory security properties through:
-
-AST
- ↓
-semantic analysis
- ↓
-canonical IR
- ↓
-optimization
- ↓
-routing
- ↓
-scheduling
- ↓
-lowering
- ↓
-runtime
-
-A transformation is invalid if it changes the meaning of a mandatory security requirement.
 
 ---
 
-56. Provenance
+57. Security Is Not Hardware Selection
 
-Security metadata should remain traceable through compilation.
+This distinction is mandatory.
 
-Where the repository's provenance infrastructure supports it, a security requirement should retain:
+Valid:
 
-source location
-source declaration
-semantic identity
-derived requirement
-lowered representation
-target enforcement requirement
+requires security::trusted_execution
 
-This is particularly important for:
+Means:
 
-- auditing;
-- reproducibility;
-- debugging;
-- resilience;
-- compliance;
-- security verification.
+> The program requires an execution environment satisfying this semantic capability.
 
----
 
-57. Verification
 
-Security verification belongs downstream.
+It does not mean:
 
-The grammar provides declarations.
+use_device("device-17")
 
-Semantic analysis verifies language-level consistency.
+Likewise:
 
-Capability/resource analysis verifies satisfiability.
+requires security::secure_channel
 
-Compiler verification verifies preservation.
+does not select a specific network implementation.
 
-Runtime verification verifies actual environment state.
+The compiler/backend decides how the requirement is realized.
 
-The separation is:
-
-syntax
-→ semantics
-→ feasibility
-→ compilation preservation
-→ runtime enforcement
 
 ---
 
-58. Security and Determinism
+58. POCO-REAF Contract
 
-Security features must not make parsing nondeterministic.
+A portable security program should be able to move between:
 
-Runtime randomness may be required for cryptographic operations, but that randomness belongs to the cryptographic/runtime subsystem.
+tiny embedded target
+single CPU
+multicore CPU
+GPU
+FPGA
+ASIC
+accelerator
+QPU
+simulator
+HPC system
+distributed cluster
+cloud
+future target
 
-The grammar itself remains deterministic.
+without changing security semantics merely because the target changed.
+
+The target may report:
+
+required capability unavailable
+required resource unavailable
+required security property unavailable
+
+That is a target feasibility result.
+
+It must not silently change the program's security meaning.
+
 
 ---
 
-59. Documentation Contract
+59. Security Metadata Preservation
 
-This README is the directory-level architecture contract.
+Security information must survive:
 
-Each specialized ".g4" file must document:
+lexing
+→ parsing
+→ AST construction
+→ semantic analysis
+→ canonical semantic representation
+→ IR lowering
+→ optimization
+→ routing
+→ scheduling
+→ resilience
+→ deployment
+→ runtime
+
+A downstream transformation MUST NOT silently discard a mandatory security requirement.
+
+If information cannot be represented by a target, the implementation must produce an explicit diagnostic or use an explicitly defined compatibility policy.
+
+
+---
+
+60. Independent File Completion Contract
+
+Every security grammar file is considered complete only when its contract is independently closed.
+
+Each file must document:
 
 Purpose
+Status
 Owns
 Does Not Own
+Inputs
+Outputs
 Dependencies
 Upstream Contracts
 Downstream Consumers
+Syntax Contract
 AST Contract
 Semantic Contract
-Compiler Integration
-Runtime Integration
+IR Contract
+Compiler Contract
+Runtime Contract
 Cross-Domain Integration
-Security Boundary
-Scalability Rules
+Diagnostics
+Source Spans
+Determinism
+Security
+Scalability
+Compatibility
+Positive Tests
+Negative Tests
+Boundary Tests
+Scalability Tests
+Determinism Tests
 Hard-Coding Audit
-Tests
 Completion Criteria
 
-The specialized files must not contradict this README.
+This prevents:
 
-If a specialized grammar requires a change to this architecture, the contract must be updated deliberately before implementation proceeds.
+file A
+   ↓
+file B changed later
+   ↓
+file A must be redesigned
 
----
+Instead, each file establishes its integration contract before implementation is declared complete.
 
-60. File Completion Contract
-
-A security grammar file is not complete merely because ANTLR accepts it.
-
-A file is complete only when:
-
-1. Its grammar is syntactically valid.
-2. Its ownership is unambiguous.
-3. Its dependencies are explicit.
-4. Its AST contract is defined.
-5. Its semantic contract is defined.
-6. Its downstream integration is defined.
-7. It does not duplicate another grammar's ownership.
-8. It contains no scalable-resource hard-coding.
-9. It contains no unsafe implementation.
-10. It contains no runtime behavior.
-11. It contains no secret-material mechanism.
-12. Positive tests exist.
-13. Negative tests exist.
-14. Boundary tests exist.
-15. Cross-domain tests exist where applicable.
-16. Compatibility expectations are documented.
-17. Determinism requirements are satisfied.
-18. POCO-REAF requirements are satisfied.
-19. Documentation agrees with implementation.
-20. Generated parser/frontend integration succeeds.
 
 ---
 
-61. Recommended Implementation Order
+61. Required Test Layers
 
-Security implementation should follow dependency order rather than arbitrary file order.
+Every security feature must have:
 
-Phase 1 — Foundation
+positive tests
+negative tests
+boundary tests
+scalability tests
+determinism tests
+compatibility tests
+cross-domain tests
+hard-coding tests
 
-Verify:
+Positive
 
-lexer
-core/names
-core/paths
-core/attributes
-core/metadata
-core/capabilities
-core/requirements
-core/constraints
-types
-expressions
+Valid security declarations parse.
 
-Phase 2 — Identity
+Negative
 
-Complete:
+Malformed declarations fail deterministically.
 
-security/identifiers.g4
+Boundary
 
-because identities and principals are foundational security subjects.
+Test:
 
-Phase 3 — Capabilities
+empty structures;
 
-Complete:
+single entries;
 
-security/capabilities.g4
+nested structures;
 
-Phase 4 — Permissions
+long qualified names;
 
-Complete:
+large metadata;
 
-security/permissions.g4
+deeply composed policies.
 
-Phase 5 — Cryptography
-
-Complete:
-
-security/cryptography.g4
-
-Phase 6 — Privacy
-
-Complete:
-
-security/privacy.g4
-
-Phase 7 — Trust
-
-Complete:
-
-security/trust.g4
-
-Phase 8 — Security Constraints
-
-Complete:
-
-security/security-constraints.g4
-
-Phase 9 — Composition
-
-Complete:
-
-security/security.g4
-
-Phase 10 — Cross-cutting effects
-
-Integrate:
-
-effects/security.g4
-
-Phase 11 — Semantic analysis
-
-Integrate the resulting AST into semantic security analysis.
-
-Phase 12 — Canonical representations
-
-Propagate security semantics into:
-
-classical IR
-quantum::ir
-HDL/hardware IR
-distributed representations
-
-where appropriate.
-
-Phase 13 — Compiler
-
-Verify preservation through:
-
-optimization
-routing
-scheduling
-lowering
-
-Phase 14 — Runtime
-
-Verify actual security enforcement.
-
-Phase 15 — Resilience
-
-Verify that recovery cannot silently violate mandatory security requirements.
-
----
-
-62. Production Readiness Checklist
-
-The security grammar is production-ready only when all of the following are true.
-
-Language
-
-- [ ] Security syntax is formally specified.
-- [ ] Security syntax has a clear authority.
-- [ ] Specialized ownership is unambiguous.
-- [ ] Open-world security is supported.
-- [ ] Security is extensible.
 
 Scalability
 
-- [ ] No fixed identity limit.
-- [ ] No fixed principal limit.
-- [ ] No fixed capability limit.
-- [ ] No fixed policy limit.
-- [ ] No fixed device limit.
-- [ ] No fixed node limit.
-- [ ] No fixed quantum-resource limit.
-- [ ] No machine-specific security assumptions.
+Test the same grammar model from:
 
-Safety
+tiny
+→ small
+→ large
+→ very large
 
-- [ ] No "unsafe".
-- [ ] No embedded Rust actions.
-- [ ] No runtime execution.
-- [ ] No filesystem access.
-- [ ] No network access.
-- [ ] No hardware discovery.
-- [ ] No credential access.
-- [ ] No secret storage.
+without introducing an artificial semantic maximum.
 
-Architecture
+Determinism
 
-- [ ] "security.g4" is only the composition root.
-- [ ] Specialized security grammars own their concepts.
-- [ ] Generic concepts remain in "core".
-- [ ] Effects remain separate from declarations.
-- [ ] Security does not duplicate IR.
-- [ ] "quantum::ir" remains canonical.
-- [ ] QEC remains outside grammar ownership.
-- [ ] ZQN remains outside grammar ownership.
-- [ ] Routing remains outside grammar ownership.
-- [ ] Scheduling remains outside grammar ownership.
-- [ ] Optimization remains outside grammar ownership.
-- [ ] Hardware discovery remains outside grammar ownership.
-- [ ] Runtime enforcement remains outside grammar ownership.
+Repeated parsing of identical input must produce equivalent parse structures.
 
-Compiler
+Compatibility
 
-- [ ] Security metadata reaches canonical semantic representations.
-- [ ] Mandatory security requirements survive optimization.
-- [ ] Mandatory security requirements survive routing.
-- [ ] Mandatory security requirements survive scheduling.
-- [ ] Mandatory security requirements survive lowering.
-- [ ] Security requirements can be evaluated against target capabilities.
+Check:
 
-Runtime
+specification
+↕
+lexer
+↕
+parser
+↕
+AST
+↕
+semantic analysis
+↕
+IR
+↕
+compiler
+↕
+runtime
 
-- [ ] Runtime authorization is separate from parsing.
-- [ ] Runtime authentication is separate from parsing.
-- [ ] Runtime trust evaluation is separate from parsing.
-- [ ] Secret management is external to source grammar.
-- [ ] Target-specific security enforcement is external to grammar.
+Cross-domain
 
-Testing
+At minimum test:
 
-- [ ] Positive tests.
-- [ ] Negative tests.
-- [ ] Boundary tests.
-- [ ] Determinism tests.
-- [ ] Round-trip tests where supported.
-- [ ] Cross-domain tests.
-- [ ] Quantum security tests.
-- [ ] Hardware security tests.
-- [ ] Distributed security tests.
-- [ ] Scalability tests.
-- [ ] Hard-coding audit.
-- [ ] Compatibility tests.
+classical + security
+quantum + security
+HDL + security
+hardware + security
+hybrid + security
+AI + security
+distributed + security
+networking + security
+data + security
+interoperability + security
+
 
 ---
 
-63. Final Security Architecture
+62. Required Security Test Matrix
 
-The final architecture is:
+The security test suite should cover:
 
-                         ZAMANI SOURCE
-                              │
-                              ▼
-                           LEXER
-                              │
-                              ▼
-                       CORE LANGUAGE
-                              │
-                              ▼
-                     SECURITY GRAMMARS
-                              │
-          ┌───────────────────┼───────────────────┐
-          │                   │                   │
-          ▼                   ▼                   ▼
-      Identity          Authorization       Cryptography
-          │                   │                   │
-          ├───────────────────┼───────────────────┤
-          │                   │                   │
-          ▼                   ▼                   ▼
-       Privacy              Trust            Constraints
-          │                   │                   │
-          └───────────────────┼───────────────────┘
-                              ▼
-                       SECURITY AST
-                              │
-                              ▼
-                   SEMANTIC ANALYSIS
-                              │
-             ┌────────────────┼────────────────┐
-             │                │                │
-             ▼                ▼                ▼
-       Classical IR       quantum::ir      HDL/HW IR
-             │                │                │
-             └────────────────┼────────────────┘
-                              ▼
-                     OPTIMIZATION / ROUTING
-                              │
-                              ▼
-                         SCHEDULING
-                              │
-                              ▼
-                       RESILIENCE
-                              │
-                              ▼
-                    TARGET LOWERING
-                              │
-                              ▼
-                    RUNTIME / DEPLOYMENT
-                              │
-                              ▼
-                  ACTUAL SECURITY ENFORCEMENT
+identity
+principal
+authority
+capability
+permission
+authorization
+policy
+cryptography
+hash
+signature
+key management
+privacy
+provenance
+secret references
+secure computation
+trust
+zero knowledge
+security constraints
+security metadata
 
-The critical architectural rule is:
+Each applicable construct requires:
 
-SECURITY GRAMMAR
-        ≠
-SECURITY IMPLEMENTATION
+syntax
+AST
+semantic
+IR
+diagnostics
+compatibility
+scalability
 
-and:
+coverage.
+
+
+---
+
+63. Repository-Wide Integration Matrix
+
+Security changes must be checked against:
+
+grammar/DESIGN.md
+grammar/README.md
+grammar/Zamani.g4
+grammar/grammar.md
+grammar/Zamani-Grammar.md
+
+grammar/core/
+grammar/types/
+grammar/expressions/
+grammar/effects/
+grammar/resources/
+
+grammar/classical/
+grammar/quantum/
+grammar/hybrid/
+grammar/hdl/
+grammar/hardware/
+grammar/distributed/
+grammar/ai/
+grammar/data/
+grammar/networking/
+
+grammar/security/
+grammar/interoperability/
+grammar/dialects/
+grammar/compile/
+grammar/execution/
+
+grammar/spec/
+grammar/specification/
+grammar/compatibility/
+grammar/validation/
+grammar/tests/
+
+src/lexer.rs
+src/parser.rs
+src/frontend/ast/
+semantic analysis
+canonical IR
+quantum::ir
+compiler
+runtime
+HAL
+
+A security feature is not production-ready merely because its .g4 file parses.
+
+
+---
+
+64. Feature Traceability
+
+Every stable security feature must be traceable:
+
+Specification
+    ↓
+Lexer vocabulary
+    ↓
+Grammar rule
+    ↓
+AST node/field
+    ↓
+Semantic model
+    ↓
+IR representation
+    ↓
+Compiler consumer
+    ↓
+Runtime consumer
+    ↓
+Tests
+
+No feature may be accepted into the stable language if one of these boundaries is intentionally undefined.
+
+If a feature is syntax-only by design, that status must be explicit.
+
+
+---
+
+65. No Silent Semantic Loss
+
+The following is a production defect:
+
+source
+  ↓
+parser accepts security requirement
+  ↓
+AST drops requirement
+  ↓
+compiler never sees requirement
+
+Likewise:
+
+source
+  ↓
+AST preserves requirement
+  ↓
+IR drops requirement
+
+is a production defect.
+
+Every accepted security construct must either:
+
+1. have a defined downstream semantic path, or
+
+
+2. be explicitly classified as non-semantic metadata.
+
+
+
+
+---
+
+66. No Downstream Guessing
+
+Downstream components MUST NOT guess missing security semantics.
+
+For example:
+
+missing security requirement
+
+must not be reconstructed by:
+
+compiler heuristics;
+
+backend assumptions;
+
+runtime defaults;
+
+hardware discovery;
+
+scheduler behavior.
+
+
+The upstream contract must preserve required information.
+
+
+---
+
+67. Compatibility
+
+Security syntax must integrate with:
+
+grammar/compatibility/
+grammar/spec/compatibility.md
+grammar/specification/
+grammar/validation/
+
+Compatibility changes must identify:
+
+added
+changed
+deprecated
+removed
+migration-required
+
+features.
+
+No security feature may silently change meaning between compatible language versions.
+
+
+---
+
+68. Versioning
+
+Security grammar versions are governed by the language versioning system.
+
+A security feature must not create an independent incompatible security language version.
+
+Dialect-specific security extensions must explicitly identify their dialect/version.
+
+
+---
+
+69. Deprecation
+
+Deprecated security syntax must have:
+
+deprecation status;
+
+compatibility behavior;
+
+migration path;
+
+replacement construct where applicable;
+
+tests preventing accidental removal/reappearance.
+
+
+Do not remove an existing security construct merely because a newer construct is preferred unless the compatibility policy permits removal.
+
+
+---
+
+70. Generated Documentation
+
+Security documentation must ultimately derive from the authoritative contracts.
+
+grammar/grammar.md remains implementation-conformance documentation.
+
+grammar/Zamani-Grammar.md remains broader historical/design/proposal material.
+
+This README explains the security architecture.
+
+None of these documents may independently introduce undocumented production syntax.
+
+
+---
+
+71. What This Directory Must Never Become
+
+grammar/security/ must never become:
+
+a runtime security engine;
+
+a cryptographic library;
+
+a secret store;
+
+an identity provider;
+
+an authorization server;
+
+a policy engine;
+
+a hardware discovery system;
+
+a device manager;
+
+a QPU manager;
+
+a QEC implementation;
+
+a ZQN implementation;
+
+a routing engine;
+
+a scheduler;
+
+a deployment system;
+
+a second quantum IR;
+
+a second generic capability language;
+
+a second generic requirements language;
+
+a second generic attribute language.
+
+
+It is the source-language security contract.
+
+
+---
+
+72. Production Architecture
+
+The complete security pipeline is:
+
+ZAMANI SOURCE
+                              |
+                              v
+                         ZamaniLexer
+                              |
+                              v
+                         ZamaniParser
+                              |
+                              v
+                    security/security.g4
+                              |
+       +----------+-----------+-----------+----------+
+       |          |           |           |          |
+       v          v           v           v          v
+   Identity   Capability   Permission  Crypto      Privacy
+       |          |           |           |          |
+       +----------+-----------+-----------+----------+
+                              |
+                 +------------+-------------+
+                 |                          |
+                 v                          v
+              Trust                     Policies
+                 |                          |
+                 +------------+-------------+
+                              |
+                              v
+                       Security AST
+                              |
+                              v
+                  Security Semantic Analysis
+                              |
+            +-----------------+-----------------+
+            |                 |                 |
+            v                 v                 v
+       Requirements       Capabilities      Constraints
+            |                 |                 |
+            +-----------------+-----------------+
+                              |
+                              v
+                    Canonical Semantic Model
+                              |
+          +-------------------+-------------------+
+          |                   |                   |
+          v                   v                   v
+      Classical           quantum::ir        HDL/Hardware
+          |                   |                   |
+          +-------------------+-------------------+
+                              |
+                              v
+                         Optimization
+                              |
+                    +---------+---------+
+                    |         |         |
+                    v         v         v
+                 Routing  Scheduling Resilience
+                              |
+                             QEC
+                              |
+                             ZQN
+                              |
+                             HAL
+                              |
+                              v
+                       Target Realization
+                              |
+             +----------------+----------------+
+             |                |                |
+            CPU              GPU              FPGA
+             |                |                |
+            ASIC             QPU         Future Target
+             |                |                |
+             +----------------+----------------+
+                              |
+                              v
+                           Runtime
+                              |
+                              v
+                     Security Enforcement
+
+
+---
+
+73. Production Invariants
+
+The security grammar is production-ready only if all of these remain true:
+
+1. There is one security composition root.
+
+
+2. Each security concept has one syntax owner.
+
+
+3. Generic language constructs are reused rather than duplicated.
+
+
+4. Security syntax is target-independent.
+
+
+5. Security syntax is open-world.
+
+
+6. No artificial security capacity limits exist.
+
+
+7. No hardware capacity becomes a language limit.
+
+
+8. No physical device identity is required for portable semantics.
+
+
+9. Secret material is not embedded as a required source-language primitive.
+
+
+10. Parsing never performs security enforcement.
+
+
+11. Trust parsing never grants trust.
+
+
+12. Authorization syntax never performs authorization.
+
+
+13. Cryptographic syntax never performs cryptography.
+
+
+14. Security syntax never creates a second quantum IR.
+
+
+15. quantum::ir remains the canonical quantum semantic boundary.
+
+
+16. Security metadata survives lowering.
+
+
+17. Mandatory requirements remain mandatory.
+
+
+18. Preferences remain preferences.
+
+
+19. Target incompatibility is distinguished from source syntax errors.
+
+
+20. Security semantics remain deterministic.
+
+
+21. Rust implementation remains safe.
+
+
+22. Rust 1.97 and Rust 1.97.1 remain supported.
+
+
+23. Cross-domain integration is explicit.
+
+
+24. AST mappings are defined before grammar completion.
+
+
+25. Semantic mappings are defined before grammar completion.
+
+
+26. IR mappings are defined before grammar completion.
+
+
+27. Positive tests exist.
+
+
+28. Negative tests exist.
+
+
+29. Boundary tests exist.
+
+
+30. Scalability tests exist.
+
+
+31. Determinism tests exist.
+
+
+32. Compatibility tests exist.
+
+
+33. Hard-coding audits pass.
+
+
+34. No competing security authority is introduced.
+
+
+35. POCO-REAF remains an architectural invariant.
+
+
+
+
+---
+
+74. Completion Criteria for grammar/security/README.md
+
+This README is complete when:
+
+[x] security ownership is defined;
+
+[x] non-ownership is defined;
+
+[x] the actual security directory is documented;
+
+[x] security.g4 is identified as the composition root;
+
+[x] specialized security ownership is defined;
+
+[x] trust.g4 remains the trust owner;
+
+[x] identity ownership is explicitly addressed;
+
+[x] identifiers.g4 and identity.g4 cannot silently become competing authorities;
+
+[x] generic core grammar ownership is preserved;
+
+[x] attributes use the canonical core attribute contract;
+
+[x] resources remain downstream;
+
+[x] capabilities remain open-world;
+
+[x] quantum security does not create another quantum IR;
+
+[x] quantum::ir remains canonical;
+
+[x] QEC remains outside security grammar;
+
+[x] ZQN remains outside security grammar;
+
+[x] routing remains outside security grammar;
+
+[x] scheduling remains outside security grammar;
+
+[x] runtime enforcement remains outside security grammar;
+
+[x] no secret-material storage is introduced;
+
+[x] no artificial security limits are introduced;
+
+[x] POCO-REAF is explicitly protected;
+
+[x] Rust 1.97 / 1.97.1 is specified;
+
+[x] production Rust is required to remain free of unsafe;
+
+[x] AST contracts are defined;
+
+[x] semantic contracts are defined;
+
+[x] IR integration is defined;
+
+[x] compiler integration is defined;
+
+[x] runtime integration is defined;
+
+[x] cross-domain integration is defined;
+
+[x] diagnostics are defined;
+
+[x] source-span preservation is defined;
+
+[x] determinism is defined;
+
+[x] scalability is defined;
+
+[x] compatibility is defined;
+
+[x] test requirements are defined;
+
+[x] hard-coding audits are defined;
+
+[x] independent-file completion requirements are defined.
+
+
+The directory is repository-wide production-ready only after the corresponding .g4 files, frontend AST, semantic security model, IR consumers, compiler/runtime consumers, and conformance tests satisfy these contracts.
+
+
+---
+
+75. Final Security Principle
+
+The security layer of Zamani must express:
+
+WHO
+WHAT
+UNDER WHICH TRUST
+WITH WHICH AUTHORITY
+REQUIRING WHICH SECURITY PROPERTIES
+UNDER WHICH CONDITIONS
+WITH WHICH CAPABILITIES
+AND WHICH GUARANTEES MUST SURVIVE EXECUTION
+
+It must not express:
+
+WHICH PARTICULAR MACHINE
+WHICH PARTICULAR CPU
+WHICH PARTICULAR GPU
+WHICH PARTICULAR QPU
+WHICH PARTICULAR FPGA
+WHICH PARTICULAR NODE
+WHICH PARTICULAR MEMORY BANK
+WHICH PARTICULAR PHYSICAL QUBIT
+
+The resulting architecture is:
 
 SECURITY INTENT
-        ≠
-PHYSICAL SECURITY DEVICE
+      ↓
+SECURITY AST
+      ↓
+SECURITY SEMANTICS
+      ↓
+REQUIREMENTS / CAPABILITIES / CONSTRAINTS
+      ↓
+CANONICAL SEMANTIC MODEL
+      ↓
+CLASSICAL / quantum::ir / HDL-HARDWARE
+      ↓
+OPTIMIZATION
+      ↓
+ROUTING / SCHEDULING / RESILIENCE
+      ↓
+QEC / ZQN where applicable
+      ↓
+HAL
+      ↓
+TARGET
+      ↓
+RUNTIME ENFORCEMENT
 
-and:
+This preserves the fundamental Zamani invariant:
 
-SECURITY SYNTAX
-        ≠
-QUANTUM IR
+> Security semantics belong to the program; security realization belongs to the execution environment.
 
-and:
 
-PORTABLE SECURITY REQUIREMENT
-        ≠
-FIXED HARDWARE TARGET
 
----
+That separation is required for a security system that can scale from tiny systems to very large computational environments while preserving the same source-level meaning and supporting Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever (POCO-REAF).
 
-64. POCO-REAF Security Guarantee
-
-The security layer ultimately exists to make the following possible:
-
-                    ONE PROGRAM
-                         │
-                         ▼
-               ONE SECURITY MEANING
-                         │
-                         ▼
-                ONE PORTABLE SEMANTIC
-                    REPRESENTATION
-                         │
-          ┌──────────────┼──────────────┐
-          ▼              ▼              ▼
-        CPU            GPU            FPGA
-          │              │              │
-          ├──────────────┼──────────────┤
-          ▼              ▼              ▼
-        ASIC            QPU          CLUSTER
-          │              │              │
-          └──────────────┼──────────────┘
-                         ▼
-                  FUTURE HARDWARE
-
-The source security semantics remain stable while implementation changes.
-
-That is the required security interpretation of:
-
-Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever.
-
----
-
-65. Final Ownership Statement
-
-"grammar/security/" is therefore the portable security-language boundary of Zamani.
-
-It owns the syntax necessary to state security intent.
-
-It does not own the machinery that enforces that intent.
-
-The permanent architectural separation is:
-
-Grammar
-    ↓
-Syntax
-
-AST
-    ↓
-Structure
-
-Semantic Security Analysis
-    ↓
-Meaning
-
-Capabilities / Resources
-    ↓
-Feasibility
-
-Canonical IR
-    ↓
-Portable computation
-
-Compiler
-    ↓
-Implementation
-
-Runtime
-    ↓
-Enforcement
-
-Hardware / Environment
-    ↓
-Actual security guarantees
-
-This separation is mandatory for scalability, portability, deterministic compilation, future hardware evolution, quantum/classical interoperability, and POCO-REAF.
