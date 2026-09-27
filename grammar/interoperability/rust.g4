@@ -4,46 +4,93 @@
  * ============================================================================
  *
  * File:
- *     grammar/interoperability/Rust.g4
+ *     grammar/interoperability/rust.g4
  *
  * Grammar:
  *     Rust
  *
- * Role:
- *     Canonical Zamani SOURCE-LEVEL RUST INTEROPERABILITY grammar.
+ * Status:
+ *     CANONICAL RUST INTEROPERABILITY DELEGATE
+ *
+ * Purpose:
+ *     Defines Zamani source-level declarations for interoperability with Rust.
  *
  * IMPORTANT:
- *     This is NOT the grammar of the Rust programming language itself.
  *
- *     It defines the syntax by which Zamani describes, imports, references,
- *     constrains, and interoperates with Rust implementations.
+ *     This is NOT the grammar of the Rust programming language.
+ *
+ *     It describes the Rust boundary exposed to Zamani:
+ *
+ *         foreign identities
+ *         modules/crates
+ *         functions
+ *         types
+ *         structs
+ *         enums
+ *         traits
+ *         implementations
+ *         callbacks
+ *         constants/statics
+ *         opaque types
+ *         generic/lifetime contracts
+ *         ownership/borrowing metadata
+ *         ABI references
+ *         linkage metadata
+ *         requirements
+ *         capabilities
+ *         compatibility
+ *
+ * Rust source itself remains outside this grammar.
  *
  * ============================================================================
+ * COMPILER BASELINE
+ * ============================================================================
  *
+ * Rust implementation:
+ *
+ *     Rust 1.97
+ *     Rust 1.97.1
+ *     Rust 2021
+ *
+ * Safety:
+ *
+ *     The Zamani compiler implementation MUST use safe Rust.
+ *
+ *     This grammar contains:
+ *
+ *         no Rust actions
+ *         no embedded code
+ *         no semantic predicates
+ *         no filesystem access
+ *         no network access
+ *         no runtime execution
+ *         no unsafe Rust
+ *
+ * ============================================================================
  * ARCHITECTURAL POSITION
  * ============================================================================
  *
- *                         Zamani source
- *                              |
- *                              v
- *                         Zamani lexer
- *                              |
- *                              v
- *                      parser composition
- *                              |
- *                              v
- *                     Rust interoperability
- *                              |
- *                              v
- *                         frontend AST
- *                              |
- *                              v
- *                     semantic analysis
- *                              |
+ *     Zamani source
+ *          |
+ *          v
+ *     canonical Zamani lexer
+ *          |
+ *          v
+ *     canonical parser
+ *          |
+ *          v
+ *     Rust interoperability
+ *          |
+ *          v
+ *     domain-neutral frontend AST
+ *          |
+ *          v
+ *     semantic analysis
+ *          |
  *          +-------------------+-------------------+
  *          |                   |                   |
  *          v                   v                   v
- *        types            capabilities          effects
+ *        types             capabilities         effects
  *          |                   |                   |
  *          +-------------------+-------------------+
  *                              |
@@ -53,109 +100,105 @@
  *              +---------------+----------------+
  *              |               |                |
  *              v               v                v
- *        classical IR     quantum::ir       hardware/HDL
+ *        classical IR     quantum::ir       HDL/hardware
  *              |               |                |
  *              +---------------+----------------+
  *                              |
  *                              v
- *                   optimization / lowering
+ *                     optimization/lowering
  *                              |
  *                              v
- *                       Rust adapter
+ *                       ABI realization
  *                              |
  *                              v
- *                     ABI / linker / runtime
+ *                    Rust/linker/runtime target
  *
  * Rust interoperability MUST NOT bypass the canonical semantic boundary.
  *
  * ============================================================================
- *
  * OWNS
  * ============================================================================
  *
- * This grammar owns:
+ * This grammar owns Rust-specific SOURCE-LEVEL INTEROPERABILITY STRUCTURE.
  *
- *   - Rust interoperability declarations;
- *   - Rust interface declarations;
- *   - Rust external function contracts;
- *   - Rust type-boundary declarations;
- *   - opaque Rust types;
- *   - Rust representation metadata;
- *   - Rust symbol metadata;
- *   - Rust module references;
- *   - Rust trait/interface references;
- *   - Rust generic boundary metadata;
- *   - Rust lifetime boundary metadata;
- *   - Rust ownership/borrowing boundary metadata;
- *   - Rust callback declarations;
- *   - Rust async boundary declarations;
- *   - Rust error/Result boundary declarations;
- *   - Rust implementation references;
- *   - Rust interoperability requirements;
- *   - Rust interoperability capabilities;
- *   - Rust interoperability compatibility metadata;
- *   - Rust interoperability calls.
+ * It owns:
+ *
+ *     rustItem
+ *     Rust interface declarations
+ *     Rust module references
+ *     Rust use references
+ *     Rust callable declarations
+ *     Rust type declarations
+ *     Rust struct declarations
+ *     Rust enum declarations
+ *     Rust trait declarations
+ *     Rust implementation declarations
+ *     Rust constant declarations
+ *     Rust static declarations
+ *     Rust callbacks
+ *     Rust opaque types
+ *     Rust generic-boundary metadata
+ *     Rust lifetime-boundary metadata
+ *     Rust ownership/borrowing-boundary metadata
+ *     Rust linkage/symbol references
+ *     Rust requirements/capabilities
+ *     Rust compatibility metadata
  *
  * ============================================================================
- *
  * DOES NOT OWN
  * ============================================================================
  *
  * This grammar does NOT own:
  *
- *   - the complete Rust programming language;
- *   - rustc;
- *   - Rust macro expansion;
- *   - Rust borrow checking;
- *   - Rust trait solving;
- *   - Rust type inference;
- *   - Rust MIR;
- *   - Rust LLVM IR;
- *   - Rust object files;
- *   - Rust machine code;
- *   - ABI implementation;
- *   - calling-convention implementation;
- *   - linker implementation;
- *   - dynamic library loading;
- *   - filesystem resolution;
- *   - network resolution;
- *   - process creation;
- *   - runtime dispatch;
- *   - pointer dereferencing;
- *   - native memory access;
- *   - register allocation;
- *   - scheduling;
- *   - routing;
- *   - optimization;
- *   - hardware discovery;
- *   - calibration;
- *   - QEC;
- *   - ZQN;
- *   - resilience;
- *   - quantum::ir;
- *   - classical IR;
- *   - HDL IR.
+ *     general FFI
+ *     general ABI
+ *     calling-convention definitions
+ *     foreign-function generic machinery
+ *     canonical names
+ *     canonical expressions
+ *     canonical types
+ *     ordinary Zamani functions
+ *     Rust compiler implementation
+ *     Rust borrow checker
+ *     Rust trait solver
+ *     Rust MIR
+ *     LLVM IR
+ *     object files
+ *     linker implementation
+ *     dynamic loading
+ *     runtime dispatch
+ *     filesystem resolution
+ *     Cargo resolution
+ *     crate downloading
+ *     Rust macro expansion
+ *     hardware discovery
+ *     routing
+ *     scheduling
+ *     QEC
+ *     ZQN
+ *     resilience
+ *     quantum::ir
  *
  * General FFI remains owned by:
  *
  *     grammar/interoperability/ffi.g4
  *
- * General foreign functions remain owned by:
- *
- *     grammar/interoperability/foreign-functions.g4
- *
  * ABI contracts remain owned by:
  *
  *     grammar/interoperability/abi.g4
  *
- * Interoperability composition remains owned by:
+ * General foreign-function syntax remains owned by:
  *
- *     grammar/interoperability/interoperability.g4
+ *     grammar/interoperability/foreign-functions.g4
  *
  * Canonical names remain owned by:
  *
  *     grammar/core/names.g4
  *     grammar/core/qualified-names.g4
+ *
+ * Canonical attributes remain owned by:
+ *
+ *     grammar/core/attributes.g4
  *
  * Canonical expressions remain owned by:
  *
@@ -166,155 +209,130 @@
  *     grammar/types/
  *
  * ============================================================================
- *
  * POCO-REAF
  * ============================================================================
  *
- * A Rust declaration describes a semantic interoperability contract.
+ * Rust interoperability is target-independent source intent.
  *
- * It MUST NOT permanently encode:
+ * It MUST NOT encode universal limits for:
  *
- *     CPU
- *     GPU
- *     FPGA
- *     ASIC
- *     QPU
- *     device ID
- *     node ID
- *     memory size
+ *     CPUs
+ *     cores
+ *     threads
+ *     GPUs
+ *     FPGAs
+ *     ASICs
+ *     QPUs
+ *     nodes
+ *     devices
+ *     memory
+ *     storage
+ *     registers
  *     pointer width
- *     register count
- *     register names
- *     address
- *     topology
- *     fixed deployment location
+ *     vector width
+ *     tensor rank
+ *     tensor dimensions
+ *     network size
+ *     qubit count
  *
- * Rust implementation identity is symbolic.
+ * It MUST NOT contain:
  *
- * For example, the semantic layer may resolve a Rust implementation through:
- *
- *     native Rust
- *     static linkage
- *     dynamic linkage
- *     embedded runtime
- *     distributed service
- *     accelerator adapter
- *     generated implementation
- *     future execution mechanism
- *
- * without changing the Zamani source contract.
- *
- * ============================================================================
- *
- * SCALABILITY
- * ============================================================================
- *
- * No finite source-level maximum is imposed on:
- *
- *     declarations
- *     parameters
- *     arguments
- *     modules
- *     traits
- *     implementations
- *     generic parameters
- *     lifetime parameters
- *     callbacks
- *     interfaces
- *     types
- *     functions
- *     resources
- *     capabilities
- *
- * Repetition is structural through ANTLR '*' and '+' operators.
- *
- * There are deliberately no:
- *
- *     MAX_RUST_FUNCTIONS
- *     MAX_RUST_TYPES
- *     MAX_PARAMETERS
- *     MAX_GENERIC_PARAMETERS
- *     MAX_LIFETIMES
- *     MAX_CALLBACKS
- *     MAX_MODULES
+ *     MAX_CPUS
  *     MAX_THREADS
- *     MAX_CORES
+ *     MAX_MEMORY
  *     MAX_DEVICES
+ *     MAX_PARAMETERS
+ *     MAX_TYPES
+ *     MAX_MODULES
  *
- * or equivalent limits.
+ * or equivalent universal limits.
  *
- * Practical compiler/runtime limits belong to resource and execution policy.
+ * Repetition is structural:
+ *
+ *     *
+ *     +
+ *     ?
+ *
+ * Actual resource limits belong to semantic analysis, compilation, deployment,
+ * runtime, and target capability negotiation.
  *
  * ============================================================================
- *
  * SECURITY
  * ============================================================================
  *
- * Parsing this grammar MUST NEVER:
+ * Parsing Rust interoperability MUST NOT:
  *
- *     load Rust;
- *     invoke rustc;
- *     execute Rust;
- *     load a library;
- *     resolve a symbol;
- *     inspect installed crates;
- *     inspect Cargo configuration;
- *     access the filesystem;
- *     access the network;
- *     inspect environment variables;
- *     dereference pointers;
- *     allocate native memory;
- *     invoke callbacks;
- *     execute build scripts.
+ *     invoke rustc
+ *     load a crate
+ *     resolve a symbol
+ *     open a library
+ *     execute Rust
+ *     execute build scripts
+ *     access Cargo
+ *     access the filesystem
+ *     access the network
+ *     inspect environment variables
+ *     inspect hardware
+ *     dereference pointers
+ *     allocate native memory
+ *     invoke callbacks
  *
- * A Rust declaration is data.
+ * A Rust interoperability declaration is DATA.
  *
- * A declaration is not authorization to execute the implementation.
- *
- * ============================================================================
- *
- * RUST IMPLEMENTATION SAFETY
- * ============================================================================
- *
- * This grammar contains:
- *
- *     no embedded Rust actions;
- *     no semantic predicates;
- *     no runtime callbacks;
- *     no filesystem operations;
- *     no network operations;
- *     no unsafe code.
- *
- * Generated/runtime integration must remain compatible with:
- *
- *     Rust 1.97
- *     Rust 1.97.1
- *     Rust 2021
+ * It is not authorization to execute a foreign implementation.
  *
  * ============================================================================
- *
- * ANTLR COMPOSITION CONTRACT
+ * LEXICAL CONTRACT
  * ============================================================================
  *
- * Canonical lexer:
+ * The ONLY lexer consumed by this grammar is:
  *
  *     grammar/antlr/ZamaniLexer.g4
  *
- * Shared parser grammars:
+ * through:
  *
- *     Expressions
- *     Types
- *     QualifiedNames
- *     Attributes
+ *     tokenVocab = ZamaniLexer;
  *
- * This grammar deliberately does not redefine:
+ * Rust keywords that already exist in the canonical Zamani lexical vocabulary
+ * are consumed through their canonical tokens:
+ *
+ *     FN
+ *     TYPE
+ *     STRUCT
+ *     ENUM
+ *     TRAIT
+ *     IMPL
+ *     PUB
+ *     PUBLIC
+ *     PRIVATE
+ *     INTERNAL
+ *     STATIC
+ *     CONST
+ *     MODULE
+ *     USE
+ *     AS
+ *     WHERE
+ *     ASYNC
+ *     EXTERN
+ *     MUT
+ *     SELF
+ *     SUPER
+ *     NEW
+ *     UNSAFE
+ *
+ * No new Rust lexer is created here.
+ *
+ * Rust-specific concepts for which Zamani has no dedicated lexical token are
+ * represented structurally using:
  *
  *     identifier
- *     qualifiedName
- *     expression
- *     typeExpression
- *     attribute
+ *     qualifiedNameReference
+ *     STRING
  *
+ * This deliberately avoids introducing a second Rust keyword vocabulary.
+ *
+ * ============================================================================
+ * IMPORTS
  * ============================================================================
  */
 
@@ -324,33 +342,43 @@ options {
     tokenVocab = ZamaniLexer;
 }
 
-import Expressions,
-       Types,
-       QualifiedNames,
-       Attributes;
+import
+    Names,
+    QualifiedNames,
+    Attributes,
+    Expressions,
+    Types,
+    Abi;
 
 
 /* ============================================================================
- * PUBLIC ENTRY POINT
- * ========================================================================== */
-
-/**
- * Parse a complete Zamani Rust interoperability fragment.
+ * 1. PUBLIC ENTRY POINT
+ * ============================================================================
  *
- * The composition root determines where this fragment may occur in a complete
- * Zamani compilation unit.
+ * This is a reusable delegate.
+ *
+ * The interoperability composition grammar decides where Rust interoperability
+ * is legal in a complete Zamani source unit.
+ *
+ * This rule is NOT the complete Zamani program root.
+ * ============================================================================
  */
+
 rustInterop
     : rustItem*
     ;
 
 
-/**
- * A Rust interoperability item.
+/* ============================================================================
+ * 2. RUST ITEM
+ * ============================================================================
  *
- * The grammar is intentionally open-world with respect to implementation
- * identities and Rust library/module names.
+ * Rust interoperability is intentionally open-world.
+ *
+ * New Rust library/type/function identities do not require grammar changes.
+ * ============================================================================
  */
+
 rustItem
     : rustInterfaceDeclaration
     | rustModuleDeclaration
@@ -368,36 +396,29 @@ rustItem
     | rustOpaqueDeclaration
     | rustRequirementDeclaration
     | rustCompatibilityDeclaration
-    | rustLinkageDeclaration
     | rustImplementationReference
     ;
 
 
 /* ============================================================================
- * RUST INTERFACE
- * ========================================================================== */
-
-/**
- * A reusable Rust interoperability contract.
+ * 3. RUST INTERFACE
+ * ============================================================================
  *
- * Example:
+ * A Rust interface is a Zamani interoperability contract.
  *
- *     rust interface math {
- *         fn sin(value: Real) -> Real;
- *     }
- *
- * The interface name is symbolic.
+ * It is NOT a Rust trait implementation.
+ * ============================================================================
  */
+
 rustInterfaceDeclaration
     : attribute*
-      'rust'
-      'interface'
+      INTERFACE
       qualifiedNameReference
       rustGenericParameters?
       rustInterfaceClause*
-      '{'
+      LBRACE
       rustInterfaceMember*
-      '}'
+      RBRACE
     ;
 
 
@@ -422,9 +443,6 @@ rustInterfaceMember
     ;
 
 
-/**
- * Interface-level metadata.
- */
 rustInterfaceClause
     : rustCrateClause
     | rustModuleClause
@@ -437,112 +455,93 @@ rustInterfaceClause
 
 
 /* ============================================================================
- * RUST MODULE / CRATE REFERENCES
- * ========================================================================== */
-
-/**
- * A Rust crate identity is symbolic.
+ * 4. CRATE / MODULE / USE REFERENCES
+ * ============================================================================
  *
- * It does not imply a filesystem path or a Cargo installation.
+ * These are symbolic references.
+ *
+ * They do not perform package resolution.
+ * ============================================================================
  */
+
 rustCrateClause
-    : 'crate'
-      '='
-      rustSymbolicReference
-      ';'
+    : identifier
+      ASSIGN
+      rustSymbolicValue
+      SEMICOLON
     ;
 
 
 rustModuleClause
-    : 'module'
-      '='
+    : MODULE
+      ASSIGN
       qualifiedNameReference
-      ';'
+      SEMICOLON
     ;
 
 
 rustModuleDeclaration
     : attribute*
-      'rust'
-      'module'
+      MODULE
       qualifiedNameReference
       rustModuleBody?
-      ';'?
+      SEMICOLON?
     ;
 
 
 rustModuleBody
-    : '{'
+    : LBRACE
       rustItem*
-      '}'
+      RBRACE
     ;
 
 
 rustUseDeclaration
     : attribute*
-      'rust'
-      'use'
+      USE
       rustPathReference
       rustUseAlias?
-      ';'
+      SEMICOLON
     ;
 
 
 rustUseAlias
-    : 'as'
+    : AS
       identifier
     ;
 
 
-/* ============================================================================
- * EXTERN BLOCKS
- * ========================================================================== */
+rustPathReference
+    : qualifiedNameReference
+    ;
 
-/**
- * Describes a Rust external interface.
+
+/* ============================================================================
+ * 5. EXTERN / ABI BOUNDARY
+ * ============================================================================
  *
- * Examples:
+ * ABI itself remains owned by Abi.
  *
- *     rust extern "C" {
- *         fn external_function(...);
- *     }
+ * Rust merely attaches a symbolic ABI contract to the Rust boundary.
  *
- *     rust extern "..." {
- *         ...
- *     }
- *
- * The ABI string is opaque.
- *
- * It is deliberately NOT an enumeration of:
- *
- *     C
- *     system
- *     Rust
- *     wasm
- *     ...
- *
- * Target-specific ABI semantics belong to abi.g4 and semantic resolution.
+ * No fixed list such as C/system/Rust/wasm is encoded here.
+ * ============================================================================
  */
+
 rustExternBlock
     : attribute*
-      'rust'
-      'extern'
-      rustAbiName?
-      rustExternSafety?
-      '{'
+      EXTERN
+      rustAbiReference?
+      LBRACE
       rustExternItem*
-      '}'
+      RBRACE
     ;
 
 
-rustAbiName
-    : stringLiteral
-    ;
-
-
-rustExternSafety
-    : 'safe'
-    | 'unsafe'
+rustAbiReference
+    : STRING
+    | qualifiedNameReference
+    | abiProfileReference
     ;
 
 
@@ -556,56 +555,56 @@ rustExternItem
     ;
 
 
-/**
- * `unsafe` here is a description of the FOREIGN CONTRACT.
- *
- * It does not introduce an unsafe Rust implementation requirement into Zamani.
- *
- * The semantic safety system must independently determine whether the
- * boundary is permitted.
- */
-
-
 /* ============================================================================
- * FUNCTIONS
- * ========================================================================== */
-
-/**
- * Rust function declaration.
+ * 6. FUNCTIONS
+ * ============================================================================
  *
- * This represents a callable boundary rather than an implementation body.
+ * A Rust function declaration describes a callable interoperability boundary.
+ *
+ * It does not contain a Rust implementation body.
+ * ============================================================================
  */
+
 rustFunctionDeclaration
     : attribute*
       rustVisibility?
-      rustAsync?
+      rustAsyncQualifier?
       rustExternQualifier?
-      'fn'
+      FN
       identifier
       rustGenericParameters?
-      '('
+      LPAREN
       rustParameterList?
-      ')'
+      RPAREN
       rustReturnType?
       rustWhereClause?
       rustFunctionClause*
-      ';'
+      SEMICOLON
+    ;
+
+
+rustVisibility
+    : PUBLIC
+    | PUB
+    | PRIVATE
+    | PROTECTED
+    | INTERNAL
+    ;
+
+
+rustAsyncQualifier
+    : ASYNC
     ;
 
 
 rustExternQualifier
-    : 'extern'
-      rustAbiName?
-    ;
-
-
-rustAsync
-    : 'async'
+    : EXTERN
+      rustAbiReference?
     ;
 
 
 rustReturnType
-    : '->'
+    : ARROW
       typeExpression
     ;
 
@@ -613,10 +612,10 @@ rustReturnType
 rustParameterList
     : rustParameter
       (
-          ','
+          COMMA
           rustParameter
       )*
-      ','?
+      COMMA?
     ;
 
 
@@ -627,17 +626,17 @@ rustParameter
 
 
 rustReceiverParameter
-    : '&'
+    : AMPERSAND
       rustLifetime?
-      'mut'?
-      'self'
+      MUT?
+      SELF
       rustParameterMetadata*
     ;
 
 
 rustNamedParameter
     : rustPattern
-      ':'
+      COLON
       typeExpression
       rustParameterMetadata*
     ;
@@ -645,13 +644,32 @@ rustNamedParameter
 
 rustPattern
     : identifier
-    | '_'
+    | UNDERSCORE
     ;
 
 
-/**
- * Function-specific semantic clauses.
+rustParameterMetadata
+    : rustRepresentationClause
+    | rustOwnershipClause
+    | rustBorrowingClause
+    | rustLifetimeClause
+    | rustNullabilityClause
+    | rustRequirementClause
+    | rustCapabilityClause
+    | rustAttributeBlock
+    ;
+
+
+/* ============================================================================
+ * 7. FUNCTION CONTRACT
+ * ============================================================================
+ *
+ * Boundary metadata is deliberately symbolic.
+ *
+ * ABI implementation remains downstream.
+ * ============================================================================
  */
+
 rustFunctionClause
     : rustSymbolClause
     | rustLinkageClause
@@ -659,129 +677,212 @@ rustFunctionClause
     | rustOwnershipClause
     | rustBorrowingClause
     | rustLifetimeClause
+    | rustNullabilityClause
     | rustSafetyClause
     | rustEffectClause
     | rustRequirementClause
     | rustCapabilityClause
     | rustCompatibilityClause
-    | rustAttributeBlock
     | rustThrowsClause
     | rustAsyncClause
     | rustStreamingClause
+    | rustRepresentationClause
+    | rustAttributeBlock
     ;
 
 
 rustSymbolClause
-    : 'symbol'
-      '='
-      stringLiteral
+    : identifier
+      ASSIGN
+      STRING
+      SEMICOLON
     ;
 
 
 rustLinkageClause
-    : 'linkage'
-      '='
-      rustSymbolicReference
+    : identifier
+      ASSIGN
+      rustSymbolicValue
+      SEMICOLON
     ;
 
 
 rustCallingConventionClause
-    : 'calling'
-      'convention'
-      '='
-      rustSymbolicReference
+    : identifier
+      identifier
+      ASSIGN
+      rustSymbolicValue
+      SEMICOLON
     ;
 
 
 rustSafetyClause
-    : 'safety'
-      '='
-      rustSymbolicReference
+    : identifier
+      ASSIGN
+      rustSafetyValue
+      SEMICOLON
+    ;
+
+
+rustSafetyValue
+    : identifier
+    | qualifiedNameReference
+    | STRING
     ;
 
 
 rustEffectClause
-    : 'effects'
-      '{'
+    : EFFECTS
+      LBRACE
       qualifiedNameReference
       (
-          ','
+          COMMA
           qualifiedNameReference
       )*
-      '}'
+      RBRACE
     ;
 
 
 rustCapabilityClause
-    : 'capabilities'
-      '{'
+    : CAPABILITY
       qualifiedNameReference
-      (
-          ','
-          qualifiedNameReference
-      )*
-      '}'
+      SEMICOLON
+    ;
+
+
+rustRequirementClause
+    : REQUIRES
+      expression
+      SEMICOLON
     ;
 
 
 rustThrowsClause
-    : 'throws'
+    : identifier
       typeExpression
+      SEMICOLON
     ;
 
 
 rustAsyncClause
-    : 'async'
+    : ASYNC
       rustAsyncContract
+      SEMICOLON
     ;
 
 
 rustAsyncContract
-    : 'required'
-    | 'optional'
-    | 'forbidden'
-    | rustSymbolicReference
+    : identifier
+    | qualifiedNameReference
+    | STRING
     ;
 
 
 rustStreamingClause
-    : 'streaming'
-      '='
-      rustSymbolicReference
+    : identifier
+      ASSIGN
+      rustSymbolicValue
+      SEMICOLON
+    ;
+
+
+rustRepresentationClause
+    : identifier
+      ASSIGN
+      rustSymbolicValue
+      SEMICOLON
+    ;
+
+
+rustOwnershipClause
+    : identifier
+      ASSIGN
+      rustOwnershipValue
+      SEMICOLON
+    ;
+
+
+rustOwnershipValue
+    : identifier
+    | qualifiedNameReference
+    | STRING
+    ;
+
+
+rustBorrowingClause
+    : identifier
+      ASSIGN
+      rustBorrowingValue
+      SEMICOLON
+    ;
+
+
+rustBorrowingValue
+    : identifier
+    | qualifiedNameReference
+    | STRING
+    ;
+
+
+rustLifetimeClause
+    : identifier
+      ASSIGN
+      rustLifetimeValue
+      SEMICOLON
+    ;
+
+
+rustLifetimeValue
+    : rustLifetime
+    | identifier
+    | qualifiedNameReference
+    | STRING
+    ;
+
+
+rustNullabilityClause
+    : identifier
+      ASSIGN
+      rustNullabilityValue
+      SEMICOLON
+    ;
+
+
+rustNullabilityValue
+    : identifier
+    | qualifiedNameReference
+    | STRING
     ;
 
 
 /* ============================================================================
- * TYPES
- * ========================================================================== */
-
-/**
- * Rust type declaration.
- *
- * This is a boundary declaration, not a duplicate Zamani type system.
+ * 8. TYPE BOUNDARIES
+ * ============================================================================
  */
+
 rustTypeDeclaration
     : attribute*
       rustVisibility?
-      'type'
+      TYPE
       identifier
       rustGenericParameters?
-      '='
-      typeExpression
+      (
+          ASSIGN
+          typeExpression
+      )?
       rustWhereClause?
-      ';'
+      SEMICOLON
     ;
 
 
 rustOpaqueDeclaration
     : attribute*
       rustVisibility?
-      'rust'
-      'opaque'
+      identifier
       identifier
       rustGenericParameters?
       rustOpaqueClause*
-      ';'
+      SEMICOLON
     ;
 
 
@@ -790,20 +891,23 @@ rustOpaqueClause
     | rustOwnershipClause
     | rustBorrowingClause
     | rustLifetimeClause
+    | rustNullabilityClause
     | rustRequirementClause
+    | rustCapabilityClause
     | rustCompatibilityClause
     | rustAttributeBlock
     ;
 
 
 /* ============================================================================
- * STRUCTS
- * ========================================================================== */
+ * 9. STRUCTS
+ * ============================================================================
+ */
 
 rustStructDeclaration
     : attribute*
       rustVisibility?
-      'struct'
+      STRUCT
       identifier
       rustGenericParameters?
       rustWhereClause?
@@ -812,14 +916,14 @@ rustStructDeclaration
 
 
 rustStructBody
-    : '{'
+    : LBRACE
       rustStructField*
-      '}'
-    | '('
+      RBRACE
+    | LPAREN
       rustTupleFieldList?
-      ')'
-      ';'
-    | ';'
+      RPAREN
+      SEMICOLON
+    | SEMICOLON
     ;
 
 
@@ -827,20 +931,20 @@ rustStructField
     : attribute*
       rustVisibility?
       identifier
-      ':'
+      COLON
       typeExpression
       rustFieldClause*
-      ','
+      COMMA
     ;
 
 
 rustTupleFieldList
     : rustTupleField
       (
-          ','
+          COMMA
           rustTupleField
       )*
-      ','?
+      COMMA?
     ;
 
 
@@ -857,25 +961,28 @@ rustFieldClause
     | rustOwnershipClause
     | rustBorrowingClause
     | rustLifetimeClause
+    | rustNullabilityClause
     | rustRequirementClause
+    | rustCapabilityClause
     | rustAttributeBlock
     ;
 
 
 /* ============================================================================
- * ENUMS
- * ========================================================================== */
+ * 10. ENUMS
+ * ============================================================================
+ */
 
 rustEnumDeclaration
     : attribute*
       rustVisibility?
-      'enum'
+      ENUM
       identifier
       rustGenericParameters?
       rustWhereClause?
-      '{'
+      LBRACE
       rustEnumVariant*
-      '}'
+      RBRACE
     ;
 
 
@@ -884,44 +991,45 @@ rustEnumVariant
       identifier
       rustEnumVariantBody?
       rustDiscriminant?
-      ','
+      COMMA?
     ;
 
 
 rustEnumVariantBody
     : rustStructBody
-    | '('
+    | LPAREN
       rustTupleFieldList?
-      ')'
+      RPAREN
     ;
 
 
 rustDiscriminant
-    : '='
+    : ASSIGN
       expression
     ;
 
 
 /* ============================================================================
- * TRAITS
- * ========================================================================== */
-
-/**
- * Trait contracts are represented symbolically.
+ * 11. TRAITS
+ * ============================================================================
  *
- * The grammar does not attempt to implement Rust's trait solver.
+ * Trait semantics remain symbolic.
+ *
+ * This grammar does not implement Rust's trait solver.
+ * ============================================================================
  */
+
 rustTraitDeclaration
     : attribute*
       rustVisibility?
-      'trait'
+      TRAIT
       identifier
       rustGenericParameters?
       rustTraitBounds?
       rustWhereClause?
-      '{'
+      LBRACE
       rustTraitMember*
-      '}'
+      RBRACE
     ;
 
 
@@ -937,14 +1045,11 @@ rustTraitMember
     ;
 
 
-/**
- * Trait bounds remain symbolic and extensible.
- */
 rustTraitBounds
-    : ':'
+    : COLON
       rustTraitBound
       (
-          '+'
+          PLUS
           rustTraitBound
       )*
     ;
@@ -957,114 +1062,120 @@ rustTraitBound
 
 
 /* ============================================================================
- * IMPLEMENTATIONS
- * ========================================================================== */
+ * 12. IMPLEMENTATIONS
+ * ============================================================================
+ */
 
 rustImplementationDeclaration
     : attribute*
       rustVisibility?
-      'impl'
+      IMPL
       rustGenericParameters?
       rustTraitImplementationTarget?
       typeExpression
       rustWhereClause?
-      '{'
-      rustImplementationMember*
-      '}'
+      rustImplementationBody
     ;
 
 
 rustTraitImplementationTarget
-    : rustTraitReference
-      'for'
+    : qualifiedNameReference
+      FOR
     ;
 
 
-rustTraitReference
-    : qualifiedNameReference
+rustImplementationBody
+    : LBRACE
+      rustImplementationMember*
+      RBRACE
     ;
 
 
 rustImplementationMember
-    : rustFunctionDeclaration
-    | rustTypeDeclaration
-    | rustConstantDeclaration
-    | rustOpaqueDeclaration
+    : attribute*
+      rustFunctionDeclaration
+    | attribute*
+      rustTypeDeclaration
+    | attribute*
+      rustConstantDeclaration
+    | attribute*
+      rustStaticDeclaration
     ;
 
 
 /* ============================================================================
- * CONSTANTS / STATICS
- * ========================================================================== */
+ * 13. CONSTANTS / STATICS
+ * ============================================================================
+ */
 
 rustConstantDeclaration
     : attribute*
       rustVisibility?
-      'const'
+      CONST
       identifier
-      ':'
+      COLON
       typeExpression
-      '='
-      expression
-      ';'
+      (
+          ASSIGN
+          expression
+      )?
+      SEMICOLON
     ;
 
 
 rustStaticDeclaration
     : attribute*
       rustVisibility?
-      'static'
-      'mut'?
+      STATIC
+      rustMutableStatic?
       identifier
-      ':'
+      COLON
       typeExpression
-      rustStaticClause*
-      ';'
+      (
+          ASSIGN
+          expression
+      )?
+      SEMICOLON
     ;
 
 
-rustStaticClause
-    : rustRepresentationClause
-    | rustOwnershipClause
-    | rustBorrowingClause
-    | rustLifetimeClause
-    | rustRequirementClause
-    | rustCompatibilityClause
-    | rustAttributeBlock
+rustMutableStatic
+    : MUT
     ;
 
 
 /* ============================================================================
- * CALLBACKS
- * ========================================================================== */
-
-/**
- * A callback is an externally callable contract.
+ * 14. CALLBACKS
+ * ============================================================================
  *
- * It does not allocate a runtime callback.
+ * A callback is a symbolic callable boundary.
+ *
+ * Actual callback registration/dispatch is downstream.
+ * ============================================================================
  */
+
 rustCallbackDeclaration
     : attribute*
-      rustVisibility?
-      'rust'
-      'callback'
+      identifier
       identifier
       rustGenericParameters?
-      '('
+      LPAREN
       rustParameterList?
-      ')'
+      RPAREN
       rustReturnType?
+      rustWhereClause?
       rustCallbackClause*
-      ';'
+      SEMICOLON
     ;
 
 
 rustCallbackClause
     : rustCallingConventionClause
-    | rustSafetyClause
     | rustOwnershipClause
     | rustBorrowingClause
     | rustLifetimeClause
+    | rustNullabilityClause
+    | rustSafetyClause
     | rustEffectClause
     | rustRequirementClause
     | rustCapabilityClause
@@ -1074,608 +1185,483 @@ rustCallbackClause
 
 
 /* ============================================================================
- * GENERICS
- * ========================================================================== */
+ * 15. GENERICS
+ * ============================================================================
+ *
+ * Generic cardinality is unbounded by language semantics.
+ * ============================================================================
+ */
 
 rustGenericParameters
-    : '<'
-      rustGenericParameter
+    : LESS_THAN
+      rustGenericParameterList
+      GREATER_THAN
+    ;
+
+
+rustGenericParameterList
+    : rustGenericParameter
       (
-          ','
+          COMMA
           rustGenericParameter
       )*
-      ','?
-      '>'
+      COMMA?
     ;
 
 
 rustGenericParameter
     : identifier
-      rustGenericParameterBound?
+      rustGenericParameterBounds?
     | rustLifetime
+    ;
+
+
+rustGenericParameterBounds
+    : COLON
+      rustGenericParameterBound
+      (
+          PLUS
+          rustGenericParameterBound
+      )*
     ;
 
 
 rustGenericParameterBound
-    : ':'
-      rustTraitBound
-      (
-          '+'
-          rustTraitBound
-      )*
+    : qualifiedNameReference
+    | rustLifetime
     ;
 
 
 /* ============================================================================
- * WHERE CLAUSES
- * ========================================================================== */
+ * 16. LIFETIMES
+ * ============================================================================
+ *
+ * Lifetime names are represented symbolically.
+ *
+ * No finite lifetime count or lifetime-name registry exists here.
+ * ============================================================================
+ */
+
+rustLifetime
+    : APOSTROPHE
+      identifier
+    ;
+
+
+/* ============================================================================
+ * 17. WHERE CLAUSES
+ * ============================================================================
+ */
 
 rustWhereClause
-    : 'where'
-      rustWherePredicate
-      (
-          ','
-          rustWherePredicate
-      )*
-      ','?
+    : WHERE
+      rustWherePredicate+
     ;
 
 
 rustWherePredicate
-    : rustWhereLifetimePredicate
-    | rustWhereTypePredicate
+    : rustWhereSubject
+      COLON
+      rustWhereBoundList
     ;
 
 
-rustWhereLifetimePredicate
-    : rustLifetime
-      ':'
-      rustLifetimeBound
-      (
-          '+'
-          rustLifetimeBound
-      )*
-    ;
-
-
-rustWhereTypePredicate
+rustWhereSubject
     : typeExpression
-      ':'
-      rustTraitBound
-      (
-          '+'
-          rustTraitBound
-      )*
-    ;
-
-
-rustLifetimeBound
-    : rustLifetime
-    | rustStaticLifetime
-    ;
-
-
-/* ============================================================================
- * LIFETIMES
- * ========================================================================== */
-
-/**
- * Lifetimes are symbolic.
- *
- * No lifetime count or nesting limit is imposed.
- */
-rustLifetime
-    : RUST_LIFETIME
-    ;
-
-
-rustStaticLifetime
-    : 'static'
-    ;
-
-
-/* ============================================================================
- * REFERENCES / OWNERSHIP
- * ========================================================================== */
-
-/**
- * These are interoperability metadata clauses.
- *
- * They do not replace Zamani's memory/ownership model.
- */
-rustOwnershipClause
-    : 'ownership'
-      '='
-      rustSymbolicReference
-    ;
-
-
-rustBorrowingClause
-    : 'borrowing'
-      '='
-      rustSymbolicReference
-    ;
-
-
-rustLifetimeClause
-    : 'lifetime'
-      '='
-      rustLifetimeContract
-    ;
-
-
-rustLifetimeContract
-    : rustLifetime
     | rustLifetime
-      'outlives'
-      rustLifetime
-    | rustSymbolicReference
     ;
 
 
-/* ============================================================================
- * REPRESENTATION
- * ========================================================================== */
-
-rustRepresentationClause
-    : 'representation'
-      '='
-      rustSymbolicReference
-    ;
-
-
-rustRepresentationAttribute
-    : 'repr'
-      '('
-      rustRepresentationArgument
+rustWhereBoundList
+    : rustWhereBound
       (
-          ','
-          rustRepresentationArgument
+          PLUS
+          rustWhereBound
       )*
-      ')'
     ;
 
 
-rustRepresentationArgument
-    : rustSymbolicReference
-    | expression
+rustWhereBound
+    : qualifiedNameReference
+    | rustLifetime
+    | typeExpression
     ;
 
 
 /* ============================================================================
- * REQUIREMENTS / CAPABILITIES / COMPATIBILITY
- * ========================================================================== */
+ * 18. REQUIREMENTS / CAPABILITIES
+ * ============================================================================
+ *
+ * These are references to canonical Zamani semantic systems.
+ *
+ * They do not grant capabilities.
+ * ============================================================================
+ */
 
 rustRequirementDeclaration
     : attribute*
-      'rust'
-      'requires'
-      rustRequirementExpression
-      ';'
-    ;
-
-
-rustRequirementClause
-    : 'requires'
-      rustRequirementExpression
-    ;
-
-
-rustRequirementExpression
-    : qualifiedNameReference
-    | expression
-    ;
-
-
-rustCapabilityClause
-    : 'capabilities'
-      '{'
-      qualifiedNameReference
-      (
-          ','
-          qualifiedNameReference
-      )*
-      '}'
-    ;
-
-
-rustFeatureClause
-    : 'feature'
-      '='
-      rustSymbolicReference
+      REQUIRES
+      expression
+      SEMICOLON
     ;
 
 
 rustCompatibilityDeclaration
     : attribute*
-      'rust'
-      'compatible'
-      'with'
-      rustCompatibilityTarget
-      ';'
+      identifier
+      qualifiedNameReference
+      rustCompatibilityBody?
+      SEMICOLON
     ;
 
 
-rustCompatibilityClause
-    : 'compatible'
-      'with'
-      rustCompatibilityTarget
+rustCompatibilityBody
+    : LBRACE
+      rustCompatibilityItem*
+      RBRACE
     ;
 
 
-rustCompatibilityTarget
-    : qualifiedNameReference
-    | stringLiteral
-    | expression
+rustCompatibilityItem
+    : rustVersionClause
+    | rustFeatureClause
+    | rustRequirementDeclaration
+    | rustCapabilityClause
+    | rustAttributeBlock
     ;
 
-
-/* ============================================================================
- * VERSION
- * ========================================================================== */
 
 rustVersionClause
-    : 'version'
-      rustVersionOperator?
+    : identifier
+      ASSIGN
       rustVersionValue
-    ;
-
-
-rustVersionOperator
-    : '='
-    | '=='
-    | '!='
-    | '<'
-    | '<='
-    | '>'
-    | '>='
-    | '^'
-    | '~'
+      SEMICOLON
     ;
 
 
 rustVersionValue
-    : stringLiteral
-    | integerLiteral
-    | rustSymbolicReference
-    ;
-
-
-/* ============================================================================
- * LINKAGE
- * ========================================================================== */
-
-rustLinkageDeclaration
-    : attribute*
-      'rust'
-      'link'
-      rustLinkageTarget
-      rustLinkageBody?
-      ';'?
-    ;
-
-
-rustLinkageTarget
-    : qualifiedNameReference
-    | stringLiteral
-    ;
-
-
-rustLinkageBody
-    : '{'
-      rustLinkageItem*
-      '}'
-    ;
-
-
-rustLinkageItem
-    : 'name'
-      '='
-      stringLiteral
-      ';'
-    | 'kind'
-      '='
-      rustSymbolicReference
-      ';'
-    | 'version'
-      '='
-      stringLiteral
-      ';'
-    | 'interface'
-      '='
-      qualifiedNameReference
-      ';'
-    | 'requires'
-      '='
-      expression
-      ';'
-    | identifier
-      '='
-      expression
-      ';'
-    ;
-
-
-/* ============================================================================
- * IMPLEMENTATION REFERENCES
- * ========================================================================== */
-
-/**
- * References an implementation without executing or resolving it.
- */
-rustImplementationReference
-    : attribute*
-      'rust'
-      'implementation'
-      qualifiedNameReference
-      rustImplementationClause*
-      ';'
-    ;
-
-
-rustImplementationClause
-    : rustCrateClause
-    | rustModuleClause
-    | rustVersionClause
-    | rustFeatureClause
-    | rustRequirementClause
-    | rustCompatibilityClause
-    | rustAttributeBlock
-    ;
-
-
-/* ============================================================================
- * CALL EXPRESSIONS
- * ========================================================================== */
-
-/**
- * Explicit Rust call.
- *
- * The call crosses a semantic interoperability boundary.
- *
- * It does not itself:
- *
- *     load a crate
- *     load a library
- *     resolve a symbol
- *     execute Rust
- */
-rustCallExpression
-    : 'rust'
-      'call'
-      rustCallTarget
-      '('
-      rustArgumentList?
-      ')'
-    ;
-
-
-rustQualifiedCallExpression
-    : 'rust'
-      'call'
-      stringLiteral
-      '::'
-      qualifiedNameReference
-      '('
-      rustArgumentList?
-      ')'
-    ;
-
-
-rustCallTarget
-    : qualifiedNameReference
-    | stringLiteral
-      '::'
-      qualifiedNameReference
-    ;
-
-
-rustArgumentList
-    : expression
-      (
-          ','
-          expression
-      )*
-      ','?
-    ;
-
-
-/**
- * Statement-oriented form.
- */
-rustCallStatement
-    : rustCallExpression ';'
-    | rustQualifiedCallExpression ';'
-    ;
-
-
-/* ============================================================================
- * PARAMETERS
- * ========================================================================== */
-
-rustParameterMetadata
-    : rustOwnershipClause
-    | rustBorrowingClause
-    | rustLifetimeClause
-    | rustRepresentationClause
-    | rustRequirementClause
-    | rustAttributeBlock
-    ;
-
-
-/* ============================================================================
- * VISIBILITY
- * ========================================================================== */
-
-rustVisibility
-    : 'pub'
-    | 'public'
-    | 'private'
-    | 'protected'
-    ;
-
-
-/* ============================================================================
- * ATTRIBUTE BLOCK
- * ========================================================================== */
-
-/**
- * Rust-specific metadata is kept separate from Zamani's generic attributes.
- *
- * This permits imported Rust declarations such as:
- *
- *     #[repr(C)]
- *
- * to be represented without turning the Zamani attribute grammar into a
- * Rust-language grammar.
- *
- * The semantic layer decides which Rust attributes are valid.
- */
-rustAttributeBlock
-    : '#'
-      '['
-      rustAttributeContent
-      ']'
-    ;
-
-
-rustAttributeContent
-    : rustAttributeName
-      rustAttributeArguments?
-    ;
-
-
-rustAttributeName
-    : identifier
+    : STRING
+    | INTEGER
     | qualifiedNameReference
     ;
 
 
-rustAttributeArguments
-    : '('
-      rustAttributeArgumentList?
-      ')'
-    ;
-
-
-rustAttributeArgumentList
-    : rustAttributeArgument
-      (
-          ','
-          rustAttributeArgument
-      )*
-      ','?
-    ;
-
-
-rustAttributeArgument
-    : rustAttributeKeyValue
-    | expression
-    | rustSymbolicReference
-    ;
-
-
-rustAttributeKeyValue
+rustFeatureClause
     : identifier
-      '='
-      expression
+      ASSIGN
+      rustSymbolicValue
+      SEMICOLON
+    ;
+
+
+rustImplementationReference
+    : attribute*
+      identifier
+      ASSIGN
+      rustImplementationValue
+      SEMICOLON
+    ;
+
+
+rustImplementationValue
+    : qualifiedNameReference
+    | STRING
+    | rustSymbolicValue
     ;
 
 
 /* ============================================================================
- * SYMBOLIC REFERENCES
- * ========================================================================== */
-
-/**
- * Rust implementation identities are intentionally open-world.
+ * 19. SYMBOLIC VALUES
+ * ============================================================================
  *
- * The grammar does not enumerate crates, vendors, platforms, operating
- * systems, architectures, ABIs, or deployment targets.
+ * Symbolic values are deliberately open-world.
+ *
+ * This permits future Rust editions, crates, traits, ABIs, implementations,
+ * runtimes, platforms, and interoperability mechanisms without changing this
+ * grammar merely to enumerate their names.
+ * ============================================================================
  */
-rustSymbolicReference
+
+rustSymbolicValue
     : qualifiedNameReference
-    | stringLiteral
-    ;
-
-
-rustPathReference
-    : qualifiedNameReference
-    | rustPathSegment
-      (
-          '::'
-          rustPathSegment
-      )*
-    ;
-
-
-rustPathSegment
-    : identifier
-    | 'self'
-    | 'super'
-    | 'crate'
+    | STRING
+    | identifier
     ;
 
 
 /* ============================================================================
- * SAFETY / CONTRACT METADATA
- * ========================================================================== */
+ * 20. ATTRIBUTE BLOCK
+ * ============================================================================
+ *
+ * Attribute syntax remains owned by Attributes.
+ * ============================================================================
+ */
 
-rustSafetyClause
-    : 'safety'
-      '='
-      rustSymbolicReference
+rustAttributeBlock
+    : attribute
     ;
 
 
 /* ============================================================================
- * GENERIC ATTRIBUTE VALUE
- * ========================================================================== */
-
-rustAttributeBlockList
-    : rustAttributeBlock+
-    ;
-
-
-/* ============================================================================
- * NO TARGET-SPECIFIC RULES
- * ========================================================================== */
-
-/**
- * Deliberately absent:
+ * 21. COMPLETION CONTRACT
+ * ============================================================================
  *
- *     x86
- *     x86_64
- *     arm
- *     aarch64
- *     riscv
- *     wasm
- *     gpu
- *     qpu
- *     fpga
- *     register
- *     address
- *     pointer width
- *     memory size
- *     device ID
- *     core count
- *     thread count
- *     topology
+ * This grammar is complete when:
  *
- * Such information belongs to:
+ * [x] Rust interoperability has one parser grammar owner.
  *
- *     ABI
- *     target
+ * [x] The existing filename remains rust.g4.
+ *
+ * [x] The grammar name remains Rust.
+ *
+ * [x] Canonical ZamaniLexer is the only lexer dependency.
+ *
+ * [x] Names are reused rather than redefined.
+ *
+ * [x] Qualified names are reused rather than redefined.
+ *
+ * [x] Attributes are reused rather than redefined.
+ *
+ * [x] Expressions are reused rather than redefined.
+ *
+ * [x] Types are reused rather than redefined.
+ *
+ * [x] ABI syntax remains owned by Abi.
+ *
+ * [x] General FFI remains owned by Ffi.
+ *
+ * [x] Rust syntax is not confused with the complete Rust language.
+ *
+ * [x] Rust implementation behavior is not embedded in the grammar.
+ *
+ * [x] No filesystem/network/runtime behavior exists.
+ *
+ * [x] No hardware-specific limits exist.
+ *
+ * [x] No CPU/GPU/FPGA/QPU topology exists.
+ *
+ * [x] No physical memory assumptions exist.
+ *
+ * [x] No fixed Rust crate registry exists.
+ *
+ * [x] No fixed trait/type/function inventory exists.
+ *
+ * [x] Generic cardinality is structurally unbounded.
+ *
+ * [x] Lifetime cardinality is structurally unbounded.
+ *
+ * [x] Function parameter cardinality is structurally unbounded.
+ *
+ * [x] No MAX_* language-level limits exist.
+ *
+ * [x] Rust implementation remains compatible with Rust 1.97/1.97.1.
+ *
+ * [x] Rust implementation requires no unsafe Rust.
+ *
+ * [x] Parsing is deterministic.
+ *
+ * [x] Source-level Rust interoperability remains target-independent.
+ *
+ * ============================================================================
+ * AST CONTRACT
+ * ============================================================================
+ *
+ * The frontend must map these rules into the EXISTING domain-neutral AST.
+ *
+ * Conceptually:
+ *
+ *     rustInterfaceDeclaration
+ *         -> foreign/interface declaration
+ *
+ *     rustFunctionDeclaration
+ *         -> foreign callable declaration
+ *
+ *     rustTypeDeclaration
+ *         -> foreign type declaration
+ *
+ *     rustStructDeclaration
+ *         -> foreign aggregate declaration
+ *
+ *     rustEnumDeclaration
+ *         -> foreign variant declaration
+ *
+ *     rustTraitDeclaration
+ *         -> foreign capability/interface contract
+ *
+ *     rustImplementationDeclaration
+ *         -> foreign implementation relationship
+ *
+ *     rustCallbackDeclaration
+ *         -> foreign callback contract
+ *
+ *     rustOpaqueDeclaration
+ *         -> opaque foreign type
+ *
+ *     rustExternBlock
+ *         -> ABI/foreign boundary
+ *
+ * No Rust-specific backend IR is created by this grammar.
+ *
+ * Exact Rust AST type names belong to:
+ *
+ *     src/frontend/ast/
+ *
+ * ============================================================================
+ * SEMANTIC CONTRACT
+ * ============================================================================
+ *
+ * Semantic analysis must validate:
+ *
+ *     name resolution
+ *     type compatibility
+ *     generic compatibility
+ *     lifetime compatibility
+ *     ownership compatibility
+ *     borrowing compatibility
+ *     nullability
+ *     ABI compatibility
+ *     symbol compatibility
+ *     calling-convention compatibility
+ *     effect compatibility
+ *     capability requirements
+ *     resource requirements
+ *     Rust-version compatibility
+ *
+ * Unsupported target capabilities are semantic/target errors, NOT parser
+ * errors.
+ *
+ * ============================================================================
+ * ABI / FFI INTEGRATION
+ * ============================================================================
+ *
+ * Rust-specific declarations may reference:
+ *
+ *     Abi
+ *     Ffi
+ *
+ * but MUST NOT reproduce their semantic models.
+ *
+ * ABI realization remains downstream:
+ *
+ *     ABI contract
+ *          |
+ *          v
+ *     semantic validation
+ *          |
+ *          v
+ *     target-specific ABI lowering
+ *          |
+ *          v
+ *     linker/runtime
+ *
+ * ============================================================================
+ * QUANTUM INTEGRATION
+ * ============================================================================
+ *
+ * Rust interoperability may expose types participating in quantum programs.
+ *
+ * For example, a Rust implementation may provide a classical service used
+ * around a quantum computation.
+ *
+ * This grammar MUST NOT introduce:
+ *
+ *     RustQuantumIR
+ *     RustQubitIR
+ *     RustGateIR
+ *     RustQPUIR
+ *
+ * Quantum semantics continue through:
+ *
+ *     semantic model
+ *          |
+ *          v
+ *     quantum::ir
+ *
+ * Rust is an interoperability target, not a competing quantum representation.
+ *
+ * ============================================================================
+ * CLASSICAL / HDL / HARDWARE INTEGRATION
+ * ============================================================================
+ *
+ * Rust may interoperate with:
+ *
+ *     classical computation
+ *     quantum computation
+ *     hybrid computation
+ *     HDL
  *     hardware
- *     resource
- *     capability
- *     compilation
- *     execution
- *     deployment
+ *     accelerators
+ *     distributed services
+ *     AI/ML
+ *     networking
+ *     security
  *
- * and must never become an accidental Rust interoperability limitation.
+ * The Rust grammar remains domain-neutral.
+ *
+ * Domain meaning belongs to the relevant semantic subsystem.
+ *
+ * ============================================================================
+ * POCO-REAF GUARANTEE
+ * ============================================================================
+ *
+ * The same Zamani Rust interoperability contract can remain valid when the
+ * implementation changes from:
+ *
+ *     tiny embedded target
+ *     CPU
+ *     multicore CPU
+ *     GPU
+ *     FPGA
+ *     accelerator
+ *     HPC
+ *     distributed system
+ *     quantum/classical host
+ *     future computational target
+ *
+ * provided that the target satisfies the semantic requirements.
+ *
+ * The grammar does not need to change merely because scale changes.
+ *
+ * ============================================================================
+ * FINAL INVARIANT
+ * ============================================================================
+ *
+ * Rust interoperability describes:
+ *
+ *     WHAT Zamani requires from a Rust boundary.
+ *
+ * It does not prescribe:
+ *
+ *     WHICH machine
+ *     WHICH CPU
+ *     WHICH memory
+ *     WHICH register
+ *     WHICH device
+ *     WHICH node
+ *     WHICH physical address
+ *     WHICH hardware topology
+ *
+ * Therefore:
+ *
+ *     Zamani source
+ *          ->
+ *     Rust interoperability contract
+ *          ->
+ *     canonical semantic model
+ *          ->
+ *     canonical IR
+ *          ->
+ *     target-specific lowering
+ *
+ * preserves the POCO-REAF architecture:
+ *
+ *     Program Once
+ *     Compile Once
+ *     Run Everywhere
+ *     Run Anywhere
+ *     Forever
+ *
+ * subject only to actual program semantics and available resources.
+ *
+ * ============================================================================
  */
-
-
-/* ============================================================================
- * END
- * ========================================================================== */
