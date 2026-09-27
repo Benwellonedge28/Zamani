@@ -12,10 +12,30 @@
  * Status:
  *     Production scheduling-intent parser grammar
  *
- * Purpose:
- *     Defines source-level scheduling intent for Zamani execution.
+ * Compiler baseline:
+ *     Rust 1.97 / Rust 1.97.1
+ *     Rust 2021
  *
- * Architectural position:
+ * Safety:
+ *     Grammar contains no embedded Rust, semantic actions, predicates,
+ *     filesystem access, network access, hardware discovery, or runtime calls.
+ *
+ *     The Zamani compiler/runtime implementation MUST use safe Rust only.
+ *     `unsafe` Rust is not part of this contract.
+ *
+ * ============================================================================
+ * PURPOSE
+ * ============================================================================
+ *
+ * This grammar defines SOURCE-LEVEL SCHEDULING INTENT.
+ *
+ * It describes constraints, requirements, preferences, hints, ordering,
+ * temporal intent, resource intent, and scheduler-policy intent that may
+ * influence later scheduling.
+ *
+ * It does NOT implement a scheduler.
+ *
+ * The complete architectural pipeline is:
  *
  *     Zamani source
  *          |
@@ -26,16 +46,22 @@
  *     parser
  *          |
  *          v
- *     frontend AST
- *          |
- *          +--> semantic analysis
- *          +--> resource analysis
- *          +--> capability analysis
+ *     domain-neutral frontend AST
  *          |
  *          v
- *     canonical semantic representation
+ *     structural analysis
  *          |
- *          +--> classical IR
+ *          +--> type analysis
+ *          +--> effect analysis
+ *          +--> resource analysis
+ *          +--> capability analysis
+ *          +--> dependency analysis
+ *          +--> portability analysis
+ *          |
+ *          v
+ *     canonical semantic model
+ *          |
+ *          +--> classical representation
  *          +--> quantum::ir
  *          +--> HDL / hardware representation
  *          +--> distributed representation
@@ -47,103 +73,159 @@
  *     routing
  *          |
  *          v
- *     scheduling subsystem
+ *     scheduling
  *          |
- *          +--> scheduling model
- *          +--> dependency analysis
- *          +--> resource constraints
- *          +--> temporal constraints
- *          +--> planner
+ *          v
+ *     placement
+ *          |
+ *          v
+ *     resilience / QEC / ZQN where applicable
+ *          |
+ *          v
+ *     HAL
  *          |
  *          v
  *     target realization
  *
  * ============================================================================
- *
- * CORE PRINCIPLE
- * ============================================================================
- *
- * This grammar describes:
- *
- *     WHAT scheduling behavior is requested or permitted.
- *
- * It does NOT describe:
- *
- *     HOW a scheduler computes a schedule.
- *
- * Therefore this grammar MUST NOT implement:
- *
- *     - ASAP scheduling;
- *     - ALAP scheduling;
- *     - list scheduling;
- *     - critical-path scheduling;
- *     - RCPSP;
- *     - resource allocation;
- *     - dependency analysis;
- *     - routing;
- *     - pulse scheduling;
- *     - calibration;
- *     - hardware discovery;
- *     - device selection;
- *     - queue management;
- *     - runtime scheduling;
- *     - operating-system scheduling.
- *
- * Those are semantic/compiler/runtime responsibilities.
- *
- * ============================================================================
- *
  * OWNERSHIP
  * ============================================================================
  *
  * THIS FILE OWNS:
  *
- *     - the `schedule` source construct;
- *     - scheduling intent;
+ *     - the `schedule` construct;
+ *     - scheduling subjects;
+ *     - scheduling property/intent entries;
+ *     - scheduling requirement intent;
+ *     - scheduling constraint intent;
+ *     - scheduling preference intent;
+ *     - scheduling hint intent;
  *     - scheduling policy references;
- *     - scheduling objectives;
- *     - ordering intent;
- *     - dependency intent;
- *     - temporal constraints;
- *     - resource-aware scheduling intent;
+ *     - scheduling objective references;
+ *     - ordering/dependency intent;
+ *     - temporal intent;
  *     - alignment intent;
+ *     - priority intent;
+ *     - resource intent;
+ *     - concurrency intent;
  *     - latency intent;
  *     - deadline intent;
- *     - priority intent;
- *     - concurrency limits expressed semantically;
- *     - scheduling preferences;
- *     - scheduling constraints;
- *     - scheduling hints;
- *     - schedule composition;
- *     - schedule metadata/property blocks.
+ *     - extensible scheduling properties;
+ *     - nested scheduling property blocks.
  *
  * THIS FILE DOES NOT OWN:
  *
- *     - lexical definitions;
+ *     - lexical tokens;
  *     - identifiers;
- *     - expressions;
+ *     - qualified names;
+ *     - general expressions;
+ *     - expression precedence;
  *     - types;
- *     - canonical IR;
- *     - quantum operations;
- *     - physical qubit mapping;
- *     - routing;
+ *     - resource-expression semantics;
+ *     - capability discovery;
  *     - hardware discovery;
- *     - resource discovery;
+ *     - target selection;
+ *     - placement;
+ *     - routing;
  *     - scheduling algorithms;
- *     - runtime queues;
- *     - device selection;
- *     - calibration;
+ *     - queue management;
+ *     - operating-system scheduling;
+ *     - runtime dispatch;
+ *     - quantum operations;
+ *     - quantum::ir;
  *     - QEC;
  *     - ZQN;
- *     - resilience;
+ *     - calibration;
  *     - optimization algorithms.
  *
  * ============================================================================
+ * SINGLE-AUTHORITY RULE
+ * ============================================================================
  *
+ * This file MUST NOT create a second:
+ *
+ *     expression grammar;
+ *     name grammar;
+ *     resource grammar;
+ *     capability grammar;
+ *     type grammar;
+ *     scheduling algorithm;
+ *     IR.
+ *
+ * Canonical expression syntax is imported from:
+ *
+ *     grammar/expressions/expressions.g4
+ *
+ * Canonical name syntax is imported from:
+ *
+ *     grammar/core/names.g4
+ *
+ * Resource/capability meaning remains owned by their respective semantic
+ * systems.
+ *
+ * ============================================================================
+ * LEXER CONTRACT
+ * ============================================================================
+ *
+ * The canonical lexer is:
+ *
+ *     grammar/antlr/ZamaniLexer.g4
+ *
+ * through the canonical lexical composition.
+ *
+ * This grammar consumes:
+ *
+ *     tokenVocab = ZamaniLexer;
+ *
+ * Required scheduling-specific lexical token:
+ *
+ *     SCHEDULE
+ *
+ * The current repository's canonical keyword vocabulary does not yet expose
+ * SCHEDULE. Therefore adding:
+ *
+ *     SCHEDULE : 'schedule' ;
+ *
+ * to grammar/lexer/keywords.g4 is the ONE required lexical integration
+ * change for this grammar.
+ *
+ * No policy/objective/dependency/etc. tokens are required.
+ *
+ * Scheduling property names remain ordinary identifiers/qualified names.
+ *
+ * This deliberately avoids a closed scheduler keyword registry.
+ *
+ * ============================================================================
+ * WHY ONLY `SCHEDULE` IS A KEYWORD
+ * ============================================================================
+ *
+ * `schedule` introduces a distinct language construct and therefore benefits
+ * from stable lexical recognition.
+ *
+ * Names such as:
+ *
+ *     asap
+ *     critical_path
+ *     latency
+ *     throughput
+ *     energy
+ *     fidelity
+ *     custom_policy
+ *     vendor::policy
+ *     future::scheduler
+ *
+ * do NOT need to become keywords.
+ *
+ * They are semantic names.
+ *
+ * This permits future scheduler policies, domain-specific scheduling
+ * properties, and dialect extensions without repeatedly changing the lexer.
+ *
+ * ============================================================================
  * POCO-REAF
  * ============================================================================
  *
- * Scheduling syntax must preserve:
+ * Scheduling syntax MUST preserve:
  *
  *     Program_Once
  *          |
@@ -159,276 +241,479 @@
  *          v
  *     Run_Forever
  *
- * A source-level schedule therefore describes semantic requirements,
- * constraints, preferences and hints rather than a concrete machine schedule.
+ * Scheduling source code describes portable execution intent.
  *
- * For example, source syntax may express:
+ * It MUST NOT require a particular:
  *
- *     schedule {
- *         policy: asap;
- *         priority: critical;
- *         alignment: required;
- *         latency: bounded;
- *     }
- *
- * without meaning:
- *
- *     use device X;
- *     use N cores;
- *     use N qubits;
- *     use topology Y;
- *     use a fixed clock;
- *     use a fixed pulse duration.
+ *     CPU;
+ *     core;
+ *     thread;
+ *     GPU;
+ *     FPGA;
+ *     ASIC;
+ *     QPU;
+ *     physical qubit;
+ *     node;
+ *     device;
+ *     memory bank;
+ *     accelerator;
+ *     network topology;
+ *     clock implementation;
+ *     scheduler implementation.
  *
  * ============================================================================
- *
  * SCALABILITY
  * ============================================================================
  *
- * There are deliberately no grammar-level finite scheduling limits.
+ * There are NO grammar-level finite limits on:
  *
- * This grammar contains no:
+ *     - number of schedule entries;
+ *     - number of nested property entries;
+ *     - number of scheduling properties;
+ *     - number of dependencies;
+ *     - number of tasks;
+ *     - number of operations;
+ *     - number of resources;
+ *     - number of machines;
+ *     - number of nodes;
+ *     - number of processors;
+ *     - number of accelerators;
+ *     - number of qubits;
+ *     - schedule depth;
+ *     - schedule duration;
+ *     - concurrency;
+ *     - target size.
+ *
+ * ANTLR repetition operators provide unbounded language structure:
+ *
+ *     *
+ *     +
+ *
+ * Actual limits belong to implementation/resource policy.
+ *
+ * Examples:
+ *
+ *     compiler memory;
+ *     compiler execution time;
+ *     target capacity;
+ *     runtime capacity;
+ *     operating-system constraints;
+ *     explicitly requested program constraints.
+ *
+ * These are NOT language-level scheduling limits.
+ *
+ * ============================================================================
+ * HARD-CODING PROHIBITION
+ * ============================================================================
+ *
+ * This grammar MUST NOT introduce:
  *
  *     MAX_OPERATIONS
  *     MAX_STAGES
  *     MAX_RESOURCES
  *     MAX_CORES
  *     MAX_THREADS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_QPUS
  *     MAX_QUBITS
- *     MAX_DEVICES
  *     MAX_NODES
- *     MAX_DEPENDENCIES
+ *     MAX_DEVICES
+ *     MAX_CONCURRENCY
  *     MAX_SCHEDULE_LENGTH
  *     MAX_DURATION
- *     MAX_CONCURRENCY
+ *     MAX_TIMELINES
  *
- * Repetition is represented structurally through ANTLR repetition operators.
+ * It also MUST NOT encode:
  *
- * Actual limits belong to:
+ *     CPU 0
+ *     GPU 0
+ *     QPU 0
+ *     physical qubit 0
+ *     fixed topology
+ *     fixed clock frequency
+ *     fixed register width
+ *     fixed memory capacity.
  *
- *     - semantic validation;
- *     - compiler policy;
- *     - resource management;
- *     - target capabilities;
- *     - runtime policy;
- *     - operating-system limits;
- *     - explicitly requested program constraints.
+ * A numeric scheduling value is allowed when it is PROGRAM SEMANTICS.
+ *
+ * For example:
+ *
+ *     concurrency: available;
+ *
+ * or:
+ *
+ *     concurrency: requested_parallelism;
+ *
+ * or:
+ *
+ *     deadline: application_deadline;
+ *
+ * The grammar does not interpret the value as a machine limit.
  *
  * ============================================================================
+ * REQUIREMENT / CONSTRAINT / PREFERENCE / HINT
+ * ============================================================================
  *
+ * These concepts are intentionally represented as distinct structural forms.
+ *
+ * REQUIREMENT:
+ *
+ *     A condition necessary for a valid realization.
+ *
+ * CONSTRAINT:
+ *
+ *     A mandatory restriction on acceptable realization.
+ *
+ * PREFERENCE:
+ *
+ *     Advisory optimization intent.
+ *
+ * HINT:
+ *
+ *     Weaker advisory information.
+ *
+ * The semantic layer MUST preserve these distinctions.
+ *
+ * A preference MUST NOT silently become a requirement.
+ *
+ * A hint MUST NOT silently become a constraint.
+ *
+ * ============================================================================
  * DETERMINISM
  * ============================================================================
  *
- * This grammar contains:
+ * This grammar:
  *
- *     - no semantic actions;
- *     - no embedded Rust;
- *     - no runtime calls;
- *     - no random behavior;
- *     - no device discovery;
- *     - no filesystem access;
- *     - no network access;
- *     - no mutable global state.
+ *     - has no semantic actions;
+ *     - has no predicates;
+ *     - has no runtime calls;
+ *     - has no hardware discovery;
+ *     - has no resource discovery;
+ *     - has no filesystem access;
+ *     - has no network access;
+ *     - has no randomness;
+ *     - has no mutable global parser state.
  *
- * Parsing therefore depends only on the canonical token stream.
+ * Given the same token stream and grammar version, parsing is deterministic.
  *
  * ============================================================================
+ * SECURITY
+ * ============================================================================
  *
+ * Scheduling syntax is declarative.
+ *
+ * Parsing MUST NOT:
+ *
+ *     - start a process;
+ *     - contact a scheduler;
+ *     - contact a cluster;
+ *     - query hardware;
+ *     - inspect credentials;
+ *     - allocate resources;
+ *     - access a device;
+ *     - execute a program;
+ *     - invoke a quantum processor;
+ *     - invoke an HDL simulator.
+ *
+ * ============================================================================
  * RUST COMPATIBILITY
  * ============================================================================
  *
- * Generated parser/runtime integration must remain compatible with:
+ * This grammar is intentionally target-independent.
+ *
+ * Generated Zamani parser integration MUST remain compatible with:
  *
  *     Rust 1.97
  *     Rust 1.97.1
  *     Rust 2021
  *
- * The grammar itself contains no Rust implementation code.
+ * No embedded Rust code is used.
  *
- * The Zamani implementation requires safe Rust.
- *
- * No `unsafe` Rust is required or permitted by this grammar.
+ * The compiler implementation MUST use safe Rust.
  *
  * ============================================================================
- *
- * LEXER CONTRACT
+ * AST CONTRACT
  * ============================================================================
  *
- * This grammar requires the canonical lexer to expose:
+ * The frontend AST should preserve scheduling syntax as a domain-neutral
+ * scheduling-intent structure.
  *
- *     SCHEDULE : 'schedule'
+ * Conceptually:
  *
- * as a reserved scheduling construct.
+ *     ExecutionSchedule {
+ *         subject: Option<Expression>,
+ *         entries: Vec<ScheduleEntry>,
+ *         span: SourceSpan
+ *     }
  *
- * This is intentionally a single stable syntactic keyword.
+ * Each entry should preserve at least:
  *
- * Scheduling policies, objectives, resources, capabilities, algorithms and
- * vendor extensions remain identifiers/qualified names rather than an
- * ever-growing closed keyword list.
+ *     kind;
+ *     key/name where applicable;
+ *     value;
+ *     source span;
+ *     source ordering.
+ *
+ * Recommended semantic categories:
+ *
+ *     Policy
+ *     Objective
+ *     Order
+ *     Dependency
+ *     Timing
+ *     Alignment
+ *     Priority
+ *     Resource
+ *     Concurrency
+ *     Latency
+ *     Deadline
+ *     Requirement
+ *     Constraint
+ *     Preference
+ *     Hint
+ *     Property
+ *
+ * The exact Rust AST names belong to the existing frontend AST architecture.
+ *
+ * This grammar MUST NOT define those Rust structures.
  *
  * ============================================================================
- *
- * CORE GRAMMAR CONTRACT
+ * SEMANTIC CONTRACT
  * ============================================================================
  *
- * This grammar consumes the canonical core rules:
- *
- *     identifier
- *     qualifiedName
- *     expression
- *
- * It MUST NOT redefine them.
- *
- * ============================================================================
- *
- * SEMANTIC BOUNDARY
- * ============================================================================
- *
- * The parser produces syntax.
+ * Parsing determines structural validity only.
  *
  * Semantic analysis determines:
  *
- *     - whether the requested schedule is meaningful;
- *     - whether a referenced policy exists;
- *     - whether a dependency is valid;
- *     - whether timing constraints are satisfiable;
- *     - whether resource constraints are satisfiable;
- *     - whether capabilities support the request;
- *     - whether the requested schedule conflicts with other constraints.
+ *     - whether the schedule subject is schedulable;
+ *     - whether a property is valid;
+ *     - whether a policy exists;
+ *     - whether a policy is compatible with the program;
+ *     - whether dependencies are meaningful;
+ *     - whether timing values have valid temporal types;
+ *     - whether constraints are satisfiable;
+ *     - whether resources can satisfy the requirements;
+ *     - whether capabilities exist;
+ *     - whether preferences are feasible;
+ *     - whether hints can be applied;
+ *     - whether concurrent execution is semantically legal;
+ *     - whether effects/ownership impose ordering;
+ *     - whether quantum scheduling requirements are compatible with quantum::ir;
+ *     - whether distributed scheduling requirements are realizable;
+ *     - whether HDL timing intent is compatible with hardware semantics.
+ *
+ * The parser MUST NOT perform these checks.
  *
  * ============================================================================
- *
- * QUANTUM INTEGRATION
+ * IR CONTRACT
  * ============================================================================
  *
- * Quantum scheduling consumes canonical quantum semantics.
+ * This grammar has NO direct IR implementation.
  *
- * The grammar does not:
+ * Scheduling intent is attached to the canonical semantic model.
  *
- *     - schedule gates;
- *     - choose physical qubits;
- *     - insert SWAP operations;
- *     - choose pulse timings;
- *     - select calibration data;
- *     - construct hardware topology.
+ * Later compiler stages consume that model when creating an executable
+ * schedule.
  *
- * The intended pipeline is:
+ * For quantum programs:
  *
  *     quantum source
  *          |
  *          v
+ *     quantum semantic model
+ *          |
+ *          v
  *     quantum::ir
+ *          |
+ *          v
+ *     optimization
  *          |
  *          v
  *     routing
  *          |
  *          v
  *     scheduling
- *          |
- *          v
- *     hardware realization
+ *
+ * This file MUST NOT create:
+ *
+ *     QuantumScheduleIR
+ *     QuantumSchedulingIR
+ *     PhysicalQubitScheduleIR
+ *
+ * as competing quantum IRs.
  *
  * ============================================================================
- *
  * CLASSICAL INTEGRATION
  * ============================================================================
  *
- * Scheduling can apply to:
+ * Scheduling intent may apply to:
  *
- *     - classical functions;
- *     - tasks;
- *     - loops;
- *     - pipelines;
- *     - accelerator work;
- *     - asynchronous operations;
- *     - distributed computation.
+ *     functions;
+ *     calls;
+ *     loops;
+ *     tasks;
+ *     pipelines;
+ *     asynchronous computation;
+ *     accelerator work;
+ *     data-parallel work;
+ *     distributed work.
  *
- * The grammar does not distinguish those by fixed machine assumptions.
+ * The grammar does not enumerate these as a finite set of machine classes.
  *
  * ============================================================================
+ * QUANTUM INTEGRATION
+ * ============================================================================
  *
+ * Quantum scheduling may ultimately consider:
+ *
+ *     operation dependencies;
+ *     resource conflicts;
+ *     logical operation ordering;
+ *     measurement dependencies;
+ *     classical feed-forward;
+ *     timing constraints;
+ *     capability requirements;
+ *     resilience requirements.
+ *
+ * This grammar does NOT:
+ *
+ *     - select physical qubits;
+ *     - insert SWAP operations;
+ *     - choose a coupling topology;
+ *     - select calibration;
+ *     - select a QPU;
+ *     - schedule pulses;
+ *     - perform QEC.
+ *
+ * Those belong to downstream subsystems.
+ *
+ * ============================================================================
  * HDL / HARDWARE INTEGRATION
  * ============================================================================
  *
- * Hardware scheduling may consume:
+ * Scheduling intent may be consumed for:
  *
- *     - timing constraints;
- *     - clock relationships;
- *     - latency requirements;
- *     - pipeline constraints;
- *     - resource conflicts;
- *     - ordering requirements.
+ *     pipeline ordering;
+ *     timing requirements;
+ *     latency requirements;
+ *     resource conflicts;
+ *     synchronization;
+ *     throughput goals.
  *
- * This grammar does not define physical clocks, frequencies, wires,
- * registers, devices or topology.
- *
- * Those belong to HDL/hardware semantic layers.
+ * It MUST NOT encode a universal hardware clock, register width, FPGA size,
+ * ASIC structure, or physical routing decision.
  *
  * ============================================================================
- *
  * DISTRIBUTED INTEGRATION
  * ============================================================================
  *
  * Scheduling may express:
  *
- *     - ordering;
- *     - dependency;
- *     - locality;
- *     - latency;
- *     - synchronization;
- *     - priority;
- *     - resource intent.
+ *     ordering;
+ *     dependency;
+ *     latency;
+ *     synchronization;
+ *     locality-related intent;
+ *     resource requirements;
+ *     throughput objectives.
  *
- * Node placement and distributed execution remain downstream concerns.
- *
- * ============================================================================
- *
- * RESILIENCE INTEGRATION
- * ============================================================================
- *
- * A schedule may contain retry/recovery-compatible constraints or hints,
- * but this grammar does not implement recovery.
- *
- * Resilience remains responsible for adapting execution after failures.
+ * Actual node placement remains owned by placement/deployment/resource
+ * subsystems.
  *
  * ============================================================================
- *
  * RESOURCE INTEGRATION
  * ============================================================================
  *
- * Resource references are semantic expressions.
+ * Scheduling values use the canonical expression language.
  *
- * The grammar does not discover or allocate resources.
+ * This allows semantic expressions such as:
  *
- * For example:
+ *     available_parallelism
+ *     workload_size
+ *     required_memory
+ *     latency_budget
+ *     problem_size
  *
- *     resources: available
+ * without imposing a language-level resource ceiling.
  *
- * may be interpreted downstream according to the resource model.
- *
- * A source program must not need rewriting merely because the available
- * resource quantity changes.
+ * The scheduler/resource subsystem determines actual availability.
  *
  * ============================================================================
+ * CAPABILITY INTEGRATION
+ * ============================================================================
  *
+ * Capability references may be expressed through ordinary expressions and
+ * qualified names.
+ *
+ * Examples:
+ *
+ *     capability::parallel
+ *     quantum::dynamic_control
+ *     accelerator::tensor_compute
+ *
+ * Whether a capability exists is decided downstream.
+ *
+ * ============================================================================
+ * PLACEMENT INTEGRATION
+ * ============================================================================
+ *
+ * Scheduling and placement remain separate:
+ *
+ *     scheduling
+ *         =
+ *     WHEN / ORDER / UNDER WHAT EXECUTION CONSTRAINTS
+ *
+ *     placement
+ *         =
+ *     WHERE / WITH WHICH ALLOWED REALIZATION CONTEXT
+ *
+ * The scheduler may consume placement information, but this grammar does not
+ * duplicate grammar/execution/placement.g4.
+ *
+ * ============================================================================
+ * RESILIENCE INTEGRATION
+ * ============================================================================
+ *
+ * Scheduling does not implement:
+ *
+ *     retry;
+ *     recovery;
+ *     failover;
+ *     quarantine;
+ *     escalation;
+ *     degradation.
+ *
+ * Those remain resilience/runtime concerns.
+ *
+ * A scheduling property may reference a resilience policy by name/value, but
+ * semantic execution behavior belongs downstream.
+ *
+ * ============================================================================
  * EXTENSIBILITY
  * ============================================================================
  *
- * Scheduling policies and properties intentionally use qualified names.
+ * Scheduling properties are open-ended:
  *
- * This permits:
+ *     standard_property: value;
  *
- *     standard policies;
- *     future policies;
- *     domain-specific policies;
- *     vendor-neutral extensions;
- *     dialect-specific policies;
+ *     custom::property: value;
  *
- * without requiring the grammar to enumerate every future scheduler.
+ *     future::scheduler::property: value;
  *
- * Semantic validation remains responsible for determining whether a name is
- * known and supported.
+ * This means future scheduling capabilities can be introduced without
+ * requiring every scheduler name to become a lexer keyword.
  *
+ * Semantic validation determines whether a property is known, supported,
+ * deprecated, experimental, or supplied by a dialect.
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * PARSER DEFINITION
  * ============================================================================
  */
 
@@ -438,81 +723,92 @@ options {
     tokenVocab = ZamaniLexer;
 }
 
+import Core, Expressions;
 
-/* ============================================================================
- * 1. TOP-LEVEL SCHEDULING CONSTRUCT
+
+/*
+ * ============================================================================
+ * 1. PUBLIC SCHEDULE ENTRY POINT
  * ============================================================================
  *
- * Canonical form:
+ * Canonical:
  *
  *     schedule {
  *         ...
  *     }
  *
- * A schedule may also be associated with an explicit subject:
+ * Subject-associated:
  *
- *     schedule target {
+ *     schedule computation {
  *         ...
  *     }
  *
- * The subject is an expression because Zamani must not maintain a closed
- * inventory of schedulable entities.
- * ========================================================================== */
+ * The subject is an expression so the language does not need a closed list of
+ * schedulable entities.
+ *
+ * ============================================================================
+ */
 
 executionSchedule
     : SCHEDULE executionScheduleSubject? executionScheduleBody executionScheduleTerminator?
     ;
 
 
-/* ============================================================================
+/*
+ * ============================================================================
  * 2. SCHEDULE SUBJECT
  * ============================================================================
  *
- * Examples:
+ * The subject may be:
  *
- *     schedule circuit {
- *         ...
- *     }
+ *     a function reference;
+ *     a call;
+ *     a pipeline;
+ *     a computation;
+ *     a task;
+ *     a quantum computation;
+ *     a classical computation;
+ *     a hybrid computation;
+ *     a distributed computation;
+ *     an accelerator computation;
+ *     another semantic execution object.
  *
- *     schedule pipeline {
- *         ...
- *     }
- *
- *     schedule expression {
- *         ...
- *     }
- *
- * Semantic analysis determines whether the expression denotes a schedulable
- * entity.
- * ========================================================================== */
+ * Semantic analysis decides whether it is schedulable.
+ * ============================================================================
+ */
 
 executionScheduleSubject
     : expression
     ;
 
 
-/* ============================================================================
+/*
+ * ============================================================================
  * 3. SCHEDULE BODY
  * ============================================================================
  *
- * An empty schedule body is intentionally legal.
+ * Arbitrary entry count.
  *
- * This permits tooling, macros and incremental compilation to construct an
- * initially empty scheduling declaration.
- * ========================================================================== */
+ * No fixed schedule-property count exists.
+ * ============================================================================
+ */
 
 executionScheduleBody
     : LBRACE executionScheduleEntry* RBRACE
     ;
 
 
-/* ============================================================================
- * 4. SCHEDULE ENTRIES
+/*
+ * ============================================================================
+ * 4. SCHEDULE ENTRY
  * ============================================================================
  *
- * Entries are categorized structurally so downstream AST construction can
- * distinguish semantic intent without requiring string inspection.
- * ========================================================================== */
+ * The first alternatives provide stable semantic categories for the common
+ * scheduling intents.
+ *
+ * The final property alternative permits extensible scheduling concepts.
+ * ============================================================================
+ */
 
 executionScheduleEntry
     : executionSchedulePolicy
@@ -526,15 +822,38 @@ executionScheduleEntry
     | executionScheduleConcurrency
     | executionScheduleLatency
     | executionScheduleDeadline
-    | executionSchedulePreference
+    | executionScheduleRequirement
     | executionScheduleConstraint
+    | executionSchedulePreference
     | executionScheduleHint
     | executionScheduleProperty
     ;
 
 
-/* ============================================================================
- * 5. POLICY
+/*
+ * ============================================================================
+ * 5. COMMON KEY/VALUE FORM
+ * ============================================================================
+ *
+ * Scheduling properties deliberately use:
+ *
+ *     name : expression
+ *
+ * rather than requiring every future scheduling concept to become a lexer
+ * keyword.
+ *
+ * This also makes dialect and future-extension integration possible.
+ * ============================================================================
+ */
+
+executionScheduleNamedValue
+    : qualifiedName COLON executionScheduleValue executionScheduleEntryTerminator
+    ;
+
+
+/*
+ * ============================================================================
+ * 6. POLICY
  * ============================================================================
  *
  * Examples:
@@ -543,29 +862,20 @@ executionScheduleEntry
  *     policy: critical_path;
  *     policy: custom::policy;
  *
- * The grammar does not enumerate algorithms.
+ * The policy name/value is semantic data.
  *
- * Therefore adding a new scheduler does not require changing the language
- * grammar.
- * ========================================================================== */
+ * The grammar does NOT enumerate scheduler algorithms.
+ * ============================================================================
+ */
 
 executionSchedulePolicy
-    : SCHEDULE_POLICY_KEY executionScheduleValue executionScheduleEntryTerminator
+    : executionScheduleNamedValue
     ;
 
 
 /*
- * The canonical lexer may later reserve `policy`.
- *
- * Until that keyword exists, this rule is intentionally isolated behind a
- * dedicated token so the lexer/parser contract is explicit.
- *
- * See integration note below.
- */
-
-
-/* ============================================================================
- * 6. OBJECTIVE
+ * ============================================================================
+ * 7. OBJECTIVE
  * ============================================================================
  *
  * Examples:
@@ -575,229 +885,263 @@ executionSchedulePolicy
  *     objective: energy;
  *     objective: fidelity;
  *
- * The semantic layer determines the objective's validity.
- * ========================================================================== */
+ * Semantic analysis validates the objective.
+ * ============================================================================
+ */
 
 executionScheduleObjective
-    : SCHEDULE_OBJECTIVE_KEY executionScheduleValue executionScheduleEntryTerminator
+    : executionScheduleNamedValue
     ;
 
 
-/* ============================================================================
- * 7. ORDERING
+/*
+ * ============================================================================
+ * 8. ORDER
  * ============================================================================
  *
- * Ordering expresses precedence intent.
+ * Ordering intent is represented by an expression.
  *
- * It does not construct the dependency graph.
- * ========================================================================== */
+ * This permits future dependency/order representations without introducing a
+ * second dependency language.
+ * ============================================================================
+ */
 
 executionScheduleOrder
-    : SCHEDULE_ORDER_KEY executionScheduleValue executionScheduleEntryTerminator
+    : executionScheduleNamedValue
     ;
 
 
-/* ============================================================================
- * 8. DEPENDENCY INTENT
+/*
  * ============================================================================
- *
- * Generic dependency expressions allow:
- *
- *     dependency: a before b;
- *
- *     dependency: stage_a -> stage_b;
- *
- * depending on the expression grammar available to the enclosing parser.
- *
- * The scheduler is responsible for validating and constructing the actual
- * dependency DAG.
- * ========================================================================== */
-
-executionScheduleDependency
-    : SCHEDULE_DEPENDENCY_KEY executionScheduleValue executionScheduleEntryTerminator
-    ;
-
-
-/* ============================================================================
- * 9. TIMING
+ * 9. DEPENDENCY
  * ============================================================================
- *
- * Timing is represented as an expression.
- *
- * This allows duration/temporal types to evolve independently of the grammar.
  *
  * Examples:
  *
+ *     dependency: dependency_graph;
+ *
+ *     dependency: depends_on(a, b);
+ *
+ *     dependency: ordered(stage_a, stage_b);
+ *
+ * The actual dependency graph is constructed downstream.
+ * ============================================================================
+ */
+
+executionScheduleDependency
+    : executionScheduleNamedValue
+    ;
+
+
+/*
+ * ============================================================================
+ * 10. TIMING
+ * ============================================================================
+ *
+ * Examples:
+ *
+ *     timing: timing_window;
  *     timing: bounded;
  *     timing: duration;
- *     timing: window;
  *
- * The grammar does not establish physical clock precision.
- * ========================================================================== */
+ * No physical clock resolution is established here.
+ * ============================================================================
+ */
 
 executionScheduleTiming
-    : SCHEDULE_TIMING_KEY executionScheduleValue executionScheduleEntryTerminator
+    : executionScheduleNamedValue
     ;
 
 
-/* ============================================================================
- * 10. ALIGNMENT
+/*
+ * ============================================================================
+ * 11. ALIGNMENT
  * ============================================================================
  *
- * Alignment expresses semantic alignment requirements.
+ * Alignment is semantic intent.
  *
- * Hardware-specific alignment units are resolved later.
- * ========================================================================== */
+ * Physical alignment is resolved by downstream target-aware compilation.
+ * ============================================================================
+ */
 
 executionScheduleAlignment
-    : SCHEDULE_ALIGNMENT_KEY executionScheduleValue executionScheduleEntryTerminator
+    : executionScheduleNamedValue
     ;
 
 
-/* ============================================================================
- * 11. PRIORITY
+/*
  * ============================================================================
- *
- * Priority is an execution preference/constraint, not a scheduler algorithm.
- * ========================================================================== */
+ * 12. PRIORITY
+ * ============================================================================
+ */
 
 executionSchedulePriority
-    : SCHEDULE_PRIORITY_KEY executionScheduleValue executionScheduleEntryTerminator
+    : executionScheduleNamedValue
     ;
 
 
-/* ============================================================================
- * 12. RESOURCE INTENT
+/*
+ * ============================================================================
+ * 13. RESOURCE
  * ============================================================================
  *
- * Resources are semantic expressions.
+ * Resource values remain expressions.
  *
- * No finite resource count is encoded here.
- * ========================================================================== */
+ * No resource is allocated by parsing.
+ * ============================================================================
+ */
 
 executionScheduleResource
-    : SCHEDULE_RESOURCE_KEY executionScheduleValue executionScheduleEntryTerminator
+    : executionScheduleNamedValue
     ;
 
 
-/* ============================================================================
- * 13. CONCURRENCY
+/*
+ * ============================================================================
+ * 14. CONCURRENCY
  * ============================================================================
  *
- * Concurrency may be expressed as:
+ * Examples:
  *
  *     concurrency: available;
- *     concurrency: bounded;
- *     concurrency: requirement;
+ *     concurrency: requested_parallelism;
+ *     concurrency: workload_parallelism;
  *
- * A numeric value, if supplied, remains a program-level constraint rather
- * than a machine-wide grammar limit.
- * ========================================================================== */
+ * A numeric value is a program-level semantic constraint if the surrounding
+ * semantic model defines it that way. It is never a compiler-wide maximum.
+ * ============================================================================
+ */
 
 executionScheduleConcurrency
-    : SCHEDULE_CONCURRENCY_KEY executionScheduleValue executionScheduleEntryTerminator
+    : executionScheduleNamedValue
     ;
 
 
-/* ============================================================================
- * 14. LATENCY
+/*
  * ============================================================================
- *
- * Latency is expressed semantically.
- *
- * Actual measured latency belongs to runtime/target analysis.
- * ========================================================================== */
+ * 15. LATENCY
+ * ============================================================================
+ */
 
 executionScheduleLatency
-    : SCHEDULE_LATENCY_KEY executionScheduleValue executionScheduleEntryTerminator
+    : executionScheduleNamedValue
     ;
 
 
-/* ============================================================================
- * 15. DEADLINE
+/*
  * ============================================================================
- *
- * Deadline syntax expresses a requirement or preference.
- *
- * Whether it is achievable is a semantic/runtime question.
- * ========================================================================== */
+ * 16. DEADLINE
+ * ============================================================================
+ */
 
 executionScheduleDeadline
-    : SCHEDULE_DEADLINE_KEY executionScheduleValue executionScheduleEntryTerminator
+    : executionScheduleNamedValue
     ;
 
 
-/* ============================================================================
- * 16. PREFERENCE
+/*
+ * ============================================================================
+ * 17. REQUIREMENT
  * ============================================================================
  *
- * Preferences are advisory unless semantic analysis explicitly determines
- * otherwise from the surrounding construct.
- * ========================================================================== */
+ * Requirement syntax is structurally separated from preference/hint syntax.
+ *
+ * The value remains an expression so the canonical requirement semantics can
+ * evolve independently.
+ * ============================================================================
+ */
 
-executionSchedulePreference
-    : SCHEDULE_PREFERENCE_KEY executionScheduleValue executionScheduleEntryTerminator
+executionScheduleRequirement
+    : REQUIRES executionScheduleValue executionScheduleEntryTerminator
     ;
 
 
-/* ============================================================================
- * 17. CONSTRAINT
+/*
+ * ============================================================================
+ * 18. CONSTRAINT
  * ============================================================================
  *
- * Constraints restrict legal schedules.
- *
- * They do not select a specific physical realization.
- * ========================================================================== */
-
-executionScheduleConstraint
-    : SCHEDULE_CONSTRAINT_KEY executionScheduleValue executionScheduleEntryTerminator
-    ;
-
-
-/* ============================================================================
- * 18. HINT
- * ============================================================================
- *
- * Hints are advisory.
- *
- * A backend MUST NOT silently promote a hint to a semantic requirement.
- * ========================================================================== */
-
-executionScheduleHint
-    : SCHEDULE_HINT_KEY executionScheduleValue executionScheduleEntryTerminator
-    ;
-
-
-/* ============================================================================
- * 19. EXTENSIBLE PROPERTY
- * ============================================================================
- *
- * Future scheduling concepts can be represented without changing the
- * scheduler grammar when the semantic property name is not a core language
- * keyword.
+ * `constraint:` remains an extensible named constraint property rather than a
+ * parser implementation of constraint solving.
  *
  * Example:
  *
- *     custom::scheduler_property: value;
+ *     constraint: no_overlap;
  *
- * This rule is intentionally last in the alternatives so well-known
- * scheduling properties remain structurally identifiable.
- * ========================================================================== */
+ * ============================================================================
+ */
+
+executionScheduleConstraint
+    : executionScheduleNamedValue
+    ;
+
+
+/*
+ * ============================================================================
+ * 19. PREFERENCE
+ * ============================================================================
+ *
+ * Preferences are advisory.
+ *
+ * The semantic layer MUST NOT promote them to mandatory constraints silently.
+ * ============================================================================
+ */
+
+executionSchedulePreference
+    : PREFER executionScheduleValue executionScheduleEntryTerminator
+    ;
+
+
+/*
+ * ============================================================================
+ * 20. HINT
+ * ============================================================================
+ *
+ * Hints are weaker than requirements and constraints.
+ * ============================================================================
+ */
+
+executionScheduleHint
+    : HINT executionScheduleValue executionScheduleEntryTerminator
+    ;
+
+
+/*
+ * ============================================================================
+ * 21. EXTENSIBLE PROPERTY
+ * ============================================================================
+ *
+ * This is the generic extension mechanism.
+ *
+ * Examples:
+ *
+ *     custom::scheduler: custom::policy;
+ *
+ *     quantum::timing: symbolic_window;
+ *
+ *     distributed::ordering: causal;
+ *
+ *     future::property: value;
+ *
+ * Property meaning is resolved semantically.
+ * ============================================================================
+ */
 
 executionScheduleProperty
     : qualifiedName executionSchedulePropertyAssignment executionScheduleEntryTerminator
     ;
 
 
-/* ============================================================================
- * 20. PROPERTY ASSIGNMENT
+/*
+ * ============================================================================
+ * 22. PROPERTY ASSIGNMENT
  * ============================================================================
  *
- * Both `:` and `=` are supported because they represent property assignment
- * rather than comparison.
+ * Both `:` and `=` are supported for property assignment.
  *
- * Comparison semantics remain inside expressions.
- * ========================================================================== */
+ * Comparison remains part of the canonical expression grammar.
+ * ============================================================================
+ */
 
 executionSchedulePropertyAssignment
     : COLON executionScheduleValue
@@ -805,26 +1149,30 @@ executionSchedulePropertyAssignment
     ;
 
 
-/* ============================================================================
- * 21. GENERIC SCHEDULE VALUE
+/*
+ * ============================================================================
+ * 23. GENERIC SCHEDULE VALUE
  * ============================================================================
  *
- * The value is delegated to the canonical expression grammar.
+ * Canonical expression syntax is reused.
  *
- * This is critical for scalability:
+ * This allows values to be:
  *
- *     numbers
- *     durations
- *     identifiers
- *     qualified names
- *     function calls
- *     resource expressions
- *     capability expressions
- *     compile-time expressions
- *     future expression forms
+ *     literals;
+ *     identifiers;
+ *     qualified names;
+ *     calls;
+ *     arithmetic;
+ *     comparisons;
+ *     symbolic quantities;
+ *     resource expressions;
+ *     capability expressions;
+ *     temporal expressions;
+ *     future expression forms.
  *
- * can all evolve without creating a second value language here.
- * ========================================================================== */
+ * No second scheduling value language is created.
+ * ============================================================================
+ */
 
 executionScheduleValue
     : expression
@@ -832,22 +1180,21 @@ executionScheduleValue
     ;
 
 
-/* ============================================================================
- * 22. NESTED PROPERTY BLOCK
+/*
  * ============================================================================
- *
- * Nested blocks allow structured scheduling metadata without requiring a
- * separate scheduler-specific object model in the grammar.
+ * 24. NESTED PROPERTY BLOCK
+ * ============================================================================
  *
  * Example:
  *
  *     timing: {
  *         start: earliest;
  *         finish: bounded;
- *     }
+ *     };
  *
- * Semantic analysis determines whether each property is valid.
- * ========================================================================== */
+ * Nested property depth is not artificially limited.
+ * ============================================================================
+ */
 
 executionSchedulePropertyBlock
     : LBRACE executionSchedulePropertyEntry* RBRACE
@@ -859,207 +1206,44 @@ executionSchedulePropertyEntry
     ;
 
 
-/* ============================================================================
- * 23. ENTRY TERMINATORS
+/*
+ * ============================================================================
+ * 25. ENTRY TERMINATOR
  * ============================================================================
  *
- * Semicolon is the canonical separator.
+ * Semicolon is the canonical statement/property terminator.
  *
- * Comma is accepted to support compact generated/configuration-oriented
- * syntax where the surrounding language permits it.
+ * Comma is NOT accepted here.
  *
- * A terminator is required for every property entry.
+ * This corrects the previous grammar's unnecessary ambiguity between:
  *
- * This deliberate requirement prevents ambiguous concatenation of scheduling
- * properties.
- * ========================================================================== */
-
-executionScheduleEntryTerminator
-    : SEMI
-    | COMMA
-    ;
-
-
-/* ============================================================================
- * 24. OUTER SCHEDULE TERMINATOR
- * ============================================================================
+ *     property lists
  *
- * The enclosing execution construct may also own the final statement
- * terminator. This rule therefore remains optional.
- * ========================================================================== */
-
-executionScheduleTerminator
-    : SEMI
-    ;
-
-
-/* ============================================================================
- * 25. SCHEDULING KEYWORD CONTRACT
- * ============================================================================
+ * and:
  *
- * These symbolic names document the lexer contract required by this parser.
+ *     expression lists.
  *
- * IMPORTANT:
- *
- * In a parser grammar using tokenVocab, these tokens MUST be defined by the
- * canonical lexer. They are NOT parser-local token declarations.
- *
- * Required canonical lexer vocabulary:
- *
- *     SCHEDULE
- *     POLICY
- *     OBJECTIVE
- *     ORDER
- *     DEPENDENCY
- *     TIMING
- *     ALIGNMENT
- *     PRIORITY
- *     RESOURCE
- *     CONCURRENCY
- *     LATENCY
- *     DEADLINE
- *     PREFERENCE
- *     CONSTRAINT
- *     HINT
- *
- * The repository's lexer should add these only if they are not already
- * present. They should remain a small stable scheduling vocabulary.
- *
- * Future scheduler names MUST remain identifiers/qualified names.
- *
- * ============================================================================
- *
- * IMPORTANT ANTLR NOTE
- * ============================================================================
- *
- * The aliases below are intentionally written as parser rule names rather
- * than lexer token declarations so this file remains a pure parser grammar.
- *
- * They must be mapped to the corresponding canonical lexer tokens by the
- * lexer/token vocabulary integration.
+ * Generated/configuration serialization should use the surrounding canonical
+ * language syntax rather than inventing a second comma-separated scheduling
+ * statement language.
  * ============================================================================
  */
 
-executionSchedulePolicyKey
-    : POLICY
-    ;
-
-executionScheduleObjectiveKey
-    : OBJECTIVE
-    ;
-
-executionScheduleOrderKey
-    : ORDER
-    ;
-
-executionScheduleDependencyKey
-    : DEPENDENCY
-    ;
-
-executionScheduleTimingKey
-    : TIMING
-    ;
-
-executionScheduleAlignmentKey
-    : ALIGNMENT
-    ;
-
-executionSchedulePriorityKey
-    : PRIORITY
-    ;
-
-executionScheduleResourceKey
-    : RESOURCE
-    ;
-
-executionScheduleConcurrencyKey
-    : CONCURRENCY
-    ;
-
-executionScheduleLatencyKey
-    : LATENCY
-    ;
-
-executionScheduleDeadlineKey
-    : DEADLINE
-    ;
-
-executionSchedulePreferenceKey
-    : PREFERENCE
-    ;
-
-executionScheduleConstraintKey
-    : CONSTRAINT
-    ;
-
-executionScheduleHintKey
-    : HINT
+executionScheduleEntryTerminator
+    : SEMICOLON
     ;
 
 
 /*
  * ============================================================================
- * CANONICAL KEY RULE ALIASES
+ * 26. OUTER TERMINATOR
  * ============================================================================
  *
- * These aliases are intentionally separate from the semantic rule names so
- * future lexer vocabulary changes remain localized to the parser composition
- * layer.
+ * The enclosing statement/declaration composition may own the final
+ * terminator, so it remains optional here.
  * ============================================================================
  */
 
-executionSchedulePolicyKeyCanonical
-    : executionSchedulePolicyKey
-    ;
-
-executionScheduleObjectiveKeyCanonical
-    : executionScheduleObjectiveKey
-    ;
-
-executionScheduleOrderKeyCanonical
-    : executionScheduleOrderKey
-    ;
-
-executionScheduleDependencyKeyCanonical
-    : executionScheduleDependencyKey
-    ;
-
-executionScheduleTimingKeyCanonical
-    : executionScheduleTimingKey
-    ;
-
-executionScheduleAlignmentKeyCanonical
-    : executionScheduleAlignmentKey
-    ;
-
-executionSchedulePriorityKeyCanonical
-    : executionSchedulePriorityKey
-    ;
-
-executionScheduleResourceKeyCanonical
-    : executionScheduleResourceKey
-    ;
-
-executionScheduleConcurrencyKeyCanonical
-    : executionScheduleConcurrencyKey
-    ;
-
-executionScheduleLatencyKeyCanonical
-    : executionScheduleLatencyKey
-    ;
-
-executionScheduleDeadlineKeyCanonical
-    : executionScheduleDeadlineKey
-    ;
-
-executionSchedulePreferenceKeyCanonical
-    : executionSchedulePreferenceKey
-    ;
-
-executionScheduleConstraintKeyCanonical
-    : executionScheduleConstraintKey
-    ;
-
-executionScheduleHintKeyCanonical
-    : executionScheduleHintKey
+executionScheduleTerminator
+    : SEMICOLON
     ;
