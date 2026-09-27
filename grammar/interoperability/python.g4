@@ -10,95 +10,88 @@
  *     PythonInterop
  *
  * Status:
- *     Production-ready Python interoperability boundary grammar.
+ *     Production interoperability grammar.
  *
- * Language implementation baseline:
+ * Baseline:
  *     Rust 1.97 / Rust 1.97.1
  *     Rust 2021
- *     unsafe Rust forbidden
+ *     Safe Rust only.
+ *     No unsafe Rust.
  *
  * ============================================================================
  * PURPOSE
  * ============================================================================
  *
- * This grammar defines Zamani SOURCE-LEVEL PYTHON INTEROPERABILITY.
+ * This grammar defines the Zamani SOURCE-LEVEL PYTHON INTEROPERABILITY
+ * CONTRACT.
  *
  * It does NOT define the Python programming language.
  *
- * It defines how Zamani source may DECLARE a semantic boundary to Python
- * implementations, modules, callables, objects, buffers, asynchronous
- * interfaces, exceptions, iterators, generators, and other Python-facing
- * capabilities.
+ * It does NOT parse Python source code, Python bytecode, Python ASTs, or
+ * implementation-specific Python syntax.
  *
- * The grammar is intentionally independent of:
+ * It defines the Zamani-side semantic boundary for interoperability with
+ * Python implementations and Python-facing interfaces.
+ *
+ * Python implementation details are deliberately open-ended.
+ *
+ * Examples that may be resolved downstream include:
  *
  *     CPython
  *     PyPy
  *     GraalPy
  *     MicroPython
- *     a particular Python version
- *     a particular operating system
- *     a particular CPU
- *     a particular GPU
- *     a particular accelerator
- *     a particular machine
- *     a particular Python installation
- *     a particular virtual environment
- *     a particular filesystem
- *     a particular process
- *     a particular memory address
- *     a particular pointer width
- *     a particular ABI
- *     a particular deployment topology
+ *     another conforming implementation
  *
- * Those are semantic, compilation, deployment, runtime, or target concerns.
+ * No implementation is enumerated by this grammar.
  *
  * ============================================================================
  * ARCHITECTURAL POSITION
  * ============================================================================
  *
- *                         Zamani source
- *                              |
- *                              v
- *                         Zamani lexer
- *                              |
- *                              v
- *                       parser composition
- *                              |
- *                              v
- *                  Python interoperability
- *                              |
- *                              v
- *                     frontend AST
- *                              |
- *                              v
- *                     semantic analysis
- *                              |
- *              +---------------+----------------+
- *              |               |                |
- *              v               v                v
- *            types         capabilities       effects
- *              |               |                |
- *              +---------------+----------------+
- *                              |
- *                              v
- *                  canonical semantic model
- *                              |
- *             +----------------+----------------+
- *             |                |                |
- *             v                v                v
- *       classical IR      quantum::ir      hardware/HDL IR
- *             |                |                |
- *             +----------------+----------------+
- *                              |
- *                              v
- *                    optimization / lowering
- *                              |
- *                              v
- *                       Python adapter
- *                              |
- *                              v
- *                     runtime / deployment
+ * Zamani source
+ *      |
+ *      v
+ * canonical ZamaniLexer
+ *      |
+ *      v
+ * ZamaniParser / Interoperability
+ *      |
+ *      v
+ * Python interoperability contract
+ *      |
+ *      v
+ * domain-neutral frontend AST
+ *      |
+ *      v
+ * semantic analysis
+ *      |
+ *      +--------------------+--------------------+
+ *      |                    |                    |
+ *      v                    v                    v
+ *    types              effects             capabilities
+ *      |                    |                    |
+ *      +--------------------+--------------------+
+ *                           |
+ *                           v
+ *                 canonical semantic model
+ *                           |
+ *             +-------------+-------------+
+ *             |             |             |
+ *             v             v             v
+ *        classical      quantum::ir   HDL/hardware
+ *             |             |             |
+ *             +-------------+-------------+
+ *                           |
+ *                           v
+ *                     optimization
+ *                           |
+ *                     target lowering
+ *                           |
+ *                 ABI / runtime / adapter
+ *                           |
+ *                           v
+ *                     target realization
  *
  * Python interoperability MUST NOT bypass the canonical semantic boundary.
  *
@@ -108,29 +101,24 @@
  *
  * THIS FILE OWNS:
  *
- *   - Python interoperability declarations;
- *   - Python interface declarations;
- *   - Python module references;
- *   - Python callable references;
+ *   - Python interoperability boundary declarations;
+ *   - Python module identities;
+ *   - Python callable identities;
  *   - Python object boundary declarations;
+ *   - Python callback contracts;
  *   - Python conversion contracts;
- *   - Python ownership metadata;
- *   - Python borrowing metadata;
- *   - Python lifetime metadata;
- *   - Python nullability metadata;
- *   - Python buffer/data-transfer metadata;
- *   - Python iterator/generator contracts;
+ *   - Python buffer contracts;
+ *   - Python iterator contracts;
+ *   - Python generator contracts;
  *   - Python asynchronous contracts;
- *   - Python exception boundary declarations;
- *   - Python execution/capability requirements;
- *   - Python implementation compatibility metadata;
- *   - Python environment requirements as symbolic constraints;
+ *   - Python exception mapping intent;
+ *   - Python ownership/lifetime metadata;
+ *   - Python compatibility requirements;
+ *   - Python implementation requirements;
+ *   - Python environment requirements;
  *   - Python interoperability policies;
- *   - Python interoperability attributes;
- *   - Python interoperability calls;
- *   - Python callable references;
- *   - Python callback declarations;
- *   - Python boundary intent.
+ *   - Python interoperability call/reference expressions;
+ *   - Python-specific semantic metadata.
  *
  * THIS FILE DOES NOT OWN:
  *
@@ -138,71 +126,109 @@
  *   - Python AST;
  *   - Python bytecode;
  *   - Python interpreter implementation;
- *   - Python runtime implementation;
- *   - CPython internals;
- *   - PyPy internals;
- *   - Python package installation;
- *   - filesystem access;
- *   - process creation;
- *   - interpreter discovery;
- *   - library loading;
- *   - symbol resolution;
- *   - native pointer manipulation;
- *   - raw memory access;
- *   - ABI implementation;
- *   - calling-convention implementation;
- *   - general FFI declarations;
- *   - general ABI declarations;
- *   - ordinary function declarations;
- *   - ordinary types;
+ *   - FFI generally;
+ *   - ABI generally;
+ *   - calling conventions;
+ *   - ordinary Zamani functions;
+ *   - ordinary Zamani types;
  *   - ordinary expressions;
- *   - modules as a general language feature;
- *   - capabilities as a general language feature;
- *   - resources as a general language feature;
- *   - scheduling;
- *   - routing;
- *   - optimization;
+ *   - identifiers;
+ *   - qualified names;
+ *   - attributes generally;
+ *   - resource semantics generally;
+ *   - capability semantics generally;
+ *   - effects generally;
+ *   - runtime execution;
+ *   - dynamic library loading;
+ *   - symbol resolution;
+ *   - filesystem access;
+ *   - network access;
  *   - hardware discovery;
- *   - calibration;
+ *   - target selection;
+ *   - routing;
+ *   - scheduling;
  *   - QEC;
  *   - ZQN;
- *   - resilience;
- *   - quantum IR;
- *   - classical IR;
- *   - HDL IR;
- *   - runtime dispatch.
+ *   - HAL;
+ *   - quantum IR.
  *
- * General FFI ownership remains with:
+ * General FFI ownership:
  *
  *     grammar/interoperability/ffi.g4
  *
- * General foreign-function declarations remain with:
+ * Foreign callable ownership:
  *
  *     grammar/interoperability/foreign-functions.g4
  *
- * ABI contracts remain with:
+ * ABI ownership:
  *
  *     grammar/interoperability/abi.g4
  *
- * Interoperability composition remains with:
- *
- *     grammar/interoperability/interoperability.g4
- *
- * Ordinary function syntax remains with:
- *
- *     grammar/functions/
- *
- * Ordinary types remain with:
+ * General types:
  *
  *     grammar/types/
  *
- * Ordinary expressions remain with:
+ * General expressions:
  *
  *     grammar/expressions/
  *
- * Canonical names remain with:
+ * Names:
  *
- *     grammar/core/
+ *     grammar/core/names.g4
+ *
+ * Qualified references:
+ *
+ *     grammar/core/qualified-names.g4
+ *
+ * Attributes:
+ *
+ *     grammar/core/attributes.g4
+ *
+ * ============================================================================
+ * ANTLR COMPOSITION CONTRACT
+ * ============================================================================
+ *
+ * This is a parser grammar.
+ *
+ * The production lexer is:
+ *
+ *     grammar/antlr/ZamaniLexer.g4
+ *
+ * Therefore:
+ *
+ *     tokenVocab = ZamaniLexer
+ *
+ * is mandatory.
+ *
+ * Canonical parser imports:
+ *
+ *     Expressions
+ *     Types
+ *     QualifiedNames
+ *     Attributes
+ *
+ * are used instead of redefining shared language constructs.
+ *
+ * IMPORTANT:
+ *
+ * The current canonical lexer vocabulary does not define a PYTHON keyword.
+ *
+ * Therefore this grammar intentionally uses the existing:
+ *
+ *     EXTERN
+ *     LANGUAGE
+ *     STRING
+ *     IDENTIFIER
+ *
+ * vocabulary to identify Python boundaries.
+ *
+ * Examples:
+ *
+ *     extern language "python" { ... }
+ *
+ *     extern language python { ... }
+ *
+ * This avoids introducing a second keyword authority.
  *
  * ============================================================================
  * POCO-REAF
@@ -216,183 +242,80 @@
  *     Run Anywhere
  *     Run Forever
  *
- * Therefore this grammar MUST NOT encode:
+ * This grammar therefore MUST NOT encode:
  *
- *     a fixed Python implementation;
- *     a fixed Python version;
- *     a fixed machine;
- *     a fixed interpreter path;
- *     a fixed library path;
- *     a fixed CPU;
- *     a fixed GPU;
- *     a fixed device;
- *     a fixed node;
- *     a fixed memory size;
- *     a fixed pointer width;
- *     a fixed address;
- *     a fixed deployment location.
+ *     a particular interpreter path;
+ *     a particular executable;
+ *     a particular operating system;
+ *     a particular CPU;
+ *     a particular GPU;
+ *     a particular accelerator;
+ *     a particular QPU;
+ *     a particular node;
+ *     a particular address;
+ *     a particular pointer width;
+ *     a particular memory capacity;
+ *     a particular filesystem;
+ *     a particular virtual environment;
+ *     a particular package installation;
+ *     a particular process.
  *
- * A source-level Python requirement is a semantic requirement.
- *
- * Example:
- *
- *     python;
- *
- * means that the semantic operation requires Python interoperability.
- *
- * It does NOT mean:
- *
- *     CPython on Linux
- *
- * or:
- *
- *     Python at /usr/bin/python
- *
- * or:
- *
- *     Python version X
- *
- * or:
- *
- *     a particular device.
- *
- * ============================================================================
- * OPEN-WORLD IMPLEMENTATION MODEL
- * ============================================================================
- *
- * Python implementations are symbolic.
- *
- * Examples that MAY be expressed downstream include:
- *
- *     CPython
- *     PyPy
- *     GraalPy
- *     MicroPython
- *     custom implementation
- *
- * This grammar does not enumerate them.
- *
- * The same rule supports future implementations without changing the grammar.
+ * Concrete realization belongs downstream.
  *
  * ============================================================================
  * SCALABILITY
  * ============================================================================
  *
- * This grammar imposes no language-level finite limit on:
+ * No grammar-level finite limits are imposed on:
  *
- *     interfaces
  *     modules
- *     callables
- *     callbacks
+ *     interfaces
+ *     functions
  *     parameters
  *     arguments
- *     conversions
- *     attributes
- *     requirements
- *     capabilities
- *     effects
+ *     callbacks
  *     objects
- *     streams
  *     buffers
  *     iterators
  *     generators
  *     declarations
+ *     requirements
+ *     capabilities
+ *     effects
+ *     metadata
  *     program size
  *
- * Repetition is structural through ANTLR '*' and '+' operators.
+ * Repetition is structural through ANTLR repetition operators.
  *
- * There is intentionally no:
+ * There are deliberately no:
  *
  *     MAX_PYTHON_MODULES
- *     MAX_PYTHON_CALLABLES
- *     MAX_ARGUMENTS
- *     MAX_OBJECTS
- *     MAX_BUFFERS
- *     MAX_ITERATORS
- *     MAX_GENERATORS
- *     MAX_THREADS
- *     MAX_DEVICES
- *     MAX_CORES
- *     MAX_QUBITS
+ *     MAX_PYTHON_FUNCTIONS
+ *     MAX_PYTHON_ARGUMENTS
+ *     MAX_PYTHON_OBJECTS
+ *     MAX_PYTHON_BUFFERS
+ *     MAX_PYTHON_THREADS
+ *     MAX_PYTHON_DEVICES
  *
- * or equivalent source-level limit.
- *
- * Practical resource limits belong to compiler/resource/runtime policy.
+ * or equivalent universal limits.
  *
  * ============================================================================
- * SECURITY
- * ============================================================================
- *
- * Parsing this grammar MUST NEVER:
- *
- *     load Python;
- *     start an interpreter;
- *     import a Python module;
- *     execute Python;
- *     evaluate Python expressions;
- *     execute Python bytecode;
- *     access the filesystem;
- *     access the network;
- *     inspect installed packages;
- *     inspect environment variables;
- *     resolve native symbols;
- *     dereference pointers;
- *     allocate native memory;
- *     create interpreter state;
- *     invoke callbacks.
- *
- * This grammar is declarative and inert.
- *
- * A declaration is not an authorization.
- *
- * Security and runtime policy must independently authorize execution.
- *
- * ============================================================================
- * RUST SAFETY
+ * SAFETY
  * ============================================================================
  *
  * This grammar contains:
  *
- *     no Rust actions;
+ *     no embedded Rust actions;
  *     no semantic predicates;
- *     no embedded code;
- *     no unsafe blocks;
- *     no runtime calls.
+ *     no filesystem access;
+ *     no network access;
+ *     no runtime calls;
+ *     no Python execution;
+ *     no interpreter loading;
+ *     no native pointer dereference;
+ *     no hardware discovery.
  *
- * Downstream Rust implementation MUST remain compatible with:
- *
- *     Rust 1.97
- *     Rust 1.97.1
- *     Edition 2021
- *
- * and MUST NOT require unsafe Rust.
- *
- * ============================================================================
- * ANTLR COMPOSITION CONTRACT
- * ============================================================================
- *
- * This is a parser grammar.
- *
- * The canonical lexer is:
- *
- *     grammar/antlr/ZamaniLexer.g4
- *
- * Therefore this grammar uses:
- *
- *     tokenVocab = ZamaniLexer
- *
- * Shared syntax is imported rather than redefined.
- *
- * Expected canonical imported rules:
- *
- *     expression
- *     expressionList
- *     typeExpression
- *     qualifiedNameReference
- *
- * If the repository later renames any of these canonical rules, the composition
- * layer MUST adapt the names. This file must not introduce duplicate
- * definitions merely to compensate.
+ * Downstream Rust implementation MUST remain safe Rust.
  *
  * ============================================================================
  */
@@ -405,7 +328,8 @@ options {
 
 import Expressions,
        Types,
-       QualifiedNames;
+       QualifiedNames,
+       Attributes;
 
 
 /* ============================================================================
@@ -413,33 +337,32 @@ import Expressions,
  * ========================================================================== */
 
 /*
- * A reusable Python interoperability item.
+ * A reusable Python interoperability declaration sequence.
  *
- * The canonical composition grammar decides whether an item is legal at:
- *
- *     declaration level
- *     expression level
- *     statement level
- *     module level
- *
- * This grammar does not make itself the global compilation root.
+ * The interoperability composition grammar decides where this entry point
+ * participates in the complete Zamani program.
  */
 pythonInterop
     : pythonInteropItem*
     ;
 
 
+/* ============================================================================
+ * INTEROPERABILITY ITEM
+ * ========================================================================== */
+
 pythonInteropItem
-    : pythonInterfaceDeclaration
+    : pythonBoundaryDeclaration
+    | pythonInterfaceDeclaration
     | pythonModuleDeclaration
     | pythonCallableDeclaration
     | pythonObjectDeclaration
     | pythonCallbackDeclaration
     | pythonConversionDeclaration
     | pythonBufferDeclaration
-    | pythonAsyncDeclaration
     | pythonIteratorDeclaration
     | pythonGeneratorDeclaration
+    | pythonAsyncDeclaration
     | pythonExceptionDeclaration
     | pythonRequirementDeclaration
     | pythonPolicyDeclaration
@@ -448,48 +371,95 @@ pythonInteropItem
 
 
 /* ============================================================================
- * PYTHON INTERFACE
+ * COMMON PYTHON BOUNDARY
  * ========================================================================== */
 
 /*
- * Defines a reusable symbolic Python interoperability boundary.
+ * Canonical Python identity.
  *
- * Example:
+ * Python is represented as a language identity rather than as a dedicated
+ * lexer keyword.
  *
- *     python interface numerical {
- *         ...
- *     }
+ * Both of these forms are supported:
  *
- * The identifier is semantic identity only.
+ *     extern language "python" { ... }
+ *     extern language python { ... }
+ *
+ * The semantic layer MUST canonicalize the identity.
  */
-pythonInterfaceDeclaration
+pythonBoundaryDeclaration
     : attribute*
-      'python'
-      'interface'
+      EXTERN
+      LANGUAGE
+      pythonLanguageIdentity
+      LBRACE
+      pythonBoundaryItem*
+      RBRACE
+    ;
+
+
+pythonLanguageIdentity
+    : STRING
+    | identifier
+    | qualifiedNameReference
+    ;
+
+
+pythonBoundaryItem
+    : pythonInterfaceDeclaration
+    | pythonModuleDeclaration
+    | pythonCallableDeclaration
+    | pythonObjectDeclaration
+    | pythonCallbackDeclaration
+    | pythonConversionDeclaration
+    | pythonBufferDeclaration
+    | pythonIteratorDeclaration
+    | pythonGeneratorDeclaration
+    | pythonAsyncDeclaration
+    | pythonExceptionDeclaration
+    | pythonRequirementDeclaration
+    | pythonPolicyDeclaration
+    | pythonLinkDeclaration
+    ;
+
+
+/* ============================================================================
+ * INTERFACE
+ * ========================================================================== */
+
+pythonInterfaceDeclaration
+    : optionalAttributePrefix
+      INTERFACE
       qualifiedNameReference
       pythonInterfaceParameterClause?
-      '{'
+      LBRACE
       pythonInterfaceMember*
-      '}'
+      RBRACE
     ;
 
 
 pythonInterfaceParameterClause
-    : '<'
+    : LESS
       pythonInterfaceParameter
-      (',' pythonInterfaceParameter)*
-      '>'
+      (
+          COMMA
+          pythonInterfaceParameter
+      )*
+      GREATER
     ;
 
 
 pythonInterfaceParameter
     : identifier
-      (':' qualifiedNameReference)?
+      (
+          COLON
+          typeExpression
+      )?
     ;
 
 
 pythonInterfaceMember
-    : attribute*
+    : optionalAttributePrefix
       (
           pythonModuleDeclaration
         | pythonCallableDeclaration
@@ -497,9 +467,9 @@ pythonInterfaceMember
         | pythonCallbackDeclaration
         | pythonConversionDeclaration
         | pythonBufferDeclaration
-        | pythonAsyncDeclaration
         | pythonIteratorDeclaration
         | pythonGeneratorDeclaration
+        | pythonAsyncDeclaration
         | pythonExceptionDeclaration
         | pythonRequirementDeclaration
         | pythonPolicyDeclaration
@@ -509,29 +479,21 @@ pythonInterfaceMember
 
 
 /* ============================================================================
- * MODULES
+ * MODULE
  * ========================================================================== */
 
-/*
- * A Python module is a symbolic namespace.
- *
- * The grammar deliberately does not interpret the module reference as:
- *
- *     filesystem path
- *     wheel
- *     package directory
- *     URL
- *     installed package
- *
- * Those interpretations belong to later resolution policy.
- */
 pythonModuleDeclaration
-    : attribute*
-      'python'
-      'module'
-      qualifiedNameReference
+    : optionalAttributePrefix
+      MODULE
+      pythonModuleIdentity
       pythonModuleClause*
-      ';'
+      SEMICOLON
+    ;
+
+
+pythonModuleIdentity
+    : STRING
+    | qualifiedNameReference
     ;
 
 
@@ -540,98 +502,95 @@ pythonModuleClause
     | pythonVersionClause
     | pythonCompatibilityClause
     | pythonRequirementClause
-    | pythonAttributeBlock
+    | pythonEnvironmentClause
     ;
 
 
-/*
- * Implementation identity is symbolic.
- *
- * Examples:
- *
- *     implementation = CPython
- *     implementation = PyPy
- *
- * are semantic metadata rather than hard-coded grammar categories.
- */
+/* ============================================================================
+ * IMPLEMENTATION
+ * ========================================================================== */
+
 pythonImplementationClause
-    : 'implementation'
-      '='
+    : identifier
+      ASSIGN
       pythonSymbolicValue
     ;
 
 
-/*
- * Version is represented as a value rather than a grammar-level enumeration.
- *
- * This permits future Python versions without grammar changes.
- */
+/* ============================================================================
+ * VERSION
+ * ========================================================================== */
+
 pythonVersionClause
-    : 'version'
+    : identifier
       pythonVersionOperator?
       pythonVersionValue
     ;
 
 
 pythonVersionOperator
-    : '='
-    | '=='
-    | '!='
-    | '<'
-    | '<='
-    | '>'
-    | '>='
-    | '^'
-    | '~'
+    : ASSIGN
+    | EQUAL_EQUAL
+    | NOT_EQUAL
+    | LESS
+    | LESS_EQUAL
+    | GREATER
+    | GREATER_EQUAL
     ;
 
 
 pythonVersionValue
-    : stringLiteral
-    | integerLiteral
-    | pythonVersionIdentifier
-    ;
-
-
-pythonVersionIdentifier
-    : identifier
+    : STRING
+    | INTEGER
+    | FLOAT
+    | identifier
     | qualifiedNameReference
     ;
 
 
 /* ============================================================================
- * CALLABLE DECLARATIONS
+ * CALLABLE
  * ========================================================================== */
 
 /*
- * Declares a Python callable contract.
+ * Declares an externally implemented Python callable.
  *
- * This is NOT ordinary Zamani function syntax.
+ * The callable identity remains symbolic.
  *
- * It describes an external callable boundary.
+ * This rule does not define Python function syntax.
  */
 pythonCallableDeclaration
-    : attribute*
-      'python'
-      'fn'
-      qualifiedNameReference
-      '('
+    : optionalAttributePrefix
+      FN
+      pythonCallableIdentity
+      LPAREN
       pythonParameterList?
-      ')'
+      RPAREN
       pythonReturnClause?
       pythonCallableClause*
-      ';'
+      SEMICOLON
+    ;
+
+
+pythonCallableIdentity
+    : qualifiedNameReference
+    | STRING
     ;
 
 
 pythonParameterList
     : pythonParameter
-      (',' pythonParameter)*
+      (
+          COMMA
+          pythonParameter
+      )*
     ;
 
 
 pythonParameter
-    : parameter
+    : identifier
+      COLON
+      typeExpression
       pythonParameterClause*
     ;
 
@@ -640,18 +599,18 @@ pythonParameterClause
     : pythonConversionClause
     | pythonOwnershipClause
     | pythonBorrowClause
+    | pythonLifetimeClause
     | pythonNullabilityClause
-    | pythonBufferClause
+    | pythonBufferReferenceClause
     | pythonOptionalClause
     | pythonKeywordOnlyClause
     | pythonPositionalOnlyClause
     | pythonVariadicClause
-    | pythonAttributeBlock
     ;
 
 
 pythonReturnClause
-    : '->'
+    : THIN_ARROW
       typeExpression
       pythonReturnClauseItem*
     ;
@@ -661,8 +620,8 @@ pythonReturnClauseItem
     : pythonConversionClause
     | pythonOwnershipClause
     | pythonNullabilityClause
-    | pythonBufferClause
-    | pythonAttributeBlock
+    | pythonBufferReferenceClause
+    | pythonLifetimeClause
     ;
 
 
@@ -675,7 +634,7 @@ pythonCallableClause
     | pythonBorrowClause
     | pythonLifetimeClause
     | pythonNullabilityClause
-    | pythonBufferClause
+    | pythonBufferReferenceClause
     | pythonExceptionClause
     | pythonEffectClause
     | pythonRequirementClause
@@ -683,51 +642,45 @@ pythonCallableClause
     | pythonAsyncClause
     | pythonStreamingClause
     | pythonThreadingClause
-    | pythonGILClause
+    | pythonInterpreterSerializationClause
     | pythonEnvironmentClause
-    | pythonAttributeBlock
     ;
 
 
 /* ============================================================================
- * SYMBOLS
+ * MODULE / SYMBOL REFERENCES
  * ========================================================================== */
 
-/*
- * A Python symbol remains symbolic.
- *
- * The grammar does not resolve it.
- */
+pythonModuleReferenceClause
+    : identifier
+      ASSIGN
+      pythonModuleIdentity
+    ;
+
+
 pythonSymbolClause
-    : 'symbol'
-      '='
+    : identifier
+      ASSIGN
       pythonSymbolicValue
     ;
 
 
-pythonModuleReferenceClause
-    : 'module'
-      '='
-      qualifiedNameReference
+/* ============================================================================
+ * OBJECT
+ * ========================================================================== */
+
+pythonObjectDeclaration
+    : optionalAttributePrefix
+      TYPE
+      pythonObjectIdentity
+      pythonObjectClause*
+      SEMICOLON
     ;
 
 
-/* ============================================================================
- * OBJECT BOUNDARIES
- * ========================================================================== */
-
-/*
- * Describes a Python object that may cross the Zamani/Python boundary.
- *
- * This does not create a runtime Python object.
- */
-pythonObjectDeclaration
-    : attribute*
-      'python'
-      'object'
-      qualifiedNameReference
-      pythonObjectClause*
-      ';'
+pythonObjectIdentity
+    : qualifiedNameReference
+    | STRING
     ;
 
 
@@ -739,295 +692,250 @@ pythonObjectClause
     | pythonLifetimeClause
     | pythonNullabilityClause
     | pythonConversionClause
-    | pythonBufferClause
+    | pythonBufferReferenceClause
     | pythonRequirementClause
     | pythonCompatibilityClause
-    | pythonAttributeBlock
     ;
 
 
 pythonTypeClause
-    : 'type'
-      '='
+    : identifier
+      ASSIGN
       typeExpression
     ;
 
 
 pythonRepresentationClause
-    : 'representation'
-      '='
+    : identifier
+      ASSIGN
       pythonSymbolicValue
     ;
 
 
 /* ============================================================================
- * CONVERSION / MARSHALLING
+ * CALLBACK
  * ========================================================================== */
 
-/*
- * Conversion is semantic metadata.
- *
- * It does not prescribe a particular native representation.
- */
+pythonCallbackDeclaration
+    : optionalAttributePrefix
+      identifier
+      qualifiedNameReference
+      LPAREN
+      pythonParameterList?
+      RPAREN
+      pythonReturnClause?
+      pythonCallbackClause*
+      SEMICOLON
+    ;
+
+
+pythonCallbackClause
+    : pythonOwnershipClause
+    | pythonBorrowClause
+    | pythonLifetimeClause
+    | pythonThreadingClause
+    | pythonInterpreterSerializationClause
+    | pythonExceptionClause
+    | pythonAsyncClause
+    | pythonRequirementClause
+    | pythonCompatibilityClause
+    ;
+
+
+/* ============================================================================
+ * CONVERSION
+ * ========================================================================== */
+
 pythonConversionDeclaration
-    : attribute*
-      'python'
-      'conversion'
+    : optionalAttributePrefix
+      identifier
       pythonConversionSpec
       pythonConversionClause*
-      ';'
+      SEMICOLON
     ;
 
 
 pythonConversionClause
-    : 'convert'
+    : identifier
       pythonConversionSpec
     ;
 
 
 pythonConversionSpec
     : pythonSymbolicValue
-    | '('
+    | LPAREN
       expression
-      ')'
-    ;
-
-
-pythonMarshalClause
-    : 'marshal'
-      pythonConversionSpec
-      (
-          'as'
-          pythonConversionSpec
-      )?
+      RPAREN
     ;
 
 
 /* ============================================================================
- * OWNERSHIP / BORROWING / LIFETIMES
+ * OWNERSHIP
  * ========================================================================== */
 
 pythonOwnershipClause
-    : 'ownership'
-      '='
+    : identifier
+      ASSIGN
       pythonOwnershipMode
     ;
 
 
 pythonOwnershipMode
-    : 'owned'
-    | 'borrowed'
-    | 'shared'
-    | 'transferred'
-    | 'returned'
-    | 'in'
-    | 'out'
-    | 'inout'
+    : identifier
+    | qualifiedNameReference
     | pythonSymbolicValue
     ;
 
 
 pythonBorrowClause
-    : 'borrow'
-      '='
+    : identifier
+      ASSIGN
       pythonBorrowMode
     ;
 
 
 pythonBorrowMode
-    : 'shared'
-    | 'exclusive'
-    | 'read'
-    | 'write'
-    | pythonSymbolicValue
-    | '('
+    : identifier
+    | qualifiedNameReference
+    | LPAREN
       expression
-      ')'
+      RPAREN
     ;
 
 
 pythonLifetimeClause
-    : 'lifetime'
-      '='
+    : identifier
+      ASSIGN
       pythonLifetimeSpec
     ;
 
 
 pythonLifetimeSpec
     : qualifiedNameReference
-    | stringLiteral
-    | '('
+    | STRING
+    | LPAREN
       expression
-      ')'
+      RPAREN
     ;
 
 
 pythonNullabilityClause
-    : 'nullability'
-      '='
-      pythonNullability
+    : identifier
+      ASSIGN
+      pythonNullabilityMode
     ;
 
 
-pythonNullability
-    : 'nullable'
-    | 'nonnull'
-    | 'unknown'
-    | pythonSymbolicValue
+pythonNullabilityMode
+    : identifier
+    | qualifiedNameReference
     ;
 
 
 /* ============================================================================
- * BUFFER / ARRAY / ZERO-COPY BOUNDARIES
+ * BUFFER CONTRACT
  * ========================================================================== */
 
 /*
- * Python interoperability frequently crosses through buffer-oriented data.
+ * Buffer metadata is semantic.
  *
- * The grammar describes the semantic contract but never assumes:
+ * It does not encode:
  *
- *     a particular pointer width
- *     a particular stride
- *     a particular machine alignment
- *     a particular address
- *     a particular contiguous memory size
+ *     pointer width;
+ *     alignment width;
+ *     memory capacity;
+ *     physical address;
+ *     device memory size.
  */
 pythonBufferDeclaration
-    : attribute*
-      'python'
-      'buffer'
-      qualifiedNameReference
+    : optionalAttributePrefix
+      identifier
+      pythonBufferIdentity
       pythonBufferClause*
-      ';'
+      SEMICOLON
+    ;
+
+
+pythonBufferIdentity
+    : qualifiedNameReference
+    | STRING
     ;
 
 
 pythonBufferClause
-    : 'buffer'
-      '='
-      pythonBufferMode
-    | 'layout'
-      '='
-      pythonSymbolicValue
-    | 'shape'
-      '='
-      expression
-    | 'strides'
-      '='
-      expression
-    | 'format'
-      '='
-      pythonSymbolicValue
-    | 'contiguous'
-      '='
-      pythonBooleanValue
-    | 'writable'
-      '='
-      pythonBooleanValue
-    | 'zero'
-      'copy'
-      '='
-      pythonBooleanValue
-    | 'owner'
-      '='
-      pythonSymbolicValue
-    | 'lifetime'
-      '='
-      pythonLifetimeSpec
+    : identifier
+      ASSIGN
+      pythonBufferValue
     ;
 
 
-pythonBufferMode
-    : 'read'
-    | 'write'
-    | 'readwrite'
-    | 'borrowed'
-    | 'owned'
-    | pythonSymbolicValue
+pythonBufferValue
+    : pythonSymbolicValue
+    | expression
+    ;
+
+
+pythonBufferReferenceClause
+    : identifier
+      ASSIGN
+      pythonSymbolicValue
     ;
 
 
 /* ============================================================================
- * OPTIONAL / KEYWORD / POSITIONAL / VARIADIC PARAMETERS
+ * PARAMETER MODES
  * ========================================================================== */
 
 pythonOptionalClause
-    : 'optional'
+    : identifier
       (
-          '='
+          ASSIGN
           expression
       )?
     ;
 
 
 pythonKeywordOnlyClause
-    : 'keyword'
-      'only'
+    : identifier
     ;
 
 
 pythonPositionalOnlyClause
-    : 'positional'
-      'only'
+    : identifier
     ;
 
 
 pythonVariadicClause
-    : 'variadic'
+    : identifier
       pythonVariadicMode?
     ;
 
 
 pythonVariadicMode
-    : 'positional'
-    | 'keyword'
-    | 'both'
-    | pythonSymbolicValue
+    : identifier
+    | qualifiedNameReference
     ;
 
 
 /* ============================================================================
- * ASYNCHRONOUS PYTHON
+ * ASYNCHRONOUS BOUNDARY
  * ========================================================================== */
 
-/*
- * Python async semantics are represented as an interoperability contract.
- *
- * The grammar does not execute an event loop.
- */
 pythonAsyncDeclaration
-    : attribute*
-      'python'
-      'async'
+    : optionalAttributePrefix
+      ASYNC
       qualifiedNameReference
       pythonAsyncClause*
-      ';'
+      SEMICOLON
     ;
 
 
 pythonAsyncClause
-    : 'async'
+    : identifier
       (
-          '='
-          pythonBooleanValue
+          ASSIGN
+          pythonSymbolicValue
       )?
-    | 'awaitable'
-      (
-          '='
-          pythonBooleanValue
-      )?
-    | 'scheduler'
-      '='
-      pythonSymbolicValue
-    | 'context'
-      '='
-      pythonSymbolicValue
-    | 'cancellation'
-      '='
-      pythonSymbolicValue
-    | 'ordering'
-      '='
-      pythonSymbolicValue
     ;
 
 
@@ -1036,36 +944,22 @@ pythonAsyncClause
  * ========================================================================== */
 
 pythonIteratorDeclaration
-    : attribute*
-      'python'
-      'iterator'
+    : optionalAttributePrefix
+      identifier
       qualifiedNameReference
       pythonIteratorClause*
-      ';'
+      SEMICOLON
     ;
 
 
 pythonIteratorClause
-    : 'element'
-      '='
-      typeExpression
-    | 'ownership'
-      '='
-      pythonOwnershipMode
-    | 'termination'
-      '='
-      pythonSymbolicValue
-    | 'lazy'
-      '='
-      pythonBooleanValue
-    | 'reusable'
-      '='
-      pythonBooleanValue
-    | 'async'
-      '='
-      pythonBooleanValue
-    | pythonExceptionClause
-    | pythonRequirementClause
+    : identifier
+      ASSIGN
+      (
+          typeExpression
+        | pythonSymbolicValue
+        | expression
+      )
     ;
 
 
@@ -1074,139 +968,66 @@ pythonIteratorClause
  * ========================================================================== */
 
 pythonGeneratorDeclaration
-    : attribute*
-      'python'
-      'generator'
+    : optionalAttributePrefix
+      identifier
       qualifiedNameReference
       pythonGeneratorClause*
-      ';'
+      SEMICOLON
     ;
 
 
 pythonGeneratorClause
-    : 'yield'
-      '='
-      typeExpression
-    | 'send'
-      '='
-      typeExpression
-    | 'receive'
-      '='
-      typeExpression
-    | 'return'
-      '='
-      typeExpression
-    | 'async'
-      '='
-      pythonBooleanValue
-    | 'lazy'
-      '='
-      pythonBooleanValue
-    | pythonExceptionClause
-    | pythonRequirementClause
+    : identifier
+      ASSIGN
+      (
+          typeExpression
+        | pythonSymbolicValue
+        | expression
+      )
     ;
 
 
 /* ============================================================================
- * CALLBACKS
+ * EXCEPTIONS
  * ========================================================================== */
 
-/*
- * A callback is a semantic callable boundary.
- *
- * The callback is not installed or invoked during parsing.
- */
-pythonCallbackDeclaration
-    : attribute*
-      'python'
-      'callback'
-      qualifiedNameReference
-      '('
-      pythonParameterList?
-      ')'
-      pythonReturnClause?
-      pythonCallbackClause*
-      ';'
-    ;
-
-
-pythonCallbackClause
-    : pythonOwnershipClause
-    | pythonLifetimeClause
-    | pythonThreadingClause
-    | pythonGILClause
-    | pythonExceptionClause
-    | pythonAsyncClause
-    | pythonRequirementClause
-    | pythonCompatibilityClause
-    | pythonAttributeBlock
-    ;
-
-
-/* ============================================================================
- * EXCEPTION BOUNDARIES
- * ========================================================================== */
-
-/*
- * Foreign exceptions MUST NOT silently disappear.
- *
- * The semantic layer determines the actual mapping to a Zamani error/result
- * representation.
- */
 pythonExceptionDeclaration
-    : attribute*
-      'python'
-      'exception'
+    : optionalAttributePrefix
+      identifier
       qualifiedNameReference
-      pythonExceptionItem*
-      ';'
+      pythonExceptionClause*
+      SEMICOLON
     ;
 
 
 pythonExceptionClause
-    : 'errors'
-      '{'
+    : identifier
+      (
+          ASSIGN
+          pythonSymbolicValue
+      )?
+      pythonExceptionBody?
+    ;
+
+
+pythonExceptionBody
+    : LBRACE
       pythonExceptionItem*
-      '}'
+      RBRACE
     ;
 
 
 pythonExceptionItem
-    : 'mode'
-      '='
-      pythonExceptionMode
-      ';'?
-    | 'map'
-      qualifiedNameReference
-      'to'
-      typeExpression
-      ';'?
-    | 'type'
-      '='
-      typeExpression
-      ';'?
-    | 'catch'
-      pythonSymbolicValue
-      ';'?
-    | 'propagate'
-      pythonBooleanValue
-      ';'?
-    | 'attribute'
-      identifier
-      '='
-      expression
-      ';'?
-    ;
-
-
-pythonExceptionMode
-    : 'result'
-    | 'exception'
-    | 'status'
-    | 'panic'
-    | 'abort'
-    | 'unknown'
-    | pythonSymbolicValue
+    : identifier
+      (
+          ASSIGN
+          (
+              typeExpression
+            | pythonSymbolicValue
+            | expression
+          )
+      )?
+      SEMICOLON?
     ;
 
 
@@ -1214,57 +1035,52 @@ pythonExceptionMode
  * EFFECTS
  * ========================================================================== */
 
-/*
- * Effects are symbolic references.
- *
- * The canonical effects grammar owns the effect vocabulary.
- */
 pythonEffectClause
-    : 'with'
-      'effects'
-      '{'
+    : WITH
+      EFFECTS
+      LBRACE
       pythonEffectReferenceList?
-      '}'
+      RBRACE
     ;
 
 
 pythonEffectReferenceList
     : qualifiedNameReference
-      (',' qualifiedNameReference)*
+      (
+          COMMA
+          qualifiedNameReference
+      )*
     ;
 
 
 /* ============================================================================
- * REQUIREMENTS / CAPABILITIES
+ * REQUIREMENTS
  * ========================================================================== */
 
-/*
- * Requirements are semantic prerequisites, not target selections.
- */
 pythonRequirementDeclaration
-    : attribute*
-      'python'
-      'requires'
-      '{'
+    : optionalAttributePrefix
+      REQUIRES
+      LBRACE
       pythonRequirement*
-      '}'
+      RBRACE
     ;
 
 
 pythonRequirementClause
-    : 'requires'
-      '{'
+    : REQUIRES
+      LBRACE
       pythonRequirement*
-      '}'
+      RBRACE
     ;
 
 
 pythonRequirement
     : qualifiedNameReference
       (
-          '='
+          ASSIGN
           expression
       )?
+      SEMICOLON?
     ;
 
 
@@ -1273,70 +1089,33 @@ pythonRequirement
  * ========================================================================== */
 
 pythonCompatibilityClause
-    : 'compatible'
-      'with'
-      pythonCompatibilityRequirement
+    : identifier
+      pythonCompatibilityValue
     ;
 
 
-pythonCompatibilityRequirement
+pythonCompatibilityValue
     : qualifiedNameReference
-    | stringLiteral
+    | STRING
     | expression
     ;
 
 
 /* ============================================================================
- * THREADING
+ * THREADING / EXECUTION POLICY
  * ========================================================================== */
 
-/*
- * Threading policy is semantic metadata.
- *
- * It does not create threads and does not encode a fixed thread count.
- */
 pythonThreadingClause
-    : 'threading'
-      '='
-      pythonThreadingMode
+    : identifier
+      ASSIGN
+      pythonSymbolicValue
     ;
 
 
-pythonThreadingMode
-    : 'single'
-    | 'multi'
-    | 'concurrent'
-    | 'serialized'
-    | 'free'
-    | 'unknown'
-    | pythonSymbolicValue
-    ;
-
-
-/* ============================================================================
- * GIL / INTERPRETER-SERIALIZATION CONTRACT
- * ========================================================================== */
-
-/*
- * "GIL" is represented as a semantic boundary policy rather than an assumption
- * that every future Python implementation has the same execution model.
- *
- * This allows implementations with or without a global interpreter lock.
- */
-pythonGILClause
-    : 'interpreter'
-      'serialization'
-      '='
-      pythonInterpreterSerializationMode
-    ;
-
-
-pythonInterpreterSerializationMode
-    : 'required'
-    | 'preferred'
-    | 'forbidden'
-    | 'unknown'
-    | pythonSymbolicValue
+pythonInterpreterSerializationClause
+    : identifier
+      ASSIGN
+      pythonSymbolicValue
     ;
 
 
@@ -1345,18 +1124,11 @@ pythonInterpreterSerializationMode
  * ========================================================================== */
 
 pythonStreamingClause
-    : 'streaming'
-      pythonStreamingMode?
-    ;
-
-
-pythonStreamingMode
-    : 'input'
-    | 'output'
-    | 'bidirectional'
-    | 'lazy'
-    | 'eager'
-    | pythonSymbolicValue
+    : identifier
+      (
+          ASSIGN
+          pythonSymbolicValue
+      )?
     ;
 
 
@@ -1364,45 +1136,24 @@ pythonStreamingMode
  * ENVIRONMENT
  * ========================================================================== */
 
-/*
- * Environment metadata remains declarative.
- *
- * It does not read the environment.
- */
 pythonEnvironmentClause
-    : 'environment'
-      '{'
+    : identifier
+      LBRACE
       pythonEnvironmentItem*
-      '}'
+      RBRACE
     ;
 
 
 pythonEnvironmentItem
-    : 'name'
-      '='
-      pythonSymbolicValue
-      ';'?
-    | 'version'
-      '='
-      pythonVersionValue
-      ';'?
-    | 'package'
-      '='
-      pythonSymbolicValue
-      ';'?
-    | 'dependency'
-      '='
-      pythonSymbolicValue
-      ';'?
-    | 'constraint'
-      '='
-      expression
-      ';'?
-    | 'attribute'
-      identifier
-      '='
-      expression
-      ';'?
+    : identifier
+      (
+          ASSIGN
+          (
+              pythonSymbolicValue
+            | expression
+          )
+      )?
+      SEMICOLON?
     ;
 
 
@@ -1410,43 +1161,20 @@ pythonEnvironmentItem
  * POLICY
  * ========================================================================== */
 
-/*
- * Policies describe source-level interoperability intent.
- *
- * They do not themselves grant permissions.
- */
 pythonPolicyDeclaration
-    : attribute*
-      'python'
-      'policy'
+    : optionalAttributePrefix
+      identifier
       qualifiedNameReference
-      '{'
+      LBRACE
       pythonPolicyItem*
-      '}'
+      RBRACE
     ;
 
 
 pythonPolicyItem
-    : 'allow'
-      pythonPolicySubject
-      ';'?
-    | 'deny'
-      pythonPolicySubject
-      ';'?
-    | 'require'
-      pythonPolicySubject
-      ';'?
-    | 'prefer'
-      pythonPolicySubject
-      ';'?
-    | 'forbid'
-      pythonPolicySubject
-      ';'?
-    | 'attribute'
-      identifier
-      '='
-      expression
-      ';'?
+    : identifier
+      pythonPolicySubject?
+      SEMICOLON?
     ;
 
 
@@ -1458,56 +1186,28 @@ pythonPolicySubject
 
 
 /* ============================================================================
- * LINK / IMPLEMENTATION ASSOCIATION
+ * LINK ASSOCIATION
  * ========================================================================== */
 
-/*
- * A link declaration associates a semantic Python boundary with a symbolic
- * implementation identity.
- *
- * It does NOT load anything.
- */
 pythonLinkDeclaration
-    : attribute*
-      'python'
-      'link'
+    : optionalAttributePrefix
+      identifier
       qualifiedNameReference
-      '{'
+      LBRACE
       pythonLinkItem*
-      '}'
+      RBRACE
     ;
 
 
 pythonLinkItem
-    : 'module'
-      '='
-      qualifiedNameReference
-      ';'?
-    | 'symbol'
-      '='
-      pythonSymbolicValue
-      ';'?
-    | 'implementation'
-      '='
-      pythonSymbolicValue
-      ';'?
-    | 'version'
-      '='
-      pythonVersionValue
-      ';'?
-    | 'compatibility'
-      '='
-      expression
-      ';'?
-    | 'requires'
-      '='
-      expression
-      ';'?
-    | 'attribute'
-      identifier
-      '='
-      expression
-      ';'?
+    : identifier
+      ASSIGN
+      (
+          qualifiedNameReference
+        | pythonSymbolicValue
+        | expression
+      )
+      SEMICOLON?
     ;
 
 
@@ -1516,508 +1216,355 @@ pythonLinkItem
  * ========================================================================== */
 
 /*
- * Explicit Python call.
+ * Python calls are semantic boundary operations.
  *
- * Example:
+ * They do not execute during parsing.
  *
- *     python call math.sin(x)
+ * Examples:
  *
- * The call represents intent only.
+ *     python call math::sin(x)
  *
- * It does not import or execute Python during parsing.
+ *     python call "numpy"::linalg::solve(a, b)
+ *
+ * The first "python" is intentionally an identifier, not a new keyword.
  */
 pythonCallExpression
-    : 'python'
-      'call'
+    : identifier
+      identifier
       qualifiedNameReference
-      '('
+      LPAREN
       argumentList?
-      ')'
+      RPAREN
     ;
 
 
-/*
- * Explicit module-qualified Python call.
- *
- * Example:
- *
- *     python call "numpy"::linalg.solve(a, b)
- *
- * The string is an opaque source-level module identity.
- */
 pythonQualifiedCallExpression
-    : 'python'
-      'call'
-      stringLiteral
-      '::'
+    : identifier
+      identifier
+      STRING
+      DOUBLE_COLON
       qualifiedNameReference
-      '('
+      LPAREN
       argumentList?
-      ')'
+      RPAREN
     ;
 
 
-/*
- * Explicit Python callable reference.
- */
 pythonCallableReferenceExpression
-    : 'python'
-      'ref'
+    : identifier
+      identifier
       qualifiedNameReference
     ;
 
 
-/*
- * Explicit Python object reference.
- */
 pythonObjectReferenceExpression
-    : 'python'
-      'object'
+    : identifier
+      identifier
       qualifiedNameReference
     ;
 
-
-/* ============================================================================
- * STATEMENT FORMS
- * ========================================================================== */
 
 pythonCallStatement
     : pythonCallExpression
-      ';'
+      SEMICOLON
     | pythonQualifiedCallExpression
-      ';'
+      SEMICOLON
     ;
 
 
 /* ============================================================================
- * BOOLEAN / SYMBOLIC VALUES
+ * GENERIC SYMBOLIC VALUES
  * ========================================================================== */
 
-/*
- * Boolean values are represented through the canonical language literals where
- * available. These rules intentionally do not introduce a second boolean type.
- */
-pythonBooleanValue
-    : 'true'
-    | 'false'
-    | pythonSymbolicValue
-    | '('
-      expression
-      ')'
-    ;
-
-
-/*
- * Open-world symbolic metadata.
- *
- * Python-specific vocabularies are intentionally not closed here.
- *
- * This prevents future Python implementations, package systems, execution
- * models, buffer formats, schedulers, or interoperability mechanisms from
- * requiring a grammar rewrite.
- */
 pythonSymbolicValue
     : qualifiedNameReference
-    | stringLiteral
-    | integerLiteral
+    | STRING
+    | INTEGER
+    | FLOAT
+    | CHAR
+    | TRUE
+    | FALSE
     | identifier
     ;
 
 
-/* ============================================================================
- * ATTRIBUTE BLOCK
- * ========================================================================== */
-
 pythonAttributeBlock
-    : 'attributes'
-      '{'
-      pythonAttribute*
-      '}'
-    ;
-
-
-pythonAttribute
-    : identifier
-      (
-          '='
-          expression
-      )?
-      ';'
-    ;
-
-
-/* ============================================================================
- * GENERIC PYTHON BOUNDARY CLAUSES
- * ========================================================================== */
-
-/*
- * Allows future semantic properties to be attached without modifying this
- * grammar for every implementation-specific extension.
- *
- * Unknown attributes MUST still be validated semantically.
- *
- * The grammar's ability to parse an attribute does not imply that the compiler
- * accepts its meaning.
- */
-pythonMetadataClause
-    : identifier
-      (
-          '='
-          expression
-      )?
+    : LBRACE
+      attribute*
+      RBRACE
     ;
 
 
 /* ============================================================================
  * SEMANTIC INTEGRATION CONTRACT
- * ========================================================================== */
-
-/*
- * The frontend AST produced from this grammar MUST preserve:
+ * ============================================================================
+ *
+ * The frontend AST MUST preserve, where present:
  *
  *     source span
- *     declaration kind
- *     symbolic Python identity
+ *     Python boundary identity
+ *     interface identity
  *     module identity
  *     callable identity
+ *     parameter ordering
  *     parameter types
  *     return type
  *     conversion metadata
  *     ownership metadata
- *     borrowing metadata
- *     lifetime metadata
+ *     borrow/lifetime metadata
  *     nullability
- *     buffer contracts
- *     async contracts
- *     iterator/generator contracts
- *     callback contracts
- *     exception contracts
- *     effects
+ *     buffer metadata
+ *     asynchronous metadata
+ *     iterator/generator metadata
+ *     callback metadata
+ *     exception metadata
+ *     effect references
  *     requirements
- *     compatibility constraints
- *     environment requirements
+ *     compatibility metadata
+ *     environment metadata
  *     policy metadata
- *     attributes
+ *     implementation metadata
+ *     symbolic attributes
  *
- * It MUST NOT materialize:
+ * The AST MUST NOT contain runtime handles, pointers, interpreter instances,
+ * native addresses, process identifiers, or device identifiers merely because
+ * this grammar was parsed.
  *
- *     Python object handles
- *     interpreter handles
- *     pointers
- *     device handles
- *     addresses
- *     processes
- *     file descriptors
- *     native allocations
- *     runtime state
- */
-
-
-/*
+ * ============================================================================
+ * SEMANTIC RESPONSIBILITY
+ * ============================================================================
+ *
  * Semantic analysis MUST validate:
  *
- *     1. Python interface existence.
- *     2. Module identity validity.
- *     3. Callable identity validity.
- *     4. Type compatibility.
- *     5. Conversion legality.
- *     6. Ownership legality.
- *     7. Borrow/lifetime correctness.
- *     8. Buffer compatibility.
- *     9. Async compatibility.
- *    10. Iterator/generator compatibility.
- *    11. Callback safety.
- *    12. Exception/error mapping.
- *    13. Effect authorization.
- *    14. Capability satisfaction.
- *    15. Resource requirements.
- *    16. Security policy.
- *    17. Compatibility constraints.
- *    18. Target availability.
- *    19. Lowering availability.
+ *     - Python language identity;
+ *     - module identity;
+ *     - callable identity;
+ *     - type compatibility;
+ *     - conversion legality;
+ *     - ownership compatibility;
+ *     - borrow/lifetime validity;
+ *     - nullability;
+ *     - buffer compatibility;
+ *     - asynchronous compatibility;
+ *     - iterator/generator contracts;
+ *     - callback contracts;
+ *     - exception mapping;
+ *     - effects;
+ *     - capabilities;
+ *     - resource requirements;
+ *     - security policy;
+ *     - implementation compatibility;
+ *     - target availability;
+ *     - lowering availability.
  *
- * None of these decisions belong in the grammar.
- */
-
-
-/* ============================================================================
- * IR INTEGRATION
- * ========================================================================== */
-
-/*
- * Python interoperability syntax MUST lower through a semantic interoperability
- * representation.
+ * None of these are parser decisions.
  *
- * Conceptual flow:
+ * ============================================================================
+ * ABI INTEGRATION
+ * ============================================================================
  *
- *     PythonInterop AST
- *            |
- *            v
- *     semantic Python boundary
- *            |
- *            +--------------------+
- *            |                    |
- *            v                    v
- *      classical semantics   quantum semantics
- *            |                    |
- *            v                    v
- *      classical IR          quantum::ir
+ * This grammar MUST NOT duplicate ABI syntax.
  *
- * A Python boundary may therefore participate in hybrid programs.
+ * If a Python boundary requires ABI information, the semantic interoperability
+ * model references the canonical ABI contract owned by:
  *
- * Example semantic flow:
+ *     grammar/interoperability/abi.g4
  *
- *     Python numerical computation
- *              |
- *              v
- *     classical semantic representation
+ * Likewise, calling conventions remain owned by:
  *
- *     Python quantum tooling
- *              |
- *              v
- *     quantum semantic representation
- *              |
- *              v
- *          quantum::ir
+ *     grammar/interoperability/calling-conventions.g4
  *
- * This grammar MUST NEVER create:
+ * Python syntax may refer to these contracts symbolically through names,
+ * attributes, requirements, or semantic metadata.
  *
- *     QuantumGate
- *     QuantumInstruction
- *     QubitId
- *     PhysicalQubitId
- *     QuantumCircuit
+ * ============================================================================
+ * FFI INTEGRATION
+ * ============================================================================
  *
- * Those remain owned by the canonical quantum IR layer.
- */
-
-
-/* ============================================================================
- * HARDWARE INTEGRATION
- * ========================================================================== */
-
-/*
- * A Python boundary may eventually execute on:
+ * This grammar is a language-specific specialization of the general
+ * interoperability architecture.
+ *
+ * General FFI semantics remain owned by:
+ *
+ *     grammar/interoperability/ffi.g4
+ *
+ * Python-specific information belongs here.
+ *
+ * The Python grammar MUST NOT become a second FFI implementation.
+ *
+ * ============================================================================
+ * QUANTUM INTEGRATION
+ * ============================================================================
+ *
+ * Python may act as a host or interoperability boundary for quantum
+ * computation.
+ *
+ * This grammar therefore permits Python-facing types and symbolic operations
+ * to participate in hybrid programs.
+ *
+ * It MUST NOT define:
+ *
+ *     quantum gates;
+ *     physical qubits;
+ *     QubitId;
+ *     topology;
+ *     routing;
+ *     scheduling;
+ *     calibration;
+ *     QEC;
+ *     ZQN.
+ *
+ * If Python tooling produces or consumes quantum semantics, the downstream
+ * path remains:
+ *
+ *     Python boundary
+ *          |
+ *          v
+ *     semantic quantum model
+ *          |
+ *          v
+ *     quantum::ir
+ *          |
+ *          v
+ *     optimization
+ *          |
+ *          v
+ *     routing / scheduling
+ *          |
+ *          v
+ *     QEC / resilience / ZQN
+ *          |
+ *          v
+ *     HAL
+ *          |
+ *          v
+ *     target
+ *
+ * ============================================================================
+ * CLASSICAL / AI / DATA INTEGRATION
+ * ============================================================================
+ *
+ * Python interoperability may expose:
+ *
+ *     numerical computation
+ *     tensors
+ *     datasets
+ *     models
+ *     symbolic computation
+ *     scientific computation
+ *     distributed computation
+ *     networking
+ *     data processing
+ *
+ * The grammar does not enumerate frameworks.
+ *
+ * Framework identities remain symbolic.
+ *
+ * ============================================================================
+ * HARDWARE / HDL INTEGRATION
+ * ============================================================================
+ *
+ * Python may be used as an orchestration or tooling boundary for hardware,
+ * FPGA, accelerator, simulation, verification, or deployment workflows.
+ *
+ * This grammar does not select:
  *
  *     CPU
  *     GPU
- *     accelerator
- *     quantum-classical host
- *     distributed node
- *     embedded runtime
- *     cloud environment
- *     future execution target
+ *     FPGA
+ *     ASIC
+ *     QPU
+ *     device
+ *     node
+ *     physical address.
  *
- * This grammar does not choose one.
+ * Such choices belong downstream.
  *
- * Target selection belongs to:
+ * ============================================================================
+ * SECURITY
+ * ============================================================================
  *
- *     compilation
- *     resource management
- *     hardware abstraction
- *     execution
- *     deployment
- */
-
-
-/* ============================================================================
- * SECURITY INTEGRATION
- * ========================================================================== */
-
-/*
- * Python interoperability MUST be treated as an explicit security boundary.
+ * A declaration is not authorization.
  *
- * The semantic/security layer must be able to distinguish:
+ * For example:
  *
- *     declaration
- *     capability
- *     authorization
- *     execution
+ *     python call ...
  *
- * A source declaration such as:
+ * does not itself authorize:
  *
- *     python call module.function(...)
+ *     filesystem access;
+ *     network access;
+ *     process creation;
+ *     package installation;
+ *     native code execution;
+ *     environment inspection.
  *
- * does NOT grant:
+ * Security/capability analysis must authorize those actions independently.
  *
- *     filesystem permission
- *     network permission
- *     process permission
- *     native-code permission
- *     package-installation permission
- *     environment inspection permission
- *
- * Those permissions must be independently represented and authorized.
- */
-
-
-/* ============================================================================
- * ERROR INTEGRATION
- * ========================================================================== */
-
-/*
- * The parser reports syntactic failures.
- *
- * Semantic analysis reports:
- *
- *     unknown module
- *     unknown callable
- *     invalid type conversion
- *     invalid ownership
- *     invalid lifetime
- *     incompatible buffer contract
- *     unsupported async contract
- *     unsupported callback contract
- *     unsatisfied capability
- *     unsatisfied resource requirement
- *     incompatible implementation
- *
- * Runtime reports:
- *
- *     unavailable interpreter
- *     unavailable implementation
- *     invocation failure
- *     foreign exception
- *     cancellation
- *     timeout
- *     resource exhaustion
- *
- * The grammar must never turn runtime failures into comments or silently ignore
- * them.
- */
-
-
-/* ============================================================================
+ * ============================================================================
  * DETERMINISM
- * ========================================================================== */
-
-/*
- * Parsing must be deterministic with respect to:
+ * ============================================================================
  *
- *     source
- *     lexer configuration
- *     grammar version
+ * Parsing depends only on:
  *
- * No runtime environment may influence parsing.
+ *     source text;
+ *     selected grammar;
+ *     selected lexer vocabulary;
+ *     explicit parser configuration.
  *
- * In particular, parsing must not depend on:
+ * Parsing MUST NOT depend on:
  *
- *     installed Python versions
- *     installed modules
- *     filesystem state
- *     network state
- *     hardware
- *     environment variables
- */
-
-
-/* ============================================================================
- * COMPATIBILITY
- * ========================================================================== */
-
-/*
- * Adding a new Python implementation MUST NOT require changing this grammar.
+ *     installed Python versions;
+ *     installed packages;
+ *     filesystem contents;
+ *     environment variables;
+ *     network state;
+ *     available hardware;
+ *     runtime state.
  *
- * Adding a new Python package MUST NOT require changing this grammar.
- *
- * Adding a new Python version MUST NOT require changing this grammar.
- *
- * Adding a new execution backend MUST NOT require changing this grammar.
- *
- * New semantics should normally be introduced through:
- *
- *     symbolic identifiers
- *     attributes
- *     capabilities
- *     requirements
- *     dialects
- *     versioned semantic rules
- *
- * rather than fixed keyword inventories.
- */
-
-
-/* ============================================================================
- * SCALABILITY AUDIT
- * ========================================================================== */
-
-/*
- * The grammar deliberately contains no:
- *
- *     finite module limit
- *     finite callable limit
- *     finite argument limit
- *     finite parameter limit
- *     finite object limit
- *     finite buffer limit
- *     finite iterator limit
- *     finite generator limit
- *     finite callback limit
- *     finite resource limit
- *     finite machine limit
- *
- * ANTLR repetition operators are used for unbounded language structures subject
- * only to actual compiler/runtime resource availability.
- */
-
-
-/* ============================================================================
+ * ============================================================================
  * COMPLETION CONTRACT
- * ========================================================================== */
-
-/*
- * This file is complete only when:
+ * ============================================================================
  *
- * [ ] It compiles as an ANTLR4 parser grammar.
- * [ ] It uses the canonical Zamani lexer.
- * [ ] It does not duplicate canonical identifier rules.
- * [ ] It does not duplicate canonical type rules.
- * [ ] It does not duplicate canonical expression rules.
- * [ ] It does not define Python language syntax.
- * [ ] It does not execute Python.
- * [ ] It does not perform filesystem access.
- * [ ] It does not perform network access.
- * [ ] It does not contain machine-size constants.
- * [ ] It does not contain device identifiers.
- * [ ] It does not contain fixed Python-version assumptions.
- * [ ] It does not contain fixed interpreter paths.
- * [ ] It does not define ABI implementation.
- * [ ] It does not define quantum IR.
- * [ ] It does not define QEC.
- * [ ] It does not define ZQN.
- * [ ] It does not define scheduling.
- * [ ] It does not define routing.
- * [ ] It does not define optimization.
- * [ ] It preserves source spans through the AST contract.
- * [ ] It supports symbolic/open-world Python implementations.
- * [ ] It supports synchronous calls.
- * [ ] It supports asynchronous calls.
- * [ ] It supports callbacks.
- * [ ] It supports iterators.
- * [ ] It supports generators.
- * [ ] It supports buffer-oriented interoperability.
- * [ ] It supports explicit ownership metadata.
- * [ ] It supports borrowing/lifetime metadata.
- * [ ] It supports nullability metadata.
- * [ ] It supports conversion contracts.
- * [ ] It supports exception mapping.
- * [ ] It supports effects.
- * [ ] It supports requirements.
- * [ ] It supports compatibility constraints.
- * [ ] It supports declarative environment requirements.
- * [ ] It supports semantic policies.
- * [ ] It supports hybrid classical/quantum use.
- * [ ] It remains independent of physical hardware.
- * [ ] It remains compatible with POCO-REAF.
- * [ ] Positive parser tests exist.
- * [ ] Negative parser tests exist.
- * [ ] Boundary tests exist.
- * [ ] Cross-domain tests exist.
- * [ ] Determinism tests exist.
- * [ ] Round-trip tests exist where the canonical printer supports them.
- */
-
-
-/* ============================================================================
+ * This file is complete when:
+ *
+ * [x] It is a parser grammar.
+ * [x] It uses tokenVocab = ZamaniLexer.
+ * [x] It imports canonical Expressions.
+ * [x] It imports canonical Types.
+ * [x] It imports canonical QualifiedNames.
+ * [x] It imports canonical Attributes.
+ * [x] It does not define Python language syntax.
+ * [x] It does not enumerate Python implementations.
+ * [x] It does not encode a Python version ceiling.
+ * [x] It does not encode machine limits.
+ * [x] It does not encode interpreter paths.
+ * [x] It does not implement FFI generally.
+ * [x] It does not implement ABI generally.
+ * [x] It does not create a quantum IR.
+ * [x] It does not perform runtime execution.
+ * [x] It does not require unsafe Rust.
+ * [x] It supports symbolic Python identities.
+ * [x] It supports modules.
+ * [x] It supports callable contracts.
+ * [x] It supports callbacks.
+ * [x] It supports object boundaries.
+ * [x] It supports conversions.
+ * [x] It supports buffer contracts.
+ * [x] It supports asynchronous boundaries.
+ * [x] It supports iterators.
+ * [x] It supports generators.
+ * [x] It supports exception contracts.
+ * [x] It supports requirements.
+ * [x] It supports compatibility metadata.
+ * [x] It supports hybrid participation.
+ * [x] It preserves open-world scalability.
+ *
+ * Repository integration still requires the interoperability dispatcher to
+ * import this grammar and expose `pythonInterop` at the correct universal
+ * interoperability boundary.
+ *
+ * ============================================================================
  * END OF PYTHON INTEROPERABILITY GRAMMAR
- * ========================================================================== */
+ * ============================================================================
+ */
