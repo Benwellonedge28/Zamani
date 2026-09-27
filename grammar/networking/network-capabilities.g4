@@ -1,7 +1,6 @@
 /*
  * ============================================================================
  * Zamani Universal Programming Language
- * Production Networking Capability Grammar
  * ============================================================================
  *
  * File:
@@ -10,59 +9,111 @@
  * Grammar:
  *     NetworkingCapabilities
  *
+ * Status:
+ *     Production candidate / canonical networking capability grammar
+ *
  * Purpose:
- *     Canonical source-level grammar for networking-specific capability
- *     references, requirements, constraints, preferences, and capability
- *     predicates.
+ *     Define the networking-domain SOURCE SYNTAX for:
  *
- * Rust baseline:
- *     Rust 1.97 / Rust 1.97.1
- *     Edition 2021
- *     Safe Rust only
+ *       - capability requirements;
+ *       - capability provisions;
+ *       - capability constraints;
+ *       - capability preferences;
+ *       - capability contracts;
+ *       - capability sets;
+ *       - capability negotiation intent;
+ *       - capability predicates;
+ *       - parameterized capability references;
+ *       - networking capability metadata.
  *
- * Grammar technology:
- *     ANTLR4 parser grammar
+ * This grammar is intentionally OPEN-WORLD.
  *
- * Safety:
- *     - No embedded Rust actions.
- *     - No semantic predicates.
- *     - No unsafe code.
- *     - No filesystem access.
- *     - No network access.
- *     - No hardware access.
- *     - No runtime callbacks.
- *     - No randomness.
- *     - No environment inspection.
- *
- * ============================================================================
- * ARCHITECTURAL ROLE
- * ============================================================================
- *
- * This file owns the SOURCE SYNTAX that composes general Zamani capabilities
- * into networking-specific declarations and contracts.
- *
- * It does NOT own the general capability language.
- *
- * General capability identity/version syntax remains owned by:
- *
- *     grammar/core/capabilities.g4
- *
- * Networking-specific interpretation is represented by qualified capability
- * names and expressions.
+ * A capability identity is a semantic name, not a closed enumeration.
  *
  * Examples:
  *
  *     networking::reliable_delivery
  *     networking::ordered_delivery
- *     networking::multicast
  *     networking::low_latency
  *     networking::high_throughput
- *     networking::secure_transport
- *     networking::quantum_communication
- *     networking::hardware_fabric
+ *     quantum::communication
+ *     security::confidentiality
+ *     hardware::communication_fabric
  *     future::networking::new_capability
  *
- * This grammar deliberately does NOT enumerate a closed list of capabilities.
+ * ============================================================================
+ * RUST / IMPLEMENTATION BASELINE
+ * ============================================================================
+ *
+ * Rust:
+ *     1.97 / 1.97.1
+ *
+ * Edition:
+ *     2021
+ *
+ * Safety:
+ *     Safe Rust only.
+ *
+ * This grammar contains:
+ *
+ *     - no embedded Rust;
+ *     - no actions;
+ *     - no semantic predicates;
+ *     - no unsafe code;
+ *     - no filesystem access;
+ *     - no network access;
+ *     - no hardware access;
+ *     - no runtime callbacks;
+ *     - no randomness;
+ *     - no environment inspection.
+ *
+ * ============================================================================
+ * ARCHITECTURAL POSITION
+ * ============================================================================
+ *
+ *     Zamani source
+ *          |
+ *          v
+ *     Zamani lexer
+ *          |
+ *          v
+ *     NetworkingCapabilities
+ *          |
+ *          v
+ *     Frontend AST
+ *          |
+ *          v
+ *     Structural validation
+ *          |
+ *          v
+ *     Name / capability resolution
+ *          |
+ *          v
+ *     Resource + capability analysis
+ *          |
+ *          v
+ *     Canonical semantic representation
+ *          |
+ *          +-------------------+------------------+
+ *          |                   |                  |
+ *       classical          quantum::ir       HDL/hardware
+ *          |                   |                  |
+ *          +-------------------+------------------+
+ *                              |
+ *                              v
+ *                    optimization / lowering
+ *                              |
+ *                    routing / scheduling
+ *                              |
+ *                    resilience / QEC / ZQN
+ *                              |
+ *                              v
+ *                             HAL
+ *                              |
+ *                              v
+ *                       target realization
+ *
+ * The grammar never constructs IR and never selects hardware.
  *
  * ============================================================================
  * OWNERSHIP
@@ -70,18 +121,18 @@
  *
  * THIS FILE OWNS:
  *
- *     - networking capability references;
- *     - networking capability requirements;
- *     - networking capability provisions;
- *     - networking capability predicates;
- *     - networking capability constraints;
- *     - networking capability preferences;
- *     - networking capability groups;
- *     - networking capability composition;
- *     - networking capability metadata;
- *     - networking capability conditions;
- *     - networking capability applicability clauses;
- *     - networking-specific capability contracts.
+ *     - networking capability contract syntax;
+ *     - networking capability requirement syntax;
+ *     - networking capability provision syntax;
+ *     - networking capability constraint syntax;
+ *     - networking capability preference syntax;
+ *     - networking capability predicate syntax;
+ *     - networking capability grouping;
+ *     - networking capability sets;
+ *     - networking capability negotiation intent;
+ *     - networking capability metadata syntax;
+ *     - networking capability call syntax;
+ *     - networking capability expression composition.
  *
  * THIS FILE DOES NOT OWN:
  *
@@ -93,163 +144,214 @@
  *     - capability discovery;
  *     - resource allocation;
  *     - hardware discovery;
- *     - network discovery;
  *     - endpoint declarations;
- *     - channel declarations;
- *     - service declarations;
+ *     - address declarations;
  *     - protocol declarations;
- *     - message schemas;
+ *     - channel declarations;
+ *     - message declarations;
+ *     - service declarations;
+ *     - socket declarations;
  *     - routing;
- *     - scheduling;
  *     - placement;
- *     - transport implementation;
- *     - socket implementation;
+ *     - scheduling;
+ *     - distributed execution;
+ *     - transport implementations;
+ *     - TCP;
+ *     - UDP;
+ *     - QUIC;
+ *     - HTTP;
+ *     - MPI;
+ *     - RDMA;
  *     - IP/MAC addressing;
  *     - physical topology;
  *     - cryptographic implementation;
- *     - authentication implementation;
- *     - authorization implementation;
+ *     - authentication;
+ *     - authorization;
  *     - QEC;
  *     - ZQN;
  *     - quantum::ir;
  *     - classical IR;
  *     - HDL IR;
  *     - runtime execution;
- *     - resilience;
  *     - backend selection.
  *
  * ============================================================================
- * FUNDAMENTAL SEPARATION
+ * EXISTING REPOSITORY OWNERSHIP
  * ============================================================================
  *
- * Capability:
+ * General capability identity and version syntax remain owned by:
  *
- *     What can an execution environment or communication substrate do?
+ *     grammar/core/capabilities.g4
  *
- * Requirement:
+ * Canonical names remain owned by:
  *
- *     What must a valid realization provide?
+ *     grammar/core/names.g4
  *
- * Provision:
+ * Canonical expressions remain owned by:
  *
- *     What capability does a declaration expose?
+ *     grammar/expressions/expressions.g4
  *
- * Constraint:
+ * Attributes remain owned by:
  *
- *     What conditions restrict valid realizations?
+ *     grammar/core/attributes.g4
  *
- * Preference:
+ * Networking endpoints remain owned by:
  *
- *     Which valid realization is preferred?
+ *     grammar/networking/endpoints.g4
  *
- * Resource:
+ * Networking addresses remain owned by:
  *
- *     What physical/logical resource is available or requested?
+ *     grammar/networking/addresses.g4
  *
- * Target:
+ * Networking protocols remain owned by:
  *
- *     What execution context is being described?
+ *     grammar/networking/protocols.g4
  *
- * These concepts MUST remain separate.
+ * Networking channels remain owned by:
  *
- * In particular:
+ *     grammar/networking/channels.g4
  *
- *     networking::reliable_delivery
+ * Networking messages remain owned by:
  *
- * MUST NOT imply:
+ *     grammar/networking/messages.g4
+ *
+ * Networking services remain owned by:
+ *
+ *     grammar/networking/services.g4
+ *
+ * Networking sockets remain owned by:
+ *
+ *     grammar/networking/sockets.g4
+ *
+ * Networking routing remains owned by:
+ *
+ *     grammar/networking/routing.g4
+ *
+ * Distributed execution remains owned by:
+ *
+ *     grammar/distributed/
+ *
+ * Hardware intent remains owned by:
+ *
+ *     grammar/hardware/
+ *
+ * Resource semantics remain owned by:
+ *
+ *     grammar/resources/
+ *
+ * Security semantics remain owned by:
+ *
+ *     grammar/security/
+ *
+ * ============================================================================
+ * CRITICAL DESIGN RULE
+ * ============================================================================
+ *
+ * Capability identity is OPEN-WORLD.
+ *
+ * This grammar MUST NOT enumerate:
  *
  *     TCP
  *     UDP
  *     QUIC
- *     a particular socket
- *     a particular machine
- *     a particular network
- *     a particular number of nodes
+ *     Ethernet
+ *     InfiniBand
+ *     MPI
+ *     RDMA
+ *     GPU
+ *     FPGA
+ *     QPU
+ *     CPU
+ *     vendor-specific devices
+ *
+ * as a closed capability grammar.
+ *
+ * Instead:
+ *
+ *     capabilityReference
+ *
+ * from core/capabilities.g4 is reused.
+ *
+ * Therefore future capability identities do not require modification of this
+ * grammar.
+ *
+ * ============================================================================
+ * REQUIREMENT / CAPABILITY / CONSTRAINT / PREFERENCE SEPARATION
+ * ============================================================================
+ *
+ * REQUIREMENT:
+ *
+ *     requires networking::reliable_delivery;
+ *
+ * means that a valid realization MUST satisfy the requirement.
+ *
+ * PROVISION:
+ *
+ *     provides networking::reliable_delivery;
+ *
+ * describes a capability exposed by a logical declaration.
+ *
+ * CONSTRAINT:
+ *
+ *     constraint networking::latency <= maximum_latency;
+ *
+ * restricts valid realizations.
+ *
+ * PREFERENCE:
+ *
+ *     preference networking::low_latency;
+ *
+ * expresses an advisory preference.
+ *
+ * These meanings are semantic.
+ *
+ * The parser only records their syntax.
+ *
+ * A preference MUST NOT silently become a requirement.
+ *
+ * A provision MUST NOT imply runtime authorization.
+ *
+ * A capability reference MUST NOT imply physical resource allocation.
  *
  * ============================================================================
  * POCO-REAF
  * ============================================================================
  *
- * Networking capability syntax describes semantic communication requirements,
- * not temporary physical implementation details.
+ * Networking capability syntax MUST remain independent of target scale.
  *
- * A source program can therefore remain unchanged when the implementation
- * changes between:
+ * The same source program may ultimately be realized using:
  *
  *     in-process communication
  *     shared memory
  *     IPC
  *     local networking
  *     distributed networking
- *     accelerator fabric
- *     quantum networking
- *     future communication substrate
+ *     accelerator fabrics
+ *     quantum communication
+ *     future communication substrates
  *
- * The realization is selected downstream from the source grammar.
+ * without changing the capability grammar.
  *
- * ============================================================================
- * OPEN-WORLD DESIGN
- * ============================================================================
+ * Capability declarations describe WHAT is required or provided.
  *
- * This file MUST NOT contain rules such as:
+ * They do not describe:
  *
- *     reliableCapability
- *     tcpCapability
- *     udpCapability
- *     quicCapability
- *     ethernetCapability
- *     infinibandCapability
- *     mpiCapability
- *     rdmaCapability
- *
- * as closed enumerations.
- *
- * Instead:
- *
- *     qualifiedName
- *
- * represents capability identity.
- *
- * This permits future capabilities without modifying this grammar.
+ *     WHICH machine;
+ *     WHICH CPU;
+ *     WHICH GPU;
+ *     WHICH FPGA;
+ *     WHICH QPU;
+ *     WHICH router;
+ *     WHICH network interface;
+ *     WHICH physical link;
+ *     WHICH physical qubit;
+ *     WHICH provider.
  *
  * ============================================================================
- * SCALABILITY
+ * HARD-CODING PROHIBITION
  * ============================================================================
  *
- * There are NO grammar-level limits on:
- *
- *     - number of capabilities;
- *     - number of requirements;
- *     - number of provisions;
- *     - number of constraints;
- *     - number of preferences;
- *     - number of capability groups;
- *     - number of predicates;
- *     - number of operands;
- *     - number of networking declarations;
- *     - number of endpoints;
- *     - number of channels;
- *     - number of services;
- *     - number of protocols;
- *     - number of participants;
- *     - capability namespace depth.
- *
- * All collections use ANTLR repetition operators.
- *
- * Practical limits belong to:
- *
- *     - parser resource policy;
- *     - compiler resource policy;
- *     - semantic analysis;
- *     - resource management;
- *     - target capabilities;
- *     - runtime.
- *
- * ============================================================================
- * HARD-CODING POLICY
- * ============================================================================
- *
- * This grammar MUST NOT contain:
+ * This grammar MUST NOT impose:
  *
  *     MAX_NETWORK_CAPABILITIES
  *     MAX_ENDPOINTS
@@ -257,152 +359,121 @@
  *     MAX_SERVICES
  *     MAX_NODES
  *     MAX_CONNECTIONS
+ *     MAX_NETWORK_SIZE
  *     MAX_BANDWIDTH
  *     MAX_LATENCY
- *     MAX_NETWORK_SIZE
  *     MAX_PROTOCOLS
+ *     MAX_DEVICES
+ *     MAX_CPUS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_QPUS
+ *     MAX_THREADS
+ *     MAX_MEMORY
  *
- * Numeric values appearing inside expressions are program-level semantic
- * values, not grammar-level hardware limits.
+ * It MUST NOT contain special constructs such as:
+ *
+ *     node_0
+ *     node_1
+ *     gpu_0
+ *     gpu_1
+ *     qpu_0
+ *     router_0
+ *     interface_0
+ *
+ * as universal language concepts.
+ *
+ * Numeric expressions are program semantics.
+ *
+ * For example:
+ *
+ *     requires networking::bandwidth >= required_bandwidth;
+ *
+ * is valid.
+ *
+ * The grammar does not decide what `required_bandwidth` means physically.
  *
  * ============================================================================
- * NETWORKING / RESOURCE BOUNDARY
+ * RESOURCE BOUNDARY
  * ============================================================================
  *
- * This file may reference resource/capability expressions.
- *
- * It MUST NOT define resource allocation syntax.
- *
- * For example, a networking requirement may express:
+ * Capability requirements may refer to semantic resources:
  *
  *     requires networking::throughput >= required_rate;
  *
- * but the grammar does not decide:
+ *     requires networking::latency <= latency_budget;
  *
- *     which NIC
- *     which router
- *     which device
- *     which transport
- *     which physical link
- *     which number of machines
+ *     requires capability("network.reliable");
  *
- * Resource realization belongs downstream.
+ * The grammar does not allocate resources.
  *
- * ============================================================================
- * NETWORKING / PROTOCOL BOUNDARY
- * ============================================================================
+ * Resource feasibility is determined downstream by:
  *
- * Protocol identity belongs to:
- *
- *     grammar/networking/protocols.g4
- *
- * This file may reference protocol-related capabilities:
- *
- *     networking::reliable_delivery
- *
- * but does not define protocol syntax.
- *
- * ============================================================================
- * NETWORKING / CHANNEL BOUNDARY
- * ============================================================================
- *
- * Channel syntax belongs to:
- *
- *     grammar/networking/channels.g4
- *
- * This file may constrain channel capabilities but does not create channels.
- *
- * ============================================================================
- * NETWORKING / ENDPOINT BOUNDARY
- * ============================================================================
- *
- * Endpoint syntax belongs to:
- *
- *     grammar/networking/endpoints.g4
- *
- * This file may express endpoint capability requirements but does not define
- * endpoint identity or physical addressing.
- *
- * ============================================================================
- * NETWORKING / SERVICE BOUNDARY
- * ============================================================================
- *
- * Service syntax belongs to:
- *
- *     grammar/networking/services.g4
- *
- * A service may consume networking capability constructs defined here.
- *
- * This file does not redefine service declarations.
- *
- * ============================================================================
- * DISTRIBUTED COMPUTING BOUNDARY
- * ============================================================================
- *
- * This grammar may be consumed by distributed networking declarations.
- *
- * It MUST NOT define:
- *
- *     nodes
- *     placement
- *     replication
- *     consensus
- *     cluster membership
- *     distributed scheduling
- *
- * Those belong to:
- *
- *     grammar/distributed/
+ *     resource analysis;
+ *     capability analysis;
+ *     target discovery;
+ *     compilation;
+ *     runtime/deployment.
  *
  * ============================================================================
  * SECURITY BOUNDARY
  * ============================================================================
  *
- * Networking capability references may name security capabilities:
+ * Capability names may refer to security capabilities:
  *
- *     security::confidentiality
  *     security::authentication
+ *     security::confidentiality
  *     security::integrity
+ *     security::authorization
  *
- * This file does not define cryptographic algorithms or security semantics.
+ * This grammar does not implement:
+ *
+ *     cryptography;
+ *     keys;
+ *     credentials;
+ *     certificate validation;
+ *     identity providers;
+ *     authorization engines;
+ *     trust evaluation.
  *
  * ============================================================================
  * QUANTUM BOUNDARY
  * ============================================================================
  *
- * Networking capabilities may describe quantum communication capabilities:
+ * Networking capabilities may reference quantum communication capabilities:
  *
  *     quantum::communication
  *     quantum::entanglement_distribution
  *     quantum::quantum_networking
  *
- * These are names only.
+ * These remain semantic capability identities.
  *
- * This file MUST NOT define:
+ * This grammar MUST NOT define:
  *
  *     QubitId
  *     PhysicalQubitId
+ *     LogicalQubitId
  *     GateKind
  *     QuantumState
- *     quantum topology
- *     calibration
+ *     QuantumTopology
+ *     Calibration
  *     QEC
- *     ZQN faults
+ *     ZQN
  *
- * If networking interacts with quantum computation, semantic lowering
- * eventually reaches the canonical:
+ * When a capability affects quantum computation, semantic lowering eventually
+ * reaches the canonical:
  *
  *     quantum::ir
  *
  * boundary.
  *
+ * No second quantum IR is created here.
+ *
  * ============================================================================
  * HDL / HARDWARE BOUNDARY
  * ============================================================================
  *
- * Hardware-facing networking capabilities may be referenced symbolically.
- *
- * Examples:
+ * Networking capabilities may refer to hardware capabilities:
  *
  *     hardware::communication_fabric
  *     hardware::dma
@@ -410,100 +481,105 @@
  *
  * This grammar does not define:
  *
- *     pins
- *     wires
- *     buses
- *     clocks
- *     FPGA routing
- *     ASIC cells
- *     physical topology
- *     fixed bus width
- *     fixed device count
+ *     pins;
+ *     wires;
+ *     buses;
+ *     clocks;
+ *     physical routing;
+ *     fixed bus widths;
+ *     device counts.
+ *
+ * ============================================================================
+ * DISTRIBUTED COMPUTING BOUNDARY
+ * ============================================================================
+ *
+ * Networking capability syntax may be consumed by distributed computation.
+ *
+ * This file does not own:
+ *
+ *     node membership;
+ *     process placement;
+ *     replication;
+ *     partitioning;
+ *     consensus;
+ *     distributed scheduling;
+ *     distributed recovery.
+ *
+ * Those belong to:
+ *
+ *     grammar/distributed/
+ *
+ * or the networking/distributed-compute integration boundary.
  *
  * ============================================================================
  * DETERMINISM
  * ============================================================================
  *
- * This grammar contains:
+ * Parsing MUST:
  *
- *     - no semantic predicates;
- *     - no embedded actions;
- *     - no I/O;
- *     - no runtime access;
- *     - no network access;
- *     - no hardware inspection;
- *     - no randomness.
+ *     - produce the same structure for the same token stream;
+ *     - perform no capability discovery;
+ *     - perform no resource discovery;
+ *     - perform no network discovery;
+ *     - perform no target selection;
+ *     - perform no runtime negotiation.
  *
- * Equal token streams under the same grammar version produce equivalent parse
- * structures.
+ * Capability resolution is semantic, not syntactic.
  *
  * ============================================================================
- * LEXER CONTRACT
+ * SOURCE SPAN CONTRACT
  * ============================================================================
  *
- * Canonical lexer:
+ * The frontend AST must retain source spans for:
  *
- *     grammar/antlr/ZamaniLexer.g4
+ *     - complete capability construct;
+ *     - marker;
+ *     - capability reference;
+ *     - version requirement;
+ *     - predicate operators;
+ *     - predicate operands;
+ *     - call arguments;
+ *     - metadata keys;
+ *     - metadata values;
+ *     - nested capability blocks;
+ *     - attributes.
  *
- * This file MUST NOT define lexer rules.
- *
- * General capability syntax already relies on the canonical CAPABILITY keyword
- * and the canonical qualified-name model. The lexer defines the lexical
- * distinction between language keywords and identifiers. 
- *
- * ============================================================================
- * IMPORT CONTRACT
- * ============================================================================
- *
- * Required conceptual dependencies:
- *
- *     Core
- *         - identifier
- *         - qualifiedName
- *         - attributes
- *
- *     Expressions
- *         - expression
- *
- *     Capabilities
- *         - capabilityReference
- *         - capabilityName
- *         - capabilityVersionClause
- *
- * Networking consumers:
- *
- *     endpoints.g4
- *     channels.g4
- *     protocols.g4
- *     services.g4
- *
- * This file MUST reuse capability syntax rather than reproduce the general
- * capability grammar.
+ * This grammar must not discard source structure.
  *
  * ============================================================================
  * AST CONTRACT
  * ============================================================================
  *
- * The frontend AST should preserve:
+ * The parser provides enough structure for a domain-neutral frontend AST to
+ * represent conceptually:
  *
- *     - declaration kind;
- *     - capability identity;
- *     - capability version requirement;
- *     - logical operator structure;
- *     - expressions;
- *     - attributes;
- *     - source ordering;
- *     - source spans.
+ *     NetworkingCapabilityRequirement
+ *     NetworkingCapabilityProvision
+ *     NetworkingCapabilityConstraint
+ *     NetworkingCapabilityPreference
+ *     NetworkingCapabilityPredicate
+ *     NetworkingCapabilityContract
+ *     NetworkingCapabilitySet
+ *     NetworkingCapabilityNegotiation
+ *     NetworkingCapabilityMetadata
+ *     NetworkingCapabilityCall
  *
- * The AST MUST NOT contain:
+ * Every node must retain:
  *
- *     - physical device identity;
- *     - resolved hardware;
- *     - runtime capability tokens;
- *     - resource allocation;
- *     - routing decisions;
- *     - scheduling decisions;
- *     - backend selection.
+ *     source span;
+ *     source ordering;
+ *     referenced name;
+ *     predicate structure;
+ *     argument structure.
+ *
+ * The AST MUST NOT directly contain:
+ *
+ *     physical device state;
+ *     resolved router;
+ *     resolved network interface;
+ *     allocated bandwidth;
+ *     selected hardware;
+ *     runtime capability token.
  *
  * ============================================================================
  * SEMANTIC CONTRACT
@@ -512,21 +588,22 @@
  * Semantic analysis is responsible for:
  *
  *     - resolving capability names;
- *     - validating namespaces;
- *     - validating versions;
- *     - determining capability meaning;
- *     - checking capability availability;
- *     - evaluating capability predicates;
- *     - checking requirement satisfaction;
- *     - checking capability conflicts;
- *     - evaluating constraints;
- *     - ranking preferences;
+ *     - resolving namespaces;
+ *     - validating capability versions;
+ *     - validating capability applicability;
+ *     - checking requirements;
+ *     - checking provisions;
+ *     - checking constraints;
+ *     - evaluating preferences;
+ *     - checking conflicts;
  *     - integrating resource requirements;
  *     - integrating security requirements;
  *     - integrating distributed requirements;
- *     - determining target feasibility.
+ *     - checking target feasibility;
+ *     - checking portability;
+ *     - resolving capability references against declarations/registries.
  *
- * None of those decisions belong to this parser grammar.
+ * The grammar does none of these operations.
  *
  * ============================================================================
  * IR CONTRACT
@@ -534,55 +611,56 @@
  *
  * This file creates NO IR.
  *
- * The semantic layer may lower its AST into the canonical semantic
- * representation used by the repository.
+ * Capability information lowers through the canonical semantic model.
  *
- * If a capability affects quantum computation:
+ * Possible downstream destinations include:
  *
- *     networking capability AST
- *          ->
- *     semantic analysis
- *          ->
- *     quantum semantic lowering
- *          ->
- *     quantum::ir
+ *     classical semantic representation;
+ *     networking semantic representation;
+ *     distributed semantic representation;
+ *     hardware semantic representation;
+ *     quantum semantic representation;
+ *     quantum::ir.
  *
- * The grammar never constructs quantum::ir.
+ * The grammar MUST NOT define:
+ *
+ *     NetworkingCapabilityIR
+ *     QuantumCapabilityIR
+ *
+ * merely to represent syntax.
  *
  * ============================================================================
  * COMPILER CONTRACT
  * ============================================================================
  *
- * Compiler stages may use networking capability semantics to:
+ * Compiler stages may use capability information to:
  *
  *     - validate target compatibility;
- *     - select legal implementation strategies;
  *     - constrain routing;
  *     - constrain scheduling;
- *     - select communication mechanisms;
- *     - select serialization strategies;
+ *     - select legal communication strategies;
+ *     - select legal serialization strategies;
  *     - determine security obligations;
- *     - determine distributed execution requirements.
+ *     - determine distributed execution requirements;
+ *     - determine whether a target can satisfy the program.
  *
- * Capability preferences MUST remain distinguishable from mandatory
- * requirements.
+ * Compiler decisions remain downstream from parsing.
  *
  * ============================================================================
  * RUNTIME CONTRACT
  * ============================================================================
  *
- * Runtime owns:
+ * Runtime may perform:
  *
- *     - capability discovery;
- *     - environment inspection;
- *     - capability negotiation;
- *     - endpoint resolution;
- *     - transport selection;
- *     - service binding;
- *     - network establishment;
- *     - runtime adaptation.
+ *     capability discovery;
+ *     environment inspection;
+ *     negotiation;
+ *     endpoint resolution;
+ *     transport selection;
+ *     service binding;
+ *     adaptation.
  *
- * This grammar performs none of these actions.
+ * None of these actions occur in this grammar.
  *
  * ============================================================================
  * TOOLING CONTRACT
@@ -592,37 +670,58 @@
  *
  *     - syntax highlighting;
  *     - completion;
- *     - navigation;
- *     - capability references;
+ *     - capability navigation;
  *     - diagnostics;
  *     - documentation generation;
  *     - semantic queries;
  *     - dependency visualization.
  *
- * Tooling MUST NOT infer a physical machine merely from a capability name.
+ * Tooling MUST NOT infer physical hardware merely from a capability name.
  *
  * ============================================================================
  * COMPATIBILITY CONTRACT
  * ============================================================================
  *
- * Capability identity is represented by qualified names.
+ * This grammar reuses:
  *
- * Therefore adding:
+ *     core/capabilities.g4
+ *
+ * for capability identity and version syntax.
+ *
+ * Consequently, capability-version compatibility remains a semantic concern.
+ *
+ * Adding:
  *
  *     future::networking::new_capability
  *
- * does not require a grammar modification.
+ * does not require a grammar change.
  *
- * Removing or renaming an existing capability is a semantic compatibility
- * concern and must be handled through the language compatibility system.
+ * Changing an established capability's semantic meaning requires the normal
+ * Zamani compatibility/versioning process.
+ *
+ * ============================================================================
+ * PUBLIC API
+ * ============================================================================
+ *
+ * The primary public entry point is:
+ *
+ *     networkCapabilityConstruct
+ *
+ * It intentionally accepts ONLY complete networking capability constructs.
+ *
+ * A bare capability predicate is NOT a top-level networking construct.
+ *
+ * This prevents ordinary expression syntax from being accidentally accepted
+ * as a networking declaration by the networking aggregate grammar.
+ *
+ * Reusable predicate syntax remains publicly available through:
+ *
+ *     networkCapabilityPredicate
+ *
+ * for consumers that already own an enclosing declaration.
  *
  * ============================================================================
  */
-
-
-/* ============================================================================
- * PARSER DECLARATION
- * ========================================================================== */
 
 parser grammar NetworkingCapabilities;
 
@@ -630,45 +729,56 @@ options {
     tokenVocab = ZamaniLexer;
 }
 
-import Core, Expressions, Capabilities;
+import
+    Core,
+    Expressions,
+    Capabilities
+    ;
 
 
 /* ============================================================================
- * PUBLIC COMPOSITION ENTRY POINT
- * ========================================================================== */
-
-/*
- * Stable integration boundary for networking grammars.
+ * PUBLIC CONSTRUCT ENTRY POINT
+ * ============================================================================
  *
- * Consumers such as endpoints, channels, protocols and services should use
- * `networkCapabilityConstruct` rather than copying these rules.
+ * Only declaration/contract-level forms belong here.
+ *
+ * IMPORTANT:
+ *
+ * Do not add:
+ *
+ *     | networkCapabilityPredicate
+ *
+ * to this rule.
+ *
+ * A predicate is an expression-level component, not a top-level networking
+ * declaration.
  */
 networkCapabilityConstruct
     : networkCapabilityRequirement
     | networkCapabilityProvision
     | networkCapabilityConstraint
     | networkCapabilityPreference
-    | networkCapabilityPredicate
-    | networkCapabilityGroup
-    | networkCapabilityMetadata
+    | networkCapabilityContract
+    | networkCapabilitySet
+    | networkCapabilityNegotiation
     ;
 
 
 /* ============================================================================
  * CAPABILITY REFERENCE
- * ========================================================================== */
-
-/*
- * A networking capability reference delegates identity/version syntax to the
- * canonical capability grammar.
+ * ============================================================================
+ *
+ * Reuses the canonical capability identity/version model.
  *
  * Examples:
  *
  *     networking::reliable_delivery
- *     networking::ordered_delivery
+ *     networking::low_latency
  *     quantum::communication
  *     security::confidentiality
  *     future::networking::new_capability
+ *
+ * This grammar assigns no semantic meaning to the namespace.
  */
 networkCapabilityReference
     : capabilityReference
@@ -676,13 +786,10 @@ networkCapabilityReference
 
 
 /* ============================================================================
- * CAPABILITY REQUIREMENT
- * ========================================================================== */
-
-/*
- * A requirement is mandatory semantic intent.
+ * REQUIREMENT
+ * ============================================================================
  *
- * It does not allocate a resource.
+ * Mandatory semantic condition.
  *
  * Examples:
  *
@@ -691,6 +798,8 @@ networkCapabilityReference
  *     requires networking::ordered_delivery;
  *
  *     requires quantum::communication;
+ *
+ *     requires networking::latency <= latency_budget;
  */
 networkCapabilityRequirement
     : REQUIRES
@@ -700,15 +809,14 @@ networkCapabilityRequirement
 
 
 /* ============================================================================
- * CAPABILITY PROVISION
- * ========================================================================== */
-
-/*
- * A provision states that a logical declaration exposes a capability.
+ * PROVISION
+ * ============================================================================
  *
- * It does not grant runtime authorization.
+ * Describes a capability exposed by a logical declaration.
  *
- * It does not prove that a physical target supports the capability.
+ * It does NOT grant authorization.
+ *
+ * It does NOT allocate a physical resource.
  */
 networkCapabilityProvision
     : PROVIDES
@@ -718,22 +826,10 @@ networkCapabilityProvision
 
 
 /* ============================================================================
- * CAPABILITY CONSTRAINT
- * ========================================================================== */
-
-/*
- * A constraint restricts legal realizations.
+ * CONSTRAINT
+ * ============================================================================
  *
- * Constraints are distinct from requirements and preferences.
- *
- * Examples:
- *
- *     constraint networking::latency < required_latency;
- *
- *     constraint networking::transport != forbidden_transport;
- *
- * Expressions are intentionally used for values rather than introducing
- * machine-specific grammar.
+ * Restricts valid realizations.
  */
 networkCapabilityConstraint
     : CONSTRAINT
@@ -743,14 +839,12 @@ networkCapabilityConstraint
 
 
 /* ============================================================================
- * CAPABILITY PREFERENCE
- * ========================================================================== */
-
-/*
- * A preference is advisory.
+ * PREFERENCE
+ * ============================================================================
  *
- * A compiler/runtime may choose another valid realization if the preference
- * cannot be satisfied or conflicts with stronger requirements.
+ * Advisory semantic intent.
+ *
+ * It MUST remain distinguishable from a requirement.
  */
 networkCapabilityPreference
     : PREFERENCE
@@ -760,15 +854,12 @@ networkCapabilityPreference
 
 
 /* ============================================================================
- * CAPABILITY PREDICATE
- * ========================================================================== */
-
-/*
- * Capability predicates form the central semantic expression boundary.
+ * PREDICATE
+ * ============================================================================
  *
- * This deliberately does NOT enumerate networking capabilities.
+ * The predicate language is deliberately small and compositional.
  *
- * The capability identity remains open-world.
+ * Capability identity itself remains open-world.
  */
 networkCapabilityPredicate
     : networkCapabilityDisjunction
@@ -777,8 +868,8 @@ networkCapabilityPredicate
 
 /* ============================================================================
  * DISJUNCTION
- * ========================================================================== */
-
+ * ============================================================================
+ */
 networkCapabilityDisjunction
     : networkCapabilityConjunction
       (OR networkCapabilityConjunction)*
@@ -787,57 +878,64 @@ networkCapabilityDisjunction
 
 /* ============================================================================
  * CONJUNCTION
- * ========================================================================== */
-
+ * ============================================================================
+ */
 networkCapabilityConjunction
-    : networkCapabilityPrimary
-      (AND networkCapabilityPrimary)*
+    : networkCapabilityUnary
+      (AND networkCapabilityUnary)*
+    ;
+
+
+/* ============================================================================
+ * UNARY
+ * ============================================================================
+ */
+networkCapabilityUnary
+    : NOT networkCapabilityUnary
+    | networkCapabilityPrimary
     ;
 
 
 /* ============================================================================
  * PRIMARY
- * ========================================================================== */
-
+ * ============================================================================
+ */
 networkCapabilityPrimary
-    : networkCapabilityReference
-    | networkCapabilityComparison
+    : networkCapabilityComparison
     | networkCapabilityCall
     | networkCapabilityPresence
+    | networkCapabilityReference
     | networkCapabilityGroup
-    | NOT networkCapabilityPrimary
     ;
 
 
 /* ============================================================================
- * CAPABILITY COMPARISON
- * ========================================================================== */
-
-/*
- * Comparisons permit semantic capability/resource predicates without hardcoding
- * physical limits into the grammar.
+ * COMPARISON
+ * ============================================================================
+ *
+ * Capability/resource values may be compared without encoding physical limits.
  *
  * Examples:
  *
- *     networking::latency < max_latency
+ *     networking::latency <= latency_budget
  *
  *     networking::throughput >= required_throughput
  *
  *     networking::reliability >= required_reliability
  *
- * The meaning of these values is semantic analysis.
+ *     networking::availability != unavailable
  */
 networkCapabilityComparison
-    : networkCapabilityValue
+    : networkCapabilityReference
       networkCapabilityComparator
       expression
     ;
 
 
 /* ============================================================================
- * COMPARISON OPERATORS
- * ========================================================================== */
-
+ * COMPARISON OPERATOR
+ * ============================================================================
+ */
 networkCapabilityComparator
     : LT
     | LE
@@ -849,40 +947,20 @@ networkCapabilityComparator
 
 
 /* ============================================================================
- * CAPABILITY VALUE
- * ========================================================================== */
-
-/*
- * A value may be:
+ * PARAMETERIZED CAPABILITY
+ * ============================================================================
  *
- *     - a capability reference;
- *     - a qualified semantic property;
- *     - an expression-resolved value.
- *
- * No physical representation is implied.
- */
-networkCapabilityValue
-    : networkCapabilityReference
-    ;
-
-
-/* ============================================================================
- * CAPABILITY CALL / PARAMETERIZATION
- * ========================================================================== */
-
-/*
- * Parameterized capabilities are intentionally open-ended.
- *
- * Example:
+ * Examples:
  *
  *     networking::throughput(required_rate)
  *
- *     networking::latency(maximum)
+ *     networking::latency(maximum_latency)
  *
  *     networking::delivery(reliable)
  *
- * The semantic layer decides whether the referenced capability is actually
- * callable/parameterized.
+ *     future::networking::capability(parameter)
+ *
+ * Whether a capability is semantically callable is decided downstream.
  */
 networkCapabilityCall
     : networkCapabilityReference
@@ -893,9 +971,9 @@ networkCapabilityCall
 
 
 /* ============================================================================
- * CAPABILITY ARGUMENT LIST
- * ========================================================================== */
-
+ * CALL ARGUMENTS
+ * ============================================================================
+ */
 networkCapabilityArgumentList
     : expression
       (COMMA expression)*
@@ -904,20 +982,19 @@ networkCapabilityArgumentList
 
 
 /* ============================================================================
- * CAPABILITY PRESENCE
- * ========================================================================== */
-
-/*
- * Explicit presence testing allows a networking contract to distinguish:
+ * PRESENCE TEST
+ * ============================================================================
  *
- *     capability exists
+ * Example:
  *
- * from:
+ *     networking::reliable_delivery is true
  *
- *     capability has a particular value.
+ * or:
  *
- * The semantic layer determines whether `is` is valid for a particular
- * capability domain.
+ *     networking::reliable_delivery is false
+ *
+ * Semantic analysis determines whether presence testing is meaningful for the
+ * referenced capability.
  */
 networkCapabilityPresence
     : networkCapabilityReference
@@ -926,10 +1003,6 @@ networkCapabilityPresence
     ;
 
 
-/* ============================================================================
- * PRESENCE VALUES
- * ========================================================================== */
-
 networkCapabilityPresenceValue
     : TRUE
     | FALSE
@@ -937,13 +1010,8 @@ networkCapabilityPresenceValue
 
 
 /* ============================================================================
- * CAPABILITY GROUP
- * ========================================================================== */
-
-/*
- * Groups provide a structural boundary for multiple capability predicates.
- *
- * There is no fixed number of predicates.
+ * GROUP
+ * ============================================================================
  */
 networkCapabilityGroup
     : LPAREN
@@ -953,13 +1021,110 @@ networkCapabilityGroup
 
 
 /* ============================================================================
- * CAPABILITY METADATA
- * ========================================================================== */
-
-/*
- * Metadata is deliberately generic.
+ * CAPABILITY CONTRACT
+ * ============================================================================
  *
- * It does not create a second metadata language.
+ * Example:
+ *
+ *     capability_contract {
+ *         requires networking::reliable_delivery;
+ *         provides networking::ordered_delivery;
+ *         constraint networking::latency <= latency_budget;
+ *         preference networking::low_latency;
+ *     }
+ *
+ * Contract membership is unbounded.
+ */
+networkCapabilityContract
+    : CAPABILITY_CONTRACT
+      LBRACE
+      networkCapabilityContractMember*
+      RBRACE
+    ;
+
+
+networkCapabilityContractMember
+    : networkCapabilityRequirement
+    | networkCapabilityProvision
+    | networkCapabilityConstraint
+    | networkCapabilityPreference
+    | networkCapabilityNegotiation
+    | networkCapabilitySet
+    | networkCapabilityMetadata
+    ;
+
+
+/* ============================================================================
+ * CAPABILITY SET
+ * ============================================================================
+ *
+ * A set exposes or groups capabilities without imposing a fixed cardinality.
+ *
+ * Example:
+ *
+ *     capabilities {
+ *         networking::reliable_delivery;
+ *         networking::ordered_delivery;
+ *         networking::multicast;
+ *     }
+ */
+networkCapabilitySet
+    : CAPABILITIES
+      LBRACE
+      networkCapabilitySetMember*
+      RBRACE
+    ;
+
+
+networkCapabilitySetMember
+    : networkCapabilityReference
+      SEMI
+    | networkCapabilityProvision
+    | networkCapabilityRequirement
+    | networkCapabilityConstraint
+    | networkCapabilityPreference
+    | networkCapabilityMetadata
+    ;
+
+
+/* ============================================================================
+ * NEGOTIATION
+ * ============================================================================
+ *
+ * This represents SOURCE INTENT only.
+ *
+ * It does not perform runtime negotiation.
+ */
+networkCapabilityNegotiation
+    : NEGOTIATE
+      LBRACE
+      networkCapabilityNegotiationMember*
+      RBRACE
+    ;
+
+
+networkCapabilityNegotiationMember
+    : networkCapabilityPredicate
+      SEMI
+    | networkCapabilityMetadata
+    ;
+
+
+/* ============================================================================
+ * GENERIC METADATA
+ * ============================================================================
+ *
+ * Metadata is intentionally open-world.
+ *
+ * It does not introduce a second networking property language.
+ *
+ * Example:
+ *
+ *     metadata priority: preferred;
+ *
+ *     metadata::priority: preferred;
+ *
+ * The actual metadata marker is lexically defined by the canonical lexer.
  */
 networkCapabilityMetadata
     : PROPERTY
@@ -968,10 +1133,6 @@ networkCapabilityMetadata
       SEMI
     ;
 
-
-/* ============================================================================
- * METADATA VALUE
- * ========================================================================== */
 
 networkCapabilityMetadataValue
     : COLON
@@ -982,225 +1143,499 @@ networkCapabilityMetadataValue
 
 
 /* ============================================================================
- * CAPABILITY SET
- * ========================================================================== */
-
-/*
- * A capability set is useful where an endpoint/channel/service exposes a
- * collection of capabilities.
+ * INTEGRATION ADAPTERS
+ * ============================================================================
  *
- * Example:
+ * These adapters allow endpoint/channel/service/protocol grammars to consume
+ * the canonical capability contract without copying its implementation.
  *
- *     capabilities {
- *         networking::reliable_delivery;
- *         networking::ordered_delivery;
- *         networking::multicast;
- *     }
- *
- * The set has no fixed cardinality.
- */
-networkCapabilitySet
-    : CAPABILITIES
-      LBRACE
-      networkCapabilitySetMember*
-      RBRACE
-    ;
-
-
-/* ============================================================================
- * CAPABILITY SET MEMBER
- * ========================================================================== */
-
-networkCapabilitySetMember
-    : networkCapabilityReference
-      SEMI
-    | networkCapabilityProvision
-    | networkCapabilityRequirement
-    | networkCapabilityMetadata
-    ;
-
-
-/* ============================================================================
- * CAPABILITY NEGOTIATION INTENT
- * ========================================================================== */
-
-/*
- * Negotiation is expressed as source intent only.
- *
- * Runtime negotiation is explicitly outside this grammar.
- *
- * Example:
- *
- *     negotiate {
- *         networking::reliable_delivery
- *         or
- *         networking::best_effort;
- *     }
- *
- * The semantic layer determines compatibility and selection policy.
- */
-networkCapabilityNegotiation
-    : NEGOTIATE
-      LBRACE
-      networkCapabilityNegotiationMember*
-      RBRACE
-    ;
-
-
-/* ============================================================================
- * NEGOTIATION MEMBER
- * ========================================================================== */
-
-networkCapabilityNegotiationMember
-    : networkCapabilityPredicate
-      SEMI
-    | networkCapabilityMetadata
-    ;
-
-
-/* ============================================================================
- * CAPABILITY REQUIREMENT GROUP
- * ========================================================================== */
-
-/*
- * Groups mandatory requirements without imposing a fixed number.
- */
-networkCapabilityRequirementGroup
-    : REQUIRES
-      LBRACE
-      networkCapabilityRequirementMember*
-      RBRACE
-    ;
-
-
-/* ============================================================================
- * REQUIREMENT GROUP MEMBER
- * ========================================================================== */
-
-networkCapabilityRequirementMember
-    : networkCapabilityPredicate
-      SEMI
-    | networkCapabilityMetadata
-    ;
-
-
-/* ============================================================================
- * CAPABILITY PROVISION GROUP
- * ========================================================================== */
-
-/*
- * Groups provided capabilities.
- */
-networkCapabilityProvisionGroup
-    : PROVIDES
-      LBRACE
-      networkCapabilityProvisionMember*
-      RBRACE
-    ;
-
-
-/* ============================================================================
- * PROVISION GROUP MEMBER
- * ========================================================================== */
-
-networkCapabilityProvisionMember
-    : networkCapabilityReference
-      SEMI
-    | networkCapabilityPredicate
-      SEMI
-    | networkCapabilityMetadata
-    ;
-
-
-/* ============================================================================
- * CAPABILITY CONTRACT
- * ========================================================================== */
-
-/*
- * This is the principal integration boundary for endpoints, channels and
- * services.
- *
- * Example:
- *
- *     capability_contract {
- *         requires networking::reliable_delivery;
- *         provides networking::ordered_delivery;
- *         constraint networking::latency < maximum_latency;
- *         preference networking::low_latency;
- *     }
- */
-networkCapabilityContract
-    : CAPABILITY_CONTRACT
-      LBRACE
-      networkCapabilityContractMember*
-      RBRACE
-    ;
-
-
-/* ============================================================================
- * CONTRACT MEMBER
- * ========================================================================== */
-
-networkCapabilityContractMember
-    : networkCapabilityRequirement
-    | networkCapabilityProvision
-    | networkCapabilityConstraint
-    | networkCapabilityPreference
-    | networkCapabilityNegotiation
-    | networkCapabilityMetadata
-    ;
-
-
-/* ============================================================================
- * ENDPOINT INTEGRATION
- * ========================================================================== */
-
-/*
- * Endpoint grammars may consume this rule:
- *
- *     endpointCapabilityContract
- *
- * without importing networking implementation details.
+ * They introduce no new semantics.
  */
 endpointCapabilityContract
     : networkCapabilityContract
     ;
 
 
-/* ============================================================================
- * CHANNEL INTEGRATION
- * ========================================================================== */
-
-/*
- * Channel grammars may consume this rule to express communication
- * capabilities without defining capabilities themselves.
- */
 channelCapabilityContract
     : networkCapabilityContract
     ;
 
 
-/* ============================================================================
- * SERVICE INTEGRATION
- * ========================================================================== */
-
-/*
- * Service grammars may consume this rule for service-wide communication
- * capabilities.
- */
 serviceCapabilityContract
     : networkCapabilityContract
     ;
 
 
-/* ============================================================================
- * PROTOCOL INTEGRATION
- * ========================================================================== */
-
-/*
- * Protocols may consume the capability predicate without acquiring ownership
- * of capability declarations.
- */
 protocolCapabilityContract
     : networkCapabilityContract
     ;
+
+
+/* ============================================================================
+ * REUSABLE REQUIREMENT ADAPTER
+ * ============================================================================
+ *
+ * Useful for declarations that already own their surrounding syntax.
+ */
+networkingCapabilityRequirement
+    : networkCapabilityRequirement
+    ;
+
+
+/* ============================================================================
+ * SOURCE-LEVEL RESOURCE / CAPABILITY CONTRACT
+ * ============================================================================
+ *
+ * This adapter is deliberately syntactic.
+ *
+ * It does not create a second resource language.
+ */
+networkingCapabilityPredicate
+    : networkCapabilityPredicate
+    ;
+
+
+/* ============================================================================
+ * SEMANTIC INTEGRATION NOTES
+ * ============================================================================
+ *
+ * Endpoint:
+ *
+ *     endpoint
+ *        |
+ *        +--> capability contract
+ *
+ * The endpoint grammar remains responsible for endpoint identity.
+ *
+ * Channel:
+ *
+ *     channel
+ *        |
+ *        +--> capability contract
+ *
+ * The channel grammar remains responsible for channel identity and channel
+ * semantics.
+ *
+ * Protocol:
+ *
+ *     protocol
+ *        |
+ *        +--> capability contract
+ *
+ * The protocol grammar remains responsible for protocol identity and syntax.
+ *
+ * Service:
+ *
+ *     service
+ *        |
+ *        +--> capability contract
+ *
+ * The service grammar remains responsible for service syntax.
+ *
+ * Routing:
+ *
+ *     route
+ *        |
+ *        +--> capability requirement / constraint
+ *
+ * Routing remains responsible for route intent.
+ *
+ * Distributed computing:
+ *
+ *     distributed computation
+ *        |
+ *        +--> capability contract
+ *
+ * Distributed grammar remains responsible for distributed execution.
+ *
+ * Hardware:
+ *
+ *     hardware intent
+ *        |
+ *        +--> capability requirement
+ *
+ * Hardware grammar remains responsible for hardware intent.
+ *
+ * Quantum:
+ *
+ *     quantum computation
+ *        |
+ *        +--> capability requirement
+ *        |
+ *        v
+ *     semantic analysis
+ *        |
+ *        v
+ *     quantum::ir
+ *
+ * No quantum implementation details enter this grammar.
+ *
+ * ============================================================================
+ * AST INTEGRATION
+ * ============================================================================
+ *
+ * Grammar rule                 Semantic AST concept
+ * ---------------------------------------------------------------------------
+ * networkCapabilityReference   CapabilityReference
+ * networkCapabilityRequirement CapabilityRequirement
+ * networkCapabilityProvision   CapabilityProvision
+ * networkCapabilityConstraint  CapabilityConstraint
+ * networkCapabilityPreference  CapabilityPreference
+ * networkCapabilityPredicate   CapabilityPredicate
+ * networkCapabilityCall        CapabilityCall
+ * networkCapabilityPresence    CapabilityPresence
+ * networkCapabilityContract    CapabilityContract
+ * networkCapabilitySet         CapabilitySet
+ * networkCapabilityNegotiation CapabilityNegotiation
+ * networkCapabilityMetadata    CapabilityMetadata
+ *
+ * The actual Rust AST types remain owned by the frontend AST implementation.
+ *
+ * This grammar does not define Rust structures.
+ *
+ * ============================================================================
+ * SEMANTIC RULES
+ * ============================================================================
+ *
+ * Semantic analysis MUST:
+ *
+ *     1. resolve capability names;
+ *     2. resolve capability versions;
+ *     3. distinguish requirement/provision/constraint/preference;
+ *     4. validate capability applicability;
+ *     5. validate predicate operands;
+ *     6. validate parameterized capability arguments;
+ *     7. validate presence tests;
+ *     8. detect contradictory requirements;
+ *     9. evaluate resource implications;
+ *    10. evaluate target feasibility;
+ *    11. preserve portability;
+ *    12. preserve source meaning when target hardware changes.
+ *
+ * The parser performs none of these operations.
+ *
+ * ============================================================================
+ * ERROR MODEL
+ * ============================================================================
+ *
+ * Parser errors include:
+ *
+ *     requires;
+ *     requires capability
+ *     requires: capability;
+ *     provides;
+ *     constraint;
+ *     preference;
+ *     capability_contract;
+ *     capabilities;
+ *     negotiate;
+ *     malformed qualified capability names;
+ *     malformed comparisons;
+ *     malformed calls;
+ *     missing delimiters;
+ *     missing semicolons.
+ *
+ * Semantic errors include:
+ *
+ *     unknown capability;
+ *     unknown capability version;
+ *     unsupported capability;
+ *     conflicting capabilities;
+ *     unsatisfied requirement;
+ *     invalid capability parameterization;
+ *     invalid presence operation;
+ *     impossible constraint;
+ *     unavailable resource;
+ *     incompatible target.
+ *
+ * Parser syntax and semantic validation MUST remain separate.
+ *
+ * ============================================================================
+ * SECURITY
+ * ============================================================================
+ *
+ * Capability syntax MUST NOT itself grant authority.
+ *
+ * For example:
+ *
+ *     provides security::authorization;
+ *
+ * does not authorize anything.
+ *
+ * Likewise:
+ *
+ *     requires security::authentication;
+ *
+ * does not perform authentication.
+ *
+ * Credentials, secrets, private keys and authorization decisions belong to the
+ * security/runtime layers.
+ *
+ * ============================================================================
+ * PERFORMANCE
+ * ============================================================================
+ *
+ * The grammar contains no semantic work.
+ *
+ * Complexity is therefore determined by:
+ *
+ *     - source size;
+ *     - token count;
+ *     - nesting depth;
+ *     - expression complexity.
+ *
+ * No grammar-level finite capacity is imposed.
+ *
+ * Implementations MUST avoid introducing artificial domain limits.
+ *
+ * Any parser/resource protection belongs to the compiler's resource policy,
+ * not this language grammar.
+ *
+ * ============================================================================
+ * SCALABILITY TEST CONTRACT
+ * ============================================================================
+ *
+ * The test suite MUST verify:
+ *
+ *     - one capability;
+ *     - many capabilities;
+ *     - deeply qualified capabilities;
+ *     - parameterized capabilities;
+ *     - many predicate terms;
+ *     - nested predicates;
+ *     - many contract members;
+ *     - many set members;
+ *     - many negotiation members;
+ *     - large expressions;
+ *     - large source programs;
+ *     - arbitrary namespace depth.
+ *
+ * There must be NO test asserting a maximum number of:
+ *
+ *     capabilities;
+ *     requirements;
+ *     provisions;
+ *     constraints;
+ *     preferences;
+ *     endpoints;
+ *     nodes;
+ *     devices;
+ *     machines;
+ *     network links.
+ *
+ * ============================================================================
+ * POSITIVE TEST CONTRACT
+ * ============================================================================
+ *
+ * requires networking::reliable_delivery;
+ *
+ * requires networking::latency <= latency_budget;
+ *
+ * requires networking::throughput >= required_throughput;
+ *
+ * requires networking::reliable_delivery
+ *     and networking::ordered_delivery;
+ *
+ * requires networking::reliable_delivery
+ *     or networking::best_effort;
+ *
+ * requires (
+ *     networking::reliable_delivery
+ *     and networking::secure_transport
+ * );
+ *
+ * provides networking::message_delivery;
+ *
+ * constraint networking::latency <= maximum_latency;
+ *
+ * preference networking::low_latency;
+ *
+ * requires networking::throughput(required_rate);
+ *
+ * requires networking::reliable_delivery is true;
+ *
+ * capabilities {
+ *     networking::reliable_delivery;
+ *     networking::ordered_delivery;
+ *     networking::multicast;
+ * }
+ *
+ * capability_contract {
+ *     requires networking::reliable_delivery;
+ *     provides networking::ordered_delivery;
+ *     constraint networking::latency <= latency_budget;
+ *     preference networking::low_latency;
+ * }
+ *
+ * negotiate {
+ *     networking::reliable_delivery;
+ *     networking::best_effort;
+ * }
+ *
+ * ============================================================================
+ * NEGATIVE TEST CONTRACT
+ * ============================================================================
+ *
+ * requires;
+ *
+ * requires;
+ *
+ * provides;
+ *
+ * constraint;
+ *
+ * preference;
+ *
+ * requires networking::reliable_delivery
+ *
+ * requires: networking::reliable_delivery;
+ *
+ * requires networking::reliable_delivery <;
+ *
+ * requires networking::reliable_delivery and;
+ *
+ * requires (networking::reliable_delivery;
+ *
+ * requires networking::reliable_delivery(
+ *
+ * capabilities {
+ *     networking::reliable_delivery
+ * }
+ *
+ * capability_contract {
+ *     requires networking::reliable_delivery
+ * }
+ *
+ * ============================================================================
+ * BOUNDARY TEST CONTRACT
+ * ============================================================================
+ *
+ * Test:
+ *
+ *     - empty contracts;
+ *     - empty sets;
+ *     - empty negotiation blocks;
+ *     - one member;
+ *     - many members;
+ *     - deeply nested predicate groups;
+ *     - deeply qualified capability names;
+ *     - large argument lists;
+ *     - large expressions;
+ *     - long source files.
+ *
+ * Empty structures are syntactically accepted where the surrounding semantic
+ * contract permits them; semantic validation determines whether an empty
+ * construct is meaningful.
+ *
+ * ============================================================================
+ * DETERMINISM TEST CONTRACT
+ * ============================================================================
+ *
+ * The same token stream MUST produce the same parse structure.
+ *
+ * Parsing MUST NOT depend on:
+ *
+ *     - hardware;
+ *     - network state;
+ *     - environment variables;
+ *     - time;
+ *     - randomness;
+ *     - capability discovery;
+ *     - runtime state.
+ *
+ * ============================================================================
+ * HARD-CODING AUDIT
+ * ============================================================================
+ *
+ * Required result:
+ *
+ *     PASS
+ *
+ * No universal capacity constants are represented by this grammar.
+ *
+ * No fixed:
+ *
+ *     qubit count;
+ *     CPU count;
+ *     GPU count;
+ *     FPGA count;
+ *     node count;
+ *     device count;
+ *     memory size;
+ *     thread count;
+ *     network size;
+ *     endpoint count;
+ *     capability count;
+ *     bandwidth;
+ *     latency;
+ *     topology size
+ *
+ * is encoded.
+ *
+ * Capability identity is open-world through canonical capability references.
+ *
+ * ============================================================================
+ * COMPLETION CRITERIA
+ * ============================================================================
+ *
+ * This file is complete when:
+ *
+ * [ ] It is the sole owner of networking capability syntax.
+ *
+ * [ ] General capability identity remains owned by core/capabilities.g4.
+ *
+ * [ ] Names remain owned by core/names.g4.
+ *
+ * [ ] Expressions remain owned by expressions/expressions.g4.
+ *
+ * [ ] No bare capability predicate is exposed as a top-level networking
+ *     construct.
+ *
+ * [ ] Capability identities are open-world.
+ *
+ * [ ] Requirements are distinct from provisions.
+ *
+ * [ ] Requirements are distinct from preferences.
+ *
+ * [ ] Constraints are distinct from preferences.
+ *
+ * [ ] Capability negotiation remains source intent only.
+ *
+ * [ ] Capability syntax performs no discovery.
+ *
+ * [ ] Capability syntax performs no allocation.
+ *
+ * [ ] Capability syntax performs no routing.
+ *
+ * [ ] Capability syntax performs no scheduling.
+ *
+ * [ ] Capability syntax performs no target selection.
+ *
+ * [ ] Capability syntax creates no IR.
+ *
+ * [ ] No second quantum IR exists.
+ *
+ * [ ] Source spans remain recoverable.
+ *
+ * [ ] Diagnostics remain deterministic.
+ *
+ * [ ] Positive tests exist.
+ *
+ * [ ] Negative tests exist.
+ *
+ * [ ] Boundary tests exist.
+ *
+ * [ ] Scalability tests exist.
+ *
+ * [ ] Determinism tests exist.
+ *
+ * [ ] Compatibility tests exist.
+ *
+ * [ ] Hard-coding audit passes.
+ *
+ * [ ] Rust 1.97 / 1.97.1 compatibility is preserved.
+ *
+ * [ ] Generated parser integration requires no unsafe Rust.
+ *
+ * ============================================================================
+ */
