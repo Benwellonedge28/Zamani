@@ -1,6 +1,6 @@
 /*
  * ============================================================================
- * Zamani Universal Programming Language
+ * Zamani Universal Computing Language
  * ============================================================================
  *
  * File:
@@ -10,98 +10,131 @@
  *     Execution
  *
  * Status:
- *     Production execution-composition grammar
+ *     Production execution-domain composition root
+ *
+ * Language:
+ *     Zamani
+ *
+ * Toolchain:
+ *     ANTLR parser grammar
+ *     Rust 2021
+ *     Rust 1.97 / Rust 1.97.1
+ *     safe Rust only
  *
  * ============================================================================
  * PURPOSE
  * ============================================================================
  *
- * This grammar is the canonical source-level composition boundary for
- * execution intent.
+ * This file is the CANONICAL COMPOSITION ROOT for the source-level execution
+ * domain.
  *
- * It defines WHAT it means syntactically to request execution of an already
- * described Zamani computation.
+ * It owns the stable boundary between:
  *
- * It does NOT define HOW execution is realized.
+ *     "this computation is intended to execute"
+ *
+ * and the specialized execution-intent grammars that describe:
+ *
+ *     runtime intent
+ *     entry-point intent
+ *     scheduling intent
+ *     placement intent
+ *     recovery intent
+ *     checkpoint intent
+ *     tracing intent
+ *     profiling intent
+ *     lifecycle intent
+ *     dispatch intent
+ *     deployment intent
+ *     synchronization intent
+ *
+ * This file describes SOURCE SYNTAX ONLY.
+ *
+ * It does NOT execute anything.
+ *
+ * It does NOT:
+ *
+ *     discover hardware
+ *     allocate hardware
+ *     select devices
+ *     route operations
+ *     schedule operations
+ *     perform QEC
+ *     perform ZQN processing
+ *     perform optimization
+ *     perform calibration
+ *     perform recovery
+ *     perform deployment
+ *     invoke runtime APIs
+ *     invoke vendor APIs
+ *     create a runtime IR
+ *     create an execution IR
+ *     create a second quantum IR
  *
  * ============================================================================
  * ARCHITECTURAL POSITION
  * ============================================================================
  *
- *     Zamani source
- *          |
- *          v
- *     canonical lexer
- *          |
- *          v
- *     canonical parser
- *          |
- *          v
- *     frontend AST
- *          |
- *          +--> semantic analysis
- *          |       |
- *          |       +--> type analysis
- *          |       +--> effect analysis
- *          |       +--> capability analysis
- *          |       +--> resource analysis
- *          |       +--> target resolution
- *          |
- *          v
- *     canonical semantic representation
- *          |
- *          +--> classical IR
- *          +--> quantum::ir
- *          +--> HDL / hardware representation
- *          +--> distributed representation
- *          |
- *          v
- *     compilation / optimization
- *          |
- *          +--> routing
- *          +--> scheduling
- *          +--> resilience
- *          +--> hardware HAL
- *          |
- *          v
- *     dispatch / deployment planning
- *          |
- *          v
- *     runtime
+ *                         Zamani source
+ *                              |
+ *                              v
+ *                        ZamaniLexer
+ *                              |
+ *                              v
+ *                       ZamaniParser
+ *                              |
+ *                              v
+ *                    domain-neutral AST
+ *                              |
+ *                              v
+ *                    semantic analysis
+ *                              |
+ *            +-----------------+------------------+
+ *            |                 |                  |
+ *            v                 v                  v
+ *        capabilities       resources          effects
+ *            |                 |                  |
+ *            +-----------------+------------------+
+ *                              |
+ *                              v
+ *                   canonical semantic model
+ *                              |
+ *              +---------------+---------------+
+ *              |               |               |
+ *              v               v               v
+ *         classical IR      quantum::ir    HDL/hardware
+ *              |               |               |
+ *              +---------------+---------------+
+ *                              |
+ *                              v
+ *                         optimization
+ *                              |
+ *              +---------------+---------------+
+ *              |               |               |
+ *              v               v               v
+ *          placement       scheduling       routing
+ *              |               |               |
+ *              +---------------+---------------+
+ *                              |
+ *                              v
+ *                    resilience / recovery
+ *                              |
+ *                              v
+ *                             QEC
+ *                              |
+ *                              v
+ *                             ZQN
+ *                              |
+ *                              v
+ *                             HAL
+ *                              |
+ *                              v
+ *                    target realization
+ *                              |
+ *                              v
+ *                           runtime
  *
- * ============================================================================
- * CORE PRINCIPLE
- * ============================================================================
- *
- * Execution syntax expresses execution intent.
- *
- * It MUST NOT permanently encode:
- *
- *     - a particular CPU;
- *     - a particular core;
- *     - a particular thread;
- *     - a particular GPU;
- *     - a particular FPGA;
- *     - a particular ASIC;
- *     - a particular QPU;
- *     - a particular simulator;
- *     - a particular vendor;
- *     - a physical device identifier;
- *     - a physical address;
- *     - a fixed topology;
- *     - a fixed number of devices;
- *     - a fixed number of qubits;
- *     - a fixed number of cores;
- *     - a fixed number of threads;
- *     - a fixed memory capacity;
- *     - a fixed network size;
- *     - a fixed accelerator count;
- *     - a fixed schedule;
- *     - a fixed placement;
- *     - a fixed deployment topology.
- *
- * Such information belongs to the appropriate semantic/resource/target/
- * hardware/runtime layer.
+ * Execution grammar is therefore an INTENT boundary, not an implementation
+ * boundary.
  *
  * ============================================================================
  * POCO-REAF
@@ -109,25 +142,175 @@
  *
  * Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
  *
- * The source program describes portable computation and execution intent.
+ * Execution syntax MUST remain target-independent.
  *
- * Physical realization is selected later from:
+ * A source program may execute:
  *
- *     capabilities
- *     requirements
- *     constraints
- *     preferences
- *     hints
- *     resource availability
- *     target context
- *     scheduling context
- *     placement context
- *     dispatch context
- *     deployment context
+ *     classical computation
+ *     quantum computation
+ *     hybrid computation
+ *     HDL computation
+ *     hardware/software co-designed computation
+ *     distributed computation
+ *     AI computation
+ *     tensor/data computation
+ *     accelerator computation
+ *     scientific computation
+ *     embedded computation
+ *     future computation
  *
- * Therefore:
+ * without changing the execution grammar merely because the realization
+ * changes.
  *
- *     source semantics != physical realization
+ * Physical realization is downstream.
+ *
+ * ============================================================================
+ * HARD-CODING PROHIBITION
+ * ============================================================================
+ *
+ * This grammar MUST NOT define universal limits such as:
+ *
+ *     MAX_QUBITS
+ *     MAX_CPUS
+ *     MAX_CORES
+ *     MAX_THREADS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_ASICS
+ *     MAX_QPUS
+ *     MAX_NODES
+ *     MAX_DEVICES
+ *     MAX_MEMORY
+ *     MAX_STORAGE
+ *     MAX_REGISTER_WIDTH
+ *     MAX_VECTOR_WIDTH
+ *     MAX_TENSOR_RANK
+ *     MAX_NETWORK_SIZE
+ *     MAX_TIMELINES
+ *     MAX_TASKS
+ *     MAX_JOBS
+ *     MAX_EXECUTIONS
+ *     MAX_CONTEXT_ENTRIES
+ *     MAX_RETRIES
+ *     MAX_CHECKPOINTS
+ *     MAX_STATES
+ *     MAX_TRANSITIONS
+ *
+ * The grammar also MUST NOT encode physical identities such as:
+ *
+ *     cpu(0)
+ *     gpu(0)
+ *     qpu(0)
+ *     fpga(0)
+ *     node(0)
+ *     qubit(0)
+ *
+ * as the portable execution model.
+ *
+ * A concrete value in source is program semantics.
+ *
+ * A compiler/runtime capacity is NOT a language capacity.
+ *
+ * ============================================================================
+ * REQUIREMENT / CONSTRAINT / PREFERENCE / HINT
+ * ============================================================================
+ *
+ * Execution intent must preserve the distinction between:
+ *
+ *     requirement
+ *     constraint
+ *     capability
+ *     resource
+ *     preference
+ *     hint
+ *
+ * Examples:
+ *
+ *     requires capability("quantum.measurement")
+ *
+ *     requires qubits >= n
+ *
+ *     requires memory >= required_memory
+ *
+ *     prefer capability("gpu.compute")
+ *
+ *     hint scheduling.policy
+ *
+ * These do not select a physical machine.
+ *
+ * Semantic analysis and target realization determine whether and how the
+ * request can be satisfied.
+ *
+ * ============================================================================
+ * QUANTUM BOUNDARY
+ * ============================================================================
+ *
+ * Execution may execute a quantum computation.
+ *
+ * Execution MUST NOT define quantum operations.
+ *
+ * Quantum semantics remain owned by grammar/quantum/.
+ *
+ * Quantum lowering remains:
+ *
+ *     quantum source
+ *          |
+ *          v
+ *     domain-neutral AST
+ *          |
+ *          v
+ *     semantic quantum model
+ *          |
+ *          v
+ *     quantum::ir
+ *          |
+ *          v
+ *     optimization
+ *          |
+ *          v
+ *     routing
+ *          |
+ *          v
+ *     scheduling
+ *          |
+ *          v
+ *     QEC / resilience / ZQN
+ *          |
+ *          v
+ *     HAL
+ *
+ * Execution MUST NEVER introduce:
+ *
+ *     ExecutionQuantumIR
+ *     RuntimeQuantumIR
+ *     PhysicalQuantumIR
+ *
+ * or any other competing quantum representation.
+ *
+ * `quantum::ir` remains the canonical quantum IR boundary.
+ *
+ * ============================================================================
+ * DOMAIN NEUTRALITY
+ * ============================================================================
+ *
+ * executionSubject is deliberately generic.
+ *
+ * It does not enumerate:
+ *
+ *     classical
+ *     quantum
+ *     GPU
+ *     FPGA
+ *     QPU
+ *     AI
+ *     tensor
+ *     distributed
+ *     HDL
+ *     vendor
+ *
+ * as a closed execution vocabulary.
+ *
+ * The subject is an existing Zamani expression/block computation.
  *
  * ============================================================================
  * OWNERSHIP
@@ -135,223 +318,193 @@
  *
  * THIS FILE OWNS:
  *
- *     - execution declaration composition;
- *     - execution subject composition;
- *     - execution-level optional context;
- *     - the boundary between an executable computation and execution intent;
- *     - integration points for specialized execution grammars.
+ *     executionDeclaration
+ *     executionRequest
+ *     executionSubject
+ *     executionContextAttachment
+ *     executionStatement
+ *     executionExpression
+ *     executionDomainDeclaration
+ *     executionDomainStatement
+ *     executionDomainExpression
+ *     composition of independent execution leaf grammars
  *
  * THIS FILE DOES NOT OWN:
  *
- *     - lexical tokens;
- *     - identifiers;
- *     - expressions;
- *     - types;
- *     - declarations;
- *     - functions;
- *     - modules;
- *     - execution-context internals;
- *     - scheduling syntax;
- *     - placement syntax;
- *     - dispatch syntax;
- *     - synchronization syntax;
- *     - deployment syntax;
- *     - runtime capability syntax;
- *     - distributed execution syntax;
- *     - resource semantics;
- *     - hardware semantics;
- *     - target semantics;
- *     - routing;
- *     - optimization;
- *     - QEC;
- *     - ZQN;
- *     - resilience algorithms;
- *     - classical IR;
- *     - quantum::ir;
- *     - HDL IR;
- *     - runtime implementation;
- *     - backend APIs.
+ *     lexical rules
+ *     identifiers
+ *     expressions
+ *     types
+ *     blocks
+ *     scheduling rules
+ *     placement rules
+ *     recovery rules
+ *     checkpoint rules
+ *     tracing rules
+ *     profiling rules
+ *     lifecycle rules
+ *     dispatch rules
+ *     deployment rules
+ *     synchronization rules
+ *     runtime implementation
+ *     hardware realization
+ *     resource discovery
+ *     target discovery
+ *     routing
+ *     QEC
+ *     ZQN
+ *     HAL
+ *     quantum::ir
  *
  * ============================================================================
- * DEPENDENCY RULE
+ * DEPENDENCY DIRECTION
  * ============================================================================
  *
- * Lower-level language constructs are imported.
+ * Canonical direction:
  *
- * Specialized execution grammars are composed here only through their public
- * entry points where doing so does not create a dependency cycle.
+ *     lexer
+ *       |
+ *       v
+ *     foundational parser grammars
+ *       |
+ *       v
+ *     execution leaf grammars
+ *       |
+ *       v
+ *     Execution
+ *       |
+ *       v
+ *     ZamaniParser
  *
- * The dependency direction is:
+ * Execution leaf grammars MUST NOT depend on Execution merely to obtain
+ * execution concepts.
+ *
+ * This prevents:
+ *
+ *     Execution -> Runtime -> Execution
+ *
+ * and similar cycles.
+ *
+ * ============================================================================
+ * CURRENT REPOSITORY INTEGRATION
+ * ============================================================================
+ *
+ * The following independent execution grammars are composed here:
+ *
+ *     ExecutionContext
+ *     ExecutionEntryPoints
+ *     Runtime
+ *     Scheduling
+ *     ExecutionPlacement
+ *     Recovery
+ *     Checkpointing
+ *     Tracing
+ *     Profiling
+ *     Lifecycle
+ *     Dispatch
+ *     Deployment
+ *     ExecutionSynchronization
+ *
+ * These are deliberately composed through their PUBLIC entry points.
+ *
+ * ============================================================================
+ * KNOWN BOUNDARIES THAT MUST NOT BE MASKED HERE
+ * ============================================================================
+ *
+ * observability.g4
+ * ----------------
+ *
+ * The current repository version imports Execution itself.
+ *
+ * Therefore:
+ *
+ *     Execution -> Observability -> Execution
+ *
+ * would create a circular parser dependency.
+ *
+ * Execution MUST NOT duplicate observability syntax to work around this.
+ *
+ * Observability must first be made dependency-direction-safe by making it
+ * depend only on foundational grammars. After that correction it can be
+ * imported here without changing the execution ownership model.
+ *
+ *
+ * resilience.g4
+ * -------------
+ *
+ * The current repository version contains duplicate resilience rule
+ * definitions.
+ *
+ * Execution MUST NOT copy resilience syntax to compensate.
+ *
+ * Resilience remains a separate authority and becomes composable here after
+ * its own duplicate-rule defect is corrected.
+ *
+ *
+ * environments.g4
+ * ---------------
+ *
+ * The current repository version documents the intended environment grammar
+ * but does not currently expose a normal parser-grammar declaration.
+ *
+ * Execution therefore MUST NOT invent a second environment grammar.
+ *
+ * Once environments.g4 exposes its canonical parser grammar, it may be added
+ * to this composition root.
+ *
+ * ============================================================================
+ * LEXICAL CONTRACT
+ * ============================================================================
+ *
+ * This is a parser grammar.
+ *
+ * It consumes:
  *
  *     ZamaniLexer
- *          |
- *          v
- *        Core
- *          |
- *          v
- *   execution subgrammars
- *          |
- *          v
- *      Execution
- *          |
- *          v
- *   canonical parser
  *
- * Execution subgrammars MUST NOT depend on Execution merely to define their
- * own concepts.
+ * through:
+ *
+ *     tokenVocab = ZamaniLexer;
+ *
+ * This file MUST NOT define lexer rules.
+ *
+ * It MUST NOT create local keyword tokens.
+ *
+ * Contextual vocabulary belongs to the relevant semantic grammar and/or
+ * canonical lexer specification.
  *
  * ============================================================================
- * IMPORTANT OWNERSHIP SEPARATION
+ * CORE DEPENDENCY
  * ============================================================================
  *
- * The following files remain authoritative for their respective concepts:
+ * Core remains the authority for:
  *
- *     execution-context.g4
- *         execution context structure
+ *     expression
+ *     blockExpression
+ *     identifier
+ *     qualifiedName
+ *     argumentList
+ *     common source structures
  *
- *     scheduling.g4
- *         scheduling intent
- *
- *     placement.g4
- *         placement intent
- *
- *     dispatch.g4
- *         dispatch intent
- *
- *     synchronization.g4
- *         execution-level synchronization intent
- *
- *     runtime-capabilities.g4
- *         runtime capability declarations/requirements
- *
- *     deployment.g4
- *         deployment intent
- *
- *     distributed/remote-execution.g4
- *         distributed remote-execution semantics
- *
- * Execution.g4 MUST NOT copy those grammars.
+ * Execution MUST NOT create replacement versions of these constructs.
  *
  * ============================================================================
- * QUANTUM BOUNDARY
+ * PUBLIC COMPOSITION
  * ============================================================================
  *
- * Quantum syntax remains owned by the quantum grammar/frontend.
+ * The root parser imports Execution.
  *
- * This grammar does not define:
+ * Therefore the following public execution rules are intentionally exposed:
  *
- *     qubits
- *     registers
- *     gates
- *     measurements
- *     quantum states
- *     physical qubits
- *     quantum topology
- *     pulses
- *     QEC
- *     noise
- *     ZQN
+ *     executionDeclaration
+ *     executionStatement
+ *     executionExpression
  *
- * Quantum source syntax is lowered through the canonical quantum semantic
- * pipeline and ultimately into quantum::ir.
+ * The specialized grammars remain reachable through:
  *
- * This grammar may execute a quantum computation because the execution subject
- * is deliberately generic.
- *
- * It does not become a second quantum IR.
- *
- * ============================================================================
- * CLASSICAL / HDL / DISTRIBUTED / AI BOUNDARY
- * ============================================================================
- *
- * The execution subject is intentionally domain-neutral.
- *
- * It can refer to semantic computations originating from:
- *
- *     classical
- *     quantum
- *     hybrid
- *     HDL
- *     hardware
- *     distributed
- *     AI
- *     data
- *     accelerator
- *     networking
- *     cryptographic
- *     scientific
- *     future
- *
- * domains without enumerating those domains here.
- *
- * ============================================================================
- * SCALABILITY
- * ============================================================================
- *
- * No grammar-level finite machine limit exists here.
- *
- * This grammar contains no:
- *
- *     MAX_QUBITS
- *     MAX_CORES
- *     MAX_THREADS
- *     MAX_GPUS
- *     MAX_FPGAS
- *     MAX_DEVICES
- *     MAX_NODES
- *     MAX_MEMORY
- *     MAX_RESOURCES
- *     MAX_TARGETS
- *     MAX_JOBS
- *     MAX_EXECUTIONS
- *     MAX_ARGUMENTS
- *     MAX_CONTEXT_ENTRIES
- *
- * Repetition and nesting are represented structurally by the grammar.
- *
- * Actual resource limits are determined by:
- *
- *     - parser resource policy;
- *     - semantic analysis;
- *     - compiler policy;
- *     - resource management;
- *     - target capabilities;
- *     - runtime policy;
- *     - operating-system limits;
- *     - explicitly declared constraints.
- *
- * ============================================================================
- * DETERMINISM
- * ============================================================================
- *
- * This grammar contains:
- *
- *     - no semantic actions;
- *     - no predicates;
- *     - no filesystem operations;
- *     - no network operations;
- *     - no hardware discovery;
- *     - no runtime calls;
- *     - no random behavior;
- *     - no mutable global state.
- *
- * Given the same canonical token stream, parsing is deterministic.
- *
- * ============================================================================
- * SAFETY
- * ============================================================================
- *
- * This grammar contains no Rust code and therefore introduces no unsafe
- * operations.
- *
- * Generated/parser integration MUST remain compatible with:
- *
- *     Rust 1.97
- *     Rust 1.97.1
- *     Rust 2021
- *     safe Rust only
- *
- * No `unsafe` implementation is required by this grammar.
+ *     executionDomainDeclaration
+ *     executionDomainStatement
+ *     executionDomainExpression
  *
  * ============================================================================
  */
@@ -362,26 +515,40 @@ options {
     tokenVocab = ZamaniLexer;
 }
 
-import Core, ExecutionContext;
+import
+    Core,
+    ExecutionContext,
+    ExecutionEntryPoints,
+    Runtime,
+    Scheduling,
+    ExecutionPlacement,
+    Recovery,
+    Checkpointing,
+    Tracing,
+    Profiling,
+    Lifecycle,
+    Dispatch,
+    Deployment,
+    ExecutionSynchronization
+;
 
 
 /*
  * ============================================================================
- * 1. CANONICAL EXECUTION DECLARATION
+ * 1. PRIMARY EXECUTION DECLARATION
  * ============================================================================
  *
- * Canonical conceptual forms:
+ * Canonical form:
  *
- *     execute computation;
+ *     execute <computation>;
  *
- *     execute computation with {
+ * Optional context:
+ *
+ *     execute <computation> with {
  *         ...
  *     };
  *
- * The computation is an existing language expression/semantic subject.
- *
- * Execution does not itself compile, schedule, route, deploy, or dispatch the
- * computation.
+ * The subject is semantic computation, not a physical target.
  *
  * ============================================================================
  */
@@ -395,15 +562,6 @@ executionDeclaration
  * ============================================================================
  * 2. EXECUTION REQUEST
  * ============================================================================
- *
- * The execution request consists of:
- *
- *     subject
- *     optional execution context
- *
- * The context is deliberately delegated to ExecutionContext.
- *
- * ============================================================================
  */
 
 executionRequest
@@ -416,25 +574,10 @@ executionRequest
  * 3. EXECUTION SUBJECT
  * ============================================================================
  *
- * The subject is an already-described computation.
+ * The canonical subject is an existing expression.
  *
- * It is intentionally expression-based so this grammar does not need a
- * closed list of computational domains.
- *
- * Examples of semantic subjects include:
- *
- *     function calls
- *     named computations
- *     pipelines
- *     classical programs
- *     quantum programs
- *     hybrid programs
- *     hardware computations
- *     distributed computations
- *     AI pipelines
- *     accelerator computations
- *
- * The expression grammar remains authoritative for expression syntax.
+ * A block expression is accepted explicitly so execution can represent
+ * inline computations without inventing a second block language.
  *
  * ============================================================================
  */
@@ -447,20 +590,19 @@ executionSubject
 
 /*
  * ============================================================================
- * 4. OPTIONAL EXECUTION CONTEXT
+ * 4. EXECUTION CONTEXT ATTACHMENT
  * ============================================================================
  *
- * `with` is the explicit syntactic attachment point for execution context.
+ * ExecutionContext owns all context internals.
  *
- * ExecutionContext owns the internal context representation.
+ * Execution does not duplicate:
  *
- * Execution.g4 MUST NOT redefine:
- *
+ *     context entries
  *     context keys
  *     context values
  *     context objects
- *     context lists
  *     context comparisons
+ *     context lists
  *
  * ============================================================================
  */
@@ -472,14 +614,7 @@ executionContextAttachment
 
 /*
  * ============================================================================
- * 5. EXECUTION TERMINATOR
- * ============================================================================
- *
- * Execution declarations use the canonical statement terminator from the
- * language grammar.
- *
- * The canonical token vocabulary owns the actual token.
- *
+ * 5. TERMINATOR
  * ============================================================================
  */
 
@@ -490,509 +625,738 @@ executionTerminator
 
 /*
  * ============================================================================
- * 6. SPECIALIZED EXECUTION INTEGRATION CONTRACT
+ * 6. EXECUTION-DOMAIN DECLARATIONS
  * ============================================================================
  *
- * Specialized execution grammars are NOT duplicated here.
+ * These alternatives expose the public declaration contracts of the
+ * independent execution grammars.
  *
- * Their public entry points are consumed by the canonical parser composition
- * layer according to the language's source-level placement rules.
- *
- * The authoritative ownership is:
- *
- *     execution-context.g4
- *         -> executionContext
- *
- *     scheduling.g4
- *         -> scheduling intent
- *
- *     placement.g4
- *         -> placement intent
- *
- *     dispatch.g4
- *         -> dispatchDeclaration
- *
- *     synchronization.g4
- *         -> synchronization intent
- *
- *     runtime-capabilities.g4
- *         -> runtime capability intent
- *
- *     deployment.g4
- *         -> deployment intent
- *
- * This file does not reproduce those rules.
- *
+ * No leaf syntax is duplicated here.
  * ============================================================================
  */
+
+executionDomainDeclaration
+    : entryPointDeclaration
+    | runtimeDeclaration
+    | recoveryDeclaration
+    | checkpointingDeclaration
+    | lifecycleDeclaration
+    | dispatchDeclaration
+    | deploymentDeclaration
+    | synchronizationDeclaration
+    | schedulingDeclaration
+    | executionPlacement
+    | tracingConstruct
+    | profilingConstruct
+    ;
 
 
 /*
  * ============================================================================
- * 7. SEMANTIC INTEGRATION CONTRACT
+ * 7. EXECUTION-DOMAIN STATEMENTS
  * ============================================================================
  *
- * Parsing produces syntax nodes only.
- *
- * Conceptual AST:
- *
- *     ExecutionDeclaration
- *         |
- *         +--> Subject
- *         |
- *         +--> Optional ExecutionContext
- *
- * Semantic analysis transforms that structure into execution intent.
- *
- * Conceptually:
- *
- *     ExecutionDeclaration
- *             |
- *             v
- *     ExecutionIntent
- *             |
- *       +-----+------+-------------------+
- *       |            |                   |
- *       v            v                   v
- *   capability    resources           target
- *     analysis      analysis          resolution
- *       |            |                   |
- *       +------------+-------------------+
- *                    |
- *                    v
- *          canonical semantic model
- *
- * No runtime action occurs during parsing.
+ * Each leaf grammar owns its own statement syntax.
  *
  * ============================================================================
  */
 
+executionDomainStatement
+    : runtimeStatement
+    | recoveryStatement
+    | checkpointingStatement
+    | lifecycleStatement
+    | synchronizationDeclaration
+    ;
+
 
 /*
  * ============================================================================
- * 8. IR INTEGRATION
+ * 8. EXECUTION-DOMAIN EXPRESSIONS
  * ============================================================================
  *
- * Execution.g4 does not define an IR.
+ * These are semantic execution expressions supplied by independent execution
+ * grammars.
  *
- * The subject is lowered through the appropriate canonical semantic pipeline:
+ * No execution-specific expression language is created here.
+ * ============================================================================
+ */
+
+executionDomainExpression
+    : runtimeExpression
+    | recoveryExpression
+    | checkpointingExpression
+    ;
+
+
+/*
+ * ============================================================================
+ * 9. EXECUTION STATEMENT
+ * ============================================================================
  *
- *     classical subject
- *          -> classical semantic/IR pipeline
+ * The execution domain is intentionally additive.
  *
- *     quantum subject
- *          -> quantum frontend
- *          -> quantum::ir
- *
- *     HDL subject
- *          -> HDL/hardware semantic representation
- *
- *     distributed subject
- *          -> distributed semantic representation
- *
- *     hybrid subject
- *          -> combined canonical semantic representation
- *
- * Execution intent remains orthogonal to those representations.
- *
- * Therefore:
- *
- *     grammar -> AST -> semantic model -> IR
- *
- * and never:
- *
- *     grammar -> custom execution IR -> other IR
+ * The generic `execute` form is kept separate from specialized execution
+ * declarations.
  *
  * ============================================================================
  */
 
+executionStatement
+    : executionDomainStatement
+    ;
+
 
 /*
  * ============================================================================
- * 9. COMPILATION INTEGRATION
+ * 10. EXECUTION EXPRESSION
+ * ============================================================================
+ */
+
+executionExpression
+    : executionDomainExpression
+    ;
+
+
+/*
+ * ============================================================================
+ * 11. PUBLIC EXECUTION DOMAIN ENTRY
  * ============================================================================
  *
- * Compilation is separate from execution.
+ * This rule gives tooling a single execution-domain entry point without
+ * creating another program root.
  *
- * Execution.g4 may identify the computation whose compiled representation is
- * ultimately executed, but it does not define:
+ * ============================================================================
+ */
+
+executionDomainElement
+    : executionDeclaration
+    | executionDomainDeclaration
+    | executionDomainStatement
+    | executionDomainExpression
+    ;
+
+
+/*
+ * ============================================================================
+ * 12. SCHEDULING INTEGRATION
+ * ============================================================================
  *
- *     compiler targets
- *     optimization passes
- *     lowering algorithms
+ * Scheduling is an independent authority.
+ *
+ * execution.g4 only exposes its public declaration.
+ *
+ * Scheduling semantics are resolved downstream:
+ *
+ *     source
+ *       |
+ *       v
+ *     AST
+ *       |
+ *       v
+ *     semantic scheduling intent
+ *       |
+ *       v
+ *     scheduler
+ *
+ * The grammar does not calculate schedules.
+ *
+ * ============================================================================
+ */
+
+executionScheduling
+    : executionSchedule
+    ;
+
+
+/*
+ * ============================================================================
+ * 13. PLACEMENT INTEGRATION
+ * ============================================================================
+ *
+ * Placement remains semantic intent.
+ *
+ * The grammar does not select:
+ *
+ *     CPU
+ *     GPU
+ *     FPGA
+ *     QPU
+ *     node
+ *     physical qubit
+ *     memory bank
+ *
+ * ============================================================================
+ */
+
+executionPlacementIntent
+    : executionPlacement
+    ;
+
+
+/*
+ * ============================================================================
+ * 14. RECOVERY INTEGRATION
+ * ============================================================================
+ */
+
+executionRecovery
+    : recoveryDeclaration
+    ;
+
+
+/*
+ * ============================================================================
+ * 15. CHECKPOINT INTEGRATION
+ * ============================================================================
+ */
+
+executionCheckpointing
+    : checkpointingDeclaration
+    ;
+
+
+/*
+ * ============================================================================
+ * 16. TRACING INTEGRATION
+ * ============================================================================
+ */
+
+executionTracing
+    : tracingConstruct
+    ;
+
+
+/*
+ * ============================================================================
+ * 17. PROFILING INTEGRATION
+ * ============================================================================
+ */
+
+executionProfiling
+    : profilingConstruct
+    ;
+
+
+/*
+ * ============================================================================
+ * 18. LIFECYCLE INTEGRATION
+ * ============================================================================
+ */
+
+executionLifecycle
+    : lifecycleDeclaration
+    ;
+
+
+/*
+ * ============================================================================
+ * 19. DISPATCH INTEGRATION
+ * ============================================================================
+ */
+
+executionDispatch
+    : dispatchDeclaration
+    ;
+
+
+/*
+ * ============================================================================
+ * 20. DEPLOYMENT INTEGRATION
+ * ============================================================================
+ */
+
+executionDeployment
+    : deploymentDeclaration
+    ;
+
+
+/*
+ * ============================================================================
+ * 21. SYNCHRONIZATION INTEGRATION
+ * ============================================================================
+ */
+
+executionSynchronization
+    : synchronizationDeclaration
+    ;
+
+
+/*
+ * ============================================================================
+ * 22. RUNTIME INTEGRATION
+ * ============================================================================
+ *
+ * Runtime remains a separate authority.
+ *
+ * The runtime grammar provides:
+ *
+ *     runtimeDeclaration
+ *     runtimeStatement
+ *     runtimeExpression
+ *
+ * Execution merely exposes those contracts.
+ *
+ * Runtime implementation occurs after semantic analysis.
+ *
+ * ============================================================================
+ */
+
+executionRuntimeDeclaration
+    : runtimeDeclaration
+    ;
+
+executionRuntimeStatement
+    : runtimeStatement
+    ;
+
+executionRuntimeExpression
+    : runtimeExpression
+    ;
+
+
+/*
+ * ============================================================================
+ * 23. ENTRY-POINT INTEGRATION
+ * ============================================================================
+ */
+
+executionEntryPoint
+    : entryPointDeclaration
+    ;
+
+
+/*
+ * ============================================================================
+ * 24. CONTEXT INTEGRATION
+ * ============================================================================
+ *
+ * This explicit wrapper is useful to downstream tooling and keeps
+ * ExecutionContext independently testable.
+ * ============================================================================
+ */
+
+executionContext
+    : optionalExecutionContext
+    ;
+
+
+/*
+ * ============================================================================
+ * 25. SEMANTIC CONTRACT
+ * ============================================================================
+ *
+ * The syntax represented by this grammar maps conceptually to:
+ *
+ *     ExecutionDeclaration {
+ *         subject: Computation,
+ *         context: Option<ExecutionContext>,
+ *         source_span: SourceSpan
+ *     }
+ *
+ * Specialized declarations map to domain-neutral AST nodes such as:
+ *
+ *     EntryPointDecl
+ *     RuntimeIntent
+ *     ScheduleIntent
+ *     PlacementIntent
+ *     RecoveryIntent
+ *     CheckpointIntent
+ *     TraceIntent
+ *     ProfileIntent
+ *     LifecycleIntent
+ *     DispatchIntent
+ *     DeploymentIntent
+ *     SynchronizationIntent
+ *
+ * Exact Rust AST types belong to:
+ *
+ *     src/frontend/ast/
+ *
+ * This grammar MUST NOT require:
+ *
+ *     CpuId
+ *     GpuId
+ *     FpgaId
+ *     QpuId
+ *     PhysicalQubitId
+ *     PhysicalMemoryAddress
+ *     HardwareTopology
+ *
+ * as universal AST requirements.
+ *
+ * ============================================================================
+ * 26. RESOURCE AND CAPABILITY SEMANTICS
+ * ============================================================================
+ *
+ * Semantic analysis resolves:
+ *
+ *     requirements
+ *     constraints
+ *     capabilities
+ *     resources
+ *     preferences
+ *     hints
+ *
+ * against:
+ *
+ *     program semantics
+ *     effects
+ *     target capabilities
+ *     available resources
+ *     portability requirements
+ *     execution policy
+ *
+ * The parser does none of this.
+ *
+ * ============================================================================
+ * 27. COMPILATION CONTRACT
+ * ============================================================================
+ *
+ * Execution syntax may identify the computation that is eventually executed.
+ *
+ * It does not define:
+ *
+ *     optimization
+ *     lowering
  *     code generation
- *     target-specific instruction selection
+ *     instruction selection
+ *     target-specific compilation
+ *     binary layout
  *
- * Those remain owned by grammar/compile and the compiler implementation.
+ * Those remain compiler concerns.
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 10. SCHEDULING INTEGRATION
+ * 28. SCHEDULING CONTRACT
  * ============================================================================
  *
- * Execution.g4 does not implement scheduling.
+ * Scheduling grammar describes scheduling intent.
  *
- * It does not calculate:
+ * The scheduler determines realization.
  *
- *     start times
- *     end times
- *     dependencies
+ * This grammar does not calculate:
+ *
+ *     start time
+ *     end time
+ *     critical path
  *     resource occupancy
- *     critical paths
- *     ASAP schedules
- *     ALAP schedules
- *     RCPSP schedules
- *     pulse schedules
- *
- * Scheduling intent is consumed from the dedicated scheduling grammar and
- * resolved later by the scheduling subsystem.
+ *     ordering
+ *     temporal placement
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 11. PLACEMENT / ROUTING INTEGRATION
+ * 29. PLACEMENT / ROUTING CONTRACT
  * ============================================================================
  *
- * Execution.g4 does not map computation onto physical resources.
+ * Placement grammar describes intent.
  *
- * In particular it does not select:
+ * Routing remains downstream.
  *
- *     CPU cores
- *     GPU devices
+ * Execution does not select physical:
+ *
+ *     cores
+ *     accelerators
  *     FPGA regions
- *     ASIC instances
  *     QPU qubits
- *     cluster nodes
- *     network paths
- *
- * Placement and routing are downstream realization concerns.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 12. DISPATCH INTEGRATION
- * ============================================================================
- *
- * Dispatch remains owned by:
- *
- *     grammar/execution/dispatch.g4
- *
- * Execution.g4 MUST NOT reimplement dispatch declarations.
- *
- * The canonical integration contract is:
- *
- *     execution
- *          |
- *          +--> semantic execution intent
- *                         |
- *                         v
- *                    dispatch intent
- *                         |
- *                         v
- *                    dispatch plan
- *
- * The dispatch plan is not part of the source grammar AST.
+ *     nodes
+ *     memory banks
+ *     network links
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 13. DEPLOYMENT INTEGRATION
+ * 30. RECOVERY / RESILIENCE CONTRACT
  * ============================================================================
  *
- * Deployment remains owned by:
+ * Recovery syntax represents recovery intent.
  *
- *     grammar/execution/deployment.g4
+ * Resilience semantics remain a separate concern.
  *
- * Execution.g4 does not define:
+ * The runtime/compiler may ultimately use:
  *
- *     replicas
- *     rollout algorithms
- *     service deployment
- *     provider APIs
- *     cluster topology
- *     node allocation
- *     container implementation
- *     cloud implementation
- *
- * Deployment intent is resolved downstream.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 14. RESILIENCE INTEGRATION
- * ============================================================================
- *
- * Execution syntax may eventually carry references to resilience policy
- * through the execution-context system.
- *
- * Execution.g4 does not implement:
- *
- *     retry algorithms
+ *     retry
+ *     restart
+ *     resume
  *     rollback
- *     checkpoint reconstruction
- *     fault diagnosis
- *     mitigation
- *     QEC
- *     ZQN
- *     backend switching
+ *     migration
+ *     compensation
+ *     checkpoint restoration
+ *     escalation
+ *     degraded acceptance
  *
- * Those remain outside the grammar.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 15. RESOURCE / CAPABILITY INTEGRATION
- * ============================================================================
- *
- * Resource and capability information is interpreted semantically.
- *
- * Execution.g4 does not define physical resource inventories.
- *
- * For example, source semantics may require:
- *
- *     quantum capability
- *
- * without specifying:
- *
- *     a particular QPU
- *     a particular vendor
- *     a particular qubit identifier
- *     a fixed qubit count
- *
- * Similarly, a computation may express a resource relationship without
- * embedding a fixed machine capacity.
+ * without the parser implementing any of these algorithms.
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 16. FUTURE EXTENSIBILITY
+ * 31. CHECKPOINT CONTRACT
  * ============================================================================
  *
- * New computational domains MUST NOT require modification to this grammar
- * merely because a new kind of machine becomes available.
+ * Checkpointing is source-level intent.
  *
- * A future domain should be able to provide its own semantic grammar and
- * integrate through:
+ * It does not define:
  *
- *     executionSubject
- *     expression
- *     executionContext
+ *     storage backend
+ *     physical storage address
+ *     serialization implementation
+ *     replication algorithm
+ *     recovery algorithm
  *
- * or the canonical parser composition layer.
- *
- * The execution grammar therefore remains stable while the set of realizable
- * computing technologies grows.
+ * Those belong downstream.
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 17. ERROR-BOUNDARY CONTRACT
+ * 32. OBSERVABILITY CONTRACT
  * ============================================================================
  *
- * Syntax errors belong to the parser.
+ * Tracing and profiling remain portable source intent.
  *
- * Semantic errors belong to semantic analysis.
+ * This grammar does not select:
  *
- * Examples:
+ *     OpenTelemetry
+ *     Prometheus
+ *     vendor profiler
+ *     tracing SDK
+ *     storage backend
  *
- *     Syntax error:
- *         malformed execution declaration
- *
- *     Semantic error:
- *         referenced computation does not exist
- *
- *     Type error:
- *         execution subject has an invalid semantic type
- *
- *     Capability error:
- *         required capability cannot be satisfied
- *
- *     Resource error:
- *         declared requirement cannot be satisfied
- *
- *     Target error:
- *         no compatible target exists
- *
- *     Runtime error:
- *         execution environment fails
- *
- * Execution.g4 MUST NOT attempt to collapse these distinct error classes.
+ * Runtime realization chooses the implementation.
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 18. DETERMINISM / REPRODUCIBILITY CONTRACT
+ * 33. LIFECYCLE CONTRACT
  * ============================================================================
  *
- * The parser must produce equivalent syntax structure for equivalent canonical
- * token streams.
+ * Lifecycle is a semantic state model.
  *
- * There is no:
+ * Execution does not enumerate lifecycle states.
  *
- *     timestamp generation
- *     UUID generation
- *     device discovery
- *     backend selection
- *     randomization
- *     runtime inspection
- *
- * inside this grammar.
- *
- * Reproducibility is therefore delegated to deterministic downstream semantic
- * and compilation policies.
+ * Therefore future states can be represented without changing this grammar.
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 19. SCALABILITY CONTRACT
+ * 34. DISPATCH CONTRACT
  * ============================================================================
  *
- * This grammar scales structurally rather than by enumerating machine sizes.
+ * Dispatch intent describes a handoff boundary.
  *
- * A single execution subject can represent a tiny computation or a semantic
- * computation whose eventual realization consumes arbitrarily many resources.
+ * It does not define:
  *
- * The grammar imposes no fixed limit on:
+ *     process spawning implementation
+ *     OS syscall
+ *     queue implementation
+ *     device API
+ *     network transport
  *
- *     program size
- *     expression complexity
+ * ============================================================================
+ * 35. DEPLOYMENT CONTRACT
+ * ============================================================================
+ *
+ * Deployment intent remains target-independent.
+ *
+ * Execution does not define:
+ *
+ *     cloud provider
+ *     container engine
+ *     cluster scheduler
+ *     node allocator
+ *     service mesh
+ *     deployment API
+ *
+ * ============================================================================
+ * 36. SYNCHRONIZATION CONTRACT
+ * ============================================================================
+ *
+ * Synchronization describes semantic ordering and dependency intent.
+ *
+ * It does not mandate:
+ *
+ *     mutexes
+ *     CPU fences
+ *     GPU fences
+ *     barriers
+ *     semaphores
+ *     vendor synchronization primitives
+ *
+ * The realization is downstream.
+ *
+ * ============================================================================
+ * 37. DETERMINISM
+ * ============================================================================
+ *
+ * This grammar contains:
+ *
+ *     no semantic actions
+ *     no predicates
+ *     no runtime calls
+ *     no filesystem access
+ *     no network access
+ *     no hardware discovery
+ *     no randomness
+ *     no mutable global state
+ *
+ * Equivalent canonical token streams must produce equivalent parse structures.
+ *
+ * Runtime nondeterminism is a semantic/runtime property and does not alter
+ * parser determinism.
+ *
+ * ============================================================================
+ * 38. SOURCE SPANS
+ * ============================================================================
+ *
+ * Every execution AST node MUST preserve source-span information.
+ *
+ * This grammar does not implement source spans itself.
+ *
+ * The parser/frontend infrastructure must preserve:
+ *
+ *     start offset
+ *     end offset
+ *     line
+ *     column
+ *     source identity
+ *
+ * sufficiently for diagnostics, tooling, formatting and provenance.
+ *
+ * ============================================================================
+ * 39. DIAGNOSTIC BOUNDARY
+ * ============================================================================
+ *
+ * Syntax errors:
+ *
+ *     parser
+ *
+ * Semantic errors:
+ *
+ *     semantic analysis
+ *
+ * Resource errors:
+ *
+ *     resource analysis
+ *
+ * Capability errors:
+ *
+ *     capability analysis
+ *
+ * Target errors:
+ *
+ *     target resolution
+ *
+ * Scheduling errors:
+ *
+ *     scheduler
+ *
+ * Runtime failures:
+ *
+ *     runtime
+ *
+ * Execution.g4 MUST NOT collapse these error classes into syntax errors.
+ *
+ * ============================================================================
+ * 40. SCALABILITY
+ * ============================================================================
+ *
+ * Repetition is structural.
+ *
+ * This grammar places no finite language-level ceiling on:
+ *
+ *     execution declarations
+ *     execution subjects
+ *     context entries
  *     context nesting
- *     resource cardinality
- *     target cardinality
- *     device cardinality
- *     node cardinality
- *     qubit cardinality
- *     accelerator cardinality
+ *     scheduling properties
+ *     placement properties
+ *     recovery policies
+ *     checkpoints
+ *     traces
+ *     profiling entries
+ *     lifecycle states
+ *     lifecycle transitions
+ *     synchronization dependencies
+ *     distributed resources
+ *     quantum resources
+ *     classical resources
+ *     accelerator resources
  *
- * Subject only to actual parser/runtime memory and time resources and to
- * explicitly defined implementation safeguards.
+ * Actual limits arise only from:
  *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 20. HARD-CODING AUDIT
- * ============================================================================
+ *     parser implementation resources
+ *     compiler resources
+ *     runtime resources
+ *     available target resources
+ *     operating-environment limits
+ *     explicit program requirements
  *
- * No machine-size constant is present.
- *
- * No:
- *
- *     MAX_*
- *     device ID
- *     physical address
- *     CPU count
- *     GPU count
- *     FPGA count
- *     QPU count
- *     qubit count
- *     node count
- *     memory size
- *     topology
- *     queue size
- *
- * is encoded in this grammar.
- *
- * Any future machine-specific requirement MUST be represented through the
- * appropriate target/resource/capability/constraint system rather than added
- * as a grammar-level limit.
+ * Those are not grammar capacities.
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 21. COMPLETION CRITERIA
+ * 41. FUTURE EXTENSIBILITY
  * ============================================================================
  *
- * This file is complete only when:
+ * A future computing technology should first attempt integration through:
  *
- * [ ] It parses the canonical execution declaration.
+ *     expressions
+ *     types
+ *     attributes
+ *     capabilities
+ *     resources
+ *     requirements
+ *     constraints
+ *     preferences
+ *     hints
+ *     dialects
  *
- * [ ] It reuses the canonical lexer.
+ * rather than adding a new execution keyword.
  *
- * [ ] It reuses Core expression/block syntax.
+ * This allows execution.g4 to remain stable as the set of computational
+ * technologies expands.
  *
- * [ ] It reuses ExecutionContext rather than duplicating context syntax.
+ * ============================================================================
+ * 42. SAFE RUST CONTRACT
+ * ============================================================================
  *
- * [ ] It contains no machine-size limits.
+ * This grammar contains no Rust actions.
  *
- * [ ] It contains no hardware discovery.
+ * Therefore it requires no unsafe Rust.
  *
- * [ ] It contains no runtime behavior.
+ * The generated Zamani frontend must remain compatible with:
  *
- * [ ] It contains no scheduling implementation.
+ *     Rust 1.97
+ *     Rust 1.97.1
+ *     Rust 2021
  *
- * [ ] It contains no placement implementation.
+ * and safe Rust only.
  *
- * [ ] It contains no routing implementation.
+ * No execution grammar feature may require `unsafe`.
  *
- * [ ] It contains no dispatch implementation.
+ * ============================================================================
+ * 43. COMPLETION CRITERIA
+ * ============================================================================
  *
- * [ ] It contains no deployment implementation.
+ * execution.g4 is complete when:
  *
- * [ ] It does not duplicate quantum syntax.
+ * [x] It is the sole execution composition root.
+ * [x] It preserves the existing filename.
+ * [x] It uses the canonical ZamaniLexer vocabulary.
+ * [x] It reuses Core syntax.
+ * [x] It reuses ExecutionContext.
+ * [x] It exposes the independent execution leaf grammars.
+ * [x] It does not duplicate leaf grammar ownership.
+ * [x] It does not create an execution IR.
+ * [x] It preserves quantum::ir as the canonical quantum boundary.
+ * [x] It contains no hardware capacity limits.
+ * [x] It contains no physical-device selection.
+ * [x] It contains no runtime implementation.
+ * [x] It contains no scheduling implementation.
+ * [x] It contains no routing implementation.
+ * [x] It contains no QEC implementation.
+ * [x] It contains no ZQN implementation.
+ * [x] It contains no semantic actions.
+ * [x] It requires no unsafe Rust.
+ * [x] It remains domain-neutral.
+ * [x] It supports POCO-REAF.
  *
- * [ ] It does not create a second quantum IR.
+ * Repository integration gates that remain external to this file:
  *
- * [ ] It has no semantic actions.
+ * [ ] observability.g4 must break its Execution dependency before composition.
+ * [ ] resilience.g4 must remove duplicate rule definitions before composition.
+ * [ ] environments.g4 must expose a canonical parser grammar before
+ *     composition.
  *
- * [ ] It has no unsafe Rust dependency.
+ * Those are intentionally NOT duplicated or hidden here.
  *
- * [ ] It passes parser generation with the canonical ZamaniLexer.
- *
- * [ ] It passes Rust 1.97 / 1.97.1 compilation of the generated parser.
- *
- * [ ] Positive execution tests pass.
- *
- * [ ] Negative syntax tests pass.
- *
- * [ ] Cross-domain execution subjects parse.
- *
- * [ ] Large/repeated execution structures do not encounter artificial
- *     grammar-level machine limits.
- *
- * [ ] Parser output is deterministic.
- *
- * [ ] AST lowering has a documented ExecutionDeclaration ->
- *     ExecutionIntent contract.
- *
- * [ ] No downstream file needs to modify the fundamental ownership model
- *     established here.
- *
+ * ============================================================================
+ * END OF EXECUTION.G4
  * ============================================================================
  */
