@@ -1,6 +1,6 @@
 /*
  * ============================================================================
- * Zamani Programming Language
+ * Zamani Universal Programming Language
  * ============================================================================
  *
  * File:
@@ -10,2324 +10,1069 @@
  *     Interoperability
  *
  * Status:
- *     Production interoperability composition grammar.
+ *     CANONICAL INTEROPERABILITY COMPOSITION GRAMMAR
  *
- * Language:
- *     Zamani
- *
- * Implementation baseline:
+ * Compiler baseline:
  *     Rust 1.97 / Rust 1.97.1
  *     Rust 2021
- *     unsafe Rust forbidden
+ *     SAFE RUST ONLY
+ *     NO UNSAFE RUST
  *
  * ============================================================================
  * PURPOSE
  * ============================================================================
  *
- * This file is the AUTHORITATIVE COMPOSITION BOUNDARY for source-level
- * interoperability in Zamani.
+ * This file is the canonical COMPOSITION BOUNDARY for Zamani
+ * interoperability syntax.
  *
- * It connects Zamani semantic programs with external languages, ABIs,
- * execution systems, hardware/software interfaces, quantum formats, HDL
- * formats, system interfaces, foreign functions, and future interoperability
- * mechanisms.
+ * It does NOT own the syntax of every foreign language.
  *
- * This grammar describes INTEROPERABILITY INTENT.
+ * It does NOT define a second FFI grammar.
  *
- * It does NOT implement:
+ * It does NOT define a second ABI grammar.
  *
- *     - C
- *     - C++
- *     - Python
- *     - Rust
- *     - Verilog
- *     - OpenQASM
- *     - assembly languages
- *     - an ABI implementation
- *     - a linker
- *     - a loader
- *     - a runtime
- *     - a foreign compiler
- *     - hardware discovery
- *     - device discovery
- *     - network discovery
- *     - quantum compilation
- *     - quantum routing
- *     - quantum scheduling
- *     - QEC
- *     - ZQN
- *     - resilience
- *     - optimization
- *     - physical placement
+ * It does NOT define a second serialization grammar.
  *
- * Those systems have separate owners.
+ * It does NOT define C, C++, Python, Rust, Zig, Verilog, OpenQASM,
+ * assembly, WASM, or any other foreign language.
+ *
+ * Instead, it composes the repository's independently owned
+ * interoperability grammars into the three parser entry points required by
+ * grammar/antlr/ZamaniParser.g4:
+ *
+ *     interoperabilityDeclaration
+ *     interoperabilityStatement
+ *     interoperabilityExpression
+ *
+ * This file therefore answers:
+ *
+ *     "Which already-defined interoperability constructs participate in
+ *      canonical Zamani source composition?"
+ *
+ * It does NOT answer:
+ *
+ *     "How is the construct implemented?"
  *
  * ============================================================================
- * ARCHITECTURAL POSITION
+ * ARCHITECTURAL PIPELINE
  * ============================================================================
  *
- *     Zamani source
- *          |
- *          v
- *     canonical lexer
- *          |
- *          v
- *     parser grammar
- *          |
- *          v
- *     Interoperability
- *          |
- *          +--------------------+
- *          |                    |
- *          v                    v
- *       FFI/ABI             foreign-language
- *       contracts           integration contracts
- *          |                    |
- *          +---------+----------+
- *                    |
- *                    v
- *              semantic analysis
- *                    |
- *       +------------+-------------+
- *       |            |             |
- *       v            v             v
- *      types      effects      capabilities
- *       |            |             |
- *       +------------+-------------+
- *                    |
- *                    v
- *              canonical semantic IR
- *                    |
- *          +---------+----------+
- *          |         |          |
- *          v         v          v
- *     classical  quantum::ir  hardware/
- *        IR                    HDL/resource
- *          |         |          |
- *          +---------+----------+
- *                    |
- *                    v
- *              optimization
- *                    |
- *                    v
- *                routing
- *                    |
- *                    v
- *                scheduling
- *                    |
- *                    v
- *                 lowering
- *                    |
- *                    v
- *               ABI/runtime
+ *                         ZAMANI SOURCE
+ *                              |
+ *                              v
+ *                         ZamaniLexer
+ *                              |
+ *                              v
+ *                       ZamaniParser
+ *                              |
+ *                              v
+ *                   Interoperability
+ *                              |
+ *        +---------------------+----------------------+
+ *        |                     |                      |
+ *        v                     v                      v
+ *       ABI                   FFI             Foreign-function
+ *     contracts             contracts           contracts
+ *        |                     |                      |
+ *        +---------------------+----------------------+
+ *                              |
+ *                              v
+ *                    Serialization boundary
+ *                              |
+ *                              v
+ *                     Domain-neutral AST
+ *                              |
+ *                              v
+ *                      Semantic analysis
+ *                              |
+ *          +-------------------+-------------------+
+ *          |                   |                   |
+ *          v                   v                   v
+ *       classical          quantum semantics    HDL/hardware
+ *          |                   |                   |
+ *          |                   v                   |
+ *          |              quantum::ir             |
+ *          |                   |                   |
+ *          +-------------------+-------------------+
+ *                              |
+ *                              v
+ *                         canonical IR
+ *                              |
+ *                    +---------+---------+
+ *                    |         |         |
+ *                    v         v         v
+ *                optimize   route     schedule
+ *                              |
+ *                              v
+ *                         resilience/QEC
+ *                              |
+ *                              v
+ *                             ZQN
+ *                              |
+ *                              v
+ *                             HAL
+ *                              |
+ *                              v
+ *                       target realization
  *
  * ============================================================================
- * OWNERSHIP
+ * SINGLE-AUTHORITY RULE
  * ============================================================================
  *
- * THIS FILE OWNS:
+ * Ownership is deliberately split:
  *
- *     - interoperability declarations;
- *     - interoperability imports;
- *     - interoperability exports;
- *     - foreign-boundary references;
- *     - language identity at the semantic boundary;
- *     - source-format identity;
- *     - ABI/FFI composition;
- *     - semantic adapters;
- *     - type-boundary declarations;
- *     - value conversion declarations;
- *     - ownership-transfer intent;
- *     - lifetime-boundary intent;
- *     - calling-convention intent;
- *     - linkage intent;
- *     - compatibility constraints;
- *     - capability requirements;
- *     - effect requirements;
- *     - portability requirements;
- *     - foreign-resource requirements;
- *     - foreign-call intent;
- *     - foreign callable references;
- *     - foreign data references;
- *     - foreign type references;
- *     - callback-boundary intent;
- *     - asynchronous interoperability intent;
- *     - streaming interoperability intent;
- *     - cross-language semantic contracts;
- *     - target-independent interoperability metadata.
+ *     ABI
+ *         grammar/interoperability/abi.g4
  *
- * THIS FILE DOES NOT OWN:
+ *     FFI
+ *         grammar/interoperability/ffi.g4
  *
- *     - lexical token definitions;
- *     - identifier syntax;
- *     - qualified-name syntax;
- *     - ordinary expression syntax;
- *     - ordinary type syntax;
- *     - function parameter syntax;
- *     - ordinary function declarations;
- *     - ABI implementation;
- *     - ABI layout computation;
- *     - linker behavior;
- *     - loader behavior;
- *     - dynamic library discovery;
- *     - filesystem access;
- *     - network access;
- *     - process creation;
- *     - symbol lookup;
- *     - machine discovery;
- *     - device selection;
- *     - physical addresses;
- *     - CPU register allocation;
- *     - GPU selection;
- *     - FPGA selection;
- *     - ASIC selection;
- *     - QPU selection;
- *     - physical qubit selection;
- *     - quantum topology;
- *     - scheduling;
- *     - routing;
- *     - calibration;
- *     - QEC;
- *     - ZQN;
- *     - resilience;
- *     - simulation;
- *     - optimization;
- *     - canonical IR.
+ *     interoperability-specific foreign functions
+ *         grammar/interoperability/foreign-functions.g4
+ *
+ *     serialization/deserialization
+ *         grammar/data/serialization.g4
+ *
+ *     serialization interoperability façade
+ *         grammar/interoperability/serialization.g4
+ *
+ *     names
+ *         grammar/core/names.g4
+ *
+ *     attributes
+ *         grammar/core/attributes.g4
+ *
+ *     expressions
+ *         grammar/expressions/expressions.g4
+ *
+ *     types
+ *         grammar/types/types.g4
+ *
+ *     parameters
+ *         grammar/functions/parameters.g4
+ *
+ *     function generic parameters
+ *         grammar/functions/generics.g4
+ *
+ *     visibility
+ *         grammar/core/visibility.g4
+ *
+ * This file ONLY composes those contracts.
+ *
+ * ============================================================================
+ * CRITICAL NON-DUPLICATION RULE
+ * ============================================================================
+ *
+ * DO NOT add independent definitions here for:
+ *
+ *     identifier
+ *     qualifiedName
+ *     expression
+ *     typeExpression
+ *     parameter
+ *     parameterList
+ *     attribute
+ *     ABI contracts
+ *     FFI contracts
+ *     foreign-function declarations
+ *     serialization
+ *     deserialization
+ *
+ * Any such definition would create a second authority.
+ *
+ * ============================================================================
+ * ANTLR IMPORT MODEL
+ * ============================================================================
+ *
+ * ANTLR parser imports operate on parser grammar names.
+ *
+ * Therefore this file imports grammar identities, not filesystem paths.
+ *
+ * The imported grammar names are:
+ *
+ *     Names
+ *     Attributes
+ *     Expressions
+ *     Types
+ *     Parameters
+ *     FunctionGenerics
+ *     Visibility
+ *     Abi
+ *     Ffi
+ *     InteroperabilityForeignFunctions
+ *     SerializationInterop
+ *
+ * The source directory structure remains:
+ *
+ *     grammar/core/
+ *     grammar/expressions/
+ *     grammar/types/
+ *     grammar/functions/
+ *     grammar/interoperability/
+ *
+ * The build system is responsible for putting those grammar roots on the
+ * ANTLR grammar source path.
+ *
+ * ============================================================================
+ * LEXER AUTHORITY
+ * ============================================================================
+ *
+ * The parser-facing lexer is:
+ *
+ *     grammar/antlr/ZamaniLexer.g4
+ *
+ * Therefore:
+ *
+ *     tokenVocab = ZamaniLexer;
+ *
+ * is mandatory.
+ *
+ * This grammar MUST NOT use:
+ *
+ *     tokenVocab = ZamaniTokens;
+ *
+ * as its parser-facing vocabulary.
+ *
+ * ZamaniTokens is an internal lexical composition layer.
+ *
+ * ZamaniLexer is the canonical parser-facing lexer boundary.
+ *
+ * ============================================================================
+ * ROOT-PARSER CONTRACT
+ * ============================================================================
+ *
+ * grammar/antlr/ZamaniParser.g4 currently defines:
+ *
+ *     interoperabilityElement
+ *         : interoperabilityDeclaration
+ *         | interoperabilityStatement
+ *         | interoperabilityExpression
+ *         ;
+ *
+ * Therefore this grammar MUST provide exactly those reusable entry points.
+ *
+ * A generic rule named only:
+ *
+ *     interoperability
+ *
+ * is insufficient as the canonical composition contract.
+ *
+ * This file therefore deliberately exposes:
+ *
+ *     interoperabilityDeclaration
+ *     interoperabilityStatement
+ *     interoperabilityExpression
  *
  * ============================================================================
  * POCO-REAF
  * ============================================================================
  *
- * Interoperability must preserve:
+ * This grammar preserves:
  *
  *     Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
  *
- * Therefore this grammar MUST describe:
+ * Interoperability syntax describes:
  *
  *     WHAT boundary is required
  *
  * rather than:
  *
- *     WHICH MACHINE IMPLEMENTS IT.
+ *     WHICH physical machine realizes it.
  *
- * For example:
+ * The grammar therefore imposes NO universal language-level limits on:
  *
- *     requires capability::quantum
+ *     CPU count
+ *     core count
+ *     thread count
+ *     GPU count
+ *     FPGA count
+ *     accelerator count
+ *     QPU count
+ *     qubit count
+ *     node count
+ *     device count
+ *     memory capacity
+ *     storage capacity
+ *     network size
+ *     tensor rank
+ *     tensor dimensions
+ *     register width
+ *     address-space size
+ *     interface count
+ *     function count
+ *     parameter count
+ *     argument count
+ *     schema size
+ *     metadata size
  *
- * is valid semantic intent.
+ * In particular, this grammar MUST NOT introduce:
  *
- * The grammar must NOT turn that into:
+ *     MAX_QUBITS
+ *     MAX_CPUS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_NODES
+ *     MAX_MEMORY
+ *     MAX_THREADS
+ *     MAX_TENSOR_RANK
+ *     MAX_REGISTER_WIDTH
+ *     MAX_NETWORK_SIZE
+ *     MAX_DEVICE_COUNT
  *
- *     use device 7
- *     use qpu_127
- *     use 32 qubits
- *     use topology X
- *     use CPU Y
+ * Program-level quantities remain program semantics.
  *
- * Concrete realization is downstream.
- *
- * ============================================================================
- * SCALABILITY
- * ============================================================================
- *
- * There are deliberately NO finite production limits on:
- *
- *     - interoperability declarations;
- *     - interfaces;
- *     - foreign functions;
- *     - parameters;
- *     - arguments;
- *     - adapters;
- *     - conversions;
- *     - capabilities;
- *     - effects;
- *     - language integrations;
- *     - source formats;
- *     - callbacks;
- *     - streams;
- *     - resources;
- *     - devices;
- *     - nodes;
- *     - cores;
- *     - threads;
- *     - qubits;
- *     - memory;
- *     - address spaces.
- *
- * Practical limits may exist in:
- *
- *     - parser implementation;
- *     - compiler policy;
- *     - available memory;
- *     - available storage;
- *     - operating-system limits;
- *     - runtime limits;
- *     - target capabilities.
- *
- * Those limits are NOT language grammar limits.
+ * Target capacities remain resource/capability concerns.
  *
  * ============================================================================
- * SECURITY
+ * REQUIREMENT / CAPABILITY / CONSTRAINT / PREFERENCE / HINT
  * ============================================================================
  *
- * Parsing this grammar MUST NEVER:
+ * Interoperability MUST preserve the distinction between:
  *
- *     - open a file;
- *     - access a network;
- *     - load a library;
- *     - execute foreign code;
- *     - resolve a symbol;
- *     - invoke a process;
+ *     requirement
+ *         What must be true.
+ *
+ *     capability
+ *         What a realization can provide.
+ *
+ *     constraint
+ *         What implementations are forbidden from violating.
+ *
+ *     preference
+ *         What implementation is preferred but not mandatory.
+ *
+ *     hint
+ *         Non-binding implementation guidance.
+ *
+ *     realization
+ *         A downstream compiler/runtime/backend decision.
+ *
+ * The composition grammar does not collapse these concepts.
+ *
+ * ============================================================================
+ * SECURITY / INERTNESS
+ * ============================================================================
+ *
+ * Parsing interoperability syntax MUST NOT:
+ *
+ *     - load libraries;
+ *     - open files;
+ *     - resolve symbols;
  *     - inspect hardware;
+ *     - inspect devices;
+ *     - inspect network topology;
+ *     - execute foreign code;
+ *     - create processes;
  *     - allocate native resources;
- *     - dereference a physical address;
- *     - create a runtime handle.
+ *     - dereference physical addresses;
+ *     - perform dynamic linking;
+ *     - invoke QPU APIs;
+ *     - invoke HDL tools;
+ *     - perform QEC;
+ *     - perform ZQN analysis;
+ *     - perform routing;
+ *     - perform scheduling.
  *
- * This grammar is declarative and inert.
- *
- * ============================================================================
- * CANONICAL DEPENDENCIES
- * ============================================================================
- *
- * The composition root provides canonical versions of:
- *
- *     identifier
- *     qualifiedName
- *     expression
- *     typeExpr
- *     parameterList
- *     argumentList
- *     attribute
- *
- * These MUST NOT be duplicated here.
- *
- * Canonical ownership remains with:
- *
- *     grammar/core/names.g4
- *     grammar/core/attributes.g4
- *     grammar/types/
- *     grammar/expressions/
- *     grammar/functions/
+ * The grammar is declarative and inert.
  *
  * ============================================================================
- * SPECIALIZED INTEROPERABILITY GRAMMARS
+ * FOREIGN-LANGUAGE INTEGRATION
  * ============================================================================
  *
- * This composition grammar integrates with, but does not replace:
+ * The following remain independent language/format grammars:
  *
- *     abi.g4
- *     ffi.g4
- *     foreign-functions.g4
  *     c.g4
  *     cpp.g4
  *     python.g4
  *     rust.g4
+ *     zig.g4
  *     openqasm.g4
  *     verilog.g4
  *     AssemblyLanguage.g4
  *     system-interfaces.g4
  *
- * Specialized grammars own their respective syntax.
+ * This file MUST NOT import or reproduce their complete syntax.
  *
- * This file owns how their semantic contracts participate in Zamani.
+ * In particular, OpenQASM remains a separate grammar because its grammar is
+ * a complete foreign-language grammar rather than a parser component of the
+ * Zamani interoperability contract.
+ *
+ * The OpenQASM pipeline remains:
+ *
+ *     OpenQASM source
+ *          |
+ *          v
+ *     OpenQASM parser
+ *          |
+ *          v
+ *     semantic validation
+ *          |
+ *          v
+ *     canonical quantum::ir
+ *
+ * The same architectural separation applies to HDL and other foreign
+ * languages.
+ *
+ * ============================================================================
+ * ABI INTEGRATION
+ * ============================================================================
+ *
+ * ABI syntax remains owned by Abi.
+ *
+ * This composition grammar exposes:
+ *
+ *     abiDeclaration
+ *     abiContract
+ *
+ * without redefining their internals.
+ *
+ * ABI implementation remains downstream.
+ *
+ * The grammar does not determine:
+ *
+ *     pointer width
+ *     alignment
+ *     register allocation
+ *     stack layout
+ *     calling sequence
+ *     object format
+ *     binary encoding
+ *     linker behavior
+ *     loader behavior
+ *
+ * ============================================================================
+ * FFI INTEGRATION
+ * ============================================================================
+ *
+ * FFI syntax remains owned by Ffi.
+ *
+ * The composition grammar exposes the public FFI item forms through the
+ * canonical Ffi rules.
+ *
+ * FFI realization remains downstream.
+ *
+ * ============================================================================
+ * FOREIGN FUNCTION INTEGRATION
+ * ============================================================================
+ *
+ * InteroperabilityForeignFunctions remains the owner of its specialized
+ * external callable declaration syntax.
+ *
+ * IMPORTANT:
+ *
+ * It MUST NOT be added as an unrestricted sibling alternative to
+ * abiDeclaration when both constructs share the same EXTERN prefix and
+ * overlapping bodies.
+ *
+ * Doing so would create a composition-level ambiguity.
+ *
+ * The interoperable foreign-function grammar is therefore exposed through
+ * an explicitly named adapter rule and remains available to the appropriate
+ * ABI/FFI integration layer.
+ *
+ * This file does not silently choose one interpretation using alternative
+ * ordering.
+ *
+ * ============================================================================
+ * SERIALIZATION INTEGRATION
+ * ============================================================================
+ *
+ * Serialization is a representation boundary, not an interoperability IR.
+ *
+ * The canonical serialization authority remains:
+ *
+ *     grammar/data/serialization.g4
+ *
+ * The interoperability façade remains:
+ *
+ *     grammar/interoperability/serialization.g4
+ *
+ * This file composes the façade rather than duplicating serialization rules.
+ *
+ * Serialization/deserialization therefore remains compatible with:
+ *
+ *     classical data
+ *     quantum-associated data
+ *     hybrid data
+ *     tensors
+ *     AI/ML artifacts
+ *     HDL/hardware descriptions
+ *     distributed messages
+ *     network payloads
+ *     persistent artifacts
+ *
+ * without introducing another data IR.
  *
  * ============================================================================
  * QUANTUM INTEGRATION
  * ============================================================================
  *
- * OpenQASM interoperability is a FORMAT/FOREIGN-LANGUAGE boundary.
+ * Interoperability may cross a quantum/classical boundary.
  *
- * It must NOT create a second quantum IR.
+ * This file does NOT define:
  *
- *     Zamani/OpenQASM syntax
- *             |
- *             v
- *       OpenQASM frontend
- *             |
- *             v
- *       canonical quantum::ir
+ *     gates
+ *     QubitId
+ *     physical qubits
+ *     topology
+ *     routing
+ *     scheduling
+ *     calibration
+ *     QEC
+ *     ZQN
+ *     HAL
  *
- * The same rule applies to quantum interoperability through FFI or runtime
- * interfaces.
+ * A quantum-related interoperability construct eventually follows:
+ *
+ *     interoperability syntax
+ *          |
+ *          v
+ *     frontend AST
+ *          |
+ *          v
+ *     semantic analysis
+ *          |
+ *          v
+ *     quantum semantic representation
+ *          |
+ *          v
+ *     quantum::ir
+ *
+ * No second quantum IR is introduced here.
  *
  * ============================================================================
- * HDL INTEGRATION
+ * HDL / HARDWARE INTEGRATION
  * ============================================================================
  *
- * Verilog/SystemVerilog/other HDL integration is a foreign-language boundary.
+ * HDL and hardware interoperability remain semantic boundaries.
  *
- * HDL semantics are owned by the HDL subsystem.
+ * This file does not define:
  *
- * This file only declares:
+ *     physical pin numbers
+ *     register addresses
+ *     bus widths
+ *     FPGA capacities
+ *     ASIC capacities
+ *     accelerator counts
+ *     device IDs
+ *     physical topology
  *
- *     - HDL interface identity;
- *     - import/export intent;
- *     - binding;
- *     - port/data contracts;
- *     - capability requirements;
- *     - compatibility metadata.
+ * Hardware realization remains downstream.
+ *
+ * ============================================================================
+ * DISTRIBUTED INTEGRATION
+ * ============================================================================
+ *
+ * Interoperability may describe distributed interfaces, but this file does
+ * not select:
+ *
+ *     node 0
+ *     node 1
+ *     CPU 0
+ *     GPU 0
+ *     device 7
+ *
+ * or any other physical resource.
+ *
+ * Distributed realization remains owned by:
+ *
+ *     grammar/distributed/
+ *     resource/capability analysis
+ *     deployment
+ *     runtime
+ *
+ * ============================================================================
+ * AST CONTRACT
+ * ============================================================================
+ *
+ * This grammar introduces NO interoperability-specific universal AST.
+ *
+ * The intended mapping is:
+ *
+ *     interoperabilityDeclaration
+ *          |
+ *          v
+ *     canonical frontend AST
+ *          |
+ *          v
+ *     semantic interoperability contract
+ *
+ *     interoperabilityStatement
+ *          |
+ *          v
+ *     canonical statement/call/serialization AST
+ *
+ *     interoperabilityExpression
+ *          |
+ *          v
+ *     canonical expression AST
+ *
+ * The fact that a construct entered through this composition grammar MUST
+ * NOT require a duplicate AST hierarchy.
+ *
+ * Forbidden examples:
+ *
+ *     InteroperabilityIR
+ *     FfiIR
+ *     AbiIR
+ *     SerializationInteropIR
+ *     QuantumInteropIR
+ *
+ * ============================================================================
+ * SEMANTIC CONTRACT
+ * ============================================================================
+ *
+ * Semantic analysis resolves:
+ *
+ *     language identity
+ *     ABI identity
+ *     interface identity
+ *     foreign symbol identity
+ *     type compatibility
+ *     conversion validity
+ *     ownership
+ *     lifetime
+ *     nullability
+ *     effects
+ *     capabilities
+ *     resource requirements
+ *     compatibility
+ *     versioning
+ *     security
+ *     provenance
+ *
+ * Parsing does not perform these operations.
+ *
+ * ============================================================================
+ * IR CONTRACT
+ * ============================================================================
+ *
+ * This grammar defines no IR.
+ *
+ * Interoperability semantics are lowered through the repository's canonical
+ * semantic/IR pipeline.
+ *
+ * For quantum computation:
+ *
+ *     quantum semantics -> quantum::ir
+ *
+ * For classical computation:
+ *
+ *     classical semantics -> canonical classical IR
+ *
+ * For HDL/hardware:
+ *
+ *     hardware semantics -> canonical HDL/hardware representation
+ *
+ * Serialization remains a representation boundary around canonical semantic
+ * values.
+ *
+ * ============================================================================
+ * COMPILER INTEGRATION
+ * ============================================================================
+ *
+ * Compiler stages consume interoperability semantics after parsing:
+ *
+ *     parse
+ *       |
+ *       v
+ *     AST
+ *       |
+ *       v
+ *     name/type/effect/capability analysis
+ *       |
+ *       v
+ *     interoperability validation
+ *       |
+ *       v
+ *     canonical semantic model
+ *       |
+ *       v
+ *     IR generation
+ *       |
+ *       v
+ *     optimization/lowering
+ *       |
+ *       v
+ *     ABI/link/runtime realization
+ *
+ * This grammar MUST NOT invoke any compiler backend.
+ *
+ * ============================================================================
+ * RUNTIME INTEGRATION
+ * ============================================================================
+ *
+ * Runtime behavior may eventually perform:
+ *
+ *     foreign calls
+ *     serialization
+ *     deserialization
+ *     callbacks
+ *     transport
+ *     dynamic linking
+ *     device interaction
+ *
+ * None of those operations occurs during parsing.
+ *
+ * Runtime availability MUST NOT change whether the grammar accepts a source
+ * program.
+ *
+ * ============================================================================
+ * SOURCE PROVENANCE
+ * ============================================================================
+ *
+ * Every imported construct retains its parser context and therefore its
+ * source span.
+ *
+ * Downstream AST construction MUST preserve:
+ *
+ *     source file
+ *     byte/character range
+ *     line/column information where available
+ *     originating grammar construct
+ *
+ * Interoperability diagnostics must therefore be able to point back to the
+ * exact source declaration, call, expression, or contract.
  *
  * ============================================================================
  * DETERMINISM
  * ============================================================================
  *
- * No:
+ * This composition grammar contains:
  *
- *     - semantic predicates;
- *     - actions;
- *     - random behavior;
- *     - filesystem access;
- *     - network access;
- *     - target-dependent parser decisions
+ *     - no semantic predicates;
+ *     - no parser actions;
+ *     - no external calls;
+ *     - no randomness;
+ *     - no environment access;
+ *     - no filesystem access;
+ *     - no network access;
+ *     - no target-dependent parsing.
  *
- * are permitted here.
+ * Given the same token stream and grammar version, parsing is deterministic.
+ *
+ * ============================================================================
+ * SCALABILITY
+ * ============================================================================
+ *
+ * All repetition is represented using grammar repetition:
+ *
+ *     *
+ *     +
+ *
+ * rather than artificial finite maxima.
+ *
+ * Examples:
+ *
+ *     ffi interfaces
+ *     ABI members
+ *     callbacks
+ *     conversions
+ *     requirements
+ *     attributes
+ *     serialization contracts
+ *
+ * can scale according to actual compiler/runtime resources.
+ *
+ * "Infinity" means:
+ *
+ *     no artificial language-level ceiling.
+ *
+ * It does NOT mean that a physical machine has infinite resources.
+ *
+ * ============================================================================
+ * PUBLIC COMPOSITION RULES
+ * ============================================================================
+ *
+ * These are the rules consumed by grammar/antlr/ZamaniParser.g4.
  *
  * ============================================================================
  */
 
-parser grammar Interoperability;
-
-options {
-    tokenVocab = ZamaniLexer;
-}
 
 /*
  * ============================================================================
- * TOP-LEVEL INTEROPERABILITY ITEM
+ * CANONICAL DECLARATION ENTRY
  * ============================================================================
  *
- * This is the reusable composition entry point.
+ * Declaration-level interoperability constructs are composed here.
  *
- * The authoritative compilation-unit grammar decides where an interoperability
- * item is legal.
+ * The ABI declaration and FFI declaration families remain owned by their
+ * respective grammars.
+ *
+ * Serialization contracts are exposed through their façade.
+ *
+ * ============================================================================
  */
-interopItem
-    : interopDeclaration
-    | interopImportDeclaration
-    | interopExportDeclaration
-    | interopBindingDeclaration
-    | interopCallStatement
+
+interoperabilityDeclaration
+    : abiDeclaration
+    | ffiInterfaceDeclaration
+    | ffiBindingDeclaration
+    | ffiCallbackDeclaration
+    | ffiAdapterDeclaration
+    | ffiPolicyDeclaration
+    | serializationInteroperabilityContract
     ;
 
 
 /*
  * ============================================================================
- * INTEROPERABILITY DECLARATION
+ * CANONICAL STATEMENT ENTRY
  * ============================================================================
  *
- * Generic language-neutral interoperability contract.
+ * Statement-level interoperability constructs are intentionally limited to
+ * existing owned rules.
  *
- * Example:
- *
- *     interop math using "C" {
- *         ...
- *     }
- *
- * The language/source identifier is semantic metadata.
+ * No new foreign-call syntax is invented here.
+ * ============================================================================
  */
-interopDeclaration
-    : attribute*
-      'interop'
-      interopName
-      interopLanguageClause?
-      interopSourceClause?
-      interopAbiClause?
-      interopBody
+
+interoperabilityStatement
+    : ffiCallStatement
+    | ffiCallbackCallStatement
+    | serializationInteroperabilityStatement
     ;
 
 
 /*
  * ============================================================================
- * INTEROPERABILITY NAME
+ * CANONICAL EXPRESSION ENTRY
+ * ============================================================================
+ *
+ * Expression-level interoperability constructs are delegated to the FFI and
+ * serialization owners.
  * ============================================================================
  */
 
-interopName
-    : identifier
-    | qualifiedName
+interoperabilityExpression
+    : ffiCallExpression
+    | ffiCallbackCallExpression
+    | ffiQualifiedCallExpression
+    | ffiQualifiedCallbackCallExpression
+    | serializationInteroperabilityExpression
     ;
 
 
 /*
  * ============================================================================
- * LANGUAGE IDENTITY
+ * FFI COMPOSITION ENTRY
  * ============================================================================
  *
- * The language is intentionally NOT an enum.
+ * Useful to tooling that needs to parse one complete FFI item without making
+ * Ffi itself the source-unit root.
+ * ============================================================================
+ */
+
+interoperabilityFfiItem
+    : ffiItem
+    ;
+
+
+/*
+ * ============================================================================
+ * ABI COMPOSITION ENTRIES
+ * ============================================================================
  *
- * This is essential for extensibility.
+ * These aliases expose ABI constructs without redefining them.
+ * ============================================================================
+ */
+
+interoperabilityAbiDeclaration
+    : abiDeclaration
+    ;
+
+
+interoperabilityAbiContract
+    : abiContract
+    ;
+
+
+/*
+ * ============================================================================
+ * FOREIGN-FUNCTION COMPOSITION ENTRY
+ * ============================================================================
  *
- * Existing ecosystems can use:
+ * This rule deliberately does not place the foreign-function declaration in
+ * the unrestricted top-level declaration alternatives above because its
+ * EXTERN-prefixed form overlaps with abiDeclaration.
+ *
+ * The specialized grammar remains available to the ABI/FFI integration layer.
+ *
+ * ============================================================================
+ */
+
+interoperabilityForeignFunctionDeclaration
+    : interoperabilityForeignFunctionDeclaration
+    ;
+
+
+/*
+ * ============================================================================
+ * SERIALIZATION COMPOSITION ENTRIES
+ * ============================================================================
+ *
+ * These aliases expose the existing interoperability serialization façade.
+ * ============================================================================
+ */
+
+interoperabilitySerializationUnit
+    : serializationInteroperabilityUnit
+    ;
+
+
+interoperabilitySerializationConstruct
+    : serializationInteroperabilityConstruct
+    ;
+
+
+interoperabilitySerializationStatement
+    : serializationInteroperabilityStatement
+    ;
+
+
+interoperabilitySerializationExpression
+    : serializationInteroperabilityExpression
+    ;
+
+
+interoperabilitySerializationContract
+    : serializationInteroperabilityContract
+    ;
+
+
+interoperabilitySerializationSerialize
+    : serializationInteroperabilitySerialize
+    ;
+
+
+interoperabilitySerializationDeserialize
+    : serializationInteroperabilityDeserialize
+    ;
+
+
+interoperabilitySerializationSerializeExpression
+    : serializationInteroperabilitySerializeExpression
+    ;
+
+
+interoperabilitySerializationDeserializeExpression
+    : serializationInteroperabilityDeserializeExpression
+    ;
+
+
+/*
+ * ============================================================================
+ * FOREIGN-LANGUAGE SYMBOLIC BOUNDARY
+ * ============================================================================
+ *
+ * This rule is intentionally symbolic.
+ *
+ * It does NOT parse C, C++, Python, Rust, OpenQASM, Verilog, assembly, or any
+ * other foreign language.
+ *
+ * It provides a generic interoperability identity for tooling and semantic
+ * metadata when a foreign language/format is represented symbolically.
+ *
+ * Examples:
  *
  *     C
  *     C++
- *     Python
  *     Rust
+ *     Python
  *     OpenQASM
- *     Verilog
- *     SystemVerilog
- *     assembly
+ *     vendor::language
+ *     organization::format
  *
- * while future languages do not require this grammar to change.
+ * The semantic layer determines whether the referenced language/format is
+ * supported.
+ * ============================================================================
  */
-interopLanguageClause
-    : 'language'
-      interopLanguage
-    ;
 
-
-interopLanguage
+interoperabilityForeignIdentity
     : qualifiedName
-    | stringLiteral
+    | STRING
     ;
 
 
 /*
  * ============================================================================
- * SOURCE FORMAT
+ * OPEN-WORLD LANGUAGE REFERENCE
  * ============================================================================
  *
- * A source format identifies the representation being integrated.
- *
- * It is not a filesystem path and is not automatically opened.
+ * Future languages MUST NOT require modification of this composition grammar
+ * merely to become identifiable.
+ * ============================================================================
  */
-interopSourceClause
-    : 'source'
-      interopSource
+
+interoperabilityLanguageReference
+    : LANGUAGE interoperabilityForeignIdentity
     ;
 
 
-interopSource
-    : stringLiteral
+/*
+ * ============================================================================
+ * OPEN-WORLD ABI REFERENCE
+ * ============================================================================
+ *
+ * ABI implementation remains owned by Abi.
+ * ============================================================================
+ */
+
+interoperabilityAbiReference
+    : abiContract
     | qualifiedName
+    | STRING
     ;
 
 
 /*
  * ============================================================================
- * ABI SELECTION
+ * CAPABILITY REFERENCE
  * ============================================================================
  *
- * ABI identity is symbolic.
+ * This is a symbolic reference only.
  *
- * The actual ABI implementation belongs to abi.g4 and downstream lowering.
- */
-interopAbiClause
-    : 'abi'
-      interopReference
-    ;
-
-
-/*
- * ============================================================================
- * BODY
+ * It does not grant the capability.
  * ============================================================================
  */
 
-interopBody
-    : '{'
-      interopMember*
-      '}'
-    ;
-
-
-interopMember
-    : interopInterfaceDeclaration
-    | interopForeignDeclaration
-    | interopTypeDeclaration
-    | interopValueDeclaration
-    | interopFunctionDeclaration
-    | interopCallbackDeclaration
-    | interopAdapterDeclaration
-    | interopConversionDeclaration
-    | interopCapabilityDeclaration
-    | interopEffectDeclaration
-    | interopRequirementDeclaration
-    | interopCompatibilityDeclaration
-    | interopLinkageDeclaration
-    | interopResourceDeclaration
-    | interopAttributeDeclaration
-    ;
-
-
-/*
- * ============================================================================
- * INTERFACE DECLARATION
- * ============================================================================
- *
- * Defines a semantic boundary.
- */
-interopInterfaceDeclaration
-    : attribute*
-      'interface'
-      identifier
-      interopGenericParameters?
-      interopInterfaceBody
-    ;
-
-
-interopInterfaceBody
-    : '{'
-      interopInterfaceMember*
-      '}'
-    ;
-
-
-interopInterfaceMember
-    : interopFunctionDeclaration
-    | interopCallbackDeclaration
-    | interopTypeDeclaration
-    | interopValueDeclaration
-    | interopRequirementDeclaration
-    | interopCapabilityDeclaration
-    | interopEffectDeclaration
-    | interopCompatibilityDeclaration
-    ;
-
-
-/*
- * ============================================================================
- * GENERIC PARAMETERS
- * ============================================================================
- *
- * Genericity prevents interoperability contracts from encoding machine sizes.
- */
-interopGenericParameters
-    : '<'
-      interopGenericParameter
-      (',' interopGenericParameter)*
-      '>'
-    ;
-
-
-interopGenericParameter
-    : identifier
-      (':' qualifiedName)?
-    ;
-
-
-/*
- * ============================================================================
- * FOREIGN DECLARATION
- * ============================================================================
- *
- * References an externally-owned declaration.
- *
- * It does not import or execute the declaration.
- */
-interopForeignDeclaration
-    : attribute*
-      'foreign'
-      interopReference
-      interopForeignBody?
-      ';'?
-    ;
-
-
-interopForeignBody
-    : '{'
-      interopForeignMember*
-      '}'
-    ;
-
-
-interopForeignMember
-    : interopFunctionDeclaration
-    | interopTypeDeclaration
-    | interopValueDeclaration
-    | interopCallbackDeclaration
-    ;
-
-
-/*
- * ============================================================================
- * FUNCTION CONTRACT
- * ============================================================================
- *
- * This deliberately resembles a callable signature without redefining the
- * repository's ordinary function grammar.
- */
-interopFunctionDeclaration
-    : attribute*
-      'fn'
-      identifier
-      interopGenericParameters?
-      '(' parameterList? ')'
-      interopReturnClause?
-      interopContractClause*
-      ';'
-    ;
-
-
-interopReturnClause
-    : '->'
-      typeExpr
-    ;
-
-
-/*
- * ============================================================================
- * TYPE CONTRACT
- * ============================================================================
- *
- * Foreign types are semantic boundary types.
- *
- * Layout remains downstream.
- */
-interopTypeDeclaration
-    : attribute*
-      'type'
-      identifier
-      interopTypeBody?
-      ';'?
-    ;
-
-
-interopTypeBody
-    : ':'
-      interopTypeSpec
-    ;
-
-
-interopTypeSpec
-    : 'opaque'
-    | typeExpr
-    | interopReference
-    ;
-
-
-/*
- * ============================================================================
- * VALUE / CONSTANT CONTRACT
- * ============================================================================
- */
-
-interopValueDeclaration
-    : attribute*
-      'value'
-      identifier
-      ':'
-      typeExpr
-      interopValueInitializer?
-      ';'
-    ;
-
-
-interopValueInitializer
-    : '='
-      expression
-    ;
-
-
-/*
- * ============================================================================
- * CALLBACK CONTRACT
- * ============================================================================
- */
-
-interopCallbackDeclaration
-    : attribute*
-      'callback'
-      identifier
-      interopGenericParameters?
-      '(' parameterList? ')'
-      interopReturnClause?
-      interopContractClause*
-      ';'
-    ;
-
-
-/*
- * ============================================================================
- * ADAPTER
- * ============================================================================
- *
- * An adapter declares a semantic transformation between interfaces.
- *
- * It does not define implementation code.
- */
-interopAdapterDeclaration
-    : attribute*
-      'adapter'
-      identifier
-      'from'
-      interopReference
-      'to'
-      interopReference
-      interopAdapterBody
-    ;
-
-
-interopAdapterBody
-    : '{'
-      interopAdapterMember*
-      '}'
-    ;
-
-
-interopAdapterMember
-    : interopConversionDeclaration
-    | interopCapabilityDeclaration
-    | interopEffectDeclaration
-    | interopRequirementDeclaration
-    | interopCompatibilityDeclaration
-    | interopAttributeDeclaration
-    ;
-
-
-/*
- * ============================================================================
- * VALUE CONVERSION
- * ============================================================================
- *
- * Conversion is declarative.
- *
- * The compiler determines whether a safe implementation exists.
- */
-interopConversionDeclaration
-    : attribute*
-      'convert'
-      interopConversionSource
-      'to'
-      interopConversionTarget
-      interopConversionContract*
-      ';'
-    ;
-
-
-interopConversionSource
-    : expression
-    | typeExpr
-    | interopReference
-    ;
-
-
-interopConversionTarget
-    : typeExpr
-    | interopReference
-    ;
-
-
-interopConversionContract
-    : 'using'
-      interopReference
-    | 'with'
-      expression
-    | 'requires'
-      expression
-    ;
-
-
-/*
- * ============================================================================
- * CAPABILITY DECLARATION
- * ============================================================================
- *
- * Capability is semantic intent.
- *
- * It does NOT select a device.
- */
-interopCapabilityDeclaration
-    : 'requires'
-      'capability'
-      interopCapabilitySet
-      ';'
-    ;
-
-
-interopCapabilitySet
-    : interopCapability
-      (',' interopCapability)*
-    ;
-
-
-interopCapability
+interoperabilityCapabilityReference
     : qualifiedName
-    | stringLiteral
-    | '(' expression ')'
+    | STRING
     ;
 
 
 /*
  * ============================================================================
- * EFFECT DECLARATION
+ * RESOURCE REFERENCE
+ * ============================================================================
+ *
+ * This is a symbolic resource reference only.
+ *
+ * It does not allocate or reserve the resource.
  * ============================================================================
  */
 
-interopEffectDeclaration
-    : 'effects'
-      '{'
-      interopEffect*
-      '}'
-    ;
-
-
-interopEffect
+interoperabilityResourceReference
     : qualifiedName
-    | stringLiteral
-    | '(' expression ')'
+    | STRING
     ;
 
 
 /*
  * ============================================================================
- * REQUIREMENT DECLARATION
+ * COMPATIBILITY METADATA
  * ============================================================================
  *
- * Requirements are deliberately separated from capabilities.
+ * Generic metadata remains represented using canonical attributes.
  *
- * Capability:
- *
- *     what the target can do.
- *
- * Requirement:
- *
- *     what the program needs.
- */
-interopRequirementDeclaration
-    : 'requires'
-      '{'
-      interopRequirement*
-      '}'
-    ;
-
-
-interopRequirement
-    : interopReference
-      interopRequirementValue?
-      ';'?
-    ;
-
-
-interopRequirementValue
-    : '='
-      expression
-    ;
-
-
-/*
- * ============================================================================
- * LINKAGE
- * ============================================================================
- *
- * Linkage identifies a semantic association.
- *
- * It does not perform linking.
- */
-interopLinkageDeclaration
-    : 'link'
-      interopReference
-      interopLinkageBody
-    ;
-
-
-interopLinkageBody
-    : '{'
-      interopLinkageMember*
-      '}'
-    ;
-
-
-interopLinkageMember
-    : 'name' '=' expression ';'
-    | 'kind' '=' interopReference ';'
-    | 'version' '=' expression ';'
-    | 'interface' '=' interopReference ';'
-    | 'abi' '=' interopReference ';'
-    | 'attribute' identifier '=' expression ';'
-    ;
-
-
-/*
- * ============================================================================
- * RESOURCE CONTRACT
- * ============================================================================
- *
- * Resources are described symbolically.
- *
- * No physical resource count is encoded here.
- */
-interopResourceDeclaration
-    : 'resource'
-      interopReference
-      interopResourceBody
-    ;
-
-
-interopResourceBody
-    : '{'
-      interopResourceMember*
-      '}'
-    ;
-
-
-interopResourceMember
-    : 'requires' expression ';'
-    | 'prefers' expression ';'
-    | 'constrains' expression ';'
-    | 'hints' expression ';'
-    | 'capability' interopCapability ';'
-    | 'attribute' identifier '=' expression ';'
-    ;
-
-
-/*
- * ============================================================================
- * COMPATIBILITY
- * ============================================================================
- *
- * Compatibility describes semantic compatibility requirements.
- */
-interopCompatibilityDeclaration
-    : 'compatible'
-      'with'
-      interopCompatibilityTarget
-      interopCompatibilityBody?
-      ';'?
-    ;
-
-
-interopCompatibilityTarget
-    : interopReference
-    | stringLiteral
-    | expression
-    ;
-
-
-interopCompatibilityBody
-    : '{'
-      interopCompatibilityMember*
-      '}'
-    ;
-
-
-interopCompatibilityMember
-    : 'version' '=' expression ';'
-    | 'feature' '=' expression ';'
-    | 'capability' '=' expression ';'
-    | 'constraint' '=' expression ';'
-    | 'attribute' identifier '=' expression ';'
-    ;
-
-
-/*
- * ============================================================================
- * ATTRIBUTE
- * ============================================================================
- *
- * Interoperability-specific metadata.
- *
- * General attribute syntax remains owned by grammar/core/attributes.g4.
- */
-interopAttributeDeclaration
-    : 'attribute'
-      identifier
-      interopAttributeValue?
-      ';'
-    ;
-
-
-interopAttributeValue
-    : '='
-      expression
-    ;
-
-
-/*
- * ============================================================================
- * CONTRACT CLAUSES
+ * No closed-world vocabulary is introduced here.
  * ============================================================================
  */
 
-interopContractClause
-    : interopOwnershipClause
-    | interopLifetimeClause
-    | interopNullabilityClause
-    | interopRepresentationClause
-    | interopCallingConventionClause
-    | interopDirectionClause
-    | interopAsyncClause
-    | interopStreamingClause
-    | interopBlockingClause
-    | interopThrowsClause
-    | interopRequirementClause
-    | interopEffectClause
-    ;
-
-
-/*
- * ============================================================================
- * OWNERSHIP
- * ============================================================================
- */
-
-interopOwnershipClause
-    : 'ownership'
-      '='
-      interopOwnership
-    ;
-
-
-interopOwnership
-    : 'borrow'
-    | 'owned'
-    | 'shared'
-    | 'move'
-    | 'copy'
-    | 'in'
-    | 'out'
-    | 'inout'
-    | interopReference
-    ;
-
-
-/*
- * ============================================================================
- * LIFETIME
- * ============================================================================
- */
-
-interopLifetimeClause
-    : 'lifetime'
-      '='
-      interopReference
-    ;
-
-
-/*
- * ============================================================================
- * NULLABILITY
- * ============================================================================
- */
-
-interopNullabilityClause
-    : 'nullability'
-      '='
-      interopNullability
-    ;
-
-
-interopNullability
-    : 'nullable'
-    | 'nonnull'
-    | 'unknown'
-    | interopReference
-    ;
-
-
-/*
- * ============================================================================
- * REPRESENTATION
- * ============================================================================
- *
- * Representation is symbolic.
- *
- * It does not encode pointer width, register width, machine word size,
- * alignment constants, or other target-specific facts.
- */
-interopRepresentationClause
-    : 'representation'
-      '='
-      interopReference
-    ;
-
-
-/*
- * ============================================================================
- * CALLING CONVENTION
- * ============================================================================
- *
- * Calling conventions are symbolic semantic requirements.
- *
- * Concrete lowering belongs to ABI resolution.
- */
-interopCallingConventionClause
-    : 'calling'
-      'convention'
-      '='
-      interopReference
-    ;
-
-
-/*
- * ============================================================================
- * DATA DIRECTION
- * ============================================================================
- */
-
-interopDirectionClause
-    : 'direction'
-      '='
-      interopDirection
-    ;
-
-
-interopDirection
-    : 'in'
-    | 'out'
-    | 'inout'
-    | interopReference
-    ;
-
-
-/*
- * ============================================================================
- * ASYNCHRONOUS INTEROPERABILITY
- * ============================================================================
- */
-
-interopAsyncClause
-    : 'async'
-      interopAsyncSpec?
-    ;
-
-
-interopAsyncSpec
-    : expression
-    | interopReference
-    ;
-
-
-/*
- * ============================================================================
- * STREAMING
- * ============================================================================
- */
-
-interopStreamingClause
-    : 'streaming'
-      interopStreamingSpec?
-    ;
-
-
-interopStreamingSpec
-    : expression
-    | interopReference
-    ;
-
-
-/*
- * ============================================================================
- * BLOCKING
- * ============================================================================
- */
-
-interopBlockingClause
-    : 'blocking'
-      '='
-      interopBlockingMode
-    ;
-
-
-interopBlockingMode
-    : 'blocking'
-    | 'nonblocking'
-    | 'unknown'
-    | interopReference
-    ;
-
-
-/*
- * ============================================================================
- * ERROR BOUNDARY
- * ============================================================================
- *
- * Foreign failures must remain observable.
- */
-interopThrowsClause
-    : 'throws'
-      interopErrorSet
-    ;
-
-
-interopErrorSet
-    : interopReference
-    | '{'
-      interopReferenceList?
-      '}'
-    ;
-
-
-interopReferenceList
-    : interopReference
-      (',' interopReference)*
-    ;
-
-
-/*
- * ============================================================================
- * EFFECT CONTRACT
- * ============================================================================
- */
-
-interopEffectClause
-    : 'with'
-      'effects'
-      '{'
-      interopEffectList?
-      '}'
-    ;
-
-
-interopEffectList
-    : interopEffect
-      (',' interopEffect)*
-    ;
-
-
-/*
- * ============================================================================
- * REQUIREMENT CLAUSE
- * ============================================================================
- */
-
-interopRequirementClause
-    : 'requires'
-      interopRequirementExpression
-    ;
-
-
-interopRequirementExpression
-    : expression
-    | '{'
-      interopRequirementList?
-      '}'
-    ;
-
-
-interopRequirementList
-    : interopRequirement
-      (',' interopRequirement)*
-    ;
-
-
-/*
- * ============================================================================
- * IMPORT
- * ============================================================================
- *
- * Import establishes a source-level semantic relationship.
- *
- * It does not open a file or load a library.
- */
-interopImportDeclaration
-    : attribute*
-      'import'
-      interopReference
-      interopImportSource?
-      interopImportBody?
-      ';'?
-    ;
-
-
-interopImportSource
-    : 'from'
-      interopSource
-    ;
-
-
-interopImportBody
-    : '{'
-      interopImportMember*
-      '}'
-    ;
-
-
-interopImportMember
-    : interopReference
-      ('as' identifier)?
-    ;
-
-
-/*
- * ============================================================================
- * EXPORT
- * ============================================================================
- */
-
-interopExportDeclaration
-    : attribute*
-      'export'
-      interopExportTarget
-      interopExportBody?
-      ';'?
-    ;
-
-
-interopExportTarget
-    : interopReference
-    | '{'
-      interopReferenceList?
-      '}'
-    ;
-
-
-interopExportBody
-    : 'to'
-      interopReference
-    ;
-
-
-/*
- * ============================================================================
- * BINDING
- * ============================================================================
- *
- * Binds a Zamani-visible semantic name to an external semantic entity.
- *
- * No symbol resolution occurs during parsing.
- */
-interopBindingDeclaration
-    : attribute*
-      'bind'
-      interopBindingName
-      'to'
-      interopBindingTarget
-      interopBindingClause*
-      ';'
-    ;
-
-
-interopBindingName
-    : identifier
-    | qualifiedName
-    ;
-
-
-interopBindingTarget
-    : interopReference
-    | stringLiteral
-    ;
-
-
-interopBindingClause
-    : 'using' interopReference
-    | 'abi' interopReference
-    | 'language' interopLanguage
-    | 'source' interopSource
-    | 'requires' expression
-    | 'with' expression
-    | 'attribute' identifier '=' expression
-    ;
-
-
-/*
- * ============================================================================
- * CALL
- * ============================================================================
- *
- * Explicit interoperability calls.
- *
- * The parser does not invoke anything.
- */
-interopCallStatement
-    : 'interop'
-      'call'
-      interopCallTarget
-      '(' argumentList? ')'
-      interopCallClause*
-      ';'
-    ;
-
-
-interopCallTarget
-    : interopReference
-    | stringLiteral
-      '::'
-      qualifiedName
-    ;
-
-
-interopCallClause
-    : 'using' interopReference
-    | 'abi' interopReference
-    | 'language' interopLanguage
-    | 'source' interopSource
-    | 'requires' expression
-    | 'with' expression
-    | 'returns' typeExpr
-    ;
-
-
-/*
- * ============================================================================
- * FOREIGN REFERENCE
- * ============================================================================
- *
- * Symbolic reference to a foreign entity.
- */
-interopReference
-    : qualifiedName
-    | identifier
-    ;
-
-
-/*
- * ============================================================================
- * LANGUAGE-SPECIFIC BOUNDARY DECLARATIONS
- * ============================================================================
- *
- * These rules intentionally identify ecosystems semantically rather than
- * embedding their complete grammars.
- *
- * The actual language grammar remains owned by its dedicated file/frontend.
- */
-
-
-/*
- * C
- * --------------------------------------------------------------------------
- *
- * Canonical specialized grammar:
- *
- *     grammar/interoperability/c.g4
- */
-cInteropDeclaration
-    : 'interop'
-      'language'
-      'C'
-      interopNamedContract?
-      interopBody
-    ;
-
-
-/*
- * C++
- * --------------------------------------------------------------------------
- *
- * The spelling is accepted only as an interoperability language identity.
- * Actual C++ syntax remains owned by cpp.g4.
- */
-cppInteropDeclaration
-    : 'interop'
-      'language'
-      'C++'
-      interopNamedContract?
-      interopBody
-    ;
-
-
-interopNamedContract
-    : identifier
-    ;
-
-
-/*
- * Python
- * --------------------------------------------------------------------------
- *
- * Python syntax remains owned by python.g4.
- */
-pythonInteropDeclaration
-    : 'interop'
-      'language'
-      'Python'
-      interopNamedContract?
-      interopBody
-    ;
-
-
-/*
- * Rust
- * --------------------------------------------------------------------------
- *
- * Rust source syntax remains owned by rust.g4.
- */
-rustInteropDeclaration
-    : 'interop'
-      'language'
-      'Rust'
-      interopNamedContract?
-      interopBody
-    ;
-
-
-/*
- * OpenQASM
- * --------------------------------------------------------------------------
- *
- * OpenQASM parsing remains owned by openqasm.g4 and the quantum frontend.
- *
- * This grammar only describes the interoperability boundary.
- */
-openQasmInteropDeclaration
-    : 'interop'
-      'language'
-      'OpenQASM'
-      interopNamedContract?
-      interopBody
-    ;
-
-
-/*
- * Verilog
- * --------------------------------------------------------------------------
- *
- * Verilog syntax remains owned by verilog.g4.
- */
-verilogInteropDeclaration
-    : 'interop'
-      'language'
-      'Verilog'
-      interopNamedContract?
-      interopBody
-    ;
-
-
-/*
- * Assembly
- * --------------------------------------------------------------------------
- *
- * Assembly syntax remains owned by AssemblyLanguage.g4.
- */
-assemblyInteropDeclaration
-    : 'interop'
-      'language'
-      'assembly'
-      interopNamedContract?
-      interopBody
-    ;
-
-
-/*
- * ============================================================================
- * GENERIC FOREIGN FORMAT DECLARATION
- * ============================================================================
- *
- * This is the preferred long-term mechanism.
- *
- * New languages do not require a grammar change merely to become
- * interoperable with Zamani.
- */
-foreignFormatDeclaration
-    : 'interop'
-      'format'
-      interopLanguage
-      interopNamedContract?
-      interopBody
-    ;
-
-
-/*
- * ============================================================================
- * FOREIGN TYPE REFERENCE
- * ============================================================================
- *
- * References a type owned by another language or ABI.
- */
-foreignTypeReference
-    : 'foreign'
-      'type'
-      interopReference
-      (':' interopReference)?
-      ';'
-    ;
-
-
-/*
- * ============================================================================
- * FOREIGN VALUE REFERENCE
- * ============================================================================
- */
-
-foreignValueReference
-    : 'foreign'
-      'value'
-      interopReference
-      (':' typeExpr)?
-      ';'
-    ;
-
-
-/*
- * ============================================================================
- * FOREIGN FUNCTION REFERENCE
- * ============================================================================
- */
-
-foreignFunctionReference
-    : 'foreign'
-      'fn'
-      interopReference
-      '(' parameterList? ')'
-      interopReturnClause?
-      interopContractClause*
-      ';'
-    ;
-
-
-/*
- * ============================================================================
- * FOREIGN CALLBACK REFERENCE
- * ============================================================================
- */
-
-foreignCallbackReference
-    : 'foreign'
-      'callback'
-      interopReference
-      '(' parameterList? ')'
-      interopReturnClause?
-      interopContractClause*
-      ';'
-    ;
-
-
-/*
- * ============================================================================
- * FOREIGN SOURCE CONTRACT
- * ============================================================================
- *
- * A source can be:
- *
- *     C source
- *     C++ source
- *     Python module
- *     Rust crate/module
- *     OpenQASM source
- *     Verilog/SystemVerilog source
- *     assembly source
- *     another future language
- *
- * The grammar does not open or parse the source.
- */
-foreignSourceDeclaration
-    : 'foreign'
-      'source'
-      interopSource
-      interopSourceMetadata?
-      ';'
-    ;
-
-
-interopSourceMetadata
-    : '{'
-      interopSourceMetadataMember*
-      '}'
-    ;
-
-
-interopSourceMetadataMember
-    : 'language' '=' interopLanguage ';'
-    | 'format' '=' interopReference ';'
-    | 'version' '=' expression ';'
-    | 'interface' '=' interopReference ';'
-    | 'abi' '=' interopReference ';'
-    | 'attribute' identifier '=' expression ';'
-    ;
-
-
-/*
- * ============================================================================
- * FOREIGN MODULE
- * ============================================================================
- */
-
-foreignModuleDeclaration
-    : 'foreign'
-      'module'
-      interopReference
-      foreignModuleBody
-    ;
-
-
-foreignModuleBody
-    : '{'
-      foreignModuleMember*
-      '}'
-    ;
-
-
-foreignModuleMember
-    : foreignTypeReference
-    | foreignValueReference
-    | foreignFunctionReference
-    | foreignCallbackReference
-    ;
-
-
-/*
- * ============================================================================
- * ABI / FFI COMPOSITION ADAPTERS
- * ============================================================================
- *
- * These wrappers deliberately delegate implementation to the specialized
- * grammars.
- *
- * The actual canonical definitions remain:
- *
- *     Abi
- *     Ffi
- *     ForeignFunctions
- *
- * The authoritative compilation root should import those grammars alongside
- * this composition grammar.
- *
- * ============================================================================
- */
-
-
-/*
- * ABI declaration adapter.
- *
- * This is intentionally a symbolic reference rather than a duplicated ABI
- * grammar. The actual ABI grammar remains authoritative.
- */
-abiInteropReference
-    : 'abi'
-      interopReference
-      ';'
-    ;
-
-
-/*
- * FFI boundary adapter.
- */
-ffiInteropReference
-    : 'ffi'
-      interopReference
-      ';'
-    ;
-
-
-/*
- * Foreign-function adapter.
- */
-foreignFunctionInteropReference
-    : 'foreign'
-      'function'
-      interopReference
-      ';'
-    ;
-
-
-/*
- * ============================================================================
- * QUANTUM INTEROPERABILITY CONTRACT
- * ============================================================================
- *
- * Quantum interoperability is semantic interoperability.
- *
- * It may connect:
- *
- *     Zamani
- *       |
- *       +--> OpenQASM
- *       +--> quantum runtime
- *       +--> quantum accelerator
- *       +--> quantum simulator
- *       +--> foreign quantum library
- *
- * None of those forms creates a second quantum IR.
- */
-quantumInteropDeclaration
-    : 'interop'
-      'quantum'
-      quantumInteropTarget?
-      quantumInteropBody
-    ;
-
-
-quantumInteropTarget
-    : interopReference
-    | interopLanguage
-    | stringLiteral
-    ;
-
-
-quantumInteropBody
-    : '{'
-      quantumInteropMember*
-      '}'
-    ;
-
-
-quantumInteropMember
-    : 'source' '=' interopSource ';'
-    | 'format' '=' interopReference ';'
-    | 'interface' '=' interopReference ';'
-    | 'operation' '=' interopReference ';'
-    | 'capability' '=' interopCapability ';'
-    | 'requires' '=' expression ';'
-    | 'attribute' identifier '=' expression ';'
-    ;
-
-
-/*
- * ============================================================================
- * HDL INTEROPERABILITY CONTRACT
- * ============================================================================
- *
- * HDL syntax itself remains owned by the HDL grammars.
- */
-hdlInteropDeclaration
-    : 'interop'
-      'hdl'
-      hdlInteropTarget?
-      hdlInteropBody
-    ;
-
-
-hdlInteropTarget
-    : interopReference
-    | interopLanguage
-    | stringLiteral
-    ;
-
-
-hdlInteropBody
-    : '{'
-      hdlInteropMember*
-      '}'
-    ;
-
-
-hdlInteropMember
-    : 'source' '=' interopSource ';'
-    | 'format' '=' interopReference ';'
-    | 'interface' '=' interopReference ';'
-    | 'module' '=' interopReference ';'
-    | 'port' '=' interopReference ';'
-    | 'capability' '=' interopCapability ';'
-    | 'requires' '=' expression ';'
-    | 'attribute' identifier '=' expression ';'
-    ;
-
-
-/*
- * ============================================================================
- * HARDWARE/SYSTEM INTEROPERABILITY CONTRACT
- * ============================================================================
- *
- * Hardware identities are symbolic.
- *
- * They are NOT physical addresses.
- */
-systemInteropDeclaration
-    : 'interop'
-      'system'
-      systemInteropTarget?
-      systemInteropBody
-    ;
-
-
-systemInteropTarget
-    : interopReference
-    | interopLanguage
-    | stringLiteral
-    ;
-
-
-systemInteropBody
-    : '{'
-      systemInteropMember*
-      '}'
-    ;
-
-
-systemInteropMember
-    : 'interface' '=' interopReference ';'
-    | 'resource' '=' interopReference ';'
-    | 'capability' '=' interopCapability ';'
-    | 'requires' '=' expression ';'
-    | 'effect' '=' interopEffect ';'
-    | 'attribute' identifier '=' expression ';'
-    ;
-
-
-/*
- * ============================================================================
- * DISTRIBUTED INTEROPERABILITY CONTRACT
- * ============================================================================
- *
- * This expresses distributed semantic boundaries without encoding a fixed
- * number of nodes or a particular topology.
- */
-distributedInteropDeclaration
-    : 'interop'
-      'distributed'
-      interopReference?
-      distributedInteropBody
-    ;
-
-
-distributedInteropBody
-    : '{'
-      distributedInteropMember*
-      '}'
-    ;
-
-
-distributedInteropMember
-    : 'interface' '=' interopReference ';'
-    | 'protocol' '=' interopReference ';'
-    | 'capability' '=' interopCapability ';'
-    | 'requires' '=' expression ';'
-    | 'consistency' '=' expression ';'
-    | 'reliability' '=' expression ';'
-    | 'attribute' identifier '=' expression ';'
-    ;
-
-
-/*
- * ============================================================================
- * RESOURCE-AGNOSTIC TARGET CONTRACT
- * ============================================================================
- *
- * A target describes an abstract execution requirement.
- *
- * It is not a machine declaration.
- */
-interopTargetDeclaration
-    : 'target'
-      identifier
-      interopTargetBody
-    ;
-
-
-interopTargetBody
-    : '{'
-      interopTargetMember*
-      '}'
-    ;
-
-
-interopTargetMember
-    : 'language' '=' interopLanguage ';'
-    | 'format' '=' interopReference ';'
-    | 'abi' '=' interopReference ';'
-    | 'capability' '=' interopCapability ';'
-    | 'requires' '=' expression ';'
-    | 'prefers' '=' expression ';'
-    | 'constraint' '=' expression ';'
-    | 'hint' '=' expression ';'
-    | 'attribute' identifier '=' expression ';'
-    ;
-
-
-/*
- * ============================================================================
- * FEATURE NEGOTIATION
- * ============================================================================
- *
- * Feature negotiation is symbolic and capability based.
- *
- * It does not encode a finite target matrix.
- */
-interopNegotiationDeclaration
-    : 'negotiate'
-      identifier
-      interopNegotiationBody
-    ;
-
-
-interopNegotiationBody
-    : '{'
-      interopNegotiationMember*
-      '}'
-    ;
-
-
-interopNegotiationMember
-    : 'requires' expression ';'
-    | 'prefers' expression ';'
-    | 'fallback' interopReference ';'
-    | 'alternative' interopReference ';'
-    | 'attribute' identifier '=' expression ';'
-    ;
-
-
-/*
- * ============================================================================
- * FALLBACK
- * ============================================================================
- *
- * Fallback is semantic policy.
- *
- * The grammar does not select a machine.
- */
-interopFallbackDeclaration
-    : 'fallback'
-      interopReference
-      'when'
-      expression
-      ';'
-    ;
-
-
-/*
- * ============================================================================
- * ADAPTIVE INTEROPERABILITY
- * ============================================================================
- *
- * Runtime/compiler adaptation is expressed declaratively.
- */
-interopAdaptationDeclaration
-    : 'adapt'
-      identifier
-      'when'
-      expression
-      interopAdaptationBody
-    ;
-
-
-interopAdaptationBody
-    : '{'
-      interopAdaptationMember*
-      '}'
-    ;
-
-
-interopAdaptationMember
-    : 'use' interopReference ';'
-    | 'fallback' interopReference ';'
-    | 'requires' expression ';'
-    | 'prefers' expression ';'
-    | 'attribute' identifier '=' expression ';'
-    ;
-
-
-/*
- * ============================================================================
- * VERSIONED INTEROPERABILITY
- * ============================================================================
- */
-
-interopVersionDeclaration
-    : 'interop'
-      'version'
-      interopReference
-      '='
-      expression
-      ';'
-    ;
-
-
-/*
- * ============================================================================
- * REFERENCE / IDENTITY
- * ============================================================================
- *
- * This is intentionally semantic rather than physical.
- */
-interopIdentityDeclaration
-    : 'identity'
-      identifier
-      '='
-      interopIdentityValue
-      ';'
-    ;
-
-
-interopIdentityValue
-    : qualifiedName
-    | stringLiteral
-    | expression
-    ;
-
-
-/*
- * ============================================================================
- * COMPLIANCE CONTRACT
- * ============================================================================
- */
-
-interopComplianceDeclaration
-    : 'compliance'
-      interopReference
-      interopComplianceBody
-    ;
-
-
-interopComplianceBody
-    : '{'
-      interopComplianceMember*
-      '}'
-    ;
-
-
-interopComplianceMember
-    : 'requires' expression ';'
-    | 'prohibits' expression ';'
-    | 'supports' expression ';'
-    | 'version' '=' expression ';'
-    | 'attribute' identifier '=' expression ';'
-    ;
-
-
-/*
- * ============================================================================
- * SAFETY CONTRACT
- * ============================================================================
- *
- * This is source-level policy only.
- *
- * The grammar cannot prove safety.
- *
- * Semantic analysis and Rust implementation must remain safe.
- */
-interopSafetyDeclaration
-    : 'safety'
-      interopReference?
-      interopSafetyBody
-    ;
-
-
-interopSafetyBody
-    : '{'
-      interopSafetyMember*
-      '}'
-    ;
-
-
-interopSafetyMember
-    : 'requires' expression ';'
-    | 'forbids' expression ';'
-    | 'allows' expression ';'
-    | 'attribute' identifier '=' expression ';'
-    ;
-
-
-/*
- * ============================================================================
- * PROVENANCE CONTRACT
- * ============================================================================
- *
- * Interoperability transformations must remain traceable.
- */
-interopProvenanceDeclaration
-    : 'provenance'
-      interopReference?
-      interopProvenanceBody
-    ;
-
-
-interopProvenanceBody
-    : '{'
-      interopProvenanceMember*
-      '}'
-    ;
-
-
-interopProvenanceMember
-    : 'source' '=' interopSource ';'
-    | 'language' '=' interopLanguage ';'
-    | 'format' '=' interopReference ';'
-    | 'version' '=' expression ';'
-    | 'attribute' identifier '=' expression ';'
-    ;
-
-
-/*
- * ============================================================================
- * SERIALIZATION CONTRACT
- * ============================================================================
- *
- * Serialization format is symbolic.
- *
- * It does not imply a particular machine representation.
- */
-interopSerializationDeclaration
-    : 'serialization'
-      identifier
-      interopSerializationBody
-    ;
-
-
-interopSerializationBody
-    : '{'
-      interopSerializationMember*
-      '}'
-    ;
-
-
-interopSerializationMember
-    : 'format' '=' interopReference ';'
-    | 'version' '=' expression ';'
-    | 'schema' '=' interopReference ';'
-    | 'requires' '=' expression ';'
-    | 'attribute' identifier '=' expression ';'
-    ;
-
-
-/*
- * ============================================================================
- * INTEROPERABILITY CONTRACT GROUP
- * ============================================================================
- *
- * Allows multiple independent contracts to be grouped.
- */
-interopContractGroup
-    : 'interop'
-      'contract'
-      identifier?
-      '{'
-      interopContractMember*
-      '}'
-    ;
-
-
-interopContractMember
-    : interopCapabilityDeclaration
-    | interopEffectDeclaration
-    | interopRequirementDeclaration
-    | interopCompatibilityDeclaration
-    | interopResourceDeclaration
-    | interopSafetyDeclaration
-    | interopProvenanceDeclaration
-    | interopSerializationDeclaration
-    | interopVersionDeclaration
-    ;
-
-
-/*
- * ============================================================================
- * PUBLIC COMPOSITION RULE
- * ============================================================================
- *
- * The authoritative compiler/parser composition layer should use this rule
- * when it needs a single interoperability entry point.
- *
- * This rule intentionally includes only constructs owned by this composition
- * grammar.
- *
- * Specialized grammars remain independently parseable and are integrated
- * through semantic/format adapters.
- */
-interoperability
-    : interopItem
-    | cInteropDeclaration
-    | cppInteropDeclaration
-    | pythonInteropDeclaration
-    | rustInteropDeclaration
-    | openQasmInteropDeclaration
-    | verilogInteropDeclaration
-    | assemblyInteropDeclaration
-    | foreignFormatDeclaration
-    | quantumInteropDeclaration
-    | hdlInteropDeclaration
-    | systemInteropDeclaration
-    | distributedInteropDeclaration
-    | interopTargetDeclaration
-    | interopNegotiationDeclaration
-    | interopFallbackDeclaration
-    | interopAdaptationDeclaration
-    | interopVersionDeclaration
-    | interopIdentityDeclaration
-    | interopComplianceDeclaration
-    | interopSafetyDeclaration
-    | interopProvenanceDeclaration
-    | interopSerializationDeclaration
-    | interopContractGroup
-    | foreignTypeReference
-    | foreignValueReference
-    | foreignFunctionReference
-    | foreignCallbackReference
-    | foreignSourceDeclaration
-    | foreignModuleDeclaration
-    | abiInteropReference
-    | ffiInteropReference
-    | foreignFunctionInteropReference
+interoperabilityMetadata
+    : attribute
     ;
 
 
@@ -2336,117 +1081,99 @@ interoperability
  * INTEGRATION CONTRACT
  * ============================================================================
  *
- * The final composed grammar must integrate this file approximately as:
+ * The final parser composition is:
  *
- *     source-unit
- *          |
- *          +--> declarations
- *          |
- *          +--> statements
- *          |
- *          +--> interoperability
- *                         |
- *                         +--> FFI
- *                         +--> ABI
- *                         +--> foreign functions
- *                         +--> C
- *                         +--> C++
- *                         +--> Python
- *                         +--> Rust
- *                         +--> OpenQASM
- *                         +--> Verilog
- *                         +--> assembly
- *                         +--> system interfaces
- *                         +--> future formats
+ *     grammar/antlr/ZamaniParser.g4
+ *                 |
+ *                 +--> Interoperability
+ *                           |
+ *                           +--> ABI
+ *                           +--> FFI
+ *                           +--> foreign functions
+ *                           +--> serialization
+ *                           |
+ *                           +--> foreign-language identities
  *
- * Specialized foreign grammars MUST NOT depend on:
- *
- *     quantum::ir
- *     hardware runtime
- *     scheduler
- *     optimizer
- *     QEC
- *     ZQN
- *     resilience
- *
- * The dependency direction remains:
- *
- *     syntax
- *       |
- *       v
- *     AST
- *       |
- *       v
- *     semantic analysis
- *       |
- *       +--> classical IR
- *       +--> quantum::ir
- *       +--> hardware/resource semantics
- *       |
- *       v
- *     lowering / optimization / routing / scheduling
- *       |
- *       v
- *     runtime/backend
- *
- * ============================================================================
- * HARD-CODING AUDIT
- * ============================================================================
- *
- * This grammar contains NO:
- *
- *     MAX_DEVICES
- *     MAX_CORES
- *     MAX_THREADS
- *     MAX_QUBITS
- *     MAX_PARAMETERS
- *     MAX_ARGUMENTS
- *     MAX_NODES
- *     MAX_MEMORY
- *     MAX_REGISTER_COUNT
- *     MAX_REGISTER_WIDTH
- *     MAX_VECTOR_WIDTH
- *     MAX_GPU_COUNT
- *     MAX_FPGA_COUNT
- *     MAX_QPU_COUNT
- *     MAX_TOPOLOGY_SIZE
- *
- * Language names such as:
+ * Foreign language leaf grammars remain independent:
  *
  *     C
  *     C++
  *     Python
  *     Rust
+ *     Zig
  *     OpenQASM
  *     Verilog
- *     assembly
+ *     Assembly
+ *     System interfaces
  *
- * are interoperability vocabulary, NOT machine limits.
- *
- * New languages can use:
- *
- *     foreignFormatDeclaration
- *
- * without modifying this grammar.
+ * Their source syntax is not duplicated here.
  *
  * ============================================================================
- * NON-GOALS
+ * BUILD / GENERATION CONTRACT
  * ============================================================================
  *
- * This grammar MUST NOT evolve into:
+ * The ANTLR generation process must:
  *
- *     - a universal foreign-language parser;
- *     - a linker;
- *     - a loader;
- *     - a hardware description;
- *     - a quantum IR;
- *     - a classical IR;
- *     - a runtime;
- *     - a scheduling system;
- *     - a routing system;
- *     - a QEC system;
- *     - a noise model;
- *     - a resilience system.
+ *     1. place all imported parser grammars in the grammar source path;
+ *     2. generate ZamaniLexer from grammar/antlr/ZamaniLexer.g4;
+ *     3. generate this parser composition with tokenVocab ZamaniLexer;
+ *     4. generate ZamaniParser from grammar/antlr/ZamaniParser.g4;
+ *     5. ensure imported parser grammar names are unique;
+ *     6. reject unresolved parser-rule references;
+ *     7. reject duplicate parser grammar identities;
+ *     8. treat warnings affecting ambiguity/precedence as production failures
+ *        where the repository validation policy requires it.
+ *
+ * ============================================================================
+ * RUST CONTRACT
+ * ============================================================================
+ *
+ * This grammar contains no Rust implementation.
+ *
+ * Generated/consuming Rust code MUST remain compatible with:
+ *
+ *     Rust 1.97
+ *     Rust 1.97.1
+ *     Rust 2021
+ *
+ * The compiler implementation MUST remain:
+ *
+ *     #![forbid(unsafe_code)]
+ *
+ * where applicable.
+ *
+ * This grammar requires no unsafe operations.
+ *
+ * ============================================================================
+ * HARD-CODING AUDIT
+ * ============================================================================
+ *
+ * This file contains no universal machine-capacity constants.
+ *
+ * It contains no:
+ *
+ *     MAX_QUBITS
+ *     MAX_CPUS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_NODES
+ *     MAX_MEMORY
+ *     MAX_THREADS
+ *     MAX_TENSOR_RANK
+ *     MAX_REGISTER_WIDTH
+ *     MAX_NETWORK_SIZE
+ *     MAX_DEVICE_COUNT
+ *
+ * It does not encode:
+ *
+ *     cpu0
+ *     gpu0
+ *     qpu0
+ *     physical_qubit0
+ *     memory_bank0
+ *     node0
+ *
+ * as universal language resources.
  *
  * ============================================================================
  * COMPLETION CRITERIA
@@ -2454,39 +1181,141 @@ interoperability
  *
  * This file is complete when:
  *
- * [ ] ANTLR generates it without grammar errors.
+ * [x] It is a parser composition grammar.
  *
- * [ ] Canonical lexer tokens are used.
+ * [x] It consumes ZamaniLexer.
  *
- * [ ] Canonical identifier/name/type/expression rules are consumed rather
- *     than duplicated.
+ * [x] It imports reusable canonical parser contracts.
  *
- * [ ] No unsafe Rust actions or predicates exist.
+ * [x] It exposes interoperabilityDeclaration.
  *
- * [ ] No filesystem/network/runtime actions exist.
+ * [x] It exposes interoperabilityStatement.
  *
- * [ ] C/C++/Python/Rust/OpenQASM/Verilog/assembly are represented as semantic
- *     interoperability boundaries rather than duplicated language grammars.
+ * [x] It exposes interoperabilityExpression.
  *
- * [ ] ABI/FFI remain delegated to their owning grammars.
+ * [x] It does not create a second ABI grammar.
  *
- * [ ] Quantum interoperability ultimately lowers through the canonical
- *     quantum::ir boundary.
+ * [x] It does not create a second FFI grammar.
  *
- * [ ] HDL interoperability remains separate from hardware realization.
+ * [x] It does not create a second foreign-function grammar.
  *
- * [ ] Capability, requirement, preference, hint, and constraint remain
- *     distinguishable.
+ * [x] It does not create a second serialization grammar.
  *
- * [ ] No machine size or topology is hard-coded.
+ * [x] It does not parse foreign languages directly.
  *
- * [ ] No fixed qubit/device/core/thread limits exist.
+ * [x] It preserves the canonical serialization/deserialization owner.
  *
- * [ ] Future languages can be introduced without changing the fundamental
- *     interoperability model.
+ * [x] It preserves canonical names.
  *
- * [ ] Positive, negative, scalability, determinism, and cross-domain tests
- *     exist in grammar/tests/interoperability/.
+ * [x] It preserves canonical expressions.
+ *
+ * [x] It preserves canonical types.
+ *
+ * [x] It preserves canonical parameters.
+ *
+ * [x] It preserves canonical attributes.
+ *
+ * [x] It introduces no hardware limits.
+ *
+ * [x] It introduces no quantum limits.
+ *
+ * [x] It introduces no fixed topology.
+ *
+ * [x] It introduces no physical-device selection.
+ *
+ * [x] It introduces no second quantum IR.
+ *
+ * [x] It introduces no runtime behavior.
+ *
+ * [x] It introduces no filesystem/network behavior.
+ *
+ * [x] It introduces no unsafe Rust.
+ *
+ * [x] It preserves deterministic parsing.
+ *
+ * [x] It preserves source-level interoperability intent.
+ *
+ * [x] It is compatible with the POCO-REAF architecture.
+ *
+ * [ ] ANTLR generation must be executed in CI against the complete repository.
+ *
+ * [ ] Rust parser/AST conformance tests must pass.
+ *
+ * [ ] Repository interoperability tests must pass.
+ *
+ * [ ] Cross-domain interoperability tests must pass.
+ *
+ * [ ] Scalability tests must pass.
+ *
+ * [ ] Negative/ambiguity tests must pass.
+ *
+ * ============================================================================
+ * REQUIRED TEST MATRIX
+ * ============================================================================
+ *
+ * Positive:
+ *
+ *     ABI declaration
+ *     FFI interface
+ *     FFI binding
+ *     FFI callback
+ *     FFI adapter
+ *     FFI policy
+ *     foreign call expression
+ *     callback call expression
+ *     serialization statement
+ *     deserialization statement
+ *     serialization expression
+ *     deserialization expression
+ *
+ * Negative:
+ *
+ *     unresolved imported rule
+ *     duplicate grammar identity
+ *     malformed ABI contract
+ *     malformed FFI contract
+ *     malformed foreign call
+ *     malformed serialization contract
+ *     invalid type boundary
+ *     invalid parameter boundary
+ *
+ * Boundary:
+ *
+ *     empty FFI interface
+ *     many interface members
+ *     many parameters
+ *     many callbacks
+ *     many conversions
+ *     deeply qualified names
+ *     deeply nested serialization contracts
+ *     large metadata collections
+ *
+ * Scalability:
+ *
+ *     tiny interoperability unit
+ *     large interoperability unit
+ *     many independent interfaces
+ *     many foreign functions
+ *     many callbacks
+ *     many serialization contracts
+ *     large parameter lists
+ *     large expression trees
+ *
+ * Cross-domain:
+ *
+ *     classical <-> foreign
+ *     quantum <-> foreign
+ *     hybrid <-> foreign
+ *     HDL <-> foreign
+ *     hardware <-> foreign
+ *     AI/data <-> foreign
+ *     distributed <-> foreign
+ *     networking <-> foreign
+ *
+ * POCO-REAF:
+ *
+ *     the same source-level interoperability contract must remain meaningful
+ *     when target resources change.
  *
  * ============================================================================
  */
