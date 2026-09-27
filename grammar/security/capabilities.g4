@@ -6,201 +6,304 @@
  * File:
  *     grammar/security/capabilities.g4
  *
- * Purpose:
- *     Canonical parser grammar for SECURITY AUTHORITY CAPABILITIES.
+ * Grammar:
+ *     SecurityCapabilities
  *
- * Grammar technology:
- *     ANTLR4 parser grammar
+ * STATUS
+ * ------
+ * CANONICAL SECURITY-AUTHORITY CAPABILITY GRAMMAR
  *
- * Implementation baseline:
- *     Rust 1.97 / Rust 1.97.1
+ * PURPOSE
+ * -------
+ * This grammar defines source-level SECURITY AUTHORITY CAPABILITIES.
+ *
+ * It is deliberately distinct from:
+ *
+ *     grammar/core/capabilities.g4
+ *
+ * which owns the language-wide computational capability model.
+ *
+ * A computational capability answers:
+ *
+ *     "What can an execution environment provide?"
+ *
+ * A security capability answers:
+ *
+ *     "What authority may be represented, delegated, attenuated,
+ *      or associated with a security principal?"
+ *
+ * This grammar describes security authority as SOURCE-LEVEL INTENT only.
+ *
+ * It does not authenticate, authorize, issue credentials, discover hardware,
+ * evaluate policy, execute cryptography, or perform runtime enforcement.
+ *
+ * ============================================================================
+ * IMPLEMENTATION BASELINE
+ * ============================================================================
+ *
+ * Rust:
+ *     1.97 / 1.97.1
+ *
+ * Edition:
+ *     Rust 2021
  *
  * Safety:
- *     - No embedded Rust actions.
- *     - No semantic predicates.
- *     - No filesystem access.
- *     - No network access.
- *     - No runtime calls.
- *     - No hardware discovery.
- *     - No capability discovery.
- *     - No policy evaluation.
- *     - No cryptographic operations.
- *     - No unsafe code.
+ *     The grammar contains no embedded Rust actions.
+ *
+ * The Zamani implementation MUST remain safe Rust.
+ *
+ * No unsafe code is required by this grammar.
  *
  * ============================================================================
- * CRITICAL OWNERSHIP BOUNDARY
+ * ARCHITECTURAL PIPELINE
  * ============================================================================
  *
- * Zamani has several different meanings of "capability".
+ *     Zamani source
+ *          |
+ *          v
+ *     grammar/antlr/ZamaniLexer.g4
+ *          |
+ *          v
+ *     ZamaniLexer
+ *          |
+ *          v
+ *     SecurityCapabilities
+ *          |
+ *          v
+ *     frontend AST
+ *          |
+ *          v
+ *     structural validation
+ *          |
+ *          v
+ *     security semantic analysis
+ *          |
+ *          +--> identity resolution
+ *          +--> permission resolution
+ *          +--> capability resolution
+ *          +--> trust analysis
+ *          +--> policy analysis
+ *          +--> resource analysis
+ *          |
+ *          v
+ *     canonical semantic model
+ *          |
+ *          +--> classical representation
+ *          +--> quantum::ir
+ *          +--> HDL / hardware representation
+ *          +--> distributed representation
+ *          +--> other domain representations
+ *          |
+ *          v
+ *     optimization / lowering
+ *          |
+ *          v
+ *     runtime / deployment / enforcement
  *
- * 1. grammar/core/capabilities.g4
- *
- *    Owns the LANGUAGE-WIDE CAPABILITY MODEL.
- *
- *    It describes capabilities such as:
- *
- *        quantum::dynamic_control
- *        quantum::measurement
- *        accelerator::tensor
- *        distributed::consensus
- *
- *    These answer:
- *
- *        "What can an execution environment provide?"
- *
- *
- * 2. grammar/effects/capabilities.g4
- *
- *    Owns capability requirements attached to EFFECTS.
- *
- *
- * 3. THIS FILE
- *
- *    Owns SECURITY AUTHORITY CAPABILITIES.
- *
- *    A security capability represents an authority-bearing security
- *    abstraction that can be associated with:
- *
- *        - a principal;
- *        - one or more permissions;
- *        - actions;
- *        - resources;
- *        - scopes;
- *        - security requirements;
- *        - conditions;
- *        - issuers;
- *        - delegation properties;
- *        - attenuation properties.
- *
- *    It answers:
- *
- *        "What security authority is represented by this capability?"
- *
- * These three concepts MUST NOT be merged.
+ * This grammar MUST NOT reverse this dependency direction.
  *
  * ============================================================================
- * CAPABILITY != PERMISSION
+ * OWNERSHIP
  * ============================================================================
  *
- * A permission describes an authorization operation or authority.
+ * THIS FILE OWNS:
  *
- * A security capability describes a bearer/delegable/attenuable authority
- * abstraction that may convey one or more permissions under explicit
- * conditions.
+ *     - security capability declarations;
+ *     - security capability references;
+ *     - security capability inheritance;
+ *     - permission associations;
+ *     - principal associations;
+ *     - action associations;
+ *     - resource associations;
+ *     - scope declarations;
+ *     - issuer declarations;
+ *     - security requirements;
+ *     - conditions;
+ *     - delegation intent;
+ *     - attenuation intent;
+ *     - open-ended security capability metadata;
+ *     - source-level security capability expressions.
  *
- * A security capability is NOT itself:
+ * THIS FILE DOES NOT OWN:
  *
- *     - a password;
- *     - a private key;
- *     - a bearer token;
- *     - a secret;
- *     - a cryptographic key;
- *     - an authenticated identity;
- *     - proof of authorization;
- *     - runtime authorization state.
- *
- * Actual credentials and runtime authority belong downstream.
+ *     - generic computational capabilities;
+ *     - generic resource declarations;
+ *     - identity declarations;
+ *     - authentication;
+ *     - credential storage;
+ *     - credential verification;
+ *     - permission declarations;
+ *     - authorization policy declarations;
+ *     - policy evaluation;
+ *     - trust evaluation;
+ *     - cryptographic implementation;
+ *     - key management;
+ *     - secret storage;
+ *     - hardware discovery;
+ *     - target selection;
+ *     - resource allocation;
+ *     - routing;
+ *     - scheduling;
+ *     - optimization;
+ *     - QEC;
+ *     - ZQN;
+ *     - quantum::ir;
+ *     - runtime enforcement.
  *
  * ============================================================================
- * SECURITY MODEL
+ * CRITICAL CAPABILITY SEPARATION
  * ============================================================================
  *
- * The conceptual relationship is:
+ * There are three distinct concepts:
  *
- *     Principal
- *         |
- *         v
- *     Security Capability
- *         |
- *         +----> Permission
- *         |
- *         +----> Action
- *         |
- *         +----> Resource
- *         |
- *         +----> Scope
- *         |
- *         +----> Conditions
- *         |
- *         +----> Requirements
- *         |
- *         v
- *     Security Analysis
- *         |
- *         v
- *     Authorization / Capability Evaluation
- *         |
- *         v
- *     Runtime Enforcement
+ * 1. COMPUTATIONAL CAPABILITY
  *
- * This grammar stops at syntax.
+ *      grammar/core/capabilities.g4
+ *
+ *      Example:
+ *
+ *          quantum::measurement
+ *          accelerator::tensor
+ *
+ * 2. EFFECT CAPABILITY REQUIREMENT
+ *
+ *      grammar/effects/capabilities.g4
+ *
+ *      Example:
+ *
+ *          requires {
+ *              quantum::measurement
+ *          }
+ *
+ * 3. SECURITY AUTHORITY CAPABILITY
+ *
+ *      THIS FILE
+ *
+ *      Example:
+ *
+ *          capability security::quantum_execution {
+ *              permission quantum::execute;
+ *              principal service::quantum_executor;
+ *              action quantum::execute;
+ *              resource quantum::program;
+ *          }
+ *
+ * These concepts MUST NOT be represented by one overloaded AST/semantic
+ * concept merely because they all use the word "capability".
  *
  * ============================================================================
  * POCO-REAF
  * ============================================================================
  *
- * Security capabilities MUST remain independent of physical machine scale.
+ * Security capabilities are symbolic and target-independent.
  *
  * This grammar MUST NOT encode:
  *
  *     MAX_CAPABILITIES
+ *     MAX_SECURITY_CAPABILITIES
  *     MAX_PRINCIPALS
  *     MAX_PERMISSIONS
  *     MAX_RESOURCES
+ *     MAX_ACTIONS
+ *     MAX_DELEGATIONS
+ *     MAX_ATOMIZATIONS
  *     MAX_DEVICES
  *     MAX_QUBITS
+ *     MAX_CPUS
  *     MAX_CORES
  *     MAX_THREADS
  *     MAX_GPUS
  *     MAX_FPGAS
+ *     MAX_QPUS
  *     MAX_NODES
  *     MAX_MEMORY
  *
- * Nor may it encode:
+ * It MUST NOT encode:
  *
- *     device IDs
+ *     physical device IDs
+ *     physical qubit IDs
  *     CPU IDs
  *     GPU IDs
+ *     FPGA IDs
  *     QPU IDs
- *     hardware addresses
- *     fixed node counts
+ *     fixed providers
+ *     fixed backends
  *     fixed topology
- *     fixed provider
- *     fixed backend
+ *     fixed node counts
+ *     fixed resource capacities
  *
- * Security authority remains symbolic and resource-parametric.
+ * Repetition uses `*` and `+`.
+ *
+ * Therefore the language has no artificial security-capability ceiling.
+ *
+ * Practical limits imposed by:
+ *
+ *     memory
+ *     compiler resources
+ *     parser configuration
+ *     runtime resources
+ *     target resources
+ *
+ * remain implementation/resource concerns and MUST NOT become language
+ * semantics.
  *
  * ============================================================================
- * UNIVERSAL COMPUTING BOUNDARY
+ * OPEN-WORLD SECURITY
  * ============================================================================
  *
- * A security capability may protect:
+ * Security capability identities are open-ended.
  *
- *     classical computation
- *     quantum computation
- *     HDL/hardware operations
- *     accelerator operations
- *     AI/ML operations
- *     data operations
- *     network operations
- *     distributed operations
- *     storage operations
- *     compilation
- *     deployment
- *     future computational domains
+ * Valid examples include:
  *
- * The grammar MUST NOT create separate closed capability vocabularies for
- * CPU, GPU, FPGA, QPU, ASIC, cloud, etc.
+ *     security::data::read
+ *     security::quantum::execute
+ *     security::hardware::configure
+ *     security::network::admin
+ *     organization::research::execution
+ *     future::security::new_authority
  *
- * New domains are represented by ordinary qualified names.
+ * This grammar MUST NOT enumerate:
+ *
+ *     read
+ *     write
+ *     admin
+ *     execute
+ *     quantum
+ *     GPU
+ *     CPU
+ *     FPGA
+ *     QPU
+ *
+ * as a closed universe of security capabilities.
+ *
+ * Those are names, not grammar-level semantic enums.
+ *
+ * ============================================================================
+ * SECRET-MATERIAL BOUNDARY
+ * ============================================================================
+ *
+ * This grammar MUST NOT provide syntax for embedding:
+ *
+ *     passwords
+ *     private keys
+ *     secret keys
+ *     bearer tokens
+ *     API keys
+ *     session tokens
+ *     recovery secrets
+ *     raw credentials
+ *
+ * A security capability may reference a symbolic security object, but the
+ * referenced secret material belongs to the credential/key-management
+ * subsystem.
  *
  * ============================================================================
  * QUANTUM BOUNDARY
  * ============================================================================
  *
- * Security capabilities may protect quantum operations.
+ * Security authority may protect quantum computation.
  *
- * For example:
+ * Example:
  *
  *     capability security::quantum_execution {
  *         permission quantum::execute;
@@ -213,10 +316,12 @@
  *     QubitId
  *     PhysicalQubitId
  *     GateKind
- *     quantum topology
+ *     QEC code
+ *     topology
  *     calibration
- *     QEC codes
- *     ZQN fault models
+ *     noise model
+ *     routing
+ *     scheduling
  *
  * Quantum semantics remain downstream.
  *
@@ -225,170 +330,38 @@
  *     quantum::ir
  *
  * ============================================================================
- * HARDWARE BOUNDARY
+ * HDL / HARDWARE BOUNDARY
  * ============================================================================
  *
- * A security capability may protect an abstract hardware operation:
+ * Security capabilities may protect abstract hardware intent:
  *
- *     capability security::hardware_configuration {
- *         permission hardware::configure;
- *         action hardware::configure;
- *         resource hardware::resource;
- *     }
+ *     hardware::configure
+ *     hardware::reconfigure
+ *     accelerator::execute
  *
- * It MUST NOT select a physical device.
+ * They MUST NOT select physical hardware.
  *
  * ============================================================================
- * NO SECRET MATERIAL
+ * DETERMINISM
  * ============================================================================
  *
- * This grammar MUST NOT introduce syntax whose purpose is to embed:
+ * This grammar contains:
  *
- *     passwords
- *     private keys
- *     secret keys
- *     authentication tokens
- *     session tokens
- *     API keys
- *     bearer credentials
- *     recovery secrets
+ *     no actions;
+ *     no semantic predicates;
+ *     no I/O;
+ *     no filesystem access;
+ *     no network access;
+ *     no randomness;
+ *     no hardware discovery;
+ *     no runtime calls;
+ *     no policy evaluation.
  *
- * Source may reference a credential or security object symbolically where
- * required by another security subsystem.
+ * Parsing therefore depends only on:
  *
- * Secret material belongs to secure credential/key-management systems.
- *
- * ============================================================================
- * OPEN-WORLD SECURITY
- * ============================================================================
- *
- * Capability names, permission names, action names, resource names,
- * principals, issuers and security domains are open-ended.
- *
- * Examples:
- *
- *     security::data::read
- *     security::quantum::execute
- *     security::hardware::configure
- *     security::network::admin
- *     future::security::new_authority
- *
- * No closed enumeration is permitted here.
- *
- * ============================================================================
- * OWNERSHIP
- * ============================================================================
- *
- * THIS FILE OWNS:
- *
- *     - security capability declaration syntax;
- *     - security capability references;
- *     - capability authority subjects;
- *     - capability permission associations;
- *     - capability action associations;
- *     - capability resource associations;
- *     - capability scope associations;
- *     - capability issuer associations;
- *     - capability conditions;
- *     - capability security requirements;
- *     - delegation syntax;
- *     - attenuation syntax;
- *     - security capability metadata;
- *     - source-level security capability attributes.
- *
- * THIS FILE DOES NOT OWN:
- *
- *     - general capability declarations;
- *     - general capability versions;
- *     - effect capability requirements;
- *     - permission policy evaluation;
- *     - authentication;
- *     - identity verification;
- *     - credential verification;
- *     - cryptography;
- *     - key management;
- *     - trust establishment;
- *     - resource discovery;
- *     - hardware discovery;
- *     - target selection;
- *     - scheduling;
- *     - routing;
- *     - optimization;
- *     - QEC;
- *     - ZQN;
- *     - quantum::ir;
- *     - runtime authorization;
- *     - security logging implementation.
- *
- * ============================================================================
- * DEPENDENCIES
- * ============================================================================
- *
- * Canonical dependencies:
- *
- *     ZamaniLexer
- *     Core
- *     Types
- *     Expressions
- *
- * Semantic dependencies:
- *
- *     frontend AST
- *     security semantic analysis
- *     core capability registry
- *     permission registry
- *     identity/principal resolution
- *     trust analysis
- *     resource analysis
- *
- * This grammar MUST NOT depend directly on:
- *
- *     quantum::ir
- *     QEC
- *     ZQN
- *     scheduler
- *     router
- *     optimizer
- *     runtime
- *     hardware implementation
- *
- * ============================================================================
- * DEPENDENCY DIRECTION
- * ============================================================================
- *
- *     lexer
- *       |
- *       v
- *     Core / Types / Expressions
- *       |
- *       v
- *     SecurityCapabilities
- *       |
- *       v
- *     Security AST
- *       |
- *       v
- *     Name / identity / permission resolution
- *       |
- *       v
- *     Security semantic model
- *       |
- *       +----> capability analysis
- *       +----> permission analysis
- *       +----> trust analysis
- *       +----> resource analysis
- *       |
- *       v
- *     canonical semantic representation
- *       |
- *       +----> classical IR
- *       +----> quantum::ir
- *       +----> HDL/hardware IR
- *       |
- *       v
- *     compiler / runtime / enforcement
- *
- * This direction MUST NOT be reversed.
+ *     source token stream
+ *     grammar version
+ *     parser configuration
  *
  * ============================================================================
  */
@@ -399,19 +372,49 @@ options {
     tokenVocab = ZamaniLexer;
 }
 
+/*
+ * Core supplies:
+ *
+ *     identifier
+ *     qualifiedName
+ *     attributes
+ *     visibility
+ *     genericParameters
+ *     expression
+ *     typeExpression
+ *     capabilityReference
+ *
+ * Types supplies canonical type syntax.
+ *
+ * Expressions supplies canonical expression syntax.
+ *
+ * IMPORTANT:
+ *
+ * This grammar deliberately does NOT import Permissions or Security directly.
+ *
+ * That avoids a circular/duplicate ownership relationship:
+ *
+ *     Security
+ *        -> SecurityCapabilities
+ *        -> Permissions
+ *
+ * SecurityCapabilities remains an independent security-authority grammar.
+ */
 import Core, Types, Expressions;
 
 
 /* ============================================================================
- * 1. SECURITY CAPABILITY DOCUMENT ENTRY
+ * 1. STANDALONE TEST ENTRY
  * ============================================================================
  *
- * Used by grammar-level tests and standalone parser validation.
+ * This rule is for grammar tests/tooling.
  *
- * The enclosing Security grammar MUST consume `securityCapabilityDeclaration`
+ * The production security composition root MUST consume:
+ *
+ *     securityCapabilityDeclaration
+ *
  * rather than this EOF-bearing rule.
  */
-
 securityCapabilitiesFile
     : securityCapabilityDeclaration+
       EOF
@@ -419,34 +422,33 @@ securityCapabilitiesFile
 
 
 /* ============================================================================
- * 2. SECURITY CAPABILITY DECLARATION
+ * 2. CANONICAL SECURITY CAPABILITY DECLARATION
  * ============================================================================
  *
  * Examples:
  *
- *     capability security::data::read;
+ *     capability security::quantum_execution;
  *
- *     capability security::data::read {
- *         permission data::read;
+ *     capability security::quantum_execution {
+ *         permission quantum::execute;
  *     }
  *
- *     capability security::quantum::execute {
+ *     capability security::quantum_execution {
  *         permission quantum::execute;
- *         principal service::quantum_runner;
+ *         principal service::quantum_executor;
  *         action quantum::execute;
  *         resource quantum::program;
+ *         scope security::research;
+ *         issuer organization::security_authority;
  *     }
  *
- * The declaration introduces source-level security authority semantics.
- *
- * It does NOT create a runtime credential.
+ * No finite number of members is imposed.
  */
-
 securityCapabilityDeclaration
     : attributes*
       visibility?
       CAPABILITY
-      qualifiedName
+      securityCapabilityName
       genericParameters?
       securityCapabilityInheritanceClause?
       securityCapabilityBody?
@@ -455,14 +457,39 @@ securityCapabilityDeclaration
 
 
 /* ============================================================================
- * 3. INHERITANCE / COMPOSITION
+ * 3. SECURITY CAPABILITY NAME
  * ============================================================================
  *
- * Capability inheritance describes source-level composition.
+ * Security capability identity is deliberately separate from the generic
+ * computational capability reference.
  *
- * It does not imply runtime credential inheritance.
+ * A security capability is still represented by a normal Zamani qualified
+ * name.
  */
+securityCapabilityName
+    : qualifiedName
+    ;
 
+
+/* ============================================================================
+ * 4. SECURITY CAPABILITY REFERENCE
+ * ============================================================================
+ *
+ * A reference does not declare or instantiate a capability.
+ */
+securityCapabilityReference
+    : securityCapabilityName
+    ;
+
+
+/* ============================================================================
+ * 5. INHERITANCE
+ * ============================================================================
+ *
+ * Source-level composition only.
+ *
+ * Semantic analysis MUST determine whether inheritance is legal.
+ */
 securityCapabilityInheritanceClause
     : EXTENDS
       securityCapabilityReferenceList
@@ -471,15 +498,17 @@ securityCapabilityInheritanceClause
 
 securityCapabilityReferenceList
     : securityCapabilityReference
-      (COMMA securityCapabilityReference)*
+      (
+          COMMA
+          securityCapabilityReference
+      )*
     ;
 
 
 /* ============================================================================
- * 4. CAPABILITY BODY
+ * 6. CAPABILITY BODY
  * ============================================================================
  */
-
 securityCapabilityBody
     : LBRACE
       securityCapabilityMember*
@@ -494,8 +523,8 @@ securityCapabilityMember
     | securityCapabilityResource
     | securityCapabilityScope
     | securityCapabilityIssuer
-    | securityCapabilityCondition
     | securityCapabilityRequirement
+    | securityCapabilityCondition
     | securityCapabilityDelegation
     | securityCapabilityAttenuation
     | securityCapabilityProperty
@@ -503,143 +532,144 @@ securityCapabilityMember
 
 
 /* ============================================================================
- * 5. SECURITY CAPABILITY REFERENCES
+ * 7. PERMISSIONS
  * ============================================================================
  *
- * This is deliberately distinct from the language-wide capabilityReference
- * owned by grammar/core/capabilities.g4.
+ * Permission declarations themselves remain owned by:
  *
- * This reference identifies a SECURITY AUTHORITY capability.
+ *     grammar/security/permissions.g4
+ *
+ * This grammar only associates an already named permission with a security
+ * capability.
+ *
+ * We intentionally use a local rule name instead of importing Permissions,
+ * preventing grammar coupling and duplicate ownership.
  */
-
-securityCapabilityReference
-    : qualifiedName
-    ;
-
-
-/* ============================================================================
- * 6. PERMISSION ASSOCIATION
- * ============================================================================
- *
- * A security capability may convey one or more named permissions.
- *
- * The permission itself remains owned by grammar/security/permissions.g4.
- *
- * No permission semantics are duplicated here.
- */
-
 securityCapabilityPermission
     : PERMISSION
-      permissionReferenceList
+      securityPermissionReferenceList
       SEMI
     ;
 
 
-permissionReferenceList
-    : permissionReference
-      (COMMA permissionReference)*
+securityPermissionReferenceList
+    : securityPermissionReference
+      (
+          COMMA
+          securityPermissionReference
+      )*
     ;
 
 
-permissionReference
+securityPermissionReference
     : qualifiedName
     ;
 
 
 /* ============================================================================
- * 7. PRINCIPAL ASSOCIATION
+ * 8. PRINCIPALS
  * ============================================================================
  *
- * Identifies the subject/principal to which the authority applies.
+ * A principal is a symbolic security subject.
  *
- * Principal identity semantics remain owned by the security identity
- * subsystem.
+ * Authentication and identity verification remain downstream.
  */
-
 securityCapabilityPrincipal
     : PRINCIPAL
-      securityPrincipalSelectorList
+      securityPrincipalReferenceList
       SEMI
     ;
 
 
-securityPrincipalSelectorList
-    : securityPrincipalSelector
-      (COMMA securityPrincipalSelector)*
+securityPrincipalReferenceList
+    : securityPrincipalReference
+      (
+          COMMA
+          securityPrincipalReference
+      )*
     ;
 
 
-securityPrincipalSelector
+securityPrincipalReference
     : qualifiedName
     | expression
     ;
 
 
 /* ============================================================================
- * 8. ACTION ASSOCIATION
+ * 9. ACTIONS
  * ============================================================================
  *
- * Actions are open-world semantic names.
- *
- * No CPU/GPU/QPU/FPGA action list is hard-coded.
+ * Action names remain open-world.
  */
-
 securityCapabilityAction
     : ACTION
-      securityActionSelectorList
+      securityActionReferenceList
       SEMI
     ;
 
 
-securityActionSelectorList
-    : securityActionSelector
-      (COMMA securityActionSelector)*
+securityActionReferenceList
+    : securityActionReference
+      (
+          COMMA
+          securityActionReference
+      )*
     ;
 
 
-securityActionSelector
+securityActionReference
     : qualifiedName
     | expression
     ;
 
 
 /* ============================================================================
- * 9. RESOURCE ASSOCIATION
+ * 10. RESOURCES
  * ============================================================================
  *
- * Resources remain abstract.
- *
- * This grammar does not allocate or discover resources.
+ * Resources are semantic resources, never implicit physical resources.
  */
-
 securityCapabilityResource
     : RESOURCE
-      securityResourceSelectorList
+      securityResourceReferenceList
       SEMI
     ;
 
 
-securityResourceSelectorList
-    : securityResourceSelector
-      (COMMA securityResourceSelector)*
+securityResourceReferenceList
+    : securityResourceReference
+      (
+          COMMA
+          securityResourceReference
+      )*
     ;
 
 
-securityResourceSelector
+securityResourceReference
     : qualifiedName
     | expression
     ;
 
 
 /* ============================================================================
- * 10. SCOPE
+ * 11. SCOPE
  * ============================================================================
  *
- * Scope limits where or under which circumstances the capability applies.
+ * Scope is a semantic expression.
  *
- * Scope is an expression, not a physical deployment topology.
+ * It may describe:
+ *
+ *     namespace
+ *     workload
+ *     data domain
+ *     execution context
+ *     security domain
+ *     temporal condition
+ *     resource domain
+ *
+ * without encoding a physical deployment topology.
  */
-
 securityCapabilityScope
     : SCOPE
       expression
@@ -648,14 +678,13 @@ securityCapabilityScope
 
 
 /* ============================================================================
- * 11. ISSUER
+ * 12. ISSUER
  * ============================================================================
  *
- * Issuer is a symbolic security principal/authority reference.
+ * The issuer is a symbolic authority reference.
  *
- * It does not perform authentication.
+ * This does not authenticate the issuer.
  */
-
 securityCapabilityIssuer
     : ISSUER
       qualifiedName
@@ -664,41 +693,18 @@ securityCapabilityIssuer
 
 
 /* ============================================================================
- * 12. CONDITIONS
- * ============================================================================
- *
- * Conditions are parsed, not evaluated.
- *
- * Examples:
- *
- *     when context::environment == "production";
- *
- *     when context::trust >= required::level;
- *
- *     when request::purpose == "research";
- */
-
-securityCapabilityCondition
-    : WHEN
-      expression
-      SEMI
-    ;
-
-
-/* ============================================================================
  * 13. SECURITY REQUIREMENTS
  * ============================================================================
  *
- * A security capability may require another security property or a
- * language-wide capability.
+ * A requirement is not:
  *
- * IMPORTANT:
+ *     a grant;
+ *     a runtime authorization decision;
+ *     a hardware capability;
+ *     a credential.
  *
- *     requirement != capability declaration
- *     requirement != authorization decision
- *     requirement != runtime verification
+ * It is source-level security intent.
  */
-
 securityCapabilityRequirement
     : REQUIRES
       securityCapabilityRequirementExpression
@@ -707,56 +713,76 @@ securityCapabilityRequirement
 
 
 securityCapabilityRequirementExpression
-    : securityCapabilityRequirementTerm
-    | securityCapabilityRequirementAll
-    | securityCapabilityRequirementAny
-    | securityCapabilityRequirementNot
+    : securityCapabilityRequirementDisjunction
     ;
 
 
-securityCapabilityRequirementTerm
-    : securityCapabilityReference
-    | capabilityReference
-    | permissionReference
-    | expression
+securityCapabilityRequirementDisjunction
+    : securityCapabilityRequirementConjunction
+      (
+          OR
+          securityCapabilityRequirementConjunction
+      )*
     ;
 
 
-securityCapabilityRequirementAll
-    : LBRACE
+securityCapabilityRequirementConjunction
+    : securityCapabilityRequirementPrimary
+      (
+          AND
+          securityCapabilityRequirementPrimary
+      )*
+    ;
+
+
+securityCapabilityRequirementPrimary
+    : securityCapabilityRequirementAtom
+    | LPAREN
       securityCapabilityRequirementExpression
-      (COMMA securityCapabilityRequirementExpression)*
-      COMMA?
-      RBRACE
-    ;
-
-
-securityCapabilityRequirementAny
-    : LPAREN
-      securityCapabilityRequirementExpression
-      (OR securityCapabilityRequirementExpression)+
       RPAREN
     ;
 
 
-securityCapabilityRequirementNot
-    : NOT
-      securityCapabilityRequirementExpression
+securityCapabilityRequirementAtom
+    : securityCapabilityReference
+    | capabilityReference
+    | securityPermissionReference
+    | expression
+    ;
+
+
+securityPermissionReference
+    : qualifiedName
     ;
 
 
 /* ============================================================================
- * 14. DELEGATION
+ * 14. CONDITIONS
  * ============================================================================
  *
- * Delegation describes whether the authority represented by a capability may
- * be delegated.
- *
- * This is declarative syntax only.
- *
- * It does not create a credential or perform delegation.
+ * Conditions are parsed but never evaluated by the parser.
  */
+securityCapabilityCondition
+    : WHEN
+      expression
+      SEMI
+    ;
 
+
+/* ============================================================================
+ * 15. DELEGATION
+ * ============================================================================
+ *
+ * Delegation describes source-level authority transfer intent.
+ *
+ * It does not:
+ *
+ *     authenticate;
+ *     issue credentials;
+ *     establish trust;
+ *     authorize;
+ *     contact a security provider.
+ */
 securityCapabilityDelegation
     : DELEGATE
       securityDelegationSpecification
@@ -765,13 +791,13 @@ securityCapabilityDelegation
 
 
 securityDelegationSpecification
-    : securityDelegationFlag
+    : securityDelegationTarget
     | securityDelegationBody
     ;
 
 
-securityDelegationFlag
-    : identifier
+securityDelegationTarget
+    : securityPrincipalReference
     ;
 
 
@@ -783,14 +809,47 @@ securityDelegationBody
 
 
 securityDelegationMember
-    : securityDelegationProperty
+    : securityDelegationTo
+    | securityDelegationPermission
+    | securityDelegationAction
+    | securityDelegationResource
+    | securityDelegationCondition
     | securityDelegationConstraint
+    | securityDelegationProperty
     ;
 
 
-securityDelegationProperty
-    : identifier
-      (ASSIGN expression)?
+securityDelegationTo
+    : TO
+      securityPrincipalReference
+      SEMI
+    ;
+
+
+securityDelegationPermission
+    : PERMISSION
+      securityPermissionReferenceList
+      SEMI
+    ;
+
+
+securityDelegationAction
+    : ACTION
+      securityActionReferenceList
+      SEMI
+    ;
+
+
+securityDelegationResource
+    : RESOURCE
+      securityResourceReferenceList
+      SEMI
+    ;
+
+
+securityDelegationCondition
+    : WHEN
+      expression
       SEMI
     ;
 
@@ -802,18 +861,30 @@ securityDelegationConstraint
     ;
 
 
+securityDelegationProperty
+    : identifier
+      (
+          COLON
+          typeExpression
+      )?
+      (
+          ASSIGN
+          expression
+      )?
+      SEMI
+    ;
+
+
 /* ============================================================================
- * 15. ATTENUATION
+ * 16. ATTENUATION
  * ============================================================================
  *
- * Attenuation allows a derived authority to be restricted relative to the
- * source authority.
+ * Attenuation can only restrict authority.
  *
- * This grammar only records the source-level relationship.
+ * The grammar records the requested attenuation.
  *
- * Semantic analysis MUST verify that attenuation never expands authority.
+ * Semantic analysis MUST verify monotonic non-expansion.
  */
-
 securityCapabilityAttenuation
     : ATTENUATE
       securityAttenuationSpecification
@@ -839,27 +910,28 @@ securityAttenuationMember
     | securityAttenuationAction
     | securityAttenuationResource
     | securityAttenuationCondition
+    | securityAttenuationConstraint
     | securityAttenuationProperty
     ;
 
 
 securityAttenuationPermission
     : PERMISSION
-      permissionReferenceList
+      securityPermissionReferenceList
       SEMI
     ;
 
 
 securityAttenuationAction
     : ACTION
-      securityActionSelectorList
+      securityActionReferenceList
       SEMI
     ;
 
 
 securityAttenuationResource
     : RESOURCE
-      securityResourceSelectorList
+      securityResourceReferenceList
       SEMI
     ;
 
@@ -871,51 +943,79 @@ securityAttenuationCondition
     ;
 
 
+securityAttenuationConstraint
+    : CONSTRAINT
+      expression
+      SEMI
+    ;
+
+
 securityAttenuationProperty
     : identifier
-      (ASSIGN expression)?
+      (
+          COLON
+          typeExpression
+      )?
+      (
+          ASSIGN
+          expression
+      )?
       SEMI
     ;
 
 
 /* ============================================================================
- * 16. GENERIC SECURITY CAPABILITY PROPERTY
+ * 17. OPEN-WORLD SECURITY METADATA
  * ============================================================================
  *
- * Extension points must remain open.
+ * Unknown/future metadata remains syntactically representable.
  *
- * New security metadata must not require a grammar rewrite when it can be
- * represented as an ordinary typed property.
+ * Example:
+ *
+ *     assurance_level = security::high;
+ *
+ *     audit_class: SecurityClass = security::restricted;
+ *
+ * The parser does not determine the semantic meaning of the property.
  */
-
 securityCapabilityProperty
     : identifier
-      (COLON typeExpression)?
-      (ASSIGN expression)?
+      (
+          COLON
+          typeExpression
+      )?
+      (
+          ASSIGN
+          expression
+      )?
       SEMI
     ;
 
 
 /* ============================================================================
- * 17. CAPABILITY LIST
+ * 18. SECURITY CAPABILITY LIST
  * ============================================================================
  *
  * No finite maximum.
  */
-
 securityCapabilityReferenceListExpression
     : securityCapabilityReference
-      (COMMA securityCapabilityReference)*
+      (
+          COMMA
+          securityCapabilityReference
+      )*
+      COMMA?
     ;
 
 
 /* ============================================================================
- * 18. SECURITY CAPABILITY SET
+ * 19. SECURITY CAPABILITY SET
  * ============================================================================
  *
- * Used by future semantic composition layers and extension grammars.
+ * This is a source-level set of symbolic authority references.
+ *
+ * It does not grant authority by itself.
  */
-
 securityCapabilitySet
     : LBRACE
       securityCapabilitySetMember*
@@ -930,80 +1030,838 @@ securityCapabilitySetMember
 
 
 /* ============================================================================
- * 19. SECURITY CAPABILITY EXPRESSION
+ * 20. SECURITY CAPABILITY BOOLEAN EXPRESSION
  * ============================================================================
  *
- * Generic compositional expression.
+ * Precedence:
  *
- * The semantic layer determines:
+ *     OR
+ *       lower
  *
- *     ALL
- *     ANY
- *     NOT
- *     equivalence
- *     conflict
- *     attenuation
- *     inheritance
+ *     AND
+ *       higher
  *
- * No authorization decision occurs here.
+ *     primary/group
+ *       highest
+ *
+ * Example:
+ *
+ *     A or B and C
+ *
+ * means:
+ *
+ *     A or (B and C)
+ *
+ * The parser does not decide whether an expression is satisfiable.
  */
-
 securityCapabilityExpression
-    : securityCapabilityReference
-    | securityCapabilityExpressionGroup
-    | securityCapabilityExpressionNot
-    | securityCapabilityExpressionBinary
+    : securityCapabilityDisjunction
     ;
 
 
-securityCapabilityExpressionGroup
-    : LPAREN
+securityCapabilityDisjunction
+    : securityCapabilityConjunction
+      (
+          OR
+          securityCapabilityConjunction
+      )*
+    ;
+
+
+securityCapabilityConjunction
+    : securityCapabilityPrimary
+      (
+          AND
+          securityCapabilityPrimary
+      )*
+    ;
+
+
+securityCapabilityPrimary
+    : securityCapabilityReference
+    | LPAREN
       securityCapabilityExpression
       RPAREN
     ;
 
 
-securityCapabilityExpressionNot
-    : NOT
-      securityCapabilityExpression
-    ;
-
-
-securityCapabilityExpressionBinary
-    : securityCapabilityExpression
-      capabilityExpressionOperator
-      securityCapabilityExpression
-    ;
-
-
-capabilityExpressionOperator
-    : AND
-    | OR
+/* ============================================================================
+ * 21. CAPABILITY REQUIREMENT COMPOSITION
+ * ============================================================================
+ *
+ * This rule is deliberately different from:
+ *
+ *     securityCapabilityExpression
+ *
+ * because requirements may refer to:
+ *
+ *     security capabilities;
+ *     computational capabilities;
+ *     permissions;
+ *     ordinary security expressions.
+ */
+securityCapabilityRequirementExpressionRoot
+    : securityCapabilityRequirementDisjunction
     ;
 
 
 /* ============================================================================
- * 20. VALIDATION BOUNDARY
+ * 22. SECURITY CAPABILITY MEMBER EXPRESSION
  * ============================================================================
  *
- * The grammar intentionally does NOT enforce the following semantic rules:
+ * This is a reusable expression boundary for future security composition
+ * grammars.
+ */
+securityCapabilityMemberExpression
+    : securityCapabilityExpression
+    | securityCapabilityRequirementExpression
+    | expression
+    ;
+
+
+/* ============================================================================
+ * 23. STRUCTURAL VALIDATION BOUNDARY
+ * ============================================================================
  *
- *     - referenced principal exists;
- *     - referenced permission exists;
- *     - referenced resource exists;
- *     - referenced action exists;
- *     - issuer is trusted;
- *     - issuer is authorized to delegate;
- *     - capability exists in the registry;
- *     - capability version is compatible;
- *     - delegation is legal;
- *     - attenuation is monotonic;
- *     - capability is non-escalating;
- *     - capability satisfies policy;
- *     - capability satisfies runtime requirements;
- *     - capability is available on the selected target.
+ * The grammar intentionally does NOT determine:
  *
- * Those belong to semantic/security analysis.
+ *     - whether the capability exists;
+ *     - whether a principal exists;
+ *     - whether a permission exists;
+ *     - whether an action exists;
+ *     - whether a resource exists;
+ *     - whether an issuer is trusted;
+ *     - whether delegation is authorized;
+ *     - whether attenuation is monotonic;
+ *     - whether a condition is satisfiable;
+ *     - whether a capability is available;
+ *     - whether a target supports a capability;
+ *     - whether a policy allows an operation;
+ *     - whether credentials are valid.
+ *
+ * Those are semantic/security/runtime responsibilities.
+ */
+
+
+/* ============================================================================
+ * 24. INTEGRATION CONTRACT
+ * ============================================================================
+ *
+ * SECURITY COMPOSITION
+ * --------------------
+ *
+ * grammar/security/security.g4 already owns the security composition root.
+ *
+ * It imports:
+ *
+ *     SecurityCapabilities
+ *
+ * and therefore receives:
+ *
+ *     securityCapabilityDeclaration
+ *
+ * SecurityCapabilities MUST NOT import Security.
+ *
+ *
+ * PERMISSION INTEGRATION
+ * ----------------------
+ *
+ * grammar/security/permissions.g4 owns:
+ *
+ *     permissionDeclaration
+ *     authorizationPolicyDeclaration
+ *     authorizationRule
+ *     grantDeclaration
+ *     revokeDeclaration
+ *
+ * This file references permissions symbolically.
+ *
+ * It does not redefine permission semantics.
+ *
+ *
+ * IDENTITY INTEGRATION
+ * --------------------
+ *
+ * grammar/security/identity.g4 / identifiers.g4 own identity syntax.
+ *
+ * This file references principals symbolically.
+ *
+ * It does not authenticate them.
+ *
+ *
+ * CORE CAPABILITY INTEGRATION
+ * ---------------------------
+ *
+ * grammar/core/capabilities.g4 owns computational capability syntax.
+ *
+ * This file may reference:
+ *
+ *     capabilityReference
+ *
+ * for requirements.
+ *
+ * A computational capability requirement MUST NOT be interpreted as a
+ * security authorization grant.
+ *
+ *
+ * EFFECT INTEGRATION
+ * ------------------
+ *
+ * grammar/effects/capabilities.g4 owns capability requirements attached to
+ * effects.
+ *
+ * It remains independent of this security-authority capability grammar.
+ *
+ *
+ * RESOURCE INTEGRATION
+ * --------------------
+ *
+ * Resources remain abstract.
+ *
+ * This grammar may reference:
+ *
+ *     resource names;
+ *     resource expressions;
+ *     resource requirements.
+ *
+ * It does not discover or allocate resources.
+ *
+ *
+ * QUANTUM INTEGRATION
+ * -------------------
+ *
+ * A security capability may protect quantum intent.
+ *
+ * Example:
+ *
+ *     capability security::quantum_execution {
+ *         permission quantum::execute;
+ *         action quantum::execute;
+ *         resource quantum::program;
+ *     }
+ *
+ * The security grammar does not construct quantum IR.
+ *
+ * The canonical boundary remains:
+ *
+ *     quantum::ir
+ *
+ *
+ * HDL / HARDWARE INTEGRATION
+ * --------------------------
+ *
+ * Security authority may be attached to abstract:
+ *
+ *     hardware::configure
+ *     accelerator::execute
+ *     hdl::synthesize
+ *
+ * without selecting physical targets.
+ *
+ *
+ * DISTRIBUTED / NETWORKING INTEGRATION
+ * ------------------------------------
+ *
+ * Principals, resources and actions may refer to distributed/network
+ * abstractions through qualified names.
+ *
+ * No node count, topology or endpoint capacity is encoded here.
+ *
+ *
+ * AST INTEGRATION
+ * ---------------
+ *
+ * This grammar is syntax-only.
+ *
+ * The frontend AST MUST preserve at least:
+ *
+ *     declaration identity;
+ *     attributes;
+ *     visibility;
+ *     generic parameters;
+ *     inheritance;
+ *     ordered members;
+ *     permission references;
+ *     principal references;
+ *     action references;
+ *     resource references;
+ *     scope expressions;
+ *     issuer reference;
+ *     requirement expressions;
+ *     conditions;
+ *     delegation structure;
+ *     attenuation structure;
+ *     generic properties;
+ *     source spans.
+ *
+ * IMPORTANT:
+ *
+ * The existing:
+ *
+ *     src/frontend/ast/node/capabilities/capability.rs
+ *
+ * represents the language-wide leaf capability identity/version model.
+ *
+ * It MUST NOT be overloaded to represent this entire security-authority
+ * declaration.
+ *
+ * Security authority declarations require a distinct security semantic/AST
+ * representation, while the existing generic Capability node remains the
+ * representation for computational capability identities.
+ *
+ * This avoids contaminating the domain-neutral computational capability node
+ * with security-only state.
+ *
+ *
+ * SEMANTIC INTEGRATION
+ * --------------------
+ *
+ * Semantic analysis MUST perform:
+ *
+ *     name resolution;
+ *     duplicate detection;
+ *     namespace validation;
+ *     permission resolution;
+ *     principal resolution;
+ *     action/resource resolution;
+ *     issuer resolution;
+ *     inheritance validation;
+ *     delegation authorization analysis;
+ *     attenuation monotonicity analysis;
+ *     condition typing;
+ *     capability compatibility;
+ *     policy compatibility;
+ *     trust validation;
+ *     resource compatibility;
+ *     target capability analysis.
+ *
+ * None of these operations belong in this grammar.
+ *
+ *
+ * IR INTEGRATION
+ * --------------
+ *
+ * Security capability declarations MUST NOT create a second security IR merely
+ * because they occur in source.
+ *
+ * Security semantics become metadata/constraints/authority information in the
+ * canonical semantic representation.
+ *
+ * When the protected operation is quantum, the semantic information may
+ * accompany the path to:
+ *
+ *     quantum::ir
+ *
+ * without creating a security-specific quantum IR.
+ *
+ * When the protected operation is HDL/hardware, the security information may
+ * accompany the corresponding canonical hardware representation.
+ *
+ *
+ * COMPILER INTEGRATION
+ * --------------------
+ *
+ * The compiler may:
+ *
+ *     preserve mandatory security requirements;
+ *     validate target compatibility;
+ *     propagate authority metadata;
+ *     reject impossible security requirements;
+ *     perform security-aware lowering;
+ *     preserve provenance.
+ *
+ * The compiler MUST NOT treat a security capability declaration as a direct
+ * hardware-selection instruction.
+ *
+ *
+ * RUNTIME INTEGRATION
+ * -------------------
+ *
+ * Runtime security systems may evaluate:
+ *
+ *     credentials;
+ *     principals;
+ *     trust;
+ *     authorization;
+ *     capability possession;
+ *     policy conditions;
+ *     security state.
+ *
+ * Those evaluations are downstream of parsing.
+ *
+ *
+ * RESILIENCE INTEGRATION
+ * ----------------------
+ *
+ * Security requirements may constrain recovery and fallback.
+ *
+ * The grammar does not implement:
+ *
+ *     retry;
+ *     recover;
+ *     reroute;
+ *     reschedule;
+ *     recompile;
+ *     backend switching;
+ *     quarantine.
+ *
+ * Those remain resilience/runtime responsibilities.
+ *
+ * ============================================================================
+ * LEXER INTEGRATION
+ * ============================================================================
+ *
+ * The production lexer is:
+ *
+ *     grammar/antlr/ZamaniLexer.g4
+ *
+ * which consumes:
+ *
+ *     grammar/lexer/tokens.g4
+ *
+ * SecurityCapabilities MUST therefore use:
+ *
+ *     tokenVocab = ZamaniLexer;
+ *
+ * and MUST NOT use:
+ *
+ *     tokenVocab = ZamaniTokens;
+ *
+ * ============================================================================
+ * REQUIRED LEXER TOKENS
+ * ============================================================================
+ *
+ * The current repository already supplies:
+ *
+ *     CAPABILITY
+ *     ACTION
+ *     RESOURCE
+ *     REQUIRES
+ *     WHEN
+ *     CONSTRAINT
+ *     EXTENDS
+ *     AND
+ *     OR
+ *     NOT
+ *
+ * The security grammar additionally requires these reserved words:
+ *
+ *     PERMISSION
+ *     PRINCIPAL
+ *     SCOPE
+ *     ISSUER
+ *     DELEGATE
+ *     ATTENUATE
+ *
+ * They MUST be added to the canonical keyword vocabulary exactly once:
+ *
+ *     grammar/lexer/keywords.g4
+ *
+ * Suggested canonical spellings:
+ *
+ *     PERMISSION : 'permission' ;
+ *     PRINCIPAL  : 'principal' ;
+ *     SCOPE      : 'scope' ;
+ *     ISSUER     : 'issuer' ;
+ *     DELEGATE   : 'delegate' ;
+ *     ATTENUATE  : 'attenuate' ;
+ *
+ * No parser grammar should define these tokens locally.
+ *
+ * ============================================================================
+ * REQUIRED SECURITY COMPOSITION
+ * ============================================================================
+ *
+ * `grammar/security/security.g4` should continue to import:
+ *
+ *     SecurityCapabilities
+ *
+ * and consume:
+ *
+ *     securityCapabilityDeclaration
+ *
+ * It must not duplicate this grammar's declaration/member rules.
+ *
+ * `grammar/security/permissions.g4` remains the owner of permission
+ * declarations and authorization policy syntax.
+ *
+ * `grammar/security/trust.g4` remains the owner of trust semantics.
+ *
+ * `grammar/security/identity.g4` remains the identity façade.
+ *
+ * ============================================================================
+ * COMPATIBILITY
+ * ============================================================================
+ *
+ * Existing public integration names retained:
+ *
+ *     SecurityCapabilities
+ *     securityCapabilitiesFile
+ *     securityCapabilityDeclaration
+ *     securityCapabilityReference
+ *     securityCapabilityBody
+ *     securityCapabilityMember
+ *     securityCapabilityPermission
+ *     securityCapabilityPrincipal
+ *     securityCapabilityAction
+ *     securityCapabilityResource
+ *     securityCapabilityScope
+ *     securityCapabilityIssuer
+ *     securityCapabilityRequirement
+ *     securityCapabilityCondition
+ *     securityCapabilityDelegation
+ *     securityCapabilityAttenuation
+ *
+ * This preserves the repository's existing integration surface while removing
+ * the ambiguous/duplicated implementation details.
+ *
+ * ============================================================================
+ * HARD-CODING AUDIT
+ * ============================================================================
+ *
+ * This grammar contains NO:
+ *
+ *     MAX_CAPABILITIES
+ *     MAX_SECURITY_CAPABILITIES
+ *     MAX_PERMISSIONS
+ *     MAX_PRINCIPALS
+ *     MAX_ACTIONS
+ *     MAX_RESOURCES
+ *     MAX_DEVICES
+ *     MAX_QUBITS
+ *     MAX_CPUS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_QPUS
+ *     MAX_NODES
+ *     MAX_MEMORY
+ *     MAX_REGISTER_WIDTH
+ *     MAX_TENSOR_RANK
+ *
+ * It contains no:
+ *
+ *     physical device IDs;
+ *     physical qubit IDs;
+ *     vendor IDs;
+ *     backend IDs;
+ *     topology;
+ *     routing;
+ *     scheduling;
+ *     calibration;
+ *     QEC implementation;
+ *     ZQN implementation;
+ *     HAL implementation.
+ *
+ * ============================================================================
+ * SECURITY AUDIT
+ * ============================================================================
+ *
+ * This grammar:
+ *
+ *     does not authenticate;
+ *     does not authorize;
+ *     does not grant runtime authority;
+ *     does not issue credentials;
+ *     does not evaluate trust;
+ *     does not retrieve secrets;
+ *     does not execute cryptography;
+ *     does not contact external systems.
+ *
+ * Parsing a security capability declaration is never proof of authority.
+ *
+ * ============================================================================
+ * SCALABILITY AUDIT
+ * ============================================================================
+ *
+ * The grammar uses unbounded structural repetition:
+ *
+ *     *
+ *     +
+ *
+ * for:
+ *
+ *     declarations;
+ *     inheritance;
+ *     permissions;
+ *     principals;
+ *     actions;
+ *     resources;
+ *     members;
+ *     requirements;
+ *     delegation members;
+ *     attenuation members.
+ *
+ * No language-level capacity ceiling is introduced.
+ *
+ * "Infinity" therefore means:
+ *
+ *     arbitrarily large source/semantic structures subject only to actual
+ *     implementation and resource availability.
+ *
+ * ============================================================================
+ * TEST CONTRACT
+ * ============================================================================
+ *
+ * POSITIVE
+ * --------
+ *
+ *     capability security::quantum_execution;
+ *
+ *     capability security::quantum_execution {
+ *         permission quantum::execute;
+ *     }
+ *
+ *     capability security::quantum_execution {
+ *         permission quantum::execute;
+ *         principal service::quantum_executor;
+ *         action quantum::execute;
+ *         resource quantum::program;
+ *     }
+ *
+ *     capability security::hardware_configuration {
+ *         permission hardware::configure;
+ *         action hardware::configure;
+ *         resource hardware::resource;
+ *     }
+ *
+ *     capability security::distributed_execution {
+ *         permission distributed::execute;
+ *         action distributed::execute;
+ *         resource distributed::workload;
+ *         scope security::production;
+ *     }
+ *
+ *     capability security::delegated_execution {
+ *         permission compute::execute;
+ *         delegate {
+ *             to service::worker;
+ *             permission compute::execute;
+ *             action compute::execute;
+ *             when request::purpose == "research";
+ *         };
+ *     }
+ *
+ *     capability security::attenuated_execution {
+ *         permission compute::execute;
+ *         attenuate {
+ *             permission compute::read;
+ *             action compute::read;
+ *             resource data::research;
+ *             when request::purpose == "research";
+ *         };
+ *     }
+ *
+ *     capability security::conditional_execution {
+ *         permission compute::execute;
+ *         when context::environment == "production";
+ *         requires trusted::execution;
+ *     }
+ *
+ *     capability security::future_authority {
+ *         permission future::security::new_permission;
+ *         action future::compute::new_action;
+ *         resource future::resource::new_resource;
+ *     }
+ *
+ *     capability security::versioned_authority
+ *         extends security::base_authority {
+ *         requirement_level = security::high;
+ *     }
+ *
+ *
+ * NEGATIVE
+ * --------
+ *
+ *     capability;
+ *
+ *     capability security::;
+ *
+ *     capability security::x {
+ *         permission;
+ *     }
+ *
+ *     capability security::x {
+ *         principal;
+ *     }
+ *
+ *     capability security::x {
+ *         action;
+ *     }
+ *
+ *     capability security::x {
+ *         resource;
+ *     }
+ *
+ *     capability security::x {
+ *         issuer;
+ *     }
+ *
+ *     capability security::x {
+ *         delegate {
+ *         };
+ *     }
+ *
+ *     capability security::x {
+ *         attenuate {
+ *         };
+ *     }
+ *
+ *
+ * BOUNDARY
+ * --------
+ *
+ * Test:
+ *
+ *     one member;
+ *     many members;
+ *     deeply qualified names;
+ *     large inheritance sets;
+ *     large permission sets;
+ *     large principal sets;
+ *     large action sets;
+ *     large resource sets;
+ *     nested expressions;
+ *     deeply nested scopes;
+ *     many delegation members;
+ *     many attenuation members;
+ *     unknown/future capability names.
+ *
+ *
+ * CROSS-DOMAIN
+ * ------------
+ *
+ *     security::classical_execution
+ *     security::quantum_execution
+ *     security::hdl_synthesis
+ *     security::hardware_configuration
+ *     security::accelerator_execution
+ *     security::distributed_execution
+ *     security::ai_execution
+ *     security::data_access
+ *     security::network_execution
+ *     future::domain::authority
+ *
+ *
+ * POCO-REAF
+ * ---------
+ *
+ * The same security capability syntax must remain valid whether the protected
+ * computation eventually executes on:
+ *
+ *     embedded hardware;
+ *     CPU;
+ *     multicore CPU;
+ *     GPU;
+ *     FPGA;
+ *     ASIC;
+ *     QPU;
+ *     simulator;
+ *     accelerator;
+ *     HPC;
+ *     cluster;
+ *     distributed infrastructure;
+ *     cloud;
+ *     future computational substrates.
+ *
+ * No target-specific security grammar is required.
+ *
+ * ============================================================================
+ * DIAGNOSTICS
+ * ============================================================================
+ *
+ * The parser should report syntax errors through the normal ANTLR/Rust
+ * diagnostic pipeline.
+ *
+ * This grammar MUST NOT:
+ *
+ *     panic;
+ *     inspect runtime state;
+ *     query hardware;
+ *     retrieve credentials;
+ *     evaluate authorization;
+ *     silently repair security syntax.
+ *
+ * Source spans remain the responsibility of the parser/frontend AST.
+ *
+ * ============================================================================
+ * COMPLETION CRITERIA
+ * ============================================================================
+ *
+ * This file is complete when:
+ *
+ * [x] Existing filename is retained.
+ * [x] Grammar name is SecurityCapabilities.
+ * [x] Canonical lexer is ZamaniLexer.
+ * [x] Generic capability ownership remains in core/capabilities.g4.
+ * [x] Effect capability ownership remains in effects/capabilities.g4.
+ * [x] Permission ownership remains in security/permissions.g4.
+ * [x] Identity ownership remains in security identity grammars.
+ * [x] No circular import with Security exists.
+ * [x] No second security IR is introduced.
+ * [x] No second quantum IR is introduced.
+ * [x] quantum::ir remains canonical for quantum semantics.
+ * [x] Security capability names are open-world.
+ * [x] Permissions are open-world.
+ * [x] Principals are open-world.
+ * [x] Actions are open-world.
+ * [x] Resources are open-world.
+ * [x] Delegation is declarative.
+ * [x] Attenuation is declarative.
+ * [x] Conditions are expressions and are not evaluated by the parser.
+ * [x] No physical hardware is selected.
+ * [x] No fixed resource capacity is encoded.
+ * [x] No fixed machine size is encoded.
+ * [x] No embedded Rust exists.
+ * [x] No semantic predicates exist.
+ * [x] No unsafe implementation is required.
+ * [x] Rust 1.97 / 1.97.1 compatibility is documented.
+ * [x] Deterministic parsing is preserved.
+ * [x] Source-level extensibility is preserved.
+ * [x] Integration boundaries are explicit.
+ *
+ * DOWNSTREAM COMPLETION
+ * ---------------------
+ *
+ * Production readiness of the repository additionally requires:
+ *
+ *     lexer token integration;
+ *     parser composition;
+ *     frontend AST mapping;
+ *     structural validation;
+ *     semantic security analysis;
+ *     capability/permission resolution;
+ *     trust analysis;
+ *     diagnostics;
+ *     positive tests;
+ *     negative tests;
+ *     boundary tests;
+ *     scalability tests;
+ *     compatibility tests.
+ *
+ * Those downstream components MUST consume this grammar rather than
+ * duplicating it.
+ *
+ * ============================================================================
+ * FINAL INVARIANT
+ * ============================================================================
+ *
+ * This grammar answers exactly one question:
+ *
+ *     "What is the source syntax for security authority capabilities?"
+ *
+ * It does NOT answer:
+ *
+ *     "Who is authenticated?"
+ *     "Who is authorized?"
+ *     "Which credential is valid?"
+ *     "Which machine is selected?"
+ *     "Which QPU is selected?"
+ *     "Which physical resource is selected?"
+ *     "How is quantum execution routed?"
+ *     "How is HDL synthesized?"
+ *     "How is policy enforced?"
+ *
+ * Those answers belong downstream.
  *
  * ============================================================================
  */
