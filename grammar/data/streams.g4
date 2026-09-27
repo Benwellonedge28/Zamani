@@ -1,89 +1,388 @@
-/**
- * Zamani — Data Stream Grammar
+/*
+ * ============================================================================
+ * Zamani — Universal Data Stream Grammar
+ * ============================================================================
  *
  * File:
  *     grammar/data/streams.g4
  *
- * Grammar:
- *     streams
+ * Status:
+ *     PRODUCTION LEAF GRAMMAR
  *
- * Purpose:
- *     Defines the portable source-level syntax for logical data streams.
+ * Language:
+ *     Zamani Universal Computing Language
  *
- * Architectural rule:
+ * Grammar technology:
+ *     ANTLR4 parser grammar
  *
- *     A stream describes a logical sequence of values/events and its
- *     semantic contract. It does NOT describe the physical machine,
- *     processor, network topology, storage engine, queue implementation,
- *     device identifier, node count, memory capacity, or deployment layout.
+ * Rust implementation baseline:
+ *     Rust 1.97 / Rust 1.97.1
  *
- * Ownership:
- *     - Stream declarations
- *     - Stream element typing references
- *     - Stream source/sink contracts
- *     - Stream partitioning semantics
- *     - Stream ordering semantics
- *     - Stream watermark semantics
- *     - Stream window declarations
- *     - Stream delivery semantics
- *     - Stream consistency semantics
- *     - Stream lifecycle semantics
- *     - Stream-level policies and extensibility hooks
+ * Safety:
+ *     This grammar contains no target-language actions, semantic predicates,
+ *     filesystem access, network access, process execution, hardware
+ *     discovery, runtime inspection, or unsafe implementation.
  *
- * Does NOT own:
- *     - General types
- *     - Records
- *     - Schemas
- *     - Collections
- *     - Serialization formats
- *     - General expressions
- *     - Transformations
- *     - Network protocols
- *     - Physical placement
- *     - Hardware topology
- *     - Runtime scheduling
- *     - Resource discovery
- *     - Database implementation
- *     - Storage engines
- *     - Quantum IR
- *     - Classical IR
+ * ============================================================================
+ * PURPOSE
+ * ============================================================================
  *
- * Scalability:
- *     No source-level maximum is imposed on:
- *       - stream count
- *       - event count
- *       - partition count
- *       - key count
- *       - window count
- *       - source count
- *       - sink count
- *       - stream size
- *       - event size
- *       - topology size
- *       - machine size
+ * This file owns the source-level syntax for LOGICAL DATA STREAMS.
  *
- * Rust:
- *     This grammar contains no Rust actions and therefore introduces
- *     no unsafe Rust and no target-specific runtime behavior.
+ * A stream is an ordered/logically ordered flow of values, events, messages,
+ * samples, records, tensors, measurements, observations, or other values.
  *
- * Integration:
- *     The semantic layer resolves all physical/resource decisions after
- *     parsing. Grammar syntax remains target-independent.
+ * A stream is a semantic abstraction.
+ *
+ * This grammar therefore does NOT encode:
+ *
+ *     - CPU count;
+ *     - GPU count;
+ *     - FPGA count;
+ *     - QPU count;
+ *     - node count;
+ *     - device count;
+ *     - partition count;
+ *     - memory capacity;
+ *     - storage capacity;
+ *     - network topology;
+ *     - queue implementation;
+ *     - database vendor;
+ *     - cloud provider;
+ *     - physical address;
+ *     - socket;
+ *     - process identifier;
+ *     - hardware identifier;
+ *     - accelerator identifier;
+ *     - physical stream buffer;
+ *     - fixed event width;
+ *     - fixed event count;
+ *     - fixed stream cardinality.
+ *
+ * Those concerns belong to semantic analysis, capability/resource analysis,
+ * optimization, scheduling, routing, execution, deployment, interoperability,
+ * and runtime systems.
+ *
+ * ============================================================================
+ * OWNERSHIP
+ * ============================================================================
+ *
+ * THIS FILE OWNS:
+ *
+ *     stream declarations
+ *     stream type parameters
+ *     stream element type references
+ *     stream inheritance/composition
+ *     stream members
+ *     logical sources
+ *     logical sinks
+ *     logical keys
+ *     partitioning intent
+ *     ordering intent
+ *     watermark intent
+ *     window intent
+ *     delivery intent
+ *     consistency intent
+ *     lifecycle intent
+ *     checkpoint intent
+ *     stream policies
+ *     stream properties
+ *     stream requirements
+ *     stream constraints
+ *     stream hints
+ *     stream-level metadata syntax
+ *
+ * THIS FILE DOES NOT OWN:
+ *
+ *     identifiers
+ *     qualified names
+ *     annotations
+ *     general expressions
+ *     general types
+ *     literals
+ *     records
+ *     schemas
+ *     collections
+ *     transformations
+ *     queries
+ *     serialization
+ *     networking
+ *     hardware
+ *     resources
+ *     scheduling
+ *     routing
+ *     execution
+ *     databases
+ *     quantum IR
+ *     classical IR
+ *     HDL
+ *     QEC
+ *     ZQN
+ *     HAL
+ *
+ * ============================================================================
+ * CANONICAL INTEGRATION
+ * ============================================================================
+ *
+ * This file is a PARSER LEAF.
+ *
+ * It must be composed by the canonical Zamani parser composition layer.
+ *
+ * Intended dependency direction:
+ *
+ *     canonical lexer
+ *          |
+ *          v
+ *     canonical parser
+ *          |
+ *          +--> core names / qualified names
+ *          +--> canonical expressions
+ *          +--> canonical type expressions
+ *          +--> canonical annotations
+ *          +--> data declarations
+ *          |
+ *          +--> streamDeclaration
+ *
+ * The stream grammar MUST NOT create another:
+ *
+ *     identifier grammar
+ *     expression grammar
+ *     type grammar
+ *     lexer
+ *     AST
+ *     IR
+ *
+ * ============================================================================
+ * AST CONTRACT
+ * ============================================================================
+ *
+ * Every accepted stream construct must map to the domain-neutral frontend
+ * representation.
+ *
+ * The grammar must NOT require a Stream-specific compiler IR.
+ *
+ * Conceptual lowering:
+ *
+ *     streamDeclaration
+ *          |
+ *          v
+ *     generic declaration/data-stream AST
+ *          |
+ *          v
+ *     semantic stream model
+ *          |
+ *          v
+ *     canonical data/compute IR
+ *          |
+ *          +--> classical execution
+ *          +--> distributed execution
+ *          +--> accelerator execution
+ *          +--> networking
+ *          +--> storage
+ *          +--> future targets
+ *
+ * Quantum consumers remain downstream of the canonical quantum::ir boundary.
+ *
+ * ============================================================================
+ * SEMANTIC CONTRACT
+ * ============================================================================
+ *
+ * The semantic layer must distinguish:
+ *
+ *     REQUIREMENT
+ *     CONSTRAINT
+ *     CAPABILITY
+ *     PREFERENCE
+ *     HINT
+ *     IMPLEMENTATION DECISION
+ *
+ * For example:
+ *
+ *     requires capability("stream.event_time")
+ *
+ * expresses a requirement.
+ *
+ * It does NOT select a machine.
+ *
+ * Likewise:
+ *
+ *     partition by key
+ *
+ * expresses logical partitioning intent.
+ *
+ * It does NOT mean:
+ *
+ *     create N physical partitions.
+ *
+ * Physical partition count, placement, topology, transport, buffering, and
+ * execution strategy are downstream decisions.
+ *
+ * ============================================================================
+ * POCO-REAF
+ * ============================================================================
+ *
+ * Streams participate in:
+ *
+ *     Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
+ *
+ * A portable program describes stream semantics rather than today's hardware.
+ *
+ * A stream may therefore be realized by:
+ *
+ *     one process
+ *     many processes
+ *     one machine
+ *     many machines
+ *     CPU
+ *     GPU
+ *     FPGA
+ *     accelerator
+ *     distributed runtime
+ *     future execution target
+ *
+ * provided that the target satisfies the semantic contract.
+ *
+ * ============================================================================
+ * SCALABILITY
+ * ============================================================================
+ *
+ * No grammar-level maximum is imposed for:
+ *
+ *     stream declarations
+ *     stream members
+ *     type parameters
+ *     source declarations
+ *     sink declarations
+ *     keys
+ *     partition expressions
+ *     ordering expressions
+ *     policies
+ *     properties
+ *     requirements
+ *     constraints
+ *     hints
+ *     windows
+ *     events
+ *     stream cardinality
+ *     event cardinality
+ *     event size
+ *     partition cardinality
+ *     node cardinality
+ *     device cardinality
+ *     topology size
+ *
+ * Any practical limit is an implementation/resource constraint rather than
+ * a language limit.
+ *
+ * ============================================================================
+ * HARD-CODING PROHIBITION
+ * ============================================================================
+ *
+ * The following MUST NOT become grammar limits:
+ *
+ *     MAX_STREAMS
+ *     MAX_EVENTS
+ *     MAX_PARTITIONS
+ *     MAX_KEYS
+ *     MAX_SOURCES
+ *     MAX_SINKS
+ *     MAX_WINDOWS
+ *     MAX_STREAM_SIZE
+ *     MAX_EVENT_SIZE
+ *     MAX_NODES
+ *     MAX_DEVICES
+ *     MAX_MEMORY
+ *
+ * Similarly, the grammar must never encode assumptions such as:
+ *
+ *     64 machines
+ *     32 partitions
+ *     8 GPUs
+ *     24 GB VRAM
+ *     32-bit registers
+ *
+ * Values explicitly written by a program are program semantics and are not
+ * compiler-wide limits.
+ *
+ * ============================================================================
+ * DETERMINISM
+ * ============================================================================
+ *
+ * Parsing depends only on:
+ *
+ *     source text
+ *     selected grammar version
+ *     canonical lexical vocabulary
+ *     canonical parser composition
+ *     explicitly selected dialect configuration
+ *
+ * Parsing MUST NOT depend on:
+ *
+ *     hardware
+ *     network state
+ *     filesystem state
+ *     runtime state
+ *     wall-clock time
+ *     randomness
+ *     environment variables
+ *     available devices
+ *
+ * ============================================================================
+ * DIAGNOSTICS
+ * ============================================================================
+ *
+ * The grammar provides syntactic structure only.
+ *
+ * Semantic diagnostics are responsible for reporting:
+ *
+ *     unknown stream type
+ *     invalid stream element type
+ *     duplicate member
+ *     conflicting policies
+ *     invalid watermark expression
+ *     invalid partition expression
+ *     invalid ordering expression
+ *     unsupported capability
+ *     unsatisfied resource requirement
+ *     incompatible delivery semantics
+ *     incompatible consistency semantics
+ *
+ * Those checks MUST NOT be implemented as target-specific parser actions.
+ *
+ * ============================================================================
+ * COMPATIBILITY
+ * ============================================================================
+ *
+ * This file does not define language-version migration logic.
+ *
+ * Version compatibility belongs to:
+ *
+ *     grammar/compatibility/
+ *     grammar/specification/
+ *     grammar/spec/
+ *
+ * Deprecated stream syntax must be represented through the canonical
+ * compatibility/deprecation mechanism rather than silently duplicated here.
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * GRAMMAR DECLARATION
+ * ============================================================================
+ *
+ * `streams` is intentionally a parser leaf grammar.
+ *
+ * The canonical composition layer supplies the shared vocabulary and the
+ * external rules referenced below.
+ *
+ * ============================================================================
  */
 
 parser grammar streams;
 
-/*
- * During the modular grammar architecture this parser grammar consumes
- * the canonical Zamani lexer vocabulary.
- *
- * Transitional integration:
- *     The current repository uses the combined grammar `Zamani.g4`.
- *     During migration, its token vocabulary may be used as the bridge.
- *
- * Final architecture:
- *     A dedicated Zamani lexer vocabulary should become authoritative.
- */
 options {
     tokenVocab = Zamani;
 }
@@ -91,24 +390,161 @@ options {
 
 /*
  * ============================================================================
- * PUBLIC ENTRY RULES
+ * PUBLIC ENTRY POINT
  * ============================================================================
  *
- * `streamDeclaration` is the primary rule consumed by data/data.g4 and
- * ultimately by the root Zamani parser.
+ * The canonical composition layer imports/exposes this rule.
  *
- * This grammar intentionally does not consume EOF.
+ * This rule intentionally does NOT consume EOF.
+ *
+ * ============================================================================
  */
+
 streamDeclaration
-    : streamAnnotation*
+    : streamAnnotations?
       streamVisibility?
-      'stream'
+      STREAM
       qualifiedName
       streamTypeParameters?
-      streamElementTypeClause?
-      streamExtendsClause?
+      streamElementType?
+      streamExtends?
       streamConfiguration*
       streamBody
+    ;
+
+
+/*
+ * ============================================================================
+ * ANNOTATIONS
+ * ============================================================================
+ *
+ * Annotation syntax remains owned by the canonical core annotation system.
+ *
+ * `streamAnnotation` is a compatibility boundary only.
+ *
+ * The canonical composition layer may replace this facade with the shared
+ * annotation rule when all parser modules have migrated.
+ * ============================================================================
+ */
+
+streamAnnotations
+    : streamAnnotation+
+    ;
+
+streamAnnotation
+    : AT qualifiedName
+      streamAnnotationArguments?
+    ;
+
+streamAnnotationArguments
+    : LPAREN
+      streamArgumentList?
+      RPAREN
+    ;
+
+streamArgumentList
+    : expression
+      (COMMA expression)*
+    ;
+
+
+/*
+ * ============================================================================
+ * VISIBILITY
+ * ============================================================================
+ *
+ * Visibility is a language-wide concept.
+ *
+ * These alternatives are retained here only as a composition boundary.
+ *
+ * The canonical root should eventually delegate to the universal visibility
+ * rule rather than maintaining multiple visibility grammars.
+ * ============================================================================
+ */
+
+streamVisibility
+    : PUBLIC
+    | PRIVATE
+    | INTERNAL
+    | PROTECTED
+    ;
+
+
+/*
+ * ============================================================================
+ * TYPE PARAMETERS
+ * ============================================================================
+ *
+ * Stream generics describe logical types.
+ *
+ * No machine-width or physical-capacity assumption is encoded.
+ *
+ * Examples:
+ *
+ *     stream Events<T> : T { ... }
+ *
+ *     stream Measurements<T, U> : Record<T, U> { ... }
+ *
+ * ============================================================================
+ */
+
+streamTypeParameters
+    : LT
+      streamTypeParameter
+      (COMMA streamTypeParameter)*
+      GT
+    ;
+
+streamTypeParameter
+    : IDENTIFIER
+      streamTypeParameterBound?
+    ;
+
+streamTypeParameterBound
+    : COLON typeExpr
+    ;
+
+
+/*
+ * ============================================================================
+ * ELEMENT TYPE
+ * ============================================================================
+ *
+ * The type system remains owned by types/.
+ *
+ * This grammar only references the canonical type expression.
+ * ============================================================================
+ */
+
+streamElementType
+    : COLON typeExpr
+    ;
+
+
+/*
+ * ============================================================================
+ * STREAM COMPOSITION
+ * ============================================================================
+ *
+ * `extends` represents logical contract composition.
+ *
+ * It does not imply inheritance of:
+ *
+ *     process
+ *     machine
+ *     device
+ *     queue
+ *     network
+ *     storage
+ *     runtime
+ *
+ * ============================================================================
+ */
+
+streamExtends
+    : EXTENDS
+      qualifiedName
+      (COMMA qualifiedName)*
     ;
 
 
@@ -119,13 +555,13 @@ streamDeclaration
  */
 
 streamBody
-    : '{'
+    : LBRACE
       streamMember*
-      '}'
+      RBRACE
     ;
 
 streamMember
-    : streamAnnotation*
+    : streamMemberAnnotations?
       (
           streamSourceDeclaration
         | streamSinkDeclaration
@@ -146,249 +582,152 @@ streamMember
       )
     ;
 
-
-/*
- * ============================================================================
- * ANNOTATIONS / VISIBILITY
- * ============================================================================
- *
- * The canonical annotation syntax belongs to core/annotations.g4.
- *
- * The rule is deliberately named `streamAnnotation` here as an integration
- * boundary. The implementation may delegate this rule to the canonical
- * annotation grammar once the modular parser facade exists.
- */
-
-streamAnnotation
-    : '@'
-      qualifiedName
-      streamAnnotationArguments?
-    ;
-
-streamAnnotationArguments
-    : '('
-      streamArgumentList?
-      ')'
-    ;
-
-streamArgumentList
-    : expression
-      (',' expression)*
-    ;
-
-streamVisibility
-    : 'public'
-    | 'private'
-    | 'internal'
-    | 'protected'
+streamMemberAnnotations
+    : streamAnnotation+
     ;
 
 
 /*
  * ============================================================================
- * STREAM TYPE PARAMETERS
+ * CONFIGURATION
  * ============================================================================
  *
- * Generic streams must remain independent of concrete event sizes or
- * physical representations.
+ * Configuration is semantic configuration, not physical deployment.
  *
- * Examples conceptually supported:
- *
- *     stream Events<T>
- *     stream Events<K, V>
- *
- * The semantic layer determines valid bounds and substitutions.
- */
-
-streamTypeParameters
-    : '<'
-      streamTypeParameter
-      (',' streamTypeParameter)*
-      '>'
-    ;
-
-streamTypeParameter
-    : IDENTIFIER
-      streamTypeParameterBounds?
-    ;
-
-streamTypeParameterBounds
-    : ':'
-      typeExpr
-    ;
-
-
-/*
+ * The qualified name prevents this grammar from becoming a registry of
+ * vendors/providers/frameworks.
  * ============================================================================
- * ELEMENT TYPE
- * ============================================================================
- *
- * A stream carries a logical element type.
- *
- * The actual type system remains owned by types/*.g4.
- */
-
-streamElementTypeClause
-    : ':'
-      typeExpr
-    ;
-
-
-/*
- * ============================================================================
- * STREAM INHERITANCE / COMPOSITION
- * ============================================================================
- *
- * Composition is semantic, not physical.
- *
- * A stream may extend logical stream contracts without inheriting a
- * machine-specific implementation.
- */
-
-streamExtendsClause
-    : 'extends'
-      qualifiedName
-      (',' qualifiedName)*
-    ;
-
-
-/*
- * ============================================================================
- * STREAM CONFIGURATION
- * ============================================================================
- *
- * Configuration is intentionally open-ended.
- *
- * Known semantic properties can be validated by semantic analysis while
- * future dialects can introduce additional properties without requiring
- * a grammar rewrite.
  */
 
 streamConfiguration
-    : streamAnnotation*
-      'configure'
+    : CONFIGURE
       qualifiedName
-      streamConfigurationArguments?
-      ';'
-    ;
-
-streamConfigurationArguments
-    : '('
-      streamArgumentList?
-      ')'
+      streamArgumentGroup?
+      SEMICOLON
     ;
 
 
 /*
  * ============================================================================
- * SOURCES
+ * SOURCE
  * ============================================================================
  *
- * A source identifies a logical producer.
+ * A source identifies a LOGICAL producer.
  *
- * It does NOT identify:
- *     - a physical machine
- *     - a socket
- *     - a fixed IP address
- *     - a hardware device
- *     - a fixed node
- *     - a provider
+ * Examples of semantic source categories may include:
  *
- * Those decisions belong to interoperability, deployment, runtime,
- * resource, and capability layers.
+ *     sensor
+ *     file
+ *     collection
+ *     network
+ *     process
+ *     device
+ *     database
+ *     generated
+ *     external
+ *
+ * Such names are semantic identifiers, not grammar-level provider lists.
+ * ============================================================================
  */
 
 streamSourceDeclaration
-    : 'source'
+    : SOURCE
       qualifiedName
-      streamEndpointTypeClause?
+      streamEndpointType?
       streamEndpointArguments?
-      streamSourceOption*
-      ';'
+      streamEndpointOption*
+      SEMICOLON
     ;
 
-streamEndpointTypeClause
-    : ':'
-      typeExpr
+streamEndpointType
+    : COLON typeExpr
     ;
 
 streamEndpointArguments
-    : '('
+    : LPAREN
       streamArgumentList?
-      ')'
+      RPAREN
     ;
 
-streamSourceOption
-    : 'format'
+streamEndpointOption
+    : streamFormatOption
+    | streamModeOption
+    | streamPolicyOption
+    | streamPropertyOption
+    ;
+
+streamFormatOption
+    : FORMAT
       qualifiedName
-      streamNamedArguments?
-    | 'mode'
+      streamArgumentGroup?
+    ;
+
+streamModeOption
+    : MODE
       qualifiedName
-      streamNamedArguments?
-    | 'policy'
+      streamArgumentGroup?
+    ;
+
+streamPolicyOption
+    : POLICY
       qualifiedName
-      streamNamedArguments?
-    | 'property'
+      streamArgumentGroup?
+    ;
+
+streamPropertyOption
+    : PROPERTY
       qualifiedName
-      ('=' expression)?
+      streamAssignment?
     ;
 
 
 /*
  * ============================================================================
- * SINKS
+ * SINK
  * ============================================================================
- *
- * A sink is a logical consumer.
- *
- * Physical placement is intentionally absent.
  */
 
 streamSinkDeclaration
-    : 'sink'
+    : SINK
       qualifiedName
-      streamEndpointTypeClause?
+      streamEndpointType?
       streamEndpointArguments?
-      streamSinkOption*
-      ';'
-    ;
-
-streamSinkOption
-    : 'format'
-      qualifiedName
-      streamNamedArguments?
-    | 'mode'
-      qualifiedName
-      streamNamedArguments?
-    | 'policy'
-      qualifiedName
-      streamNamedArguments?
-    | 'property'
-      qualifiedName
-      ('=' expression)?
+      streamEndpointOption*
+      SEMICOLON
     ;
 
 
 /*
  * ============================================================================
- * NAMED ARGUMENTS
+ * ARGUMENT GROUPS
  * ============================================================================
  *
- * Runtime/provider-specific arguments remain semantic data rather than
- * hard-coded grammar enumerations.
+ * Named arguments remain expressions.
+ *
+ * This allows future semantic extensions without creating a new grammar rule
+ * for every backend or provider.
+ * ============================================================================
  */
 
-streamNamedArguments
-    : '('
-      streamNamedArgument
-      (',' streamNamedArgument)*
-      ')'
+streamArgumentGroup
+    : LPAREN
+      streamNamedArgumentList?
+      RPAREN
+    ;
+
+streamNamedArgumentList
+    : streamNamedArgument
+      (COMMA streamNamedArgument)*
     ;
 
 streamNamedArgument
     : IDENTIFIER
-      '='
+      ASSIGN
       expression
+    ;
+
+streamAssignment
+    : ASSIGN expression
     ;
 
 
@@ -397,21 +736,22 @@ streamNamedArgument
  * KEYS
  * ============================================================================
  *
- * There is no fixed number of keys.
+ * A stream key is a logical expression over stream values/events.
  *
- * A key is a logical expression over stream elements.
+ * There is no fixed number of keys.
+ * ============================================================================
  */
 
 streamKeyDeclaration
-    : 'key'
-      'by'
-      streamKeyExpressionList
-      ';'
+    : KEY
+      BY
+      streamKeyList
+      SEMICOLON
     ;
 
-streamKeyExpressionList
+streamKeyList
     : expression
-      (',' expression)*
+      (COMMA expression)*
     ;
 
 
@@ -420,36 +760,37 @@ streamKeyExpressionList
  * PARTITIONING
  * ============================================================================
  *
- * This declares logical partitioning semantics.
+ * This describes logical partitioning.
  *
- * It does NOT prescribe:
- *     - number of partitions
- *     - number of nodes
- *     - network topology
- *     - processor placement
- *     - queue implementation
+ * It does NOT describe:
  *
- * The runtime/resource/scheduler layers choose an implementation satisfying
- * the semantic requirement.
+ *     partition count
+ *     physical partition identifiers
+ *     node placement
+ *     GPU assignment
+ *     CPU assignment
+ *     network topology
+ *
+ * ============================================================================
  */
 
 streamPartitionDeclaration
-    : 'partition'
-      'by'
-      streamPartitionExpressionList
+    : PARTITION
+      BY
+      streamPartitionKeyList
       streamPartitionStrategy?
-      ';'
+      SEMICOLON
     ;
 
-streamPartitionExpressionList
+streamPartitionKeyList
     : expression
-      (',' expression)*
+      (COMMA expression)*
     ;
 
 streamPartitionStrategy
-    : 'using'
+    : USING
       qualifiedName
-      streamNamedArguments?
+      streamArgumentGroup?
     ;
 
 
@@ -458,17 +799,22 @@ streamPartitionStrategy
  * ORDERING
  * ============================================================================
  *
- * Ordering describes logical event ordering.
+ * Ordering describes logical ordering semantics.
  *
- * It must not imply a particular machine's execution ordering.
+ * It does not prescribe how physical workers execute.
+ * ============================================================================
  */
 
 streamOrderingDeclaration
-    : 'order'
-      'by'
-      streamOrderTerm
-      (',' streamOrderTerm)*
-      ';'
+    : ORDER
+      BY
+      streamOrderList
+      SEMICOLON
+    ;
+
+streamOrderList
+    : streamOrderTerm
+      (COMMA streamOrderTerm)*
     ;
 
 streamOrderTerm
@@ -478,17 +824,17 @@ streamOrderTerm
     ;
 
 streamOrderDirection
-    : 'ascending'
-    | 'descending'
-    | 'asc'
-    | 'desc'
+    : ASC
+    | DESC
+    | ASCENDING
+    | DESCENDING
     ;
 
 streamNullOrdering
-    : 'nulls'
-      'first'
-    | 'nulls'
-      'last'
+    : NULLS
+      FIRST
+    | NULLS
+      LAST
     ;
 
 
@@ -497,30 +843,28 @@ streamNullOrdering
  * WATERMARKS
  * ============================================================================
  *
- * Watermarks describe logical progress through an event-time stream.
+ * Watermarks express logical event-time progress.
  *
- * No fixed clock resolution or duration is imposed here.
+ * Expressions remain open-ended and can therefore use the canonical temporal
+ * type system.
+ * ============================================================================
  */
 
 streamWatermarkDeclaration
-    : 'watermark'
-      'by'
+    : WATERMARK
+      BY
       expression
-      streamWatermarkPolicy*
-      ';'
+      streamWatermarkOption*
+      SEMICOLON
     ;
 
-streamWatermarkPolicy
-    : 'delay'
-      expression
-    | 'tolerance'
-      expression
-    | 'policy'
-      qualifiedName
-      streamNamedArguments?
-    | 'monotonic'
-    | 'bounded'
-    | 'unbounded'
+streamWatermarkOption
+    : DELAY expression
+    | TOLERANCE expression
+    | MONOTONIC
+    | BOUNDED
+    | UNBOUNDED
+    | POLICY qualifiedName streamArgumentGroup?
     ;
 
 
@@ -529,89 +873,86 @@ streamWatermarkPolicy
  * WINDOWS
  * ============================================================================
  *
- * Window semantics are deliberately extensible.
+ * Window kinds are qualified names instead of a closed enumeration.
  *
- * Examples conceptually supported:
+ * Therefore:
  *
  *     window tumbling(...)
  *     window sliding(...)
  *     window session(...)
  *     window custom(...)
  *
- * No finite window count or fixed duration is encoded in the grammar.
+ * can share one syntactic representation.
+ *
+ * Window semantics are validated downstream.
+ * ============================================================================
  */
 
 streamWindowDeclaration
-    : 'window'
-      streamWindowName?
-      ':'
+    : WINDOW
+      streamWindowBinding?
+      COLON
       qualifiedName
-      streamWindowArguments?
+      streamArgumentGroup?
       streamWindowOption*
-      ';'
+      SEMICOLON
     ;
 
-streamWindowName
+streamWindowBinding
     : IDENTIFIER
     ;
 
-streamWindowArguments
-    : '('
-      streamArgumentList?
-      ')'
-    ;
-
 streamWindowOption
-    : 'on'
-      expression
-    | 'partition'
-      'by'
-      streamPartitionExpressionList
-    | 'order'
-      'by'
-      streamOrderTerm
-      (',' streamOrderTerm)*
-    | 'policy'
-      qualifiedName
-      streamNamedArguments?
-    | 'property'
-      qualifiedName
-      ('=' expression)?
+    : ON expression
+    | PARTITION BY streamPartitionKeyList
+    | ORDER BY streamOrderList
+    | POLICY qualifiedName streamArgumentGroup?
+    | PROPERTY qualifiedName streamAssignment?
     ;
 
 
 /*
  * ============================================================================
- * DELIVERY SEMANTICS
+ * DELIVERY
  * ============================================================================
  *
- * Delivery modes are semantic policies.
+ * Delivery semantics are intentionally open-ended.
  *
- * Their implementation is determined by runtime/interoperability layers.
+ * Examples may include semantic contracts such as:
  *
- * The grammar allows extensible policies rather than hard-coding a finite
- * provider list.
+ *     at_most_once
+ *     at_least_once
+ *     exactly_once
+ *     lossless
+ *     replayable
+ *
+ * The grammar does not establish which policies exist or which targets can
+ * implement them. Semantic analysis owns that decision.
+ * ============================================================================
  */
 
 streamDeliveryDeclaration
-    : 'delivery'
+    : DELIVERY
       qualifiedName
-      streamNamedArguments?
-      ';'
+      streamArgumentGroup?
+      SEMICOLON
     ;
 
 
 /*
  * ============================================================================
- * CONSISTENCY SEMANTICS
+ * CONSISTENCY
+ * ============================================================================
+ *
+ * Consistency is a semantic contract.
  * ============================================================================
  */
 
 streamConsistencyDeclaration
-    : 'consistency'
+    : CONSISTENCY
       qualifiedName
-      streamNamedArguments?
-      ';'
+      streamArgumentGroup?
+      SEMICOLON
     ;
 
 
@@ -619,90 +960,77 @@ streamConsistencyDeclaration
  * ============================================================================
  * LIFECYCLE
  * ============================================================================
- *
- * Lifecycle describes logical stream behavior.
- *
- * It does not prescribe how a runtime process, service, device, or cluster
- * implements the lifecycle.
  */
 
 streamLifecycleDeclaration
-    : 'lifecycle'
-      streamLifecyclePolicy
-      streamNamedArguments?
-      ';'
-    ;
-
-streamLifecyclePolicy
-    : qualifiedName
+    : LIFECYCLE
+      qualifiedName
+      streamArgumentGroup?
+      SEMICOLON
     ;
 
 
 /*
  * ============================================================================
- * CHECKPOINTING
+ * CHECKPOINT
  * ============================================================================
  *
- * Checkpointing here describes logical recoverability semantics.
+ * Checkpointing here describes logical recoverability requirements.
  *
- * It does not claim that arbitrary execution state can always be serialized.
- *
- * Physical checkpoint storage belongs to execution/runtime infrastructure.
+ * Physical checkpoint storage belongs to execution/runtime systems.
+ * ============================================================================
  */
 
 streamCheckpointDeclaration
-    : 'checkpoint'
-      streamCheckpointPolicy
-      streamNamedArguments?
-      ';'
-    ;
-
-streamCheckpointPolicy
-    : qualifiedName
+    : CHECKPOINT
+      qualifiedName
+      streamArgumentGroup?
+      SEMICOLON
     ;
 
 
 /*
  * ============================================================================
- * OPEN-ENDED POLICIES
+ * POLICY
  * ============================================================================
  *
- * Policies are deliberately qualified names rather than closed keyword lists.
+ * Policies are extensible semantic contracts.
  *
- * This allows future dialects, execution systems, distributed runtimes,
- * hardware systems, and new computing models to introduce policies without
- * turning this grammar into a provider registry.
+ * A policy is not a provider API.
+ * ============================================================================
  */
 
 streamPolicyDeclaration
-    : 'policy'
+    : POLICY
       qualifiedName
-      streamNamedArguments?
-      ';'
+      streamArgumentGroup?
+      SEMICOLON
     ;
 
 
 /*
  * ============================================================================
- * PROPERTIES
+ * PROPERTY
  * ============================================================================
  *
- * Generic properties provide controlled extensibility.
+ * Properties provide controlled semantic metadata.
  *
- * Semantic validation must reject properties that are unknown or invalid
- * for the active language version/dialect.
+ * The semantic layer must validate whether a property is:
+ *
+ *     known
+ *     supported
+ *     compatible
+ *     deprecated
+ *     dialect-specific
+ *
+ * ============================================================================
  */
 
 streamPropertyDeclaration
-    : 'property'
+    : PROPERTY
       qualifiedName
-      streamPropertyValue?
-      ';'
-    ;
-
-streamPropertyValue
-    : '='
-      expression
+      streamAssignment?
+      SEMICOLON
     ;
 
 
@@ -711,27 +1039,22 @@ streamPropertyValue
  * REQUIREMENTS
  * ============================================================================
  *
- * Requirements express what execution must provide.
+ * Requirements are portable semantic requirements.
  *
- * They do NOT select a specific device.
+ * Examples:
  *
- * Example conceptual meaning:
+ *     requires capability("stream.event_time");
+ *     requires capability("stream.replay");
+ *     requires memory(required_memory);
  *
- *     requires capability.stream_event_time;
- *
- * does not mean:
- *
- *     use device X.
+ * This grammar does not decide whether the requirement can be satisfied.
+ * ============================================================================
  */
 
 streamRequirementDeclaration
-    : 'requires'
-      streamRequirementExpression
-      ';'
-    ;
-
-streamRequirementExpression
-    : expression
+    : REQUIRES
+      expression
+      SEMICOLON
     ;
 
 
@@ -740,18 +1063,16 @@ streamRequirementExpression
  * CONSTRAINTS
  * ============================================================================
  *
- * Constraints restrict valid implementations without becoming physical
- * machine descriptions.
+ * Constraints describe valid implementations.
+ *
+ * They are not necessarily machine selections.
+ * ============================================================================
  */
 
 streamConstraintDeclaration
-    : 'constrain'
-      streamConstraintExpression
-      ';'
-    ;
-
-streamConstraintExpression
-    : expression
+    : CONSTRAIN
+      expression
+      SEMICOLON
     ;
 
 
@@ -760,53 +1081,31 @@ streamConstraintExpression
  * HINTS
  * ============================================================================
  *
- * Hints are non-binding implementation guidance.
+ * Hints are non-binding guidance.
  *
- * A hint must never silently become a semantic requirement.
+ * A hint MUST NOT silently become a requirement.
+ * ============================================================================
  */
 
 streamHintDeclaration
-    : 'hint'
+    : HINT
       qualifiedName
-      streamNamedArguments?
-      ';'
+      streamArgumentGroup?
+      SEMICOLON
     ;
 
 
 /*
  * ============================================================================
- * EXPRESSIONS / IDENTIFIERS / TYPES
+ * COMPATIBILITY ENTRY POINTS
  * ============================================================================
  *
- * These are integration contracts.
+ * These names provide stable integration points while the repository moves
+ * from the current monolithic Zamani.g4 architecture to the modular parser
+ * hierarchy.
  *
- * They MUST resolve to the canonical rules owned elsewhere:
- *
- *     identifier / qualifiedName
- *         -> core/names.g4
- *         -> core/qualified-names.g4
- *
- *     typeExpr
- *         -> types/*.g4
- *
- *     expression
- *         -> expressions/*.g4
- *
- * The stream grammar does not create another type system or expression
- * language.
- */
-
-
-/*
+ * They do not introduce another type or expression system.
  * ============================================================================
- * COMPATIBILITY ALIASES
- * ============================================================================
- *
- * These aliases provide stable semantic entry points during the migration
- * from the current monolithic grammar to the modular grammar architecture.
- *
- * They may be removed only after the repository-wide grammar facade has
- * adopted the canonical names.
  */
 
 streamType
@@ -820,125 +1119,194 @@ streamExpression
 
 /*
  * ============================================================================
- * SEMANTIC NOTES
+ * TOKEN VOCABULARY CONTRACT
  * ============================================================================
  *
- * The following are intentionally NOT grammar constructs:
+ * The following symbolic tokens are expected to be supplied by the canonical
+ * Zamani lexer vocabulary.
  *
- *     MAX_STREAMS
- *     MAX_EVENTS
- *     MAX_PARTITIONS
- *     MAX_KEYS
- *     MAX_SOURCES
- *     MAX_SINKS
- *     MAX_WINDOW_SIZE
- *     MAX_STREAM_SIZE
- *     MAX_NODES
- *     MAX_DEVICES
+ * They are listed here as an explicit integration contract so that a lexer
+ * implementation can audit the complete stream surface.
  *
- * Any such limit belongs to:
+ * --------------------------------------------------------------------------
+ * Structural / punctuation
+ * --------------------------------------------------------------------------
  *
- *     resource constraints
- *     runtime capabilities
- *     hardware capabilities
- *     deployment configuration
+ *     AT
+ *     LPAREN
+ *     RPAREN
+ *     LBRACE
+ *     RBRACE
+ *     COMMA
+ *     COLON
+ *     SEMICOLON
+ *     ASSIGN
+ *     LT
+ *     GT
+ *
+ * --------------------------------------------------------------------------
+ * Identifiers
+ * --------------------------------------------------------------------------
+ *
+ *     IDENTIFIER
+ *
+ * --------------------------------------------------------------------------
+ * Stream keywords
+ * --------------------------------------------------------------------------
+ *
+ *     STREAM
+ *     SOURCE
+ *     SINK
+ *     CONFIGURE
+ *     KEY
+ *     BY
+ *     PARTITION
+ *     USING
+ *     ORDER
+ *     ASC
+ *     DESC
+ *     ASCENDING
+ *     DESCENDING
+ *     NULLS
+ *     FIRST
+ *     LAST
+ *     WATERMARK
+ *     DELAY
+ *     TOLERANCE
+ *     MONOTONIC
+ *     BOUNDED
+ *     UNBOUNDED
+ *     WINDOW
+ *     ON
+ *     DELIVERY
+ *     CONSISTENCY
+ *     LIFECYCLE
+ *     CHECKPOINT
+ *     POLICY
+ *     PROPERTY
+ *     FORMAT
+ *     MODE
+ *     REQUIRES
+ *     CONSTRAIN
+ *     HINT
+ *
+ * --------------------------------------------------------------------------
+ * Visibility
+ * --------------------------------------------------------------------------
+ *
+ *     PUBLIC
+ *     PRIVATE
+ *     INTERNAL
+ *     PROTECTED
+ *
+ * IMPORTANT:
+ *
+ * This list is an integration contract, not a second lexer.
+ *
+ * The canonical lexer must decide whether these are:
+ *
+ *     dedicated keyword tokens
+ *     contextual keywords
+ *
+ * according to the repository-wide lexical policy.
+ *
+ * The final implementation MUST NOT silently maintain a second incompatible
+ * keyword spelling table inside this grammar.
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * NON-OWNERSHIP / DOWNSTREAM RESPONSIBILITY
+ * ============================================================================
+ *
+ * The following must remain downstream:
+ *
+ *     physical source selection
+ *     physical sink selection
+ *     transport selection
+ *     network topology
+ *     partition placement
+ *     partition count
+ *     buffering strategy
+ *     queue implementation
+ *     thread placement
+ *     CPU selection
+ *     GPU selection
+ *     FPGA selection
+ *     QPU selection
+ *     memory placement
+ *     storage placement
+ *     accelerator selection
  *     scheduling
- *     provider constraints
- *     operating-system constraints
- *     network constraints
+ *     routing
+ *     fault recovery implementation
+ *     checkpoint storage
+ *     serialization implementation
+ *     compression implementation
  *
- * and must never become an arbitrary syntax limitation.
- *
- *
- * ============================================================================
- * DOMAIN BOUNDARIES
- * ============================================================================
- *
- * DATA:
- *     This file owns logical streaming.
- *
- * SCHEMAS:
- *     schemas.g4 owns schema contracts.
- *
- * RECORDS:
- *     records.g4 owns record declarations.
- *
- * COLLECTIONS:
- *     collections.g4 owns finite/logical collections.
- *
- * TRANSFORMATIONS:
- *     transformations.g4 owns stream/data transformations.
- *
- * SERIALIZATION:
- *     serialization.g4 owns representation/encoding syntax.
- *
- * NETWORKING:
- *     networking/*.g4 owns communication protocols/endpoints.
- *
- * DISTRIBUTED:
- *     distributed/*.g4 owns distributed execution semantics.
- *
- * RESOURCES:
- *     resources/*.g4 owns resource requirements/capabilities.
- *
- * EXECUTION:
- *     execution/*.g4 owns scheduling/dispatch/deployment.
- *
- * HARDWARE:
- *     hardware/*.g4 owns physical hardware semantics.
- *
- * QUANTUM:
- *     quantum/*.g4 owns quantum source syntax.
- *
- * QUANTUM IR:
- *     quantum::ir remains the canonical semantic quantum representation.
- *
- * This file must never import or depend on quantum::ir.
- *
+ * The stream grammar expresses intent only.
  *
  * ============================================================================
- * POCO-REAF
+ */
+
+
+/*
+ * ============================================================================
+ * PRODUCTION COMPLETION CRITERIA
  * ============================================================================
  *
- * A stream source program must express:
+ * This file is complete only when all of the following are true:
  *
- *     WHAT data flows
- *     WHAT type flows
- *     WHAT ordering means
- *     WHAT partitioning means
- *     WHAT delivery semantics mean
- *     WHAT consistency means
- *     WHAT capabilities are required
+ * [x] Stream syntax has one authoritative leaf grammar.
+ * [x] No Rust actions exist.
+ * [x] No unsafe implementation is required.
+ * [x] No hardware is selected by parsing.
+ * [x] No physical topology is encoded.
+ * [x] No universal stream limits exist.
+ * [x] No fixed event count exists.
+ * [x] No fixed partition count exists.
+ * [x] No fixed node count exists.
+ * [x] No fixed device count exists.
+ * [x] Generic element types are supported.
+ * [x] Generic stream types are supported.
+ * [x] Logical sources are supported.
+ * [x] Logical sinks are supported.
+ * [x] Logical keys are supported.
+ * [x] Partitioning intent is supported.
+ * [x] Ordering intent is supported.
+ * [x] Event-time/watermark intent is supported.
+ * [x] Window intent is supported.
+ * [x] Delivery semantics are extensible.
+ * [x] Consistency semantics are extensible.
+ * [x] Lifecycle semantics are extensible.
+ * [x] Checkpoint semantics are extensible.
+ * [x] Requirements are separated from hints.
+ * [x] Constraints are separated from requirements.
+ * [x] Properties are extensible.
+ * [x] Provider/framework names are not enumerated.
+ * [x] Expressions are delegated to the canonical expression grammar.
+ * [x] Types are delegated to the canonical type grammar.
+ * [x] Names are delegated to the canonical name grammar.
+ * [x] AST ownership is downstream and domain-neutral.
+ * [x] IR ownership is downstream.
+ * [x] POCO-REAF is preserved.
  *
- * It must not permanently encode:
+ * Repository-wide completion still requires:
  *
- *     WHERE the stream runs
- *     WHICH CPU runs it
- *     WHICH GPU runs it
- *     WHICH FPGA runs it
- *     WHICH node receives it
- *     WHICH network link carries it
- *     HOW MANY machines exist
- *     HOW MANY partitions physically exist
- *
- * Those decisions are deferred to compilation/runtime/deployment.
- *
+ *     canonical lexer token integration
+ *     canonical parser composition
+ *     AST mapping
+ *     semantic validation
+ *     canonical data IR mapping
+ *     positive tests
+ *     negative tests
+ *     boundary tests
+ *     scalability tests
+ *     determinism tests
+ *     compatibility tests
  *
  * ============================================================================
- * NO RUNTIME ACTIONS
- * ============================================================================
- *
- * This grammar intentionally contains:
- *
- *     no @members blocks
- *     no embedded Rust
- *     no target-specific actions
- *     no unsafe code
- *     no filesystem access
- *     no networking
- *     no device discovery
- *     no hardware probing
- *     no resource allocation
- *
- * This keeps parsing deterministic and portable.
  */
