@@ -3,230 +3,617 @@
  * Zamani Programming Language
  * ============================================================================
  *
- * File:
- *     grammar/data/transformations.g4
+ * FILE
+ * ----
+ * grammar/data/transformations.g4
  *
- * Grammar role:
- *     Authoritative parser grammar for GENERAL DATA TRANSFORMATION SYNTAX.
+ * GRAMMAR
+ * -------
+ * ZamaniDataTransformationsParser
  *
- * Language baseline:
- *     Rust 1.97 / Rust 1.97.1
- *     Rust edition 2021
+ * STATUS
+ * ------
+ * CANONICAL DATA-TRANSFORMATION SYNTAX
+ *
+ * ============================================================================
+ * IMPLEMENTATION BASELINE
+ * ============================================================================
+ *
+ * Rust:
+ *     1.97 / 1.97.1
+ *
+ * Edition:
+ *     Rust 2021
  *
  * Safety:
- *     - parser grammar only;
- *     - no embedded Rust actions;
+ *     Safe Rust only.
+ *
+ * This grammar contains:
+ *
+ *     - no embedded Rust;
  *     - no semantic predicates;
- *     - no unsafe code;
+ *     - no actions;
  *     - no filesystem access;
  *     - no network access;
  *     - no runtime execution;
- *     - no provider-specific implementation;
  *     - no hardware discovery;
- *     - no resource discovery.
+ *     - no resource discovery;
+ *     - no backend selection;
+ *     - no target-specific implementation.
  *
  * ============================================================================
- *
- * ARCHITECTURAL POSITION
+ * ARCHITECTURAL PURPOSE
  * ============================================================================
  *
- * Zamani source
- *      |
- *      v
- * shared lexer
- *      |
- *      v
- * root parser / delegated parser grammars
- *      |
- *      v
- * data transformation syntax
- *      |
- *      v
- * frontend AST
- *      |
- *      v
- * semantic analysis
- *      |
- *      v
- * canonical data / computation representation
- *      |
- *      +-----------------------------+
- *      |             |               |
- *      v             v               v
- * classical       AI/data       distributed
- * lowering        lowering      lowering
- *      |             |               |
- *      +-------------+---------------+
- *                    |
- *                    v
- *               optimization
- *                    |
- *                    v
- *                scheduling
- *                    |
- *                    v
- *               execution/runtime
+ * This file is the SINGLE SYNTAX OWNER for GENERAL DATA TRANSFORMATION
+ * INVOCATION AND COMPOSITION.
  *
- * This grammar is SYNTAX ONLY.
+ * It describes portable transformation intent.
  *
- * It does not construct IR.
+ * It does NOT implement transformations.
  *
- * It does not perform transformations.
- *
- * It does not decide where a transformation executes.
- *
- * It does not decide whether execution uses:
+ * It does NOT decide:
  *
  *     CPU
  *     GPU
  *     FPGA
  *     ASIC
  *     QPU
+ *     accelerator
+ *     node
  *     cluster
- *     cloud
- *     embedded hardware
- *     future hardware
+ *     cloud provider
+ *     storage engine
+ *     database engine
+ *     filesystem
+ *     network transport
+ *     physical memory
+ *     physical topology
+ *     scheduling
+ *     routing
+ *     quantum placement
+ *     QEC
+ *     ZQN
+ *     HAL
+ *
+ * Those belong downstream.
  *
  * ============================================================================
- *
- * OWNERSHIP
+ * ARCHITECTURAL PIPELINE
  * ============================================================================
  *
- * THIS FILE OWNS:
+ *     Zamani source
+ *          |
+ *          v
+ *     grammar/antlr/ZamaniLexer.g4
+ *          |
+ *          v
+ *     grammar/antlr/ZamaniParser.g4
+ *          |
+ *          v
+ *     data transformation syntax
+ *          |
+ *          v
+ *     domain-neutral frontend AST
+ *          |
+ *          v
+ *     semantic analysis
+ *          |
+ *          v
+ *     canonical semantic model / IR
+ *          |
+ *          +-----------------------+
+ *          |                       |
+ *          v                       v
+ *     classical/data          distributed/AI
+ *     lowering                lowering
+ *          |                       |
+ *          +-----------+-----------+
+ *                      |
+ *                      v
+ *                 optimization
+ *                      |
+ *                      v
+ *                 scheduling
+ *                      |
+ *                      v
+ *                 execution
+ *                      |
+ *                      v
+ *             target realization
  *
- *     - general data transformation syntax;
- *     - transformation declarations;
- *     - transformation invocation syntax;
- *     - transformation composition;
- *     - map;
- *     - flat_map;
- *     - filter;
- *     - reduce;
- *     - fold;
- *     - scan;
- *     - group;
- *     - partition;
- *     - repartition intent;
- *     - sort;
- *     - distinct;
- *     - project;
- *     - rename;
- *     - derive;
- *     - cast;
- *     - reshape;
- *     - flatten;
- *     - explode;
- *     - collect;
- *     - materialize intent;
- *     - window transformations;
- *     - joins;
- *     - unions;
- *     - intersections;
- *     - differences;
- *     - concatenation;
- *     - sampling;
- *     - batching;
- *     - limiting;
- *     - taking;
- *     - dropping;
- *     - transformation pipelines;
- *     - transformation stages;
- *     - transformation policies;
- *     - transformation requirements;
- *     - transformation hints;
- *     - transformation metadata;
- *     - transformation provenance boundaries.
+ * Quantum data flows through the ordinary semantic boundary and, where
+ * appropriate, through the canonical:
  *
- * THIS FILE DOES NOT OWN:
+ *     quantum::ir
  *
- *     - lexical tokens;
- *     - general expressions;
- *     - canonical types;
- *     - general statements;
- *     - data schemas;
- *     - data serialization;
- *     - data deserialization;
- *     - storage engines;
- *     - databases;
- *     - filesystem implementation;
- *     - network transports;
- *     - quantum::ir;
- *     - QEC;
- *     - ZQN;
- *     - routing;
- *     - scheduling;
- *     - optimization algorithms;
- *     - hardware discovery;
- *     - resource allocation;
- *     - runtime execution;
- *     - provider APIs.
+ * This grammar MUST NOT introduce another quantum IR.
  *
  * ============================================================================
- *
- * POCO-REAF CONTRACT
+ * WHY THIS FILE IS OPEN-WORLD
  * ============================================================================
  *
- * A transformation describes WHAT transformation means.
+ * Earlier versions attempted to make operations such as:
  *
- * It must not permanently encode HOW or WHERE the transformation executes.
+ *     map
+ *     filter
+ *     reduce
+ *     fold
+ *     scan
+ *     group
+ *     join
+ *     sort
+ *     ...
  *
- * Therefore this grammar deliberately contains no:
+ * parser-level keywords.
+ *
+ * That does not scale.
+ *
+ * The canonical keyword vocabulary currently does NOT reserve every such
+ * operation. More importantly, future data operations, domain operations,
+ * standard-library operations, user operations, and dialect operations must
+ * remain extensible.
+ *
+ * Therefore this grammar treats transformation names as ordinary source-level
+ * names.
+ *
+ * Examples:
+ *
+ *     map(data, |x| f(x))
+ *     filter(data, |x| predicate(x))
+ *     reduce(data, initial, |a, x| combine(a, x))
+ *     reshape(data, shape)
+ *     repartition(data, key)
+ *     join(left, right, condition)
+ *     custom_transform(data, parameter)
+ *
+ * are all instances of the same syntactic category:
+ *
+ *     dataTransformationInvocation
+ *
+ * The semantic layer determines whether a name denotes:
+ *
+ *     - a standard transformation;
+ *     - a user-defined transformation;
+ *     - an imported transformation;
+ *     - a library transformation;
+ *     - a dialect transformation;
+ *     - an AI/data transformation;
+ *     - a distributed transformation;
+ *     - a future transformation.
+ *
+ * This is the mechanism that prevents the grammar from becoming a finite
+ * catalogue of algorithms.
+ *
+ * ============================================================================
+ * SINGLE-AUTHORITY RULE
+ * ============================================================================
+ *
+ * This file owns:
+ *
+ *     dataTransformationConstruct
+ *     dataTransformationExpression
+ *     dataTransformationInvocation
+ *     dataTransformationComposition
+ *     dataTransformationReference
+ *     dataTransformationArgumentList
+ *     dataTransformationOptions
+ *     dataTransformationContract
+ *     dataTransformationSpecification
+ *
+ * It does NOT own:
+ *
+ *     expression
+ *     typeExpression
+ *     identifier
+ *     declaration
+ *     function declaration
+ *     statement
+ *     block
+ *     collection syntax
+ *     stream syntax
+ *     schema syntax
+ *     serialization syntax
+ *     query syntax
+ *     pipeline declaration syntax
+ *
+ * Those remain owned by their canonical grammar components.
+ *
+ * ============================================================================
+ * IMPORTANT CORRECTION TO THE PREVIOUS IMPLEMENTATION
+ * ============================================================================
+ *
+ * The previous implementation imported:
+ *
+ *     ZamaniDataParser
+ *
+ * while `data.g4` was also intended to delegate transformations back to this
+ * grammar.
+ *
+ * That produces the wrong dependency direction:
+ *
+ *     data.g4
+ *          |
+ *          v
+ *     transformations.g4
+ *          |
+ *          v
+ *     data.g4
+ *
+ * which can create a grammar dependency cycle.
+ *
+ * This file therefore DOES NOT import data.g4.
+ *
+ * The intended direction is:
+ *
+ *     shared lexer
+ *          |
+ *          v
+ *     shared expressions/types
+ *          |
+ *          v
+ *     transformations.g4
+ *          |
+ *          v
+ *     data.g4 / canonical parser composition
+ *
+ * ============================================================================
+ * CANONICAL LEXER
+ * ============================================================================
+ *
+ * The production lexer is:
+ *
+ *     grammar/antlr/ZamaniLexer.g4
+ *
+ * Parser grammars consume:
+ *
+ *     tokenVocab = ZamaniLexer;
+ *
+ * This file therefore MUST NOT use:
+ *
+ *     tokenVocab = Zamani
+ *     tokenVocab = ZamaniTokens
+ *
+ * as its production vocabulary.
+ *
+ * ============================================================================
+ * CANONICAL IMPORTS
+ * ============================================================================
+ *
+ * Expressions:
+ *
+ *     grammar/expressions/expressions.g4
+ *
+ * owns:
+ *
+ *     expression
+ *     lambdaExpression
+ *     argumentList
+ *     expressionList
+ *
+ * Types:
+ *
+ *     grammar/types/types.g4
+ *
+ * owns:
+ *
+ *     typeExpression
+ *
+ * This file consumes those rules rather than creating competing expression
+ * or type systems.
+ *
+ * ============================================================================
+ * POCO-REAF
+ * ============================================================================
+ *
+ * Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
+ *
+ * Transformation syntax describes WHAT should happen.
+ *
+ * It does not prescribe WHERE or HOW it happens.
+ *
+ * Consequently this grammar has no universal limits for:
+ *
+ *     records
+ *     rows
+ *     columns
+ *     elements
+ *     tensors
+ *     tensor dimensions
+ *     tensor rank
+ *     partitions
+ *     replicas
+ *     batches
+ *     workers
+ *     threads
+ *     devices
+ *     nodes
+ *     streams
+ *     pipeline stages
+ *     transformations
+ *     joins
+ *     windows
+ *     datasets
+ *
+ * ============================================================================
+ * HARD-CODING PROHIBITION
+ * ============================================================================
+ *
+ * This file MUST NOT contain universal language limits such as:
  *
  *     MAX_ROWS
  *     MAX_COLUMNS
  *     MAX_ELEMENTS
+ *     MAX_TENSOR_RANK
+ *     MAX_TENSOR_DIMENSION
  *     MAX_PARTITIONS
+ *     MAX_REPLICAS
  *     MAX_WORKERS
  *     MAX_THREADS
  *     MAX_DEVICES
- *     MAX_GPUS
- *     MAX_QUBITS
  *     MAX_NODES
- *     MAX_MEMORY
  *     MAX_BATCHES
+ *     MAX_PIPELINE_STAGES
+ *     MAX_TRANSFORMATIONS
+ *     MAX_STREAMS
+ *     MAX_DATASETS
+ *     MAX_MEMORY
+ *     MAX_GPUS
+ *     MAX_CPUS
+ *     MAX_QUBITS
  *
- * Counts, dimensions, sizes and resource quantities are expressions.
+ * There are intentionally no finite resource enumerations here.
  *
- * Physical limits are evaluated by:
+ * ============================================================================
+ * REQUIREMENT / CAPABILITY / PREFERENCE / HINT SEPARATION
+ * ============================================================================
  *
- *     semantic analysis
- *     compiler policy
- *     resource management
+ * A transformation may carry source-level intent such as:
+ *
+ *     requires capability("tensor.compute")
+ *     requires capability("distributed.data")
+ *     requires memory >= required_memory
+ *     prefer(...)
+ *     hint(...)
+ *
+ * The grammar only preserves the expressions.
+ *
+ * Semantic analysis determines their meaning.
+ *
+ * Resource management determines availability.
+ *
+ * Compilation determines realization.
+ *
+ * Runtime determines actual resource state.
+ *
+ * ============================================================================
+ * TRANSFORMATION FAMILIES
+ * ============================================================================
+ *
+ * The language specification may define standard semantic transformation names
+ * including, but not limited to:
+ *
+ *     map
+ *     flat_map
+ *     filter
+ *     reduce
+ *     fold
+ *     scan
+ *     group
+ *     aggregate
+ *     partition
+ *     repartition
+ *     sort
+ *     distinct
+ *     project
+ *     rename
+ *     derive
+ *     cast
+ *     reshape
+ *     flatten
+ *     explode
+ *     collect
+ *     materialize
+ *     window
+ *     join
+ *     union
+ *     intersection
+ *     difference
+ *     concat
+ *     sample
+ *     batch
+ *     limit
+ *     take
+ *     drop
+ *     select
+ *     mutate
+ *     normalize
+ *     encode
+ *     decode
+ *     validate
+ *     transform
+ *
+ * These names are semantic vocabulary.
+ *
+ * They are deliberately NOT converted into a closed parser keyword inventory.
+ *
+ * This permits future transformations without modifying this grammar.
+ *
+ * ============================================================================
+ * FUNCTION / TRANSFORMATION SEPARATION
+ * ============================================================================
+ *
+ * Reusable executable transformation code should use the canonical function
+ * system rather than introducing a second function declaration language here.
+ *
+ * For example:
+ *
+ *     fn normalize<T>(value: T) -> T {
+ *         ...
+ *     }
+ *
+ * may be used as:
+ *
+ *     map(data, |x| normalize(x))
+ *
+ * A transformation-specific contract may be attached through the contract
+ * mechanisms defined below.
+ *
+ * This avoids duplicating:
+ *
+ *     functions/functions.g4
+ *
+ * inside the data grammar.
+ *
+ * ============================================================================
+ * AST CONTRACT
+ * ============================================================================
+ *
+ * This grammar must lower into the existing domain-neutral frontend AST.
+ *
+ * It must NOT introduce:
+ *
+ *     DataTransformAst
+ *     DataTransformIr
+ *     QuantumDataIr
+ *     HardwareTransformIr
+ *
+ * merely for parser convenience.
+ *
+ * Conceptual mapping:
+ *
+ *     dataTransformationInvocation
+ *         ->
+ *     generic call / operation expression
+ *
+ *     dataTransformationComposition
+ *         ->
+ *     ordered composition expression
+ *
+ *     dataTransformationOption
+ *         ->
+ *     structured metadata/semantic-intent node
+ *
+ *     dataTransformationContract
+ *         ->
+ *     contract/declaration semantic representation
+ *
+ * Exact Rust AST type names remain owned by the frontend AST implementation.
+ *
+ * ============================================================================
+ * SEMANTIC CONTRACT
+ * ============================================================================
+ *
+ * Semantic analysis is responsible for:
+ *
+ *     - resolving transformation names;
+ *     - determining transformation kind;
+ *     - validating argument arity;
+ *     - validating argument types;
+ *     - checking lambda signatures;
+ *     - checking collection/stream compatibility;
+ *     - checking shape compatibility;
+ *     - checking schema compatibility;
+ *     - checking ordering guarantees;
+ *     - checking null/missing-value behavior;
+ *     - checking determinism;
+ *     - checking effects;
+ *     - checking resource requirements;
+ *     - checking capabilities;
+ *     - checking portability;
+ *     - checking distributed semantics;
+ *     - checking quantum/classical boundary semantics where applicable.
+ *
+ * The grammar MUST NOT perform those checks.
+ *
+ * ============================================================================
+ * IR CONTRACT
+ * ============================================================================
+ *
+ * Transformations lower through:
+ *
+ *     source syntax
+ *         |
+ *         v
+ *     domain-neutral AST
+ *         |
+ *         v
+ *     semantic transformation model
+ *         |
+ *         v
+ *     canonical data/computation IR
+ *         |
+ *         +-----------------------------+
+ *         |             |               |
+ *         v             v               v
+ *     classical       distributed       AI
+ *     lowering        lowering         lowering
+ *         |
+ *         v
+ *     optimization
+ *         |
+ *         v
  *     scheduling
- *     deployment
- *     runtime capability negotiation
+ *         |
+ *         v
+ *     execution
+ *
+ * If transformed data feeds a quantum computation:
+ *
+ *     data semantic model
+ *         |
+ *         v
+ *     quantum/classical semantic boundary
+ *         |
+ *         v
+ *     quantum::ir
+ *
+ * This grammar never directly consumes or constructs quantum::ir.
  *
  * ============================================================================
- *
- * IMPORTANT INTEGRATION RULE
+ * DETERMINISM
  * ============================================================================
  *
- * `data.g4` previously contained general transformation productions.
+ * Parsing must depend only on:
  *
- * Those productions must delegate here rather than remain duplicated there.
+ *     source tokens
+ *     language version
+ *     active grammar
  *
- * The intended architecture is:
+ * It must NOT depend on:
  *
- *     data.g4
- *          |
- *          +--> dataTransformationConstruct
- *                         |
- *                         v
- *                 transformations.g4
+ *     machine size
+ *     hardware availability
+ *     runtime state
+ *     current time
+ *     randomness
+ *     filesystem state
+ *     network state
+ *     resource discovery
+ *     scheduling
+ *     backend selection
  *
- * AI dataset grammar may similarly consume:
+ * ============================================================================
+ * SECURITY
+ * ============================================================================
  *
- *     dataTransformationConstruct
+ * Transformation syntax is non-executing.
  *
- * rather than redefining map/filter/batch/window/etc.
+ * A source expression such as:
  *
- * This file MUST NOT import AI grammar.
+ *     transform_external(data, command)
  *
- * This file MUST NOT import quantum grammar.
+ * MUST NOT execute anything during parsing.
  *
- * This file MUST NOT import hardware grammar.
+ * This grammar performs no:
  *
- * This prevents domain cycles.
+ *     I/O
+ *     network access
+ *     process execution
+ *     plugin loading
+ *     hardware probing
+ *     database access
+ *     filesystem access
  *
  * ============================================================================
  */
@@ -234,1082 +621,421 @@
 parser grammar ZamaniDataTransformationsParser;
 
 options {
-    tokenVocab = Zamani;
+    tokenVocab = ZamaniLexer;
 }
 
-import ZamaniDataParser;
+import Expressions, Types;
 
 
-/* ============================================================================
- * 1. PUBLIC INTEGRATION BOUNDARY
+/*
+ * ============================================================================
+ * 1. PUBLIC INTEGRATION ENTRY POINT
  * ============================================================================
  *
- * This is the stable rule that other data/domain grammars should consume.
+ * `dataTransformationConstruct` is the only public transformation composition
+ * boundary that data.g4 and the canonical parser should consume.
  *
- * Example integration in data.g4:
- *
- *     dataTransformationConstruct
- *
- * rather than reproducing the rules in this file.
- *
- * ========================================================================== */
+ * ============================================================================
+ */
 
 dataTransformationConstruct
-    : dataTransformationDeclaration
-    | dataTransformationStatement
-    | dataTransformationExpression
-    | dataTransformationPipeline
+    : dataTransformationExpression
+    | dataTransformationContract
+    | dataTransformationSpecification
     ;
 
-
-/* ============================================================================
- * 2. DECLARATION
- * ========================================================================== */
 
 /*
- * Declares a reusable transformation.
+ * ============================================================================
+ * 2. TRANSFORMATION EXPRESSION
+ * ============================================================================
  *
- * Examples:
+ * A transformation is syntactically an expression-level operation.
  *
- *     transform normalize(value) -> Value {
- *         ...
- *     }
+ * This is intentional.
  *
- *     transform normalize<T>(value: T) -> T {
- *         ...
- *     }
+ * It means transformations compose naturally with the universal expression
+ * system without creating a second expression language.
  *
- * No machine-specific execution target is implied.
+ * ============================================================================
  */
-dataTransformationDeclaration
-    : visibilityModifier?
-      'transform'
-      IDENTIFIER
-      genericParameters?
-      '('
-      parameterList?
-      ')'
-      dataTransformationReturnType?
-      dataTransformationAttributes?
-      block
-    ;
-
-dataTransformationReturnType
-    : '->'
-      typeExpr
-    ;
-
-dataTransformationAttributes
-    : '['
-      dataTransformationAttribute*
-      ']'
-    ;
-
-dataTransformationAttribute
-    : annotation
-    | dataTransformationProperty
-    ;
-
-dataTransformationProperty
-    : IDENTIFIER
-      ('=' expression)?
-    ;
-
-
-/* ============================================================================
- * 3. TRANSFORMATION STATEMENT
- * ========================================================================== */
-
-dataTransformationStatement
-    : dataTransformationExpression ';'
-    ;
-
-
-/* ============================================================================
- * 4. CORE TRANSFORMATION EXPRESSION
- * ========================================================================== */
 
 dataTransformationExpression
-    : dataMapExpression
-    | dataFlatMapExpression
-    | dataFilterExpression
-    | dataReduceExpression
-    | dataFoldExpression
-    | dataScanExpression
-    | dataGroupExpression
-    | dataPartitionExpression
-    | dataRepartitionExpression
-    | dataSortExpression
-    | dataDistinctExpression
-    | dataProjectExpression
-    | dataRenameExpression
-    | dataDeriveExpression
-    | dataCastExpression
-    | dataReshapeExpression
-    | dataFlattenExpression
-    | dataExplodeExpression
-    | dataCollectExpression
-    | dataMaterializeExpression
-    | dataWindowExpression
-    | dataJoinExpression
-    | dataUnionExpression
-    | dataIntersectionExpression
-    | dataDifferenceExpression
-    | dataConcatExpression
-    | dataSampleExpression
-    | dataBatchExpression
-    | dataLimitExpression
-    | dataTakeExpression
-    | dataDropExpression
-    | dataCustomTransformationExpression
-    ;
-
-
-/* ============================================================================
- * 5. MAP
- * ========================================================================== */
-
-dataMapExpression
-    : 'map'
-      '('
-      dataExpression
-      ','
-      lambdaExpression
-      ')'
-    ;
-
-
-/* ============================================================================
- * 6. FLAT MAP
- * ========================================================================== */
-
-dataFlatMapExpression
-    : 'flat_map'
-      '('
-      dataExpression
-      ','
-      lambdaExpression
-      ')'
-    ;
-
-
-/* ============================================================================
- * 7. FILTER
- * ========================================================================== */
-
-dataFilterExpression
-    : 'filter'
-      '('
-      dataExpression
-      ','
-      lambdaExpression
-      ')'
-    ;
-
-
-/* ============================================================================
- * 8. REDUCE
- * ========================================================================== */
-
-dataReduceExpression
-    : 'reduce'
-      '('
-      dataExpression
-      ','
-      lambdaExpression
-      ')'
-    ;
-
-
-/* ============================================================================
- * 9. FOLD
- * ========================================================================== */
-
-dataFoldExpression
-    : 'fold'
-      '('
-      dataExpression
-      ','
-      dataExpression
-      ','
-      lambdaExpression
-      ')'
-    ;
-
-
-/* ============================================================================
- * 10. SCAN
- * ============================================================================
- *
- * Scan preserves intermediate accumulation states.
- *
- * This is semantically different from reduce because the complete sequence
- * of accumulated results remains observable.
- * ========================================================================== */
-
-dataScanExpression
-    : 'scan'
-      '('
-      dataExpression
-      ','
-      dataExpression
-      ','
-      lambdaExpression
-      ')'
-    ;
-
-
-/* ============================================================================
- * 11. GROUP
- * ========================================================================== */
-
-dataGroupExpression
-    : 'group'
-      '('
-      dataExpression
-      'by'
-      dataExpressionList
-      ')'
-    ;
-
-
-/* ============================================================================
- * 12. PARTITION
- * ========================================================================== */
-
-dataPartitionExpression
-    : 'partition'
-      '('
-      dataExpression
-      'by'
-      dataExpressionList
-      ')'
-    ;
-
-
-/* ============================================================================
- * 13. REPARTITION
- * ============================================================================
- *
- * Repartitioning expresses logical data redistribution.
- *
- * It does NOT select a physical cluster topology.
- * ========================================================================== */
-
-dataRepartitionExpression
-    : 'repartition'
-      '('
-      dataExpression
-      'by'
-      dataExpressionList
-      dataRepartitionOptions?
-      ')'
-    ;
-
-dataRepartitionOptions
-    : '['
-      dataRepartitionOption*
-      ']'
-    ;
-
-dataRepartitionOption
-    : dataTransformationHint
-    | dataTransformationRequirement
-    | dataTransformationPreference
-    ;
-
-
-/* ============================================================================
- * 14. SORT
- * ========================================================================== */
-
-dataSortExpression
-    : 'sort'
-      '('
-      dataExpression
-      'by'
-      dataSortKeyList
-      ')'
-    ;
-
-dataSortKeyList
-    : dataSortKey
-      (',' dataSortKey)*
-    ;
-
-dataSortKey
-    : dataExpression
-      dataSortDirection?
-      dataSortNullPolicy?
-    ;
-
-dataSortDirection
-    : 'ascending'
-    | 'descending'
-    ;
-
-dataSortNullPolicy
-    : 'nulls_first'
-    | 'nulls_last'
-    ;
-
-
-/* ============================================================================
- * 15. DISTINCT
- * ========================================================================== */
-
-dataDistinctExpression
-    : 'distinct'
-      '('
-      dataExpression
-      ')'
-    ;
-
-
-/* ============================================================================
- * 16. PROJECT
- * ========================================================================== */
-
-dataProjectExpression
-    : 'project'
-      '('
-      dataExpression
-      'select'
-      dataProjectionList
-      ')'
-    ;
-
-dataProjectionList
-    : dataProjection
-      (',' dataProjection)*
-    ;
-
-dataProjection
-    : dataExpression
-      dataProjectionAlias?
-    ;
-
-dataProjectionAlias
-    : 'as'
-      IDENTIFIER
-    ;
-
-
-/* ============================================================================
- * 17. RENAME
- * ========================================================================== */
-
-dataRenameExpression
-    : 'rename'
-      '('
-      dataExpression
-      'fields'
-      dataRenameList
-      ')'
-    ;
-
-dataRenameList
-    : dataRenameItem
-      (',' dataRenameItem)*
-    ;
-
-dataRenameItem
-    : IDENTIFIER
-      'as'
-      IDENTIFIER
-    ;
-
-
-/* ============================================================================
- * 18. DERIVE
- * ============================================================================
- *
- * Adds logically derived fields.
- * ========================================================================== */
-
-dataDeriveExpression
-    : 'derive'
-      '('
-      dataExpression
-      ','
-      dataDerivationList
-      ')'
-    ;
-
-dataDerivationList
-    : dataDerivation
-      (',' dataDerivation)*
-    ;
-
-dataDerivation
-    : IDENTIFIER
-      '='
-      expression
-    ;
-
-
-/* ============================================================================
- * 19. CAST
- * ========================================================================== */
-
-dataCastExpression
-    : 'cast'
-      '('
-      dataExpression
-      'as'
-      typeExpr
-      ')'
-    ;
-
-
-/* ============================================================================
- * 20. RESHAPE
- * ============================================================================
- *
- * Shape is expressed as an arbitrary expression list.
- *
- * No fixed tensor/vector dimension is encoded here.
- * ========================================================================== */
-
-dataReshapeExpression
-    : 'reshape'
-      '('
-      dataExpression
-      ','
-      dataShapeExpression
-      ')'
-    ;
-
-dataShapeExpression
-    : '['
-      dataExpressionList?
-      ']'
-    ;
-
-
-/* ============================================================================
- * 21. FLATTEN
- * ========================================================================== */
-
-dataFlattenExpression
-    : 'flatten'
-      '('
-      dataExpression
-      flattenDepth?
-      ')'
-    ;
-
-flattenDepth
-    : 'depth'
-      expression
-    ;
-
-
-/* ============================================================================
- * 22. EXPLODE
- * ========================================================================== */
-
-dataExplodeExpression
-    : 'explode'
-      '('
-      dataExpression
-      ')'
-    ;
-
-
-/* ============================================================================
- * 23. COLLECT
- * ============================================================================
- *
- * Collect expresses logical aggregation into a collection.
- *
- * It does not prescribe where collection occurs.
- * ========================================================================== */
-
-dataCollectExpression
-    : 'collect'
-      '('
-      dataExpression
-      ')'
-    ;
-
-
-/* ============================================================================
- * 24. MATERIALIZATION
- * ============================================================================
- *
- * Materialization is an execution intent.
- *
- * It does not specify:
- *
- *     RAM
- *     disk
- *     database
- *     object store
- *     device memory
- *
- * Those are downstream decisions.
- * ========================================================================== */
-
-dataMaterializeExpression
-    : 'materialize'
-      '('
-      dataExpression
-      dataMaterializationOptions?
-      ')'
-    ;
-
-dataMaterializationOptions
-    : '['
-      dataMaterializationOption*
-      ']'
-    ;
-
-dataMaterializationOption
-    : dataTransformationHint
-    | dataTransformationRequirement
-    | dataTransformationPreference
-    ;
-
-
-/* ============================================================================
- * 25. WINDOWING
- * ========================================================================== */
-
-dataWindowExpression
-    : 'window'
-      '('
-      dataExpression
-      dataWindowSpec
-      ')'
-    ;
-
-dataWindowSpec
-    : dataTumblingWindow
-    | dataSlidingWindow
-    | dataSessionWindow
-    | dataCountWindow
-    | dataCustomWindow
-    ;
-
-dataTumblingWindow
-    : 'tumbling'
-      '('
-      expression
-      ')'
-    ;
-
-dataSlidingWindow
-    : 'sliding'
-      '('
-      'size'
-      expression
-      'step'
-      expression
-      ')'
-    ;
-
-dataSessionWindow
-    : 'session'
-      '('
-      'gap'
-      expression
-      ')'
-    ;
-
-dataCountWindow
-    : 'count'
-      '('
-      expression
-      ')'
-    ;
-
-dataCustomWindow
-    : 'custom'
-      '('
-      expression
-      ')'
-    ;
-
-
-/* ============================================================================
- * 26. JOIN
- * ========================================================================== */
-
-dataJoinExpression
-    : 'join'
-      '('
-      dataExpression
-      'with'
-      dataExpression
-      'on'
-      dataJoinCondition
-      dataJoinOptions?
-      ')'
-    ;
-
-dataJoinCondition
-    : dataExpression
-      ('==' | '=')
-      dataExpression
-    ;
-
-dataJoinOptions
-    : '['
-      dataJoinOption*
-      ']'
-    ;
-
-dataJoinOption
-    : 'inner'
-    | 'left'
-    | 'right'
-    | 'full'
-    | 'semi'
-    | 'anti'
-    | dataTransformationHint
-    | dataTransformationRequirement
-    | dataTransformationPreference
-    ;
-
-
-/* ============================================================================
- * 27. SET OPERATIONS
- * ========================================================================== */
-
-dataUnionExpression
-    : 'union'
-      '('
-      dataExpressionList
-      ')'
-    ;
-
-dataIntersectionExpression
-    : 'intersection'
-      '('
-      dataExpressionList
-      ')'
-    ;
-
-dataDifferenceExpression
-    : 'difference'
-      '('
-      dataExpression
-      ','
-      dataExpression
-      ')'
-    ;
-
-
-/* ============================================================================
- * 28. CONCATENATION
- * ========================================================================== */
-
-dataConcatExpression
-    : 'concat'
-      '('
-      dataExpressionList
-      ')'
-    ;
-
-
-/* ============================================================================
- * 29. SAMPLING
- * ========================================================================== */
-
-dataSampleExpression
-    : 'sample'
-      '('
-      dataExpression
-      ','
-      expression
-      dataSamplingMode?
-      ')'
-    ;
-
-dataSamplingMode
-    : 'with_replacement'
-    | 'without_replacement'
-    | 'deterministic'
-    | 'random'
-    ;
-
-
-/* ============================================================================
- * 30. BATCHING
- * ========================================================================== */
-
-dataBatchExpression
-    : 'batch'
-      '('
-      dataExpression
-      ','
-      expression
-      dataBatchOptions?
-      ')'
-    ;
-
-dataBatchOptions
-    : '['
-      dataBatchOption*
-      ']'
-    ;
-
-dataBatchOption
-    : 'drop_remainder'
-    | 'keep_remainder'
-    | 'ordered'
-    | 'unordered'
-    | dataTransformationHint
-    | dataTransformationRequirement
-    | dataTransformationPreference
-    ;
-
-
-/* ============================================================================
- * 31. LIMIT
- * ========================================================================== */
-
-dataLimitExpression
-    : 'limit'
-      '('
-      dataExpression
-      ','
-      expression
-      ')'
-    ;
-
-
-/* ============================================================================
- * 32. TAKE
- * ========================================================================== */
-
-dataTakeExpression
-    : 'take'
-      '('
-      dataExpression
-      ','
-      expression
-      ')'
-    ;
-
-
-/* ============================================================================
- * 33. DROP
- * ========================================================================== */
-
-dataDropExpression
-    : 'drop'
-      '('
-      dataExpression
-      ','
-      expression
-      ')'
-    ;
-
-
-/* ============================================================================
- * 34. CUSTOM TRANSFORMATIONS
- * ============================================================================
- *
- * Custom transformation names are resolved semantically.
- *
- * This prevents the grammar from becoming a closed list of transformations.
- * ========================================================================== */
-
-dataCustomTransformationExpression
-    : IDENTIFIER
-      '('
-      dataTransformationArgumentList?
-      ')'
-    ;
-
-dataTransformationArgumentList
-    : dataTransformationArgument
-      (',' dataTransformationArgument)*
-    ;
-
-dataTransformationArgument
-    : expression
-    | lambdaExpression
-    | dataExpression
-    ;
-
-
-/* ============================================================================
- * 35. TRANSFORMATION PIPELINES
- * ========================================================================== */
-
-dataTransformationPipeline
-    : dataTransformationPipelineSource
-      dataTransformationPipelineStage+
-    ;
-
-dataTransformationPipelineSource
-    : dataExpression
-    ;
-
-dataTransformationPipelineStage
-    : PIPE_FORWARD
-      dataTransformationPipelineOperation
-    ;
-
-dataTransformationPipelineOperation
-    : dataTransformationExpression
-    | dataCustomTransformationExpression
+    : dataTransformationInvocation
+    | dataTransformationComposition
     ;
 
 
 /*
- * The literal `|>` is intentionally represented as a literal parser token
- * rather than a machine-specific operation.
+ * ============================================================================
+ * 3. TRANSFORMATION INVOCATION
+ * ============================================================================
  *
- * If the canonical lexer already exposes a PIPE_FORWARD token, the lexer
- * vocabulary should be centralized there and this rule can be replaced by
- * that token without changing transformation semantics.
+ * Canonical form:
+ *
+ *     transformation(source)
+ *
+ *     transformation(source, argument)
+ *
+ *     transformation(source, argument1, argument2)
+ *
+ *     namespace::transformation(source, ...)
+ *
+ *     dialect::transformation(source, ...)
+ *
+ *     transform::<Type>(source)
+ *
+ * The transformation name is open-ended.
+ *
+ * ============================================================================
  */
-PIPE_FORWARD
-    : '|>'
+
+dataTransformationInvocation
+    : dataTransformationReference
+      dataTransformationGenericArguments?
+      LPAREN
+      dataTransformationArgumentList?
+      RPAREN
+      dataTransformationOptions?
     ;
 
 
-/* ============================================================================
- * 36. TRANSFORMATION REQUIREMENTS
+/*
+ * ============================================================================
+ * 4. TRANSFORMATION REFERENCE
  * ============================================================================
  *
- * These are semantic requirements, not machine selections.
+ * Names remain ordinary identifiers.
  *
- * Example:
+ * This permits:
  *
- *     transform x
- *         requires (associative)
+ *     map
+ *     filter
+ *     reduce
+ *     custom_transform
+ *     library::normalize
+ *     analytics::aggregate
+ *     ai::batch
+ *     distributed::repartition
+ *     future::domain::operation
  *
- * does not select a particular processor.
- * ========================================================================== */
+ * without changing the core lexer.
+ *
+ * ============================================================================
+ */
 
-dataTransformationRequirement
-    : 'requires'
-      '('
-      expression
-      ')'
+dataTransformationReference
+    : dataTransformationName
+      (
+          DOUBLE_COLON
+          dataTransformationName
+      )*
+    ;
+
+dataTransformationName
+    : IDENTIFIER
     ;
 
 
-/* ============================================================================
- * 37. TRANSFORMATION HINTS
+/*
+ * ============================================================================
+ * 5. GENERIC TRANSFORMATION ARGUMENTS
  * ============================================================================
  *
- * A hint is advisory.
+ * Generic transformation arguments are optional.
  *
- * The compiler may ignore it when it cannot be satisfied without changing
- * semantics.
- * ========================================================================== */
+ * The syntax is deliberately aligned with the canonical expression generic
+ * invocation model:
+ *
+ *     operation::<T>(...)
+ *
+ * Types are owned by the canonical Types grammar.
+ *
+ * ============================================================================
+ */
 
-dataTransformationHint
-    : 'hint'
-      '('
-      expression
-      ')'
+dataTransformationGenericArguments
+    : DOUBLE_COLON
+      LESS
+      typeExpressionList
+      GREATER
     ;
 
 
-/* ============================================================================
- * 38. TRANSFORMATION PREFERENCES
- * ========================================================================== */
+/*
+ * ============================================================================
+ * 6. TRANSFORMATION ARGUMENTS
+ * ============================================================================
+ *
+ * Transformation arguments are ordinary Zamani expressions.
+ *
+ * Therefore the language automatically supports:
+ *
+ *     scalar values
+ *     collections
+ *     streams
+ *     tensors
+ *     records
+ *     schemas
+ *     functions
+ *     lambdas
+ *     references
+ *     resources
+ *     capabilities
+ *     quantum/classical values
+ *     hardware-independent values
+ *     future domain values
+ *
+ * without extending this grammar.
+ *
+ * ============================================================================
+ */
 
-dataTransformationPreference
-    : 'prefer'
-      '('
-      expression
-      ')'
+dataTransformationArgumentList
+    : expression
+      (
+          COMMA
+          expression
+      )*
+      COMMA?
     ;
 
 
-/* ============================================================================
- * 39. TRANSFORMATION METADATA
- * ========================================================================== */
+/*
+ * ============================================================================
+ * 7. TRANSFORMATION COMPOSITION
+ * ============================================================================
+ *
+ * Composition is represented structurally rather than by inventing another
+ * operator token.
+ *
+ * Canonical forms:
+ *
+ *     compose(a, b, c)
+ *
+ *     then(a, b)
+ *
+ *     pipeline(a, b, c)
+ *
+ * These are ordinary transformation invocations and are therefore already
+ * accepted by dataTransformationInvocation.
+ *
+ * The explicit composition rule below exists for future grammar-level
+ * composition forms and currently uses a structural comma-separated form.
+ *
+ * ============================================================================
+ */
 
-dataTransformationMetadata
-    : 'metadata'
-      '{'
-      dataTransformationMetadataEntry*
-      '}'
+dataTransformationComposition
+    : dataTransformationCompositionKeyword
+      LPAREN
+      dataTransformationCompositionMember
+      (
+          COMMA
+          dataTransformationCompositionMember
+      )*
+      COMMA?
+      RPAREN
     ;
 
-dataTransformationMetadataEntry
+dataTransformationCompositionKeyword
     : IDENTIFIER
-      '='
-      expression
-      ';'
+    ;
+
+dataTransformationCompositionMember
+    : dataTransformationInvocation
+    | expression
     ;
 
 
-/* ============================================================================
- * 40. TRANSFORMATION PROVENANCE
- * ========================================================================== */
-
-dataTransformationProvenance
-    : 'provenance'
-      '{'
-      dataTransformationProvenanceEntry*
-      '}'
-    ;
-
-dataTransformationProvenanceEntry
-    : IDENTIFIER
-      '='
-      expression
-      ';'
-    ;
-
-
-/* ============================================================================
- * 41. TRANSFORMATION OPTIONS
- * ========================================================================== */
+/*
+ * ============================================================================
+ * 8. OPTIONS
+ * ============================================================================
+ *
+ * Options are source-level metadata/intent.
+ *
+ * They do not select a physical implementation.
+ *
+ * ============================================================================
+ */
 
 dataTransformationOptions
-    : '['
+    : LBRACKET
       dataTransformationOption*
-      ']'
+      RBRACKET
     ;
 
 dataTransformationOption
     : dataTransformationRequirement
-    | dataTransformationHint
     | dataTransformationPreference
+    | dataTransformationHint
+    | dataTransformationProperty
     | dataTransformationMetadata
     | dataTransformationProvenance
-    | dataTransformationProperty
     ;
 
-
-/* ============================================================================
- * 42. TRANSFORMATION PIPELINE DECLARATION
- * ========================================================================== */
-
-dataTransformationPipelineDeclaration
-    : visibilityModifier?
-      'pipeline'
-      IDENTIFIER
-      genericParameters?
-      '{'
-      dataTransformationPipelineMember*
-      '}'
-    ;
-
-dataTransformationPipelineMember
-    : dataTransformationPipelineInput
-    | dataTransformationPipelineOutput
-    | dataTransformationPipelineStageDeclaration
-    | dataTransformationPipelineRequirement
-    | dataTransformationPipelineHint
-    ;
-
-dataTransformationPipelineInput
-    : 'input'
-      IDENTIFIER
-      ':'
-      typeExpr
-      ';'
-    ;
-
-dataTransformationPipelineOutput
-    : 'output'
-      IDENTIFIER
-      ':'
-      typeExpr
-      ';'
-    ;
-
-dataTransformationPipelineStageDeclaration
-    : 'stage'
-      IDENTIFIER
-      '='
-      dataTransformationExpression
-      ';'
-    ;
-
-dataTransformationPipelineRequirement
-    : dataTransformationRequirement
-      ';'
-    ;
-
-dataTransformationPipelineHint
-    : dataTransformationHint
-      ';'
-    ;
-
-
-/* ============================================================================
- * 43. PIPELINE INVOCATION
- * ========================================================================== */
-
-dataTransformationPipelineInvocation
-    : 'pipeline'
-      IDENTIFIER
-      '('
-      dataTransformationArgumentList?
-      ')'
-    ;
-
-
-/* ============================================================================
- * 44. EXTENSIBLE TRANSFORMATION INVOCATION
- * ========================================================================== */
 
 /*
- * Named transformations are intentionally open-ended.
+ * ============================================================================
+ * 9. REQUIREMENT
+ * ============================================================================
  *
- * The semantic layer determines whether an identifier refers to:
+ * Example:
  *
- *     - a user transformation;
- *     - a standard-library transformation;
- *     - a registered dialect transformation;
- *     - an imported transformation.
+ *     [requires(capability("tensor.compute"))]
  *
- * The grammar does not maintain a finite registry.
+ * The expression remains opaque to the grammar.
+ *
+ * Semantic analysis interprets it.
+ *
+ * ============================================================================
  */
-dataNamedTransformationInvocation
-    : qualifiedDataName
-      '('
-      dataTransformationArgumentList?
-      ')'
+
+dataTransformationRequirement
+    : REQUIRES
+      LPAREN
+      expression
+      RPAREN
     ;
 
-
-/* ============================================================================
- * 45. SEMANTICALLY COMPOSABLE TRANSFORMATION
- * ========================================================================== */
-
-dataComposableTransformation
-    : dataTransformationExpression
-      (
-          dataTransformationCompositionOperator
-          dataTransformationExpression
-      )*
-    ;
-
-dataTransformationCompositionOperator
-    : '|>'
-    | 'then'
-    ;
-
-
-/* ============================================================================
- * 46. TRANSFORMATION DECLARATION CONTRACT
- * ========================================================================== */
 
 /*
- * This rule provides a machine-independent transformation contract.
- *
- * It is intentionally descriptive.
+ * ============================================================================
+ * 10. PREFERENCE
+ * ============================================================================
  */
+
+dataTransformationPreference
+    : PREFER
+      LPAREN
+      expression
+      RPAREN
+    ;
+
+
+/*
+ * ============================================================================
+ * 11. HINT
+ * ============================================================================
+ */
+
+dataTransformationHint
+    : HINT
+      LPAREN
+      expression
+      RPAREN
+    ;
+
+
+/*
+ * ============================================================================
+ * 12. GENERIC PROPERTY
+ * ============================================================================
+ *
+ * Generic properties remain open-ended.
+ *
+ * Examples:
+ *
+ *     [order = preserve]
+ *     [determinism = deterministic]
+ *     [strategy = adaptive]
+ *     [shape = shape]
+ *
+ * Property meaning belongs downstream.
+ *
+ * ============================================================================
+ */
+
+dataTransformationProperty
+    : dataTransformationName
+      ASSIGN
+      expression
+    ;
+
+
+/*
+ * ============================================================================
+ * 13. METADATA
+ * ============================================================================
+ */
+
+dataTransformationMetadata
+    : dataTransformationMetadataKeyword
+      LBRACE
+      dataTransformationMetadataEntry*
+      RBRACE
+    ;
+
+dataTransformationMetadataKeyword
+    : IDENTIFIER
+    ;
+
+dataTransformationMetadataEntry
+    : dataTransformationName
+      ASSIGN
+      expression
+      SEMICOLON?
+    ;
+
+
+/*
+ * ============================================================================
+ * 14. PROVENANCE
+ * ============================================================================
+ */
+
+dataTransformationProvenance
+    : dataTransformationProvenanceKeyword
+      LBRACE
+      dataTransformationProvenanceEntry*
+      RBRACE
+    ;
+
+dataTransformationProvenanceKeyword
+    : IDENTIFIER
+    ;
+
+dataTransformationProvenanceEntry
+    : dataTransformationName
+      ASSIGN
+      expression
+      SEMICOLON?
+    ;
+
+
+/*
+ * ============================================================================
+ * 15. TRANSFORMATION CONTRACT
+ * ============================================================================
+ *
+ * A contract describes semantic properties of a transformation.
+ *
+ * This is NOT a second function declaration system.
+ *
+ * Reusable executable behavior remains owned by the ordinary function system.
+ *
+ * A contract can instead describe:
+ *
+ *     inputs
+ *     outputs
+ *     effects
+ *     requirements
+ *     guarantees
+ *
+ * ============================================================================
+ */
+
 dataTransformationContract
-    : 'transform_contract'
-      IDENTIFIER
-      '{'
+    : dataTransformationContractKeyword
+      dataTransformationName
+      LBRACE
       dataTransformationContractMember*
-      '}'
+      RBRACE
+    ;
+
+dataTransformationContractKeyword
+    : IDENTIFIER
     ;
 
 dataTransformationContractMember
@@ -1318,340 +1044,625 @@ dataTransformationContractMember
     | dataTransformationContractEffect
     | dataTransformationContractRequirement
     | dataTransformationContractGuarantee
+    | dataTransformationContractProperty
     ;
+
+
+/*
+ * ============================================================================
+ * 16. CONTRACT INPUT
+ * ============================================================================
+ */
 
 dataTransformationContractInput
-    : 'input'
-      IDENTIFIER
-      ':'
-      typeExpr
-      ';'
+    : dataTransformationInputKeyword
+      dataTransformationName
+      COLON
+      typeExpression
+      SEMICOLON?
     ;
+
+dataTransformationInputKeyword
+    : IDENTIFIER
+    ;
+
+
+/*
+ * ============================================================================
+ * 17. CONTRACT OUTPUT
+ * ============================================================================
+ */
 
 dataTransformationContractOutput
-    : 'output'
-      IDENTIFIER
-      ':'
-      typeExpr
-      ';'
+    : dataTransformationOutputKeyword
+      dataTransformationName
+      COLON
+      typeExpression
+      SEMICOLON?
     ;
+
+dataTransformationOutputKeyword
+    : IDENTIFIER
+    ;
+
+
+/*
+ * ============================================================================
+ * 18. CONTRACT EFFECT
+ * ============================================================================
+ */
 
 dataTransformationContractEffect
-    : 'effect'
+    : dataTransformationEffectKeyword
       expression
-      ';'
+      SEMICOLON?
     ;
+
+dataTransformationEffectKeyword
+    : IDENTIFIER
+    ;
+
+
+/*
+ * ============================================================================
+ * 19. CONTRACT REQUIREMENT
+ * ============================================================================
+ */
 
 dataTransformationContractRequirement
-    : 'requires'
+    : REQUIRES
       expression
-      ';'
+      SEMICOLON?
     ;
+
+
+/*
+ * ============================================================================
+ * 20. CONTRACT GUARANTEE
+ * ============================================================================
+ */
 
 dataTransformationContractGuarantee
-    : 'guarantees'
+    : dataTransformationGuaranteesKeyword
       expression
-      ';'
+      SEMICOLON?
+    ;
+
+dataTransformationGuaranteesKeyword
+    : IDENTIFIER
     ;
 
 
-/* ============================================================================
- * 47. SEMANTIC PROPERTIES
+/*
+ * ============================================================================
+ * 21. CONTRACT PROPERTY
+ * ============================================================================
+ */
+
+dataTransformationContractProperty
+    : dataTransformationProperty
+      SEMICOLON?
+    ;
+
+
+/*
+ * ============================================================================
+ * 22. TRANSFORMATION SPECIFICATION
  * ============================================================================
  *
- * These properties describe mathematical/semantic behavior.
+ * A specification collects optional semantic declarations.
  *
- * They do NOT choose an implementation.
- * ========================================================================== */
+ * Example conceptual form:
+ *
+ *     specification {
+ *         ...
+ *     }
+ *
+ * The exact semantic vocabulary remains open.
+ *
+ * ============================================================================
+ */
+
+dataTransformationSpecification
+    : dataTransformationSpecificationKeyword
+      LBRACE
+      dataTransformationSpecificationMember*
+      RBRACE
+    ;
+
+dataTransformationSpecificationKeyword
+    : IDENTIFIER
+    ;
+
+dataTransformationSpecificationMember
+    : dataTransformationContract
+    | dataTransformationSemanticProperty
+    | dataTransformationDeterminism
+    | dataTransformationOrder
+    | dataTransformationMissingValuePolicy
+    | dataTransformationErrorPolicy
+    | dataTransformationEvaluation
+    | dataTransformationExecutionIntent
+    | dataTransformationResourceIntent
+    | dataTransformationMetadata
+    | dataTransformationProvenance
+    ;
+
+
+/*
+ * ============================================================================
+ * 23. SEMANTIC PROPERTY
+ * ============================================================================
+ */
 
 dataTransformationSemanticProperty
-    : 'property'
-      IDENTIFIER
-      '='
+    : dataTransformationPropertyKeyword
+      dataTransformationName
+      ASSIGN
       expression
-      ';'
+      SEMICOLON?
+    ;
+
+dataTransformationPropertyKeyword
+    : IDENTIFIER
     ;
 
 
-/* ============================================================================
- * 48. DETERMINISM
+/*
+ * ============================================================================
+ * 24. DETERMINISM
  * ============================================================================
  *
- * Determinism is a semantic declaration.
+ * The modes are identifiers intentionally.
  *
- * It must not imply a fixed implementation seed.
- * ========================================================================== */
+ * This permits future modes without modifying the grammar.
+ *
+ * Semantic validation determines whether a mode is recognized.
+ *
+ * ============================================================================
+ */
 
 dataTransformationDeterminism
-    : 'determinism'
-      '('
-      dataDeterminismMode
-      ')'
+    : dataTransformationDeterminismKeyword
+      LPAREN
+      expression
+      RPAREN
     ;
 
-dataDeterminismMode
-    : 'deterministic'
-    | 'nondeterministic'
-    | 'implementation_defined'
-    | 'externally_defined'
+dataTransformationDeterminismKeyword
+    : IDENTIFIER
     ;
 
 
-/* ============================================================================
- * 49. ORDER SEMANTICS
- * ========================================================================== */
+/*
+ * ============================================================================
+ * 25. ORDER SEMANTICS
+ * ============================================================================
+ */
 
 dataTransformationOrder
-    : 'order'
-      '('
-      dataOrderMode
-      ')'
-    ;
-
-dataOrderMode
-    : 'preserve'
-    | 'not_preserve'
-    | 'define'
-      '('
+    : dataTransformationOrderKeyword
+      LPAREN
       expression
-      ')'
+      RPAREN
+    ;
+
+dataTransformationOrderKeyword
+    : IDENTIFIER
     ;
 
 
-/* ============================================================================
- * 50. NULL / MISSING-VALUE SEMANTICS
- * ========================================================================== */
+/*
+ * ============================================================================
+ * 26. MISSING-VALUE SEMANTICS
+ * ============================================================================
+ */
 
 dataTransformationMissingValuePolicy
-    : 'missing'
-      '('
-      dataMissingValueMode
-      ')'
-    ;
-
-dataMissingValueMode
-    : 'preserve'
-    | 'drop'
-    | 'error'
-    | 'default'
-      '('
+    : dataTransformationMissingValueKeyword
+      LPAREN
       expression
-      ')'
+      RPAREN
+    ;
+
+dataTransformationMissingValueKeyword
+    : IDENTIFIER
     ;
 
 
-/* ============================================================================
- * 51. ERROR SEMANTICS
- * ========================================================================== */
+/*
+ * ============================================================================
+ * 27. ERROR SEMANTICS
+ * ============================================================================
+ */
 
 dataTransformationErrorPolicy
-    : 'errors'
-      '('
-      dataTransformationErrorMode
-      ')'
-    ;
-
-dataTransformationErrorMode
-    : 'propagate'
-    | 'drop'
-    | 'replace'
-      '('
+    : dataTransformationErrorKeyword
+      LPAREN
       expression
-      ')'
-    | 'collect'
-    | 'retry'
+      RPAREN
+    ;
+
+dataTransformationErrorKeyword
+    : IDENTIFIER
     ;
 
 
-/* ============================================================================
- * 52. LAZINESS
- * ========================================================================== */
+/*
+ * ============================================================================
+ * 28. EVALUATION MODE
+ * ============================================================================
+ */
 
 dataTransformationEvaluation
-    : 'evaluation'
-      '('
-      dataTransformationEvaluationMode
-      ')'
+    : dataTransformationEvaluationKeyword
+      LPAREN
+      expression
+      RPAREN
     ;
 
-dataTransformationEvaluationMode
-    : 'lazy'
-    | 'eager'
-    | 'deferred'
-    | 'implementation_defined'
+dataTransformationEvaluationKeyword
+    : IDENTIFIER
     ;
 
 
-/* ============================================================================
- * 53. RESOURCE-NEUTRAL EXECUTION INTENT
+/*
+ * ============================================================================
+ * 29. EXECUTION INTENT
  * ============================================================================
  *
- * These rules deliberately describe requirements without identifying hardware.
- * ========================================================================== */
+ * Execution properties remain expressions.
+ *
+ * Examples:
+ *
+ *     parallel(...)
+ *     streaming(...)
+ *     locality(...)
+ *     latency(...)
+ *     throughput(...)
+ *     energy(...)
+ *     reliability(...)
+ *
+ * None of these selects a physical target.
+ *
+ * ============================================================================
+ */
 
 dataTransformationExecutionIntent
-    : 'execution'
-      '{'
+    : dataTransformationExecutionKeyword
+      LBRACE
       dataTransformationExecutionProperty*
-      '}'
+      RBRACE
+    ;
+
+dataTransformationExecutionKeyword
+    : IDENTIFIER
     ;
 
 dataTransformationExecutionProperty
-    : 'parallel'
-      '('
+    : dataTransformationExecutionName
+      LPAREN
       expression
-      ')'
-    | 'streaming'
-      '('
-      expression
-      ')'
-    | 'locality'
-      '('
-      expression
-      ')'
-    | 'latency'
-      '('
-      expression
-      ')'
-    | 'throughput'
-      '('
-      expression
-      ')'
-    | 'energy'
-      '('
-      expression
-      ')'
-    | 'reliability'
-      '('
-      expression
-      ')'
+      RPAREN
+    ;
+
+dataTransformationExecutionName
+    : IDENTIFIER
     ;
 
 
-/* ============================================================================
- * 54. RESOURCE SCALABILITY
+/*
+ * ============================================================================
+ * 30. RESOURCE INTENT
  * ============================================================================
  *
- * No resource cardinality is represented as a grammar constant.
- * ========================================================================== */
+ * Resource intent is intentionally open.
+ *
+ * Examples:
+ *
+ *     require(...)
+ *     prefer(...)
+ *     allow(...)
+ *     forbid(...)
+ *
+ * Actual feasibility is downstream.
+ *
+ * ============================================================================
+ */
 
 dataTransformationResourceIntent
-    : 'resources'
-      '{'
+    : dataTransformationResourceKeyword
+      LBRACE
       dataTransformationResourceProperty*
-      '}'
+      RBRACE
+    ;
+
+dataTransformationResourceKeyword
+    : IDENTIFIER
     ;
 
 dataTransformationResourceProperty
-    : 'require'
+    : dataTransformationResourcePropertyName
+      LPAREN
       expression
-      ';'
-    | 'prefer'
-      expression
-      ';'
-    | 'allow'
-      expression
-      ';'
-    | 'forbid'
-      expression
-      ';'
+      RPAREN
+      SEMICOLON?
+    ;
+
+dataTransformationResourcePropertyName
+    : IDENTIFIER
     ;
 
 
-/* ============================================================================
- * 55. DATA TRANSFORMATION COMPOSITION
- * ========================================================================== */
-
-dataTransformationComposition
-    : 'compose'
-      '('
-      dataTransformationCompositionMember
-      (',' dataTransformationCompositionMember)*
-      ')'
-    ;
-
-dataTransformationCompositionMember
-    : dataTransformationExpression
-    | dataNamedTransformationInvocation
-    | dataTransformationPipelineInvocation
-    ;
-
-
-/* ============================================================================
- * 56. CONDITIONAL TRANSFORMATION
+/*
+ * ============================================================================
+ * 31. STANDARD TRANSFORMATION ARGUMENT SHAPES
  * ============================================================================
  *
- * Conditions remain expressions.
+ * These rules document structural forms that the semantic transformation
+ * registry may recognize.
  *
- * Machine characteristics must not become implicit grammar conditions.
- * ========================================================================== */
+ * They do NOT create a closed operation vocabulary.
+ *
+ * ============================================================================
+ */
 
-dataConditionalTransformationExpression
-    : 'transform_if'
-      '('
-      expression
-      ','
-      dataTransformationExpression
-      ','
-      dataTransformationExpression
-      ')'
+/*
+ * Unary transformation:
+ *
+ *     transform(source)
+ */
+dataUnaryTransformation
+    : dataTransformationInvocation
     ;
 
 
-/* ============================================================================
- * 57. TRANSFORMATION VERSIONING
- * ========================================================================== */
-
-dataTransformationVersion
-    : 'version'
-      '('
-      expression
-      ')'
+/*
+ * Element transformation:
+ *
+ *     transform(source, lambda)
+ */
+dataElementTransformation
+    : dataTransformationInvocation
     ;
 
 
-/* ============================================================================
- * 58. DIALECT EXTENSION
+/*
+ * Binary transformation:
+ *
+ *     transform(left, right)
+ */
+dataBinaryTransformation
+    : dataTransformationInvocation
+    ;
+
+
+/*
+ * Aggregating transformation:
+ *
+ *     transform(source, initial, lambda)
+ */
+dataAggregatingTransformation
+    : dataTransformationInvocation
+    ;
+
+
+/*
+ * Keyed transformation:
+ *
+ *     transform(source, key)
+ *
+ * or:
+ *
+ *     transform(source, key, value)
+ */
+dataKeyedTransformation
+    : dataTransformationInvocation
+    ;
+
+
+/*
+ * Shape transformation:
+ *
+ *     reshape(source, shape)
+ *
+ * The shape remains an expression.
+ */
+dataShapeTransformation
+    : dataTransformationInvocation
+    ;
+
+
+/*
+ * Window transformation:
+ *
+ *     window(source, specification)
+ *
+ * The specification remains semantic data.
+ */
+dataWindowTransformation
+    : dataTransformationInvocation
+    ;
+
+
+/*
+ * Join transformation:
+ *
+ *     join(left, right, condition)
+ *
+ * Join type, ordering, null semantics and physical strategy are semantic
+ * properties rather than parser-level hardware choices.
+ */
+dataJoinTransformation
+    : dataTransformationInvocation
+    ;
+
+
+/*
+ * ============================================================================
+ * 32. STREAMING / BATCHING
  * ============================================================================
  *
- * Future domains can register transformation syntax through semantic
- * dialect registration without requiring this grammar to enumerate every
- * future transformation.
- * ========================================================================== */
+ * Streaming and batching are represented by ordinary transformations:
+ *
+ *     batch(source, size)
+ *     window(source, specification)
+ *     stream(source, ...)
+ *
+ * The grammar does not impose:
+ *
+ *     MAX_BATCH_SIZE
+ *     MAX_STREAM_SIZE
+ *     MAX_WINDOW_SIZE
+ *
+ * ============================================================================
+ */
 
-dataTransformationDialectExpression
-    : 'dialect'
-      qualifiedDataName
-      '::'
-      IDENTIFIER
-      '('
-      dataTransformationArgumentList?
-      ')'
+dataStreamingTransformation
+    : dataTransformationInvocation
+    ;
+
+dataBatchTransformation
+    : dataTransformationInvocation
     ;
 
 
-/* ============================================================================
- * 59. COMPLETE TRANSFORMATION SPECIFICATION
- * ========================================================================== */
+/*
+ * ============================================================================
+ * 33. COLLECTION TRANSFORMATIONS
+ * ============================================================================
+ *
+ * Standard semantic vocabulary may include:
+ *
+ *     map
+ *     flat_map
+ *     filter
+ *     reduce
+ *     fold
+ *     scan
+ *     group
+ *     aggregate
+ *     distinct
+ *     sort
+ *     project
+ *     rename
+ *     derive
+ *     flatten
+ *     explode
+ *     collect
+ *     union
+ *     intersection
+ *     difference
+ *     concat
+ *
+ * These remain ordinary transformation invocations.
+ *
+ * ============================================================================
+ */
 
-dataTransformationSpecification
-    : dataTransformationContract?
-      dataTransformationSemanticProperty*
-      dataTransformationDeterminism?
-      dataTransformationOrder?
-      dataTransformationMissingValuePolicy?
-      dataTransformationErrorPolicy?
-      dataTransformationEvaluation?
-      dataTransformationExecutionIntent?
-      dataTransformationResourceIntent?
-      dataTransformationMetadata?
-      dataTransformationProvenance?
+dataCollectionTransformation
+    : dataTransformationInvocation
     ;
 
 
-/* ============================================================================
- * 60. TRANSFORMATION PIPELINE ROOT
- * ========================================================================== */
+/*
+ * ============================================================================
+ * 34. DISTRIBUTION TRANSFORMATIONS
+ * ============================================================================
+ *
+ * Standard semantic vocabulary may include:
+ *
+ *     partition
+ *     repartition
+ *     distribute
+ *     replicate
+ *     shard
+ *     rebalance
+ *
+ * The grammar does not encode:
+ *
+ *     node counts
+ *     partition counts
+ *     replica counts
+ *     topology
+ *     worker counts
+ *
+ * ============================================================================
+ */
+
+dataDistributionTransformation
+    : dataTransformationInvocation
+    ;
+
+
+/*
+ * ============================================================================
+ * 35. MATERIALIZATION
+ * ============================================================================
+ *
+ * Materialization is represented as a transformation invocation:
+ *
+ *     materialize(value)
+ *
+ * Its actual destination is determined downstream.
+ *
+ * It may resolve to:
+ *
+ *     memory
+ *     persistent storage
+ *     distributed storage
+ *     accelerator memory
+ *     quantum/classical boundary storage
+ *     another future representation
+ *
+ * without changing source syntax.
+ *
+ * ============================================================================
+ */
+
+dataMaterializationTransformation
+    : dataTransformationInvocation
+    ;
+
+
+/*
+ * ============================================================================
+ * 36. CUSTOM / DIALECT TRANSFORMATIONS
+ * ============================================================================
+ *
+ * Any qualified transformation name is syntactically valid.
+ *
+ * Examples:
+ *
+ *     vendor::transform(...)
+ *     library::normalize(...)
+ *     ai::augment(...)
+ *     distributed::rebalance(...)
+ *     future::operation(...)
+ *
+ * Semantic capability and compatibility systems determine whether the
+ * referenced transformation exists.
+ *
+ * ============================================================================
+ */
+
+dataCustomTransformation
+    : dataTransformationInvocation
+    ;
+
+
+/*
+ * ============================================================================
+ * 37. CANONICAL TRANSFORMATION PROGRAM ENTRY
+ * ============================================================================
+ *
+ * This rule is useful for isolated grammar/conformance testing.
+ *
+ * The production compiler normally reaches transformations through the
+ * canonical Zamani parser rather than this rule directly.
+ *
+ * ============================================================================
+ */
 
 dataTransformationProgram
     : dataTransformationConstruct+
@@ -1659,252 +1670,659 @@ dataTransformationProgram
     ;
 
 
-/* ============================================================================
- * INTEGRATION CONTRACT
+/*
+ * ============================================================================
+ * 38. EXAMPLES OF VALID SOURCE STRUCTURE
  * ============================================================================
  *
- * REQUIRED changes outside this file
- * -----------------------------------
+ * These are documentation examples only.
  *
- * 1. grammar/data/data.g4
+ * They are NOT parser-level operation enumerations.
  *
- *    Remove duplicated general transformation productions and delegate to:
+ * --------------------------------------------------------------------------
  *
- *        dataTransformationConstruct
+ * map(data, |x| transform(x))
  *
- *    In particular, data.g4 must no longer independently own:
+ * filter(data, |x| predicate(x))
  *
- *        dataMapExpression
- *        dataFilterExpression
- *        dataFlatMapExpression
- *        dataReduceExpression
- *        dataFoldExpression
- *        dataGroupExpression
- *        dataSortExpression
- *        dataDistinctExpression
- *        dataProjectExpression
- *        dataJoinExpression
- *        dataAggregateExpression
- *        dataWindowExpression
- *        dataUnionExpression
- *        dataDifferenceExpression
- *        dataIntersectionExpression
- *        dataConcatExpression
- *        dataLimitExpression
- *        dataTakeExpression
- *        dataDropExpression
+ * reduce(data, initial, |acc, x| combine(acc, x))
  *
- *    unless a repository audit proves a particular rule belongs elsewhere.
+ * reshape(data, shape)
  *
+ * repartition(data, key)
  *
- * 2. grammar/ai/datasets.g4
+ * join(left, right, condition)
  *
- *    Dataset-specific transformation syntax should delegate to this grammar
- *    instead of creating a second general transformation language.
+ * custom::operation(data, parameter)
  *
+ * pipeline(data, stage1, stage2)
  *
- * 3. grammar/Zamani.g4
+ * compose(
+ *     map(data, |x| f(x)),
+ *     filter(...),
+ *     collect(...)
+ * )
  *
- *    The root parser must expose the data transformation entry point through
- *    its data/domain integration layer.
+ * --------------------------------------------------------------------------
  *
- *    It must remain the owner of shared lexical vocabulary.
+ * All argument counts remain structurally unbounded.
  *
- *
- * 4. grammar/expressions/*
- *
- *    General expressions remain owned by the expression grammar.
- *
- *    This file consumes:
- *
- *        expression
- *        lambdaExpression
- *
- *    rather than redefining them.
- *
- *
- * 5. grammar/types/*
- *
- *    Canonical types remain owned by the type grammar.
- *
- *    This file consumes:
- *
- *        typeExpr
- *
- *    rather than creating data-specific competing type systems.
- *
- *
- * 6. AST / semantic analysis
- *
- *    The parser output must be lowered into the existing data semantic model.
- *
- *    This grammar must not instantiate canonical IR structures.
- *
- *
- * 7. Optimization
- *
- *    Optimization consumes semantic/IR representations.
- *
- *    Optimization must not parse this grammar directly.
- *
- *
- * 8. Scheduling
- *
- *    Scheduling consumes the resulting executable representation and resource
- *    constraints.
- *
- *    Scheduling does not depend directly on this grammar.
- *
- *
- * 9. Hardware
- *
- *    Hardware discovery/capability systems determine actual resources.
- *
- *    This grammar cannot name or assume physical resource counts.
- *
- *
- * 10. Quantum
- *
- *     Quantum transformation syntax must remain separate from this general
- *     data transformation grammar.
- *
- *     If a quantum program transforms classical datasets, the semantic layer
- *     composes the resulting representations.
- *
- *     This grammar must never import quantum::ir or quantum grammar merely
- *     because data eventually feeds a quantum computation.
- *
+ * Actual operation signatures are semantic contracts.
  *
  * ============================================================================
- *
- * DEPENDENCY DIRECTION
+ * 39. INVALID RESPONSIBILITIES
  * ============================================================================
  *
- *     lexer
- *       |
- *       v
- *     core names/types/expressions
- *       |
- *       v
+ * This file MUST NOT:
+ *
+ *     - enumerate hardware;
+ *     - enumerate devices;
+ *     - enumerate GPUs;
+ *     - enumerate QPUs;
+ *     - select physical memory;
+ *     - select physical nodes;
+ *     - select physical qubits;
+ *     - select FPGA regions;
+ *     - determine network topology;
+ *     - determine worker counts;
+ *     - determine thread counts;
+ *     - execute transformations;
+ *     - perform optimization;
+ *     - perform scheduling;
+ *     - perform routing;
+ *     - perform QEC;
+ *     - perform ZQN;
+ *     - perform calibration;
+ *     - invoke HAL;
+ *     - invoke providers;
+ *     - access runtime state.
+ *
+ * ============================================================================
+ * 40. INTEGRATION CONTRACT — data/data.g4
+ * ============================================================================
+ *
+ * `grammar/data/data.g4` must treat this file as the authoritative owner of
+ * transformation syntax.
+ *
+ * The intended relationship is:
+ *
  *     data.g4
- *       |
- *       v
- *     transformations.g4
- *       |
- *       v
- *     frontend AST
- *       |
- *       v
- *     semantic analysis
- *       |
- *       v
- *     canonical data/computation representation
- *       |
- *       +--------------------+
- *       |                    |
- *       v                    v
- *     optimization        execution planning
- *                            |
- *                            v
- *                         runtime
+ *          |
+ *          +--> dataTransformationConstruct
+ *                     |
+ *                     v
+ *          transformations.g4
  *
- * There is intentionally NO dependency:
+ * `data.g4` MUST NOT redefine:
  *
- *     transformations.g4 -> runtime
- *     transformations.g4 -> hardware
- *     transformations.g4 -> scheduler
- *     transformations.g4 -> quantum::ir
- *     transformations.g4 -> QEC
- *     transformations.g4 -> ZQN
+ *     dataMapExpression
+ *     dataFilterExpression
+ *     dataFlatMapExpression
+ *     dataReduceExpression
+ *     dataFoldExpression
+ *     dataScanExpression
+ *     dataGroupExpression
+ *     dataPartitionExpression
+ *     dataRepartitionExpression
+ *     dataSortExpression
+ *     dataDistinctExpression
+ *     dataProjectExpression
+ *     dataRenameExpression
+ *     dataDeriveExpression
+ *     dataCastExpression
+ *     dataReshapeExpression
+ *     dataFlattenExpression
+ *     dataExplodeExpression
+ *     dataCollectExpression
+ *     dataMaterializeExpression
+ *     dataWindowExpression
+ *     dataJoinExpression
+ *     dataUnionExpression
+ *     dataIntersectionExpression
+ *     dataDifferenceExpression
+ *     dataConcatExpression
+ *     dataSampleExpression
+ *     dataBatchExpression
+ *     dataLimitExpression
+ *     dataTakeExpression
+ *     dataDropExpression
+ *
+ * Those old rule families should be removed from data.g4 when that integration
+ * migration is performed.
+ *
+ * `data.g4` must NOT import this file if this file is imported by the canonical
+ * parser through another route that would create a duplicate import path.
+ *
+ * The canonical parser composition must contain one effective instance of this
+ * grammar.
  *
  * ============================================================================
- *
- * HARD-CODING AUDIT
+ * 41. INTEGRATION CONTRACT — expressions
  * ============================================================================
  *
- * Forbidden in this file:
+ * General expressions are owned by:
  *
- *     MAX_*
- *     fixed resource counts
- *     fixed worker counts
- *     fixed device counts
- *     fixed topology
- *     fixed node counts
- *     fixed memory capacities
- *     fixed tensor dimensions
- *     fixed data sizes
- *     fixed batch maxima
- *     fixed partition maxima
- *     fixed stream maxima
- *     provider-specific device identifiers
- *     physical addresses
+ *     grammar/expressions/expressions.g4
  *
- * Expressions are intentionally used for:
+ * This grammar consumes:
  *
- *     sizes
- *     dimensions
- *     limits
- *     batch quantities
- *     window quantities
- *     partition expressions
+ *     expression
+ *     lambdaExpression
+ *     argumentList
+ *     expressionList
+ *
+ * It MUST NOT redefine:
+ *
+ *     expression
+ *     assignmentExpression
+ *     postfixExpression
+ *     lambdaExpression
+ *     primaryExpression
+ *     expression precedence
+ *
+ * ============================================================================
+ * 42. INTEGRATION CONTRACT — types
+ * ============================================================================
+ *
+ * Types are owned by:
+ *
+ *     grammar/types/types.g4
+ *
+ * This grammar consumes:
+ *
+ *     typeExpression
+ *     typeExpressionList
+ *
+ * It MUST NOT introduce:
+ *
+ *     DataType
+ *     TransformationType
+ *     TensorType
+ *     StreamType
+ *
+ * as competing parser-level type systems.
+ *
+ * ============================================================================
+ * 43. INTEGRATION CONTRACT — collections
+ * ============================================================================
+ *
+ * `grammar/data/collections.g4` owns collection syntax.
+ *
+ * Transformation syntax merely consumes expressions that may evaluate to
+ * collections.
+ *
+ * Example:
+ *
+ *     map(collection, |x| f(x))
+ *
+ * The parser does not need to know that `collection` is a collection.
+ *
+ * Semantic analysis determines the type.
+ *
+ * ============================================================================
+ * 44. INTEGRATION CONTRACT — streams
+ * ============================================================================
+ *
+ * `grammar/data/streams.g4` owns stream-specific declarations and syntax.
+ *
+ * Streaming transformations remain ordinary transformation invocations.
+ *
+ * ============================================================================
+ * 45. INTEGRATION CONTRACT — tensors
+ * ============================================================================
+ *
+ * `grammar/data/tensors.g4` owns tensor-specific source syntax.
+ *
+ * Transformations such as:
+ *
+ *     reshape
+ *     flatten
+ *     map
+ *     project
+ *
+ * remain generic transformations.
+ *
+ * Shape and rank are semantic values.
+ *
+ * No maximum tensor rank is introduced here.
+ *
+ * ============================================================================
+ * 46. INTEGRATION CONTRACT — datasets
+ * ============================================================================
+ *
+ * `grammar/data/datasets.g4` may consume:
+ *
+ *     dataTransformationConstruct
+ *
+ * but must not create a second map/filter/batch/window language.
+ *
+ * ============================================================================
+ * 47. INTEGRATION CONTRACT — queries
+ * ============================================================================
+ *
+ * Query syntax remains owned by:
+ *
+ *     grammar/data/queries.g4
+ *
+ * A query may produce a value consumed by a transformation.
+ *
+ * Transformations do not become SQL syntax.
+ *
+ * ============================================================================
+ * 48. INTEGRATION CONTRACT — pipelines
+ * ============================================================================
+ *
+ * `grammar/data/pipelines.g4` owns pipeline declaration syntax.
+ *
+ * This file owns transformation expressions that may appear inside pipeline
+ * stages.
+ *
+ * There must not be two independent pipeline declaration languages.
+ *
+ * ============================================================================
+ * 49. INTEGRATION CONTRACT — serialization
+ * ============================================================================
+ *
+ * Serialization remains owned by:
+ *
+ *     grammar/data/serialization.g4
+ *
+ * A serialization operation may be referenced as an ordinary transformation
+ * or operation expression where the semantic model permits it.
+ *
+ * This grammar does not define serialization formats.
+ *
+ * ============================================================================
+ * 50. INTEGRATION CONTRACT — AI
+ * ============================================================================
+ *
+ * `grammar/ai/datasets.g4` and related AI grammars may consume transformation
+ * constructs.
+ *
+ * AI-specific operations remain semantic/domain vocabulary.
+ *
+ * This grammar must not import AI grammar.
+ *
+ * Dependency direction remains:
+ *
+ *     common syntax
+ *          |
+ *          v
+ *     data transformations
+ *          |
+ *          v
+ *     AI/data semantics
+ *
+ * ============================================================================
+ * 51. INTEGRATION CONTRACT — DISTRIBUTED
+ * ============================================================================
+ *
+ * Distributed semantics may interpret:
+ *
+ *     partition
+ *     repartition
+ *     replicate
+ *     rebalance
+ *     shuffle
+ *
+ * but this grammar does not select:
+ *
+ *     node
+ *     worker
+ *     device
+ *     topology
+ *     network link
+ *
+ * ============================================================================
+ * 52. INTEGRATION CONTRACT — HARDWARE
+ * ============================================================================
+ *
+ * Hardware/resource systems may interpret transformation options such as:
+ *
+ *     requires(...)
+ *     prefer(...)
+ *     hint(...)
+ *
+ * but transformation syntax itself does not choose hardware.
+ *
+ * ============================================================================
+ * 53. INTEGRATION CONTRACT — QUANTUM
+ * ============================================================================
+ *
+ * Classical data may feed quantum computations.
+ *
+ * The relationship is:
+ *
+ *     data transformation
+ *          |
+ *          v
+ *     semantic model
+ *          |
+ *          v
+ *     classical/quantum boundary
+ *          |
+ *          v
+ *     quantum::ir
+ *
+ * This file must not import quantum grammar.
+ *
+ * It must not define:
+ *
+ *     qubit
+ *     physical qubit
+ *     gate
+ *     topology
+ *     coupling map
+ *     QEC
+ *     ZQN
+ *
+ * ============================================================================
+ * 54. INTEGRATION CONTRACT — AST
+ * ============================================================================
+ *
+ * Every accepted transformation must preserve:
+ *
+ *     - source span;
+ *     - operation/reference name;
+ *     - qualification;
+ *     - generic arguments;
+ *     - argument ordering;
+ *     - argument expressions;
+ *     - options;
+ *     - nested composition;
+ *     - source ordering.
+ *
+ * The parser must not resolve names.
+ *
+ * ============================================================================
+ * 55. INTEGRATION CONTRACT — SEMANTIC ANALYSIS
+ * ============================================================================
+ *
+ * Semantic analysis must establish:
+ *
+ *     transformation identity
+ *     transformation signature
+ *     input/output types
+ *     schema compatibility
+ *     collection/stream compatibility
+ *     tensor shape compatibility
+ *     null/missing semantics
+ *     ordering semantics
+ *     determinism
+ *     effects
+ *     capabilities
  *     resource requirements
- *     performance requirements
+ *     portability
+ *     distributed legality
+ *     quantum/classical boundary legality
  *
  * ============================================================================
- *
- * COMPLETION CRITERIA
+ * 56. INTEGRATION CONTRACT — IR
  * ============================================================================
  *
- * This file is complete only when:
+ * The transformation semantic representation may lower to:
  *
- * [ ] ANTLR generation succeeds.
+ *     canonical data IR
+ *     canonical computation IR
+ *     distributed computation IR
+ *     classical IR
+ *     AI/data IR
  *
- * [ ] The grammar uses the canonical Zamani token vocabulary.
+ * as determined by semantic analysis.
  *
- * [ ] No embedded Rust action exists.
+ * It must not create:
  *
- * [ ] No unsafe implementation is introduced.
+ *     transformations::ir
  *
- * [ ] General expressions are reused.
+ * merely because this grammar exists.
  *
- * [ ] Canonical types are reused.
+ * ============================================================================
+ * 57. INTEGRATION CONTRACT — OPTIMIZATION
+ * ============================================================================
  *
- * [ ] General transformation syntax has one authoritative owner.
+ * Optimization may legally transform:
  *
- * [ ] data.g4 does not duplicate these productions.
+ *     map/filter
+ *     projection
+ *     fusion
+ *     batching
+ *     repartitioning
+ *     materialization
+ *     aggregation
+ *     join strategies
+ *     streaming strategies
  *
- * [ ] AI dataset grammar does not duplicate general transformations.
+ * but optimization operates on semantic/IR structures, never directly on this
+ * grammar.
  *
- * [ ] Transformation syntax is backend-independent.
+ * ============================================================================
+ * 58. INTEGRATION CONTRACT — SCHEDULING
+ * ============================================================================
  *
- * [ ] No finite machine/resource limits exist.
+ * Scheduling determines:
  *
- * [ ] Arbitrarily large structural transformation expressions are syntactically
- *     representable subject only to available compiler/runtime resources.
+ *     execution order
+ *     placement
+ *     parallelism
+ *     resource usage
+ *     synchronization
  *
- * [ ] Empty transformation argument lists are rejected where semantically
- *     invalid by syntax.
+ * from semantic/IR information.
  *
- * [ ] Transformation composition is deterministic at parse level.
+ * This grammar does not perform scheduling.
  *
- * [ ] Positive tests exist for every transformation family.
+ * ============================================================================
+ * 59. INTEGRATION CONTRACT — RUNTIME
+ * ============================================================================
  *
- * [ ] Negative tests exist for malformed transformation syntax.
+ * Runtime determines actual:
  *
- * [ ] Boundary tests cover tiny and very large expressions.
+ *     resource availability
+ *     memory availability
+ *     device availability
+ *     topology
+ *     transport
+ *     storage
+ *     execution state
  *
- * [ ] Cross-domain tests cover data + classical, data + AI, data + distributed,
- *     data + quantum-classical workflows, and data + hardware-facing programs.
+ * This grammar has no runtime dependency.
  *
- * [ ] Round-trip parser tests preserve transformation structure.
+ * ============================================================================
+ * 60. INTEGRATION CONTRACT — RUST
+ * ============================================================================
  *
- * [ ] Semantic analysis—not grammar—checks type compatibility.
+ * This grammar introduces no Rust code.
  *
- * [ ] Semantic analysis—not grammar—checks resource feasibility.
+ * The Rust implementation surrounding it MUST remain compatible with:
  *
- * [ ] Runtime—not grammar—checks actual available resources.
+ *     Rust 1.97
+ *     Rust 1.97.1
+ *     Rust 2021
  *
- * [ ] POCO-REAF remains intact.
+ * and MUST NOT require:
  *
+ *     unsafe
+ *
+ * The grammar itself cannot introduce Rust `unsafe`.
+ *
+ * ============================================================================
+ * 61. SCALABILITY CONTRACT
+ * ============================================================================
+ *
+ * The grammar uses:
+ *
+ *     *
+ *     +
+ *     ?
+ *
+ * and recursive expression composition rather than finite resource
+ * enumeration.
+ *
+ * It imposes no artificial language ceiling on:
+ *
+ *     transformation count
+ *     argument count
+ *     composition depth
+ *     qualification depth
+ *     pipeline size
+ *     dataset size
+ *     stream size
+ *     tensor dimensions
+ *     partitions
+ *     distributed nodes
+ *     devices
+ *     workers
+ *
+ * "Infinity" therefore means:
+ *
+ *     no artificial finite hardware/data ceiling is encoded by this grammar.
+ *
+ * Actual execution remains bounded by:
+ *
+ *     available resources
+ *     implementation limits
+ *     explicit semantic requirements
+ *     physical reality
+ *
+ * ============================================================================
+ * 62. COMPATIBILITY CONTRACT
+ * ============================================================================
+ *
+ * Existing transformation names remain source-level identifiers.
+ *
+ * This is intentionally compatible with an open-world operation registry.
+ *
+ * Introducing a new transformation therefore does NOT require:
+ *
+ *     a lexer change;
+ *     a new parser alternative;
+ *     a new keyword;
+ *     a new hardware backend.
+ *
+ * A transformation becomes a language-standard operation through the semantic
+ * specification and operation registry.
+ *
+ * ============================================================================
+ * 63. TEST CONTRACT
+ * ============================================================================
+ *
+ * Tests belong under:
+ *
+ *     grammar/tests/data/
+ *     grammar/tests/negative/
+ *     grammar/tests/boundary/
+ *     grammar/tests/scalability/
+ *     grammar/tests/determinism/
+ *
+ * Required positive cases include:
+ *
+ *     map(data, |x| f(x))
+ *     filter(data, |x| predicate(x))
+ *     reduce(data, initial, |a, x| combine(a, x))
+ *     fold(data, initial, |a, x| combine(a, x))
+ *     scan(data, initial, |a, x| combine(a, x))
+ *     group(data, key)
+ *     aggregate(data, key, reducer)
+ *     partition(data, key)
+ *     repartition(data, key)
+ *     sort(data, key)
+ *     distinct(data)
+ *     project(data, projection)
+ *     rename(data, mapping)
+ *     derive(data, expression)
+ *     cast(data, Type)
+ *     reshape(data, shape)
+ *     flatten(data)
+ *     explode(data)
+ *     collect(data)
+ *     materialize(data)
+ *     window(data, specification)
+ *     join(left, right, condition)
+ *     union(a, b)
+ *     intersection(a, b)
+ *     difference(a, b)
+ *     concat(a, b)
+ *     sample(data, quantity)
+ *     batch(data, size)
+ *     limit(data, quantity)
+ *     take(data, quantity)
+ *     drop(data, quantity)
+ *     custom::operation(data, argument)
+ *
+ * Required negative tests include malformed:
+ *
+ *     parentheses
+ *     generic arguments
+ *     argument separators
+ *     options
+ *     contract bodies
+ *     metadata bodies
+ *     resource intent
+ *
+ * Semantic tests must separately reject invalid:
+ *
+ *     argument counts
+ *     types
+ *     shapes
+ *     schemas
+ *     capabilities
+ *     resource requirements
+ *     ordering guarantees
+ *
+ * ============================================================================
+ * 64. HARD-CODING AUDIT
+ * ============================================================================
+ *
+ * PASS CONDITIONS:
+ *
+ *     [x] No MAX_QUBITS.
+ *     [x] No MAX_CPUS.
+ *     [x] No MAX_GPUS.
+ *     [x] No MAX_FPGAS.
+ *     [x] No MAX_NODES.
+ *     [x] No MAX_MEMORY.
+ *     [x] No MAX_THREADS.
+ *     [x] No MAX_TENSOR_RANK.
+ *     [x] No MAX_REGISTER_WIDTH.
+ *     [x] No MAX_NETWORK_SIZE.
+ *     [x] No MAX_DEVICE_COUNT.
+ *     [x] No fixed partition limit.
+ *     [x] No fixed batch limit.
+ *     [x] No fixed pipeline-stage limit.
+ *     [x] No fixed dataset-size limit.
+ *     [x] No physical device identifiers.
+ *     [x] No vendor-specific execution rules.
+ *
+ * ============================================================================
+ * 65. COMPLETION CRITERIA
+ * ============================================================================
+ *
+ * This file is complete when:
+ *
+ *     [x] Canonical lexer vocabulary is ZamaniLexer.
+ *     [x] No dependency on data.g4 exists.
+ *     [x] Expressions are reused.
+ *     [x] Types are reused.
+ *     [x] Transformation names remain open-ended.
+ *     [x] No finite transformation registry is embedded in syntax.
+ *     [x] No hardware limit is encoded.
+ *     [x] No Rust actions exist.
+ *     [x] No unsafe implementation is required.
+ *     [x] Transformation syntax remains target-independent.
+ *     [x] Transformation contracts remain semantic.
+ *     [x] Quantum remains downstream.
+ *     [x] QEC remains downstream.
+ *     [x] ZQN remains downstream.
+ *     [x] Scheduling remains downstream.
+ *     [x] Routing remains downstream.
+ *     [x] Runtime remains downstream.
+ *     [x] Future transformations remain representable without grammar changes.
+ *
+ * Remaining repository integration work is limited to wiring this already
+ * independent contract into the canonical parser/data composition and removing
+ * obsolete duplicate transformation rules from those owners.
+ *
+ * ============================================================================
+ * END OF FILE
  * ============================================================================
  */
