@@ -1,10 +1,4 @@
-Worked for 23s
 
-I inspected the actual repository, including the existing grammar/dialects/README.md, dialects.g4, dialect.g4, registration.g4, versioning.g4, capabilities.g4, compatibility.g4, extension-points.g4, Zamani.g4, and the surrounding core/specification architecture.
-
-One important finding is that grammar/dialects/registry.md does not currently exist. The existing dialect files already describe a registry concept, but they do not have one authoritative registry contract. The file below is therefore designed as that missing contract, while preserving the existing filenames and ownership model.
-
-It also deliberately treats the registry as a semantic/compiler registry contract, not another grammar and not a hardware/device registry.
 
 grammar/dialects/registry.md
 
