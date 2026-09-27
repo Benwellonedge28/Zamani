@@ -1,1300 +1,1526 @@
-/**
- * Zamani — Universal Serialization Grammar
+/*
+ * ============================================================================
+ * Zamani Universal Data Serialization Grammar
+ * ============================================================================
  *
- * Path:
- *     grammar/data/serialization.g4
+ * FILE
+ * ----
+ * grammar/data/serialization.g4
  *
- * Grammar:
- *     serialization
+ * STATUS
+ * ------
+ * CANONICAL SERIALIZATION / DESERIALIZATION LEAF GRAMMAR
  *
+ * ============================================================================
  * PURPOSE
- * -------
- * Defines the language-level syntax for expressing serialization and
- * deserialization intent.
+ * ============================================================================
  *
- * The grammar describes WHAT representation/conversion is required.
- * It does not prescribe HOW a particular runtime, library, processor,
- * accelerator, storage engine, network, or device implements it.
+ * This grammar defines SOURCE-LEVEL SERIALIZATION INTENT.
  *
+ * It describes:
  *
- * OWNS
- * ----
- * - serialization expressions
- * - deserialization expressions
- * - serialization statements
- * - deserialization statements
- * - representation/format references
- * - schema/type references
- * - serialization options
- * - compatibility/version intent
- * - canonicalization intent
- * - framing intent
- * - compression intent
- * - integrity intent
- * - extensible serialization policies
- * - source-level serialization contracts
+ *   - conversion of Zamani values into external representations;
+ *   - conversion of external representations into Zamani values;
+ *   - reusable serialization contracts;
+ *   - representation/format identity;
+ *   - schema identity;
+ *   - schema/version intent;
+ *   - compatibility intent;
+ *   - canonicalization intent;
+ *   - framing intent;
+ *   - compression intent;
+ *   - integrity intent;
+ *   - encoding intent;
+ *   - byte-order intent;
+ *   - null/missing-field intent;
+ *   - unknown-field intent;
+ *   - duplicate-field intent;
+ *   - evolution intent;
+ *   - metadata intent;
+ *   - extensible format properties;
+ *   - serialization policies;
+ *   - resource-neutral streaming intent;
+ *   - validation intent.
  *
+ * This grammar defines WHAT is requested.
  *
- * DOES NOT OWN
- * -------------
- * - general types
- * - expressions
- * - records
- * - schemas
- * - collections
- * - streams
- * - transformations
- * - networking
- * - storage
- * - filesystem access
- * - database engines
- * - compression algorithms
- * - cryptographic implementations
- * - physical memory layout
- * - hardware
- * - device identifiers
- * - quantum IR
- * - quantum-state implementation
- * - runtime allocation
- * - scheduling
- * - deployment
+ * It does NOT define HOW the request is implemented.
  *
+ * ============================================================================
+ * ARCHITECTURAL OWNERSHIP
+ * ============================================================================
  *
- * CRITICAL ARCHITECTURAL RULE
- * ----------------------------
- * A serialization format is a logical representation contract.
+ * THIS FILE OWNS
+ * --------------
  *
- * It is NOT a hardware target.
+ *   - serialization syntax;
+ *   - deserialization syntax;
+ *   - serialization/deserialization expressions;
+ *   - serialization/deserialization statement forms;
+ *   - serialization contract declarations;
+ *   - serialization contract members;
+ *   - format references;
+ *   - schema references;
+ *   - representation options;
+ *   - compatibility options;
+ *   - evolution options;
+ *   - canonicalization options;
+ *   - framing options;
+ *   - compression options;
+ *   - integrity options;
+ *   - encoding options;
+ *   - byte-order options;
+ *   - field/null/default policies;
+ *   - metadata;
+ *   - extensible serialization properties;
+ *   - logical streaming/chunking policy;
+ *   - validation intent associated with representation conversion.
  *
- * Therefore this grammar MUST NOT require:
+ * THIS FILE DOES NOT OWN
+ * ----------------------
  *
- *     JSON
- *     XML
- *     CBOR
- *     Protobuf
- *     MessagePack
+ *   - general expressions;
+ *   - general types;
+ *   - records;
+ *   - schemas;
+ *   - collections;
+ *   - streams;
+ *   - tensors;
+ *   - datasets;
+ *   - transformations;
+ *   - queries;
+ *   - storage;
+ *   - filesystems;
+ *   - networking;
+ *   - databases;
+ *   - compression implementations;
+ *   - cryptographic implementations;
+ *   - encryption;
+ *   - memory allocation;
+ *   - hardware;
+ *   - device selection;
+ *   - topology;
+ *   - scheduling;
+ *   - routing;
+ *   - runtime execution;
+ *   - backend/provider selection;
+ *   - canonical IR definitions.
  *
- * or any other finite provider list to be exhaustive.
+ * ============================================================================
+ * SINGLE-OWNER RULE
+ * ============================================================================
  *
- * Standard formats may be registered by the standard library, dialect
- * registry, interoperability layer, or runtime.
+ * Serialization and deserialization are one semantic family.
  *
- * User-defined and future formats remain possible through qualified names.
+ * Therefore this file is the canonical leaf grammar for BOTH:
  *
+ *     serialization
+ *     deserialization
  *
- * SCALABILITY
- * -----------
- * This grammar imposes no fixed maximum on:
+ * `grammar/data/deserialization.g4` MUST NOT become a second independent
+ * implementation of deserialization syntax.
  *
- * - serialized values
- * - fields
- * - records
- * - collections
- * - stream elements
- * - schema members
- * - metadata entries
- * - options
- * - nested values
- * - serialization operations
- * - formats
- * - versions
- * - compatibility rules
+ * During migration, deserialization.g4 may remain as a compatibility façade,
+ * but its rules must delegate to the canonical rules defined here.
  *
- * Any physical limit belongs to the resource/runtime/backend layer.
+ * No third serialization grammar may be introduced.
  *
+ * ============================================================================
+ * CANONICAL COMPOSITION
+ * ============================================================================
  *
+ * Canonical hierarchy:
+ *
+ *     Zamani.g4
+ *          |
+ *          v
+ *     ZamaniParser.g4
+ *          |
+ *          v
+ *        Data
+ *          |
+ *          v
+ *     serialization
+ *          |
+ *     +----+-------------------+
+ *     |                        |
+ * serialization             deserialization
+ *     |                        |
+ *     +-----------+------------+
+ *                 |
+ *                 v
+ *        domain-neutral AST
+ *                 |
+ *                 v
+ *        semantic analysis
+ *                 |
+ *                 v
+ *        canonical data model / IR
+ *                 |
+ *       +---------+----------+
+ *       |         |          |
+ *       v         v          v
+ *    storage    network    runtime
+ *
+ * Serialization MUST NOT create another semantic IR.
+ *
+ * ============================================================================
+ * QUANTUM / CLASSICAL / HDL INTEGRATION
+ * ============================================================================
+ *
+ * Serialization is domain-neutral.
+ *
+ * It may serialize values originating from:
+ *
+ *   - classical computation;
+ *   - quantum computation;
+ *   - hybrid computation;
+ *   - tensors;
+ *   - AI/ML;
+ *   - HDL/hardware co-design;
+ *   - distributed computation;
+ *   - networking;
+ *   - future domains.
+ *
+ * This grammar does not inspect or encode domain implementation details.
+ *
+ * Quantum values remain governed by the quantum semantic pipeline:
+ *
+ *     source
+ *       |
+ *       v
+ *     AST
+ *       |
+ *       v
+ *     semantic analysis
+ *       |
+ *       v
+ *     quantum::ir
+ *
+ * Serialization is a separate data/interoperability concern.
+ *
+ * It MUST NOT create:
+ *
+ *     serialization -> quantum IR
+ *
+ * or:
+ *
+ *     serialization -> physical qubit
+ *
+ * or:
+ *
+ *     serialization -> device memory
+ *
+ * ============================================================================
  * POCO-REAF
- * ---------
- * A program can state:
+ * ============================================================================
  *
- *     serialize value using format.some_representation
+ * Serialization syntax MUST remain independent of:
  *
- * without stating:
+ *   - CPU count;
+ *   - core count;
+ *   - thread count;
+ *   - GPU count;
+ *   - FPGA count;
+ *   - accelerator count;
+ *   - QPU count;
+ *   - qubit count;
+ *   - node count;
+ *   - device count;
+ *   - memory capacity;
+ *   - storage capacity;
+ *   - network capacity;
+ *   - register width;
+ *   - tensor rank;
+ *   - tensor dimensions;
+ *   - buffer capacity;
+ *   - partition count;
+ *   - replica count.
  *
- *     use library X
- *     use device Y
- *     allocate N bytes
- *     use machine Z
- *     use network node N
+ * The following are NEVER grammar-level limits:
  *
- * The compiler/runtime resolves the implementation available on the
- * execution target.
+ *     MAX_QUBITS
+ *     MAX_CPUS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_NODES
+ *     MAX_MEMORY
+ *     MAX_THREADS
+ *     MAX_TENSOR_RANK
+ *     MAX_REGISTER_WIDTH
+ *     MAX_NETWORK_SIZE
+ *     MAX_DEVICE_COUNT
  *
+ * A numeric value in a program is program semantics.
  *
- * RUST
- * ----
- * This file contains no embedded Rust actions.
+ * A machine/resource limit is a downstream resource/capability concern.
  *
- * Generated Rust parser code must integrate with Rust 1.97 / 1.97.1.
- * Zamani-owned Rust integration must remain safe Rust.
+ * ============================================================================
+ * EXTENSIBILITY
+ * ============================================================================
  *
+ * Formats are OPEN-WORLD identifiers.
  *
- * PARSER ARCHITECTURE
- * -------------------
- * This is intentionally a parser grammar.
+ * The grammar MUST NOT enumerate:
  *
- * The shared Zamani lexer owns tokens.
- * This grammar MUST NOT define a second lexer.
+ *     json
+ *     xml
+ *     cbor
+ *     protobuf
+ *     messagepack
+ *
+ * as the complete set of formats.
+ *
+ * Such formats may exist in standard registries or interoperability packages.
+ *
+ * Future formats can be represented without changing this grammar.
+ *
+ * Examples:
+ *
+ *     json
+ *     cbor
+ *     vendor::format
+ *     organization::format
+ *     dialect::format
+ *     future::representation
+ *
+ * Format identity is semantic data.
+ *
+ * ============================================================================
+ * SAFETY
+ * ============================================================================
+ *
+ * This is a parser grammar.
+ *
+ * It contains:
+ *
+ *   - no target-language actions;
+ *   - no semantic predicates;
+ *   - no filesystem access;
+ *   - no network access;
+ *   - no environment access;
+ *   - no hardware discovery;
+ *   - no runtime execution;
+ *   - no unsafe Rust.
+ *
+ * Generated parser integration MUST remain compatible with:
+ *
+ *     Rust 1.97
+ *     Rust 1.97.1
+ *
+ * and Rust 2021.
+ *
+ * ============================================================================
+ * DETERMINISM
+ * ============================================================================
+ *
+ * Parsing depends only on:
+ *
+ *   - source text;
+ *   - selected grammar version;
+ *   - shared lexical vocabulary;
+ *   - explicitly selected dialect configuration.
+ *
+ * Parsing MUST NOT depend on:
+ *
+ *   - hardware;
+ *   - runtime resources;
+ *   - filesystem state;
+ *   - network state;
+ *   - wall-clock time;
+ *   - randomness;
+ *   - environment variables.
+ *
+ * ============================================================================
+ * SOURCE-SPAN CONTRACT
+ * ============================================================================
+ *
+ * Every construct recognized here must remain representable with its source
+ * span by the domain-neutral AST.
+ *
+ * The grammar itself does not construct AST nodes.
+ *
+ * The AST contract must preserve at least:
+ *
+ *   - operation kind;
+ *   - source expression;
+ *   - target/source expression;
+ *   - format reference;
+ *   - target type where applicable;
+ *   - options;
+ *   - contract identity;
+ *   - source span.
+ *
+ * ============================================================================
+ * AST / SEMANTIC / IR CONTRACT
+ * ============================================================================
+ *
+ * serializationStatement
+ *     -> generic serialization operation AST
+ *
+ * deserializationStatement
+ *     -> generic deserialization operation AST
+ *
+ * serializationExpression
+ *     -> expression-level serialization operation
+ *
+ * deserializationExpression
+ *     -> expression-level deserialization operation
+ *
+ * serializationContractDeclaration
+ *     -> reusable serialization contract AST
+ *
+ * semantic analysis resolves:
+ *
+ *     format
+ *     schema
+ *     version
+ *     compatibility
+ *     policies
+ *     capabilities
+ *     resource requirements
+ *
+ * Lowering produces the repository's canonical data/interoperability
+ * representation.
+ *
+ * This grammar does NOT define that IR.
+ *
+ * ============================================================================
  */
 
 parser grammar serialization;
 
 options {
-    tokenVocab = Zamani;
+    /*
+     * IMPORTANT:
+     *
+     * The repository's canonical lexer composition is:
+     *
+     *     grammar/antlr/ZamaniLexer.g4
+     *
+     * Therefore parser grammars must consume ZamaniLexer.
+     *
+     * Do NOT revert this to:
+     *
+     *     tokenVocab = Zamani;
+     */
+    tokenVocab = ZamaniLexer;
 }
 
 
-/* ==========================================================================
- * PUBLIC ENTRY POINT
- * ========================================================================== */
-
-/**
- * Standalone serialization grammar entry point.
+/* ============================================================================
+ * PUBLIC TEST ENTRY POINT
+ * ============================================================================
  *
- * The root Zamani grammar must NOT use this as its whole-program entry
- * point. It exists for grammar-specific testing and tooling.
+ * This is for isolated grammar/conformance tests.
+ *
+ * It is NOT the complete Zamani program entry point.
+ * ============================================================================
  */
+
 serializationUnit
-    : serializationConstruct*
-      EOF
+    : serializationConstruct* EOF
     ;
 
 
-/* ==========================================================================
- * PUBLIC SERIALIZATION CONSTRUCTS
- * ========================================================================== */
-
-/**
- * Integration facade consumed by data/data.g4.
+/* ============================================================================
+ * PUBLIC INTEGRATION FACADE
+ * ============================================================================
  *
- * data.g4 should delegate serialization syntax to this rule rather than
- * redefining serialization alternatives.
+ * `data.g4` and the canonical Data composition grammar should delegate here.
+ *
+ * These names are intentionally stable integration points.
+ * ============================================================================
  */
-serializationConstruct
+
+dataSerializationStmt
     : serializationStatement
     | deserializationStatement
-    | serializationExpression
+    ;
+
+dataSerializationExpression
+    : serializationExpression
     | deserializationExpression
-    | serializationContractDeclaration
+    ;
+
+dataSerializationContract
+    : serializationContractDeclaration
+    ;
+
+serializationConstruct
+    : dataSerializationStmt
+    | dataSerializationExpression
+    | dataSerializationContract
     ;
 
 
-/* ==========================================================================
- * SERIALIZATION STATEMENTS
- * ========================================================================== */
-
-/**
- * Legacy-compatible form:
+/* ============================================================================
+ * SERIALIZATION STATEMENT
+ * ============================================================================
  *
- *     serialize expression to format;
+ * Canonical forms:
  *
- * Extended production form:
+ *     serialize value using format;
  *
- *     serialize expression using format ...;
+ *     serialize value to destination using format;
  *
- * Both forms are retained during migration.
+ *     serialize value using format with options;
+ *
+ * The destination is optional.
+ *
+ * Format is explicit in the statement form so that the operation cannot be
+ * accidentally confused with an ordinary expression.
+ * ============================================================================
  */
+
 serializationStatement
-    : 'serialize'
+    : SERIALIZE
       expression
       serializationDestinationClause?
       serializationFormatClause
-      serializationOptionClause*
-      ';'
+      serializationOptionBlock?
+      SEMICOLON
     ;
 
-
-/**
- * Explicit destination support.
- *
- * Destination semantics remain logical.
- *
- * Physical file/network/storage handling belongs elsewhere.
- */
 serializationDestinationClause
-    : 'to'
-      serializationDestination
+    : TO
+      expression
     ;
 
-serializationDestination
-    : expression
-    ;
-
-
-/**
- * The representation itself is intentionally extensible.
- */
 serializationFormatClause
-    : 'to'
-      serializationFormatReference
-    | 'using'
+    : USING
       serializationFormatReference
     ;
+
+
+/* ============================================================================
+ * DESERIALIZATION STATEMENT
+ * ============================================================================
+ *
+ * Canonical forms:
+ *
+ *     deserialize source using format as Type;
+ *
+ *     deserialize source from source using format as Type;
+ *
+ * The source expression itself is sufficient in the common case.
+ * ============================================================================
+ */
+
+deserializationStatement
+    : DESERIALIZE
+      expression
+      deserializationSourceClause?
+      serializationFormatClause
+      deserializationTargetClause
+      serializationOptionBlock?
+      SEMICOLON
+    ;
+
+deserializationSourceClause
+    : FROM
+      expression
+    ;
+
+deserializationTargetClause
+    : AS
+      typeExpr
+    ;
+
+
+/* ============================================================================
+ * EXPRESSION FORMS
+ * ============================================================================
+ *
+ * Expression forms are useful for:
+ *
+ *     let encoded = serialize(value) using format;
+ *
+ *     pipeline(...)
+ *
+ *     transform(serialize(value) using format)
+ *
+ *     let value = deserialize(source) using format as Record;
+ *
+ * The expression grammar owns precedence; this grammar only introduces the
+ * serialization operation.
+ * ============================================================================
+ */
+
+serializationExpression
+    : SERIALIZE
+      LPAREN
+      expression
+      serializationExpressionFormatClause?
+      serializationExpressionOptions?
+      RPAREN
+    ;
+
+serializationExpressionFormatClause
+    : USING
+      serializationFormatReference
+    | TO
+      serializationFormatReference
+    ;
+
+deserializationExpression
+    : DESERIALIZE
+      LPAREN
+      expression
+      serializationExpressionFormatClause?
+      serializationExpressionTargetClause?
+      serializationExpressionOptions?
+      RPAREN
+    ;
+
+serializationExpressionTargetClause
+    : AS
+      typeExpr
+    ;
+
+serializationExpressionOptions
+    : WITH
+      serializationOptionList
+    ;
+
+
+/* ============================================================================
+ * FORMAT REFERENCES
+ * ============================================================================
+ *
+ * A format is a symbolic semantic identifier.
+ *
+ * It may be:
+ *
+ *     json
+ *     cbor
+ *     protobuf
+ *     vendor::format
+ *     organization::domain::format
+ *
+ * No finite registry is embedded in the grammar.
+ * ============================================================================
+ */
 
 serializationFormatReference
     : qualifiedName
     ;
 
 
-/* ==========================================================================
- * DESERIALIZATION STATEMENTS
- * ========================================================================== */
-
-deserializationStatement
-    : 'deserialize'
-      expression
-      deserializationSourceClause?
-      serializationFormatClause
-      serializationOptionClause*
-      deserializationTargetClause?
-      ';'
-    ;
-
-deserializationSourceClause
-    : 'from'
-      expression
-    ;
-
-deserializationTargetClause
-    : 'as'
-      typeExpr
-    ;
-
-
-/* ==========================================================================
- * SERIALIZATION EXPRESSIONS
- * ========================================================================== */
-
-/**
- * Expression form permits serialization to participate in:
+/* ============================================================================
+ * OPTION BLOCK
+ * ============================================================================
  *
- *     pipelines
- *     transformations
- *     function arguments
- *     assignments
- *     data movement
- *     interoperability
+ * Example:
  *
- * without requiring a statement.
+ *     serialize value using format
+ *         with {
+ *             schema = telemetry::Event;
+ *             version = 2;
+ *             compatibility = backward;
+ *         };
+ *
+ * A repeated option list is deliberately unbounded.
+ * ============================================================================
  */
-serializationExpression
-    : 'serialize'
-      '('
-      expression
-      serializationExpressionFormatClause?
-      serializationExpressionOptionList?
-      ')'
+
+serializationOptionBlock
+    : WITH
+      LBRACE
+      serializationOption*
+      RBRACE
     ;
 
-serializationExpressionFormatClause
-    : 'to'
-      serializationFormatReference
-    | 'using'
-      serializationFormatReference
-    ;
-
-
-/* ==========================================================================
- * DESERIALIZATION EXPRESSIONS
- * ========================================================================== */
-
-deserializationExpression
-    : 'deserialize'
-      '('
-      expression
-      serializationExpressionFormatClause?
-      serializationExpressionTargetClause?
-      serializationExpressionOptionList?
-      ')'
-    ;
-
-serializationExpressionTargetClause
-    : 'as'
-      typeExpr
-    ;
-
-
-/* ==========================================================================
- * OPTION LISTS
- * ========================================================================== */
-
-serializationOptionClause
+serializationOptionList
     : serializationOption
+      (COMMA serializationOption)*
     ;
 
-serializationExpressionOptionList
-    : '['
-      serializationOption
-      (',' serializationOption)*
-      ']'
-    ;
+
+/* ============================================================================
+ * OPTION DISPATCH
+ * ============================================================================
+ */
 
 serializationOption
     : serializationSchemaOption
+    | serializationTypeOption
     | serializationVersionOption
+    | serializationSchemaVersionOption
     | serializationCompatibilityOption
+    | serializationEvolutionOption
     | serializationCanonicalOption
     | serializationFramingOption
     | serializationCompressionOption
     | serializationIntegrityOption
+    | serializationEncodingOption
+    | serializationByteOrderOption
+    | serializationNullPolicyOption
+    | serializationMissingPolicyOption
+    | serializationUnknownFieldOption
+    | serializationDuplicateFieldOption
+    | serializationDefaultPolicyOption
+    | serializationFieldPolicyOption
     | serializationMetadataOption
     | serializationPropertyOption
+    | serializationStreamOption
+    | serializationChunkOption
+    | serializationValidationOption
     | serializationPolicyOption
+    | serializationCapabilityOption
+    | serializationRequirementOption
+    | serializationPreferenceOption
+    | serializationHintOption
     | serializationExtensionOption
     ;
 
 
-/* ==========================================================================
- * SCHEMA / TYPE OPTIONS
- * ========================================================================== */
-
-/**
- * A serialization schema is a semantic contract, not a physical database
- * schema.
+/* ============================================================================
+ * SCHEMA
+ * ============================================================================
  */
+
 serializationSchemaOption
-    : 'schema'
+    : SCHEMA
       qualifiedName
     ;
 
-
-/**
- * The schema may be inferred from the value/type when omitted.
- */
 serializationTypeOption
-    : 'type'
+    : TYPE
       typeExpr
     ;
 
 
-/* ==========================================================================
+/* ============================================================================
  * VERSIONING
- * ========================================================================== */
-
-/**
- * Serialization format version is distinct from:
+ * ============================================================================
  *
- * - language version
- * - AST schema version
- * - IR version
- * - backend version
- * - protocol version
+ * Version values are expressions rather than fixed integer grammar values.
+ *
+ * This permits:
+ *
+ *     version = 1;
+ *     version = schema_version;
+ *     version = negotiated_version;
+ *
+ * Semantic validation determines whether the resulting value is a valid
+ * representation/version identifier.
+ * ============================================================================
  */
+
 serializationVersionOption
-    : 'version'
+    : VERSION
+      ASSIGN
       expression
     ;
 
 serializationSchemaVersionOption
-    : 'schema_version'
+    : SCHEMA_VERSION
+      ASSIGN
       expression
     ;
 
 
-/* ==========================================================================
+/* ============================================================================
  * COMPATIBILITY
- * ========================================================================== */
+ * ============================================================================
+ *
+ * Compatibility policy is symbolic and extensible.
+ *
+ * Examples:
+ *
+ *     compatibility = backward;
+ *     compatibility = forward;
+ *     compatibility = vendor::policy;
+ *
+ * The grammar does not define the actual compatibility algorithm.
+ * ============================================================================
+ */
 
 serializationCompatibilityOption
-    : 'compatibility'
-      qualifiedName
-      serializationNamedArguments?
+    : COMPATIBILITY
+      ASSIGN
+      serializationPolicyReference
     ;
 
-serializationCompatibilityRule
-    : 'compatible'
-      qualifiedName
-      serializationNamedArguments?
+serializationEvolutionOption
+    : EVOLUTION
+      ASSIGN
+      serializationPolicyReference
+    ;
+
+serializationPolicyReference
+    : qualifiedName
     ;
 
 
-/* ==========================================================================
+/* ============================================================================
  * CANONICALIZATION
- * ========================================================================== */
+ * ============================================================================
+ */
 
 serializationCanonicalOption
-    : 'canonical'
-    | 'canonical'
-      '='
+    : CANONICAL
+      serializationBooleanOrPolicyValue?
+    ;
+
+serializationBooleanOrPolicyValue
+    : ASSIGN
       expression
+    | LPAREN
+      expression
+      RPAREN
     ;
 
 
-/**
- * Canonicalization may be an implementation-specific policy.
- *
- * The grammar only records intent.
- */
-serializationCanonicalPolicy
-    : 'canonicalization'
-      qualifiedName
-      serializationNamedArguments?
-    ;
-
-
-/* ==========================================================================
+/* ============================================================================
  * FRAMING
- * ========================================================================== */
+ * ============================================================================
+ *
+ * Framing describes logical representation boundaries.
+ *
+ * It does NOT define network packets.
+ * ============================================================================
+ */
 
 serializationFramingOption
-    : 'framing'
-      qualifiedName
-      serializationNamedArguments?
+    : FRAMING
+      ASSIGN
+      serializationPolicyReference
     ;
 
 
-/**
- * Framing describes logical document/message boundaries.
- *
- * It does not define network packet layout.
- */
-serializationFrameOption
-    : 'frame'
-      qualifiedName
-      serializationNamedArguments?
-    ;
-
-
-/* ==========================================================================
+/* ============================================================================
  * COMPRESSION
- * ========================================================================== */
-
-/**
- * Compression algorithm names are qualified names rather than hard-coded
- * grammar keywords.
- *
- * Examples may be:
- *
- *     compression.zstd
- *     compression.gzip
- *     compression.custom
- *
- * but the grammar does not privilege any particular algorithm.
+ * ============================================================================
  */
+
 serializationCompressionOption
-    : 'compression'
-      qualifiedName
-      serializationNamedArguments?
-    ;
-
-serializationCompressionLevelOption
-    : 'compression_level'
-      expression
+    : COMPRESSION
+      ASSIGN
+      serializationPolicyReference
     ;
 
 
-/* ==========================================================================
+/* ============================================================================
  * INTEGRITY
- * ========================================================================== */
-
-/**
- * Integrity is intentionally separate from encryption/security.
+ * ============================================================================
  *
- * Cryptographic policy implementation belongs to security/interoperability.
+ * Integrity is intentionally distinct from encryption.
+ *
+ * Encryption/security implementation belongs to the security/interoperability
+ * layers.
+ * ============================================================================
  */
+
 serializationIntegrityOption
-    : 'integrity'
-      qualifiedName
-      serializationNamedArguments?
+    : INTEGRITY
+      ASSIGN
+      serializationPolicyReference
     ;
 
 
-/* ==========================================================================
+/* ============================================================================
+ * TEXT ENCODING
+ * ============================================================================
+ *
+ * Encoding names remain symbolic.
+ *
+ * The grammar does not privilege a finite encoding list.
+ * ============================================================================
+ */
+
+serializationEncodingOption
+    : ENCODING
+      ASSIGN
+      serializationPolicyReference
+    ;
+
+
+/* ============================================================================
+ * BYTE ORDER
+ * ============================================================================
+ */
+
+serializationByteOrderOption
+    : BYTE_ORDER
+      ASSIGN
+      serializationPolicyReference
+    ;
+
+
+/* ============================================================================
+ * NULL / MISSING VALUES
+ * ============================================================================
+ */
+
+serializationNullPolicyOption
+    : NULL_POLICY
+      ASSIGN
+      serializationPolicyReference
+    ;
+
+serializationMissingPolicyOption
+    : MISSING_POLICY
+      ASSIGN
+      serializationPolicyReference
+    ;
+
+
+/* ============================================================================
+ * UNKNOWN FIELDS
+ * ============================================================================
+ */
+
+serializationUnknownFieldOption
+    : UNKNOWN_FIELDS
+      ASSIGN
+      serializationPolicyReference
+    ;
+
+
+/* ============================================================================
+ * DUPLICATE FIELDS
+ * ============================================================================
+ */
+
+serializationDuplicateFieldOption
+    : DUPLICATE_FIELDS
+      ASSIGN
+      serializationPolicyReference
+    ;
+
+
+/* ============================================================================
+ * DEFAULT VALUES
+ * ============================================================================
+ */
+
+serializationDefaultPolicyOption
+    : DEFAULT_POLICY
+      ASSIGN
+      serializationPolicyReference
+    ;
+
+
+/* ============================================================================
+ * FIELD REPRESENTATION
+ * ============================================================================
+ */
+
+serializationFieldPolicyOption
+    : FIELD_POLICY
+      ASSIGN
+      serializationPolicyReference
+    ;
+
+
+/* ============================================================================
  * METADATA
- * ========================================================================== */
+ * ============================================================================
+ *
+ * Metadata is an expression so arbitrary structured metadata can be preserved
+ * without introducing another metadata language.
+ * ============================================================================
+ */
 
 serializationMetadataOption
-    : 'metadata'
-      serializationMetadataValue
-    ;
-
-serializationMetadataValue
-    : expression
+    : METADATA
+      ASSIGN
+      expression
     ;
 
 
-/* ==========================================================================
- * GENERIC PROPERTIES
- * ========================================================================== */
+/* ============================================================================
+ * EXTENSIBLE FORMAT PROPERTY
+ * ============================================================================
+ *
+ * Properties allow a format-specific representation policy without requiring
+ * every new format to modify the core grammar.
+ *
+ * Example:
+ *
+ *     property = vendor::property(value)
+ *
+ * ============================================================================
+ */
 
 serializationPropertyOption
-    : 'property'
-      qualifiedName
-      '='
+    : PROPERTY
+      serializationPropertyName
+      ASSIGN
+      expression
+    ;
+
+serializationPropertyName
+    : qualifiedName
+    ;
+
+
+/* ============================================================================
+ * STREAMING
+ * ============================================================================
+ *
+ * Streaming is semantic intent.
+ *
+ * It does not impose a fixed buffer size, chunk count, record count, or
+ * transport implementation.
+ * ============================================================================
+ */
+
+serializationStreamOption
+    : STREAMING
+      ASSIGN
+      serializationPolicyReference
+    ;
+
+
+/* ============================================================================
+ * CHUNKING
+ * ============================================================================
+ *
+ * Chunking is representation intent.
+ *
+ * A chunk size may be expressed symbolically or numerically.
+ *
+ * The grammar imposes no maximum or minimum.
+ * ============================================================================
+ */
+
+serializationChunkOption
+    : CHUNKING
+      ASSIGN
       expression
     ;
 
 
-/* ==========================================================================
- * EXTENSIBLE POLICIES
- * ========================================================================== */
-
-/**
- * Open policy namespace.
- *
- * This prevents the grammar from becoming obsolete every time a new
- * serialization requirement is introduced.
+/* ============================================================================
+ * VALIDATION
+ * ============================================================================
  */
+
+serializationValidationOption
+    : VALIDATE
+      ASSIGN
+      serializationPolicyReference
+    ;
+
+
+/* ============================================================================
+ * CAPABILITIES / REQUIREMENTS
+ * ============================================================================
+ *
+ * These are source-level requirements, not backend selections.
+ *
+ * Examples:
+ *
+ *     capability = serialization::streaming;
+ *     requires = capability("serialization.canonical");
+ *
+ * Actual capability checking occurs downstream.
+ * ============================================================================
+ */
+
+serializationCapabilityOption
+    : CAPABILITY
+      ASSIGN
+      expression
+    ;
+
+serializationRequirementOption
+    : REQUIRES
+      ASSIGN
+      expression
+    ;
+
+serializationPreferenceOption
+    : PREFER
+      ASSIGN
+      expression
+    ;
+
+serializationHintOption
+    : HINT
+      ASSIGN
+      expression
+    ;
+
+
+/* ============================================================================
+ * GENERIC POLICY
+ * ============================================================================
+ */
+
 serializationPolicyOption
-    : 'policy'
-      qualifiedName
-      serializationNamedArguments?
+    : POLICY
+      ASSIGN
+      serializationPolicyReference
     ;
 
 
-/**
- * Explicit extension point for dialects.
+/* ============================================================================
+ * DIALECT / FUTURE EXTENSION
+ * ============================================================================
+ *
+ * Extensions remain qualified and are interpreted by the dialect/semantic
+ * layer. The core grammar does not need to know future provider features.
+ * ============================================================================
  */
+
 serializationExtensionOption
-    : 'extension'
-      qualifiedName
-      serializationNamedArguments?
+    : EXTENSION
+      serializationExtensionReference
+    ;
+
+serializationExtensionReference
+    : qualifiedName
     ;
 
 
-/* ==========================================================================
- * NAMED ARGUMENTS
- * ========================================================================== */
-
-serializationNamedArguments
-    : '('
-      serializationNamedArgument
-      (',' serializationNamedArgument)*
-      ')'
-    ;
-
-serializationNamedArgument
-    : IDENTIFIER
-      '='
-      expression
-    ;
-
-
-/* ==========================================================================
- * SERIALIZATION CONTRACT DECLARATIONS
- * ========================================================================== */
-
-/**
- * A contract defines reusable serialization intent.
+/* ============================================================================
+ * SERIALIZATION CONTRACT
+ * ============================================================================
  *
- * Example conceptually:
+ * A contract packages reusable representation intent.
  *
- *     serialization contract telemetry
- *     {
- *         format telemetry.binary;
- *         schema telemetry.Event;
- *         version 1;
- *         compatibility backward;
+ * Example:
+ *
+ *     serialization contract telemetry::EventWire {
+ *         format = telemetry::binary;
+ *         schema = telemetry::Event;
+ *         version = 1;
+ *         compatibility = backward;
  *     }
  *
- * The grammar intentionally does not dictate a particular wire format.
+ * Contracts do not implement codecs.
+ * ============================================================================
  */
+
 serializationContractDeclaration
     : visibilityModifier?
-      'serialization'
-      'contract'
+      SERIALIZATION
+      CONTRACT
       qualifiedName
       serializationContractTypeParameters?
-      '{'
+      LBRACE
       serializationContractMember*
-      '}'
+      RBRACE
     ;
 
 serializationContractTypeParameters
-    : '<'
+    : LESS_THAN
       serializationTypeParameter
-      (',' serializationTypeParameter)*
-      '>'
+      (COMMA serializationTypeParameter)*
+      GREATER_THAN
     ;
 
 serializationTypeParameter
     : IDENTIFIER
-      (':' typeExpr)?
+      (COLON typeExpr)?
     ;
 
 
-/* ==========================================================================
+/* ============================================================================
  * CONTRACT MEMBERS
- * ========================================================================== */
+ * ============================================================================
+ */
 
 serializationContractMember
     : serializationContractFormat
     | serializationContractSchema
+    | serializationContractType
     | serializationContractVersion
+    | serializationContractSchemaVersion
     | serializationContractCompatibility
+    | serializationContractEvolution
     | serializationContractCanonicalization
     | serializationContractFraming
     | serializationContractCompression
     | serializationContractIntegrity
+    | serializationContractEncoding
+    | serializationContractByteOrder
+    | serializationContractNullPolicy
+    | serializationContractMissingPolicy
+    | serializationContractUnknownFields
+    | serializationContractDuplicateFields
+    | serializationContractDefaultPolicy
+    | serializationContractFieldPolicy
+    | serializationContractMetadata
     | serializationContractProperty
+    | serializationContractStreaming
+    | serializationContractChunking
+    | serializationContractValidation
     | serializationContractPolicy
+    | serializationContractCapability
+    | serializationContractRequirement
+    | serializationContractPreference
+    | serializationContractHint
+    | serializationContractExtension
     | annotation
     ;
 
 
-/* ==========================================================================
+/* ============================================================================
  * CONTRACT FORMAT
- * ========================================================================== */
+ * ============================================================================
+ */
 
 serializationContractFormat
-    : 'format'
+    : FORMAT
+      ASSIGN
       serializationFormatReference
-      ';'
+      SEMICOLON
     ;
 
 
-/* ==========================================================================
+/* ============================================================================
  * CONTRACT SCHEMA
- * ========================================================================== */
+ * ============================================================================
+ */
 
 serializationContractSchema
-    : 'schema'
+    : SCHEMA
+      ASSIGN
       qualifiedName
-      ';'
+      SEMICOLON
     ;
 
 
-/* ==========================================================================
+/* ============================================================================
+ * CONTRACT TYPE
+ * ============================================================================
+ */
+
+serializationContractType
+    : TYPE
+      ASSIGN
+      typeExpr
+      SEMICOLON
+    ;
+
+
+/* ============================================================================
  * CONTRACT VERSION
- * ========================================================================== */
+ * ============================================================================
+ */
 
 serializationContractVersion
-    : 'version'
+    : VERSION
+      ASSIGN
       expression
-      ';'
+      SEMICOLON
+    ;
+
+serializationContractSchemaVersion
+    : SCHEMA_VERSION
+      ASSIGN
+      expression
+      SEMICOLON
     ;
 
 
-/* ==========================================================================
+/* ============================================================================
  * CONTRACT COMPATIBILITY
- * ========================================================================== */
+ * ============================================================================
+ */
 
 serializationContractCompatibility
-    : 'compatibility'
-      qualifiedName
-      serializationNamedArguments?
-      ';'
+    : COMPATIBILITY
+      ASSIGN
+      serializationPolicyReference
+      SEMICOLON
+    ;
+
+serializationContractEvolution
+    : EVOLUTION
+      ASSIGN
+      serializationPolicyReference
+      SEMICOLON
     ;
 
 
-/* ==========================================================================
+/* ============================================================================
  * CONTRACT CANONICALIZATION
- * ========================================================================== */
+ * ============================================================================
+ */
 
 serializationContractCanonicalization
-    : 'canonical'
-      serializationContractPolicyArguments?
-      ';'
-    ;
-
-serializationContractPolicyArguments
-    : '('
-      serializationArgumentList?
-      ')'
+    : CANONICAL
+      serializationBooleanOrPolicyValue?
+      SEMICOLON
     ;
 
 
-/* ==========================================================================
+/* ============================================================================
  * CONTRACT FRAMING
- * ========================================================================== */
+ * ============================================================================
+ */
 
 serializationContractFraming
-    : 'framing'
-      qualifiedName
-      serializationNamedArguments?
-      ';'
+    : FRAMING
+      ASSIGN
+      serializationPolicyReference
+      SEMICOLON
     ;
 
 
-/* ==========================================================================
+/* ============================================================================
  * CONTRACT COMPRESSION
- * ========================================================================== */
+ * ============================================================================
+ */
 
 serializationContractCompression
-    : 'compression'
-      qualifiedName
-      serializationNamedArguments?
-      ';'
+    : COMPRESSION
+      ASSIGN
+      serializationPolicyReference
+      SEMICOLON
     ;
 
 
-/* ==========================================================================
+/* ============================================================================
  * CONTRACT INTEGRITY
- * ========================================================================== */
+ * ============================================================================
+ */
 
 serializationContractIntegrity
-    : 'integrity'
-      qualifiedName
-      serializationNamedArguments?
-      ';'
+    : INTEGRITY
+      ASSIGN
+      serializationPolicyReference
+      SEMICOLON
     ;
 
 
-/* ==========================================================================
- * CONTRACT PROPERTIES
- * ========================================================================== */
+/* ============================================================================
+ * CONTRACT ENCODING
+ * ============================================================================
+ */
+
+serializationContractEncoding
+    : ENCODING
+      ASSIGN
+      serializationPolicyReference
+      SEMICOLON
+    ;
+
+
+/* ============================================================================
+ * CONTRACT BYTE ORDER
+ * ============================================================================
+ */
+
+serializationContractByteOrder
+    : BYTE_ORDER
+      ASSIGN
+      serializationPolicyReference
+      SEMICOLON
+    ;
+
+
+/* ============================================================================
+ * CONTRACT NULL / MISSING POLICY
+ * ============================================================================
+ */
+
+serializationContractNullPolicy
+    : NULL_POLICY
+      ASSIGN
+      serializationPolicyReference
+      SEMICOLON
+    ;
+
+serializationContractMissingPolicy
+    : MISSING_POLICY
+      ASSIGN
+      serializationPolicyReference
+      SEMICOLON
+    ;
+
+
+/* ============================================================================
+ * CONTRACT UNKNOWN / DUPLICATE FIELD POLICY
+ * ============================================================================
+ */
+
+serializationContractUnknownFields
+    : UNKNOWN_FIELDS
+      ASSIGN
+      serializationPolicyReference
+      SEMICOLON
+    ;
+
+serializationContractDuplicateFields
+    : DUPLICATE_FIELDS
+      ASSIGN
+      serializationPolicyReference
+      SEMICOLON
+    ;
+
+
+/* ============================================================================
+ * CONTRACT DEFAULT / FIELD POLICY
+ * ============================================================================
+ */
+
+serializationContractDefaultPolicy
+    : DEFAULT_POLICY
+      ASSIGN
+      serializationPolicyReference
+      SEMICOLON
+    ;
+
+serializationContractFieldPolicy
+    : FIELD_POLICY
+      ASSIGN
+      serializationPolicyReference
+      SEMICOLON
+    ;
+
+
+/* ============================================================================
+ * CONTRACT METADATA
+ * ============================================================================
+ */
+
+serializationContractMetadata
+    : METADATA
+      ASSIGN
+      expression
+      SEMICOLON
+    ;
+
+
+/* ============================================================================
+ * CONTRACT PROPERTY
+ * ============================================================================
+ */
 
 serializationContractProperty
-    : 'property'
-      qualifiedName
-      '='
+    : PROPERTY
+      serializationPropertyName
+      ASSIGN
       expression
-      ';'
+      SEMICOLON
     ;
 
 
-/* ==========================================================================
- * CONTRACT POLICIES
- * ========================================================================== */
+/* ============================================================================
+ * CONTRACT STREAMING / CHUNKING
+ * ============================================================================
+ */
+
+serializationContractStreaming
+    : STREAMING
+      ASSIGN
+      serializationPolicyReference
+      SEMICOLON
+    ;
+
+serializationContractChunking
+    : CHUNKING
+      ASSIGN
+      expression
+      SEMICOLON
+    ;
+
+
+/* ============================================================================
+ * CONTRACT VALIDATION
+ * ============================================================================
+ */
+
+serializationContractValidation
+    : VALIDATE
+      ASSIGN
+      serializationPolicyReference
+      SEMICOLON
+    ;
+
+
+/* ============================================================================
+ * CONTRACT CAPABILITY / REQUIREMENT / PREFERENCE / HINT
+ * ============================================================================
+ */
+
+serializationContractCapability
+    : CAPABILITY
+      ASSIGN
+      expression
+      SEMICOLON
+    ;
+
+serializationContractRequirement
+    : REQUIRES
+      ASSIGN
+      expression
+      SEMICOLON
+    ;
+
+serializationContractPreference
+    : PREFER
+      ASSIGN
+      expression
+      SEMICOLON
+    ;
+
+serializationContractHint
+    : HINT
+      ASSIGN
+      expression
+      SEMICOLON
+    ;
+
+
+/* ============================================================================
+ * CONTRACT POLICY
+ * ============================================================================
+ */
 
 serializationContractPolicy
-    : 'policy'
-      qualifiedName
-      serializationNamedArguments?
-      ';'
+    : POLICY
+      ASSIGN
+      serializationPolicyReference
+      SEMICOLON
     ;
 
 
-/* ==========================================================================
- * GENERIC ARGUMENT LIST
- * ========================================================================== */
+/* ============================================================================
+ * CONTRACT EXTENSION
+ * ============================================================================
+ */
 
-serializationArgumentList
-    : expression
-      (',' expression)*
+serializationContractExtension
+    : EXTENSION
+      serializationExtensionReference
+      SEMICOLON
     ;
 
 
-/* ==========================================================================
- * SCHEMA EVOLUTION
- * ========================================================================== */
-
-/**
- * Schema evolution belongs semantically to schema compatibility, but the
- * serialization contract may carry the policy used during encoding/decoding.
- */
-serializationEvolutionOption
-    : 'evolution'
-      qualifiedName
-      serializationNamedArguments?
-    ;
-
-
-/* ==========================================================================
- * NULL / OPTIONAL / DEFAULT REPRESENTATION
- * ========================================================================== */
-
-serializationNullPolicyOption
-    : 'null_policy'
-      qualifiedName
-      serializationNamedArguments?
-    ;
-
-serializationDefaultPolicyOption
-    : 'default_policy'
-      qualifiedName
-      serializationNamedArguments?
-    ;
-
-
-/* ==========================================================================
- * FIELD REPRESENTATION
- * ========================================================================== */
-
-/**
- * Field representation is deliberately symbolic.
+/* ============================================================================
+ * INTEGRATION CONTRACT
+ * ============================================================================
  *
- * It must not require a particular byte width unless that width is actually
- * part of the language-level serialization contract.
- */
-serializationFieldPolicyOption
-    : 'field_policy'
-      qualifiedName
-      serializationNamedArguments?
-    ;
-
-
-/* ==========================================================================
- * ENCODING POLICY
- * ========================================================================== */
-
-/**
- * Character/text encoding is a representation concern.
+ * This grammar is intentionally dependent only on shared canonical rules:
  *
- * It remains extensible rather than hard-coded to UTF-8/UTF-16/etc.
- */
-serializationEncodingOption
-    : 'encoding'
-      qualifiedName
-      serializationNamedArguments?
-    ;
-
-
-/* ==========================================================================
- * BYTE ORDER
- * ========================================================================== */
-
-/**
- * Byte ordering is only meaningful for representations that expose such a
- * property. The semantic layer determines whether the selected format allows
- * it.
- */
-serializationByteOrderOption
-    : 'byte_order'
-      qualifiedName
-      serializationNamedArguments?
-    ;
-
-
-/* ==========================================================================
- * DETERMINISM
- * ========================================================================== */
-
-serializationDeterminismOption
-    : 'deterministic'
-    | 'deterministic'
-      '='
-      expression
-    ;
-
-
-/* ==========================================================================
- * LOSS / FIDELITY POLICY
- * ========================================================================== */
-
-/**
- * Particularly important for scientific, numerical, AI, quantum, and
- * hardware-adjacent data.
+ *     expression
+ *     typeExpr
+ *     qualifiedName
+ *     visibilityModifier
+ *     annotation
  *
- * The grammar records intent.
+ * and canonical ZamaniLexer tokens.
  *
- * It does NOT claim that arbitrary quantum states, hardware states, or
- * runtime state can necessarily be reconstructed.
- */
-serializationFidelityOption
-    : 'fidelity'
-      qualifiedName
-      serializationNamedArguments?
-    ;
-
-
-/* ==========================================================================
- * QUANTUM-SAFE SEMANTIC BOUNDARY
- * ========================================================================== */
-
-/**
- * Quantum data may be serialized when a backend/domain defines a valid
- * representation.
+ * It does NOT redefine:
  *
- * This grammar does NOT define a quantum-state format.
+ *     expression
+ *     typeExpr
+ *     identifier
+ *     qualifiedName
+ *     literal
+ *     block
+ *     attributes
+ *     source spans
  *
- * It MUST NOT imply that an arbitrary live physical quantum state can be
- * extracted and serialized.
+ * Therefore the semantic owner of those constructs remains outside this file.
  *
- * Actual semantics are determined by the quantum subsystem, canonical
- * quantum::ir, hardware capabilities, and runtime contract.
- */
-serializationQuantumPolicy
-    : 'quantum'
-      qualifiedName
-      serializationNamedArguments?
-    ;
-
-
-/* ==========================================================================
- * HARDWARE / EXECUTION INDEPENDENCE
- * ========================================================================== */
-
-/**
- * These are intentionally not hardware declarations.
- *
- * If serialization requires a capability, it should be expressed through
- * the universal resource/capability system rather than here.
- *
- * Therefore this grammar does NOT define:
- *
- *     device
- *     gpu
- *     qpu
- *     fpga
- *     cpu
- *     memory_size
- *     address
- *     node_count
- *     bandwidth
- *
- * Those belong to their respective grammar domains.
- */
-
-
-/* ==========================================================================
- * LEGACY FORMAT COMPATIBILITY
- * ========================================================================== */
-
-/**
- * The existing Zamani grammar documents JSON, XML, MessagePack, Protobuf,
- * and CBOR as serialization formats.
- *
- * They remain valid through qualified-name interpretation during migration:
- *
- *     json
- *     xml
- *     messagepack
- *     protobuf
- *     cbor
- *
- * The semantic registry, not this grammar, determines whether a format is
- * available.
- *
- * These rules are compatibility aliases only.
- */
-legacySerializationFormat
-    : 'json'
-    | 'xml'
-    | 'messagepack'
-    | 'protobuf'
-    | 'cbor'
-    ;
-
-
-/**
- * Compatibility adapter for existing code that still expects `dataFormat`.
- *
- * This rule MUST be removed only after all legacy consumers have migrated.
- */
-dataFormat
-    : legacySerializationFormat
-    | qualifiedName
-    ;
-
-
-/**
- * Compatibility adapter for the legacy data statement.
- *
- * Existing syntax:
- *
- *     serialize expression to json;
- *     deserialize expression from json;
- *
- * remains parseable while the modular grammar becomes authoritative.
- */
-legacyDataSerializationStatement
-    : 'serialize'
-      expression
-      'to'
-      dataFormat
-      ';'
-    | 'deserialize'
-      expression
-      'from'
-      dataFormat
-      ';'
-    ;
-
-
-/* ==========================================================================
- * SEMANTIC VALIDATION BOUNDARY
- * ==========================================================================
- *
- * The following are intentionally semantic checks, NOT grammar checks:
- *
- * 1. Is the selected format registered?
- * 2. Does the format support the value's type?
- * 3. Does the selected schema match the value?
- * 4. Is the version compatible?
- * 5. Is the requested compatibility policy satisfiable?
- * 6. Is canonicalization supported?
- * 7. Is compression supported?
- * 8. Is integrity supported?
- * 9. Is the selected format lossless?
- * 10. Can the selected representation preserve the required precision?
- * 11. Can a quantum value legally be represented?
- * 12. Can the target runtime decode it?
- * 13. Are required capabilities available?
- * 14. Are resource requirements satisfiable?
- *
- * None of these should be encoded as arbitrary parser limits.
- */
-
-
-/* ==========================================================================
- * OWNERSHIP BOUNDARIES
- * ==========================================================================
- *
- * `serialization.g4`
- *     owns source syntax for serialization intent.
- *
- * `schemas.g4`
- *     owns schema declarations and schema evolution semantics.
- *
- * `records.g4`
- *     owns record declarations.
- *
- * `collections.g4`
- *     owns collection declarations.
- *
- * `streams.g4`
- *     owns logical stream declarations.
- *
- * `transformations.g4`
- *     owns data transformation/query semantics.
- *
- * `types/*.g4`
- *     owns the type system.
- *
- * `expressions/*.g4`
- *     owns general expressions.
- *
- * `security/*.g4`
- *     owns security/cryptographic policy.
- *
- * `networking/*.g4`
- *     owns transport/network protocol semantics.
- *
- * `resources/*.g4`
- *     owns resource/capability requirements.
- *
- * `hardware/*.g4`
- *     owns hardware descriptions.
- *
- * `execution/*.g4`
- *     owns runtime execution/deployment.
- *
- * `quantum/*.g4`
- *     owns quantum source syntax.
- *
- * `quantum::ir`
- *     remains the canonical quantum semantic boundary.
- *
- * This grammar MUST NOT import quantum::ir or define a second quantum IR.
- */
-
-
-/* ==========================================================================
- * AST CONTRACT
- * ==========================================================================
- *
- * The parser layer should produce source-level serialization AST nodes
- * containing, at minimum:
- *
- *     operation
- *     source expression
- *     destination/source expression
- *     format reference
- *     optional target type
- *     schema reference
- *     version expression
- *     compatibility policy
- *     canonicalization policy
- *     framing policy
- *     compression policy
- *     integrity policy
- *     metadata
- *     source span/provenance
- *
- * The grammar must NOT manufacture:
- *
- *     codec instances
- *     byte buffers
- *     runtime handles
- *     device IDs
- *     network connections
- *     storage handles
- *     hardware objects
- *
- * Those belong downstream.
- */
-
-
-/* ==========================================================================
- * IR CONTRACT
- * ==========================================================================
- *
- * Serialization syntax lowers into a semantic serialization request/plan.
- *
- * The semantic representation should preserve:
- *
- *     source semantics
- *     target type
- *     format identity
- *     schema identity
- *     version
- *     compatibility requirements
- *     representation policies
- *     provenance
- *
- * It should not embed a concrete codec object.
- *
- * Backend lowering may later select:
- *
- *     JSON codec
- *     binary codec
- *     MessagePack codec
- *     Protobuf codec
- *     custom codec
- *     future codec
- *
- * based on capabilities and compilation context.
- */
-
-
-/* ==========================================================================
- * VERSIONING CONTRACT
- * ==========================================================================
- *
- * Keep distinct:
- *
- *     Zamani language version
- *     grammar version
- *     AST schema version
- *     serialization contract version
- *     serialization format version
- *     schema version
- *     protocol version
- *     backend version
- *
- * They MUST NOT be collapsed into one integer.
- */
-
-
-/* ==========================================================================
- * DETERMINISM CONTRACT
- * ==========================================================================
- *
- * Parsing must be deterministic.
- *
- * Serialization determinism is a semantic/runtime property.
- *
- * If a program requests deterministic serialization:
- *
- *     deterministic
- *
- * semantic validation must ensure that the selected representation and
- * implementation can satisfy that requirement.
- *
- * The grammar itself must not implement canonical serialization.
- */
-
-
-/* ==========================================================================
- * SECURITY CONTRACT
- * ==========================================================================
- *
- * Serialization syntax must not silently imply security.
- *
- * For example:
- *
- *     serialize x using format.foo;
- *
- * does not mean:
- *
- *     encrypted
- *     authenticated
- *     private
- *     trusted
- *
- * Security must be explicitly expressed through the security subsystem or
- * an explicitly named serialization integrity/policy contract.
- */
-
-
-/* ==========================================================================
- * RESOURCE CONTRACT
- * ==========================================================================
- *
- * Serialization can require resources:
- *
- *     memory
- *     compute
- *     bandwidth
- *     storage
- *     accelerator support
- *
- * The grammar must not encode those limits.
- *
- * They are resolved by:
- *
- *     resources
- *     compile
- *     execution
- *     runtime
- *     hardware
- *     distributed
- *
- * subsystems.
- */
-
-
-/* ==========================================================================
- * POCO-REAF CONTRACT
- * ==========================================================================
- *
- * Source:
- *
- *     serialize value using representation.application.Event;
- *
- * remains semantically portable.
- *
- * The compiler/runtime can map that intent to whatever implementation exists
- * on the target.
- *
- * Therefore:
- *
- *     one source
- *         ->
- *     one semantic serialization contract
- *         ->
- *     many representations/implementations
- *         ->
- *     many machines
- *         ->
- *     many scales
- *         ->
- *     future platforms
- *
- * without rewriting the source merely because the physical machine changes.
- */
-
-
-/* ==========================================================================
- * NO HARD-CODED SCALABILITY LIMITS
- * ==========================================================================
- *
- * This grammar intentionally has no:
- *
- *     MAX_FIELDS
- *     MAX_BYTES
- *     MAX_RECORDS
- *     MAX_COLLECTIONS
- *     MAX_STREAMS
- *     MAX_SCHEMA_DEPTH
- *     MAX_METADATA
- *     MAX_FORMATS
- *     MAX_VERSIONS
- *     MAX_DEVICES
- *     MAX_NODES
- *     MAX_MEMORY
- *     MAX_NETWORK_SIZE
- *
- * Any such limit must be supplied by an external resource/runtime contract.
- */
-
-
-/* ==========================================================================
- * NO RUNTIME ACTIONS
- * ==========================================================================
- *
- * This file contains no:
- *
- *     @members
- *     @init
- *     @after
- *     embedded Rust
- *     filesystem operations
- *     network operations
- *     codec calls
- *     device discovery
- *     runtime allocation
- *
- * The grammar remains a pure syntax layer.
+ * ============================================================================
  */
