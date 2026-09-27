@@ -1,0 +1,1993 @@
+/*
+
+* ============================================================================
+* Zamani Universal Computing Language
+* ============================================================================
+* 
+* File:
+* grammar/data/tensors.g4
+* 
+* Grammar:
+* DataTensors
+* 
+* Status:
+* PRODUCTION DATA-DOMAIN TENSOR ADAPTER / COMPOSITION LEAF
+* 
+* Language:
+* Zamani Universal Computing Language
+* 
+* Rust baseline:
+* Rust 1.97 / Rust 1.97.1
+* Rust edition 2021
+* Safe Rust only
+* 
+* ============================================================================
+* PURPOSE
+* ============================================================================
+* 
+* This file defines the DATA-DOMAIN syntax boundary for tensor-valued data.
+* 
+* It intentionally does NOT define a second tensor language.
+* 
+* Tensor computation already has a canonical tensor-domain grammar:
+* 
+* grammar/classical/tensor.g4
+* 
+* AI tensor-domain syntax is separately composed through:
+* 
+* grammar/ai/tensors.g4
+* 
+* General data syntax is composed through:
+* 
+* grammar/data/data.g4
+* 
+* This file therefore provides the narrow integration boundary required when
+* tensors are treated as DATA:
+* 
+* - tensor-valued data declarations;
+* - tensor data construction references;
+* - tensor data shape/value boundaries;
+* - tensor data metadata;
+* - tensor data transformation hooks;
+* - tensor data serialization/materialization hooks;
+* - tensor data resource/capability intent hooks.
+* 
+* Tensor arithmetic, tensor indexing, tensor operation semantics, tensor type
+* semantics, broadcasting, contraction, layout, allocation, scheduling,
+* optimization, accelerator selection, and hardware realization remain owned
+* by their canonical downstream domains.
+* 
+* ============================================================================
+* ARCHITECTURAL POSITION
+* ============================================================================
+* 
+* Zamani source
+*      |
+*      v
+* grammar/antlr/ZamaniLexer.g4
+*      |
+*      v
+* grammar/antlr/ZamaniParser.g4
+*      |
+*      v
+* Data composition
+*      |
+*      +-----------------------------+
+*      |                             |
+*      v                             v
+* ordinary data syntax         data tensor boundary
+*                                    |
+*                                    v
+*                          canonical Tensor grammar
+*                          grammar/classical/tensor.g4
+*                                    |
+*                                    v
+*                              domain-neutral AST
+*                                    |
+*                                    v
+*                            semantic analysis
+*                                    |
+*                     +--------------+---------------+
+*                     |                              |
+*                     v                              v
+*               data semantics                 tensor semantics
+*                     |                              |
+*                     +--------------+---------------+
+*                                    |
+*                                    v
+*                           canonical semantic model
+*                                    |
+*                     +--------------+---------------+
+*                     |                              |
+*                     v                              v
+*               canonical data/compute IR       Classical IR
+*                                                    |
+*                                                    v
+*                                              optimization
+*                                                    |
+*                                          scheduling/lowering
+*                                                    |
+*                                                    v
+*                                              target runtime
+* 
+* Quantum consumers remain downstream of the canonical quantum::ir boundary.
+* 
+* This grammar MUST NOT create another tensor IR or another quantum IR.
+* 
+* ============================================================================
+* OWNERSHIP
+* ============================================================================
+* 
+* THIS FILE OWNS:
+* 
+* - data-domain tensor composition entry points;
+* - tensor-valued data references;
+* - tensor-valued data construction boundaries;
+* - tensor data shape/value boundaries;
+* - tensor data metadata;
+* - tensor data transformation hooks;
+* - tensor data materialization hooks;
+* - tensor data serialization hooks;
+* - tensor data requirement/capability hooks;
+* - tensor data portability boundaries.
+* 
+* THIS FILE DOES NOT OWN:
+* 
+* - lexical rules;
+* - lexer tokens;
+* - identifiers;
+* - qualified-name syntax;
+* - general expressions;
+* - expression precedence;
+* - arithmetic;
+* - indexing;
+* - slicing;
+* - general calls;
+* - universal types;
+* - tensor type semantics;
+* - general declarations;
+* - records;
+* - schemas;
+* - collections;
+* - streams;
+* - databases;
+* - storage engines;
+* - networking;
+* - memory allocation;
+* - hardware;
+* - accelerators;
+* - GPU/FPGA/QPU selection;
+* - scheduling;
+* - routing;
+* - optimization;
+* - automatic differentiation;
+* - quantum semantics;
+* - quantum::ir;
+* - QEC;
+* - ZQN;
+* - HAL;
+* - runtime execution.
+* 
+* ============================================================================
+* SINGLE-SOURCE TENSOR RULE
+* ============================================================================
+* 
+* There MUST be one canonical source-level tensor computation grammar.
+* 
+* That grammar is:
+* 
+* grammar/classical/tensor.g4
+* 
+* This file MUST NOT redefine:
+* 
+* tensorLiteral
+* tensorConstruction
+* tensorOperationInvocation
+* tensorShapeSpecification
+* tensorDimensionList
+* tensorAxisList
+* tensorDomainExpression
+* 
+* when those rules are already supplied by the canonical Tensor grammar.
+* 
+* Instead, this grammar imports and reuses the canonical tensor rules.
+* 
+* ============================================================================
+* SINGLE-SOURCE TYPE RULE
+* ============================================================================
+* 
+* Tensor types remain owned by the canonical type system.
+* 
+* This file therefore consumes:
+* 
+* typeExpression
+* 
+* and MUST NOT define a competing:
+* 
+* dataTensorType
+* tensorType
+* tensorTypeExpression
+* 
+* hierarchy.
+* 
+* Examples of semantic tensor types include:
+* 
+* Tensor<T>
+* Tensor<T, Shape>
+* 
+* and other future type-system representations.
+* 
+* Whether a particular type denotes a tensor is a semantic question.
+* 
+* ============================================================================
+* SINGLE-SOURCE EXPRESSION RULE
+* ============================================================================
+* 
+* General expressions remain owned by the canonical expression grammar.
+* 
+* This file consumes:
+* 
+* expression
+* 
+* and MUST NOT create a second tensor-specific expression precedence system.
+* 
+* Consequently:
+* 
+* A + B
+* A * B
+* f(A)
+* A[i]
+* A[i, j]
+* A[i, j, k]
+* 
+* remain ordinary Zamani expressions.
+* 
+* Their tensor semantics are determined after parsing.
+* 
+* ============================================================================
+* OPEN-WORLD OPERATION MODEL
+* ============================================================================
+* 
+* Data tensors may be consumed by arbitrary tensor operations.
+* 
+* The grammar MUST NOT enumerate a closed operation list such as:
+* 
+* reshape
+* transpose
+* matmul
+* convolution
+* einsum
+* reduce
+* broadcast
+* concatenate
+* stack
+* svd
+* qr
+* lu
+* 
+* Operation names remain extensible source-level names.
+* 
+* They may resolve to:
+* 
+* - standard library operations;
+* - user-defined operations;
+* - mathematical operations;
+* - AI operations;
+* - accelerator operations;
+* - dialect operations;
+* - vendor-neutral interoperability operations;
+* - future operations.
+* 
+* Adding a new tensor algorithm MUST NOT require changing this grammar.
+* 
+* ============================================================================
+* DATA/TENSOR SEPARATION
+* ============================================================================
+* 
+* A tensor is a computational/data abstraction.
+* 
+* A data tensor is not a separate physical storage abstraction.
+* 
+* For example:
+* 
+* tensor-valued data
+* 
+* may ultimately be represented in:
+* 
+* - host memory;
+* - accelerator memory;
+* - distributed memory;
+* - persistent storage;
+* - streamed storage;
+* - database-backed storage;
+* - object storage;
+* - generated hardware;
+* - another future representation.
+* 
+* This file describes the logical data relationship only.
+* 
+* ============================================================================
+* POCO-REAF CONTRACT
+* ============================================================================
+* 
+* This grammar participates in:
+* 
+* Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
+* 
+* Tensor-valued data syntax MUST therefore remain independent of:
+* 
+* - CPU model;
+* - CPU count;
+* - core count;
+* - thread count;
+* - GPU model;
+* - GPU count;
+* - FPGA model;
+* - FPGA count;
+* - accelerator model;
+* - QPU model;
+* - device count;
+* - node count;
+* - memory capacity;
+* - storage capacity;
+* - register width;
+* - SIMD width;
+* - vector width;
+* - network topology;
+* - physical address;
+* - vendor library;
+* - database provider;
+* - cloud provider.
+* 
+* A logical tensor data declaration must remain meaningful when the available
+* target resources change.
+* 
+* ============================================================================
+* SCALABILITY CONTRACT
+* ============================================================================
+* 
+* This grammar imposes NO language-level maximum on:
+* 
+* - tensor rank;
+* - tensor dimensions;
+* - tensor elements;
+* - tensor declarations;
+* - tensor values;
+* - tensor metadata;
+* - tensor arguments;
+* - tensor operations;
+* - nested tensor structures;
+* - datasets;
+* - records;
+* - collections;
+* - streams;
+* - partitions;
+* - replicas;
+* - distributed participants;
+* - devices;
+* - memory capacity.
+* 
+* In particular, this grammar MUST NOT define:
+* 
+* MAX_TENSOR_RANK
+* MAX_TENSOR_DIMENSIONS
+* MAX_TENSOR_ELEMENTS
+* MAX_TENSOR_SIZE
+* MAX_TENSOR_COUNT
+* MAX_TENSOR_ARGUMENTS
+* MAX_DATASET_SIZE
+* MAX_PARTITIONS
+* MAX_REPLICAS
+* MAX_NODES
+* MAX_MEMORY
+* MAX_DEVICES
+* 
+* Repetition is represented structurally using ANTLR repetition operators.
+* 
+* Practical implementation limits are environmental or resource constraints,
+* not language semantics.
+* 
+* ============================================================================
+* HARD-CODING PROHIBITION
+* ============================================================================
+* 
+* No universal hardware limit may be encoded in this grammar.
+* 
+* Forbidden examples include:
+* 
+* MAX_QUBITS
+* MAX_CPUS
+* MAX_GPUS
+* MAX_FPGAS
+* MAX_NODES
+* MAX_MEMORY
+* MAX_THREADS
+* MAX_TENSOR_RANK
+* MAX_REGISTER_WIDTH
+* MAX_NETWORK_SIZE
+* MAX_DEVICE_COUNT
+* 
+* The following distinction MUST remain intact:
+* 
+* let n = 1024;
+* 
+* is program data.
+* 
+* It does NOT establish:
+* 
+* tensor dimensions <= 1024
+* 
+* as a language rule.
+* 
+* Likewise:
+* 
+* requires memory >= required_memory
+* 
+* expresses a resource requirement.
+* 
+* It does NOT define a universal memory capacity.
+* 
+* ============================================================================
+* RESOURCE / CAPABILITY SEPARATION
+* ============================================================================
+* 
+* Tensor data may require semantic capabilities such as:
+* 
+* requires capability("tensor.compute")
+* requires capability("tensor.reshape")
+* requires capability("tensor.distributed")
+* requires capability("tensor.persistence")
+* 
+* Such expressions are source-level intent.
+* 
+* They do not select:
+* 
+* GPU 0
+* CPU 3
+* FPGA 1
+* QPU 2
+* node 17
+* 
+* Physical realization belongs downstream.
+* 
+* ============================================================================
+* REQUIREMENT / CONSTRAINT / PREFERENCE / HINT
+* ============================================================================
+* 
+* These concepts MUST remain semantically distinct.
+* 
+* REQUIREMENT:
+* 
+* execution cannot satisfy the program's semantics without the property.
+* 
+* CONSTRAINT:
+* 
+* a valid implementation must not violate the property.
+* 
+* PREFERENCE:
+* 
+* an implementation satisfying the preference is preferred when possible.
+* 
+* HINT:
+* 
+* information supplied to optimization without changing program meaning.
+* 
+* IMPLEMENTATION DECISION:
+* 
+* a downstream target-specific realization.
+* 
+* This grammar only exposes source syntax.
+* 
+* Semantic analysis decides the classification.
+* 
+* ============================================================================
+* AST CONTRACT
+* ============================================================================
+* 
+* The parser must produce ordinary domain-neutral frontend structures.
+* 
+* Conceptual mapping:
+* 
+* dataTensorConstruct
+*         |
+*         v
+* generic data/tensor AST
+*         |
+*         v
+* semantic tensor-data model
+*         |
+*         v
+* canonical data/compute representation
+* 
+* No TensorDataIR is created by this grammar.
+* 
+* No DataTensorIR is created by this grammar.
+* 
+* No TensorHardwareIR is created by this grammar.
+* 
+* ============================================================================
+* SEMANTIC CONTRACT
+* ============================================================================
+* 
+* Semantic analysis is responsible for determining:
+* 
+* - whether an expression is tensor-valued;
+* - element type;
+* - rank;
+* - dimension relationships;
+* - shape compatibility;
+* - broadcasting validity;
+* - indexing validity;
+* - operation compatibility;
+* - ownership;
+* - mutability;
+* - lifetime;
+* - resource requirements;
+* - capability requirements;
+* - serialization compatibility;
+* - materialization requirements;
+* - distributed data constraints;
+* - security/privacy constraints.
+* 
+* The grammar performs none of these semantic checks.
+* 
+* ============================================================================
+* SHAPE SEMANTICS
+* ============================================================================
+* 
+* Shape values may be:
+* 
+* - constants;
+* - variables;
+* - symbolic values;
+* - expressions;
+* - dependent values;
+* - runtime values where the type system permits them.
+* 
+* The grammar must not require shape dimensions to be machine constants.
+* 
+* Example:
+* 
+* shape = <batch, height, width, channels>
+* 
+* is valid semantic intent when the surrounding language permits it.
+* 
+* The grammar does not decide whether those values are statically known.
+* 
+* ============================================================================
+* DATA MATERIALIZATION
+* ============================================================================
+* 
+* Tensor data may be logical or materialized.
+* 
+* The distinction belongs to semantic/data execution layers.
+* 
+* The grammar may expose a materialization boundary without selecting:
+* 
+* RAM
+* VRAM
+* storage device
+* database
+* distributed store
+* accelerator memory
+* 
+* ============================================================================
+* SERIALIZATION
+* ============================================================================
+* 
+* Tensor serialization is a data concern.
+* 
+* This grammar may express serialization intent through a generic data
+* serialization boundary.
+* 
+* It MUST NOT implement or enumerate a closed list of serialization engines.
+* 
+* A format identifier remains extensible semantic data.
+* 
+* ============================================================================
+* DISTRIBUTED TENSOR DATA
+* ============================================================================
+* 
+* Tensor data may be partitioned, replicated, streamed, or distributed.
+* 
+* This grammar may expose logical distribution metadata.
+* 
+* It MUST NOT encode a fixed physical number of:
+* 
+* partitions;
+* replicas;
+* nodes;
+* devices;
+* links.
+* 
+* For example:
+* 
+* partition by expression
+* 
+* is semantic intent.
+* 
+* It does not mean:
+* 
+* partition into N physical partitions.
+* 
+* ============================================================================
+* QUANTUM INTEGRATION
+* ============================================================================
+* 
+* Tensor data may coexist with quantum computation.
+* 
+* This file does NOT define quantum syntax.
+* 
+* Quantum syntax remains owned by:
+* 
+* grammar/quantum/
+* 
+* The canonical quantum semantic boundary remains:
+* 
+* quantum::ir
+* 
+* Tensor data may represent:
+* 
+* - measurement data;
+* - classical parameters;
+* - observables;
+* - experiment results;
+* - model parameters;
+* - classical feed-forward data.
+* 
+* Quantum operation semantics remain outside this grammar.
+* 
+* ============================================================================
+* AI INTEGRATION
+* ============================================================================
+* 
+* AI/ML tensor semantics remain owned by:
+* 
+* grammar/ai/
+* 
+* This file permits tensor-valued data to cross the data/AI boundary without
+* making any AI framework a language primitive.
+* 
+* It MUST NOT enumerate:
+* 
+* PyTorch
+* TensorFlow
+* JAX
+* CUDA
+* ROCm
+* 
+* or other framework/vendor names as required tensor syntax.
+* 
+* ============================================================================
+* CLASSICAL INTEGRATION
+* ============================================================================
+* 
+* Tensor computation remains owned by:
+* 
+* grammar/classical/tensor.g4
+* 
+* This grammar reuses that canonical tensor construct boundary rather than
+* redefining tensor operations.
+* 
+* ============================================================================
+* COLLECTION INTEGRATION
+* ============================================================================
+* 
+* Collections may contain tensors.
+* 
+* The collection grammar remains the authority for collection syntax.
+* 
+* This file must not define:
+* 
+* tensorCollection
+* 
+* as a competing collection type system.
+* 
+* A collection's element type may semantically be tensor-valued.
+* 
+* ============================================================================
+* RECORD INTEGRATION
+* ============================================================================
+* 
+* Records may contain tensor-valued fields.
+* 
+* Record declaration syntax remains owned by:
+* 
+* grammar/declarations/records.g4
+* 
+* Data record value syntax remains owned by:
+* 
+* grammar/data/
+* 
+* This file only provides tensor-specific data classification hooks.
+* 
+* ============================================================================
+* STREAM INTEGRATION
+* ============================================================================
+* 
+* Streams may carry tensor values.
+* 
+* Stream declaration and stream operators remain owned by:
+* 
+* grammar/data/streams.g4
+* 
+* This file does not redefine stream syntax.
+* 
+* ============================================================================
+* SCHEMA INTEGRATION
+* ============================================================================
+* 
+* Schemas may describe tensor-valued fields.
+* 
+* Schema declaration syntax remains owned by the schema grammar.
+* 
+* Tensor shape constraints are semantic constraints and do not become a
+* duplicate schema grammar here.
+* 
+* ============================================================================
+* NETWORKING INTEGRATION
+* ============================================================================
+* 
+* Tensor data may cross logical network boundaries.
+* 
+* Networking owns:
+* 
+* endpoints;
+* protocols;
+* routing;
+* transport;
+* network topology.
+* 
+* This grammar owns none of those implementation details.
+* 
+* ============================================================================
+* MEMORY INTEGRATION
+* ============================================================================
+* 
+* Tensor values may eventually occupy one or more memory domains.
+* 
+* Memory ownership, allocation, address spaces, borrowing, persistence,
+* placement, and physical memory selection remain outside this grammar.
+* 
+* ============================================================================
+* HARDWARE INTEGRATION
+* ============================================================================
+* 
+* Tensor data may eventually be lowered to:
+* 
+* CPU
+* GPU
+* FPGA
+* ASIC
+* accelerator
+* distributed target
+* future compute architecture
+* 
+* This grammar must remain unchanged when the target changes.
+* 
+* ============================================================================
+* COMPILER INTEGRATION
+* ============================================================================
+* 
+* The compiler consumes semantic tensor/data representations.
+* 
+* It must not consume this grammar directly as an execution specification.
+* 
+* Conceptual path:
+* 
+* parser context
+*      |
+*      v
+* domain-neutral AST
+*      |
+*      v
+* semantic tensor/data model
+*      |
+*      v
+* canonical IR
+*      |
+*      v
+* optimization
+*      |
+*      v
+* resource-aware lowering
+*      |
+*      v
+* scheduling
+*      |
+*      v
+* target realization
+* 
+* Adding a new tensor backend must not require changing this grammar.
+* 
+* ============================================================================
+* RUNTIME INTEGRATION
+* ============================================================================
+* 
+* Runtime systems may discover:
+* 
+* memory;
+* devices;
+* accelerators;
+* network resources;
+* storage;
+* execution capabilities.
+* 
+* Runtime discovery MUST NOT alter parser semantics.
+* 
+* ============================================================================
+* DETERMINISM
+* ============================================================================
+* 
+* Parsing MUST depend only on:
+* 
+* source;
+* token stream;
+* language/grammar version.
+* 
+* Parsing MUST NOT depend on:
+* 
+* available hardware;
+* memory capacity;
+* CPU count;
+* GPU availability;
+* network state;
+* filesystem state;
+* runtime state;
+* randomness;
+* wall-clock time.
+* 
+* ============================================================================
+* SAFETY
+* ============================================================================
+* 
+* This grammar contains:
+* 
+* - no embedded Rust actions;
+* - no semantic predicates;
+* - no filesystem access;
+* - no network access;
+* - no process execution;
+* - no environment inspection;
+* - no hardware discovery;
+* - no runtime execution;
+* - no unsafe code.
+* 
+* Rust 1.97 / 1.97.1 compatibility is enforced by the downstream Rust
+* implementation and build/conformance system.
+* 
+* ============================================================================
+* LEXICAL CONTRACT
+* ============================================================================
+* 
+* This is a parser grammar.
+* 
+* It MUST consume the canonical:
+* 
+* ZamaniLexer
+* 
+* token vocabulary.
+* 
+* It MUST NOT declare lexer rules.
+* 
+* Tensor operation names are intentionally not keywords.
+* 
+* ============================================================================
+* GRAMMAR DECLARATION
+* ============================================================================
+  */
+
+parser grammar DataTensors;
+
+options {
+tokenVocab = ZamaniLexer;
+}
+
+import Tensor, Types, Expressions;
+
+/*
+
+* ============================================================================
+* 1. PUBLIC DATA-TENSOR ENTRY POINT
+* ============================================================================
+* 
+* This is the only public entry point owned by this file.
+* 
+* It intentionally describes data-domain tensor structure rather than
+* reimplementing tensor computation.
+* 
+* ============================================================================
+  */
+
+dataTensorConstruct
+: dataTensorValue
+| dataTensorBinding
+| dataTensorShape
+| dataTensorMetadata
+| dataTensorTransform
+| dataTensorMaterialization
+| dataTensorSerialization
+| dataTensorRequirement
+;
+
+/*
+
+* ============================================================================
+* 2. TENSOR DATA VALUE
+* ============================================================================
+* 
+* A tensor data value may be:
+* 
+* - a canonical tensor construct;
+* - an ordinary Zamani expression whose semantic type is tensor-valued.
+* 
+* The first alternative provides an explicit tensor-domain parse boundary.
+* The second preserves ordinary expression semantics.
+* 
+* ============================================================================
+  */
+
+dataTensorValue
+: tensorConstruct
+| expression
+;
+
+/*
+
+* ============================================================================
+* 3. TENSOR DATA BINDING
+* ============================================================================
+* 
+* This is a data-domain binding boundary.
+* 
+* It does not replace the universal declaration grammar.
+* 
+* It is intended for data-domain consumers that need to identify a logical
+* tensor binding before semantic lowering.
+* 
+* Example:
+* 
+* tensor_data A: Tensor<f64> = value
+* 
+* Whether "tensor_data" is exposed as stable source syntax is controlled by
+* the canonical data specification/dispatcher.
+* 
+* ============================================================================
+  */
+
+dataTensorBinding
+: TENSOR_DATA
+identifier
+COLON
+typeExpression
+dataTensorInitializer?
+SEMICOLON
+;
+
+dataTensorInitializer
+: ASSIGN
+expression
+;
+
+/*
+
+* ============================================================================
+* 4. TENSOR DATA SHAPE
+* ============================================================================
+* 
+* Reuses the canonical Tensor grammar's shape specification.
+* 
+* No rank or dimension maximum exists.
+* 
+* ============================================================================
+  */
+
+dataTensorShape
+: TENSOR_SHAPE
+tensorShapeSpecification
+;
+
+/*
+
+* ============================================================================
+* 5. TENSOR DATA METADATA
+* ============================================================================
+* 
+* Metadata is intentionally open-ended.
+* 
+* The key is a canonical identifier.
+* 
+* The value is a canonical expression.
+* 
+* Semantic validation determines whether a metadata key is recognized.
+* 
+* This avoids continuously extending the grammar for every future tensor
+* metadata concept.
+* 
+* ============================================================================
+  */
+
+dataTensorMetadata
+: TENSOR_METADATA
+LBRACE
+dataTensorMetadataEntry*
+RBRACE
+;
+
+dataTensorMetadataEntry
+: identifier
+COLON
+expression
+COMMA?
+;
+
+/*
+
+* ============================================================================
+* 6. TENSOR DATA TRANSFORMATION
+* ============================================================================
+* 
+* Tensor transformation names are open-world.
+* 
+* Examples include:
+* 
+* reshape
+* transpose
+* cast
+* normalize
+* standardize
+* quantize
+* dequantize
+* custom_operation
+* 
+* These are NOT grammar keywords.
+* 
+* ============================================================================
+  */
+
+dataTensorTransform
+: TENSOR_TRANSFORM
+qualifiedName
+LPAREN
+dataTensorArgumentList?
+RPAREN
+;
+
+dataTensorArgumentList
+: dataTensorArgument
+(COMMA dataTensorArgument)*
+COMMA?
+;
+
+dataTensorArgument
+: identifier
+COLON
+expression
+| expression
+;
+
+/*
+
+* ============================================================================
+* 7. MATERIALIZATION
+* ============================================================================
+* 
+* Materialization is logical data intent.
+* 
+* It does not select physical memory or storage.
+* 
+* ============================================================================
+  */
+
+dataTensorMaterialization
+: TENSOR_MATERIALIZE
+expression
+dataTensorMaterializationOption*
+SEMICOLON
+;
+
+dataTensorMaterializationOption
+: identifier
+(ASSIGN expression)?
+;
+
+/*
+
+* ============================================================================
+* 8. SERIALIZATION
+* ============================================================================
+* 
+* Serialization format names remain open-world identifiers.
+* 
+* This grammar does not enumerate serialization technologies.
+* 
+* ============================================================================
+  */
+
+dataTensorSerialization
+: TENSOR_SERIALIZE
+expression
+dataTensorSerializationFormat?
+SEMICOLON
+;
+
+dataTensorSerializationFormat
+: identifier
+| STRING
+;
+
+/*
+
+* ============================================================================
+* 9. RESOURCE / CAPABILITY REQUIREMENT
+* ============================================================================
+* 
+* This rule provides a tensor-data-specific classification boundary.
+* 
+* Resource validation remains downstream.
+* 
+* ============================================================================
+  */
+
+dataTensorRequirement
+: REQUIRES
+expression
+SEMICOLON
+;
+
+/*
+
+* ============================================================================
+* 10. TENSOR VALUE
+* ============================================================================
+* 
+* Stable wrapper for consumers that need a tensor-valued data boundary.
+* 
+* ============================================================================
+  */
+
+dataTensor
+: expression
+;
+
+/*
+
+* ============================================================================
+* 11. TENSOR TYPE
+* ============================================================================
+* 
+* This rule is deliberately only an adapter to the canonical type system.
+* 
+* It does not establish a competing tensor type grammar.
+* 
+* ============================================================================
+  */
+
+dataTensorType
+: typeExpression
+;
+
+/*
+
+* ============================================================================
+* 12. TENSOR SHAPE VALUE
+* ============================================================================
+* 
+* Shape values remain ordinary expressions.
+* 
+* ============================================================================
+  */
+
+dataTensorShapeValue
+: expression
+;
+
+/*
+
+* ============================================================================
+* 13. TENSOR AXIS VALUE
+* ============================================================================
+* 
+* Axis values remain ordinary expressions.
+* 
+* ============================================================================
+  */
+
+dataTensorAxisValue
+: expression
+;
+
+/*
+
+* ============================================================================
+* 14. TENSOR OPERATION VALUE
+* ============================================================================
+* 
+* This adapter exposes the canonical tensor operation boundary to data-domain
+* consumers without enumerating operations.
+* 
+* ============================================================================
+  */
+
+dataTensorOperation
+: tensorOperationInvocation
+;
+
+/*
+
+* ============================================================================
+* 15. TENSOR CONSTRUCTION VALUE
+* ============================================================================
+* 
+* Reuses the canonical tensor construction grammar.
+* 
+* ============================================================================
+  */
+
+dataTensorConstruction
+: tensorConstruction
+;
+
+/*
+
+* ============================================================================
+* 16. TENSOR LITERAL VALUE
+* ============================================================================
+* 
+* Reuses the canonical tensor literal grammar.
+* 
+* ============================================================================
+  */
+
+dataTensorLiteral
+: tensorLiteral
+;
+
+/*
+
+* ============================================================================
+* 17. TENSOR SHAPE SPECIFICATION VALUE
+* ============================================================================
+* 
+* Reuses canonical tensor shape syntax.
+* 
+* ============================================================================
+  */
+
+dataTensorShapeSpecification
+: tensorShapeSpecification
+;
+
+/*
+
+* ============================================================================
+* 18. TENSOR DIMENSION LIST VALUE
+* ============================================================================
+* 
+* Reuses the canonical tensor dimension-list grammar.
+* 
+* ============================================================================
+  */
+
+dataTensorDimensionList
+: tensorDimensionList
+;
+
+/*
+
+* ============================================================================
+* 19. TENSOR AXIS LIST VALUE
+* ============================================================================
+* 
+* Reuses the canonical tensor axis-list grammar.
+* 
+* ============================================================================
+  */
+
+dataTensorAxisList
+: tensorAxisList
+;
+
+/*
+
+* ============================================================================
+* 20. SEMANTIC DATA-TENSOR ARGUMENT
+* ============================================================================
+* 
+* An argument may be:
+* 
+* - named;
+* - positional.
+* 
+* The expression grammar remains authoritative.
+* 
+* ============================================================================
+  */
+
+dataTensorSemanticArgument
+: identifier
+COLON
+expression
+| expression
+;
+
+dataTensorSemanticArgumentList
+: dataTensorSemanticArgument
+(COMMA dataTensorSemanticArgument)*
+COMMA?
+;
+
+/*
+
+* ============================================================================
+* 21. TENSOR DATA CONSTRUCT LIST
+* ============================================================================
+* 
+* Unbounded repetition is intentional.
+* 
+* No fixed number of tensor data constructs is imposed.
+* 
+* ============================================================================
+  */
+
+dataTensorConstructList
+: dataTensorConstruct*
+;
+
+/*
+
+* ============================================================================
+* 22. DATA/TENSOR EXPRESSION ADAPTER
+* ============================================================================
+* 
+* This adapter exists for data-domain composition grammars.
+* 
+* It does not create a second expression hierarchy.
+* 
+* ============================================================================
+  */
+
+dataTensorExpression
+: expression
+;
+
+/*
+
+* ============================================================================
+* 23. DATA/TENSOR INITIALIZER ADAPTER
+* ============================================================================
+* 
+* Tensor initialization uses the universal expression system.
+* 
+* ============================================================================
+  */
+
+dataTensorValueInitializer
+: ASSIGN
+expression
+;
+
+/*
+
+* ============================================================================
+* 24. DATA/TENSOR ATTRIBUTE VALUE
+* ============================================================================
+* 
+* Attribute semantics remain owned by the canonical attribute system.
+* 
+* This rule only exposes a value boundary to data-tensor consumers.
+* 
+* ============================================================================
+  */
+
+dataTensorAttributeValue
+: expression
+;
+
+/*
+
+* ============================================================================
+* 25. DATA/TENSOR METADATA LIST
+* ============================================================================
+  */
+
+dataTensorMetadataList
+: dataTensorMetadataEntry*
+;
+
+/*
+
+* ============================================================================
+* 26. DATA/TENSOR OPERATION ARGUMENT
+* ============================================================================
+  */
+
+dataTensorOperationArgument
+: identifier
+COLON
+expression
+| expression
+;
+
+dataTensorOperationArgumentList
+: dataTensorOperationArgument
+(COMMA dataTensorOperationArgument)*
+COMMA?
+;
+
+/*
+
+* ============================================================================
+* 27. DATA/TENSOR REQUIREMENT VALUE
+* ============================================================================
+* 
+* The actual resource/capability semantics remain downstream.
+* 
+* ============================================================================
+  */
+
+dataTensorRequirementValue
+: expression
+;
+
+/*
+
+* ============================================================================
+* 28. DATA/TENSOR CAPABILITY VALUE
+* ============================================================================
+* 
+* Capability names remain open-world strings/expressions.
+* 
+* ============================================================================
+  */
+
+dataTensorCapability
+: identifier
+| qualifiedName
+| STRING
+;
+
+/*
+
+* ============================================================================
+* 29. DATA/TENSOR PORTABILITY BOUNDARY
+* ============================================================================
+* 
+* A tensor data construct is portable when its semantic requirements can be
+* satisfied by the target.
+* 
+* This rule intentionally does not contain target identifiers.
+* 
+* ============================================================================
+  */
+
+dataTensorPortability
+: identifier
+COLON
+expression
+;
+
+/*
+
+* ============================================================================
+* 30. DATA/TENSOR DISTRIBUTION BOUNDARY
+* ============================================================================
+* 
+* Distribution is expressed semantically.
+* 
+* Physical placement is not encoded.
+* 
+* ============================================================================
+  */
+
+dataTensorDistribution
+: identifier
+dataTensorDistributionSpecification
+;
+
+dataTensorDistributionSpecification
+: expression
+;
+
+/*
+
+* ============================================================================
+* 31. DATA/TENSOR PARTITIONING BOUNDARY
+* ============================================================================
+* 
+* Partitioning expression remains open-ended.
+* 
+* No physical partition count is specified by this grammar.
+* 
+* ============================================================================
+  */
+
+dataTensorPartitioning
+: identifier
+expression
+;
+
+/*
+
+* ============================================================================
+* 32. DATA/TENSOR REPLICATION BOUNDARY
+* ============================================================================
+* 
+* Replication is semantic intent.
+* 
+* Any requested replication quantity is a program/resource requirement, not
+* a language-level maximum.
+* 
+* ============================================================================
+  */
+
+dataTensorReplication
+: identifier
+expression
+;
+
+/*
+
+* ============================================================================
+* 33. DATA/TENSOR STREAM VALUE
+* ============================================================================
+* 
+* Streams remain owned by grammar/data/streams.g4.
+* 
+* This adapter only allows a data-domain tensor consumer to refer to an
+* ordinary expression whose semantic value is a tensor stream.
+* 
+* ============================================================================
+  */
+
+dataTensorStreamValue
+: expression
+;
+
+/*
+
+* ============================================================================
+* 34. DATA/TENSOR COLLECTION VALUE
+* ============================================================================
+* 
+* Collections remain owned by grammar/data/collections.g4.
+* 
+* ============================================================================
+  */
+
+dataTensorCollectionValue
+: expression
+;
+
+/*
+
+* ============================================================================
+* 35. DATA/TENSOR RECORD VALUE
+* ============================================================================
+* 
+* Records remain owned by the declaration/data record grammars.
+* 
+* ============================================================================
+  */
+
+dataTensorRecordValue
+: expression
+;
+
+/*
+
+* ============================================================================
+* 36. DATA/TENSOR SCHEMA VALUE
+* ============================================================================
+* 
+* Schema syntax remains owned by the schema grammar.
+* 
+* ============================================================================
+  */
+
+dataTensorSchemaValue
+: expression
+;
+
+/*
+
+* ============================================================================
+* 37. DATA/TENSOR SERIALIZATION VALUE
+* ============================================================================
+* 
+* Serialization syntax is intentionally represented as a logical boundary.
+* 
+* ============================================================================
+  */
+
+dataTensorSerializationValue
+: expression
+;
+
+/*
+
+* ============================================================================
+* 38. DATA/TENSOR MATERIALIZATION VALUE
+* ============================================================================
+  */
+
+dataTensorMaterializationValue
+: expression
+;
+
+/*
+
+* ============================================================================
+* 39. DATA/TENSOR SOURCE VALUE
+* ============================================================================
+* 
+* Sources remain owned by the data source grammar.
+* 
+* ============================================================================
+  */
+
+dataTensorSourceValue
+: expression
+;
+
+/*
+
+* ============================================================================
+* 40. DATA/TENSOR SINK VALUE
+* ============================================================================
+* 
+* Sinks remain owned by the data sink grammar.
+* 
+* ============================================================================
+  */
+
+dataTensorSinkValue
+: expression
+;
+
+/*
+
+* ============================================================================
+* 41. DATA/TENSOR PIPELINE VALUE
+* ============================================================================
+* 
+* Pipelines remain owned by the data pipeline grammar.
+* 
+* ============================================================================
+  */
+
+dataTensorPipelineValue
+: expression
+;
+
+/*
+
+* ============================================================================
+* 42. DOMAIN-NEUTRAL SEMANTIC BOUNDARY
+* ============================================================================
+* 
+* The following invariant is mandatory:
+* 
+* grammar
+*     |
+*     v
+* parser context
+*     |
+*     v
+* domain-neutral AST
+*     |
+*     v
+* semantic tensor/data model
+*     |
+*     v
+* canonical IR
+* 
+* The grammar must never directly construct:
+* 
+* TensorIR
+* DataTensorIR
+* GPUIR
+* CUDAIR
+* QPUDataIR
+* VendorTensorIR
+* 
+* ============================================================================
+* 43. FUTURE EXTENSION CONTRACT
+* ============================================================================
+* 
+* Future tensor data features must prefer:
+* 
+* existing expression syntax
+* existing type syntax
+* existing name syntax
+* existing attribute syntax
+* existing resource syntax
+* existing capability syntax
+* existing tensor grammar
+* 
+* before introducing a new parser rule.
+* 
+* A new rule is justified only when a construct has genuinely distinct
+* language-level syntax or semantic boundaries.
+* 
+* New tensor algorithms MUST NOT require new grammar rules merely because
+* their names are new.
+* 
+* ============================================================================
+* 44. ERROR / DIAGNOSTIC CONTRACT
+* ============================================================================
+* 
+* This grammar is responsible only for structural parse errors.
+* 
+* Semantic diagnostics belong downstream and should distinguish:
+* 
+* invalid tensor type
+* incompatible element type
+* incompatible shape
+* invalid rank relationship
+* invalid dimension
+* invalid operation
+* unsupported capability
+* unavailable resource
+* invalid serialization
+* invalid materialization
+* invalid distribution
+* invalid partitioning
+* invalid replication
+* 
+* Diagnostics must preserve source locations from the parser/frontend.
+* 
+* ============================================================================
+* 45. COMPATIBILITY CONTRACT
+* ============================================================================
+* 
+* Compatibility must distinguish:
+* 
+* source compatibility
+* semantic compatibility
+* AST compatibility
+* IR compatibility
+* serialization compatibility
+* backend compatibility
+* 
+* A backend change must not require a grammar change unless the source
+* language itself changes.
+* 
+* ============================================================================
+* 46. TEST CONTRACT
+* ============================================================================
+* 
+* The owning test suite MUST cover:
+* 
+* POSITIVE:
+* 
+* - tensor-valued expressions;
+* - tensor literals;
+* - tensor construction;
+* - tensor operations;
+* - symbolic shapes;
+* - nested tensor values;
+* - tensor metadata;
+* - tensor transformations;
+* - tensor materialization intent;
+* - tensor serialization intent;
+* - resource/capability expressions;
+* - tensor values inside records;
+* - tensor values inside collections;
+* - tensor values inside streams;
+* - tensor values in AI programs;
+* - tensor values in classical programs;
+* - tensor values surrounding quantum computation.
+* 
+* NEGATIVE:
+* 
+* - malformed tensor boundaries;
+* - malformed argument lists;
+* - malformed metadata;
+* - malformed shape syntax;
+* - malformed bindings;
+* - malformed materialization syntax;
+* - malformed serialization syntax.
+* 
+* BOUNDARY:
+* 
+* - scalar tensor;
+* - one-dimensional tensor;
+* - nested tensors;
+* - symbolic dimensions;
+* - very large generated dimension lists;
+* - deeply nested valid syntax;
+* - long operation argument lists.
+* 
+* SCALABILITY:
+* 
+* - increasing tensor rank;
+* - increasing dimension count;
+* - increasing tensor declarations;
+* - increasing operation count;
+* - increasing metadata count;
+* - increasing pipeline composition.
+* 
+* PORTABILITY:
+* 
+* The same source must parse independently of:
+* 
+* CPU
+* GPU
+* FPGA
+* accelerator
+* QPU
+* node count
+* memory capacity
+* storage system
+* provider
+* topology.
+* 
+* DETERMINISM:
+* 
+* Identical source and grammar/version configuration must produce equivalent
+* parse structures independent of execution hardware.
+* 
+* ============================================================================
+* 47. HARD-CODING AUDIT
+* ============================================================================
+* 
+* Release validation MUST reject accidental introduction of:
+* 
+* MAX_TENSOR_RANK
+* MAX_TENSOR_DIMENSIONS
+* MAX_TENSOR_ELEMENTS
+* MAX_TENSOR_SIZE
+* MAX_MEMORY
+* MAX_DEVICES
+* MAX_NODES
+* MAX_PARTITIONS
+* MAX_REPLICAS
+* MAX_THREADS
+* MAX_GPUS
+* MAX_FPGAS
+* MAX_QUBITS
+* 
+* and equivalent fixed-capacity grammar constructs.
+* 
+* Numeric literals in source remain program semantics.
+* 
+* ============================================================================
+* 48. COMPLETION CRITERIA
+* ============================================================================
+* 
+* This file is COMPLETE when:
+* 
+* [x] one canonical Zamani lexer is consumed;
+* [x] canonical Tensor grammar is reused;
+* [x] canonical Types grammar is reused;
+* [x] canonical Expressions grammar is reused;
+* [x] no tensor algorithm list is hard-coded;
+* [x] no machine capacity is hard-coded;
+* [x] no tensor IR is introduced;
+* [x] no quantum IR is introduced;
+* [x] no backend is selected;
+* [x] no physical topology is selected;
+* [x] no memory implementation is selected;
+* [x] no storage engine is selected;
+* [x] data-domain ownership is explicit;
+* [x] AST integration is predetermined;
+* [x] semantic integration is predetermined;
+* [x] compiler integration is predetermined;
+* [x] runtime integration is predetermined;
+* [x] cross-domain integration is predetermined;
+* [x] diagnostics contract is defined;
+* [x] compatibility contract is defined;
+* [x] positive tests are defined;
+* [x] negative tests are defined;
+* [x] boundary tests are defined;
+* [x] scalability tests are defined;
+* [x] determinism tests are defined;
+* [x] hard-coding audit is defined;
+* [x] Rust 1.97 / 1.97.1 compatibility remains downstream-safe;
+* [x] no unsafe Rust is required.
+* 
+* ============================================================================
+* 49. INTEGRATION REQUIREMENTS
+* ============================================================================
+* 
+* This file requires the canonical parser composition layer to expose:
+* 
+* DataTensors
+* 
+* through the data-domain dispatcher.
+* 
+* The data dispatcher should expose:
+* 
+* dataTensorConstruct
+* 
+* rather than copying these alternatives into another grammar.
+* 
+* "grammar/data/data.g4" MUST NOT redefine the tensor rules contained here.
+* 
+* "grammar/data/collections.g4" MUST NOT redefine tensor syntax.
+* 
+* "grammar/data/streams.g4" MUST NOT redefine tensor syntax.
+* 
+* "grammar/classical/tensor.g4" remains the canonical tensor-computation
+* grammar.
+* 
+* "grammar/ai/tensors.g4" remains the AI/tensor domain grammar and should
+* delegate to the same canonical tensor semantics rather than create another
+* tensor IR.
+* 
+* ============================================================================
+* 50. IMPORTANT TOKEN INTEGRATION NOTE
+* ============================================================================
+* 
+* The token names used by this file:
+* 
+* TENSOR_DATA
+* TENSOR_SHAPE
+* TENSOR_METADATA
+* TENSOR_TRANSFORM
+* TENSOR_MATERIALIZE
+* TENSOR_SERIALIZE
+* 
+* are intended as explicit lexical vocabulary for these data-domain
+* boundaries.
+* 
+* They MUST exist in the canonical lexical vocabulary before this grammar is
+* composed.
+* 
+* If the repository's canonical lexer does not yet expose these tokens, the
+* integration work MUST add them to the canonical lexer/token authority
+* rather than defining lexer rules in this parser grammar.
+* 
+* No parser-local lexer rule may be introduced here.
+* 
+* ============================================================================
+* 51. FINAL ARCHITECTURAL INVARIANT
+* ============================================================================
+* 
+* The data tensor grammar describes:
+* 
+* WHAT tensor-valued data means at the language boundary.
+* 
+* It does not describe:
+* 
+* HOW the tensor is stored;
+* WHERE the tensor is executed;
+* WHICH machine executes it;
+* WHICH accelerator executes it;
+* HOW memory is allocated;
+* HOW tensors are partitioned physically;
+* HOW tensors are routed;
+* HOW tensors are scheduled;
+* HOW tensor operations are optimized.
+* 
+* Those decisions remain downstream.
+* 
+* Therefore:
+* 
+* one Zamani source program
+*         |
+*         v
+* one semantic tensor/data meaning
+*         |
+*         +-------------------------------+
+*         |               |               |
+*         v               v               v
+*       CPU             GPU             FPGA
+*         |               |               |
+*         +---------------+---------------+
+*                         |
+*                         v
+*                     accelerator
+*                         |
+*                         v
+*                   distributed target
+*                         |
+*                         v
+*                    future target
+* 
+* without changing the language-level tensor-data semantics merely because
+* the available machine changes.
+* 
+* ============================================================================
+  */
