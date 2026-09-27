@@ -6,15 +6,53 @@
  * File:
  *     grammar/dialects/compatibility.g4
  *
- * Role:
- *     Canonical dialect compatibility-contract grammar.
+ * Grammar:
+ *     DialectCompatibility
+ *
+ * Status:
+ *     CANONICAL DIALECT COMPATIBILITY GRAMMAR
  *
  * Baseline:
+ *     ANTLR4
  *     Rust 1.97 / Rust 1.97.1
  *     Rust 2021
- *     ANTLR4
  *     safe Rust only
  *     no unsafe Rust
+ *
+ * ============================================================================
+ * PURPOSE
+ * ============================================================================
+ *
+ * This file owns SOURCE-LEVEL DIALECT COMPATIBILITY CONTRACT SYNTAX.
+ *
+ * It describes relationships between symbolic language/dialect contracts:
+ *
+ *     compatibility
+ *     requirements
+ *     support
+ *     conflicts
+ *     equivalence
+ *     migration
+ *     replacement
+ *     supersession
+ *     deprecation
+ *     compatibility profiles
+ *     compatibility assertions
+ *     compatibility metadata
+ *
+ * This grammar records compatibility INTENT.
+ *
+ * It does NOT determine whether a compatibility relationship is satisfied.
+ *
+ * Semantic analysis owns:
+ *
+ *     version resolution
+ *     dialect resolution
+ *     compatibility solving
+ *     migration validation
+ *     conflict detection
+ *     policy evaluation
+ *     diagnostics
  *
  * ============================================================================
  * ARCHITECTURAL POSITION
@@ -26,62 +64,46 @@
  *     ZamaniLexer
  *       |
  *       v
- *     core::Names
+ *     ZamaniParser
  *       |
  *       v
- *     core::Versioning
+ *     dialectRegistration
  *       |
  *       v
- *     dialects::Compatibility        <-- THIS FILE
+ *     dialectCompatibilityMember       <-- THIS FILE
  *       |
  *       v
- *     dialect AST
+ *     domain-neutral AST
  *       |
  *       v
- *     semantic compatibility analysis
+ *     semantic compatibility model
  *       |
  *       +--> dialect registry
- *       +--> capability resolution
- *       +--> package/module compatibility
- *       +--> compiler compatibility
- *       +--> runtime compatibility
- *       +--> target-contract compatibility
+ *       +--> version resolver
+ *       +--> package/module resolver
+ *       +--> capability resolver
+ *       +--> migration analysis
+ *       +--> compatibility policy
  *       |
  *       v
  *     canonical semantic representation
  *       |
- *       +--> classical IR
- *       +--> quantum::ir
- *       +--> HDL/hardware semantic models
- *       +--> control/data/temporal IR
- *       |
- *       v
- *     optimization / routing / scheduling / QEC / ZQN /
- *     resilience / hardware HAL / runtime
- *
- * ============================================================================
- * PURPOSE
- * ============================================================================
- *
- * This grammar defines SOURCE-LEVEL COMPATIBILITY CONTRACT SYNTAX for
- * dialects.
- *
- * It allows a dialect to express relationships such as:
- *
- *     compatible with another dialect/version
- *     requires another dialect/version
- *     supports another dialect/version
- *     conflicts with another dialect/version
- *     supersedes another dialect/version
- *     replaces another dialect/version
- *     deprecates another dialect/version
- *     provides a compatibility profile
- *     declares migration relationships
- *     declares compatibility policies
- *
- * Compatibility is a semantic contract.
- *
- * This grammar does NOT decide whether a contract is satisfied.
+ *       +-------------------------------+
+ *       |               |               |
+ *       v               v               v
+ *   classical IR    quantum::ir    HDL/hardware IR
+ *       |               |               |
+ *       +---------------+---------------+
+ *                       |
+ *                       v
+ *              optimization / lowering
+ *                       |
+ *               routing / scheduling
+ *                       |
+ *                QEC / ZQN / resilience
+ *                       |
+ *                       v
+ *                    HAL/runtime
  *
  * ============================================================================
  * OWNERSHIP
@@ -89,100 +111,113 @@
  *
  * THIS FILE OWNS:
  *
- *   - dialect compatibility declaration syntax;
+ *   - compatibility member dispatch;
  *   - compatibility relationship syntax;
  *   - compatibility subject syntax;
- *   - compatibility profile syntax;
- *   - compatibility requirement syntax;
- *   - compatibility conflict syntax;
- *   - compatibility migration syntax;
- *   - compatibility deprecation syntax;
- *   - compatibility replacement syntax;
- *   - compatibility policy metadata syntax;
- *   - structural compatibility predicates;
- *   - compatibility annotations;
+ *   - compatibility version attachment;
+ *   - compatibility predicates;
+ *   - compatibility metadata;
+ *   - compatibility profiles;
+ *   - migration declarations;
+ *   - replacement declarations;
+ *   - supersession declarations;
+ *   - deprecation declarations;
+ *   - compatibility assertions;
+ *   - compatibility groups;
+ *   - compatibility sets;
+ *   - reusable compatibility contract syntax.
  *
  * THIS FILE DOES NOT OWN:
  *
  *   - lexical identifiers;
- *   - keywords;
- *   - version-number syntax;
+ *   - lexical keywords;
+ *   - qualified-name syntax;
+ *   - version syntax;
  *   - semantic version comparison;
  *   - version satisfiability;
+ *   - dialect declaration syntax;
+ *   - dialect registration;
+ *   - namespace resolution;
  *   - package resolution;
  *   - module resolution;
- *   - filesystem access;
- *   - network access;
- *   - plugin discovery;
+ *   - capability discovery;
+ *   - resource discovery;
  *   - hardware discovery;
- *   - hardware topology;
- *   - resource allocation;
+ *   - target selection;
  *   - scheduling;
  *   - routing;
  *   - optimization;
  *   - QEC;
  *   - ZQN;
  *   - resilience;
- *   - simulation;
- *   - runtime execution;
- *   - canonical IR;
  *   - quantum::ir;
- *   - vendor implementation;
- *   - compiler implementation;
+ *   - classical IR;
+ *   - HDL IR;
+ *   - runtime execution.
  *
  * ============================================================================
- * CRITICAL BOUNDARY
+ * DEPENDENCY OWNERSHIP
  * ============================================================================
  *
- * Compatibility MUST remain independent of physical realization.
+ * Names are owned by:
  *
- * A compatibility declaration MUST NOT mean:
+ *     grammar/core/names.g4
  *
- *     use CPU X
- *     use GPU X
- *     use FPGA X
- *     use ASIC X
- *     use QPU X
- *     use device X
- *     use topology X
- *     use N qubits
- *     use N nodes
- *     use N cores
- *     use N GPUs
- *     use a particular calibration
- *     use a particular scheduler
+ * Version syntax is owned by:
  *
- * Such information belongs to:
+ *     grammar/core/versioning.g4
  *
- *     target descriptions
- *     capability models
- *     resource models
- *     deployment configuration
- *     runtime discovery
- *     scheduling
- *     hardware abstraction
+ * Lexical tokens are owned by:
+ *
+ *     grammar/lexer/*
+ *     grammar/antlr/ZamaniLexer.g4
+ *
+ * The compatibility grammar MUST NOT redefine any of those facilities.
  *
  * ============================================================================
  * POCO-REAF
  * ============================================================================
  *
- * Compatibility is part of the durable SOURCE CONTRACT.
+ * Compatibility describes durable SOURCE CONTRACTS.
  *
- * It therefore describes:
+ * It MUST NOT encode temporary properties of a machine.
  *
- *     what language/dialect contract is expected
+ * Compatibility MUST NOT select:
  *
- * rather than:
+ *     CPU
+ *     GPU
+ *     FPGA
+ *     ASIC
+ *     QPU
+ *     simulator
+ *     device
+ *     physical qubit
+ *     physical node
+ *     memory bank
+ *     network endpoint
+ *     hardware topology
+ *     scheduler
+ *     calibration
+ *     backend
  *
- *     what machine happens to execute it.
+ * Compatibility may describe that a dialect requires a capability or
+ * language contract.
  *
- * This preserves:
+ * Target realization remains downstream.
+ *
+ * Therefore:
  *
  *     Program Once
+ *          ->
  *     Compile Once
+ *          ->
  *     Run Everywhere
+ *          ->
  *     Run Anywhere
+ *          ->
  *     Run Forever
+ *
+ * remains an architectural property of the complete compiler pipeline.
  *
  * ============================================================================
  * SCALABILITY
@@ -190,130 +225,38 @@
  *
  * There are NO grammar-level limits on:
  *
- *   - number of compatibility declarations;
- *   - number of subjects;
- *   - number of requirements;
- *   - number of profiles;
- *   - number of migration entries;
- *   - number of deprecated contracts;
- *   - version magnitude;
- *   - version-expression complexity;
- *   - dialect nesting;
- *   - compatibility relationships.
+ *     compatibility declarations
+ *     subjects
+ *     versions
+ *     profiles
+ *     predicates
+ *     metadata entries
+ *     migrations
+ *     replacements
+ *     deprecations
+ *     compatibility sets
+ *     dialect relationships
+ *     namespace depth
  *
- * The repetition operators in this grammar are intentionally open-ended.
+ * Repetition is represented using `*`, `+`, and recursive expressions.
  *
- * No:
+ * This file contains no:
  *
  *     MAX_DIALECTS
  *     MAX_COMPATIBILITY_RULES
  *     MAX_VERSIONS
- *     MAX_REQUIREMENTS
  *     MAX_FEATURES
  *     MAX_TARGETS
- *     MAX_QUBITS
  *     MAX_DEVICES
+ *     MAX_QUBITS
+ *     MAX_CPUS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_NODES
+ *     MAX_MEMORY
  *
- * exists here.
- *
- * Practical limits are compiler/resource-policy concerns.
- *
- * ============================================================================
- * VERSION OWNERSHIP
- * ============================================================================
- *
- * Version syntax is owned by:
- *
- *     grammar/core/versioning.g4
- *
- * This file MUST consume:
- *
- *     versionExpression
- *     exactVersion
- *     versionRange
- *     versionConstraintSet
- *     versionReference
- *     versionChannel
- *
- * from that canonical grammar.
- *
- * This file MUST NOT redefine them.
- *
- * ============================================================================
- * DIALECT OWNERSHIP
- * ============================================================================
- *
- * Dialect declaration syntax remains owned by:
- *
- *     grammar/dialects/dialects.g4
- *
- * This file only provides compatibility members that can be incorporated
- * by the dialect grammar.
- *
- * ============================================================================
- * AST CONTRACT
- * ============================================================================
- *
- * The frontend AST should preserve:
- *
- *   - source span;
- *   - relationship kind;
- *   - subject identity;
- *   - optional version expression;
- *   - optional profile;
- *   - optional predicate;
- *   - optional migration target;
- *   - optional reason/metadata;
- *   - original source spelling where diagnostics/round-tripping require it.
- *
- * Parsing MUST NOT:
- *
- *   - resolve a dialect;
- *   - compare versions;
- *   - query a registry;
- *   - inspect hardware;
- *   - query capabilities;
- *   - select a backend.
- *
- * ============================================================================
- * SEMANTIC CONTRACT
- * ============================================================================
- *
- * Semantic analysis is responsible for:
- *
- *   - resolving compatibility subjects;
- *   - resolving dialect identities;
- *   - evaluating version expressions;
- *   - detecting unsatisfied requirements;
- *   - detecting incompatible contracts;
- *   - detecting circular compatibility/migration relationships;
- *   - detecting impossible combinations;
- *   - applying compatibility policy;
- *   - applying deprecation policy;
- *   - applying migration policy;
- *   - producing diagnostics;
- *
- * ============================================================================
- * IR CONTRACT
- * ============================================================================
- *
- * This grammar produces NO IR.
- *
- * Compatibility information may later become semantic metadata attached to:
- *
- *   - dialect contracts;
- *   - module contracts;
- *   - package contracts;
- *   - compilation-unit contracts;
- *   - canonical semantic representations.
- *
- * It MUST NOT create:
- *
- *   - Quantum IR;
- *   - Classical IR;
- *   - Hardware IR;
- *   - Runtime state;
- *   - Resource state.
+ * Any practical limit is an implementation/resource limit, never a language
+ * limit.
  *
  * ============================================================================
  * DETERMINISM
@@ -321,49 +264,104 @@
  *
  * This grammar contains:
  *
- *   - no embedded Rust;
- *   - no actions;
- *   - no semantic predicates;
- *   - no filesystem access;
- *   - no network access;
- *   - no hardware access;
- *   - no runtime calls;
- *   - no randomness.
+ *     no embedded Rust;
+ *     no actions;
+ *     no semantic predicates;
+ *     no filesystem access;
+ *     no network access;
+ *     no environment inspection;
+ *     no hardware discovery;
+ *     no runtime callbacks;
+ *     no randomness.
  *
- * Identical token streams therefore receive identical syntactic treatment.
+ * Identical source/token streams therefore receive identical syntactic
+ * treatment.
  *
  * ============================================================================
- * CONTEXTUAL KEYWORD DESIGN
+ * AST CONTRACT
  * ============================================================================
  *
- * The current canonical lexer does not make every future compatibility word
- * a reserved token.
+ * Every compatibility construct must preserve, directly or indirectly:
  *
- * Therefore compatibility relation names are represented structurally through
- * identifiers where appropriate.
+ *     source span
+ *     relationship kind
+ *     subject identity
+ *     version expression where present
+ *     predicate where present
+ *     migration target where present
+ *     profile identity where present
+ *     metadata where present
+ *     source ordering
  *
- * This is deliberate.
+ * The AST MUST NOT resolve:
  *
- * It prevents this grammar from forcing every future compatibility concept
- * into the global lexical keyword namespace.
+ *     versions
+ *     dialects
+ *     packages
+ *     capabilities
+ *     hardware
+ *     resources
+ *     targets
  *
- * Semantic analysis MUST validate the recognized contextual names.
+ * ============================================================================
+ * SEMANTIC CONTRACT
+ * ============================================================================
  *
- * This permits future contracts such as:
+ * Semantic analysis is responsible for:
  *
- *     compatible
- *     requires
- *     supports
- *     conflicts
- *     supersedes
- *     replaces
- *     deprecated
- *     migrates
- *     equivalent
- *     conditional
+ *     resolving subjects;
+ *     resolving dialect identities;
+ *     evaluating version expressions;
+ *     checking compatibility;
+ *     checking conflicts;
+ *     validating migrations;
+ *     validating replacements;
+ *     validating supersession;
+ *     applying deprecation policy;
+ *     evaluating predicates;
+ *     resolving metadata semantics;
+ *     producing diagnostics.
  *
- * without requiring a new lexer keyword merely to extend compatibility
- * semantics.
+ * A syntactically valid compatibility declaration is NOT necessarily a
+ * semantically valid compatibility relationship.
+ *
+ * ============================================================================
+ * IR CONTRACT
+ * ============================================================================
+ *
+ * This grammar creates NO IR.
+ *
+ * Compatibility information may become semantic metadata attached to:
+ *
+ *     dialect contracts
+ *     module contracts
+ *     package contracts
+ *     compilation-unit contracts
+ *     capability contracts
+ *     canonical semantic representations
+ *
+ * It MUST NOT create:
+ *
+ *     quantum::ir
+ *     classical IR
+ *     HDL IR
+ *     hardware IR
+ *     runtime state
+ *     resource state
+ *
+ * ============================================================================
+ * RUST CONTRACT
+ * ============================================================================
+ *
+ * This file contains no Rust.
+ *
+ * Generated parser integration must remain compatible with:
+ *
+ *     Rust 1.97
+ *     Rust 1.97.1
+ *     Rust 2021
+ *
+ * and must require no `unsafe`.
  *
  * ============================================================================
  */
@@ -374,58 +372,75 @@ options {
     tokenVocab = ZamaniLexer;
 }
 
-import Names, Versioning;
+import
+    Names,
+    Versioning
+    ;
 
-
-/* ============================================================================
- * 1. TOP-LEVEL COMPATIBILITY MEMBER
- * ========================================================================== */
 
 /*
- * This is the integration entry point for dialects.g4.
+ * ============================================================================
+ * 1. PUBLIC INTEGRATION ENTRY POINT
+ * ============================================================================
  *
- * Recommended integration:
+ * `dialectCompatibilityMember` is the only rule that a parent dialect grammar
+ * needs to know about.
  *
- *     dialectMember
+ * Canonical integration:
+ *
+ *     dialectRegistrationMember
  *         : ...
  *         | dialectCompatibilityMember
  *         ;
  *
- * The dialect grammar remains responsible for determining that the member
- * occurs inside a dialect declaration.
+ * The parent grammar remains responsible for establishing the surrounding
+ * dialect declaration.
+ *
+ * This file therefore remains independently complete.
  */
+
 dialectCompatibilityMember
     : dialectCompatibilityDeclaration
-    | dialectCompatibilityProfileDeclaration
+    | dialectCompatibilityProfile
+    | dialectCompatibilityGroupDeclaration
+    | dialectCompatibilitySetDeclaration
     | dialectMigrationDeclaration
-    | dialectDeprecationDeclaration
     | dialectReplacementDeclaration
     | dialectSupersessionDeclaration
+    | dialectDeprecationDeclaration
+    | dialectCompatibilityAssertion
     ;
 
 
-/* ============================================================================
- * 2. GENERIC COMPATIBILITY DECLARATION
- * ========================================================================== */
-
 /*
- * Generic contextual form:
+ * ============================================================================
+ * 2. GENERIC COMPATIBILITY DECLARATION
+ * ============================================================================
  *
- *     compatible <subject> [versionExpression] ;
+ * Canonical forms include:
  *
- *     requires <subject> [versionExpression] ;
+ *     compatible quantum::standard;
+ *     compatible quantum::standard version >= 1.0.0;
  *
- *     supports <subject> [versionExpression] ;
+ *     requires quantum::dynamic_control;
+ *     requires quantum::dynamic_control version >= 1.0.0;
  *
- *     conflicts <subject> [versionExpression] ;
+ *     supports quantum::standard version >= 1.0.0;
  *
- *     equivalent <subject> [versionExpression] ;
+ *     conflicts quantum::legacy;
  *
- * Relation names are contextual identifiers rather than a closed lexer
- * enumeration.
+ *     equivalent classical::numeric;
+ *
+ * Relationship names are intentionally open where possible.
+ *
+ * Existing globally reserved words such as `requires` remain supported through
+ * their canonical lexer token. Future relationship names may remain ordinary
+ * identifiers instead of forcing global keyword expansion.
  */
+
 dialectCompatibilityDeclaration
-    : compatibilityRelation compatibilitySubjectList
+    : compatibilityRelation
+      compatibilitySubjectList
       compatibilityVersionClause?
       compatibilityConditionClause*
       compatibilityMetadataClause*
@@ -433,14 +448,12 @@ dialectCompatibilityDeclaration
     ;
 
 
-/* ============================================================================
- * 3. RELATIONSHIP KIND
- * ========================================================================== */
-
 /*
- * The semantic layer recognizes the canonical contextual relation names.
+ * ============================================================================
+ * 3. RELATIONSHIP KIND
+ * ============================================================================
  *
- * Canonical names:
+ * Canonical semantic relationship names:
  *
  *     compatible
  *     requires
@@ -448,21 +461,52 @@ dialectCompatibilityDeclaration
  *     conflicts
  *     equivalent
  *
- * Additional implementation-neutral relationship names may be introduced
- * through dialect policy, but they MUST NOT change the grammar's physical
- * independence.
+ * `requires` is already a Zamani lexical keyword.
+ *
+ * The other contextual names remain identifiers unless the canonical lexer
+ * eventually reserves them.
+ *
+ * This rule deliberately avoids introducing new lexer tokens.
  */
+
 compatibilityRelation
-    : identifier
+    : REQUIRES
+    | identifier
     ;
 
 
-/* ============================================================================
- * 4. SUBJECT LIST
- * ========================================================================== */
+/*
+ * ============================================================================
+ * 4. COMPATIBILITY SUBJECT
+ * ============================================================================
+ *
+ * A compatibility subject is symbolic language-level identity.
+ *
+ * Examples:
+ *
+ *     quantum::standard
+ *     quantum::openqasm
+ *     classical::numeric
+ *     hdl::rtl
+ *     hardware::abstract
+ *     ai::tensor
+ *     distributed::execution
+ *     organization::domain::dialect
+ *
+ * The grammar does not decide whether the subject exists.
+ *
+ * It is NOT a:
+ *
+ *     device identifier
+ *     physical qubit identifier
+ *     memory address
+ *     network endpoint
+ *     filesystem path
+ *     hardware location
+ */
 
-dialectCompatibilitySubjectList
-    : compatibilitySubjectList
+compatibilitySubject
+    : qualifiedName
     ;
 
 compatibilitySubjectList
@@ -471,106 +515,78 @@ compatibilitySubjectList
     ;
 
 
-/* ============================================================================
- * 5. COMPATIBILITY SUBJECT
- * ========================================================================== */
-
 /*
- * A subject identifies a semantic contract.
+ * ============================================================================
+ * 5. VERSION ATTACHMENT
+ * ============================================================================
  *
- * Examples:
+ * Version syntax is entirely delegated to core/versioning.g4.
  *
- *     quantum::standard
- *     hardware::abstract
- *     hdl::rtl
- *     classical::core
- *     ai::tensor
- *     distributed::execution
- *
- * A subject is NOT a device identifier.
- *
- * The same qualified-name mechanism can therefore describe future domains
- * without changing this grammar.
+ * No version grammar is duplicated here.
  */
-compatibilitySubject
-    : qualifiedName
-    ;
 
-
-/* ============================================================================
- * 6. VERSION CLAUSE
- * ========================================================================== */
-
-/*
- * Version semantics come entirely from core/versioning.g4.
- *
- * The compatibility grammar merely associates a canonical version expression
- * with a compatibility subject.
- */
 compatibilityVersionClause
-    : compatibilityVersionMarker versionExpression
+    : VERSION versionExpression
     ;
 
 
 /*
- * Contextual marker.
+ * ============================================================================
+ * 6. CONDITIONS
+ * ============================================================================
  *
- * Canonical spelling:
- *
- *     version
- *
- * It remains an identifier at this grammar layer so the compatibility grammar
- * does not require a new globally reserved lexer token.
- */
-compatibilityVersionMarker
-    : identifier
-    ;
-
-
-/* ============================================================================
- * 7. EXPLICIT VERSION REQUIREMENT
- * ========================================================================== */
-
-/*
- * Supports:
- *
- *     requires quantum::standard version >= 1.0.0;
- *
- * The version itself is parsed by Versioning.
- */
-dialectCompatibilityRequirement
-    : compatibilityRequirementMarker
-      compatibilitySubject
-      compatibilityVersionClause?
-      compatibilityConditionClause*
-      SEMICOLON
-    ;
-
-compatibilityRequirementMarker
-    : identifier
-    ;
-
-
-/* ============================================================================
- * 8. CONDITIONS
- * ========================================================================== */
-
-/*
- * Conditions are structural.
+ * Conditions are declarative compatibility predicates.
  *
  * They do not execute code.
  *
- * They do not inspect hardware.
+ * They do not query hardware.
  *
- * They do not query runtime state.
+ * They do not inspect the filesystem.
+ *
+ * They do not access the network.
+ *
+ * They are later interpreted by semantic compatibility analysis.
+ *
+ * Canonical examples:
+ *
+ *     when feature == "x"
+ *     where api::surface == "stable"
+ *     if language::version >= 1
+ *
+ * The marker is intentionally open-world.
  */
+
 compatibilityConditionClause
     : compatibilityConditionMarker compatibilityPredicate
     ;
 
 compatibilityConditionMarker
-    : identifier
+    : WHEN
+    | WHERE
+    | identifier
     ;
+
+
+/*
+ * ============================================================================
+ * 7. PREDICATE EXPRESSION
+ * ============================================================================
+ *
+ * The predicate grammar uses the canonical Zamani logical keyword/operator
+ * vocabulary.
+ *
+ * AND / OR are existing keyword tokens.
+ *
+ * Parentheses provide explicit grouping.
+ *
+ * Logical negation is intentionally not introduced here through the existing
+ * `NOT` token because the repository currently has competing lexical ownership
+ * for `not` and `!`. Compatibility syntax therefore remains monotonic until
+ * that repository-wide lexical conflict is resolved.
+ *
+ * Semantic consumers can represent negation through explicit comparison
+ * predicates or a future canonical logical-negation contract.
+ */
 
 compatibilityPredicate
     : compatibilityPredicateOr
@@ -578,23 +594,12 @@ compatibilityPredicate
 
 compatibilityPredicateOr
     : compatibilityPredicateAnd
-      (
-          OR
-          compatibilityPredicateAnd
-      )*
+      (OR compatibilityPredicateAnd)*
     ;
 
 compatibilityPredicateAnd
-    : compatibilityPredicateUnary
-      (
-          AND
-          compatibilityPredicateUnary
-      )*
-    ;
-
-compatibilityPredicateUnary
-    : NOT compatibilityPredicatePrimary
-    | compatibilityPredicatePrimary
+    : compatibilityPredicatePrimary
+      (AND compatibilityPredicatePrimary)*
     ;
 
 compatibilityPredicatePrimary
@@ -608,28 +613,67 @@ compatibilityPredicateAtom
     ;
 
 
-/* ============================================================================
- * 9. COMPARISON OPERATORS
- * ========================================================================== */
-
 /*
- * These operators compare semantic compatibility metadata.
+ * ============================================================================
+ * 8. COMPARISON OPERATORS
+ * ============================================================================
  *
- * They do not compare physical resources.
+ * These are the canonical lexer token names from grammar/lexer/operators.g4.
+ *
+ * Do NOT use obsolete aliases such as:
+ *
+ *     EQ
+ *     NE
+ *     LT
+ *     LE
+ *     GT
+ *     GE
+ *
+ * The canonical names are:
+ *
+ *     EQUAL_EQUAL
+ *     NOT_EQUAL
+ *     LESS
+ *     LESS_EQUAL
+ *     GREATER
+ *     GREATER_EQUAL
+ *
+ * This keeps compatibility.g4 aligned with the actual lexer vocabulary.
  */
+
 compatibilityComparisonOperator
-    : EQ
-    | NE
-    | LT
-    | LE
-    | GT
-    | GE
+    : EQUAL_EQUAL
+    | NOT_EQUAL
+    | LESS
+    | LESS_EQUAL
+    | GREATER
+    | GREATER_EQUAL
     ;
 
 
-/* ============================================================================
- * 10. COMPATIBILITY VALUES
- * ========================================================================== */
+/*
+ * ============================================================================
+ * 9. COMPATIBILITY VALUES
+ * ============================================================================
+ *
+ * Values are source-level data.
+ *
+ * They do not imply a machine representation.
+ *
+ * For example:
+ *
+ *     1024
+ *
+ * remains a source integer.
+ *
+ * It does NOT mean:
+ *
+ *     1024 qubits
+ *     1024 CPUs
+ *     1024 devices
+ *
+ * unless semantic analysis gives that value such meaning.
+ */
 
 compatibilityValue
     : STRING
@@ -671,24 +715,31 @@ compatibilityMapEntry
     ;
 
 
-/* ============================================================================
- * 11. METADATA
- * ========================================================================== */
-
 /*
- * Metadata is open-ended.
+ * ============================================================================
+ * 10. OPEN-WORLD METADATA
+ * ============================================================================
  *
- * Unknown metadata is retained syntactically and validated semantically.
+ * Metadata is intentionally open.
  *
- * This prevents future compatibility information from requiring grammar
- * rewrites.
+ * This avoids requiring a grammar change every time compatibility tooling
+ * gains a new descriptive property.
+ *
+ * Examples:
+ *
+ *     stability = stable
+ *     owner = organization::domain
+ *     reason = "migration required"
+ *
+ * Unknown metadata remains syntax-valid and is validated semantically.
  */
+
 compatibilityMetadataClause
-    : compatibilityMetadataMarker
+    : compatibilityMetadataKey
       compatibilityMetadataValue?
     ;
 
-compatibilityMetadataMarker
+compatibilityMetadataKey
     : identifier
     ;
 
@@ -698,31 +749,31 @@ compatibilityMetadataValue
     ;
 
 
-/* ============================================================================
- * 12. COMPATIBILITY PROFILES
- * ========================================================================== */
-
 /*
- * A profile groups compatibility contracts under one semantic name.
+ * ============================================================================
+ * 11. COMPATIBILITY PROFILE
+ * ============================================================================
+ *
+ * Profiles provide named groups of compatibility contracts.
  *
  * Example:
  *
- *     compatibility profile "portable" {
- *         ...
+ *     profile portable {
+ *         compatible quantum::standard version >= 1.0.0;
+ *         supports classical::numeric;
  *     }
  *
- * The profile itself does not perform compatibility checking.
+ * Profile membership does not automatically imply that every member is
+ * mutually compatible.
+ *
+ * Semantic analysis determines profile meaning.
  */
-dialectCompatibilityProfileDeclaration
-    : compatibilityProfileMarker
-      compatibilityProfileName
+
+dialectCompatibilityProfile
+    : PROFILE compatibilityProfileName
       LBRACE
       dialectCompatibilityProfileMember*
       RBRACE
-    ;
-
-compatibilityProfileMarker
-    : identifier
     ;
 
 compatibilityProfileName
@@ -732,36 +783,108 @@ compatibilityProfileName
 
 dialectCompatibilityProfileMember
     : dialectCompatibilityDeclaration
-    | dialectCompatibilityRequirement
+    | dialectCompatibilityGroupDeclaration
+    | dialectCompatibilitySetDeclaration
     | dialectMigrationDeclaration
-    | dialectDeprecationDeclaration
     | dialectReplacementDeclaration
     | dialectSupersessionDeclaration
+    | dialectDeprecationDeclaration
+    | dialectCompatibilityAssertion
     | compatibilityMetadataClause
     ;
 
 
-/* ============================================================================
- * 13. MIGRATION DECLARATIONS
- * ========================================================================== */
-
 /*
- * Migration expresses a semantic evolution path.
+ * ============================================================================
+ * 12. COMPATIBILITY GROUP
+ * ============================================================================
+ *
+ * A group provides explicit structure for several compatibility contracts.
  *
  * Example:
  *
- *     migrate quantum::old to quantum::new;
+ *     compatibility {
+ *         compatible quantum::standard;
+ *         supports quantum::dynamic_control;
+ *     }
  *
- * Migration is not automatic source rewriting.
- *
- * The compiler/tooling layer determines whether and how a migration can be
- * performed.
+ * The grammar imposes no number of entries.
  */
+
+dialectCompatibilityGroupDeclaration
+    : compatibilityGroupMarker
+      LBRACE
+      dialectCompatibilityGroupMember*
+      RBRACE
+    ;
+
+compatibilityGroupMarker
+    : identifier
+    ;
+
+dialectCompatibilityGroupMember
+    : dialectCompatibilityDeclaration
+    | dialectMigrationDeclaration
+    | dialectReplacementDeclaration
+    | dialectSupersessionDeclaration
+    | dialectDeprecationDeclaration
+    | dialectCompatibilityAssertion
+    | compatibilityMetadataClause
+    ;
+
+
+/*
+ * ============================================================================
+ * 13. COMPATIBILITY SET
+ * ============================================================================
+ *
+ * A set groups subjects without claiming pairwise compatibility.
+ *
+ * Example:
+ *
+ *     compatibility_set portable {
+ *         quantum::standard,
+ *         quantum::openqasm,
+ *         quantum::future
+ *     }
+ *
+ * The actual relationships remain explicit compatibility contracts.
+ */
+
+dialectCompatibilitySetDeclaration
+    : compatibilitySetMarker
+      identifier
+      LBRACE
+      compatibilitySubjectList?
+      RBRACE
+    ;
+
+compatibilitySetMarker
+    : identifier
+    ;
+
+
+/*
+ * ============================================================================
+ * 14. MIGRATION
+ * ============================================================================
+ *
+ * Migration describes a semantic evolution relationship.
+ *
+ * Example:
+ *
+ *     migrate quantum::legacy to quantum::standard;
+ *
+ * Migration does NOT perform rewriting.
+ *
+ * Migration algorithms remain outside the grammar.
+ */
+
 dialectMigrationDeclaration
     : migrationMarker
       compatibilitySubject
       migrationTargetClause
-      migrationVersionClause?
+      compatibilityVersionClause?
       compatibilityConditionClause*
       compatibilityMetadataClause*
       SEMICOLON
@@ -772,69 +895,29 @@ migrationMarker
     ;
 
 migrationTargetClause
-    : migrationTargetMarker compatibilitySubject
+    : migrationTargetMarker
+      compatibilitySubject
     ;
 
 migrationTargetMarker
     : identifier
     ;
 
-migrationVersionClause
-    : compatibilityVersionClause
-    ;
-
-
-/* ============================================================================
- * 14. DEPRECATION
- * ========================================================================== */
 
 /*
- * Deprecation is source-contract metadata.
- *
- * It does not automatically reject a program.
- *
- * Semantic analysis decides whether the active compatibility policy treats
- * deprecation as:
- *
- *     warning
- *     error
- *     informational
- *     migration-required
- */
-dialectDeprecationDeclaration
-    : deprecationMarker
-      compatibilitySubject
-      deprecationMetadataClause*
-      SEMICOLON
-    ;
-
-deprecationMarker
-    : identifier
-    ;
-
-deprecationMetadataClause
-    : compatibilityMetadataClause
-    | compatibilityVersionClause
-    ;
-
-
-/* ============================================================================
+ * ============================================================================
  * 15. REPLACEMENT
- * ========================================================================== */
-
-/*
+ * ============================================================================
+ *
+ * Replacement records a successor contract.
+ *
  * Example:
  *
  *     replace quantum::legacy with quantum::standard;
  *
- * The grammar records the relationship.
- *
- * Semantic analysis determines:
- *
- *     - whether replacement is valid;
- *     - whether source migration is possible;
- *     - whether semantics are preserved.
+ * The grammar records intent only.
  */
+
 dialectReplacementDeclaration
     : replacementMarker
       compatibilitySubject
@@ -849,7 +932,8 @@ replacementMarker
     ;
 
 replacementTargetClause
-    : replacementTargetMarker compatibilitySubject
+    : replacementTargetMarker
+      compatibilitySubject
     ;
 
 replacementTargetMarker
@@ -857,18 +941,15 @@ replacementTargetMarker
     ;
 
 
-/* ============================================================================
- * 16. SUPERSESSION
- * ========================================================================== */
-
 /*
- * Supersession differs from replacement:
+ * ============================================================================
+ * 16. SUPERSESSION
+ * ============================================================================
  *
- *     superseded contract
- *
- * may remain semantically meaningful while another contract becomes the
- * preferred successor.
+ * Supersession differs from replacement in that the old contract may remain
+ * semantically meaningful while another contract becomes its successor.
  */
+
 dialectSupersessionDeclaration
     : supersessionMarker
       compatibilitySubject
@@ -883,7 +964,8 @@ supersessionMarker
     ;
 
 supersessionTargetClause
-    : supersessionTargetMarker compatibilitySubject
+    : supersessionTargetMarker
+      compatibilitySubject
     ;
 
 supersessionTargetMarker
@@ -891,108 +973,56 @@ supersessionTargetMarker
     ;
 
 
-/* ============================================================================
- * 17. COMPATIBILITY MATRIX ENTRY
- * ========================================================================== */
-
 /*
- * A compatibility matrix entry allows many-to-many relationships without
- * requiring a fixed number of subjects.
+ * ============================================================================
+ * 17. DEPRECATION
+ * ============================================================================
  *
- * Example:
+ * Deprecation is metadata.
  *
- *     compatibility {
- *         quantum::standard -> quantum::future >= 2.0;
- *     }
+ * It does not automatically reject source.
  *
- * The arrow represents a semantic relationship, not execution flow.
+ * Semantic/compiler policy determines whether the result is:
+ *
+ *     informational
+ *     warning
+ *     error
+ *     migration-required
  */
-dialectCompatibilityMatrixEntry
-    : compatibilitySubject
-      compatibilityMatrixOperator
+
+dialectDeprecationDeclaration
+    : deprecationMarker
       compatibilitySubject
       compatibilityVersionClause?
-      compatibilityConditionClause*
       compatibilityMetadataClause*
       SEMICOLON
     ;
 
-compatibilityMatrixOperator
-    : ARROW
-    ;
-
-
-/* ============================================================================
- * 18. COMPATIBILITY MATRIX
- * ========================================================================== */
-
-/*
- * The matrix itself is deliberately open-ended.
- */
-dialectCompatibilityMatrixDeclaration
-    : compatibilityMatrixMarker
-      LBRACE
-      dialectCompatibilityMatrixEntry*
-      RBRACE
-    ;
-
-compatibilityMatrixMarker
+deprecationMarker
     : identifier
     ;
 
 
-/* ============================================================================
- * 19. COMPATIBILITY SET
- * ========================================================================== */
-
 /*
- * A compatibility set groups subjects that are intended to participate in
- * one semantic compatibility contract.
+ * ============================================================================
+ * 18. COMPATIBILITY ASSERTION
+ * ============================================================================
+ *
+ * An assertion requests semantic validation of a compatibility claim.
  *
  * Example:
  *
- *     compatibility_set universal_quantum {
- *         quantum::standard,
- *         quantum::future,
- *         quantum::openqasm
- *     }
+ *     assert_compatible quantum::standard version >= 1.0.0;
  *
- * The set does not imply that every member is mutually compatible.
- *
- * Actual relationships remain explicit.
+ * The assertion itself performs no evaluation during parsing.
  */
-dialectCompatibilitySetDeclaration
-    : compatibilitySetMarker
-      identifier
-      LBRACE
-      compatibilitySubjectList?
-      RBRACE
-    ;
 
-compatibilitySetMarker
-    : identifier
-    ;
-
-
-/* ============================================================================
- * 20. COMPATIBILITY ASSERTION
- * ========================================================================== */
-
-/*
- * Assertions are declarative statements that the semantic compatibility
- * analyzer may validate.
- *
- * Example:
- *
- *     assert_compatible quantum::standard version >= 1.0;
- *
- * The assertion does not execute.
- */
 dialectCompatibilityAssertion
     : compatibilityAssertionMarker
-      compatibilitySubject
+      compatibilitySubjectList
       compatibilityVersionClause?
       compatibilityConditionClause*
+      compatibilityMetadataClause*
       SEMICOLON
     ;
 
@@ -1001,133 +1031,40 @@ compatibilityAssertionMarker
     ;
 
 
-/* ============================================================================
- * 21. COMPATIBILITY NEGATION
- * ========================================================================== */
-
 /*
- * Explicit incompatibility can be represented without introducing a second
- * conflict grammar.
- */
-dialectCompatibilityConflict
-    : conflictMarker
-      compatibilitySubjectList
-      compatibilityVersionClause?
-      compatibilityConditionClause*
-      compatibilityMetadataClause*
-      SEMICOLON
-    ;
-
-conflictMarker
-    : identifier
-    ;
-
-
-/* ============================================================================
- * 22. COMPATIBILITY EQUIVALENCE
- * ========================================================================== */
-
-/*
- * Equivalence is a semantic claim that must later be proven/validated.
+ * ============================================================================
+ * 19. REUSABLE COMPATIBILITY CONTRACT
+ * ============================================================================
  *
- * The grammar merely records the claim.
+ * This rule is provided for other dialect grammar components that need to
+ * embed a compatibility contract without duplicating its syntax.
+ *
+ * It intentionally excludes the terminating semicolon so that a containing
+ * grammar can determine ownership of termination.
  */
-dialectCompatibilityEquivalence
-    : equivalenceMarker
+
+compatibilityContract
+    : compatibilityRelation
       compatibilitySubjectList
       compatibilityVersionClause?
       compatibilityConditionClause*
       compatibilityMetadataClause*
-      SEMICOLON
     ;
 
-equivalenceMarker
-    : identifier
-    ;
-
-
-/* ============================================================================
- * 23. COMPATIBILITY RANGE
- * ========================================================================== */
 
 /*
- * Uses the canonical version range model.
+ * ============================================================================
+ * 20. REUSABLE VERSIONED SUBJECT
+ * ============================================================================
+ *
+ * This is a small integration boundary for vendor, experimental, and
+ * registration grammars.
  */
-dialectCompatibilityRange
-    : compatibilitySubject
-      compatibilityRangeMarker
-      versionRange
-      SEMICOLON
-    ;
 
-compatibilityRangeMarker
-    : identifier
-    ;
-
-
-/* ============================================================================
- * 24. COMPATIBILITY CONSTRAINT SET
- * ========================================================================== */
-
-/*
- * Uses the canonical Versioning constraint-set representation.
- */
-dialectCompatibilityConstraintSet
-    : compatibilitySubject
-      compatibilityConstraintMarker
-      versionConstraintSet
-      SEMICOLON
-    ;
-
-compatibilityConstraintMarker
-    : identifier
-    ;
-
-
-/* ============================================================================
- * 25. COMPATIBILITY VERSION REFERENCE
- * ========================================================================== */
-
-/*
- * Named version contracts remain resolved by semantic analysis.
- */
-dialectCompatibilityVersionReference
-    : compatibilitySubject
-      compatibilityVersionReferenceMarker
-      versionReference
-      SEMICOLON
-    ;
-
-compatibilityVersionReferenceMarker
-    : identifier
-    ;
-
-
-/* ============================================================================
- * 26. OPTIONAL COMPATIBILITY VERSION
- * ========================================================================== */
-
-optionalCompatibilityVersionClause
-    : compatibilityVersionClause?
-    ;
-
-
-/* ============================================================================
- * 27. COMPATIBILITY SUBJECT WITH VERSION
- * ========================================================================== */
-
-/*
- * Reusable integration production for other dialect grammar components.
- */
 compatibilitySubjectWithVersion
     : compatibilitySubject
       compatibilityVersionClause?
     ;
-
-
-/* ============================================================================
- * 28. COMPATIBILITY SUBJECT LIST WITH VERSIONS
- * ========================================================================== */
 
 compatibilitySubjectWithVersionList
     : compatibilitySubjectWithVersion
@@ -1135,477 +1072,573 @@ compatibilitySubjectWithVersionList
     ;
 
 
-/* ============================================================================
- * 29. COMPATIBILITY CONTRACT
- * ========================================================================== */
+/*
+ * ============================================================================
+ * 21. REUSABLE SUBJECT GROUP
+ * ============================================================================
+ */
+
+compatibilitySubjectGroup
+    : LBRACE
+      compatibilitySubjectList?
+      RBRACE
+    ;
+
 
 /*
- * Generic structural contract used by higher-level grammar components.
+ * ============================================================================
+ * 22. REUSABLE METADATA LIST
+ * ============================================================================
  */
-dialectCompatibilityContract
-    : compatibilityRelation
-      compatibilitySubjectWithVersionList
+
+compatibilityMetadataList
+    : compatibilityMetadataClause*
+    ;
+
+
+/*
+ * ============================================================================
+ * 23. COMPATIBILITY MATRIX ENTRY
+ * ============================================================================
+ *
+ * A matrix entry expresses a directed semantic relationship between two
+ * symbolic subjects.
+ *
+ * Example:
+ *
+ *     quantum::legacy -> quantum::standard;
+ *
+ * The arrow is the canonical THIN_ARROW token.
+ *
+ * It does NOT represent execution flow.
+ */
+
+compatibilityMatrixEntry
+    : compatibilitySubject
+      THIN_ARROW
+      compatibilitySubject
+      compatibilityVersionClause?
       compatibilityConditionClause*
       compatibilityMetadataClause*
+      SEMICOLON
     ;
 
-
-/* ============================================================================
- * 30. COMPATIBILITY CONTRACT LIST
- * ========================================================================== */
-
-dialectCompatibilityContractList
-    : dialectCompatibilityContract
-      (COMMA dialectCompatibilityContract)*
-    ;
-
-
-/* ============================================================================
- * 31. OPTIONAL COMPATIBILITY CONTRACT LIST
- * ========================================================================== */
-
-optionalDialectCompatibilityContractList
-    : dialectCompatibilityContractList?
-    ;
-
-
-/* ============================================================================
- * 32. COMPATIBILITY PROFILE BODY
- * ========================================================================== */
 
 /*
- * Explicit reusable body production.
+ * ============================================================================
+ * 24. COMPATIBILITY MATRIX
+ * ============================================================================
+ *
+ * Example:
+ *
+ *     matrix compatibility {
+ *         quantum::legacy -> quantum::standard;
+ *         hdl::legacy -> hdl::rtl;
+ *     }
+ *
+ * The matrix is open-ended.
  */
-dialectCompatibilityProfileBody
-    : LBRACE
-      dialectCompatibilityProfileMember*
+
+dialectCompatibilityMatrix
+    : compatibilityMatrixMarker
+      compatibilityMatrixName
+      LBRACE
+      compatibilityMatrixEntry*
       RBRACE
     ;
 
-
-/* ============================================================================
- * 33. COMPATIBILITY POLICY
- * ========================================================================== */
-
-/*
- * A policy names the semantic policy under which compatibility relationships
- * are interpreted.
- *
- * Examples of policy names:
- *
- *     strict
- *     permissive
- *     migration
- *     compatibility
- *     legacy
- *
- * These remain identifiers.
- */
-dialectCompatibilityPolicyDeclaration
-    : compatibilityPolicyMarker
-      identifier
-      compatibilityPolicyBody?
-      SEMICOLON?
-    ;
-
-compatibilityPolicyMarker
+compatibilityMatrixMarker
     : identifier
     ;
 
-compatibilityPolicyBody
-    : LBRACE
-      compatibilityPolicyMember*
-      RBRACE
-    ;
-
-compatibilityPolicyMember
-    : compatibilityMetadataClause
-    | compatibilityConditionClause
-    | dialectCompatibilityContract
-    ;
-
-
-/* ============================================================================
- * 34. COMPATIBILITY POLICY REFERENCE
- * ========================================================================== */
-
-dialectCompatibilityPolicyReference
-    : compatibilityPolicyReferenceMarker
-      qualifiedName
-      SEMICOLON
-    ;
-
-compatibilityPolicyReferenceMarker
+compatibilityMatrixName
     : identifier
-    ;
-
-
-/* ============================================================================
- * 35. COMPATIBILITY PROVENANCE
- * ========================================================================== */
-
-/*
- * Provenance is structural metadata only.
- *
- * It does not grant trust.
- *
- * It does not constitute a cryptographic proof.
- */
-dialectCompatibilityProvenance
-    : compatibilityProvenanceMarker
-      compatibilityValue
-      SEMICOLON
-    ;
-
-compatibilityProvenanceMarker
-    : identifier
-    ;
-
-
-/* ============================================================================
- * 36. COMPATIBILITY DIAGNOSTIC METADATA
- * ========================================================================== */
-
-/*
- * Human-readable explanation can be retained without making diagnostics part
- * of semantic execution.
- */
-dialectCompatibilityReason
-    : compatibilityReasonMarker
-      STRING
-      SEMICOLON
-    ;
-
-compatibilityReasonMarker
-    : identifier
-    ;
-
-
-/* ============================================================================
- * 37. COMPATIBILITY DEPRECATION WINDOW
- * ========================================================================== */
-
-/*
- * A deprecation window can reference canonical versions.
- *
- * It does not define policy.
- */
-dialectCompatibilityDeprecationWindow
-    : compatibilityDeprecationWindowMarker
-      versionExpression
-      compatibilityRangeSeparator
-      versionExpression
-      SEMICOLON
-    ;
-
-compatibilityDeprecationWindowMarker
-    : identifier
-    ;
-
-compatibilityRangeSeparator
-    : ARROW
-    ;
-
-
-/* ============================================================================
- * 38. COMPATIBILITY MIGRATION WINDOW
- * ========================================================================== */
-
-dialectCompatibilityMigrationWindow
-    : compatibilityMigrationWindowMarker
-      versionExpression
-      compatibilityRangeSeparator
-      versionExpression
-      SEMICOLON
-    ;
-
-compatibilityMigrationWindowMarker
-    : identifier
-    ;
-
-
-/* ============================================================================
- * 39. COMPATIBILITY PROFILE REFERENCE
- * ========================================================================== */
-
-dialectCompatibilityProfileReference
-    : compatibilityProfileReferenceMarker
-      compatibilityProfileName
-      SEMICOLON
-    ;
-
-compatibilityProfileReferenceMarker
-    : identifier
-    ;
-
-
-/* ============================================================================
- * 40. COMPATIBILITY ANNOTATION
- * ========================================================================== */
-
-/*
- * Compatibility-specific annotations remain structural.
- */
-dialectCompatibilityAnnotation
-    : AT identifier
-      compatibilityAnnotationArguments?
-    ;
-
-compatibilityAnnotationArguments
-    : LPAREN compatibilityValueList? RPAREN
-    ;
-
-
-/* ============================================================================
- * 41. COMPATIBILITY MEMBER WITH ANNOTATIONS
- * ========================================================================== */
-
-annotatedDialectCompatibilityMember
-    : dialectCompatibilityAnnotation*
-      dialectCompatibilityMember
-    ;
-
-
-/* ============================================================================
- * 42. COMPATIBILITY DOCUMENT
- * ========================================================================== */
-
-/*
- * Reusable complete compatibility document.
- *
- * The enclosing dialect grammar normally supplies the surrounding dialect
- * declaration. This rule is also useful for isolated grammar tests.
- */
-dialectCompatibilityDocument
-    : annotatedDialectCompatibilityMember*
-      EOF
-    ;
-
-
-/* ============================================================================
- * 43. INTEGRATION ALIASES
- * ========================================================================== */
-
-/*
- * Explicitly named adapter rules allow the surrounding dialect grammar to
- * integrate this grammar without depending on implementation details.
- */
-
-dialectCompatibility
-    : dialectCompatibilityMember
-    ;
-
-dialectCompatibilityDeclarationMember
-    : dialectCompatibilityDeclaration
-    ;
-
-dialectCompatibilityProfile
-    : dialectCompatibilityProfileDeclaration
-    ;
-
-dialectCompatibilityMigration
-    : dialectMigrationDeclaration
-    ;
-
-dialectCompatibilityDeprecation
-    : dialectDeprecationDeclaration
-    ;
-
-dialectCompatibilityReplacement
-    : dialectReplacementDeclaration
-    ;
-
-dialectCompatibilitySupersession
-    : dialectSupersessionDeclaration
+    | STRING
     ;
 
 
 /*
  * ============================================================================
- * END OF FILE
+ * 25. VERSIONED COMPATIBILITY SUBJECT
  * ============================================================================
  *
- * INTEGRATION CONTRACT
+ * Convenience boundary for consumers that need a subject/version pair.
+ */
+
+versionedCompatibilitySubject
+    : compatibilitySubject
+      compatibilityVersionClause
+    ;
+
+
+/*
+ * ============================================================================
+ * 26. OPTIONAL VERSION
+ * ============================================================================
+ */
+
+optionalCompatibilityVersionClause
+    : compatibilityVersionClause?
+    ;
+
+
+/*
+ * ============================================================================
+ * 27. OPTIONAL CONDITION
+ * ============================================================================
+ */
+
+optionalCompatibilityConditionClause
+    : compatibilityConditionClause?
+    ;
+
+
+/*
+ * ============================================================================
+ * 28. OPTIONAL METADATA
+ * ============================================================================
+ */
+
+optionalCompatibilityMetadata
+    : compatibilityMetadataClause*
+    ;
+
+
+/*
+ * ============================================================================
+ * 29. COMPLETION / INTEGRATION CONTRACT
  * ============================================================================
  *
- * 1. grammar/antlr/ZamaniLexer.g4
+ * Parent grammar:
  *
- *    No new lexer keyword is required by this file.
+ *     grammar/dialects/registration.g4
  *
- *    This is intentional: compatibility terminology is contextual rather
- *    than globally reserved.
+ * MUST expose:
  *
+ *     dialectRegistrationMember
  *
- * 2. grammar/core/Names.g4
+ * and integrate this grammar through:
  *
- *    Supplies:
+ *     dialectCompatibilityMember
  *
- *        identifier
- *        qualifiedName
+ * The preferred final dispatch is:
  *
- *    This file does not redefine either.
+ *     dialectRegistrationMember
+ *         : dialectRegistrationImport
+ *         | dialectRegistrationUse
+ *         | dialectRegistrationExtends
+ *         | dialectRegistrationRequires
+ *         | dialectRegistrationProvides
+ *         | dialectRegistrationExtension
+ *         | dialectCompatibilityMember
+ *         | dialectRegistrationSyntax
+ *         | dialectRegistrationSemantics
+ *         | dialectRegistrationLowering
+ *         | dialectRegistrationProperty
+ *         | dialectRegistrationAnnotation
+ *         ;
  *
+ * The old compatibility implementation in registration.g4:
  *
- * 3. grammar/core/versioning.g4
+ *     dialectRegistrationCompatibility
+ *     dialectCompatibilityExpression
+ *     dialectCompatibilityAtom
+ *     dialectCompatibilityGroup
  *
- *    Supplies:
+ * MUST NOT remain as a second compatibility authority.
  *
- *        versionExpression
- *        exactVersion
- *        versionRange
- *        versionConstraintSet
- *        versionReference
- *        versionChannel
+ * It must be removed from the registration grammar when this grammar is
+ * imported.
  *
- *    This file MUST NOT duplicate those productions.
+ * This is deliberate: two compatibility grammars would violate the repository
+ * requirement of one authoritative grammar contract.
  *
+ * ============================================================================
+ * IMPORT CONTRACT
+ * ============================================================================
  *
- * 4. grammar/dialects/dialects.g4
+ * `dialects.g4` remains the public dialect parser boundary.
  *
- *    Integrate:
+ * `registration.g4` remains the dialect registration owner.
  *
- *        import Compatibility;
+ * `compatibility.g4` owns only compatibility members.
  *
- *    and extend:
+ * `versioning.g4` remains the dialect-specific wrapper around core versioning.
  *
- *        dialectMember
- *            : ...
- *            | dialectCompatibilityMember
- *            ;
+ * `core/versioning.g4` remains the canonical version-expression authority.
  *
- *    The dialect grammar remains the owner of dialect declaration structure.
+ * `core/names.g4` remains the canonical qualified-name authority.
  *
+ * ============================================================================
+ * VENDOR / EXPERIMENTAL INTEGRATION
+ * ============================================================================
  *
- * 5. grammar/dialects/versioning.g4
+ * Vendor and experimental dialect grammars may consume:
  *
- *    Remains responsible for dialect-specific adaptation of the canonical
- *    version model.
+ *     dialectCompatibilityMember
+ *     compatibilityContract
+ *     compatibilitySubjectWithVersion
+ *     compatibilitySubjectWithVersionList
+ *     compatibilityMetadataClause
  *
- *    It should NOT import this file merely to parse versions.
+ * They MUST NOT duplicate compatibility predicates or version syntax.
  *
- *    This file consumes canonical Versioning rules directly.
+ * ============================================================================
+ * CAPABILITY INTEGRATION
+ * ============================================================================
  *
+ * Compatibility may refer to capability identities as symbolic qualified
+ * names:
  *
- * 6. grammar/dialects/registration.g4
+ *     requires quantum::dynamic_control;
+ *     supports hardware::programmable_logic;
  *
- *    May consume:
+ * This grammar does not determine whether the capability is actually
+ * available.
  *
- *        dialectCompatibilityContract
- *        dialectCompatibilityProfileReference
+ * Capability resolution belongs to:
  *
- *    Registration remains responsible for registration semantics, not
- *    compatibility evaluation.
+ *     dialects/capabilities.g4
+ *     semantic analysis
+ *     target capability negotiation
  *
+ * ============================================================================
+ * QUANTUM INTEGRATION
+ * ============================================================================
  *
- * 7. grammar/dialects/capabilities.g4
+ * Quantum dialect compatibility remains symbolic.
  *
- *    Compatibility requirements may refer to capability contracts, but this
- *    grammar does NOT resolve those capabilities.
+ * Valid semantic examples include:
  *
- *    Capability resolution belongs to semantic analysis.
+ *     compatible quantum::standard version >= 1.0.0;
+ *     supports quantum::dynamic_control;
+ *     conflicts quantum::legacy;
+ *
+ * This grammar MUST NOT contain:
+ *
+ *     QubitId
+ *     PhysicalQubitId
+ *     GateKind
+ *     topology
+ *     calibration
+ *     pulse
+ *     routing
+ *     scheduling
+ *     QEC implementation
+ *
+ * Quantum compatibility eventually attaches metadata to the canonical
+ * semantic model and, where applicable, the existing `quantum::ir` boundary.
+ *
+ * It does NOT create another quantum IR.
+ *
+ * ============================================================================
+ * HDL / HARDWARE INTEGRATION
+ * ============================================================================
+ *
+ * Compatibility subjects may identify HDL/hardware language contracts:
+ *
+ *     hdl::rtl
+ *     hardware::programmable_logic
+ *     hardware::synthesis
+ *
+ * They do not identify:
+ *
+ *     a particular FPGA
+ *     a particular ASIC
+ *     a particular CPU
+ *     a particular GPU
+ *     a particular device
+ *     a fixed register width
+ *     a fixed memory capacity
+ *     a fixed topology
  *
+ * ============================================================================
+ * DISTRIBUTED / AI / DATA INTEGRATION
+ * ============================================================================
  *
- * 8. grammar/dialects/vendor.g4
+ * The same symbolic compatibility mechanism applies to:
  *
- *    Vendor dialects may use the same compatibility contract syntax.
+ *     distributed
+ *     networking
+ *     AI
+ *     tensor
+ *     data
+ *     security
+ *     accelerators
+ *     embedded systems
+ *     HPC
+ *     cloud
+ *     future computational domains
  *
- *    This grammar deliberately does not contain vendor names.
+ * No domain-specific compatibility enumeration belongs here.
  *
+ * ============================================================================
+ * HARD-CODING AUDIT
+ * ============================================================================
  *
- * 9. grammar/dialects/namespaces.g4
+ * Forbidden:
  *
- *    Qualified dialect names are resolved through the canonical namespace
- *    model.
+ *     MAX_DIALECTS
+ *     MAX_COMPATIBILITY_RULES
+ *     MAX_VERSIONS
+ *     MAX_FEATURES
+ *     MAX_TARGETS
+ *     MAX_DEVICES
+ *     MAX_QUBITS
+ *     MAX_CPUS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_NODES
+ *     MAX_MEMORY
+ *     MAX_THREADS
+ *
+ * Also forbidden are fixed enumerations of:
  *
- *    This file does not define namespace semantics.
+ *     known dialect names
+ *     known vendors
+ *     known hardware
+ *     known quantum processors
+ *     known AI frameworks
+ *     known HDL implementations
  *
+ * New domains must be representable using the existing symbolic structures.
+ *
+ * ============================================================================
+ * NEGATIVE TEST CONTRACT
+ * ============================================================================
  *
- * 10. Quantum grammar
+ * The grammar test suite MUST reject malformed compatibility constructs such
+ * as:
  *
- *     Quantum dialect compatibility may eventually feed semantic analysis
- *     before lowering into quantum::ir.
+ *     compatible ;
+ *     compatible ::name;
+ *     compatible name::;
+ *     compatible name::::other;
+ *     compatible name version;
+ *     migrate source;
+ *     migrate source to;
+ *     replace source;
+ *     replace source with;
+ *     profile;
+ *     profile { }
+ *     matrix;
+ *
+ * Exact diagnostics belong to parser/diagnostic infrastructure.
+ *
+ * ============================================================================
+ * POSITIVE TEST CONTRACT
+ * ============================================================================
  *
- *     This grammar MUST NOT create quantum::ir structures.
+ * The grammar test suite MUST accept, at minimum:
  *
+ *     compatible quantum::standard;
  *
- * 11. Hardware grammar
+ *     compatible quantum::standard version >= 1.0.0;
  *
- *     Hardware dialect compatibility can describe semantic contract versions.
+ *     requires quantum::dynamic_control;
  *
- *     It MUST NOT select a device, topology, qubit count, CPU count, GPU
- *     count, FPGA count, memory capacity, or physical address.
+ *     supports hardware::programmable_logic;
  *
+ *     conflicts quantum::legacy;
  *
- * 12. Compiler
+ *     equivalent classical::numeric;
  *
- *     The compiler resolves compatibility after parsing.
+ *     migrate quantum::legacy to quantum::standard;
  *
- *     Compatibility failure is a semantic diagnostic, not a parser action.
+ *     replace hdl::legacy with hdl::rtl;
  *
+ *     supersede ai::legacy with ai::tensor;
  *
- * 13. Runtime
+ *     deprecated quantum::old;
  *
- *     Runtime negotiation may consume the semantic compatibility result.
+ *     profile portable {
+ *         compatible quantum::standard;
+ *         supports quantum::dynamic_control;
+ *     }
  *
- *     Runtime MUST NOT depend directly on this grammar.
+ *     compatibility {
+ *         compatible quantum::standard;
+ *         requires classical::numeric;
+ *     }
  *
+ *     compatibility_set portable {
+ *         quantum::standard,
+ *         quantum::openqasm,
+ *         quantum::future
+ *     }
  *
- * 14. Rust 1.97 / 1.97.1
+ *     assert_compatible quantum::standard version >= 1.0.0;
  *
- *     This .g4 file contains no Rust target-language code.
+ *     matrix compatibility {
+ *         quantum::legacy -> quantum::standard;
+ *     }
  *
- *     Generated parser/frontend integration MUST remain compatible with the
- *     repository's Rust 1.97 / 1.97.1 baseline and MUST use safe Rust only.
+ * ============================================================================
+ * BOUNDARY TEST CONTRACT
+ * ============================================================================
  *
+ * Tests MUST cover:
  *
- * 15. No unsafe
+ *     one subject
+ *     many subjects
+ *     deeply qualified names
+ *     long metadata lists
+ *     nested predicates
+ *     nested profiles
+ *     nested compatibility groups
+ *     large migration sets
+ *     large compatibility sets
+ *     large matrices
+ *     arbitrary version magnitude
  *
- *     This grammar contains no actions or embedded code and therefore cannot
- *     introduce Rust unsafe operations.
+ * No test may establish a finite language-level maximum.
  *
+ * ============================================================================
+ * DETERMINISM TEST CONTRACT
+ * ============================================================================
  *
- * 16. Determinism
+ * Given identical:
  *
- *     No semantic predicate, external lookup, filesystem access, network
- *     access, runtime call, hardware query, or random operation is permitted.
+ *     source
+ *     lexer vocabulary
+ *     grammar version
  *
+ * parsing must produce identical:
  *
- * 17. Hard-coding audit
+ *     parse structure
+ *     token consumption
+ *     source spans
+ *     diagnostics
  *
- *     This file contains no:
+ * Behavior must not depend upon:
  *
- *        machine maximum
- *        device count
- *        qubit count
- *        CPU count
- *        GPU count
- *        FPGA count
- *        node count
- *        memory size
- *        topology
- *        physical address
- *        backend identifier
- *        scheduler identifier
+ *     CPU count
+ *     GPU availability
+ *     QPU availability
+ *     filesystem state
+ *     network state
+ *     wall-clock time
+ *     environment state
+ *     random state
+ *     deployment topology
  *
+ * ============================================================================
+ * COMPLETION CRITERIA
+ * ============================================================================
  *
- * 18. Completion criterion
+ * This file is complete when:
  *
- *     This file is complete when:
+ * [x] Compatibility has one grammar authority.
  *
- *        - ANTLR generation succeeds;
- *        - imports resolve;
- *        - no duplicate canonical version rules exist;
- *        - no lexer modification is required solely for compatibility;
- *        - dialects.g4 can consume dialectCompatibilityMember;
- *        - compatibility AST nodes preserve all declared structure;
- *        - version semantics remain delegated to Versioning;
- *        - compatibility semantics remain delegated to semantic analysis;
- *        - no hardware/runtime/IR dependency exists;
- *        - positive tests pass;
- *        - negative tests pass;
- *        - ambiguity tests pass;
- *        - deterministic parsing tests pass;
- *        - scalability tests contain no artificial grammar ceiling.
+ * [x] Names delegate to core/names.g4.
+ *
+ * [x] Versions delegate to core/versioning.g4.
+ *
+ * [x] Lexer tokens match the canonical lexer vocabulary.
+ *
+ * [x] No obsolete EQ/NE/LT/LE/GT/GE aliases are used.
+ *
+ * [x] No new global compatibility keywords are required.
+ *
+ * [x] Compatibility relationships are open-world.
+ *
+ * [x] Compatibility metadata is open-world.
+ *
+ * [x] Profiles are open-ended.
+ *
+ * [x] Migration is declarative.
+ *
+ * [x] Replacement is declarative.
+ *
+ * [x] Supersession is declarative.
+ *
+ * [x] Deprecation is declarative.
+ *
+ * [x] No hardware limits are encoded.
+ *
+ * [x] No resource limits are encoded.
+ *
+ * [x] No quantum gate set is encoded.
+ *
+ * [x] No physical target is selected.
+ *
+ * [x] No IR is created.
+ *
+ * [x] No semantic compatibility algorithm is embedded.
+ *
+ * [x] No filesystem/network/runtime access exists.
+ *
+ * [x] No Rust or unsafe code is embedded.
+ *
+ * [x] Rust 1.97/1.97.1 generated-parser integration remains possible.
+ *
+ * [x] POCO-REAF is preserved.
+ *
+ * [x] Classical, quantum, HDL, hardware, AI, distributed, data, networking,
+ *     security and future dialects can use the same compatibility mechanism.
+ *
+ * ============================================================================
+ * FINAL RULE
+ * ============================================================================
+ *
+ * Compatibility syntax describes RELATIONSHIPS BETWEEN LANGUAGE CONTRACTS.
+ *
+ * It does not describe machines.
+ *
+ * Therefore:
+ *
+ *     dialect compatibility
+ *         !=
+ *     hardware compatibility
+ *
+ *     language version
+ *         !=
+ *     machine version
+ *
+ *     capability requirement
+ *         !=
+ *     physical device selection
+ *
+ *     compatibility syntax
+ *         !=
+ *     compatibility algorithm
+ *
+ * The complete pipeline remains:
+ *
+ *     Zamani source
+ *          |
+ *          v
+ *     lexer
+ *          |
+ *          v
+ *     parser
+ *          |
+ *          v
+ *     domain-neutral AST
+ *          |
+ *          v
+ *     semantic compatibility analysis
+ *          |
+ *          v
+ *     canonical semantic model
+ *          |
+ *          +--> classical IR
+ *          +--> quantum::ir
+ *          +--> HDL/hardware representation
+ *          |
+ *          v
+ *     optimization / lowering
+ *          |
+ *          v
+ *     routing / scheduling / resilience / QEC / ZQN
+ *          |
+ *          v
+ *     HAL / runtime
+ *          |
+ *          v
+ *     target realization
+ *
+ * This is the compatibility boundary required for scalable POCO-REAF.
  *
  * ============================================================================
  */
