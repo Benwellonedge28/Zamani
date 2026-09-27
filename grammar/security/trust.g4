@@ -6,460 +6,739 @@
  * File:
  *     grammar/security/trust.g4
  *
- * Role:
- *     Canonical parser-level grammar for source-level trust declarations,
- *     trust relationships, trust requirements, trust preferences, trust
- *     assertions, trust references, and trust metadata.
+ * Grammar:
+ *     Trust
  *
- * Grammar technology:
- *     ANTLR4 parser grammar
+ * Status:
+ *     Canonical parser-level trust grammar.
  *
- * Language/runtime baseline:
+ * Purpose:
+ *     Define portable, open-world source syntax for trust relationships,
+ *     trust requirements, trust preferences, trust assertions, trust scope,
+ *     trust conditions, trust evidence references, trust composition,
+ *     trust properties, trust extension, and trust status metadata.
+ *
+ * Language baseline:
  *     Rust 1.97 / Rust 1.97.1
+ *     Rust 2021
  *
  * Safety:
- *     - No embedded Rust actions.
- *     - No semantic predicates.
- *     - No unsafe code.
- *     - No filesystem access.
- *     - No network access.
- *     - No runtime calls.
- *     - No hardware discovery.
- *     - No cryptographic execution.
- *     - No identity-provider access.
- *     - No policy evaluation.
+ *     - This file contains no Rust code.
+ *     - This file contains no embedded actions.
+ *     - This file contains no semantic predicates.
+ *     - This file performs no I/O.
+ *     - This file performs no network access.
+ *     - This file performs no credential access.
+ *     - This file performs no cryptographic operations.
+ *     - This file performs no trust evaluation.
+ *     - This file performs no hardware discovery.
+ *     - No unsafe Rust is required or permitted by the implementation
+ *       contract.
  *
  * ============================================================================
  * ARCHITECTURAL POSITION
  * ============================================================================
  *
- *     Zamani source
- *          |
- *          v
- *     canonical lexer
- *          |
- *          v
- *     Core / Types / Expressions
- *          |
- *          v
- *     Trust parser
- *          |
- *          v
- *     frontend AST
- *          |
- *          +--> name resolution
- *          +--> type analysis
- *          +--> security analysis
- *          +--> trust analysis
- *          +--> capability analysis
- *          +--> policy analysis
- *          |
- *          v
- *     canonical semantic representations
- *          |
- *          +--> classical IR
- *          +--> quantum::ir
- *          +--> HDL / hardware representation
- *          +--> security metadata
- *          |
- *          v
- *     compilation / deployment / runtime
+ *                         ZAMANI SOURCE
+ *                              |
+ *                              v
+ *                        ZamaniLexer
+ *                              |
+ *                              v
+ *                        ZamaniParser
+ *                              |
+ *                    Security composition
+ *                              |
+ *                              v
+ *                       Trust grammar
+ *                              |
+ *                              v
+ *                       Frontend AST
+ *                              |
+ *              +---------------+----------------+
+ *              |               |                |
+ *              v               v                v
+ *        name resolution   security analysis   policy analysis
+ *                              |
+ *                              v
+ *                       semantic trust model
+ *                              |
+ *              +---------------+----------------+
+ *              |               |                |
+ *              v               v                v
+ *          classical       quantum::ir       HDL/hardware
+ *              |               |                |
+ *              +---------------+----------------+
+ *                              |
+ *                              v
+ *                  compilation / lowering /
+ *                  routing / scheduling /
+ *                  resilience / deployment
+ *                              |
+ *                              v
+ *                           runtime
  *
- * Trust syntax is therefore ABOVE semantic analysis and BELOW the canonical
- * lexer. It does not become an IR and does not call runtime systems.
+ * This file exists ABOVE semantic analysis and BELOW the canonical lexer.
  *
- * ============================================================================
- * OWNERSHIP
- * ============================================================================
- *
- * THIS FILE OWNS:
- *
- *   - trust declaration syntax;
- *   - trust relationship syntax;
- *   - trust requirement syntax;
- *   - trust preference syntax;
- *   - trust assertion syntax;
- *   - trust references;
- *   - trust source/subject references;
- *   - trust target/object references;
- *   - trust metadata;
- *   - trust conditions;
- *   - trust qualifiers;
- *   - trust evidence references;
- *   - trust scope;
- *   - trust validity expressions;
- *   - trust lifecycle intent;
- *   - trust composition syntax.
- *
- * THIS FILE DOES NOT OWN:
- *
- *   - identity declaration;
- *   - principal declaration;
- *   - identity verification;
- *   - authentication;
- *   - authorization;
- *   - permission declaration;
- *   - capability declaration;
- *   - cryptographic algorithms;
- *   - key material;
- *   - certificates;
- *   - credential storage;
- *   - trust-store implementation;
- *   - certificate-chain validation;
- *   - signature verification;
- *   - policy evaluation;
- *   - privacy policy;
- *   - security enforcement;
- *   - hardware trust anchors;
- *   - TPM/HSM/enclave implementation;
- *   - network transport;
- *   - quantum semantics;
- *   - quantum::ir;
- *   - QEC;
- *   - ZQN;
- *   - routing;
- *   - scheduling;
- *   - optimization;
- *   - backend selection;
- *   - runtime execution.
- *
- * Identity syntax belongs to:
- *
- *     security/identities.g4
- *
- * Authorization belongs to:
- *
- *     security/permissions.g4
- *
- * Security capabilities belong to:
- *
- *     security/capabilities.g4
- *
- * Cryptographic intent belongs to:
- *
- *     security/cryptography.g4
- *
- * Privacy intent belongs to:
- *
- *     security/privacy.g4
- *
- * Security-wide composition belongs to:
- *
- *     security/security.g4
+ * It describes source syntax only.
  *
  * ============================================================================
- * TRUST SEMANTIC BOUNDARY
+ * SINGLE AUTHORITY
  * ============================================================================
  *
- * Trust describes a declared relationship or requirement concerning whether
- * one abstract entity may be relied upon by another for a stated purpose,
- * scope, condition, or evidence set.
+ * Trust syntax is owned exclusively by this file.
  *
- * A trust declaration does NOT establish that the relationship is actually
- * trustworthy.
+ * The security composition root:
  *
- * For example:
+ *     grammar/security/security.g4
  *
- *     trust application from identity::alice to service::compute;
+ * imports this grammar and consumes its public rules.
  *
- * expresses source-level intent.
+ * Other security grammars MAY reference trust through:
  *
- * It does NOT mean that:
+ *     trustConditionReference
+ *     trustRequirementReference
+ *     trustReference
  *
- *     alice has been authenticated;
- *     a certificate has been verified;
- *     a signature has been checked;
- *     a trust anchor exists;
- *     a provider has been contacted;
- *     a hardware root of trust exists.
+ * but MUST NOT reproduce trust declaration syntax.
  *
- * Those are downstream semantic/runtime responsibilities.
+ * ============================================================================
+ * NON-OWNERSHIP
+ * ============================================================================
+ *
+ * This grammar DOES NOT own:
+ *
+ *     identity declaration
+ *     principal declaration
+ *     authentication
+ *     authorization
+ *     permissions
+ *     capability declaration
+ *     cryptographic algorithms
+ *     keys
+ *     certificates
+ *     credential storage
+ *     certificate validation
+ *     signature verification
+ *     privacy enforcement
+ *     policy evaluation
+ *     trust-store implementation
+ *     hardware trust anchors
+ *     TPM/HSM/enclave implementation
+ *     network transport
+ *     network discovery
+ *     hardware discovery
+ *     target selection
+ *     resource allocation
+ *     quantum semantics
+ *     QEC
+ *     ZQN
+ *     routing
+ *     scheduling
+ *     optimization
+ *     backend selection
+ *     runtime execution
+ *
+ * ============================================================================
+ * EXISTING REPOSITORY INTEGRATION
+ * ============================================================================
+ *
+ * Canonical parser composition:
+ *
+ *     grammar/antlr/ZamaniParser.g4
+ *             |
+ *             +--> Security
+ *                      |
+ *                      +--> Trust
+ *
+ * Security-wide composition:
+ *
+ *     grammar/security/security.g4
+ *
+ * Existing specialized security owners:
+ *
+ *     grammar/security/identifiers.g4
+ *         identity / principal syntax
+ *
+ *     grammar/security/permissions.g4
+ *         authorization / permission syntax
+ *
+ *     grammar/security/capabilities.g4
+ *         security capability syntax
+ *
+ *     grammar/security/cryptography.g4
+ *         cryptographic intent
+ *
+ *     grammar/security/privacy.g4
+ *         privacy syntax
+ *
+ * Trust MUST NOT redefine any of these domains.
+ *
+ * ============================================================================
+ * LEXER INTEGRATION
+ * ============================================================================
+ *
+ * The canonical production lexer is:
+ *
+ *     grammar/antlr/ZamaniLexer.g4
+ *
+ * Parser grammars therefore consume:
+ *
+ *     tokenVocab = ZamaniLexer;
+ *
+ * Do NOT change this file to:
+ *
+ *     tokenVocab = ZamaniTokens;
+ *
+ * ZamaniTokens is the lexical composition vocabulary.
+ *
+ * ZamaniLexer is the production lexer consumed by parser grammars.
+ *
+ * ============================================================================
+ * EXISTING TOKEN INTEGRATION
+ * ============================================================================
+ *
+ * This grammar intentionally uses only vocabulary already present in the
+ * repository's canonical lexical architecture.
+ *
+ * Existing keywords/operators used here include:
+ *
+ *     TRUST
+ *     FROM
+ *     REQUIRES
+ *     PREFER
+ *     ASSERT
+ *     FOR
+ *     WITH
+ *     IN
+ *     WHEN
+ *     AS
+ *     EXTENDS
+ *     USE
+ *     THIN_ARROW
+ *
+ * No new trust-specific lexer token is required for:
+ *
+ *     to
+ *     evidence
+ *     valid
+ *     evaluate
+ *     using
+ *     requirement
+ *     preference
+ *     assertion
+ *
+ * Those concepts are represented structurally using existing vocabulary and
+ * generic names/expressions.
+ *
+ * This is intentional.
  *
  * ============================================================================
  * OPEN-WORLD TRUST MODEL
  * ============================================================================
  *
- * Trust relationships are deliberately open-world.
+ * Trust is intentionally open-world.
  *
- * The grammar MUST NOT enumerate finite sets of:
+ * This grammar MUST NOT enumerate:
  *
- *   - trust providers;
- *   - identity providers;
- *   - certificate authorities;
- *   - algorithms;
- *   - trust anchors;
- *   - hardware roots of trust;
- *   - enclaves;
- *   - vendors;
- *   - cloud providers;
- *   - machines;
- *   - devices;
- *   - principals;
- *   - domains;
- *   - future trust mechanisms.
+ *     trust providers
+ *     identity providers
+ *     certificate authorities
+ *     trust anchors
+ *     algorithms
+ *     cryptographic schemes
+ *     vendors
+ *     cloud providers
+ *     machines
+ *     devices
+ *     enclaves
+ *     principals
+ *     services
+ *     QPUs
+ *     GPUs
+ *     CPUs
+ *     FPGAs
+ *     future trust mechanisms
  *
- * Qualified names and general expressions represent these concepts.
+ * All such entities are represented through:
  *
- * Therefore introducing a new trust mechanism does not require changing this
- * grammar.
+ *     qualifiedName
+ *     expression
+ *
+ * and interpreted downstream.
+ *
+ * Therefore a new trust mechanism does not require a grammar modification.
  *
  * ============================================================================
  * POCO-REAF
  * ============================================================================
  *
- * Trust syntax expresses PORTABLE TRUST INTENT.
+ * Trust syntax describes PORTABLE TRUST INTENT.
  *
- * It MUST NOT encode a temporary physical realization as permanent program
+ * It MUST NOT encode today's physical deployment as permanent program
  * semantics.
  *
- * A declaration such as:
+ * For example:
  *
- *     trust execution from security::authority to compute::service;
+ *     trust execution
+ *         from security::authority
+ *         -> compute::service;
  *
- * does not imply:
+ * does NOT mean:
  *
- *     use machine X;
- *     use device Y;
- *     use provider Z;
- *     use N nodes;
- *     use N CPUs;
- *     use N GPUs;
- *     use N qubits;
- *     use a particular enclave;
- *     use a particular network;
+ *     use machine X
+ *     use CPU Y
+ *     use GPU Z
+ *     use QPU N
+ *     use FPGA M
+ *     use node K
+ *     use enclave E
  *
- * Target selection, resource selection, trust-anchor resolution, verification,
- * and enforcement occur downstream.
+ * Those decisions belong downstream.
  *
  * ============================================================================
  * SCALABILITY
  * ============================================================================
  *
- * There are NO grammar-level finite limits on:
+ * This grammar deliberately contains no finite language-level limits on:
  *
- *   - trust declarations;
- *   - trust relationships;
- *   - trust conditions;
- *   - evidence references;
- *   - metadata entries;
- *   - scopes;
- *   - validity expressions;
- *   - trust requirements;
- *   - trust preferences;
- *   - nested expressions;
- *   - declaration count.
+ *     trust declarations
+ *     trust relationships
+ *     trust conditions
+ *     trust evidence
+ *     trust properties
+ *     trust references
+ *     trust scopes
+ *     trust requirements
+ *     trust preferences
+ *     trust metadata
+ *     trust composition
+ *     trust extensions
+ *     declaration nesting
+ *     qualified-name depth
+ *     expression size
  *
- * Repetition uses ANTLR repetition operators.
- *
- * The grammar MUST NOT contain:
+ * There is NO:
  *
  *     MAX_TRUST_RELATIONSHIPS
- *     MAX_PRINCIPALS
  *     MAX_TRUST_ANCHORS
- *     MAX_DOMAINS
+ *     MAX_TRUST_PROVIDERS
+ *     MAX_PRINCIPALS
  *     MAX_DEVICES
  *     MAX_NODES
+ *     MAX_QUANTUM_DEVICES
+ *     MAX_EVIDENCE
  *
- * or equivalent artificial limits.
+ * or equivalent language-level ceiling.
  *
- * Practical limits are parser/compiler/resource-policy concerns and are not
- * language semantics.
- *
- * ============================================================================
- * IDENTITY BOUNDARY
- * ============================================================================
- *
- * Trust may refer to identities and principals, but does not declare them.
- *
- * For example:
- *
- *     FROM identity::alice
- *
- * refers to an identity owned by the identity grammar/semantic layer.
- *
- * Trust does not redefine:
- *
- *     Principal
- *     Identity
- *     IdentityBinding
- *     Credential
+ * Practical implementation limits remain compiler/resource-policy concerns.
  *
  * ============================================================================
- * AUTHENTICATION BOUNDARY
+ * SECURITY PRINCIPLE
  * ============================================================================
  *
- * Trust may express requirements concerning authentication, but it does not
- * perform authentication.
+ * Successfully parsing a trust declaration MUST NOT grant trust.
  *
- * Authentication mechanisms remain downstream.
+ * Parsing establishes only that the source conforms to trust syntax.
  *
- * ============================================================================
- * AUTHORIZATION BOUNDARY
- * ============================================================================
+ * Semantic analysis must subsequently determine:
  *
- * Trust may be consumed during authorization analysis, but trust does not
- * define allow/deny policy semantics.
+ *     whether references resolve;
+ *     whether identities exist;
+ *     whether authorities are valid;
+ *     whether evidence is acceptable;
+ *     whether conditions are satisfiable;
+ *     whether policy permits the relationship;
+ *     whether capabilities exist;
+ *     whether cryptographic requirements can be met;
+ *     whether resource requirements can be met;
+ *     whether the target can preserve mandatory security properties.
  *
- * Authorization remains owned by:
+ * Runtime infrastructure may subsequently perform:
  *
- *     security/permissions.g4
+ *     authentication;
+ *     attestation;
+ *     certificate validation;
+ *     signature verification;
+ *     policy evaluation;
+ *     capability validation;
+ *     trust-anchor validation;
+ *     secure-environment validation.
  *
- * ============================================================================
- * CRYPTOGRAPHY BOUNDARY
- * ============================================================================
- *
- * Trust may reference cryptographic evidence or cryptographic requirements
- * using open-world names and expressions.
- *
- * It does NOT define:
- *
- *     encryption;
- *     decryption;
- *     signing;
- *     verification;
- *     key generation;
- *     key storage;
- *     certificate implementation;
- *     algorithm implementations.
- *
- * No secret material may appear as a trust-language primitive.
+ * None of those operations belong here.
  *
  * ============================================================================
- * QUANTUM BOUNDARY
+ * SECRET MATERIAL
  * ============================================================================
  *
- * Trust syntax can apply to quantum computation.
+ * Trust syntax MUST NOT create a primitive for embedding:
  *
- * Examples include:
+ *     passwords
+ *     private keys
+ *     secret keys
+ *     bearer tokens
+ *     API secrets
+ *     session secrets
+ *     authentication secrets
+ *     recovery secrets
+ *     raw credential material
  *
- *     trusted quantum execution;
- *     trusted quantum-classical control;
- *     trusted QPU capability;
- *     trust requirements for quantum services.
+ * A trust declaration may reference an abstract credential/evidence object:
  *
- * However, this grammar MUST NOT define:
+ *     security::credential::application
+ *
+ * but the actual secret material belongs to secure credential/key-management
+ * infrastructure.
+ *
+ * ============================================================================
+ * IDENTITY INTEGRATION
+ * ============================================================================
+ *
+ * Identity declarations are owned by:
+ *
+ *     grammar/security/identifiers.g4
+ *
+ * Trust may refer to:
+ *
+ *     identity::alice
+ *     principal::service
+ *     authority::organization
+ *
+ * without redefining identity syntax.
+ *
+ * Example:
+ *
+ *     trust application
+ *         from identity::alice
+ *         -> service::compute;
+ *
+ * The parser does not establish that the identity is authentic.
+ *
+ * ============================================================================
+ * AUTHORIZATION INTEGRATION
+ * ============================================================================
+ *
+ * Authorization and permissions are owned by:
+ *
+ *     grammar/security/permissions.g4
+ *
+ * Trust may be consumed by authorization analysis.
+ *
+ * Trust does NOT itself define:
+ *
+ *     allow
+ *     deny
+ *     grant
+ *     revoke
+ *     permission
+ *
+ * A permission system may reference trust through:
+ *
+ *     trustRequirementReference
+ *
+ * without importing a second trust language.
+ *
+ * ============================================================================
+ * CAPABILITY INTEGRATION
+ * ============================================================================
+ *
+ * Capability declarations remain owned by the existing capability grammar.
+ *
+ * Trust may reference capabilities:
+ *
+ *     security::trusted_execution
+ *     quantum::secure_execution
+ *     hardware::attestation
+ *
+ * The grammar does not determine whether the capability exists.
+ *
+ * ============================================================================
+ * CRYPTOGRAPHY INTEGRATION
+ * ============================================================================
+ *
+ * Cryptographic intent remains owned by:
+ *
+ *     grammar/security/cryptography.g4
+ *
+ * Trust can reference cryptographic evidence or properties symbolically.
+ *
+ * Example:
+ *
+ *     with security::attestation;
+ *
+ * or:
+ *
+ *     with cryptography::verified_measurement;
+ *
+ * No algorithm list is embedded here.
+ *
+ * ============================================================================
+ * PRIVACY INTEGRATION
+ * ============================================================================
+ *
+ * Privacy syntax remains owned by:
+ *
+ *     grammar/security/privacy.g4
+ *
+ * Trust may coexist with privacy requirements without defining privacy
+ * semantics.
+ *
+ * ============================================================================
+ * QUANTUM INTEGRATION
+ * ============================================================================
+ *
+ * Trust syntax is target-independent and may protect:
+ *
+ *     quantum computation
+ *     quantum-classical execution
+ *     quantum services
+ *     quantum data
+ *     quantum control
+ *     quantum hardware
+ *
+ * Examples:
+ *
+ *     trust quantum_execution
+ *         from security::authority
+ *         -> quantum::service
+ *         with quantum::trusted_execution;
+ *
+ *     trust quantum_measurement
+ *         from quantum::service
+ *         -> classical::controller
+ *         when security::measurement_policy;
+ *
+ * This grammar MUST NOT define:
  *
  *     QubitId
  *     PhysicalQubitId
  *     GateKind
- *     quantum topology
+ *     topology
+ *     coupling map
  *     calibration
- *     QEC codes
- *     ZQN faults
- *     backend selection
+ *     pulse data
+ *     QEC code
+ *     physical backend
  *
- * Quantum semantics remain downstream and the canonical quantum semantic
- * boundary remains:
+ * Quantum semantics remain downstream:
  *
+ *     source
+ *       |
+ *       v
+ *     frontend AST
+ *       |
+ *       v
+ *     semantic quantum model
+ *       |
+ *       v
  *     quantum::ir
+ *       |
+ *       +--> optimization
+ *       +--> QEC
+ *       +--> ZQN
+ *       +--> routing
+ *       +--> scheduling
+ *       +--> HAL
+ *
+ * No second quantum IR is introduced.
  *
  * ============================================================================
- * HARDWARE BOUNDARY
+ * HARDWARE INTEGRATION
  * ============================================================================
  *
- * Trust may refer to abstract hardware capabilities.
+ * Trust may refer to abstract hardware security capabilities:
  *
- * Example:
+ *     hardware::trusted_execution
+ *     hardware::attestation
+ *     hardware::isolated_memory
  *
- *     requires trust::trusted_execution;
+ * It MUST NOT select:
  *
- * does not mean:
+ *     CPU 0
+ *     GPU 0
+ *     QPU 0
+ *     FPGA 0
+ *     node 0
  *
- *     use CPU X;
- *     use GPU Y;
- *     use FPGA Z;
- *     use QPU N;
- *     use enclave E.
- *
- * Hardware realization belongs to hardware capability, resource, target,
- * compilation, deployment, and runtime layers.
+ * or encode any universal hardware capacity.
  *
  * ============================================================================
- * DATA BOUNDARY
+ * DISTRIBUTED INTEGRATION
  * ============================================================================
  *
- * Trust references data or services abstractly.
+ * Trust can span:
  *
- * This grammar does not define:
+ *     services
+ *     processes
+ *     nodes
+ *     clusters
+ *     regions
+ *     distributed systems
  *
- *     data schemas;
- *     database structures;
- *     storage formats;
- *     memory layouts;
- *     filesystem paths;
- *     network addresses.
+ * No finite number of participants is encoded in the grammar.
  *
  * ============================================================================
  * AST CONTRACT
  * ============================================================================
  *
- * The parser preserves:
+ * The parser should preserve the syntactic structure necessary for the
+ * frontend AST to represent:
  *
- *   - declaration kind;
- *   - source ordering;
- *   - source spelling;
- *   - qualified-name structure;
- *   - expressions;
- *   - conditions;
- *   - metadata;
- *   - source spans supplied by the frontend.
+ *     trust relationship
+ *     trust requirement
+ *     trust preference
+ *     trust assertion
+ *     source reference
+ *     target reference
+ *     condition
+ *     scope
+ *     evidence
+ *     property
+ *     extension
+ *     status
+ *     composition
+ *     metadata
  *
- * Semantic analysis may construct:
+ * Recommended semantic concepts are:
  *
- *   TrustRelationship
- *   TrustRequirement
- *   TrustPreference
- *   TrustAssertion
- *   TrustScope
- *   TrustCondition
- *   TrustEvidence
- *   TrustMetadata
+ *     TrustRelationship
+ *     TrustRequirement
+ *     TrustPreference
+ *     TrustAssertion
+ *     TrustReference
+ *     TrustCondition
+ *     TrustScope
+ *     TrustEvidence
+ *     TrustProperty
+ *     TrustExtension
+ *     TrustStatus
  *
- * The parser MUST NOT construct those semantic objects.
+ * These are semantic/AST concepts, not parser actions.
+ *
+ * ============================================================================
+ * SEMANTIC CONTRACT
+ * ============================================================================
+ *
+ * Semantic analysis is responsible for:
+ *
+ *     name resolution
+ *     identity resolution
+ *     principal resolution
+ *     authority resolution
+ *     trust relationship validation
+ *     requirement validation
+ *     preference interpretation
+ *     evidence validation
+ *     condition validation
+ *     policy interaction
+ *     capability checking
+ *     cryptographic requirement checking
+ *     privacy interaction
+ *     resource/capability analysis
+ *     target feasibility
+ *
+ * The parser MUST NOT perform these operations.
+ *
+ * ============================================================================
+ * IR CONTRACT
+ * ============================================================================
+ *
+ * Trust is NOT an independent universal execution IR.
+ *
+ * Validated trust information may become:
+ *
+ *     security metadata
+ *     semantic constraints
+ *     capability requirements
+ *     policy metadata
+ *     provenance metadata
+ *     deployment requirements
+ *     verification metadata
+ *
+ * It may accompany:
+ *
+ *     classical IR
+ *     quantum::ir
+ *     HDL/hardware representations
+ *     distributed representations
+ *     deployment metadata
+ *
+ * The grammar does not create any of these representations.
  *
  * ============================================================================
  * DETERMINISM
  * ============================================================================
  *
- * Parsing is deterministic for a deterministic token stream.
+ * Given an identical token stream and grammar version, parsing is deterministic.
  *
  * This grammar contains:
  *
- *   - no actions;
- *   - no semantic predicates;
- *   - no I/O;
- *   - no randomness;
- *   - no hardware discovery;
- *   - no runtime state;
- *   - no trust evaluation.
+ *     no actions
+ *     no predicates
+ *     no randomness
+ *     no runtime calls
+ *     no external state
+ *     no filesystem access
+ *     no network access
+ *     no hardware discovery
  *
  * ============================================================================
- * IMPORT CONTRACT
+ * DIAGNOSTIC CONTRACT
  * ============================================================================
  *
- * This parser consumes canonical shared syntax from:
+ * The grammar must allow malformed trust syntax to remain distinguishable
+ * from valid trust syntax.
  *
- *     Core
- *     Types
- *     Expressions
+ * The frontend must preserve source spans for:
  *
- * It MUST NOT define another lexer.
+ *     trust keyword
+ *     optional declaration name
+ *     source reference
+ *     target reference
+ *     requirement expression
+ *     preference expression
+ *     assertion target
+ *     condition
+ *     evidence
+ *     properties
+ *     metadata
  *
- * Canonical shared rules consumed here include:
+ * Diagnostic classification belongs downstream.
  *
- *     identifier
- *     qualifiedName
- *     attributes
- *     visibility
- *     genericParameters
- *     typeExpression
- *     expression
- *     literal
- *     argumentList
+ * ============================================================================
+ * RUST CONTRACT
+ * ============================================================================
  *
- * If a repository version names one of these rules differently, the canonical
- * rule must be reconciled at the shared grammar layer rather than creating a
- * trust-local duplicate.
+ * This file contains no Rust implementation.
+ *
+ * The generated Zamani parser/frontend integration MUST:
+ *
+ *     - compile with Rust 1.97;
+ *     - compile with Rust 1.97.1;
+ *     - use Rust 2021;
+ *     - contain no unsafe Rust;
+ *     - preserve source spans;
+ *     - remain deterministic;
+ *     - avoid machine-specific assumptions.
+ *
+ * ============================================================================
+ * PUBLIC RULES
+ * ============================================================================
+ *
+ * The following rules are intended for Security and other parser consumers:
+ *
+ *     trustFile
+ *     trustDeclaration
+ *     trustRelationshipDeclaration
+ *     trustRequirementDeclaration
+ *     trustPreferenceDeclaration
+ *     trustAssertionDeclaration
+ *     trustReference
+ *     trustReferenceList
+ *     trustConditionReference
+ *     trustRequirementReference
+ *
+ * Supporting rules are intentionally reusable where useful.
  *
  * ============================================================================
  */
@@ -474,23 +753,24 @@ import Core, Types, Expressions;
 
 
 /* ============================================================================
- * 1. TRUST ROOT
+ * 1. STANDALONE TRUST ENTRY
+ * ============================================================================
+ *
+ * This rule is useful for grammar tests and isolated tooling.
+ *
+ * The Security composition root does NOT call this rule as its complete
+ * program entry point; it consumes trustDeclaration directly.
  * ========================================================================== */
 
-/*
- * Entry point for trust syntax when this grammar is composed independently.
- *
- * The security aggregator may compose this rule into its broader security
- * declaration grammar.
- */
 trustFile
     : trustDeclaration* EOF
     ;
 
 
-/*
- * A trust declaration is one source-level trust construct.
- */
+/* ============================================================================
+ * 2. UNIVERSAL TRUST DECLARATION
+ * ========================================================================== */
+
 trustDeclaration
     : trustRelationshipDeclaration
     | trustRequirementDeclaration
@@ -500,23 +780,24 @@ trustDeclaration
 
 
 /* ============================================================================
- * 2. TRUST RELATIONSHIPS
+ * 3. TRUST RELATIONSHIP
+ * ============================================================================
+ *
+ * Canonical portable form:
+ *
+ *     trust execution
+ *         from security::authority
+ *         -> compute::service;
+ *
+ * The arrow is the existing canonical THIN_ARROW operator.
+ *
+ * A named relationship is optional because anonymous trust relationships are
+ * useful for local/source-level requirements.
+ *
  * ========================================================================== */
 
-/*
- * Declares a relationship in which one abstract entity is treated as a
- * potential source of trust for another abstract entity.
- *
- * Example:
- *
- *     trust serviceTrust
- *         from identity::authority
- *         to service::compute;
- *
- * The grammar does not determine whether the relationship is valid.
- */
 trustRelationshipDeclaration
-    : attributes?
+    : attributes*
       visibility?
       TRUST
       identifier?
@@ -534,10 +815,14 @@ trustSourceClause
 
 
 trustTargetClause
-    : TO
+    : THIN_ARROW
       trustReference
     ;
 
+
+/* ============================================================================
+ * 4. TRUST RELATIONSHIP BODY
+ * ========================================================================== */
 
 trustRelationshipBody
     : LBRACE
@@ -547,282 +832,103 @@ trustRelationshipBody
 
 
 trustMember
-    : trustProperty
-    | trustCondition
-    | trustScope
-    | trustEvidence
-    | trustValidity
-    | trustRequirement
-    | trustPreference
-    | trustMetadata
+    : trustConditionClause
+    | trustScopeClause
+    | trustEvidenceClause
+    | trustRequirementMember
+    | trustPreferenceMember
+    | trustPropertyClause
+    | trustExtensionClause
+    | trustStatusClause
+    | trustCompositionClause
     ;
 
 
 /* ============================================================================
- * 3. TRUST PROPERTIES
+ * 5. TRUST REQUIREMENT
+ * ============================================================================
+ *
+ * Reuses the existing canonical REQUIRES keyword and the canonical expression
+ * grammar.
+ *
+ * There is deliberately no second Boolean/trust-specific requirement language.
+ *
+ * Therefore:
+ *
+ *     trust requires security::trusted_execution;
+ *
+ *     trust requires capability("security.attestation");
+ *
+ *     trust requires security::integrity and security::confidentiality;
+ *
+ * can all be represented by the same semantic expression infrastructure.
+ *
  * ========================================================================== */
 
-trustProperty
-    : qualifiedName
-      (ASSIGN expression)?
-      SEMI
-    ;
-
-
-trustMetadata
-    : identifier
-      (COLON typeExpression)?
-      (ASSIGN expression)?
-      SEMI
-    ;
-
-
-/* ============================================================================
- * 4. TRUST CONDITIONS
- * ========================================================================== */
-
-/*
- * Conditions constrain when a declared trust relationship is applicable.
- *
- * This is declarative syntax only.
- */
-trustCondition
-    : WHEN
-      expression
-      SEMI?
-    ;
-
-
-/*
- * Explicit conditional trust form.
- *
- * Example:
- *
- *     if <expression>
- */
-trustConditionClause
-    : IF
-      expression
-    ;
-
-
-/* ============================================================================
- * 5. TRUST SCOPE
- * ========================================================================== */
-
-/*
- * Scope identifies the abstract semantic area in which trust applies.
- *
- * Scope does not identify a physical machine or fixed deployment topology.
- */
-trustScope
-    : IN
-      trustReferenceList
-      SEMI?
-    ;
-
-
-trustReferenceList
-    : trustReference
-      (COMMA trustReference)*
-      COMMA?
-    ;
-
-
-/* ============================================================================
- * 6. TRUST EVIDENCE
- * ========================================================================== */
-
-/*
- * Evidence is referenced abstractly.
- *
- * The grammar does not validate certificates, signatures, measurements,
- * credentials, attestations, logs, or other evidence.
- */
-trustEvidence
-    : WITH
-      EVIDENCE
-      trustEvidenceList
-      SEMI?
-    ;
-
-
-trustEvidenceList
-    : trustEvidenceReference
-      (COMMA trustEvidenceReference)*
-      COMMA?
-    ;
-
-
-trustEvidenceReference
-    : trustReference
-    | trustEvidenceCall
-    ;
-
-
-trustEvidenceCall
-    : qualifiedName
-      LPAREN
-      argumentList?
-      RPAREN
-    ;
-
-
-/* ============================================================================
- * 7. TRUST VALIDITY
- * ========================================================================== */
-
-/*
- * Validity is expressed as an abstract expression.
- *
- * The grammar does not impose a particular clock, timestamp representation,
- * calendar, duration system, or deployment environment.
- */
-trustValidity
-    : VALID
-      trustValidityExpression
-      SEMI?
-    ;
-
-
-trustValidityExpression
-    : expression
-    ;
-
-
-/* ============================================================================
- * 8. TRUST REQUIREMENTS
- * ========================================================================== */
-
-/*
- * A trust requirement expresses a condition that a downstream semantic
- * analysis must establish or satisfy.
- */
 trustRequirementDeclaration
-    : attributes?
+    : attributes*
       visibility?
       TRUST
-      REQUIREMENT
+      REQUIRES
       identifier?
-      trustRequirement
+      expression
       SEMI?
     ;
 
 
-trustRequirement
+trustRequirementMember
     : REQUIRES
-      trustRequirementExpression
-    ;
-
-
-trustRequirementExpression
-    : trustRequirementAll
-    | trustRequirementAny
-    | trustRequirementNot
-    | trustRequirementAtom
-    ;
-
-
-trustRequirementAll
-    : LBRACE
-      trustRequirementExpression
-      (COMMA trustRequirementExpression)*
-      COMMA?
-      RBRACE
-    ;
-
-
-trustRequirementAny
-    : LPAREN
-      trustRequirementExpression
-      (OR trustRequirementExpression)+
-      RPAREN
-    ;
-
-
-trustRequirementNot
-    : NOT
-      trustRequirementExpression
-    ;
-
-
-trustRequirementAtom
-    : trustReference
-    | trustCall
-    | trustPropertyExpression
-    | expression
-    ;
-
-
-trustPropertyExpression
-    : trustReference
-      (IS | COLON)
-      trustValue
-    ;
-
-
-trustValue
-    : trustReference
-    | literal
-    | expression
-    ;
-
-
-trustCall
-    : qualifiedName
-      LPAREN
-      argumentList?
-      RPAREN
-    ;
-
-
-/* ============================================================================
- * 9. TRUST PREFERENCES
- * ========================================================================== */
-
-/*
- * A preference is weaker than a requirement.
- *
- * It expresses a desirable trust property without making it intrinsically
- * mandatory.
- */
-trustPreferenceDeclaration
-    : attributes?
-      visibility?
-      TRUST
-      PREFERENCE
-      identifier?
-      trustPreferenceExpression
+      expression
       SEMI?
     ;
 
 
-trustPreference
-    : PREFER
-      trustPreferenceExpression
+/* ============================================================================
+ * 6. TRUST PREFERENCE
+ * ============================================================================
+ *
+ * Preference is intentionally weaker than requirement.
+ *
+ * Semantic analysis decides how a preference participates in target selection,
+ * policy evaluation, or optimization.
+ *
+ * ========================================================================== */
+
+trustPreferenceDeclaration
+    : attributes*
+      visibility?
+      TRUST
+      PREFER
+      identifier?
+      expression
+      SEMI?
     ;
 
 
-trustPreferenceExpression
-    : trustRequirementExpression
+trustPreferenceMember
+    : PREFER
+      expression
+      SEMI?
     ;
 
 
 /* ============================================================================
- * 10. TRUST ASSERTIONS
+ * 7. TRUST ASSERTION
+ * ============================================================================
+ *
+ * ASSERT is already a canonical Zamani keyword.
+ *
+ * This syntax records source-level assertion intent.
+ *
+ * It does NOT verify the assertion.
+ *
  * ========================================================================== */
 
-/*
- * An assertion records source-level intent that a trust relationship or
- * property is asserted.
- *
- * It does not verify the assertion.
- */
 trustAssertionDeclaration
-    : attributes?
+    : attributes*
       visibility?
       TRUST
-      ASSERTION
+      ASSERT
       identifier?
       trustAssertionTarget
       trustAssertionBody?
@@ -844,148 +950,141 @@ trustAssertionBody
 
 
 trustAssertionMember
-    : trustProperty
-    | trustCondition
-    | trustEvidence
-    | trustValidity
-    | trustMetadata
+    : trustConditionClause
+    | trustScopeClause
+    | trustEvidenceClause
+    | trustPropertyClause
+    | trustStatusClause
+    | trustExtensionClause
     ;
 
 
 /* ============================================================================
- * 11. TRUST REFERENCES
+ * 8. TRUST REFERENCE
+ * ============================================================================
+ *
+ * Trust references intentionally reuse the canonical qualified-name grammar.
+ *
+ * Examples:
+ *
+ *     identity::alice
+ *     principal::service
+ *     security::authority
+ *     quantum::service
+ *     hardware::trusted_execution
+ *     future::trust::mechanism
+ *
+ * Their meaning is semantic, not syntactic.
  * ========================================================================== */
 
-/*
- * Trust references are intentionally open-world.
- *
- * They can refer to:
- *
- *     identity
- *     principal
- *     service
- *     domain
- *     capability
- *     authority
- *     execution context
- *     hardware abstraction
- *     future trust entities
- *
- * The semantic layer resolves their meaning.
- */
 trustReference
     : qualifiedName
     ;
 
 
-trustReferenceListExpression
+trustReferenceList
     : trustReference
       (COMMA trustReference)*
-    ;
-
-
-/* ============================================================================
- * 12. TRUST RELATIONSHIP QUALIFIERS
- * ========================================================================== */
-
-/*
- * Optional semantic qualifiers are represented as open-world names rather
- * than a closed enumeration.
- */
-trustQualifier
-    : qualifiedName
-    ;
-
-
-trustQualifierList
-    : trustQualifier
-      (COMMA trustQualifier)*
       COMMA?
     ;
 
 
-trustQualifierClause
-    : WITH
-      trustQualifierList
-    ;
-
-
 /* ============================================================================
- * 13. TRUST MEMBER FORMS
- * ========================================================================== */
-
-/*
- * Allows a trust relationship body to express a requirement without creating
- * a second security requirement language.
- */
-trustRequirementMember
-    : trustRequirement
-    ;
-
-
-trustPreferenceMember
-    : trustPreference
-    ;
-
-
-/* ============================================================================
- * 14. TRUST COMPOSITION
- * ========================================================================== */
-
-/*
- * A trust composition references other trust declarations.
- */
-trustComposition
-    : USING
-      trustReferenceList
-    ;
-
-
-trustCompositionClause
-    : trustComposition
-    ;
-
-
-/* ============================================================================
- * 15. TRUST POLICY-FACING INTENT
- * ========================================================================== */
-
-/*
- * These rules allow security policy layers to refer to trust without
- * redefining trust declarations.
- */
-trustConditionReference
-    : TRUST
-      trustReference
-    ;
-
-
-trustRequirementReference
-    : TRUST
-      trustReference
-    ;
-
-
-/* ============================================================================
- * 16. OPTIONAL TRUST ACTION INTENT
- * ========================================================================== */
-
-/*
- * Trust may be consumed by downstream policy systems that need an abstract
- * operation over a trust relationship.
+ * 9. TRUST CONDITIONS
+ * ============================================================================
  *
- * This rule does NOT implement the operation.
- */
-trustAction
-    : qualifiedName
-      LPAREN
-      argumentList?
-      RPAREN
+ * WHEN is already a canonical Zamani keyword.
+ *
+ * The expression remains general and open-world.
+ * ========================================================================== */
+
+trustConditionClause
+    : WHEN
+      expression
+      SEMI?
     ;
 
 
 /* ============================================================================
- * 17. GENERAL TRUST PROPERTY
+ * 10. TRUST SCOPE
+ * ============================================================================
+ *
+ * IN is an existing language keyword.
+ *
+ * Scope is an expression rather than a fixed enumeration.
+ *
+ * Examples:
+ *
+ *     in execution;
+ *     in security::production;
+ *     in deployment::region;
+ *     in quantum::execution;
+ *
+ * ========================================================================== */
+
+trustScopeClause
+    : IN
+      expression
+      SEMI?
+    ;
+
+
+/* ============================================================================
+ * 11. TRUST EVIDENCE
+ * ============================================================================
+ *
+ * WITH is an existing keyword.
+ *
+ * Evidence is represented as one or more references/expressions.
+ *
+ * The grammar does not define:
+ *
+ *     certificate
+ *     attestation
+ *     signature
+ *     measurement
+ *     log
+ *     credential
+ *
+ * as a closed list.
+ *
+ * ========================================================================== */
+
+trustEvidenceClause
+    : WITH
+      trustEvidenceList
+      SEMI?
+    ;
+
+
+trustEvidenceList
+    : trustEvidence
+      (COMMA trustEvidence)*
+      COMMA?
+    ;
+
+
+trustEvidence
+    : trustReference
+    | expression
+    ;
+
+
+/* ============================================================================
+ * 12. TRUST PROPERTIES
+ * ============================================================================
+ *
+ * Generic properties remain open-world.
+ *
+ * This allows future trust models without requiring new parser keywords.
+ *
+ * Examples:
+ *
+ *     security::integrity = required;
+ *     organization::jurisdiction = "example";
+ *     quantum::measurement = security::protected;
+ *
+ * Semantic analysis decides whether a property is valid.
  * ========================================================================== */
 
 trustPropertyClause
@@ -995,100 +1094,27 @@ trustPropertyClause
 
 
 trustPropertyList
-    : trustPropertyItem
-      (COMMA trustPropertyItem)*
+    : trustProperty
+      (COMMA trustProperty)*
       COMMA?
     ;
 
 
-trustPropertyItem
+trustProperty
     : qualifiedName
-    | qualifiedName
       ASSIGN
       expression
     ;
 
 
 /* ============================================================================
- * 18. TRUST EVALUATION INTENT
- * ========================================================================== */
-
-/*
- * Evaluation is an INTENT, not evaluation itself.
+ * 13. TRUST STATUS
+ * ============================================================================
  *
- * The semantic/runtime layers decide how trust is evaluated.
- */
-trustEvaluation
-    : EVALUATE
-      trustReference
-      (WITH trustEvaluationOptions)?
-    ;
-
-
-trustEvaluationOptions
-    : trustPropertyList
-    ;
-
-
-trustEvaluationClause
-    : trustEvaluation
-    ;
-
-
-/* ============================================================================
- * 19. TRUST STATUS REFERENCES
- * ========================================================================== */
-
-/*
- * Status values remain open-world expressions rather than hard-coded semantic
- * states. This permits future trust models.
- */
-trustStatus
-    : expression
-    ;
-
-
-trustStatusClause
-    : AS
-      trustStatus
-    ;
-
-
-/* ============================================================================
- * 20. TRUST RELATIONSHIP EXTENSION
- * ========================================================================== */
-
-/*
- * Existing trust declarations may be semantically extended by another
- * declaration. The meaning is resolved downstream.
- */
-trustExtension
-    : EXTENDS
-      trustReferenceList
-    ;
-
-
-trustExtensionClause
-    : trustExtension
-    ;
-
-
-/* ============================================================================
- * 21. TRUST DECLARATION OPTIONS
- * ========================================================================== */
-
-trustDeclarationOption
-    : trustScope
-    | trustEvidence
-    | trustValidity
-    | trustQualifierClause
-    | trustCompositionClause
-    | trustExtensionClause
-    | trustStatusClause
-    | trustPropertyClause
-    ;
-
-
-trustDeclarationOptionList
-    : trustDeclarationOption*
-    ;
+ * AS is already a canonical language keyword.
+ *
+ * Status is deliberately an expression rather than an enumeration.
+ *
+ * This avoids hard-coding a finite trust lifecycle.
+ *
+ * ==========================================================================
