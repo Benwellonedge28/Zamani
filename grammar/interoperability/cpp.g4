@@ -1,77 +1,373 @@
 /*
- * Zamani — C++ Interoperability Grammar
+ * ============================================================================
+ * Zamani Universal Programming Language
+ * ============================================================================
  *
  * File:
  *     grammar/interoperability/cpp.g4
  *
- * Purpose:
- *     Define Zamani source syntax for interoperating with externally
- *     implemented C++ entities.
+ * Grammar:
+ *     CppInterop
  *
- * Architectural boundary:
+ * Status:
+ *     CANONICAL C++ INTEROPERABILITY LEAF GRAMMAR
  *
- *     Zamani syntax
- *          ↓
- *     C++ interoperability parse structure
- *          ↓
- *     semantic validation
- *          ↓
- *     ABI / foreign-function resolution
- *          ↓
- *     compiler / linker / runtime
+ * Baseline:
+ *     Rust 2021
+ *     Rust 1.97 / Rust 1.97.1
+ *     ANTLR4
+ *     safe Rust implementation
+ *     no unsafe Rust required
  *
- * This grammar does NOT implement the C++ language.
+ * ============================================================================
+ * PURPOSE
+ * ============================================================================
  *
- * It does NOT define:
- *   - the C++ parser
- *   - C++ expressions
- *   - C++ template semantics
- *   - overload resolution
- *   - C++ object layout
- *   - C++ ABI rules
- *   - platform calling conventions
- *   - linker behavior
- *   - runtime behavior
- *   - machine/resource limits
- *   - Rust implementation details
+ * This grammar defines the Zamani SOURCE-LEVEL CONTRACT for interoperating
+ * with externally implemented C++ entities.
  *
- * Machine-specific properties belong to the ABI, target, capability,
- * resource, compiler, and runtime layers.
+ * It does NOT define the C++ programming language.
  *
- * The grammar intentionally contains no embedded target-language code,
- * semantic actions, filesystem access, network access, or unsafe code.
+ * It does NOT parse:
  *
- * Rust implementation requirement:
- *   Rust 1.97 / 1.97.1
- *   Rust 2021
- *   No unsafe Rust.
+ *     C++ expressions
+ *     C++ statements
+ *     C++ class bodies
+ *     C++ template implementations
+ *     C++ preprocessing
+ *     C++ modules as a programming language
+ *     C++ concepts
+ *     C++ overload resolution
+ *     C++ template instantiation
+ *     C++ object layout
+ *     C++ name mangling
+ *     C++ ABI implementation
+ *     linker behavior
+ *     loader behavior
+ *     runtime behavior
+ *     hardware behavior
+ *
+ * Those concerns remain downstream semantic/compiler/runtime concerns.
+ *
+ * ============================================================================
+ * ARCHITECTURAL POSITION
+ * ============================================================================
+ *
+ *     Zamani source
+ *          |
+ *          v
+ *     canonical lexer
+ *          |
+ *          v
+ *     canonical parser composition
+ *          |
+ *          v
+ *     CppInterop
+ *          |
+ *          v
+ *     domain-neutral frontend AST
+ *          |
+ *          v
+ *     semantic analysis
+ *          |
+ *     +----+---------+----------+----------+
+ *     |              |          |          |
+ *     v              v          v          v
+ *   types           ABI       effects   capabilities
+ *     |              |          |          |
+ *     +--------------+----------+----------+
+ *                    |
+ *                    v
+ *             canonical semantic model
+ *                    |
+ *                    v
+ *              canonical IR boundary
+ *                    |
+ *          +---------+----------+
+ *          |         |          |
+ *          v         v          v
+ *      classical quantum::ir hardware/HDL
+ *                    |
+ *                    v
+ *             target lowering
+ *                    |
+ *                    v
+ *             ABI/linker/runtime
+ *
+ * ============================================================================
+ * OWNERSHIP
+ * ============================================================================
+ *
+ * THIS FILE OWNS:
+ *
+ *     - C++ interoperability declarations;
+ *     - C++ namespace references;
+ *     - C++ function declarations;
+ *     - C++ method declarations;
+ *     - constructors;
+ *     - destructors;
+ *     - C++ variable references;
+ *     - C++ constant references;
+ *     - C++ type references;
+ *     - opaque C++ type references;
+ *     - enum boundary declarations;
+ *     - template boundary declarations;
+ *     - callback declarations;
+ *     - C++ library/module references;
+ *     - C++ symbol aliases;
+ *     - C++-specific interoperability metadata;
+ *     - C++ interoperability requirements/capabilities.
+ *
+ * THIS FILE DOES NOT OWN:
+ *
+ *     - generic FFI;
+ *     - generic foreign functions;
+ *     - ABI semantics;
+ *     - generic calling-convention semantics;
+ *     - universal types;
+ *     - universal expressions;
+ *     - universal names;
+ *     - modules;
+ *     - effects;
+ *     - resources;
+ *     - security;
+ *     - compiler lowering;
+ *     - linker implementation;
+ *     - runtime implementation.
+ *
+ * ============================================================================
+ * SINGLE-AUTHORITY RULE
+ * ============================================================================
+ *
+ * General FFI:
+ *
+ *     grammar/interoperability/ffi.g4
+ *
+ * General foreign callable declarations:
+ *
+ *     grammar/interoperability/foreign-functions.g4
+ *
+ * ABI contracts:
+ *
+ *     grammar/interoperability/abi.g4
+ *
+ * Calling-convention references:
+ *
+ *     grammar/interoperability/calling-conventions.g4
+ *
+ * Canonical names:
+ *
+ *     grammar/core/names.g4
+ *     grammar/core/qualified-names.g4
+ *
+ * Canonical types:
+ *
+ *     grammar/types/types.g4
+ *
+ * Canonical expressions:
+ *
+ *     grammar/expressions/expressions.g4
+ *
+ * Interoperability composition:
+ *
+ *     grammar/interoperability/interoperability.g4
+ *
+ * This file MUST NOT redefine those systems.
+ *
+ * ============================================================================
+ * LEXER AUTHORITY
+ * ============================================================================
+ *
+ * Canonical parser-facing lexer:
+ *
+ *     grammar/antlr/ZamaniLexer.g4
+ *
+ * This grammar therefore uses the repository's canonical lexer vocabulary.
+ *
+ * It does NOT introduce:
+ *
+ *     CPP_FUNCTION
+ *     CPP_CLASS
+ *     CPP_NAMESPACE
+ *     CPP_TEMPLATE
+ *     CPP_ABI
+ *     CPP_POINTER
+ *     CPP_REFERENCE
+ *     CPP_TYPE
+ *
+ * merely because C++ interoperability exists.
+ *
+ * C++ implementation names remain symbolic source names.
+ *
+ * ============================================================================
+ * POCO-REAF
+ * ============================================================================
+ *
+ * C++ interoperability describes a portable external boundary.
+ *
+ * It MUST NOT encode universal limits such as:
+ *
+ *     MAX_CPUS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_QPUS
+ *     MAX_NODES
+ *     MAX_THREADS
+ *     MAX_MEMORY
+ *     MAX_REGISTER_WIDTH
+ *     MAX_REGISTER_COUNT
+ *     MAX_DEVICE_COUNT
+ *     MAX_TENSOR_RANK
+ *
+ * It MUST NOT require:
+ *
+ *     cpu0
+ *     gpu0
+ *     qpu0
+ *     core0
+ *     thread0
+ *     register0
+ *     memory_bank0
+ *
+ * as universal language constructs.
+ *
+ * ABI and target realization are downstream.
+ *
+ * ============================================================================
+ * SAFETY
+ * ============================================================================
+ *
+ * Parsing this grammar MUST NOT:
+ *
+ *     - invoke a C++ compiler;
+ *     - execute C++ code;
+ *     - load a C++ library;
+ *     - inspect headers;
+ *     - resolve symbols;
+ *     - access the filesystem;
+ *     - access the network;
+ *     - inspect hardware;
+ *     - select a device;
+ *     - execute linker commands;
+ *     - execute build scripts.
+ *
+ * This grammar contains no embedded actions or semantic predicates.
+ *
+ * ============================================================================
+ * SCALABILITY
+ * ============================================================================
+ *
+ * No source-level maximum is imposed on:
+ *
+ *     namespaces
+ *     declarations
+ *     functions
+ *     parameters
+ *     callbacks
+ *     types
+ *     enum members
+ *     template parameters
+ *     attributes
+ *     libraries
+ *     requirements
+ *     capabilities
+ *     nested interoperability declarations
+ *
+ * Repetition is represented structurally through ANTLR repetition operators.
+ *
+ * Practical resource limits belong to:
+ *
+ *     compiler resources
+ *     runtime resources
+ *     target resources
+ *     deployment policy
+ *
+ * They are not grammar limits.
+ *
+ * ============================================================================
+ * AST CONTRACT
+ * ============================================================================
+ *
+ * Every C++ construct must map into the existing domain-neutral frontend
+ * interoperability representation.
+ *
+ * Conceptual semantic categories include:
+ *
+ *     ForeignDeclaration
+ *     ForeignFunction
+ *     ForeignMethod
+ *     ForeignConstructor
+ *     ForeignDestructor
+ *     ForeignType
+ *     ForeignOpaqueType
+ *     ForeignEnum
+ *     ForeignCallback
+ *     ForeignSymbol
+ *     ForeignLibrary
+ *     ForeignMetadata
+ *
+ * These names describe semantic categories, not permission to create a
+ * parallel C++-specific IR.
+ *
+ * ============================================================================
+ * IR CONTRACT
+ * ============================================================================
+ *
+ * C++ interoperability MUST lower through the canonical semantic model.
+ *
+ * It MUST NOT create:
+ *
+ *     CppIR
+ *     CppQuantumIR
+ *     CppHardwareIR
+ *
+ * If a C++ boundary participates in quantum computation, its semantic effect
+ * is lowered through the existing canonical:
+ *
+ *     quantum::ir
+ *
+ * boundary.
+ *
+ * ============================================================================
  */
 
-parser grammar cpp;
+parser grammar CppInterop;
+
+options {
+    tokenVocab = ZamaniLexer;
+}
 
 import
-    abi,
-    foreign_functions,
-    qualified_names,
-    types;
+    Expressions,
+    Types,
+    QualifiedNames,
+    Attributes;
+
 
 /*
- * --------------------------------------------------------------------------
- * Top-level C++ interoperability declarations
- * --------------------------------------------------------------------------
+ * ============================================================================
+ * PUBLIC ENTRY POINT
+ * ============================================================================
  *
- * A C++ interoperability declaration is declarative. It tells Zamani how
- * an externally implemented C++ entity is exposed to Zamani.
+ * This is the entry point consumed by the interoperability composition layer.
  *
- * It does not cause the grammar to decide:
- *   - where the implementation lives
- *   - which compiler builds it
- *   - which linker is used
- *   - which ABI implementation is selected
- *   - which physical machine executes it
+ * The complete Zamani program root remains responsible for deciding where
+ * C++ interoperability declarations are legal.
+ * ============================================================================
  */
 
-cppDeclaration
+cppInterop
+    : cppItem*
+    ;
+
+
+/*
+ * ============================================================================
+ * C++ ITEM DISPATCH
+ * ============================================================================
+ */
+
+cppItem
     : cppNamespaceDeclaration
     | cppFunctionDeclaration
     | cppMethodDeclaration
@@ -87,218 +383,271 @@ cppDeclaration
     | cppLibraryDeclaration
     ;
 
+
 /*
- * --------------------------------------------------------------------------
- * C++ namespace qualification
- * --------------------------------------------------------------------------
+ * ============================================================================
+ * NAMESPACE
+ * ============================================================================
  *
- * Namespace names are semantic names, not filesystem paths.
+ * Namespace identity is symbolic.
  *
- * A namespace may contain:
- *   foo
- *   foo::bar
- *   std
- *   vendor::library
+ * The grammar does not enumerate:
  *
- * The grammar deliberately does not enumerate namespaces.
+ *     std
+ *     boost
+ *     vendor namespaces
+ *     implementation namespaces
+ *
+ * A future namespace requires no grammar modification.
+ * ============================================================================
  */
 
 cppNamespaceDeclaration
-    : 'extern'
-      'cpp'
-      'namespace'
-      cppQualifiedName
-      cppDeclarationBlock
+    : attribute*
+      EXTERN
+      STRING
+      cppNamespaceKeyword
+      qualifiedName
+      cppNamespaceBody
     ;
 
-cppDeclarationBlock
-    : '{'
-      cppDeclaration*
-      '}'
+cppNamespaceKeyword
+    : identifier
     ;
+
+cppNamespaceBody
+    : LBRACE
+      cppItem*
+      RBRACE
+    ;
+
 
 /*
- * --------------------------------------------------------------------------
- * C++ functions
- * --------------------------------------------------------------------------
+ * ============================================================================
+ * FREE FUNCTION
+ * ============================================================================
  *
- * Functions are declared in terms of Zamani-visible signatures.
+ * Example semantic form:
  *
- * The semantic layer is responsible for determining whether the signature
- * can actually be represented by the selected C++ ABI.
+ *     extern "C++" fn std::sqrt(value: Real) -> Real;
+ *
+ * The string identifies the external language/ABI boundary.
+ * Its interpretation belongs to ABI semantics.
+ * ============================================================================
  */
 
 cppFunctionDeclaration
-    : 'extern'
-      'cpp'
-      'fn'
-      cppFunctionName
-      cppParameterList
+    : attribute*
+      EXTERN
+      STRING
+      FN
+      cppExternalName
+      parameterList
       cppReturnClause?
-      cppFunctionAttributes*
-      ';'
+      cppFunctionMetadata*
+      SEMICOLON
     ;
 
-cppFunctionName
-    : identifier
-    | cppQualifiedName
-    | cppSymbolName
-    ;
 
 /*
- * --------------------------------------------------------------------------
- * Member functions
- * --------------------------------------------------------------------------
+ * ============================================================================
+ * MEMBER FUNCTION
+ * ============================================================================
  *
- * C++ methods are distinct from free functions because their invocation
- * ABI may depend on object representation and ABI rules.
- *
- * The grammar does not attempt to model a platform's object layout.
+ * A method is represented separately because object/member dispatch can have
+ * ABI implications that differ from a free function.
+ * ============================================================================
  */
 
 cppMethodDeclaration
-    : 'extern'
-      'cpp'
-      'method'
-      cppQualifiedName
-      cppParameterList
+    : attribute*
+      EXTERN
+      STRING
+      cppMethodKeyword
+      qualifiedName
+      parameterList
       cppReturnClause?
-      cppMethodAttributes*
-      ';'
+      cppMethodMetadata*
+      SEMICOLON
     ;
 
+cppMethodKeyword
+    : identifier
+    ;
+
+
 /*
- * --------------------------------------------------------------------------
- * Constructors and destructors
- * --------------------------------------------------------------------------
- *
- * Constructors/destructors are explicitly represented because they are not
- * ordinary free functions in C++ source semantics.
+ * ============================================================================
+ * CONSTRUCTOR
+ * ============================================================================
  */
 
 cppConstructorDeclaration
-    : 'extern'
-      'cpp'
-      'constructor'
-      cppQualifiedName
-      cppParameterList
-      cppFunctionAttributes*
-      ';'
+    : attribute*
+      EXTERN
+      STRING
+      cppConstructorKeyword
+      qualifiedName
+      parameterList
+      cppFunctionMetadata*
+      SEMICOLON
     ;
 
-cppDestructorDeclaration
-    : 'extern'
-      'cpp'
-      'destructor'
-      cppQualifiedName
-      cppFunctionAttributes*
-      ';'
+cppConstructorKeyword
+    : identifier
     ;
+
 
 /*
- * --------------------------------------------------------------------------
- * Variables
- * --------------------------------------------------------------------------
+ * ============================================================================
+ * DESTRUCTOR
+ * ============================================================================
+ */
+
+cppDestructorDeclaration
+    : attribute*
+      EXTERN
+      STRING
+      cppDestructorKeyword
+      qualifiedName
+      parameterList?
+      cppFunctionMetadata*
+      SEMICOLON
+    ;
+
+cppDestructorKeyword
+    : identifier
+    ;
+
+
+/*
+ * ============================================================================
+ * VARIABLE
+ * ============================================================================
  */
 
 cppVariableDeclaration
-    : 'extern'
-      'cpp'
-      'var'
-      cppQualifiedName
-      ':'
-      typeExpr
-      cppVariableAttributes*
-      ';'
+    : attribute*
+      EXTERN
+      STRING
+      cppVariableKeyword
+      qualifiedName
+      COLON
+      typeExpression
+      cppVariableMetadata*
+      SEMICOLON
     ;
 
+cppVariableKeyword
+    : identifier
+    ;
+
+
 /*
- * --------------------------------------------------------------------------
- * Constants
- * --------------------------------------------------------------------------
- *
- * Constant evaluation is deliberately not performed by the grammar.
+ * ============================================================================
+ * CONSTANT
+ * ============================================================================
  */
 
 cppConstantDeclaration
-    : 'extern'
-      'cpp'
-      'const'
-      cppQualifiedName
-      ':'
-      typeExpr
-      cppConstantAttributes*
-      ';'
+    : attribute*
+      EXTERN
+      STRING
+      CONST
+      qualifiedName
+      COLON
+      typeExpression
+      cppVariableMetadata*
+      SEMICOLON
     ;
 
+
 /*
- * --------------------------------------------------------------------------
- * C++ types
- * --------------------------------------------------------------------------
+ * ============================================================================
+ * TYPE
+ * ============================================================================
  *
- * A C++ type declaration describes an externally defined type.
+ * This is a boundary declaration for a type defined externally.
  *
- * The actual representation is resolved by semantic analysis and the
- * selected ABI. No C++ fundamental type widths are hard-coded here.
+ * The actual C++ representation is resolved semantically.
+ * ============================================================================
  */
 
 cppTypeDeclaration
-    : 'extern'
-      'cpp'
-      'type'
-      cppQualifiedName
-      cppTypeAttributes*
-      ';'
+    : attribute*
+      EXTERN
+      STRING
+      TYPE
+      qualifiedName
+      cppTypeMetadata*
+      SEMICOLON
     ;
 
+
 /*
- * Opaque types are especially important for POCO-REAF.
+ * ============================================================================
+ * OPAQUE TYPE
+ * ============================================================================
  *
- * Zamani does not need to know the physical representation of an opaque
- * C++ object merely to hold or pass a valid handle to it.
+ * Opaque types are essential for portable FFI.
+ *
+ * Zamani can carry an externally managed object without embedding the
+ * implementation's physical representation in the language grammar.
+ * ============================================================================
  */
 
 cppOpaqueTypeDeclaration
-    : 'extern'
-      'cpp'
-      'opaque'
-      'type'
-      cppQualifiedName
-      cppTypeAttributes*
-      ';'
+    : attribute*
+      EXTERN
+      STRING
+      cppOpaqueKeyword
+      TYPE
+      qualifiedName
+      cppTypeMetadata*
+      SEMICOLON
     ;
 
+cppOpaqueKeyword
+    : identifier
+    ;
+
+
 /*
- * --------------------------------------------------------------------------
- * Enumerations
- * --------------------------------------------------------------------------
- *
- * Enumeration membership and underlying representation remain subject to
- * C++ ABI validation.
+ * ============================================================================
+ * ENUM
+ * ============================================================================
  */
 
 cppEnumDeclaration
-    : 'extern'
-      'cpp'
-      'enum'
-      cppQualifiedName
+    : attribute*
+      EXTERN
+      STRING
+      cppEnumKeyword
+      qualifiedName
       cppEnumUnderlyingType?
       cppEnumBody?
-      cppTypeAttributes*
-      ';'
+      cppTypeMetadata*
+      SEMICOLON
+    ;
+
+cppEnumKeyword
+    : identifier
     ;
 
 cppEnumUnderlyingType
-    : ':'
-      typeExpr
+    : COLON
+      typeExpression
     ;
 
 cppEnumBody
-    : '{'
+    : LBRACE
       cppEnumMember
-      (',' cppEnumMember)*
-      ','?
-      '}'
+      (
+          COMMA
+          cppEnumMember
+      )*
+      COMMA?
+      RBRACE
     ;
 
 cppEnumMember
@@ -307,422 +656,522 @@ cppEnumMember
     ;
 
 cppEnumValue
-    : '='
+    : ASSIGN
       expression
     ;
 
+
 /*
- * --------------------------------------------------------------------------
- * Templates
- * --------------------------------------------------------------------------
+ * ============================================================================
+ * TEMPLATE BOUNDARY
+ * ============================================================================
  *
- * This is intentionally an interoperability declaration, not a complete
- * C++ template grammar.
+ * This grammar describes a template interface.
  *
- * Zamani may refer to an externally provided template interface, while
- * template implementation and instantiation remain C++-side concerns.
+ * It does NOT parse or instantiate a C++ template implementation.
+ *
+ * Examples:
+ *
+ *     template <type T> ...
+ *     template <N> ...
+ *
+ * The meaning of template parameters is validated semantically.
+ * ============================================================================
  */
 
 cppTemplateDeclaration
-    : 'extern'
-      'cpp'
-      'template'
+    : attribute*
+      EXTERN
+      STRING
+      cppTemplateKeyword
       cppTemplateParameterList?
       cppTemplateEntity
-      cppTemplateAttributes*
-      ';'
+      cppTemplateMetadata*
+      SEMICOLON
+    ;
+
+cppTemplateKeyword
+    : identifier
     ;
 
 cppTemplateParameterList
-    : '<'
+    : LT
       cppTemplateParameter
-      (',' cppTemplateParameter)*
-      '>'
+      (
+          COMMA
+          cppTemplateParameter
+      )*
+      GT
     ;
 
 cppTemplateParameter
     : identifier
-    | identifier
-      ':'
-      typeExpr
-    | 'type'
-      identifier
+      cppTemplateParameterConstraint?
+    ;
+
+cppTemplateParameterConstraint
+    : COLON
+      typeExpression
     ;
 
 cppTemplateEntity
-    : 'fn'
-      cppQualifiedName
-      cppParameterList
+    : FN
+      cppExternalName
+      parameterList
       cppReturnClause?
-    | 'type'
-      cppQualifiedName
-    | 'method'
-      cppQualifiedName
-      cppParameterList
-      cppReturnClause?
+    | TYPE
+      qualifiedName
     ;
 
+
 /*
- * --------------------------------------------------------------------------
- * Callback declarations
- * --------------------------------------------------------------------------
+ * ============================================================================
+ * CALLBACK
+ * ============================================================================
  *
- * Callback types allow C++ libraries to call back into Zamani-managed
- * functionality where the selected execution environment permits it.
- *
- * Runtime legality and lifetime are semantic/runtime concerns.
+ * Callback semantics, lifetime, thread-safety, reentrancy and ownership are
+ * semantic/runtime concerns.
+ * ============================================================================
  */
 
 cppCallbackDeclaration
-    : 'extern'
-      'cpp'
-      'callback'
-      cppQualifiedName
-      cppParameterList
+    : attribute*
+      EXTERN
+      STRING
+      cppCallbackKeyword
+      identifier
+      parameterList
       cppReturnClause?
-      cppCallbackAttributes*
-      ';'
+      cppCallbackMetadata*
+      SEMICOLON
     ;
 
-/*
- * --------------------------------------------------------------------------
- * Parameter lists
- * --------------------------------------------------------------------------
- */
-
-cppParameterList
-    : '('
-      cppParameter*
-      ')'
-    ;
-
-cppParameter
-    : cppParameterDeclaration
-    | cppVariadicParameter
-    ;
-
-cppParameterDeclaration
+cppCallbackKeyword
     : identifier
-      ':'
-      typeExpr
-      cppParameterAttributes*
     ;
 
-cppVariadicParameter
-    : '...'
-    ;
 
 /*
- * --------------------------------------------------------------------------
- * Return types
- * --------------------------------------------------------------------------
- */
-
-cppReturnClause
-    : '->'
-      typeExpr
-    ;
-
-/*
- * --------------------------------------------------------------------------
- * Libraries
- * --------------------------------------------------------------------------
+ * ============================================================================
+ * LIBRARY / IMPLEMENTATION REFERENCE
+ * ============================================================================
  *
- * A library declaration expresses a logical external dependency.
+ * A library name is a logical dependency identity.
  *
- * It MUST NOT be interpreted as permission for the grammar/runtime to
- * access arbitrary filesystem paths or network locations.
- *
- * Resolution belongs to the build/deployment system and its policy.
+ * It is NOT a filesystem path.
+ * It is NOT a permission to load a library during parsing.
+ * ============================================================================
  */
 
 cppLibraryDeclaration
-    : 'extern'
-      'cpp'
-      'library'
-      cppLibraryName
-      cppLibraryAttributes*
-      ';'
+    : attribute*
+      EXTERN
+      STRING
+      cppLibraryKeyword
+      cppLibraryIdentity
+      cppLibraryMetadata*
+      SEMICOLON
     ;
 
-cppLibraryName
-    : stringLiteral
-    | cppQualifiedName
-    ;
-
-/*
- * --------------------------------------------------------------------------
- * Symbol binding
- * --------------------------------------------------------------------------
- *
- * C++ names may be transformed by compiler-specific name mangling.
- *
- * The source language therefore distinguishes:
- *
- *   logical Zamani name
- *   C++ semantic name
- *   externally linked symbol
- *
- * Resolution occurs after parsing.
- */
-
-cppSymbolBinding
-    : 'symbol'
-      stringLiteral
-    ;
-
-/*
- * --------------------------------------------------------------------------
- * Common C++ attributes
- * --------------------------------------------------------------------------
- *
- * Attributes are declarative metadata.
- *
- * They do not hard-code platform behavior.
- */
-
-cppFunctionAttributes
-    : cppSymbolBinding
-    | cppAbiAttribute
-    | cppCallingConventionAttribute
-    | cppLinkageAttribute
-    | cppVisibilityAttribute
-    | cppExceptionAttribute
-    | cppVariadicAttribute
-    | cppNoReturnAttribute
-    ;
-
-cppMethodAttributes
-    : cppSymbolBinding
-    | cppAbiAttribute
-    | cppCallingConventionAttribute
-    | cppLinkageAttribute
-    | cppVisibilityAttribute
-    | cppExceptionAttribute
-    | cppConstMethodAttribute
-    | cppReferenceQualifierAttribute
-    ;
-
-cppVariableAttributes
-    : cppSymbolBinding
-    | cppAbiAttribute
-    | cppLinkageAttribute
-    | cppVisibilityAttribute
-    ;
-
-cppConstantAttributes
-    : cppSymbolBinding
-    | cppAbiAttribute
-    | cppLinkageAttribute
-    | cppVisibilityAttribute
-    ;
-
-cppTypeAttributes
-    : cppAbiAttribute
-    | cppVisibilityAttribute
-    ;
-
-cppCallbackAttributes
-    : cppAbiAttribute
-    | cppCallingConventionAttribute
-    | cppExceptionAttribute
-    ;
-
-cppTemplateAttributes
-    : cppAbiAttribute
-    | cppVisibilityAttribute
-    ;
-
-cppLibraryAttributes
-    : cppAbiAttribute
-    ;
-
-/*
- * --------------------------------------------------------------------------
- * ABI integration
- * --------------------------------------------------------------------------
- *
- * ABI selection is delegated to interoperability/abi.g4.
- *
- * This grammar accepts an ABI identity rather than enumerating all possible
- * ABIs. That is essential for future architectures and platforms.
- */
-
-cppAbiAttribute
-    : 'abi'
-      qualifiedName
-    ;
-
-/*
- * Calling conventions are intentionally open-ended.
- *
- * Examples may include platform-defined conventions, but the grammar must
- * not permanently enumerate them.
- */
-
-cppCallingConventionAttribute
-    : 'calling_convention'
-      qualifiedName
-    ;
-
-/*
- * Linkage identity is semantic metadata.
- */
-
-cppLinkageAttribute
-    : 'linkage'
-      qualifiedName
-    ;
-
-/*
- * Visibility is target/ABI dependent.
- */
-
-cppVisibilityAttribute
-    : 'visibility'
-      qualifiedName
-    ;
-
-/*
- * --------------------------------------------------------------------------
- * Exception boundaries
- * --------------------------------------------------------------------------
- *
- * C++ exceptions must not silently cross a Zamani ABI boundary.
- *
- * The grammar only declares the intended boundary policy. Validation is
- * performed by semantic analysis.
- */
-
-cppExceptionAttribute
-    : 'exceptions'
-      qualifiedName
-    ;
-
-/*
- * --------------------------------------------------------------------------
- * Variadic functions
- * --------------------------------------------------------------------------
- */
-
-cppVariadicAttribute
-    : 'variadic'
-    ;
-
-/*
- * --------------------------------------------------------------------------
- * Method qualifiers
- * --------------------------------------------------------------------------
- */
-
-cppConstMethodAttribute
-    : 'const'
-    ;
-
-cppReferenceQualifierAttribute
-    : 'ref_qualifier'
-      qualifiedName
-    ;
-
-/*
- * --------------------------------------------------------------------------
- * No-return semantics
- * --------------------------------------------------------------------------
- */
-
-cppNoReturnAttribute
-    : 'noreturn'
-    ;
-
-/*
- * --------------------------------------------------------------------------
- * C++ qualified names
- * --------------------------------------------------------------------------
- *
- * C++ namespace qualification uses :: semantics.
- *
- * This is kept separate from ordinary Zamani filesystem/module paths.
- */
-
-cppQualifiedName
-    : cppNameSegment
-      ('::' cppNameSegment)*
-    ;
-
-cppNameSegment
+cppLibraryKeyword
     : identifier
     ;
 
-/*
- * A symbol name is kept as a string when the external linker identity
- * cannot safely be represented as a Zamani identifier.
- */
-
-cppSymbolName
-    : stringLiteral
+cppLibraryIdentity
+    : STRING
+    | qualifiedName
     ;
 
+
 /*
- * --------------------------------------------------------------------------
- * Shared grammar contracts
- * --------------------------------------------------------------------------
+ * ============================================================================
+ * SHARED FUNCTION PARAMETERS
+ * ============================================================================
  *
- * These rules intentionally delegate to canonical Zamani grammar rules.
+ * Parameter syntax consumes the canonical type system.
  *
- * No duplicate expression or type grammar is created here.
+ * This grammar deliberately does not define:
+ *
+ *     C++ pointer syntax
+ *     C++ reference syntax
+ *     C++ type qualifiers
+ *     C++ template type syntax
+ *
+ * Such information is represented by canonical Zamani types plus semantic
+ * interoperability metadata.
+ * ============================================================================
  */
 
-identifier
-    : IdentifierToken
+parameterList
+    : LPAREN
+      parameterDeclaration*
+      RPAREN
     ;
 
-qualifiedName
+parameterDeclaration
     : identifier
-      ('::' identifier | '.' identifier)*
+      COLON
+      typeExpression
+      cppParameterMetadata*
     ;
 
-typeExpr
-    : TypeExpression
+cppParameterMetadata
+    : cppMetadataClause
     ;
 
-expression
-    : Expression
-    ;
-
-stringLiteral
-    : StringLiteral
-    ;
 
 /*
- * --------------------------------------------------------------------------
- * Imported canonical token/rule contracts
- * --------------------------------------------------------------------------
- *
- * The repository's authoritative lexer/parser layer must provide:
- *
- *   IdentifierToken
- *   TypeExpression
- *   Expression
- *   StringLiteral
- *
- * These are contracts, not local token definitions.
- *
- * The final Zamani grammar integration must map these references to the
- * repository's actual canonical lexer/parser rule names.
+ * ============================================================================
+ * RETURN TYPE
+ * ============================================================================
  */
 
-IdentifierToken
-    : IdentifierToken
+cppReturnClause
+    : THIN_ARROW
+      typeExpression
     ;
 
-TypeExpression
-    : TypeExpression
+
+/*
+ * ============================================================================
+ * EXTERNAL NAME
+ * ============================================================================
+ *
+ * A C++ source-level name can be a normal Zamani identifier or a qualified
+ * external name.
+ *
+ * An explicit string is available for symbol names that cannot safely be
+ * represented as ordinary identifiers.
+ * ============================================================================
+ */
+
+cppExternalName
+    : qualifiedName
+    | STRING
     ;
 
-Expression
-    : Expression
+
+/*
+ * ============================================================================
+ * FUNCTION METADATA
+ * ============================================================================
+ */
+
+cppFunctionMetadata
+    : cppMetadataClause
     ;
 
-StringLiteral
-    : StringLiteral
+cppMethodMetadata
+    : cppMetadataClause
     ;
+
+cppVariableMetadata
+    : cppMetadataClause
+    ;
+
+cppTypeMetadata
+    : cppMetadataClause
+    ;
+
+cppCallbackMetadata
+    : cppMetadataClause
+    ;
+
+cppTemplateMetadata
+    : cppMetadataClause
+    ;
+
+cppLibraryMetadata
+    : cppMetadataClause
+    ;
+
+
+/*
+ * ============================================================================
+ * C++ INTEROPERABILITY METADATA
+ * ============================================================================
+ *
+ * Metadata is intentionally open-world.
+ *
+ * This prevents the grammar from becoming a closed enumeration of today's
+ * C++ ABIs, compilers, platforms and vendor extensions.
+ *
+ * Examples of semantic keys include:
+ *
+ *     abi
+ *     calling_convention
+ *     linkage
+ *     symbol
+ *     visibility
+ *     exceptions
+ *     ownership
+ *     lifetime
+ *     nullable
+ *     representation
+ *     thread_safety
+ *     noexcept
+ *     variadic
+ *     capability
+ *     requires
+ *
+ * These keys are semantic metadata, not necessarily universal lexer keywords.
+ * ============================================================================
+ */
+
+cppMetadataClause
+    : identifier
+      cppMetadataValue?
+      SEMICOLON
+    ;
+
+cppMetadataValue
+    : ASSIGN
+      cppMetadataExpression
+    ;
+
+cppMetadataExpression
+    : expression
+    | qualifiedName
+    | STRING
+    ;
+
+
+/*
+ * ============================================================================
+ * EXPLICIT C++ ABI METADATA
+ * ============================================================================
+ *
+ * These aliases make the semantic contract clearer while retaining an
+ * open-world representation.
+ *
+ * They do not enumerate ABI families.
+ * ============================================================================
+ */
+
+cppAbiClause
+    : cppKeyAbi
+      ASSIGN
+      cppSymbolicValue
+      SEMICOLON
+    ;
+
+cppCallingConventionClause
+    : cppKeyCallingConvention
+      ASSIGN
+      cppSymbolicValue
+      SEMICOLON
+    ;
+
+cppLinkageClause
+    : cppKeyLinkage
+      ASSIGN
+      cppSymbolicValue
+      SEMICOLON
+    ;
+
+cppSymbolClause
+    : cppKeySymbol
+      ASSIGN
+      STRING
+      SEMICOLON
+    ;
+
+cppVisibilityClause
+    : cppKeyVisibility
+      ASSIGN
+      cppSymbolicValue
+      SEMICOLON
+    ;
+
+cppExceptionClause
+    : cppKeyExceptions
+      ASSIGN
+      cppSymbolicValue
+      SEMICOLON
+    ;
+
+cppOwnershipClause
+    : cppKeyOwnership
+      ASSIGN
+      cppSymbolicValue
+      SEMICOLON
+    ;
+
+cppLifetimeClause
+    : cppKeyLifetime
+      ASSIGN
+      cppSymbolicValue
+      SEMICOLON
+    ;
+
+cppNullabilityClause
+    : cppKeyNullable
+      ASSIGN
+      cppSymbolicValue
+      SEMICOLON
+    ;
+
+cppRepresentationClause
+    : cppKeyRepresentation
+      ASSIGN
+      cppSymbolicValue
+      SEMICOLON
+    ;
+
+cppVariadicClause
+    : cppKeyVariadic
+      ASSIGN
+      cppSymbolicValue
+      SEMICOLON
+    ;
+
+
+/*
+ * ============================================================================
+ * CONTEXTUAL ABI KEYS
+ * ============================================================================
+ *
+ * These are intentionally parsed as identifiers rather than lexer keywords.
+ *
+ * This means future ABI vocabulary can be added semantically without changing
+ * the universal lexical language.
+ * ============================================================================
+ */
+
+cppKeyAbi
+    : identifier
+    ;
+
+cppKeyCallingConvention
+    : identifier
+    ;
+
+cppKeyLinkage
+    : identifier
+    ;
+
+cppKeySymbol
+    : identifier
+    ;
+
+cppKeyVisibility
+    : identifier
+    ;
+
+cppKeyExceptions
+    : identifier
+    ;
+
+cppKeyOwnership
+    : identifier
+    ;
+
+cppKeyLifetime
+    : identifier
+    ;
+
+cppKeyNullable
+    : identifier
+    ;
+
+cppKeyRepresentation
+    : identifier
+    ;
+
+cppKeyVariadic
+    : identifier
+    ;
+
+
+/*
+ * ============================================================================
+ * SYMBOLIC VALUES
+ * ============================================================================
+ */
+
+cppSymbolicValue
+    : qualifiedName
+    | STRING
+    ;
+
+
+/*
+ * ============================================================================
+ * INTEROPERABILITY REQUIREMENTS
+ * ============================================================================
+ *
+ * Requirements belong semantically to the resource/capability system.
+ *
+ * The C++ grammar merely provides an attachment point.
+ *
+ * A requirement does not select a physical device.
+ * ============================================================================
+ */
+
+cppRequirementClause
+    : REQUIRES
+      expression
+      SEMICOLON
+    ;
+
+cppCapabilityClause
+    : CAPABILITY
+      qualifiedName
+      SEMICOLON
+    ;
+
+cppResourceClause
+    : RESOURCE
+      expression
+      SEMICOLON
+;
+
+
+/*
+ * ============================================================================
+ * C++-SPECIFIC METADATA DISPATCH
+ * ============================================================================
+ *
+ * These rules are deliberately explicit semantic categories, but all consume
+ * open-world identifiers rather than a closed C++ vocabulary.
+ * ============================================================================
+ */
+
+cppBoundaryMetadata
+    : cppAbiClause
+    | cppCallingConventionClause
+    | cppLinkageClause
+    | cppSymbolClause
+    | cppVisibilityClause
+    | cppExceptionClause
+    | cppOwnershipClause
+    | cppLifetimeClause
+    | cppNullabilityClause
+    | cppRepresentationClause
+    | cppVariadicClause
+    | cppRequirementClause
+    | cppCapabilityClause
+    | cppResourceClause
+    | attribute
+    | cppMetadataClause
+    ;
+
+
+/*
+ * ============================================================================
+ * CANONICAL TYPE / EXPRESSION / NAME INTEGRATION
+ * ============================================================================
+ *
+ * IMPORTANT:
+ *
+ * No local identifier rule is created.
+ *
+ * No local qualified-name rule is created.
+ *
+ * No local type-expression rule is created.
+ *
+ * No local expression grammar is created.
+ *
+ * The imported canonical grammars own these constructs.
+ * ============================================================================
+ */
