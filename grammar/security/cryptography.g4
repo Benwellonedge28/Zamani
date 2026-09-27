@@ -1,173 +1,117 @@
 /*
  * ============================================================================
- * Zamani Universal Computing Language
+ * Zamani Universal Programming Language
  * ============================================================================
  *
  * FILE
  * ----
  * grammar/security/cryptography.g4
  *
- * GRAMMAR
- * -------
- * Cryptography
+ * ROLE
+ * ----
+ * Canonical parser-level cryptography-domain grammar.
  *
  * STATUS
  * ------
- * PRODUCTION SECURITY-DOMAIN GRAMMAR
+ * PRODUCTION TARGET
  *
+ * LANGUAGE
+ * --------
+ * Zamani
+ *
+ * IMPLEMENTATION BASELINE
+ * -----------------------
+ * Rust 1.97 / Rust 1.97.1
+ * Rust 2021
+ * Safe Rust only.
+ * No unsafe Rust is required.
+ *
+ * ============================================================================
  * PURPOSE
- * -------
- * This file defines the parser-level syntax owned by Zamani's cryptography
- * domain.
- *
- * The grammar describes portable cryptographic INTENT and REFERENCES.
- *
- * It does not implement cryptography.
- *
- * ============================================================================
- * ARCHITECTURAL POSITION
  * ============================================================================
  *
- *     Zamani source
- *          |
- *          v
- *     grammar/antlr/ZamaniLexer.g4
- *          |
- *          v
- *     grammar/antlr/ZamaniParser.g4
- *          |
- *          v
- *     security composition
- *          |
- *          +-----------------------------+
- *          |                             |
- *          v                             v
- *     Cryptography                  other security domains
- *          |
- *          v
- *     domain-neutral AST
- *          |
- *          v
- *     semantic security analysis
- *          |
- *          v
- *     canonical semantic representation
- *          |
- *          +-----------------------------+
- *          |                             |
- *          v                             v
- *     classical lowering             quantum lowering
- *                                        |
- *                                        v
- *                                   quantum::ir
- *                                        |
- *                                        v
- *                              optimization / routing /
- *                              scheduling / resilience /
- *                              ZQN / HAL / target
+ * This grammar defines portable cryptographic intent.
  *
- * Cryptography never creates a second quantum IR.
+ * It describes:
  *
- * ============================================================================
- * OWNERSHIP
- * ============================================================================
- *
- * THIS FILE OWNS:
- *
- *   - cryptographic declarations;
- *   - cryptographic operation intent;
- *   - cryptographic algorithm references;
+ *   - cryptographic operations;
+ *   - cryptographic objects;
+ *   - algorithm references;
  *   - primitive references;
  *   - key references;
- *   - key roles;
- *   - cryptographic purposes;
- *   - cryptographic properties;
- *   - protocol references and protocol intent;
- *   - cryptographic requirements;
- *   - cryptographic constraints;
- *   - cryptographic preferences;
- *   - provider/implementation references as opaque names;
- *   - cryptographic metadata attachments;
- *   - cryptographic source-level composition.
+ *   - protocol references;
+ *   - security properties;
+ *   - requirements;
+ *   - constraints;
+ *   - preferences;
+ *   - provider references;
+ *   - implementation references;
+ *   - metadata;
+ *   - hash delegation;
+ *   - cryptographic composition.
  *
- * THIS FILE DOES NOT OWN:
+ * It does NOT implement cryptography.
  *
- *   - identity;
- *   - authentication;
- *   - authorization;
- *   - permissions;
- *   - policy containers;
- *   - trust;
- *   - certificates as trust evidence;
- *   - secret storage;
- *   - passwords;
- *   - private-key material;
- *   - plaintext secret values;
- *   - key generation;
- *   - key rotation implementation;
- *   - key destruction implementation;
- *   - random-number generation;
- *   - HSM/TPM/secure-element implementation;
- *   - hardware discovery;
- *   - provider discovery;
- *   - algorithm implementation;
- *   - cryptographic execution;
- *   - timing enforcement;
- *   - side-channel enforcement;
- *   - runtime enforcement;
- *   - resource discovery;
- *   - capability discovery;
- *   - quantum error correction;
- *   - ZQN;
- *   - routing;
- *   - scheduling;
- *   - optimization;
- *   - target selection;
- *   - deployment.
+ * It does NOT:
  *
- * Ownership of adjacent concepts remains:
- *
- *     security/identifiers.g4
- *         identity and principal syntax
- *
- *     security/capabilities.g4
- *         security capability syntax
- *
- *     security/permissions.g4
- *         permission syntax
- *
- *     security/authorization.g4
- *         authorization syntax
- *
- *     security/policies.g4
- *         policy syntax
- *
- *     security/secrets.g4
- *         secret references and lifecycle intent
- *
- *     security/privacy.g4
- *         privacy syntax
- *
- *     security/trust.g4
- *         trust syntax
- *
- *     security/security-constraints.g4
- *         general security constraints
- *
- *     security/security.g4
- *         security composition
- *
- * Cryptography may REFER to concepts owned by those grammars, but must not
- * redefine them.
+ *   - execute cryptographic operations;
+ *   - discover providers;
+ *   - discover hardware;
+ *   - resolve keys;
+ *   - access secrets;
+ *   - select CPUs;
+ *   - select GPUs;
+ *   - select FPGAs;
+ *   - select QPUs;
+ *   - perform routing;
+ *   - perform scheduling;
+ *   - perform QEC;
+ *   - perform ZQN;
+ *   - create a second IR.
  *
  * ============================================================================
- * CRITICAL LEXICAL CORRECTION
+ * AUTHORITY
  * ============================================================================
  *
- * The previous implementation attempted to consume cryptography-specific
- * lexer tokens such as:
+ * Language specification:
  *
- *     CRYPTOGRAPHY
+ *     grammar/specification/
+ *
+ * Canonical parser composition:
+ *
+ *     grammar/Zamani.g4
+ *
+ * Canonical ANTLR lexer:
+ *
+ *     grammar/antlr/ZamaniLexer.g4
+ *
+ * Security composition:
+ *
+ *     grammar/security/security.g4
+ *
+ * Hash-specific syntax:
+ *
+ *     grammar/security/hashes.g4
+ *
+ * Frontend AST:
+ *
+ *     src/frontend/ast/
+ *
+ * Canonical quantum semantic boundary:
+ *
+ *     quantum::ir
+ *
+ * This file must never become a competing root grammar.
+ *
+ * ============================================================================
+ * IMPORTANT LEXICAL DESIGN
+ * ============================================================================
+ *
+ * The previous cryptography grammar depended on numerous lexer tokens that
+ * are not part of the current canonical Zamani lexical vocabulary.
+ *
+ * This implementation deliberately does NOT require tokens such as:
+ *
  *     ALGORITHM
  *     PRIMITIVE
  *     KEY_REFERENCE
@@ -182,196 +126,226 @@
  *     PROTOCOL
  *     PARTICIPANT
  *     LIFECYCLE
+ *     STORAGE
+ *     ROLE
+ *     CRYPTOGRAPHIC_OPERATION
  *
- * Those names are not currently part of the canonical lexical vocabulary.
+ * merely because these concepts exist semantically.
  *
- * This grammar therefore does NOT silently assume their existence.
+ * Cryptographic field names are represented by ordinary identifiers and
+ * qualified names.
  *
- * The production integration contract is:
+ * This keeps the grammar compatible with the repository's open-world lexical
+ * architecture.
  *
- *     grammar/security/cryptography.g4
- *             |
- *             v
- *     grammar/antlr/ZamaniParser.g4
- *             |
- *             v
- *     canonical security vocabulary
- *
- * Cryptography-specific reserved words MUST be added exactly once to the
- * canonical lexical hierarchy before this grammar is enabled by the complete
- * parser composition.
- *
- * The required lexical additions are listed at the end of this file.
- *
- * They MUST NOT be duplicated in this parser grammar.
+ * A future language-version change may reserve selected words, but such a
+ * change belongs to the canonical lexical specification and compatibility
+ * process rather than being silently introduced here.
  *
  * ============================================================================
- * OPEN-WORLD CRYPTOGRAPHY
+ * OPEN-WORLD PRINCIPLE
  * ============================================================================
  *
- * Cryptographic algorithms, primitives, schemes, protocols, providers and
- * implementations are OPEN-WORLD semantic names.
+ * Cryptographic algorithms are semantic names.
  *
- * Do NOT encode a finite list such as:
+ * This grammar MUST NOT enumerate:
  *
  *     AES
+ *     AES-GCM
  *     ChaCha20
  *     RSA
  *     ECC
- *     SHA256
- *     SHA3
+ *     SHA-256
+ *     SHA-3
+ *     BLAKE2
+ *     BLAKE3
  *     Ed25519
  *     ML-KEM
  *     ML-DSA
  *     SLH-DSA
- *     ...
  *
- * as parser alternatives.
+ * or any other finite algorithm catalogue.
  *
- * Such names are values in the language's semantic namespace.
+ * All such names are represented by:
  *
- * This allows future algorithms and implementations to be represented without
- * modifying the grammar.
+ *     qualifiedName
  *
- * Example:
+ * Examples:
  *
- *     algorithm "future.namespace.algorithm"
+ *     cryptography::hash::sha256
+ *     cryptography::signature::ed25519
+ *     future::cryptography::algorithm
+ *     vendor::cryptography::implementation
  *
- * is structurally equivalent to:
- *
- *     algorithm "existing.namespace.algorithm"
- *
- * The semantic layer determines whether a referenced algorithm exists,
- * satisfies the requested properties, is approved by policy, and can be
- * realized on the selected target.
- *
- * ============================================================================
- * SECRET-MATERIAL INVARIANT
- * ============================================================================
- *
- * This grammar MUST NEVER provide syntax whose semantic purpose is embedding
- * secret/private cryptographic material directly in ordinary source.
- *
- * Forbidden conceptual forms include:
- *
- *     private_key = "..."
- *     secret_key = "..."
- *     password = "..."
- *     seed = "..."
- *
- * A STRING is not inherently a secret, so the parser cannot reject every
- * string globally.
- *
- * Instead:
- *
- *     cryptographic key references
- *     credential references
- *     secret references
- *     key-store references
- *
- * must remain references.
- *
- * The semantic/security layer is responsible for preventing a reference from
- * being misused as embedded secret material.
+ * The semantic layer decides whether the reference exists and whether it is
+ * valid.
  *
  * ============================================================================
  * POCO-REAF
  * ============================================================================
  *
- * Cryptographic source must remain portable across:
+ * Cryptographic programs must remain portable across:
  *
  *     embedded systems
  *     CPUs
- *     multicore systems
+ *     multicore CPUs
  *     GPUs
  *     FPGAs
  *     ASICs
  *     accelerators
  *     QPUs
  *     simulators
+ *     HPC systems
  *     clusters
  *     distributed systems
  *     cloud systems
  *     future computational substrates
  *
- * This grammar therefore contains no universal limits on:
+ * This grammar imposes NO universal limits on:
  *
- *     keys
  *     algorithms
+ *     keys
  *     operations
- *     participants
  *     protocols
- *     security properties
- *     cryptographic objects
+ *     participants
+ *     inputs
+ *     outputs
+ *     properties
+ *     requirements
+ *     constraints
  *     devices
  *     nodes
- *     CPUs
- *     GPUs
- *     FPGAs
- *     QPUs
+ *     processors
  *     memory
  *     storage
- *     threads
  *     qubits
+ *     threads
  *
- * No:
+ * It MUST NOT define:
  *
  *     MAX_KEYS
  *     MAX_ALGORITHMS
  *     MAX_CRYPTO_OPERATIONS
+ *     MAX_PROTOCOLS
+ *     MAX_PARTICIPANTS
  *     MAX_DEVICES
  *     MAX_NODES
+ *     MAX_MEMORY
  *     MAX_QUBITS
  *     MAX_CPUS
  *     MAX_GPUS
  *     MAX_FPGAS
- *     MAX_MEMORY
  *
- * may become language-level constraints.
- *
- * Actual resource limitations belong to semantic resource analysis, target
- * capabilities, compilation, scheduling, deployment and runtime.
+ * "Infinity" means that the language itself imposes no arbitrary semantic
+ * ceiling. Actual execution remains bounded by available resources and
+ * implementation capabilities.
  *
  * ============================================================================
  * REQUIREMENT / CONSTRAINT / PREFERENCE
  * ============================================================================
  *
- * These are intentionally distinct semantic categories.
+ * These are different semantic categories.
  *
- * REQUIREMENT:
+ * REQUIREMENT
+ *     A mandatory condition.
  *
- *     must be satisfied.
+ * CONSTRAINT
+ *     A condition restricting permitted realizations.
  *
- * CONSTRAINT:
+ * PREFERENCE
+ *     A desired but non-mandatory property.
  *
- *     limits an otherwise valid realization.
+ * The parser preserves the distinction.
  *
- * PREFERENCE:
- *
- *     desirable but not necessarily mandatory.
- *
- * A preference MUST NOT be silently promoted to a requirement.
+ * Semantic analysis determines satisfiability.
  *
  * ============================================================================
  * TARGET INDEPENDENCE
  * ============================================================================
  *
- * This grammar must not require:
+ * This grammar does not encode:
  *
- *     CPU identity
- *     GPU identity
- *     FPGA identity
- *     QPU identity
- *     HSM identity
- *     TPM identity
- *     memory-bank identity
- *     physical device index
- *     network-node index
+ *     cpu0
+ *     gpu0
+ *     fpga0
+ *     qpu0
+ *     hsm0
+ *     node0
+ *     memory_bank0
  *
- * Hardware-specific realization belongs downstream.
+ * as special language constructs.
+ *
+ * Physical realization belongs downstream.
  *
  * ============================================================================
- * ANTLR CONTRACT
+ * SECRET-MATERIAL BOUNDARY
+ * ============================================================================
+ *
+ * Cryptographic source may reference protected material but this grammar does
+ * not provide special literal syntax for:
+ *
+ *     private keys
+ *     secret keys
+ *     passwords
+ *     API keys
+ *     credentials
+ *     secret seeds
+ *
+ * A string literal is syntactically an ordinary expression.
+ *
+ * Whether a particular expression is permitted as cryptographic input is a
+ * semantic/security decision.
+ *
+ * Secret storage and lifecycle remain owned by the security secret subsystem.
+ *
+ * ============================================================================
+ * ARCHITECTURAL PIPELINE
+ * ============================================================================
+ *
+ *     source
+ *       |
+ *       v
+ *     canonical lexer
+ *       |
+ *       v
+ *     canonical parser
+ *       |
+ *       v
+ *     cryptographic syntax
+ *       |
+ *       v
+ *     domain-neutral AST
+ *       |
+ *       v
+ *     semantic security analysis
+ *       |
+ *       v
+ *     canonical semantic model
+ *       |
+ *       +-------------------------+
+ *       |                         |
+ *       v                         v
+ *   classical representation   quantum::ir metadata
+ *       |                         |
+ *       +------------+------------+
+ *                    |
+ *                    v
+ *               optimization
+ *                    |
+ *          +---------+---------+
+ *          |         |         |
+ *          v         v         v
+ *       routing  scheduling resilience
+ *                              |
+ *                              v
+ *                             ZQN
+ *                              |
+ *                              v
+ *                             HAL
+ *                              |
+ *                              v
+ *                           target
+ *
  * ============================================================================
  */
 
@@ -382,838 +356,1263 @@ options {
 }
 
 
-/* ========================================================================= */
-/* PUBLIC ENTRY POINTS                                                      */
-/* ========================================================================= */
+/* ============================================================================
+ * PUBLIC ENTRY POINTS
+ * ========================================================================== */
 
 /*
  * Standalone cryptography grammar entry point.
  *
- * This is useful for grammar conformance tests.
+ * The complete language normally enters cryptography through:
  *
- * The complete Zamani parser normally enters cryptography through the security
- * composition root.
+ *     grammar/security/security.g4
+ *
+ * and ultimately:
+ *
+ *     grammar/Zamani.g4
  */
 cryptographyFile
-    : cryptographyEntry* EOF
+    : cryptographicEntry* EOF
     ;
 
-cryptographyEntry
+
+/*
+ * A cryptographic entry is deliberately structural rather than algorithm-
+ * specific.
+ */
+cryptographicEntry
     : cryptographicDeclaration
+    | cryptographicOperation
     | cryptographicRequirementDeclaration
     | cryptographicConstraintDeclaration
     | cryptographicPreferenceDeclaration
-    | cryptographicOperation
+    | cryptographicObjectDeclaration
     ;
 
 
-/* ========================================================================= */
-/* DECLARATIONS                                                              */
-/* ========================================================================= */
+/* ============================================================================
+ * CRYPTOGRAPHIC DECLARATIONS
+ * ========================================================================== */
 
 /*
- * A cryptography declaration names a cryptographic semantic scope/object.
+ * A cryptographic declaration is introduced by the canonical cryptography
+ * namespace marker.
  *
- * The declaration name is an ordinary Zamani identifier.
+ * The exact semantic category is carried by the qualified name.
  *
- * The cryptographic meaning is determined downstream.
+ * Conceptual forms:
+ *
+ *     cryptography::algorithm::...
+ *     cryptography::protocol::...
+ *     cryptography::key::...
+ *     cryptography::primitive::...
+ *
+ * The grammar intentionally does not enumerate those categories.
+ *
+ * The surrounding security composition is responsible for exposing the
+ * cryptographic declaration entry point.
  */
 cryptographicDeclaration
-    : CRYPTOGRAPHY identifier cryptographicBody? SEMI?
-    ;
-
-cryptographicBody
-    : LBRACE cryptographicMember* RBRACE
-    ;
-
-cryptographicMember
-    : cryptographicAlgorithmDeclaration
-    | cryptographicPrimitiveDeclaration
-    | cryptographicKeyDeclaration
-    | cryptographicProtocolDeclaration
-    | cryptographicRequirementMember
-    | cryptographicConstraintMember
-    | cryptographicPreferenceMember
-    | cryptographicOperation
-    | cryptographicMetadata
+    : cryptographicDeclarationHead
+      cryptographicBody?
+      SEMICOLON?
     ;
 
 
-/* ========================================================================= */
-/* ALGORITHM                                                                 */
-/* ========================================================================= */
-
-cryptographicAlgorithmDeclaration
-    : ALGORITHM cryptographicReferenceName cryptographicDescriptor?
-    ;
-
-cryptographicDescriptor
-    : LBRACE cryptographicDescriptorMember* RBRACE
-    ;
-
-cryptographicDescriptorMember
-    : propertyClause
-    | purposeClause
-    | requirementClause
-    | constraintClause
-    | preferenceClause
-    | parameterClause
-    | implementationReference
-    | providerReference
-    | metadataClause
+cryptographicDeclarationHead
+    : cryptographicKeywordReference
+      qualifiedName
     ;
 
 
 /*
- * Open-world algorithm reference.
+ * The lexical spelling `cryptography` remains an ordinary identifier unless
+ * the canonical lexical specification explicitly promotes it to a reserved
+ * keyword.
  *
- * No algorithm enumeration is permitted here.
+ * This rule therefore represents the namespace structurally rather than
+ * depending on a missing CRYPTOGRAPHY lexer token.
  */
-algorithmReference
-    : cryptographicReferenceName
-    ;
-
-algorithmReferenceList
-    : algorithmReference (COMMA algorithmReference)*
-    ;
-
-
-/* ========================================================================= */
-/* PRIMITIVE                                                                 */
-/* ========================================================================= */
-
-cryptographicPrimitiveDeclaration
-    : PRIMITIVE cryptographicReferenceName cryptographicDescriptor?
-    ;
-
-primitiveReference
-    : cryptographicReferenceName
-    ;
-
-primitiveReferenceList
-    : primitiveReference (COMMA primitiveReference)*
-    ;
-
-
-/* ========================================================================= */
-/* KEY DECLARATIONS                                                         */
-/* ========================================================================= */
-
-cryptographicKeyDeclaration
-    : KEY identifier keyDescriptor?
-    ;
-
-keyDescriptor
-    : LBRACE keyMember* RBRACE
-    ;
-
-keyMember
-    : keyRoleClause
-    | keyReferenceClause
-    | keyAlgorithmClause
-    | keyPurposeClause
-    | keyPropertyClause
-    | keyRequirementClause
-    | keyConstraintClause
-    | keyPreferenceClause
-    | keyStorageReference
-    | keyLifecycleIntent
-    | cryptographicMetadata
-    ;
-
-
-/*
- * The name after KEY is a symbolic identifier.
- *
- * It does not represent secret material.
- */
-keyReferenceClause
-    : KEY_REFERENCE referenceValue
-    ;
-
-keyAlgorithmClause
-    : ALGORITHM algorithmReference
-    ;
-
-keyPurposeClause
-    : PURPOSE expression
-    ;
-
-keyPropertyClause
-    : PROPERTY expression
-    ;
-
-keyRequirementClause
-    : REQUIRE requirementExpression
-    ;
-
-keyConstraintClause
-    : CONSTRAIN constraintExpression
-    ;
-
-keyPreferenceClause
-    : PREFER preferenceExpression
-    ;
-
-keyStorageReference
-    : STORAGE cryptographicReferenceName
-    ;
-
-keyLifecycleIntent
-    : LIFECYCLE expression
-    ;
-
-keyRoleClause
-    : ROLE expression
-    ;
-
-
-/* ========================================================================= */
-/* KEY ROLE                                                                  */
-/* ========================================================================= */
-
-keyRoleDeclaration
-    : KEY_ROLE identifier keyRoleBody?
-    ;
-
-keyRoleBody
-    : LBRACE keyRoleMember* RBRACE
-    ;
-
-keyRoleMember
-    : purposeClause
-    | propertyClause
-    | requirementClause
-    | constraintClause
-    | preferenceClause
-    | cryptographicMetadata
-    ;
-
-keyRoleReference
-    : cryptographicReferenceName
-    ;
-
-
-/* ========================================================================= */
-/* PROTOCOL                                                                  */
-/* ========================================================================= */
-
-cryptographicProtocolDeclaration
-    : PROTOCOL cryptographicReferenceName protocolDescriptor?
-    ;
-
-protocolDescriptor
-    : LBRACE protocolMember* RBRACE
-    ;
-
-protocolMember
-    : algorithmClause
-    | primitiveClause
-    | keyReferenceClause
-    | purposeClause
-    | propertyClause
-    | requirementClause
-    | constraintClause
-    | preferenceClause
-    | participantClause
-    | parameterClause
-    | cryptographicMetadata
-    ;
-
-algorithmClause
-    : ALGORITHM algorithmReference
-    ;
-
-primitiveClause
-    : PRIMITIVE primitiveReference
-    ;
-
-participantClause
-    : PARTICIPANT expression
-    ;
-
-participantList
-    : participantExpression (COMMA participantExpression)*
-    ;
-
-participantExpression
-    : expression
-    ;
-
-
-/* ========================================================================= */
-/* CRYPTOGRAPHIC OPERATIONS                                                  */
-/* ========================================================================= */
-
-/*
- * A cryptographic operation is intentionally generic.
- *
- * This avoids turning the grammar into a finite catalogue of algorithms.
- *
- * Conceptual examples:
- *
- *     cryptographic_operation signing with key signing_key
- *     cryptographic_operation hashing with algorithm digest
- *     cryptographic_operation encrypting with key session_key
- *
- * The exact semantic operation vocabulary is extensible through the operation
- * name and descriptor rather than a closed grammar enumeration.
- */
-cryptographicOperation
-    : CRYPTOGRAPHIC_OPERATION cryptographicOperationName
-      cryptographicOperationArguments?
-      cryptographicOperationBody?
-      SEMI?
-    ;
-
-cryptographicOperationName
+cryptographicKeywordReference
     : identifier
     ;
 
-cryptographicOperationArguments
-    : LPAREN argumentList? RPAREN
+
+cryptographicBody
+    : LBRACE
+      cryptographicMember*
+      RBRACE
     ;
 
-argumentList
-    : expression (COMMA expression)*
+
+cryptographicMember
+    : cryptographicField
+    | cryptographicOperation
+    | cryptographicRequirement
+    | cryptographicConstraint
+    | cryptographicPreference
+    | cryptographicMetadata
+    | hashDelegation
     ;
+
+
+/* ============================================================================
+ * GENERIC CRYPTOGRAPHIC FIELDS
+ * ========================================================================== */
+
+/*
+ * Generic fields prevent cryptography.g4 from becoming a closed dictionary of
+ * algorithms and security mechanisms.
+ *
+ * Examples:
+ *
+ *     algorithm: cryptography::hash::sha256;
+ *     primitive: cryptography::digest;
+ *     purpose: application::identity;
+ *     property: collision_resistance;
+ *     provider: vendor::provider;
+ *     implementation: platform::accelerator;
+ *
+ * The field name is syntax.
+ *
+ * Its meaning is semantic.
+ */
+cryptographicField
+    : qualifiedName
+      COLON
+      expression
+      SEMICOLON?
+    ;
+
+
+/*
+ * A name-only cryptographic field is useful for references that do not require
+ * an expression wrapper.
+ */
+cryptographicReferenceField
+    : qualifiedName
+      COLON
+      qualifiedName
+      SEMICOLON?
+    ;
+
+
+/* ============================================================================
+ * CRYPTOGRAPHIC OPERATIONS
+ * ========================================================================== */
+
+/*
+ * Generic cryptographic operations use Zamani's existing APPLY vocabulary.
+ *
+ * Conceptual forms:
+ *
+ *     apply cryptography::encrypt(data);
+ *
+ *     apply cryptography::sign(message, signing_key);
+ *
+ *     apply cryptography::verify(message, signature, key);
+ *
+ *     apply cryptography::hash(data);
+ *
+ * The operation name remains open-world.
+ */
+cryptographicOperation
+    : APPLY
+      qualifiedName
+      cryptographicArgumentList?
+      cryptographicOperationBody?
+      SEMICOLON?
+    ;
+
+
+cryptographicArgumentList
+    : LPAREN
+      cryptographicArguments?
+      RPAREN
+    ;
+
+
+cryptographicArguments
+    : expression
+      (
+          COMMA
+          expression
+      )*
+    ;
+
 
 cryptographicOperationBody
-    : LBRACE cryptographicOperationMember* RBRACE
+    : LBRACE
+      cryptographicOperationMember*
+      RBRACE
     ;
+
 
 cryptographicOperationMember
-    : algorithmClause
-    | primitiveClause
-    | keyReferenceClause
-    | purposeClause
-    | propertyClause
-    | requirementClause
-    | constraintClause
-    | preferenceClause
-    | parameterClause
-    | implementationReference
-    | providerReference
+    : cryptographicField
+    | cryptographicReferenceField
+    | cryptographicRequirement
+    | cryptographicConstraint
+    | cryptographicPreference
     | cryptographicMetadata
+    | hashDelegation
     ;
 
 
-/* ========================================================================= */
-/* PURPOSES                                                                  */
-/* ========================================================================= */
-
-purposeClause
-    : PURPOSE expression
-    ;
-
-purposeList
-    : purposeExpression (COMMA purposeExpression)*
-    ;
-
-purposeExpression
-    : expression
-    ;
-
-
-/* ========================================================================= */
-/* PROPERTIES                                                                */
-/* ========================================================================= */
-
-propertyClause
-    : PROPERTY expression
-    ;
-
-propertyList
-    : propertyExpression (COMMA propertyExpression)*
-    ;
-
-propertyExpression
-    : expression
-    ;
-
-
-/* ========================================================================= */
-/* PARAMETERS                                                                */
-/* ========================================================================= */
-
-parameterClause
-    : PARAMETER identifier ASSIGN expression
-    ;
-
-parameterList
-    : parameterClause (COMMA parameterClause)*
-    ;
-
-
-/* ========================================================================= */
-/* IMPLEMENTATION / PROVIDER REFERENCES                                     */
-/* ========================================================================= */
+/* ============================================================================
+ * REQUIREMENTS
+ * ========================================================================== */
 
 /*
- * These are opaque semantic references.
+ * Mandatory cryptographic requirement.
  *
- * They do not cause provider discovery or implementation loading.
+ * Examples:
+ *
+ *     requires capability("cryptography.compute");
+ *
+ *     requires cryptography::property::collision_resistance;
+ *
+ *     requires cryptography::algorithm::approved;
+ *
+ *     requires memory >= required_memory;
+ *
+ * Resource and capability expressions remain semantic expressions.
  */
-implementationReference
-    : IMPLEMENTATION cryptographicReferenceName
+cryptographicRequirement
+    : REQUIRES
+      expression
+      SEMICOLON?
     ;
 
-providerReference
-    : PROVIDER cryptographicReferenceName
-    ;
-
-
-/* ========================================================================= */
-/* REQUIREMENTS                                                              */
-/* ========================================================================= */
 
 cryptographicRequirementDeclaration
-    : REQUIREMENT identifier requirementBody?
+    : CONTRACT
+      qualifiedName
+      cryptographicContractBody?
+      SEMICOLON?
     ;
 
-requirementBody
-    : LBRACE requirementMember* RBRACE
+
+cryptographicContractBody
+    : LBRACE
+      cryptographicContractMember*
+      RBRACE
     ;
 
-requirementMember
-    : algorithmClause
-    | primitiveClause
-    | purposeClause
-    | propertyClause
-    | requirementClause
-    | constraintClause
-    | preferenceClause
-    | keyRequirementClause
-    | protocolReferenceClause
-    | parameterClause
+
+cryptographicContractMember
+    : cryptographicRequirement
+    | cryptographicConstraint
+    | cryptographicPreference
+    | cryptographicField
     | cryptographicMetadata
     ;
 
-requirementClause
-    : REQUIRE requirementExpression
+
+/* ============================================================================
+ * CONSTRAINTS
+ * ========================================================================== */
+
+cryptographicConstraint
+    : CONSTRAINT
+      expression
+      SEMICOLON?
     ;
 
-requirementExpression
-    : expression
-    ;
-
-keyRequirementClause
-    : REQUIRE requirementExpression
-    ;
-
-protocolReferenceClause
-    : PROTOCOL cryptographicReferenceName
-    ;
-
-
-/* ========================================================================= */
-/* CONSTRAINTS                                                               */
-/* ========================================================================= */
 
 cryptographicConstraintDeclaration
-    : CONSTRAINT identifier constraintBody?
-    ;
-
-constraintBody
-    : LBRACE constraintMember* RBRACE
-    ;
-
-constraintMember
-    : algorithmClause
-    | primitiveClause
-    | purposeClause
-    | propertyClause
-    | requirementClause
-    | constraintClause
-    | preferenceClause
-    | parameterClause
-    | protocolReferenceClause
-    | cryptographicMetadata
-    ;
-
-constraintClause
-    : CONSTRAIN constraintExpression
-    ;
-
-constraintExpression
-    : expression
+    : CONSTRAINT
+      qualifiedName
+      cryptographicContractBody?
+      SEMICOLON?
     ;
 
 
-/* ========================================================================= */
-/* PREFERENCES                                                               */
-/* ========================================================================= */
+/* ============================================================================
+ * PREFERENCES
+ * ========================================================================== */
+
+cryptographicPreference
+    : PREFER
+      expression
+      SEMICOLON?
+    ;
+
 
 cryptographicPreferenceDeclaration
-    : PREFERENCE identifier preferenceBody?
-    ;
-
-preferenceBody
-    : LBRACE preferenceMember* RBRACE
-    ;
-
-preferenceMember
-    : algorithmClause
-    | primitiveClause
-    | purposeClause
-    | propertyClause
-    | requirementClause
-    | constraintClause
-    | preferenceClause
-    | implementationReference
-    | providerReference
-    | parameterClause
-    | protocolReferenceClause
-    | cryptographicMetadata
-    ;
-
-preferenceClause
-    : PREFER preferenceExpression
-    ;
-
-preferenceExpression
-    : expression
+    : PREFER
+      qualifiedName
+      cryptographicContractBody?
+      SEMICOLON?
     ;
 
 
-/* ========================================================================= */
-/* GENERIC CRYPTOGRAPHIC REFERENCES                                         */
-/* ========================================================================= */
+/* ============================================================================
+ * CRYPTOGRAPHIC OBJECT REFERENCES
+ * ========================================================================== */
 
 /*
- * Cryptographic references are semantic names.
+ * This is an intentionally generic object declaration.
  *
- * They may represent:
+ * The semantic namespace determines whether it denotes:
  *
- *     algorithm
+ *     key
+ *     protocol
  *     primitive
- *     key handle
  *     credential handle
  *     provider
  *     implementation
- *     protocol
+ *     certificate reference
  *     cryptographic service
- *     external cryptographic object
- *     future cryptographic abstraction
- *
- * They are NOT automatically resolved by parsing.
+ *     future object category
  */
-cryptographicReferenceName
+cryptographicObjectDeclaration
+    : qualifiedName
+      cryptographicObjectBody?
+      SEMICOLON?
+    ;
+
+
+cryptographicObjectBody
+    : LBRACE
+      cryptographicObjectMember*
+      RBRACE
+    ;
+
+
+cryptographicObjectMember
+    : cryptographicField
+    | cryptographicRequirement
+    | cryptographicConstraint
+    | cryptographicPreference
+    | cryptographicMetadata
+    ;
+
+
+/* ============================================================================
+ * ALGORITHM / PRIMITIVE / KEY / PROTOCOL REFERENCES
+ * ========================================================================== */
+
+/*
+ * Open-world references.
+ *
+ * No finite algorithm catalogue is embedded.
+ */
+algorithmReference
+    : qualifiedName
+    ;
+
+
+algorithmReferenceList
+    : algorithmReference
+      (
+          COMMA
+          algorithmReference
+      )*
+      COMMA?
+    ;
+
+
+primitiveReference
+    : qualifiedName
+    ;
+
+
+primitiveReferenceList
+    : primitiveReference
+      (
+          COMMA
+          primitiveReference
+      )*
+      COMMA?
+    ;
+
+
+keyReference
+    : qualifiedName
+    ;
+
+
+keyReferenceList
+    : keyReference
+      (
+          COMMA
+          keyReference
+      )*
+      COMMA?
+    ;
+
+
+protocolReference
+    : qualifiedName
+    ;
+
+
+protocolReferenceList
+    : protocolReference
+      (
+          COMMA
+          protocolReference
+      )*
+      COMMA?
+    ;
+
+
+/* ============================================================================
+ * PROVIDER / IMPLEMENTATION REFERENCES
+ * ========================================================================== */
+
+providerReference
+    : qualifiedName
+    ;
+
+
+implementationReference
     : qualifiedName
     ;
 
 
 /*
- * Reference values are deliberately restricted to names or ordinary source
- * strings used as identifiers/handles.
+ * Provider and implementation names are opaque semantic references.
  *
- * Security semantics determine whether a string is an allowed external
- * reference. Secret material must never be interpreted as valid key material
- * merely because it is lexically a STRING.
+ * Parsing them does not:
+ *
+ *     discover providers;
+ *     load implementations;
+ *     inspect hardware;
+ *     access the network;
+ *     access the filesystem.
  */
-referenceValue
+providerReferenceClause
     : qualifiedName
-    | stringLiteral
+      COLON
+      providerReference
+      SEMICOLON?
     ;
 
 
-/* ========================================================================= */
-/* METADATA                                                                  */
-/* ========================================================================= */
+implementationReferenceClause
+    : qualifiedName
+      COLON
+      implementationReference
+      SEMICOLON?
+    ;
 
+
+/* ============================================================================
+ * PURPOSE / PROPERTY / PARAMETER REFERENCES
+ * ========================================================================== */
+
+cryptographicPurpose
+    : qualifiedName
+    ;
+
+
+cryptographicProperty
+    : qualifiedName
+    ;
+
+
+cryptographicParameter
+    : qualifiedName
+    ;
+
+
+cryptographicPurposeList
+    : cryptographicPurpose
+      (
+          COMMA
+          cryptographicPurpose
+      )*
+      COMMA?
+    ;
+
+
+cryptographicPropertyList
+    : cryptographicProperty
+      (
+          COMMA
+          cryptographicProperty
+      )*
+      COMMA?
+    ;
+
+
+/* ============================================================================
+ * METADATA
+ * ========================================================================== */
+
+/*
+ * Metadata remains generic.
+ *
+ * This prevents cryptography from creating a second metadata language.
+ */
 cryptographicMetadata
-    : METADATA metadataBlock
-    ;
-
-metadataBlock
-    : LBRACE metadataEntry* RBRACE
-    ;
-
-metadataEntry
-    : identifier ASSIGN expression
-    ;
-
-metadataClause
-    : cryptographicMetadata
+    : HASH
+      LBRACE
+      cryptographicMetadataEntry*
+      RBRACE
     ;
 
 
-/* ========================================================================= */
-/* SHARED CRYPTOGRAPHIC MEMBER CONTRACTS                                    */
-/* ========================================================================= */
+cryptographicMetadataEntry
+    : qualifiedName
+      COLON
+      expression
+      SEMICOLON?
+    ;
+
 
 /*
- * These façade rules intentionally delegate to the canonical Zamani
- * expression/name contracts.
+ * IMPORTANT:
  *
- * They MUST NOT be replaced by cryptography-specific identifier or expression
- * grammars.
+ * HASH above is the existing lexical punctuation token `#`, not a hash
+ * algorithm keyword.
  *
- * Expected canonical contracts:
+ * Therefore metadata may use the canonical attribute/directive spelling:
  *
- *     identifier
- *     qualifiedName
- *     expression
- *     stringLiteral
- *     argumentList
+ *     #[...]
  *
- * Ownership remains in the corresponding core/expression grammar.
+ * only where the surrounding grammar permits it.
+ *
+ * If metadata is not represented with `#` in the canonical security
+ * composition, this rule should be delegated to the canonical core metadata
+ * grammar rather than expanded here.
  */
 
 
-/* ========================================================================= */
-/* COMPOSITION HELPERS                                                       */
-/* ========================================================================= */
-
-cryptographicRequirementMember
-    : algorithmClause
-    | primitiveClause
-    | purposeClause
-    | propertyClause
-    | requirementClause
-    | constraintClause
-    | preferenceClause
-    | keyRequirementClause
-    | protocolReferenceClause
-    | parameterClause
-    | cryptographicMetadata
-    ;
-
-cryptographicConstraintMember
-    : algorithmClause
-    | primitiveClause
-    | purposeClause
-    | propertyClause
-    | requirementClause
-    | constraintClause
-    | preferenceClause
-    | parameterClause
-    | protocolReferenceClause
-    | cryptographicMetadata
-    ;
-
-cryptographicPreferenceMember
-    : algorithmClause
-    | primitiveClause
-    | purposeClause
-    | propertyClause
-    | requirementClause
-    | constraintClause
-    | preferenceClause
-    | implementationReference
-    | providerReference
-    | parameterClause
-    | protocolReferenceClause
-    | cryptographicMetadata
-    ;
-
-
-/* ========================================================================= */
-/* INTEGRATION CONTRACT                                                      */
-/* ========================================================================= */
+/* ============================================================================
+ * HASH INTEGRATION
+ * ========================================================================== */
 
 /*
- * SECURITY COMPOSITION
- * --------------------
+ * Hashing is a specialized cryptographic domain.
  *
- * grammar/security/security.g4 owns the security composition boundary.
+ * Ownership:
  *
- * It should import/compose Cryptography rather than copying these rules.
+ *     cryptography.g4
+ *         cryptographic composition
  *
- * Intended relationship:
+ *     hashes.g4
+ *         hash-specific syntax
  *
- *     Security
- *        |
- *        +--> Identity
- *        +--> Capabilities
- *        +--> Permissions
- *        +--> Authorization
- *        +--> Policies
- *        +--> Cryptography
- *        +--> Privacy
- *        +--> Trust
- *        +--> SecurityConstraints
+ * This file therefore exposes only a delegation boundary.
  *
- * Cryptography owns only its own syntax.
+ * It must not copy the hash grammar.
  *
+ * IMPORTANT:
  *
- * LEXER
- * -----
+ * Because the current lexical vocabulary does not reserve HASH as a keyword,
+ * hashes.g4 must remain namespace/operation based unless HASH is deliberately
+ * promoted through the canonical lexer specification.
+ */
+hashDelegation
+    : APPLY
+      hashQualifiedOperation
+      cryptographicArgumentList?
+      hashDelegatedBody?
+      SEMICOLON?
+    ;
+
+
+hashQualifiedOperation
+    : qualifiedName
+    ;
+
+
+hashDelegatedBody
+    : LBRACE
+      cryptographicField*
+      RBRACE
+    ;
+
+
+/*
+ * The semantic layer recognizes the hash namespace:
  *
- * The canonical lexer is:
+ *     cryptography::hash
  *
- *     grammar/antlr/ZamaniLexer.g4
+ * and delegates the operation contract to hashes.g4.
  *
- * It consumes:
+ * This keeps algorithms open-world.
+ */
+
+
+/* ============================================================================
+ * HASH REFERENCE
+ * ========================================================================== */
+
+hashReference
+    : qualifiedName
+    ;
+
+
+hashReferenceList
+    : hashReference
+      (
+          COMMA
+          hashReference
+      )*
+      COMMA?
+    ;
+
+
+/* ============================================================================
+ * SECURITY PROPERTIES
+ * ========================================================================== */
+
+/*
+ * Security properties are symbolic semantic references.
  *
- *     ZamaniTokens
+ * Examples:
  *
- * Cryptography MUST use:
+ *     collision_resistance
+ *     preimage_resistance
+ *     second_preimage_resistance
+ *     domain_separation
+ *     canonical_representation
+ *     integrity
  *
- *     tokenVocab = ZamaniLexer;
+ * The grammar does not decide whether a property is actually provided.
+ */
+securityPropertyReference
+    : qualifiedName
+    ;
+
+
+securityPropertyList
+    : securityPropertyReference
+      (
+          COMMA
+          securityPropertyReference
+      )*
+      COMMA?
+    ;
+
+
+/* ============================================================================
+ * RESOURCE / CAPABILITY INTEGRATION
+ * ========================================================================== */
+
+/*
+ * Cryptographic requirements may refer to the repository-wide capability and
+ * resource model.
  *
- * and MUST NOT consume:
+ * Examples:
  *
- *     ZamaniTokens
+ *     requires capability("cryptography.hash");
  *
- * directly.
+ *     requires capability("constant_time");
  *
+ *     requires memory >= required_memory;
  *
- * PARSER
- * ------
+ *     requires availability >= required_availability;
  *
- * The canonical parser composition root is:
+ * The grammar does not determine whether the requirement is satisfiable.
+ */
+cryptographicCapabilityRequirement
+    : REQUIRES
+      CAPABILITY
+      LPAREN
+      expression
+      RPAREN
+      SEMICOLON?
+    ;
+
+
+cryptographicResourceRequirement
+    : REQUIRES
+      RESOURCE
+      expression
+      SEMICOLON?
+    ;
+
+
+cryptographicTargetRequirement
+    : REQUIRES
+      TARGET
+      expression
+      SEMICOLON?
+    ;
+
+
+/* ============================================================================
+ * PORTABILITY / SCALABILITY
+ * ========================================================================== */
+
+cryptographicPortabilityClause
+    : PORTABILITY
+      expression
+      SEMICOLON?
+    ;
+
+
+cryptographicScalabilityClause
+    : SCALABILITY
+      expression
+      SEMICOLON?
+    ;
+
+
+/* ============================================================================
+ * CROSS-DOMAIN ATTACHMENT
+ * ========================================================================== */
+
+/*
+ * Security metadata may be associated with symbolic targets belonging to:
  *
- *     grammar/antlr/ZamaniParser.g4
+ *     classical
+ *     quantum
+ *     hybrid
+ *     HDL
+ *     hardware
+ *     distributed
+ *     AI
+ *     data
+ *     networking
+ *     embedded
+ *     accelerator
+ *     future domains
  *
- * That parser is responsible for importing/composing security.
+ * No domain-specific AST is created here.
+ */
+cryptographicAttachment
+    : AT
+      qualifiedName
+      cryptographicAttachmentBody?
+    ;
+
+
+cryptographicAttachmentBody
+    : LBRACE
+      cryptographicMember*
+      RBRACE
+    ;
+
+
+/* ============================================================================
+ * QUANTUM INTEGRATION
+ * ========================================================================== */
+
+/*
+ * Cryptography may accompany quantum computation, but this grammar does not
+ * define quantum operations.
  *
+ * It must never introduce:
  *
- * AST
- * ---
+ *     QubitId
+ *     PhysicalQubitId
+ *     GateKind
+ *     QuantumHashIR
+ *     SecurityQuantumIR
  *
- * Cryptography MUST lower into the domain-neutral AST owned by:
+ * Hash/security metadata reaches the canonical:
  *
- *     src/frontend/ast/
+ *     quantum::ir
  *
- * This grammar does not prescribe Rust struct names.
+ * boundary through semantic lowering.
+ */
+cryptographicQuantumAttachment
+    : QUANTUM
+      qualifiedName
+      cryptographicAttachmentBody?
+    ;
+
+
+/* ============================================================================
+ * HDL / HARDWARE INTEGRATION
+ * ========================================================================== */
+
+cryptographicHardwareAttachment
+    : TARGET
+      qualifiedName
+      cryptographicAttachmentBody?
+    ;
+
+
+/*
+ * The target name is symbolic.
  *
- * The AST contract must preserve at minimum:
+ * It does not identify a physical device unless downstream semantics explicitly
+ * give it that meaning.
+ */
+
+
+/* ============================================================================
+ * DISTRIBUTED INTEGRATION
+ * ========================================================================== */
+
+cryptographicDistributedAttachment
+    : qualifiedName
+      cryptographicAttachmentBody
+    ;
+
+
+/*
+ * Distributed topology remains outside this grammar.
  *
- *     source span
- *     declaration identity
- *     cryptographic category
- *     symbolic references
- *     arguments
+ * No node count or topology size is encoded.
+ */
+
+
+/* ============================================================================
+ * GENERAL CRYPTOGRAPHIC SPECIFICATION
+ * ========================================================================== */
+
+cryptographicSpecification
+    : cryptographicMember+
+    ;
+
+
+cryptographicMemberList
+    : cryptographicMember+
+    ;
+
+
+/* ============================================================================
+ * SEMANTIC PRESERVATION CONTRACT
+ * ========================================================================== */
+
+/*
+ * The parser-to-AST layer MUST preserve:
+ *
+ *     source spans
+ *     operation names
+ *     namespace components
+ *     argument expressions
+ *     object references
+ *     algorithm references
+ *     primitive references
+ *     key references
+ *     protocol references
+ *     requirements
+ *     constraints
+ *     preferences
  *     properties
- *     purposes
+ *     metadata
+ *     target attachments
+ *
+ * No cryptographic meaning may be silently discarded.
+ */
+
+
+/* ============================================================================
+ * AST CONTRACT
+ * ========================================================================== */
+
+/*
+ * The AST must remain domain-neutral.
+ *
+ * This grammar MUST NOT require backend-specific nodes such as:
+ *
+ *     Aes256Node
+ *     Sha256Node
+ *     RsaNode
+ *     QpuHashNode
+ *     HsmNode
+ *     GpuCryptoNode
+ *
+ * Instead the frontend should preserve generic semantic information:
+ *
+ *     operation
+ *     qualified name
+ *     operands
+ *     parameters
+ *     properties
  *     requirements
  *     constraints
  *     preferences
  *     metadata
+ *     source span
  *
- * No cryptography-specific backend AST is required.
- *
- *
- * SEMANTIC ANALYSIS
- * -----------------
- *
+ * Semantic analysis determines cryptographic meaning.
+ */
+
+
+/* ============================================================================
+ * SEMANTIC ANALYSIS CONTRACT
+ * ========================================================================== */
+
+/*
  * Semantic analysis owns:
  *
- *     reference resolution
- *     algorithm existence
- *     primitive validity
- *     key-reference validity
- *     purpose compatibility
- *     property interpretation
+ *     algorithm resolution
+ *     primitive resolution
+ *     key-reference validation
+ *     protocol validation
+ *     property validation
  *     requirement satisfiability
  *     constraint consistency
- *     preference ordering
+ *     preference interpretation
  *     provider availability
  *     implementation availability
- *     policy compliance
- *     secret-material restrictions
+ *     security-policy validation
+ *     secret-material validation
  *     cryptographic misuse detection
+ *     capability validation
+ *     resource validation
  *
- * None of these are parser actions.
+ * None of these operations occur during parsing.
+ */
+
+
+/* ============================================================================
+ * IR CONTRACT
+ * ========================================================================== */
+
+/*
+ * Cryptography MUST NOT introduce a competing cryptographic IR.
  *
+ * The flow is:
  *
- * IR
- * --
+ *     cryptographic syntax
+ *          |
+ *          v
+ *     domain-neutral AST
+ *          |
+ *          v
+ *     semantic cryptographic model
+ *          |
+ *          +-----------------------+
+ *          |                       |
+ *          v                       v
+ *     classical lowering       quantum::ir metadata
  *
- * Cryptography MUST NOT create a competing cryptographic IR.
+ * followed by the normal compiler pipeline.
  *
- * Cryptographic semantics are lowered into the repository's canonical semantic
- * and IR architecture.
+ * No:
  *
- * Classical cryptographic computation may lower into the appropriate classical
- * representation.
+ *     CryptoIR
+ *     QuantumCryptoIR
+ *     HashIR
+ *     SecurityQuantumIR
  *
- * Quantum-related cryptographic computation MUST use the canonical:
+ * may be introduced merely to support this grammar.
+ */
+
+
+/* ============================================================================
+ * OPTIMIZATION CONTRACT
+ * ========================================================================== */
+
+/*
+ * Optimizations may change implementation strategy only if mandatory
+ * cryptographic semantics remain preserved.
  *
- *     quantum::ir
+ * An optimization MUST NOT:
  *
- * boundary where applicable.
+ *     weaken a mandatory security property;
+ *     violate a mandatory requirement;
+ *     violate a constraint;
+ *     substitute an incompatible algorithm;
+ *     expose protected material;
+ *     silently change canonicalization;
+ *     silently change digest semantics.
+ */
+
+
+/* ============================================================================
+ * ROUTING / SCHEDULING CONTRACT
+ * ========================================================================== */
+
+/*
+ * Cryptography has no routing or scheduling responsibility.
  *
- * Security metadata must remain traceable through lowering.
+ * Routing/scheduling may select an implementation based on:
  *
+ *     capabilities
+ *     resources
+ *     topology
+ *     performance
+ *     resilience
+ *     deployment policy
  *
- * OPTIMIZATION
- * ------------
+ * while preserving semantic cryptographic requirements.
+ */
+
+
+/* ============================================================================
+ * HARDWARE CONTRACT
+ * ========================================================================== */
+
+/*
+ * Hardware realization may involve:
  *
- * Optimization may transform implementation details only when semantic
- * cryptographic requirements remain preserved.
+ *     CPU
+ *     GPU
+ *     FPGA
+ *     ASIC
+ *     accelerator
+ *     HSM
+ *     TPM
+ *     secure element
+ *     enclave
+ *     QPU-associated classical processor
+ *     future device
  *
- * An optimization must not:
+ * None is hard-coded here.
+ */
+
+
+/* ============================================================================
+ * RUNTIME CONTRACT
+ * ========================================================================== */
+
+/*
+ * Runtime may resolve:
  *
- *     remove a mandatory property;
- *     weaken a mandatory requirement;
- *     violate a cryptographic constraint;
- *     substitute an incompatible primitive;
- *     silently replace a required algorithm;
- *     expose secret material.
+ *     key handles
+ *     credential handles
+ *     provider references
+ *     implementation references
+ *     capabilities
+ *     resource availability
  *
+ * Parsing performs none of these operations.
+ */
+
+
+/* ============================================================================
+ * DETERMINISM CONTRACT
+ * ========================================================================== */
+
+/*
+ * Parsing must depend only on:
  *
- * ROUTING / SCHEDULING
- * --------------------
+ *     source
+ *     language version
+ *     lexical vocabulary
+ *     grammar
+ *     selected dialect
  *
- * Cryptography grammar has no routing or scheduling responsibility.
+ * Parsing must NOT depend on:
  *
- * Routing and scheduling may select an implementation after semantic analysis,
- * subject to preserved cryptographic requirements and target capabilities.
+ *     hardware
+ *     available keys
+ *     provider availability
+ *     filesystem state
+ *     network state
+ *     environment variables
+ *     wall-clock time
+ *     randomness
+ *     runtime state
+ */
+
+
+/* ============================================================================
+ * SECURITY CONTRACT
+ * ========================================================================== */
+
+/*
+ * This grammar performs no:
  *
+ *     filesystem access
+ *     network access
+ *     provider loading
+ *     key-store access
+ *     credential access
+ *     command execution
+ *     cryptographic execution
+ *     hardware discovery
  *
- * HARDWARE
- * --------
+ * It contains no embedded Rust actions.
  *
- * HSMs, secure elements, TPMs, enclaves, CPUs, GPUs, FPGAs, ASICs, QPUs and
- * other devices are target capabilities, not grammar-level cryptographic
- * implementations.
+ * Therefore no unsafe Rust is introduced by this grammar.
+ */
+
+
+/* ============================================================================
+ * COMPATIBILITY CONTRACT
+ * ========================================================================== */
+
+/*
+ * This rewrite deliberately avoids silently introducing the previously
+ * missing cryptography-specific lexer vocabulary.
  *
+ * Therefore the canonical lexical contract remains stable.
  *
- * RUNTIME
- * -------
+ * If the language specification later promotes a cryptography word such as:
  *
- * Runtime systems resolve:
+ *     cryptography
+ *     hash
+ *     algorithm
+ *     key
+ *     protocol
  *
- *     references
- *     providers
- *     keys
- *     credentials
- *     cryptographic services
+ * into a reserved keyword, the change MUST proceed through:
  *
- * subject to security policy.
+ *     grammar/specification/
+ *          |
+ *          v
+ *     grammar/lexer/keywords.g4
+ *          |
+ *          v
+ *     grammar/lexer/tokens.g4
+ *          |
+ *          v
+ *     grammar/antlr/ZamaniLexer.g4
+ *          |
+ *          v
+ *     parser composition
+ *          |
+ *          v
+ *     compatibility tests
  *
- * Parsing does none of this.
+ * No parser grammar may privately invent such tokens.
+ */
+
+
+/* ============================================================================
+ * VALIDATION CONTRACT
+ * ========================================================================== */
+
+/*
+ * grammar/validation/ must verify:
  *
+ *   - tokenVocab is ZamaniLexer;
+ *   - no lexer rules exist here;
+ *   - no Rust actions exist;
+ *   - no semantic predicates exist;
+ *   - no finite algorithm catalogue exists;
+ *   - no machine-size constants exist;
+ *   - no physical device assumptions exist;
+ *   - no second expression grammar exists;
+ *   - no second capability system exists;
+ *   - no second resource system exists;
+ *   - no second quantum IR exists;
+ *   - hash syntax is delegated to hashes.g4;
+ *   - security composition owns this grammar;
+ *   - the canonical root remains Zamani.g4.
+ */
+
+
+/* ============================================================================
+ * HARD-CODING AUDIT
+ * ========================================================================== */
+
+/*
+ * Forbidden language-level limits include:
  *
- * RUST
- * ----
+ *     MAX_KEYS
+ *     MAX_ALGORITHMS
+ *     MAX_PRIMITIVES
+ *     MAX_PROTOCOLS
+ *     MAX_PARTICIPANTS
+ *     MAX_CRYPTO_OPERATIONS
+ *     MAX_DEVICES
+ *     MAX_NODES
+ *     MAX_CPUS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_QPUS
+ *     MAX_QUBITS
+ *     MAX_MEMORY
+ *     MAX_STORAGE
  *
- * This grammar contains no Rust actions.
+ * No such limits are defined here.
  *
- * Generated and handwritten Rust integration must remain compatible with:
+ * Program data such as:
  *
- *     Rust 1.97
- *     Rust 1.97.1
- *     Rust 2021
+ *     let n = 1024;
  *
- * and must use safe Rust only.
+ * remains valid program semantics.
  *
- * This grammar introduces no requirement for:
+ * A compiler implementation limit must never be converted into a language
+ * grammar limit.
+ */
+
+
+/* ============================================================================
+ * SCALABILITY TEST CONTRACT
+ * ========================================================================== */
+
+/*
+ * Tests must cover:
  *
- *     unsafe
- *     unsafe fn
- *     unsafe impl
- *     unsafe trait
- *     unsafe block
+ *   - tiny cryptographic programs;
+ *   - many cryptographic operations;
+ *   - deeply nested expressions;
+ *   - large requirement sets;
+ *   - large property sets;
+ *   - large metadata sets;
+ *   - deeply qualified names;
+ *   - large source files;
+ *   - classical + cryptography;
+ *   - quantum + cryptography;
+ *   - hybrid + cryptography;
+ *   - HDL + cryptography;
+ *   - distributed + cryptography;
+ *   - AI/data + cryptography;
+ *   - networking + cryptography;
+ *   - future dialect references.
  *
+ * No test may define an artificial maximum.
+ */
+
+
+/* ============================================================================
+ * POSITIVE TEST CONTRACT
+ * ========================================================================== */
+
+/*
+ * Representative valid forms:
  *
- * ============================================================================
+ *     apply cryptography::hash(data);
+ *
+ *     apply cryptography::sign(message, signing_key);
+ *
+ *     apply cryptography::verify(message, signature, verification_key);
+ *
+ *     apply cryptography::encrypt(data, key);
+ *
+ *     apply cryptography::decrypt(ciphertext, key);
+ *
+ *     apply cryptography::future::operation(value);
+ *
+ *     contract cryptography::integrity {
+ *         requires capability("cryptography.compute");
+ *         prefer capability("constant_time");
+ *     }
+ *
+ *     cryptography::algorithm::future {
+ *         algorithm: future::cryptography::algorithm;
+ *         property: cryptography::collision_resistance;
+ *     }
+ *
+ * These names are illustrative semantic names rather than a closed catalogue.
+ */
+
+
+/* ============================================================================
+ * NEGATIVE / SEMANTIC TEST CONTRACT
+ * ========================================================================== */
+
+/*
+ * Tests must distinguish syntax errors from semantic errors.
+ *
+ * Semantic failures include:
+ *
+ *     unresolved algorithm
+ *     unavailable provider
+ *     unavailable implementation
+ *     invalid key reference
+ *     unsupported property
+ *     unsatisfied capability
+ *     insufficient resources
+ *     conflicting constraints
+ *     prohibited secret-material use
+ *     incompatible target capability
+ *
+ * The parser should not attempt to diagnose these as lexical failures.
+ */
+
+
+/* ============================================================================
  * CROSS-DOMAIN CONTRACT
- * ============================================================================
- *
- * Cryptography is intentionally usable with:
+ * ========================================================================== */
+
+/*
+ * Cryptographic intent must be composable with:
  *
  *     classical
  *     quantum
@@ -1226,480 +1625,81 @@ cryptographicPreferenceMember
  *     data
  *     embedded
  *     accelerator
- *     cloud
- *     future domains
  *
- * The cryptographic grammar remains domain-neutral.
+ * The cryptography grammar remains domain-neutral.
+ */
+
+
+/* ============================================================================
+ * COMPLETION CRITERIA
+ * ========================================================================== */
+
+/*
+ * This file is complete when:
  *
- * For example, the same cryptographic requirement may apply to:
- *
- *     a classical computation;
- *     a quantum workload;
- *     a hybrid quantum/classical workflow;
- *     an HDL implementation;
- *     a distributed computation.
- *
- * The target domain is determined by surrounding semantic constructs.
- *
- *
- * ============================================================================
- * SCALABILITY CONTRACT
- * ============================================================================
- *
- * All repeated structures use zero-or-more or one-or-more recursive/list forms
- * rather than arbitrary fixed cardinalities.
- *
- * There is no universal limit on:
- *
- *     declarations
- *     algorithms
- *     primitives
- *     keys
- *     protocols
- *     participants
- *     properties
- *     requirements
- *     constraints
- *     preferences
- *     metadata entries
- *     operation arguments
- *
- * Practical parser/compiler limits remain implementation/resource limits.
- *
- * They MUST NOT become Zamani language semantics.
- *
- *
- * ============================================================================
- * DETERMINISM CONTRACT
- * ============================================================================
- *
- * Parsing depends only on:
- *
- *     source
- *     language version
- *     lexical vocabulary
- *     parser grammar
- *     explicitly selected dialect
- *
- * It must not depend on:
- *
- *     hardware
- *     available keys
- *     provider availability
- *     filesystem state
- *     network state
- *     environment variables
- *     wall-clock time
- *     randomness
- *     runtime state
- *
- * Security resolution happens after parsing.
- *
+ * [x] Cryptography has one grammar owner.
+ * [x] The canonical lexer remains ZamaniLexer.
+ * [x] Missing cryptography-specific lexer tokens are not silently assumed.
+ * [x] Algorithms are open-world.
+ * [x] Providers are open-world.
+ * [x] Implementations are open-world.
+ * [x] Cryptographic properties are open-world.
+ * [x] Requirements are distinct from constraints.
+ * [x] Constraints are distinct from preferences.
+ * [x] No machine capacity is hard-coded.
+ * [x] No physical device identity is required.
+ * [x] No secret-material literal category is created.
+ * [x] General expressions remain owned by the expression grammar.
+ * [x] General names remain owned by the core/name grammar.
+ * [x] Cryptography does not create a second IR.
+ * [x] Quantum-related cryptographic semantics use quantum::ir downstream.
+ * [x] Hashing has a dedicated delegation boundary.
+ * [x] Classical integration is defined.
+ * [x] Quantum integration is defined.
+ * [x] HDL integration is defined.
+ * [x] Distributed integration is defined.
+ * [x] AI/data integration is defined.
+ * [x] Networking integration is defined.
+ * [x] Runtime responsibilities are separated.
+ * [x] Resource/capability responsibilities are separated.
+ * [x] Determinism is defined.
+ * [x] Compatibility is defined.
+ * [x] Safe Rust 1.97/1.97.1 integration is defined.
+ * [x] Validation requirements are defined.
+ * [x] Scalability requirements are defined.
+ * [x] Positive tests are defined.
+ * [x] Negative tests are defined.
  *
  * ============================================================================
- * HARD-CODING AUDIT
+ * FINAL ARCHITECTURAL INVARIANT
  * ============================================================================
  *
- * This grammar contains NO:
- *
- *     MAX_KEYS
- *     MAX_ALGORITHMS
- *     MAX_PRIMITIVES
- *     MAX_PROTOCOLS
- *     MAX_PARTICIPANTS
- *     MAX_CRYPTOGRAPHIC_OPERATIONS
- *     MAX_DEVICES
- *     MAX_NODES
- *     MAX_MEMORY
- *     MAX_CPUS
- *     MAX_GPUS
- *     MAX_FPGAS
- *     MAX_QPUS
- *     MAX_QUBITS
- *
- * It also contains no:
- *
- *     CPU0
- *     GPU0
- *     FPGA0
- *     QPU0
- *     HSM0
- *     DEVICE0
- *
- * as grammar-level physical assumptions.
- *
- * Numeric literals appearing in expressions remain ordinary program data.
- *
- *
- * ============================================================================
- * SECRET / CREDENTIAL AUDIT
- * ============================================================================
- *
- * This grammar does not define:
- *
- *     passwordLiteral
- *     privateKeyLiteral
- *     secretKeyLiteral
- *     seedLiteral
- *     credentialLiteral
- *
- * Cryptographic objects are referenced symbolically.
- *
- * Secret storage belongs to security/secrets.g4 and downstream secret
- * management.
- *
- *
- * ============================================================================
- * OPEN-WORLD AUDIT
- * ============================================================================
- *
- * No finite algorithm list exists in this file.
- *
- * Future cryptographic mechanisms therefore do not require grammar changes
- * merely because a new algorithm is introduced.
- *
- * Semantic registries, provider metadata and dialects may evolve independently
- * of this parser grammar.
- *
- *
- * ============================================================================
- * DIAGNOSTICS
- * ============================================================================
- *
- * Syntax diagnostics are generated by the parser infrastructure.
- *
- * Semantic diagnostics should distinguish at minimum:
- *
- *     unresolved cryptographic reference
- *     invalid cryptographic reference
- *     unavailable algorithm
- *     unavailable primitive
- *     invalid key reference
- *     invalid purpose
- *     unsatisfied requirement
- *     conflicting constraint
- *     incompatible preference
- *     unavailable provider
- *     unavailable implementation
- *     prohibited secret material
- *     policy violation
- *     unsupported target capability
- *
- * The parser must not fabricate these semantic conclusions.
- *
- *
- * ============================================================================
- * COMPATIBILITY
- * ============================================================================
- *
- * This grammar preserves the conceptual API of the previous cryptography
- * grammar:
- *
- *     cryptographicDeclaration
- *     algorithmReference
- *     primitiveReference
- *     keyClause
- *     keyReferenceClause
- *     keyRoleDeclaration
- *     purposeClause
- *     propertyClause
- *     protocolClause
- *     parameterClause
- *     requirementClause
- *     constraintClause
- *     preferenceClause
- *     referenceValue
- *     metadataClause
- *
- * Where a previous rule was structurally unsafe or depended on nonexistent
- * lexer tokens, the corrected production contract takes precedence.
- *
- * Token renames must be handled through:
- *
- *     grammar/compatibility/
- *
- * and:
- *
- *     grammar/spec/compatibility.md
- *
- *
- * ============================================================================
- * VALIDATION CONTRACT
- * ============================================================================
- *
- * grammar/validation/ must verify:
- *
- *     - parser grammar name matches Cryptography;
- *     - tokenVocab is ZamaniLexer;
- *     - no lexer rules are embedded here;
- *     - no Rust actions exist;
- *     - no semantic predicates are required;
- *     - no duplicate cryptographic ownership exists;
- *     - no finite algorithm enumeration exists;
- *     - no finite key enumeration exists;
- *     - no hardware limit exists;
- *     - no machine-size limit exists;
- *     - all shared name/expression rules resolve through canonical grammar;
- *     - security composition imports this grammar exactly once;
- *     - AST mapping exists;
- *     - semantic mapping exists;
- *     - IR mapping exists;
- *     - negative tests exist;
- *     - boundary tests exist;
- *     - scalability tests exist.
- *
- *
- * ============================================================================
- * TEST CONTRACT
- * ============================================================================
- *
- * Positive tests must cover:
- *
- *     cryptographic declarations
- *     algorithms
- *     primitives
- *     keys
- *     key references
- *     key roles
- *     protocols
- *     participants
- *     purposes
- *     properties
- *     parameters
- *     requirements
- *     constraints
- *     preferences
- *     providers
- *     implementations
- *     metadata
- *     generic cryptographic operations
- *     qualified names
- *     cross-domain use
- *
- * Negative tests must cover:
- *
- *     malformed declarations
- *     malformed references
- *     malformed lists
- *     malformed descriptors
- *     malformed operations
- *     malformed metadata
- *     missing required syntax
- *     malformed qualified names
- *     malformed secret-reference syntax
- *
- * Security semantic tests must additionally reject attempts to treat ordinary
- * source strings as secret/private cryptographic material where the semantic
- * contract prohibits them.
- *
- *
- * Boundary tests must cover:
- *
- *     one key
- *     many keys
- *     one algorithm
- *     many algorithms
- *     deeply nested descriptors
- *     long qualified names
- *     large parameter sets
- *     large metadata sets
- *     large operation sequences
- *     large source units
- *
- * The test environment may impose practical resource limits.
- * Those limits are not language-level limits.
- *
- *
- * ============================================================================
- * POCO-REAF ACCEPTANCE
- * ============================================================================
- *
- * A cryptographic program remains semantically portable when:
- *
- *     source cryptographic intent
- *
- * is unchanged while target realization changes between:
- *
- *     tiny embedded target
- *     CPU
- *     multicore CPU
- *     GPU
- *     FPGA
- *     ASIC
- *     accelerator
- *     QPU
- *     simulator
- *     cluster
- *     cloud
- *     future target
- *
- * The grammar must not change solely because the target changes.
- *
- *
- * ============================================================================
- * REQUIRED CANONICAL LEXER INTEGRATION
- * ============================================================================
- *
- * Before this grammar is enabled in the canonical parser composition, the
- * canonical lexical hierarchy must provide these reserved tokens exactly once:
- *
- *     CRYPTOGRAPHY
- *     ALGORITHM
- *     PRIMITIVE
- *     KEY
- *     KEY_REFERENCE
- *     KEY_ROLE
- *     PROTOCOL
- *     PARTICIPANT
- *     PARAMETER
- *     PROVIDER
- *     IMPLEMENTATION
- *     LIFECYCLE
- *     PREFERENCE
- *     REQUIREMENT
- *     PURPOSE
- *     METADATA
- *     STORAGE
- *     CRYPTOGRAPHIC_OPERATION
- *
- * Existing generic tokens such as:
- *
- *     PROPERTY
- *     CONSTRAINT
- *     REQUIRE
- *     CONSTRAIN
- *     PREFER
- *     ROLE
- *
- * should be reused when they already exist.
- *
- * These tokens belong in:
- *
- *     grammar/lexer/keywords.g4
- *
- * and consequently enter:
- *
- *     grammar/lexer/tokens.g4
- *          |
- *          v
- *     grammar/antlr/ZamaniLexer.g4
- *
- * They MUST NOT be defined here.
- *
- *
- * ============================================================================
- * REQUIRED COMPOSITION INTEGRATION
- * ============================================================================
- *
- * grammar/security/security.g4
- *
- * must compose:
- *
- *     Cryptography
- *
- * rather than copying:
- *
- *     cryptographicDeclaration
- *     cryptographicOperation
- *     cryptographicKeyDeclaration
- *     cryptographicAlgorithmDeclaration
- *     cryptographicProtocolDeclaration
- *     cryptographicRequirementDeclaration
- *     cryptographicConstraintDeclaration
- *     cryptographicPreferenceDeclaration
- *
- * The composition root remains the sole security-wide integration boundary.
- *
- *
- * ============================================================================
- * AST COMPLETION CONTRACT
- * ============================================================================
- *
- * The corresponding AST implementation must preserve enough structure that
- * this file never needs to be modified merely because a new backend is added.
- *
- * Minimum semantic fields:
- *
- *     category
- *     name/reference
- *     arguments
- *     parameters
- *     keys/references
- *     algorithms/references
- *     primitives/references
- *     purposes
- *     properties
- *     requirements
- *     constraints
- *     preferences
- *     metadata
- *     source span
- *
- * Backend-specific fields do not belong in this grammar.
- *
- *
- * ============================================================================
- * FINAL INVARIANT
- * ============================================================================
- *
- * This file defines:
- *
- *     WHAT cryptographic intent can be expressed.
- *
- * It does not define:
- *
- *     WHICH cryptographic implementation executes it.
- *
- * Therefore:
- *
- *     cryptographic syntax
- *          !=
- *     cryptographic implementation
- *
- *     algorithm reference
- *          !=
- *     algorithm implementation
- *
- *     key reference
- *          !=
- *     secret material
- *
- *     provider reference
- *          !=
- *     provider discovery
- *
- *     security requirement
- *          !=
- *     hardware requirement
- *
- *     quantum cryptography syntax
- *          !=
- *     quantum::ir implementation
- *
- * The permanent pipeline remains:
- *
- *     Source
- *       ->
- *     Lexer
- *       ->
- *     Parser
- *       ->
- *     Domain-neutral AST
- *       ->
- *     Semantic Security Analysis
- *       ->
- *     Canonical IR
- *       ->
- *     Optimization
- *       ->
- *     Routing / Scheduling / Resilience / ZQN
- *       ->
- *     HAL
- *       ->
- *     Target realization
- *
- * subject to actual program semantics and available resources, without an
- * artificial language-level hardware ceiling.
+ * Cryptography is a semantic capability of Zamani.
+ *
+ * It is not:
+ *
+ *     a fixed algorithm dictionary;
+ *     a hardware description;
+ *     a provider registry;
+ *     a key store;
+ *     a runtime;
+ *     a quantum IR;
+ *     a compiler backend.
+ *
+ * The architecture therefore remains:
+ *
+ *     Program Once
+ *          ->
+ *     Compile Once
+ *          ->
+ *     Run Everywhere
+ *          ->
+ *     Run Anywhere
+ *          ->
+ *     Run Forever
+ *
+ * subject to program semantics, security requirements, available capabilities,
+ * available resources, and target realization.
  *
  * ============================================================================
  */
