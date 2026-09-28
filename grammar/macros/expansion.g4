@@ -1,3 +1,4 @@
+
 /*
  * ============================================================================
  * Zamani Programming Language
@@ -6,110 +7,187 @@
  * File:
  *     grammar/macros/expansion.g4
  *
- * Role:
- *     Canonical parser boundary for source-level macro-expansion metadata and
- *     expansion directives.
+ * Grammar:
+ *     expansion
+ *
+ * Status:
+ *     Canonical macro-expansion syntax component
+ *
+ * Language:
+ *     Zamani
+ *
+ * Compiler baseline:
+ *     Rust 1.97 / Rust 1.97.1
+ *
+ * Edition:
+ *     Rust 2021
+ *
+ * Safety:
+ *     Safe Rust only.
+ *     No unsafe Rust.
  *
  * Grammar technology:
  *     ANTLR4 parser grammar
  *
- * Rust implementation baseline:
- *     Rust 1.97 / Rust 1.97.1
- *
- * Safety:
- *     No embedded Rust actions.
- *     No predicates.
- *     No filesystem access.
- *     No network access.
- *     No process execution.
- *     No arbitrary compile-time host execution.
- *     No unsafe code.
- *
  * ============================================================================
- * ARCHITECTURAL PRINCIPLE
+ * 1. PURPOSE
  * ============================================================================
  *
- * This file defines SYNTAX, not macro expansion.
+ * Defines the parser-level syntax boundary for macro expansion metadata.
  *
- * The architecture is:
+ * This grammar describes source constructs that annotate or constrain
+ * macro expansion.
  *
- *     source
- *       |
- *       v
- *     ZamaniLexer
- *       |
- *       v
- *     parser
- *       |
- *       v
- *     frontend AST
- *       |
- *       +--> macro resolution
- *       |
- *       +--> hygiene/provenance
- *       |
- *       +--> expansion planning
- *       |
- *       +--> controlled expansion
- *       |
- *       v
- *     semantic analysis
- *       |
- *       v
- *     canonical semantic IR
- *       |
- *       +--> classical IR
- *       +--> quantum::ir
- *       +--> HDL/hardware representation
- *       +--> distributed/data/effect/resource representations
- *       |
- *       v
- *     optimization / routing / scheduling / target lowering
- *       |
- *       v
- *     runtime
+ * It does NOT perform macro expansion.
  *
- * This file MUST remain above those semantic and execution layers.
+ * It does NOT execute compile-time code.
+ *
+ * It does NOT generate source files.
+ *
+ * It does NOT mutate the AST.
+ *
+ * Expansion is a compiler transformation performed after parsing and macro
+ * resolution.
  *
  * ============================================================================
- * SINGLE SOURCE OF TRUTH
+ * 2. ARCHITECTURAL POSITION
  * ============================================================================
  *
- * Macro declaration syntax is owned by:
+ * Source
+ *   |
+ *   v
+ * Canonical lexer
+ *   |
+ *   v
+ * Canonical parser
+ *   |
+ *   +--> macro declarations
+ *   |
+ *   +--> macro invocations
+ *   |
+ *   +--> expansion metadata
+ *   |
+ *   v
+ * Frontend AST
+ *   |
+ *   v
+ * Name and macro resolution
+ *   |
+ *   v
+ * Expansion planning
+ *   |
+ *   v
+ * Controlled expansion
+ *   |
+ *   v
+ * Hygiene and provenance validation
+ *   |
+ *   v
+ * Semantic analysis
+ *   |
+ *   v
+ * Canonical semantic model / IR
+ *   |
+ *   +--> classical computation
+ *   +--> quantum::ir
+ *   +--> HDL / hardware
+ *   +--> hybrid computation
+ *   +--> distributed computation
+ *   +--> future domains
+ *   |
+ *   v
+ * Optimization / lowering / scheduling / routing
+ *   |
+ *   v
+ * Target realization
+ *
+ * ============================================================================
+ * 3. OWNERSHIP
+ * ============================================================================
+ *
+ * THIS FILE OWNS:
+ *
+ *   - expansion metadata syntax;
+ *   - reusable expansion annotation boundaries;
+ *   - expansion-related parser integration points;
+ *   - syntactic grouping of expansion metadata.
+ *
+ * THIS FILE DOES NOT OWN:
+ *
+ *   - macro declarations;
+ *   - macro parameters;
+ *   - macro invocation syntax;
+ *   - macro paths;
+ *   - identifiers;
+ *   - qualified names;
+ *   - expressions;
+ *   - blocks;
+ *   - attributes or annotations themselves;
+ *   - lexer tokens;
+ *   - name resolution;
+ *   - binding resolution;
+ *   - expansion algorithms;
+ *   - expansion ordering;
+ *   - recursion detection;
+ *   - expansion caching;
+ *   - hygiene implementation;
+ *   - provenance implementation;
+ *   - AST mutation;
+ *   - token generation;
+ *   - arbitrary compile-time execution;
+ *   - filesystem or network access;
+ *   - process execution;
+ *   - compiler plugins;
+ *   - target discovery;
+ *   - hardware selection;
+ *   - resource allocation;
+ *   - canonical IR construction;
+ *   - quantum::ir;
+ *   - runtime execution.
+ *
+ * ============================================================================
+ * 4. SINGLE-AUTHORITY CONTRACT
+ * ============================================================================
+ *
+ * Macro declarations:
  *
  *     grammar/macros/declarations.g4
  *
- * Macro invocation syntax is owned by:
+ * Macro invocations:
  *
  *     grammar/macros/invocations.g4
  *
- * Macro hygiene syntax is owned by:
+ * Macro hygiene:
  *
  *     grammar/macros/hygiene.g4
  *
- * This file owns only expansion-specific syntax.
+ * Macro composition:
  *
- * It MUST NOT redefine:
+ *     grammar/macros/macros.g4
  *
- *     macroDeclaration
- *     macroParameter
- *     macroInvocation
- *     macroPath
- *     argumentList
- *     annotation
- *     identifier
- *     qualifiedName
- *     expression
- *     blockExpression
+ * Macro expression integration:
+ *
+ *     grammar/expressions/macros.g4
+ *
+ * Canonical annotation syntax:
+ *
+ *     canonical core/declaration/annotation grammar
+ *
+ * This component consumes shared rules. It does not redefine them.
  *
  * ============================================================================
- * CURRENT REPOSITORY COMPATIBILITY
+ * 5. LEXER CONTRACT
  * ============================================================================
  *
- * The repository's macro grammar deliberately does not currently establish
- * canonical lexer tokens for quotation/splicing/interpolation.
+ * This is a parser grammar.
  *
- * Therefore this file does NOT invent:
+ * All tokens originate from the canonical Zamani lexer.
+ *
+ * No lexer rules are defined here.
+ *
+ * No new token names are introduced by this file.
+ *
+ * In particular, this grammar does not invent tokens for:
  *
  *     QUOTE
  *     UNQUOTE
@@ -120,311 +198,155 @@
  *     TOKEN
  *     SYNTAX
  *
- * lexer tokens.
- *
- * Nor does it interpret ordinary identifiers named:
- *
- *     quote
- *     splice
- *     expand
- *     eval
- *
- * as keywords.
- *
- * This is intentional.
- *
- * A future first-class quotation/splicing language feature must first establish
- * its canonical lexical, syntactic, AST, semantic, security, and compatibility
- * contracts.
+ * Ordinary identifiers must not become reserved words merely because
+ * they resemble names used by a possible future expansion facility.
  *
  * ============================================================================
- * WHAT "EXPANSION" MEANS HERE
+ * 6. SHARED RULE CONTRACT
  * ============================================================================
  *
- * There are three distinct concepts:
+ * The complete parser composition must provide:
  *
- *     1. Macro invocation
- *        Requests a macro by name.
+ *     annotation
+ *     macroDeclaration
+ *     macroInvocation
  *
- *     2. Expansion
- *        Compiler transformation of a resolved macro invocation into source
- *        structure.
+ * These are external integration dependencies.
  *
- *     3. Evaluation
- *        Execution of a computation.
+ * Their canonical definitions must remain in their respective owners.
  *
- * These MUST NOT be conflated.
- *
- * `foo!(x)` is a macro invocation.
- *
- * The parser does not execute `foo`.
- *
- * The macro engine may subsequently expand it.
- *
- * The resulting program is then semantically analyzed and eventually compiled
- * and/or executed according to the normal Zamani pipeline.
+ * This component does not create duplicate definitions.
  *
  * ============================================================================
- * OWNERSHIP
+ * 7. EXPANSION METADATA
  * ============================================================================
  *
- * THIS FILE OWNS:
+ * Expansion metadata uses the canonical annotation representation.
  *
- *     - expansion-specific parser boundaries;
- *     - reusable expansion metadata syntax;
- *     - the parser-level connection between macro invocation and expansion
- *       metadata, where standardized;
- *     - source-level expansion descriptors that do not themselves execute
- *       anything.
+ * The annotation's semantic identity is resolved by the semantic annotation
+ * registry.
  *
- * THIS FILE DOES NOT OWN:
+ * The grammar does not assign execution semantics to arbitrary annotation
+ * names.
  *
- *     - macro declarations;
- *     - macro invocations;
- *     - macro names;
- *     - identifiers;
- *     - paths;
- *     - expressions;
- *     - blocks;
- *     - annotations;
- *     - hygiene semantics;
- *     - name resolution;
- *     - binding resolution;
- *     - expansion algorithms;
- *     - expansion ordering;
- *     - expansion caching;
- *     - expansion memoization;
- *     - token generation;
- *     - AST mutation;
- *     - source-file generation;
- *     - arbitrary compile-time execution;
- *     - filesystem access;
- *     - network access;
- *     - process execution;
- *     - compiler plugins;
- *     - resource discovery;
- *     - hardware discovery;
- *     - target selection;
- *     - backend selection;
- *     - optimization;
- *     - routing;
- *     - scheduling;
- *     - QEC;
- *     - ZQN;
- *     - runtime execution;
- *     - canonical IR;
- *     - quantum::ir.
+ * An annotation is not automatically an expansion directive.
+ *
+ * Only annotations explicitly registered for expansion-related use may
+ * affect expansion planning.
  *
  * ============================================================================
- * DOMAIN NEUTRALITY
+ * 8. SCALABILITY
  * ============================================================================
  *
- * Macro expansion is source-language infrastructure.
+ * This grammar imposes no finite implementation capacity.
  *
- * A macro may generate:
+ * It defines no universal maximum for:
  *
- *     classical computation
- *     quantum computation
- *     hybrid computation
- *     HDL
- *     hardware descriptions
- *     distributed computation
- *     AI/ML structures
- *     data pipelines
- *     networking structures
- *     security constructs
- *     future dialect constructs
+ *     macros
+ *     annotations
+ *     expansion steps
+ *     expansion depth
+ *     generated AST nodes
+ *     generated tokens
+ *     source bytes
+ *     generated output size
+ *     nested invocations
  *
- * This file MUST NOT contain domain-specific expansion rules.
+ * Compiler resource budgets belong to configurable compiler policy.
  *
- * The expanded syntax is interpreted by the appropriate semantic layer after
- * expansion.
+ * Resource exhaustion must produce a diagnostic rather than silently
+ * changing the meaning of the program.
  *
  * ============================================================================
- * POCO-REAF
+ * 9. DETERMINISM
  * ============================================================================
  *
- * Macro expansion must preserve the semantic portability of the program.
+ * Parsing depends only on:
  *
- * Expansion must not implicitly select:
+ *     source text
+ *     canonical lexer
+ *     grammar version
+ *     explicitly selected language configuration
+ *
+ * Expansion must subsequently be deterministic for a declared compilation
+ * context.
+ *
+ * Expansion must not use incidental machine state as semantic input.
+ *
+ * ============================================================================
+ * 10. HYGIENE AND PROVENANCE
+ * ============================================================================
+ *
+ * Expansion must preserve:
+ *
+ *     macro definition identity
+ *     invocation identity
+ *     argument provenance
+ *     generated-node provenance
+ *     source spans
+ *     hygiene context
+ *
+ * Actual binding identities and capture avoidance belong to the semantic
+ * hygiene implementation.
+ *
+ * This grammar does not rename identifiers or implement lexical scope.
+ *
+ * ============================================================================
+ * 11. SECURITY
+ * ============================================================================
+ *
+ * Expansion metadata does not grant permission to:
+ *
+ *     read files
+ *     write files
+ *     inspect environment variables
+ *     access networks
+ *     execute processes
+ *     access secrets
+ *     access hardware
+ *     bypass compiler policy
+ *
+ * Compile-time computation, if supported, requires a separate explicit
+ * capability and effect contract.
+ *
+ * ============================================================================
+ * 12. POCO-REAF
+ * ============================================================================
+ *
+ * Expansion must preserve target-independent program meaning.
+ *
+ * It must not implicitly select:
  *
  *     CPU
- *     core
- *     thread
  *     GPU
  *     FPGA
  *     ASIC
  *     QPU
- *     quantum simulator
+ *     simulator
  *     device
  *     node
- *     cluster
  *     topology
  *     backend
- *     scheduler
  *     routing strategy
+ *     scheduler
  *
- * A macro may express semantic requirements through the canonical language
- * constructs, but expansion itself must not secretly turn portable source
- * semantics into target-specific implementation choices.
- *
- * ============================================================================
- * SCALABILITY
- * ============================================================================
- *
- * No finite machine-dependent limits are encoded here.
- *
- * There is no:
- *
- *     MAX_EXPANSIONS
- *     MAX_MACROS
- *     MAX_EXPANSION_DEPTH
- *     MAX_GENERATED_NODES
- *     MAX_TOKENS
- *     MAX_QUANTUM_RESOURCES
- *     MAX_DEVICES
- *     MAX_THREADS
- *     MAX_NODES
- *
- * Compiler resource policies may impose configurable budgets for:
- *
- *     source size
- *     token count
- *     AST size
- *     expansion steps
- *     expansion depth
- *     generated output size
- *     memory consumption
- *     compilation time
- *
- * Those are implementation/resource policies, not grammar semantics.
+ * Generated syntax must pass through the same semantic and portability
+ * checks as directly authored syntax.
  *
  * ============================================================================
- * DETERMINISM
+ * 13. CANONICAL GRAMMAR RULES
  * ============================================================================
- *
- * Parsing must be deterministic.
- *
- * Expansion must subsequently be deterministic with respect to the complete
- * declared compilation context, including:
- *
- *     source
- *     macro definitions
- *     arguments
- *     language version
- *     semantic environment
- *     explicit compiler policy
- *     explicitly selected resource/target context
- *
- * Expansion must not depend on:
- *
- *     timestamps
- *     process IDs
- *     memory addresses
- *     random values
- *     machine-local incidental state
- *
- * as semantic inputs.
- *
- * ============================================================================
- * PROVENANCE
- * ============================================================================
- *
- * Expansion is a source transformation and therefore requires complete
- * provenance.
- *
- * The AST/expansion subsystem must be able to distinguish:
- *
- *     original source
- *     macro definition source
- *     invocation source
- *     generated source
- *     nested expansion source
- *
- * The parser itself only provides source structure and source spans.
- *
- * ============================================================================
- * HYGIENE
- * ============================================================================
- *
- * Hygiene is owned by:
- *
- *     grammar/macros/hygiene.g4
- *
- * and the downstream semantic hygiene engine.
- *
- * Expansion MUST preserve the information required by hygiene analysis.
- *
- * Expansion must not:
- *
- *     rename identifiers textually;
- *     invent capture semantics;
- *     bypass lexical scopes;
- *     merge unrelated bindings;
- *     discard provenance.
- *
- * Fresh binding identities and capture avoidance belong to the semantic
- * expansion implementation.
- *
- * ============================================================================
- * SECURITY
- * ============================================================================
- *
- * A source-level expansion construct MUST NOT automatically grant permission
- * to:
- *
- *     read files;
- *     write files;
- *     read environment variables;
- *     access networks;
- *     execute programs;
- *     invoke arbitrary host APIs;
- *     download dependencies;
- *     modify the compiler;
- *     access secrets;
- *     access hardware;
- *     bypass security policy.
- *
- * Compile-time computation, if Zamani eventually supports it, must be governed
- * by an explicit capability/effect/security model outside this grammar.
- *
- * ============================================================================
- * 1. EXPANSION METADATA
- * ============================================================================
- *
- * Expansion metadata is represented using the canonical annotation system.
- *
- * `macroExpansionAnnotation` is therefore an integration alias, not a second
- * annotation grammar.
- *
- * The semantic annotation registry determines which annotations actually have
- * expansion meaning.
- *
- * This allows new expansion policies to be introduced without changing the
- * parser for every new semantic annotation.
  */
-
-parser grammar expansion;
-
-options {
-    tokenVocab = ZamaniLexer;
-}
 
 
 /*
- * ============================================================================
- * 2. EXPANSION ANNOTATION
- * ============================================================================
+ * ----------------------------------------------------------------------------
+ * 13.1 Canonical expansion annotation
+ * ----------------------------------------------------------------------------
  *
- * Reuse the canonical annotation rule.
+ * Alias to the shared annotation rule.
  *
- * Do NOT define:
- *
- *     expansionAnnotationName
- *     expansionAttribute
- *     expansionArguments
- *
- * here.
+ * This rule does not introduce a second annotation language.
  */
 
 macroExpansionAnnotation
@@ -433,13 +355,12 @@ macroExpansionAnnotation
 
 
 /*
- * ============================================================================
- * 3. EXPANSION ANNOTATION LIST
- * ============================================================================
+ * ----------------------------------------------------------------------------
+ * 13.2 One or more expansion annotations
+ * ----------------------------------------------------------------------------
  *
- * A standardized expansion-bearing construct may carry multiple annotations.
- *
- * There is no grammar-level finite maximum.
+ * The semantic annotation registry determines which annotations are valid
+ * for expansion.
  */
 
 macroExpansionAnnotations
@@ -448,9 +369,9 @@ macroExpansionAnnotations
 
 
 /*
- * ============================================================================
- * 4. OPTIONAL EXPANSION ANNOTATIONS
- * ============================================================================
+ * ----------------------------------------------------------------------------
+ * 13.3 Optional expansion annotations
+ * ----------------------------------------------------------------------------
  */
 
 optionalMacroExpansionAnnotations
@@ -459,12 +380,15 @@ optionalMacroExpansionAnnotations
 
 
 /*
- * ============================================================================
- * 5. EXPANSION PREFIX
- * ============================================================================
+ * ----------------------------------------------------------------------------
+ * 13.4 Expansion metadata prefix
+ * ----------------------------------------------------------------------------
  *
- * This is the reusable attachment boundary for macro syntax that explicitly
- * permits expansion metadata.
+ * Reusable attachment point for consumers that explicitly support
+ * expansion metadata.
+ *
+ * This rule does not make metadata legal in every declaration or expression.
+ * The consuming grammar determines its permitted position.
  */
 
 macroExpansionPrefix
@@ -472,1401 +396,436 @@ macroExpansionPrefix
     ;
 
 
+/*
+ * ----------------------------------------------------------------------------
+ * 13.5 Optional expansion metadata prefix
+ * ----------------------------------------------------------------------------
+ */
+
 optionalMacroExpansionPrefix
     : optionalMacroExpansionAnnotations
     ;
 
 
 /*
- * ============================================================================
- * 6. INVOCATION EXPANSION BOUNDARY
- * ============================================================================
+ * ----------------------------------------------------------------------------
+ * 13.6 Macro declaration metadata
+ * ----------------------------------------------------------------------------
  *
- * `macroInvocation` remains owned by invocations.g4.
+ * Declaration syntax remains owned by declarations.g4.
  *
- * This rule does not redefine it.
- *
- * It provides a semantic/parser integration point for a future standardized
- * invocation-side expansion annotation.
- *
- * The consuming grammar must decide the legal source position.
+ * This is an integration boundary, not a declaration definition.
  */
 
-macroInvocationExpansion
+macroDeclarationExpansionMetadata
+    : macroExpansionAnnotations
+    ;
+
+
+/*
+ * ----------------------------------------------------------------------------
+ * 13.7 Macro invocation metadata
+ * ----------------------------------------------------------------------------
+ *
+ * Invocation syntax remains owned by invocations.g4.
+ *
+ * This rule describes metadata associated with an invocation.
+ *
+ * It does not redefine macroInvocation.
+ */
+
+macroInvocationExpansionMetadata
+    : macroExpansionAnnotations
+    ;
+
+
+/*
+ * ----------------------------------------------------------------------------
+ * 13.8 Expansion context metadata
+ * ----------------------------------------------------------------------------
+ *
+ * The actual expansion context is a semantic/compiler object.
+ *
+ * This rule only provides a source-level metadata attachment.
+ */
+
+macroExpansionContextMetadata
+    : macroExpansionAnnotations
+    ;
+
+
+/*
+ * ----------------------------------------------------------------------------
+ * 13.9 Expansion provenance metadata
+ * ----------------------------------------------------------------------------
+ *
+ * Provenance is established and maintained by the compiler.
+ *
+ * Source annotations may contribute metadata, but cannot replace compiler
+ * generated provenance records.
+ */
+
+macroExpansionProvenanceMetadata
+    : macroExpansionAnnotations
+    ;
+
+
+/*
+ * ----------------------------------------------------------------------------
+ * 13.10 Expansion policy metadata
+ * ----------------------------------------------------------------------------
+ *
+ * This is deliberately annotation-based.
+ *
+ * Policy names and their legal values are determined by the canonical
+ * annotation registry and semantic validation.
+ *
+ * This grammar does not introduce policy keywords.
+ */
+
+macroExpansionPolicyMetadata
+    : macroExpansionAnnotations
+    ;
+
+
+/*
+ * ----------------------------------------------------------------------------
+ * 13.11 Expansion diagnostic metadata
+ * ----------------------------------------------------------------------------
+ *
+ * Diagnostic severity, source mapping, and reporting are owned by the
+ * compiler diagnostics subsystem.
+ *
+ * This rule permits associated source annotations without defining a
+ * separate diagnostic language.
+ */
+
+macroExpansionDiagnosticMetadata
     : macroExpansionAnnotations
     ;
 
 
 /*
  * ============================================================================
- * 7. DECLARATION EXPANSION BOUNDARY
+ * 14. INTEGRATION CONTRACT
  * ============================================================================
  *
- * Macro declarations remain owned by declarations.g4.
+ * The canonical parser composition may consume the rules above.
  *
- * This boundary permits declaration-level expansion metadata without creating
- * a second declaration grammar.
- */
-
-macroDeclarationExpansion
-    : macroExpansionAnnotations
-    ;
-
-
-/*
- * ============================================================================
- * 8. EXPANSION-DIRECTIVE BOUNDARY
- * ============================================================================
+ * Integration requirements:
  *
- * This is intentionally an annotation-based boundary rather than a speculative
- * keyword grammar.
+ * 1. The parser must use the canonical Zamani lexer vocabulary.
  *
- * The semantic registry may eventually define expansion directives such as
- * semantic equivalents of:
+ * 2. The parser must import or delegate to this grammar component using
+ *    the repository's actual ANTLR composition mechanism.
  *
- *     expand
- *     no_expand
- *     once
- *     recursive
- *     generated
- *     transparent
- *     deferred
+ * 3. Shared annotation syntax must have exactly one owner.
  *
- * but those names are NOT language keywords here.
+ * 4. Macro declarations must continue to use declarations.g4.
  *
- * Their exact legality and meaning are semantic policy.
- */
-
-macroExpansionDirective
-    : macroExpansionAnnotation
-    ;
-
-
-/*
- * ============================================================================
- * 9. EXPANSION-DIRECTIVE SET
- * ============================================================================
- */
-
-macroExpansionDirectives
-    : macroExpansionDirective+
-    ;
-
-
-optionalMacroExpansionDirectives
-    : macroExpansionDirective*
-    ;
-
-
-/*
- * ============================================================================
- * 10. EXPANSION CONTEXT BOUNDARY
- * ============================================================================
+ * 5. Macro invocations must continue to use invocations.g4.
  *
- * Expansion context is a semantic object.
+ * 6. Hygiene must continue to use hygiene.g4 and the semantic hygiene engine.
  *
- * This grammar does not attempt to encode the compiler's internal context
- * structure.
+ * 7. Expansion metadata must be preserved in the frontend AST.
  *
- * A macro expansion context may eventually include:
+ * 8. AST nodes must preserve original source spans.
  *
- *     language version
- *     macro definition identity
- *     invocation identity
- *     lexical scope
- *     hygiene context
- *     provenance
- *     capability context
- *     effect context
- *     resource policy
- *     deterministic compilation context
+ * 9. Generated nodes must retain expansion provenance.
  *
- * Those are NOT grammar-level machine properties.
+ * 10. Expansion must finish before ordinary semantic validation of the
+ *     resulting program is considered complete.
  *
- * This rule exists solely as a stable named boundary for consumers that need
- * to attach expansion metadata.
- */
-
-macroExpansionContext
-    : macroExpansionAnnotations
-    ;
-
-
-/*
- * ============================================================================
- * 11. EXPANSION PROVENANCE BOUNDARY
- * ============================================================================
+ * 11. Generated syntax must not bypass type, effect, capability, ownership,
+ *     resource, security, or domain validation.
  *
- * Provenance is represented by the AST/compiler infrastructure.
+ * 12. The compiler must not create a second quantum IR for macro expansion.
  *
- * This rule allows expansion-related metadata to remain attached to the
- * source construct without creating a second provenance grammar.
- */
-
-macroExpansionProvenance
-    : macroExpansionAnnotations
-    ;
-
-
-/*
- * ============================================================================
- * 12. CONTROLLED EXPANSION BOUNDARY
- * ============================================================================
+ * 13. Quantum constructs generated by macros must enter the canonical
+ *     quantum::ir path through normal semantic lowering.
  *
- * A macro invocation itself is NOT an expansion instruction in the execution
- * sense.
+ * 14. HDL and hardware constructs generated by macros must enter their
+ *     existing semantic and lowering paths.
  *
- * The semantic pipeline may classify it as:
- *
- *     unresolved
- *     resolved
- *     eligible-for-expansion
- *     deferred
- *     expanded
- *     rejected
- *
- * Those states belong to the macro semantic model.
- *
- * This grammar does not encode those states as parser keywords.
- */
-
-macroExpansionBoundary
-    : macroExpansionAnnotation
-    ;
-
-
-/*
- * ============================================================================
- * 13. NO QUOTE / SPLICE IMPLEMENTATION
- * ============================================================================
- *
- * Quotation and splicing are intentionally NOT implemented here.
- *
- * In particular, do not use ordinary identifiers to fake:
- *
- *     quote(...)
- *     splice(...)
- *     unquote(...)
- *     quasiquote(...)
- *
- * as parser keywords.
- *
- * Doing so would make ordinary identifiers context-sensitive and would create
- * a language feature without a canonical lexer/AST/semantic contract.
- *
- * A future quotation system should establish:
- *
- *     lexer tokens
- *     grammar rules
- *     AST representation
- *     source/provenance model
- *     hygiene model
- *     type model
- *     capability/effect model
- *     expansion security model
- *     compatibility policy
- *     tests
- *
- * before becoming canonical syntax.
- */
-
-
-/*
- * ============================================================================
- * 14. NO ARBITRARY COMPILE-TIME EXECUTION
- * ============================================================================
- *
- * This grammar does not define a mechanism by which source text can execute
- * arbitrary Rust or host-language code during parsing.
- *
- * In particular, the grammar contains no:
- *
- *     actions
- *     semantic predicates
- *     host-language callbacks
- *     embedded Rust
- *
- * Macro expansion is a controlled compiler transformation.
- *
- * If compile-time functions are supported by the language, they must operate
- * through the separately specified compile-time execution model.
- */
-
-
-/*
- * ============================================================================
- * 15. NO SOURCE-FILE GENERATION SEMANTICS
- * ============================================================================
- *
- * Expansion may conceptually produce AST/source structures, but this parser
- * grammar does not define filesystem-backed source generation.
- *
- * The compiler may represent generated syntax in memory.
- *
- * Provenance must associate generated nodes with their origin.
- *
- * Whether generated source can be materialized is a separate tooling/compiler
- * concern.
- */
-
-
-/*
- * ============================================================================
- * 16. NO STRING-BASED MACRO EXPANSION
- * ============================================================================
- *
- * The macro engine must operate on structured source/AST/token representations
- * according to its semantic contract.
- *
- * This grammar does not define:
- *
- *     textual replacement
- *     regex replacement
- *     string interpolation as macro expansion
- *     raw source concatenation
- *
- * as the semantic macro model.
- *
- * This prevents malformed syntax, accidental capture, source-provenance loss,
- * and domain-specific parsing inconsistencies.
- */
-
-
-/*
- * ============================================================================
- * 17. EXPANSION INPUT CONTRACT
- * ============================================================================
- *
- * The downstream expansion engine receives, conceptually:
- *
- *     resolved macro definition
- *     invocation arguments
- *     lexical environment
- *     hygiene context
- *     source provenance
- *     language version
- *     semantic/compiler policy
- *
- * It MUST NOT require:
- *
- *     hardware topology
- *     number of CPUs
- *     number of GPUs
- *     number of qubits
- *     device identifier
- *
- * unless those are independently represented by a semantic resource/target
- * context.
- */
-
-
-/*
- * ============================================================================
- * 18. EXPANSION OUTPUT CONTRACT
- * ============================================================================
- *
- * Expansion produces source-semantic structure suitable for ordinary semantic
- * analysis.
- *
- * It does not directly produce:
- *
- *     machine instructions
- *     quantum hardware schedules
- *     physical qubit mappings
- *     HDL netlists
- *     device commands
- *     runtime execution requests
- *
- * unless later compiler stages explicitly lower the resulting semantics into
- * those representations.
+ * 15. Macro expansion must not select physical hardware.
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 19. QUANTUM INTEGRATION
+ * 15. AST CONTRACT
  * ============================================================================
  *
- * A macro may generate quantum syntax.
+ * This grammar does not mandate a new AST node for every alias rule.
  *
- * Example conceptually:
+ * The frontend should represent expansion metadata using the existing
+ * macro/annotation representation.
  *
- *     macro make_circuit(...) { ... }
- *
- * may produce a quantum program.
- *
- * Expansion itself must remain quantum-domain-neutral.
- *
- * After expansion:
- *
- *     generated quantum syntax
- *             |
- *             v
- *     quantum semantic analysis
- *             |
- *             v
- *     quantum::ir
- *
- * `quantum::ir` remains the canonical quantum semantic boundary.
- *
- * This grammar MUST NOT:
- *
- *     create quantum IR;
- *     define another QubitId;
- *     define PhysicalQubitId;
- *     allocate qubits;
- *     choose gates based on hardware;
- *     select a QPU;
- *     choose topology;
- *     schedule quantum operations.
- */
-
-
-/*
- * ============================================================================
- * 20. HDL / HARDWARE INTEGRATION
- * ============================================================================
- *
- * A macro may generate HDL/hardware syntax.
- *
- * Expansion does not decide:
- *
- *     FPGA family
- *     ASIC process
- *     clock implementation
- *     physical placement
- *     routing
- *     device pin
- *     physical address
- *     resource count
- *
- * Those are later semantic/target/hardware decisions.
- */
-
-
-/*
- * ============================================================================
- * 21. CLASSICAL INTEGRATION
- * ============================================================================
- *
- * Macro expansion may produce ordinary Zamani expressions, statements,
- * declarations, functions, types, memory constructs, and concurrency
- * constructs.
- *
- * The generated structures enter the same canonical semantic pipeline as
- * source-written structures.
- *
- * A generated construct must not receive weaker semantic checking merely
- * because it originated from a macro.
- */
-
-
-/*
- * ============================================================================
- * 22. HYBRID INTEGRATION
- * ============================================================================
- *
- * Macros may generate programs combining:
- *
- *     classical
- *     quantum
- *     HDL
- *     hardware
- *     distributed
- *     AI/data
- *
- * Expansion does not choose a domain.
- *
- * The semantic analyzer determines the domain composition after expansion.
- */
-
-
-/*
- * ============================================================================
- * 23. RESOURCE INTEGRATION
- * ============================================================================
- *
- * Macro expansion may generate resource requirements or constraints only when
- * the canonical resource grammar explicitly represents them.
- *
- * Expansion itself does not inspect actual resources.
- *
- * The distinction remains:
- *
- *     requirement
- *         !=
- *     capability
- *         !=
- *     constraint
- *         !=
- *     preference
- *         !=
- *     target
- *         !=
- *     actual resource
- *
- * A macro saying that a computation semantically requires a capability must
- * not silently mean that a particular physical device must be selected.
- */
-
-
-/*
- * ============================================================================
- * 24. EFFECT / CAPABILITY INTEGRATION
- * ============================================================================
- *
- * Generated code is subject to normal:
- *
- *     type checking
- *     effect checking
- *     capability checking
- *     security checking
- *     resource checking
- *
- * Macro expansion must not be an escape hatch around those systems.
- */
-
-
-/*
- * ============================================================================
- * 25. RESOLUTION
- * ============================================================================
- *
- * `macroPath` remains owned by the invocation grammar.
- *
- * Expansion does not perform name resolution.
- *
- * The semantic macro resolver must determine:
- *
- *     which macro definition a path denotes
- *     whether it is visible
- *     whether it is compatible
- *     whether overload resolution applies
- *     whether the invocation is permitted
- *
- * The parser merely preserves the path.
- */
-
-
-/*
- * ============================================================================
- * 26. RECURSION
- * ============================================================================
- *
- * Recursive macro expansion is a semantic/compiler policy.
- *
- * This grammar does not encode a fixed recursion depth.
- *
- * The compiler may provide configurable limits for:
- *
- *     expansion depth
- *     expansion steps
- *     generated structure
- *
- * Such limits are resource-protection mechanisms and must not alter the
- * language's semantic model.
- */
-
-
-/*
- * ============================================================================
- * 27. EXPANSION CYCLES
- * ============================================================================
- *
- * Expansion-cycle detection belongs to the macro expansion engine.
- *
- * Conceptually:
- *
- *     A -> B
- *     B -> A
- *
- * is a semantic expansion-cycle problem.
- *
- * It is NOT a parser problem.
- *
- * Diagnostics should preserve the complete provenance chain when a cycle is
- * detected.
- */
-
-
-/*
- * ============================================================================
- * 28. EXPANSION ORDER
- * ============================================================================
- *
- * Expansion ordering belongs to the macro engine.
- *
- * The parser must not encode a machine-dependent ordering.
- *
- * Nested expansion must have a deterministic semantic order defined by the
- * macro system.
- */
-
-
-/*
- * ============================================================================
- * 29. CACHING / MEMOIZATION
- * ============================================================================
- *
- * Macro expansion caching is not a grammar concern.
- *
- * If implemented, cache identity must include all semantic inputs that affect
- * expansion.
- *
- * A cache must never cause semantically different expansions to be treated as
- * identical merely because their textual invocation happens to match.
- *
- * This file creates no cache keys.
- */
-
-
-/*
- * ============================================================================
- * 30. VERSIONING
- * ============================================================================
- *
- * Expansion semantics must be version-aware.
- *
- * A compiler may distinguish:
- *
- *     language version
- *     macro language version
- *     annotation schema version
- *     expansion semantic version
- *
- * The parser should remain stable where the syntax remains compatible.
- *
- * A new expansion semantic operation should normally be introduced through
- * the annotation registry rather than by adding a new parser keyword.
- */
-
-
-/*
- * ============================================================================
- * 31. COMPATIBILITY
- * ============================================================================
- *
- * Existing valid macro invocation syntax must remain valid.
- *
- * In particular, the canonical invocation structure remains owned by
- * invocations.g4.
- *
- * This file must not alter the interpretation of:
- *
- *     foo!()
- *     foo!(x)
- *     foo!(x, y)
- *     module::foo!(x)
- *
- * unless an explicit language-version migration changes that syntax.
- *
- * Such a breaking change must be documented in the compatibility subsystem.
- */
-
-
-/*
- * ============================================================================
- * 32. AST CONTRACT
- * ============================================================================
- *
- * This grammar does not create a separate "Expansion AST".
- *
- * The canonical frontend AST should represent expansion metadata as part of
- * the canonical annotation structure or as a semantic reference to that
- * structure.
- *
- * The AST must preserve:
+ * Required information:
  *
  *     source span
- *     annotation span
- *     enclosing macro construct
- *     macro invocation identity
- *     provenance
+ *     annotation identity
+ *     annotation arguments
+ *     attachment owner
+ *     macro definition identity, when applicable
+ *     invocation identity, when applicable
  *
- * Generated AST nodes must subsequently retain expansion provenance.
- */
-
-
-/*
+ * The compiler expansion subsystem must additionally maintain:
+ *
+ *     expansion identity
+ *     parent expansion identity
+ *     source provenance
+ *     hygiene context
+ *     deterministic expansion context
+ *
+ * Do not create a parallel MacroExpansionAst solely to mirror these
+ * grammar aliases.
+ *
  * ============================================================================
- * 33. SOURCE MAP CONTRACT
- * ============================================================================
- *
- * Tooling must be able to answer:
- *
- *     "Where did this generated construct come from?"
- *
- * A generated node may have provenance such as:
- *
- *     generated from macro definition
- *     generated from invocation argument
- *     generated from nested expansion
- *
- * This mapping is a compiler/frontend concern.
- *
- * The grammar must not destroy the information needed to establish it.
- */
-
-
-/*
- * ============================================================================
- * 34. DIAGNOSTIC CONTRACT
+ * 16. SEMANTIC CONTRACT
  * ============================================================================
  *
- * Parser errors include only syntax failures.
+ * Parsing does not establish that an annotation is valid.
  *
- * Examples:
+ * Semantic validation must verify:
  *
- *     malformed annotation
- *     malformed annotation arguments
+ *     annotation registration
+ *     annotation placement
+ *     annotation argument validity
+ *     macro visibility
+ *     macro resolution
+ *     parameter binding
+ *     expansion eligibility
+ *     recursion policy
+ *     capability authorization
+ *     deterministic behavior
+ *     resource-budget compliance
+ *     provenance preservation
+ *     hygiene preservation
  *
- * Semantic expansion errors include:
+ * Unknown or invalid expansion annotations must produce diagnostics.
  *
- *     unresolved macro
- *     inaccessible macro
- *     invalid macro argument
- *     expansion cycle
- *     illegal expansion policy
- *     hygiene violation
- *     capability violation
- *     resource-policy violation
- *     expansion-budget exhaustion
+ * They must not silently acquire meaning.
  *
- * Those errors must not be represented as parser syntax errors merely because
- * they occur during expansion.
- */
-
-
-/*
  * ============================================================================
- * 35. TOOLING CONTRACT
+ * 17. IR CONTRACT
  * ============================================================================
  *
- * IDEs, formatters, language servers, documentation tools, and source printers
- * must be able to distinguish:
+ * This grammar creates no IR.
  *
- *     original source
- *     macro invocation
- *     expansion metadata
- *     generated source
+ * Macro expansion is completed at the frontend transformation stage.
  *
- * without executing macro expansion merely to parse the source.
+ * The resulting program proceeds through the existing semantic model and
+ * canonical IR pipeline.
  *
- * This is important for:
+ * No macro-specific quantum IR is permitted.
  *
- *     fast diagnostics
- *     syntax highlighting
- *     navigation
- *     formatting
- *     refactoring
- *     incremental compilation
- */
-
-
-/*
+ * No macro-specific HDL IR is permitted.
+ *
  * ============================================================================
- * 36. INCREMENTAL COMPILATION
+ * 18. RESOURCE POLICY
  * ============================================================================
  *
- * The expansion engine may eventually support incremental compilation.
+ * The grammar defines no fixed expansion limits.
  *
- * This grammar must not make incremental correctness dependent on:
+ * Implementations may expose configurable resource budgets for:
  *
- *     machine size
- *     hardware identity
- *     runtime state
+ *     expansion work
+ *     generated syntax size
+ *     memory use
+ *     compilation time
+ *     recursion detection
  *
- * Expansion invalidation must be based on semantic dependencies.
- */
-
-
-/*
+ * Budgets must:
+ *
+ *     be explicit;
+ *     be configurable;
+ *     be deterministic within the declared compilation context;
+ *     produce structured diagnostics;
+ *     avoid silent truncation;
+ *     avoid changing valid program meaning.
+ *
+ * These budgets are not language-wide hardware limits.
+ *
  * ============================================================================
- * 37. DISTRIBUTED / REMOTE COMPILATION
- * ============================================================================
- *
- * Parsing and expansion metadata must remain reproducible when compilation is
- * performed:
- *
- *     locally
- *     remotely
- *     in CI
- *     in a build farm
- *     in a distributed compiler
- *
- * The grammar must not rely on local machine paths or physical device state.
- */
-
-
-/*
- * ============================================================================
- * 38. FUTURE EXTENSIBILITY
+ * 19. COMPATIBILITY
  * ============================================================================
  *
- * Future macro facilities may include:
+ * Existing macro invocation syntax must remain owned by invocations.g4.
  *
- *     declarative expansion
- *     procedural-but-sandboxed expansion
- *     syntax generation
- *     AST transformation
- *     typed macro expansion
- *     compile-time functions
- *     reflection
- *     specialization
- *     dialect-aware generation
+ * Existing declaration syntax must remain owned by declarations.g4.
  *
- * These facilities must not automatically become grammar keywords.
+ * Existing annotation syntax must remain canonical.
  *
- * Each facility requires its own:
+ * This component must not introduce reserved keywords.
  *
+ * Any future change to expansion syntax requires:
+ *
+ *     lexical contract
  *     syntax contract
  *     AST contract
  *     semantic contract
- *     capability/effect contract
  *     security contract
- *     determinism contract
+ *     provenance contract
  *     compatibility contract
+ *     positive tests
+ *     negative tests
+ *     boundary tests
+ *     scalability tests
  *
- * before becoming canonical.
+ * ============================================================================
+ * 20. CONFORMANCE TEST REQUIREMENTS
+ * ============================================================================
+ *
+ * Positive:
+ *
+ *     valid expansion annotation
+ *     multiple expansion annotations
+ *     optional expansion metadata
+ *     declaration metadata integration
+ *     invocation metadata integration
+ *
+ * Negative:
+ *
+ *     malformed annotation
+ *     invalid annotation placement
+ *     invalid annotation arguments
+ *     unknown expansion annotation
+ *     duplicate conflicting policies
+ *
+ * Boundary:
+ *
+ *     empty optional metadata
+ *     nested macro invocation
+ *     nested annotation arguments
+ *     deeply nested source structure
+ *     large valid annotation collections
+ *
+ * Scalability:
+ *
+ *     increasing macro count
+ *     increasing annotation count
+ *     large generated syntax
+ *     resource-budget exhaustion
+ *     configurable expansion budgets
+ *
+ * Determinism:
+ *
+ *     repeated parsing
+ *     repeated expansion under identical context
+ *     stable provenance
+ *     stable diagnostics
+ *
+ * Portability:
+ *
+ *     classical macro output
+ *     quantum macro output
+ *     hybrid macro output
+ *     HDL macro output
+ *     hardware-independent resource declarations
+ *     distributed macro output
+ *
+ * Security:
+ *
+ *     no implicit filesystem access
+ *     no implicit network access
+ *     no implicit process execution
+ *     no capability bypass
+ *     no semantic-validation bypass
+ *
+ * ============================================================================
+ * 21. COMPLETION CRITERIA
+ * ============================================================================
+ *
+ * This file is complete when:
+ *
+ * [ ] It compiles as an ANTLR parser grammar with the canonical token
+ *     vocabulary.
+ *
+ * [ ] Shared annotation syntax has one authoritative owner.
+ *
+ * [ ] Macro declarations remain owned by declarations.g4.
+ *
+ * [ ] Macro invocations remain owned by invocations.g4.
+ *
+ * [ ] Hygiene remains owned by hygiene.g4 and semantic implementation.
+ *
+ * [ ] The canonical parser composition consumes this component correctly.
+ *
+ * [ ] Every permitted attachment point is documented by its consumer.
+ *
+ * [ ] AST metadata preserves source spans.
+ *
+ * [ ] Expansion provenance is preserved downstream.
+ *
+ * [ ] No arbitrary host execution is introduced.
+ *
+ * [ ] No machine-dependent expansion limit is introduced.
+ *
+ * [ ] No domain-specific expansion rule is introduced.
+ *
+ * [ ] No duplicate IR is introduced.
+ *
+ * [ ] Positive and negative grammar tests pass.
+ *
+ * [ ] Boundary, scalability, determinism, and compatibility tests pass.
+ *
+ * [ ] Rust implementation remains compatible with Rust 1.97.1 and Rust 2021.
+ *
+ * [ ] No unsafe Rust is required.
+ *
+ * ============================================================================
  */
+parser grammar expansion;
+
+options {
+    tokenVocab = ZamaniLexer;
+}
 
 
 /*
- * ============================================================================
- * 39. NO DUPLICATION WITH METAPROGRAMMING
- * ============================================================================
+ * Canonical shared annotation rule.
  *
- * `grammar/metaprogramming/` may eventually own broader compile-time language
- * facilities.
- *
- * Macro expansion remains the macro subsystem's responsibility.
- *
- * The two systems must not create competing versions of:
- *
- *     expansion
- *     quotation
- *     reflection
- *     generation
- *
- * Their boundaries must be explicit.
- *
- * If metaprogramming invokes macros, it consumes the canonical macro API.
- *
- * It does not redefine macro expansion syntax.
+ * The rule must be supplied by the complete parser composition.
  */
 
+macroExpansionAnnotation
+    : annotation
+    ;
 
-/*
- * ============================================================================
- * 40. NO DUPLICATION WITH HYGIENE
- * ============================================================================
- *
- * `hygiene.g4` owns the syntax boundary for macro-hygiene annotations.
- *
- * This file consumes/reuses that boundary where needed.
- *
- * It must not redefine:
- *
- *     capture
- *     fresh identity
- *     definition-site context
- *     invocation-site context
- *     binding identity
- *
- * ============================================================================
- */
+macroExpansionAnnotations
+    : macroExpansionAnnotation+
+    ;
 
+optionalMacroExpansionAnnotations
+    : macroExpansionAnnotation*
+    ;
 
-/*
- * ============================================================================
- * 41. MACROS.G4 INTEGRATION
- * ============================================================================
- *
- * `grammar/macros/macros.g4` is the composition boundary.
- *
- * Final conceptual architecture:
- *
- *     macros.g4
- *         |
- *         +--> declarations.g4
- *         |
- *         +--> invocations.g4
- *         |
- *         +--> hygiene.g4
- *         |
- *         +--> expansion.g4
- *
- * `macros.g4` must not redefine any expansion rules from this file.
- *
- * This file must not assume that `macros.g4` owns semantic expansion.
- */
+macroExpansionPrefix
+    : macroExpansionAnnotations
+    ;
 
+optionalMacroExpansionPrefix
+    : optionalMacroExpansionAnnotations
+    ;
 
-/*
- * ============================================================================
- * 42. DECLARATIONS.G4 INTEGRATION
- * ============================================================================
- *
- * declarations.g4 owns:
- *
- *     macroDeclaration
- *     macroParameterList
- *     macroParameter
- *     macroParameterDefault
- *     macroBody
- *
- * If macro declarations accept expansion metadata, they consume:
- *
- *     optionalMacroExpansionPrefix
- *
- * rather than redefining annotation syntax.
- */
+macroDeclarationExpansionMetadata
+    : macroExpansionAnnotations
+    ;
 
+macroInvocationExpansionMetadata
+    : macroExpansionAnnotations
+    ;
 
-/*
- * ============================================================================
- * 43. INVOCATIONS.G4 INTEGRATION
- * ============================================================================
- *
- * invocations.g4 owns:
- *
- *     macroPath
- *     macroInvocation
- *     macroExpression
- *
- * If invocation-side expansion metadata is standardized, it may consume:
- *
- *     macroInvocationExpansion
- *
- * The invocation grammar remains the sole owner of invocation syntax.
- */
+macroExpansionContextMetadata
+    : macroExpansionAnnotations
+    ;
 
+macroExpansionProvenanceMetadata
+    : macroExpansionAnnotations
+    ;
 
-/*
- * ============================================================================
- * 44. HYGIENE.G4 INTEGRATION
- * ============================================================================
- *
- * hygiene.g4 owns:
- *
- *     macroHygieneAnnotation
- *     macroHygieneAnnotations
- *     macroHygienePrefix
- *     macroInvocationHygiene
- *     macroDeclarationHygiene
- *     macroExpansionHygiene
- *
- * Expansion metadata must coexist with hygiene metadata rather than replacing
- * it.
- *
- * Conceptually:
- *
- *     macro construct
- *         |
- *         +--> expansion metadata
- *         |
- *         +--> hygiene metadata
- *         |
- *         +--> canonical macro syntax
- *
- * The semantic layer combines these independent dimensions.
- */
+macroExpansionPolicyMetadata
+    : macroExpansionAnnotations
+    ;
 
-
-/*
- * ============================================================================
- * 45. META.G4 RECONCILIATION
- * ============================================================================
- *
- * The repository contains macro/metaprogramming constructs in:
- *
- *     grammar/antlr/Meta.g4
- *
- * That grammar includes its own macro-related concepts.
- *
- * It must not become a second canonical expansion grammar.
- *
- * The migration target is:
- *
- *     Meta.g4
- *         |
- *         +--> consume canonical macro subsystem
- *         OR
- *         +--> migrate/deprecate duplicated macro productions
- *
- * There must ultimately be one authoritative macro-expansion syntax model.
- */
-
-
-/*
- * ============================================================================
- * 46. CORE EXPRESSION INTEGRATION
- * ============================================================================
- *
- * Macro invocation remains an expression through:
- *
- *     expression
- *         |
- *         +--> macroExpression
- *                 |
- *                 +--> macroInvocation
- *
- * This file does not add another expression production.
- *
- * Expansion happens after parsing.
- */
-
-
-/*
- * ============================================================================
- * 47. CANONICAL IR INTEGRATION
- * ============================================================================
- *
- * This grammar MUST NOT depend on canonical IR.
- *
- * The dependency direction is:
- *
- *     grammar
- *       ->
- *     AST
- *       ->
- *     semantic analysis / expansion
- *       ->
- *     canonical IR
- *
- * Never:
- *
- *     grammar -> IR -> grammar
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 48. QUANTUM::IR INTEGRATION
- * ============================================================================
- *
- * This file has no direct dependency on `quantum::ir`.
- *
- * If expansion generates quantum syntax:
- *
- *     macro expansion
- *         ->
- *     quantum semantic analysis
- *         ->
- *     quantum::ir
- *
- * `quantum::ir` remains the sole canonical quantum semantic boundary.
- */
-
-
-/*
- * ============================================================================
- * 49. OPTIMIZATION / SCHEDULING / ROUTING
- * ============================================================================
- *
- * Expansion occurs before:
- *
- *     optimization
- *     routing
- *     scheduling
- *
- * Those subsystems consume semantic representations after expansion.
- *
- * This file has no dependency on their policies.
- */
-
-
-/*
- * ============================================================================
- * 50. ZQN / QEC
- * ============================================================================
- *
- * Expansion has no direct dependency on:
- *
- *     ZQN
- *     QEC
- *
- * If generated quantum semantics later require fault/noise or error-correction
- * processing, those systems operate after normal semantic lowering.
- */
-
-
-/*
- * ============================================================================
- * 51. HARDWARE / RUNTIME
- * ============================================================================
- *
- * Expansion has no direct dependency on:
- *
- *     hardware HAL
- *     calibration
- *     runtime
- *     deployment
- *     backend selection
- *
- * This preserves POCO-REAF.
- */
-
-
-/*
- * ============================================================================
- * 52. TEST CONTRACT — POSITIVE
- * ============================================================================
- *
- * Tests must verify:
- *
- *     - expansion annotations parse through canonical annotation syntax;
- *     - ordinary macro invocations remain valid;
- *     - qualified macro paths remain valid;
- *     - expansion metadata can coexist with macro syntax;
- *     - generated semantics can later be consumed by all relevant domains.
- */
-
-
-/*
- * ============================================================================
- * 53. TEST CONTRACT — NEGATIVE
- * ============================================================================
- *
- * Tests must verify rejection of malformed annotation/expansion syntax.
- *
- * Tests must also ensure that ordinary identifiers such as:
- *
- *     quote
- *     splice
- *     expand
- *     eval
- *
- * do not become parser keywords merely because macro expansion exists.
- */
-
-
-/*
- * ============================================================================
- * 54. TEST CONTRACT — HYGIENE
- * ============================================================================
- *
- * Verify that expansion metadata does not bypass hygiene.
- *
- * Test cases must include:
- *
- *     caller binding
- *     macro-generated binding
- *     nested expansion
- *     explicit capture where supported
- *     accidental capture
- *     provenance preservation
- */
-
-
-/*
- * ============================================================================
- * 55. TEST CONTRACT — CROSS-DOMAIN
- * ============================================================================
- *
- * Expansion tests must cover macros producing:
- *
- *     classical constructs
- *     quantum constructs
- *     hybrid constructs
- *     HDL constructs
- *     hardware-independent constructs
- *     distributed constructs
- *     AI/data constructs
- *
- * The expansion parser must remain domain-neutral.
- */
-
-
-/*
- * ============================================================================
- * 56. TEST CONTRACT — QUANTUM SCALABILITY
- * ============================================================================
- *
- * Tests must verify that expansion syntax itself does not impose limits on:
- *
- *     number of generated qubits
- *     number of generated gates
- *     circuit size
- *     register size
- *     number of quantum resources
- *
- * Any finite test size is test configuration only.
- */
-
-
-/*
- * ============================================================================
- * 57. TEST CONTRACT — CLASSICAL SCALABILITY
- * ============================================================================
- *
- * Tests must verify that expansion syntax does not impose limits on:
- *
- *     functions
- *     expressions
- *     declarations
- *     generated statements
- *     data structures
- *     parallel tasks
- *
- * Compiler budgets remain configurable resource policies.
- */
-
-
-/*
- * ============================================================================
- * 58. TEST CONTRACT — HDL/HARDWARE SCALABILITY
- * ============================================================================
- *
- * Tests must verify that macro expansion does not hard-code:
- *
- *     device count
- *     port count
- *     register count
- *     FPGA resources
- *     ASIC resources
- *     topology
- *     physical addresses
- *     fixed clock hardware
- */
-
-
-/*
- * ============================================================================
- * 59. TEST CONTRACT — DETERMINISM
- * ============================================================================
- *
- * Repeated parsing of identical source must produce equivalent parse trees.
- *
- * Repeated semantic expansion under identical compilation inputs must produce
- * equivalent semantic output.
- */
-
-
-/*
- * ============================================================================
- * 60. TEST CONTRACT — ROUND TRIP
- * ============================================================================
- *
- * Where a source printer exists:
- *
- *     source
- *       ->
- *     lexer
- *       ->
- *     parser
- *       ->
- *     AST
- *       ->
- *     printer
- *       ->
- *     parser
- *
- * must preserve the intended macro/expansion metadata semantics.
- */
-
-
-/*
- * ============================================================================
- * 61. TEST CONTRACT — PROVENANCE
- * ============================================================================
- *
- * Verify that diagnostics can identify:
- *
- *     macro definition location
- *     macro invocation location
- *     expansion metadata location
- *     generated-node provenance
- *     nested expansion origin
- */
-
-
-/*
- * ============================================================================
- * 62. TEST CONTRACT — RESOURCE BUDGETS
- * ============================================================================
- *
- * Compiler resource-limit tests belong outside the grammar semantics.
- *
- * They should verify that configurable policies can reject excessive expansion
- * without changing the grammar's accepted language.
- */
-
-
-/*
- * ============================================================================
- * 63. HARD-CODING AUDIT
- * ============================================================================
- *
- * This file must contain no language-level constants representing:
- *
- *     maximum macro depth
- *     maximum expansion count
- *     maximum generated nodes
- *     maximum qubits
- *     maximum cores
- *     maximum threads
- *     maximum devices
- *     maximum nodes
- *     fixed memory
- *     fixed topology
- *     fixed hardware
- *     fixed accelerator
- *     fixed backend
- *
- * No hardware-specific literal may become part of expansion semantics.
- */
-
-
-/*
- * ============================================================================
- * 64. COMPLETION CRITERIA
- * ============================================================================
- *
- * This file is COMPLETE only when:
- *
- *     [ ] File name is expansion.g4.
- *
- *     [ ] Grammar name is expansion.
- *
- *     [ ] It is a parser grammar.
- *
- *     [ ] tokenVocab resolves to ZamaniLexer.
- *
- *     [ ] No lexer tokens are invented.
- *
- *     [ ] No Rust actions exist.
- *
- *     [ ] No unsafe implementation is required.
- *
- *     [ ] Rust 1.97 / 1.97.1 compatibility is maintained.
- *
- *     [ ] Macro declaration syntax is not duplicated.
- *
- *     [ ] Macro invocation syntax is not duplicated.
- *
- *     [ ] Hygiene syntax is not duplicated.
- *
- *     [ ] Annotation syntax is not duplicated.
- *
- *     [ ] Expression syntax is not duplicated.
- *
- *     [ ] Quote/splice syntax is not invented.
- *
- *     [ ] Expansion is not executed by the parser.
- *
- *     [ ] Arbitrary host-code execution is not introduced.
- *
- *     [ ] Filesystem/network/process access is absent.
- *
- *     [ ] Provenance requirements are preserved.
- *
- *     [ ] Hygiene requirements are preserved.
- *
- *     [ ] Expansion semantics remain downstream.
- *
- *     [ ] No machine-dependent limits exist.
- *
- *     [ ] No quantum-device assumptions exist.
- *
- *     [ ] No hardware assumptions exist.
- *
- *     [ ] No resource counts are hard-coded.
- *
- *     [ ] macros.g4 integrates this grammar as a component.
- *
- *     [ ] declarations.g4 has a predefined expansion integration point.
- *
- *     [ ] invocations.g4 has a predefined expansion integration point.
- *
- *     [ ] hygiene.g4 remains the hygiene owner.
- *
- *     [ ] Meta.g4 is prevented from becoming a duplicate canonical owner.
- *
- *     [ ] AST integration preserves source spans.
- *
- *     [ ] AST integration preserves macro provenance.
- *
- *     [ ] Semantic expansion consumes this syntax.
- *
- *     [ ] Generated syntax returns through ordinary semantic analysis.
- *
- *     [ ] quantum-generated syntax ultimately lowers through quantum::ir.
- *
- *     [ ] Positive tests pass.
- *
- *     [ ] Negative tests pass.
- *
- *     [ ] Hygiene tests pass.
- *
- *     [ ] Cross-domain tests pass.
- *
- *     [ ] Scalability tests pass.
- *
- *     [ ] Determinism tests pass.
- *
- *     [ ] Round-trip tests pass where supported.
- *
- *     [ ] Provenance tests pass.
- *
- *     [ ] Hard-coding audit passes.
- *
- * ============================================================================
- * FINAL ARCHITECTURAL GUARANTEE
- * ============================================================================
- *
- * This file establishes the boundary:
- *
- *     expansion syntax
- *         !=
- *     expansion algorithm
- *
- *     expansion
- *         !=
- *     evaluation
- *
- *     generated syntax
- *         !=
- *     machine implementation
- *
- *     macro hygiene
- *         !=
- *     textual renaming
- *
- *     source semantics
- *         !=
- *     hardware topology
- *
- * Therefore:
- *
- *     one Zamani source program
- *          |
- *          v
- *     one semantic program
- *          |
- *          v
- *     macro expansion
- *          |
- *          v
- *     semantic analysis
- *          |
- *          +--> classical
- *          +--> quantum::ir
- *          +--> HDL
- *          +--> hardware
- *          +--> distributed
- *          +--> future domains
- *          |
- *          v
- *     many targets
- *
- * remains compatible with:
- *
- *     Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
- *
- * ============================================================================
- */
+macroExpansionDiagnosticMetadata
+    : macroExpansionAnnotations
+    ;
