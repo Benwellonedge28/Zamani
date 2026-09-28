@@ -1,197 +1,320 @@
 Zamani Macro Grammar
 
 Path: "grammar/macros/README.md"
-Subsystem: Zamani source-language macro syntax
 Language: Zamani
+Subsystem: Source-language macros and syntax-level metaprogramming
 Grammar technology: ANTLR-compatible grammar components
-Compiler baseline: Rust 1.97 / Rust 1.97.1
-Edition: Rust 2021
-Safety: Safe Rust only; "unsafe" Rust is prohibited
-Status: Production architecture and conformance contract
-Scalability target: From the smallest supported program to arbitrarily large programs subject only to explicitly configured and available resources
-Portability objective: Program Once, Compile Once, Run Everywhere, Anywhere, Forever (POCO-REAF)
+Implementation baseline: Rust 2021, Rust 1.97 / Rust 1.97.1
+Rust safety requirement: Safe Rust only; "unsafe" is prohibited
+Status: Production architecture, ownership, integration, and conformance contract
+Scalability target: From the smallest supported program to arbitrarily large programs, subject only to available resources and explicitly configured implementation safeguards
+Portability objective: "Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever (POCO-REAF)"
 
 ---
 
 1. Purpose
 
-The "grammar/macros/" directory defines the source-language syntax contract for Zamani macros.
+"grammar/macros/" defines the source-language syntax contract for Zamani macros.
 
-Macros are a language mechanism for transforming or generating Zamani source-level structure before the resulting program proceeds through semantic analysis and lowering.
+This directory exists to make macro syntax independently understandable, independently testable, and independently integrable into the canonical Zamani language without creating a second language, second AST, second IR, or target-specific macro system.
 
-The macro grammar is therefore responsible for answering:
+The macro subsystem must support programs ranging from tiny embedded programs to very large classical, quantum, hybrid, HDL, accelerator, distributed, AI, HPC, and future computing systems.
 
-«What does valid Zamani macro syntax look like?»
+Macro syntax must therefore describe source intent and source structure, not current machine capacity.
 
-It is not responsible for answering:
+The macro subsystem must remain valid regardless of whether the resulting program ultimately executes on:
 
-«How is a macro resolved, expanded, executed, optimized, scheduled, routed, or lowered to a particular machine?»
+- a tiny embedded processor;
+- one CPU;
+- many CPUs;
+- a GPU;
+- many GPUs;
+- an FPGA;
+- an ASIC;
+- an accelerator;
+- a QPU;
+- a quantum simulator;
+- an HPC system;
+- a cluster;
+- a distributed system;
+- a cloud deployment;
+- a heterogeneous system;
+- a future computing architecture.
 
-Those responsibilities belong to downstream compiler components.
-
-The architectural pipeline is:
-
-Zamani source
-    │
-    ▼
-canonical lexer
-    │
-    ▼
-canonical parser
-    │
-    ├── macro declarations
-    └── macro invocations
-    │
-    ▼
-frontend AST
-    │
-    ▼
-name / module resolution
-    │
-    ▼
-macro resolution
-    │
-    ▼
-macro expansion
-    │
-    ▼
-hygiene / provenance / validation
-    │
-    ▼
-semantic analysis
-    │
-    ▼
-canonical semantic IR
-    │
-    ├── classical IR
-    ├── quantum::ir
-    ├── HDL / hardware representations
-    └── other domain representations
-    │
-    ▼
-optimization
-    │
-    ▼
-routing / scheduling / resilience / target lowering
-    │
-    ▼
-execution
-
-The macro grammar must remain independent of the target selected at the end of this pipeline.
+The macro grammar must not require modification merely because a new target architecture is introduced.
 
 ---
 
-2. Architectural Position
+2. Fundamental Architectural Rule
 
-Macros are a source-language abstraction, not a hardware abstraction.
+The macro grammar answers:
 
-A macro may ultimately generate constructs for:
+«What macro source syntax is valid Zamani?»
 
-- classical computing;
-- quantum computing;
-- hybrid quantum-classical computing;
-- HDL;
-- hardware/software co-design;
-- embedded systems;
-- distributed computing;
-- parallel computing;
-- HPC;
-- AI/ML;
-- numerical computing;
-- networking;
-- cryptography;
-- accelerators;
-- future Zamani domains.
+It does not answer:
 
-The macro grammar must not need to know which domain a macro eventually generates.
+«How is the macro resolved, expanded, executed, optimized, scheduled, routed, resource-checked, lowered, or deployed?»
+
+The production pipeline is:
+
+Zamani source
+      │
+      ▼
+canonical lexer
+      │
+      ▼
+canonical parser
+      │
+      ├───────────────┐
+      ▼               ▼
+macro declarations   macro invocations
+      │               │
+      └───────┬───────┘
+              ▼
+       canonical frontend AST
+              │
+              ▼
+       name/module resolution
+              │
+              ▼
+        macro resolution
+              │
+              ▼
+         macro expansion
+              │
+              ▼
+    hygiene + provenance handling
+              │
+              ▼
+       semantic validation
+              │
+              ▼
+      canonical semantic model
+              │
+              ▼
+        canonical IR boundary
+              │
+       ┌──────┼──────────┐
+       ▼      ▼          ▼
+  classical quantum::ir HDL/hardware
+       │      │          │
+       └──────┼──────────┘
+              ▼
+        optimization
+              │
+              ▼
+ routing / scheduling / resilience
+              │
+              ▼
+             ZQN
+              │
+              ▼
+             HAL
+              │
+              ▼
+       target realization
+
+The macro grammar participates only in the source-language portion of this pipeline.
+
+---
+
+3. Repository Authority
+
+The macro subsystem is subordinate to the repository-wide grammar authority model.
+
+The authority order is:
+
+grammar/DESIGN.md
+        │
+        ▼
+grammar/specification/
+        │
+        ▼
+grammar/spec/
+        │
+        ▼
+grammar/Zamani.g4
+        │
+        ▼
+canonical lexer/parser implementation
+        │
+        ▼
+src/frontend/ast/
+        │
+        ▼
+semantic analysis
+        │
+        ▼
+canonical IR
+
+The roles of the major existing files remain distinct.
+
+File| Authority
+"grammar/DESIGN.md"| Overall grammar architecture and boundaries
+"grammar/README.md"| Navigation and repository-wide ownership
+"grammar/specification/"| Normative human-readable language specification
+"grammar/spec/"| Formal feature contracts
+"grammar/Zamani.g4"| Canonical ANTLR composition/root grammar
+"grammar/grammar.md"| Current implementation conformance
+"grammar/Zamani-Grammar.md"| Historical, extended, proposed, experimental, and aspirational design material
+"grammar/macros/README.md"| Macro subsystem architecture and completion contract
+"grammar/macros/*.g4"| Modular macro syntax components
+"src/frontend/ast/"| Actual source AST representation
+compiler macro infrastructure| Resolution, expansion, hygiene, provenance, and expansion policy
+canonical IR| Post-semantic representation
+
+No macro document may override "grammar/DESIGN.md".
+
+No macro document may silently introduce syntax that is absent from the authoritative specification and canonical grammar.
+
+"grammar/Zamani-Grammar.md" remains useful historical/design material, but material becomes language syntax only through the normal promotion process:
+
+proposal
+   ↓
+semantic design
+   ↓
+AST contract
+   ↓
+formal specification
+   ↓
+canonical grammar
+   ↓
+implementation
+   ↓
+IR integration
+   ↓
+tests
+   ↓
+stable feature
+
+---
+
+4. Existing Macro Files
+
+The existing macro directory already contains the following components:
+
+grammar/macros/
+├── README.md
+├── macros.g4
+├── declarations.g4
+├── invocations.g4
+├── parameters.g4
+├── expansion.g4
+├── hygiene.g4
+├── token-stream.g4
+├── syntax-tree.g4
+├── diagnostics.g4
+└── safety.g4
+
+These files must remain separate where their ownership is meaningful.
+
+They must not become independent languages.
+
+Their responsibilities are:
+
+File| Sole primary responsibility
+"macros.g4"| Macro grammar composition and central macro syntax
+"declarations.g4"| Macro declaration syntax
+"invocations.g4"| Macro invocation syntax
+"parameters.g4"| Macro parameter syntax
+"token-stream.g4"| Token-tree/token-stream structural syntax
+"syntax-tree.g4"| Explicit syntax-tree-oriented macro syntax
+"expansion.g4"| Syntax associated with explicit expansion controls, where specified
+"hygiene.g4"| Syntax for explicitly exposed hygiene controls, if any
+"diagnostics.g4"| Macro-specific diagnostic syntax/metadata where language syntax requires it
+"safety.g4"| Macro safety-related source declarations/constraints where such syntax is specified
+"README.md"| Complete subsystem contract
+
+The grammar files do not implement the behavior named by their filenames.
 
 For example:
 
-quantum_prepare!(register)
+"hygiene.g4" does not implement hygiene.
 
-is structurally a macro invocation.
+"expansion.g4" does not expand macros.
 
-The grammar does not decide:
+"diagnostics.g4" does not generate compiler diagnostics.
 
-- how many qubits exist;
-- which qubits are physical;
-- which QPU is used;
-- which gate set is native;
-- which topology is available;
-- how routing occurs;
-- how scheduling occurs;
-- which QEC code is selected;
-- which ZQN model applies.
-
-Those decisions belong to semantic analysis, resource analysis, quantum compilation, routing, scheduling, resilience, hardware abstraction, and backend infrastructure.
+"token-stream.g4" does not execute token transformations.
 
 ---
 
-3. Ownership
+5. Ownership
 
-3.1 This directory owns
+5.1 This directory owns
 
-"grammar/macros/" owns the syntax of:
+"grammar/macros/" owns source syntax for:
 
 - macro declarations;
+- macro visibility;
+- macro names;
 - macro parameters;
-- optional parameter type syntax;
+- macro parameter patterns;
+- optional parameter types where specified;
 - parameter defaults;
 - macro bodies;
+- macro invocation syntax;
 - macro invocation paths;
 - macro invocation delimiters;
-- macro invocation arguments;
-- syntactic macro-expression integration;
-- syntactic macro declaration integration;
-- grammar-level macro composition.
-
-The macro grammar may also define syntactic extension points needed by future macro facilities when those extension points have an explicit lexer/parser/AST contract.
+- invocation arguments;
+- token-tree syntax where explicitly supported;
+- syntax-tree quotation syntax where explicitly supported;
+- syntax-level macro composition;
+- macro-specific source attributes where formally specified;
+- macro-specific syntactic extension points.
 
 ---
 
-3.2 This directory does not own
+5.2 This directory does not own
 
 This directory does not own:
 
-- token implementation;
 - lexer implementation;
-- AST implementation;
+- token enumeration;
+- token allocation;
+- source-file loading;
 - AST storage;
+- AST node allocation;
 - "NodeId" allocation;
 - source-span implementation;
+- symbol tables;
 - name resolution;
 - module resolution;
-- overload resolution;
+- import resolution;
+- visibility checking implementation;
 - type checking;
 - effect checking;
 - capability checking;
 - resource analysis;
-- macro resolution;
+- macro lookup;
+- macro selection;
 - macro expansion;
-- macro execution;
-- macro-generated code execution;
+- expansion execution;
 - hygiene implementation;
 - provenance implementation;
-- compile-time arbitrary code execution;
+- compile-time execution;
+- arbitrary host-code execution;
 - filesystem access;
 - network access;
-- package downloading;
+- package installation;
 - process spawning;
-- target selection;
+- hardware discovery;
+- device selection;
 - CPU selection;
 - GPU selection;
 - FPGA selection;
 - ASIC selection;
 - QPU selection;
 - simulator selection;
-- hardware discovery;
-- calibration;
+- physical qubit assignment;
 - routing;
 - scheduling;
-- optimization;
+- calibration;
 - QEC;
 - ZQN;
 - resilience;
+- optimization;
+- target lowering;
 - runtime execution;
 - canonical IR construction.
 
@@ -199,364 +322,129 @@ This separation is mandatory.
 
 ---
 
-4. Relationship to Existing Repository Components
+6. Domain Neutrality
 
-The repository already establishes macro-related compiler and AST infrastructure.
+Macros are a general source-language mechanism.
 
-Relevant existing components include:
+The macro grammar must not need separate implementations for:
 
-grammar/macros/macros.g4
-grammar/macros/declarations.g4
-grammar/macros/invocations.g4
-grammar/macros/hygiene.g4
-grammar/macros/expansion.g4
+- classical computing;
+- quantum computing;
+- hybrid computing;
+- HDL;
+- hardware/software co-design;
+- AI;
+- tensor computing;
+- numerical computing;
+- distributed computing;
+- networking;
+- security;
+- embedded computing;
+- accelerators;
+- HPC;
+- future domains.
 
-src/frontend/ast/node/expressions/macro.rs
-src/compiler/macro_engine.rs
-src/toolchain/meta_programming.rs
-grammar/antlr/Meta.g4
+A macro may generate syntax belonging to any of those domains.
 
-The existing frontend macro AST explicitly represents a source-level macro invocation rather than an already-expanded computation. It stores macro identity and argument node references and deliberately separates parsing from resolution and expansion.
+The macro grammar remains domain-neutral.
 
-The macro grammar must therefore integrate with these existing abstractions rather than introduce competing representations.
+For example:
+
+prepare!(register)
+
+is syntactically a macro invocation.
+
+The macro grammar does not determine whether "register" eventually represents:
+
+- classical storage;
+- a tensor;
+- a quantum register;
+- hardware resources;
+- distributed state;
+- an accelerator buffer.
+
+That is determined downstream.
 
 ---
 
-5. Canonical Grammar Ownership
+7. Canonical Shared Syntax
 
-The macro grammar is one component of the canonical Zamani language grammar.
+Macro grammar components must reuse repository-wide syntax.
 
-It must not become a separate programming language.
+They must use the canonical definitions of:
 
-The conceptual structure is:
-
-Canonical Zamani Language
-        │
-        ├── lexical foundation
-        │
-        ├── core syntax
-        │
-        ├── expressions
-        │
-        ├── statements
-        │
-        ├── declarations
-        │
-        ├── functions
-        │
-        ├── modules
-        │
-        ├── effects
-        │
-        ├── types
-        │
-        ├── classical constructs
-        │
-        ├── quantum constructs
-        │
-        ├── HDL constructs
-        │
-        ├── hardware constructs
-        │
-        ├── distributed constructs
-        │
-        ├── resource constructs
-        │
-        └── macros
-
-All components must share the canonical:
-
-- tokens;
 - identifiers;
 - names;
 - paths;
+- attributes;
+- modifiers;
+- visibility;
+- blocks;
 - expressions;
 - types;
-- blocks;
-- attributes;
-- annotations;
-- source locations;
-- versioning;
-- diagnostics.
+- literals;
+- punctuation;
+- source locations.
 
-The macro grammar must not redefine those concepts.
+The macro subsystem must not create alternative definitions for these concepts.
 
----
+For example, if "core/paths.g4" owns qualified paths, "invocations.g4" must consume that path abstraction rather than creating a competing "macroQualifiedPath".
 
-6. Existing Macro Grammar Components
-
-The macro subsystem is intentionally divided into multiple grammar components.
-
-"macros.g4"
-
-Owns the central macro syntax contract and composition boundaries.
-
-It defines or coordinates:
-
-- macro declarations;
-- macro parameters;
-- defaults;
-- macro bodies;
-- macro paths;
-- macro invocations;
-- macro-expression integration.
-
-The existing component explicitly treats itself as a parser grammar and reuses the canonical lexer vocabulary rather than redefining lexical tokens.
+Likewise, macro arguments must use canonical expression syntax rather than creating a second expression language.
 
 ---
 
-"declarations.g4"
+8. Macro Declaration Syntax
 
-Owns the declaration-side syntax when that syntax is separated from the central macro grammar.
+The conceptual declaration form is:
 
-It must not create an independent macro declaration model.
+visibility? macro name genericParameters? (parameters?) body
 
-It must integrate with:
+For example:
 
-macros.g4
-core/
-declarations/
-functions/
-modules/
-types/
-
-and must eventually produce the same frontend AST macro-declaration representation.
-
----
-
-"invocations.g4"
-
-Owns invocation-specific syntax where invocation rules are separated for maintainability.
-
-It must integrate with:
-
-expressions/
-core/
-modules/
-
-and provide the canonical syntactic path to the frontend macro-expression representation.
-
-The existing repository already identifies macro invocation syntax, macro invocation paths, and expression integration as its responsibility.
-
----
-
-"hygiene.g4"
-
-Hygiene is primarily a semantic/compiler concern.
-
-Therefore this file must not pretend that lexical grammar alone can implement hygiene.
-
-It may define syntax for explicit source-level hygiene controls if Zamani eventually adopts such controls, but those controls must have:
-
-- canonical tokens;
-- AST representation;
-- semantic meaning;
-- provenance semantics;
-- compatibility rules.
-
-The compiler's hygiene machinery remains responsible for actual binding protection.
-
-The existing repository already describes macro hygiene as a compiler-semantic property preventing accidental binding changes.
-
----
-
-"expansion.g4"
-
-This file defines syntax for explicit expansion-related constructs only where such syntax is genuinely part of Zamani.
-
-It must not implement expansion.
-
-The expansion engine remains responsible for:
-
-- resolving macros;
-- binding arguments;
-- performing expansion;
-- expansion ordering;
-- recursion policy;
-- resource budgets;
-- generated-source provenance;
-- hygiene;
-- diagnostics;
-- semantic validation.
-
-The repository already contains a compiler macro engine responsible for macro expansion rather than placing that behavior in grammar.
-
----
-
-7. Core Syntax Contract
-
-The canonical macro syntax is conceptually:
-
-macro name() {
+macro build(value) {
     ...
 }
 
-and:
+or:
 
-macro name<T>(value: T) {
+macro build<T>(value: T) {
     ...
 }
 
-Invocation:
+or:
 
-name!()
+macro build<T>(value: T = default_value) {
+    ...
+}
 
-name!(argument)
+The exact accepted syntax is determined by the canonical grammar and specification.
 
-name!(argument1, argument2)
-
-Qualified invocation:
-
-module::name!(argument)
-
-The exact lexical spellings remain governed by the canonical Zamani lexer and parser contracts.
-
-The grammar must never invent a second spelling for the same semantic construct.
-
----
-
-8. Macro Declarations
-
-A macro declaration consists conceptually of:
-
-visibility?
-macro
-identifier
-genericParameters?
-(
-    macroParameterList?
-)
-macroBody
-
-The declaration grammar must preserve:
+A declaration must preserve:
 
 - declaration identity;
-- visibility;
 - source name;
-- generic parameter syntax;
-- ordered parameter declarations;
+- visibility;
+- generic parameter structure;
+- parameter ordering;
+- parameter names;
 - optional parameter types;
-- optional defaults;
+- defaults;
 - body;
+- source spans;
 - source provenance.
 
-The grammar must not resolve any of these semantically.
+The parser does not resolve any of these semantically.
 
 ---
 
-9. Macro Parameters
+9. Macro Names
 
-A macro parameter is a macro-language parameter, not necessarily a runtime function parameter.
+Macro names use the canonical Zamani identifier model.
 
-Conceptually:
+The macro grammar must not invent a second identifier syntax.
 
-name
-
-or:
-
-name: Type
-
-or:
-
-name: Type = defaultExpression
-
-The grammar must preserve the distinction between:
-
-source syntax
-
-and:
-
-runtime semantics
-
-A macro parameter type must not automatically imply a runtime allocation, hardware resource, quantum resource, or backend capability.
-
----
-
-10. Parameter Defaults
-
-Defaults use ordinary Zamani expression syntax.
-
-Conceptually:
-
-macro build(
-    size: Size = default_size
-) {
-    ...
-}
-
-The parser recognizes the expression.
-
-The parser does not evaluate it.
-
-Default evaluation or substitution belongs to macro semantic processing.
-
----
-
-11. Macro Bodies
-
-Macro bodies must reuse canonical Zamani block syntax.
-
-The macro subsystem must not invent:
-
-macroBlock
-
-if an existing canonical:
-
-blockExpression
-
-or equivalent block construct can represent the same source structure.
-
-This guarantees that macro bodies can contain future Zamani constructs without requiring the macro grammar to duplicate every language domain.
-
-A macro body may eventually contain syntax related to:
-
-- classical computation;
-- quantum computation;
-- HDL;
-- hardware;
-- distributed execution;
-- AI;
-- data;
-- networking;
-- security;
-- future domains.
-
-The macro grammar must remain domain-neutral.
-
----
-
-12. Macro Invocation
-
-The canonical invocation structure is:
-
-macroPath
-BANG
-LPAREN
-argumentList?
-RPAREN
-
-The "!" is a syntactic marker.
-
-It does not mean:
-
-- execute immediately;
-- execute during lexing;
-- execute during parsing;
-- execute arbitrary host code;
-- execute arbitrary Rust;
-- perform filesystem access;
-- perform network access;
-- select hardware;
-- select a backend;
-- perform quantum execution.
-
-Those meanings are prohibited at this grammar boundary.
-
----
-
-13. Macro Paths
-
-Macro names may be qualified.
+A macro may be referenced through a qualified canonical path.
 
 Conceptually:
 
@@ -566,170 +454,295 @@ math::build!(x)
 
 domain::subdomain::build!(x)
 
-The grammar must not impose a finite namespace depth.
+There is no grammar-defined namespace-depth limit.
 
-Qualified names must use the canonical name/path infrastructure.
-
-Macro syntax must not redefine:
-
-qualifiedName
-
-if that rule already has a canonical owner.
-
-Name resolution happens after parsing.
+The implementation must not convert namespace depth into a language maximum.
 
 ---
 
-14. Arguments
+10. Macro Invocation
 
-Macro invocation arguments reuse the canonical expression and argument syntax wherever possible.
+The canonical conceptual invocation is:
 
-This is essential.
+macroPath ! ( argumentList? )
 
-The macro subsystem must not create a second expression language.
+Examples:
 
-Macro arguments may eventually contain:
+build!()
 
-- literals;
-- identifiers;
-- function calls;
-- generic expressions;
-- type-related expressions where allowed;
-- classical values;
-- quantum expressions;
-- resource expressions;
-- hardware-independent capability expressions;
-- distributed expressions;
-- future domain expressions.
+build!(value)
 
-The macro parser merely preserves their source structure.
+build!(a, b, c)
 
-Semantic validation determines whether they are valid for a particular macro.
+module::build!(value)
+
+The "!" is a syntax marker.
+
+It does not itself mean:
+
+- execute immediately;
+- execute during lexing;
+- execute during parsing;
+- execute host code;
+- execute Rust;
+- access the filesystem;
+- access the network;
+- spawn processes;
+- choose hardware;
+- execute quantum operations;
+- bypass security;
+- bypass semantic analysis.
 
 ---
 
-15. No Fixed Argument Count
+11. Macro Arguments
 
-The grammar must not define a finite macro argument universe.
-
-Do not create rules equivalent to:
-
-macroArgument1
-macroArgument2
-macroArgument3
-...
-macroArgumentN
-
-Use grammar repetition.
+Macro arguments reuse canonical Zamani expression syntax wherever the language permits.
 
 Conceptually:
 
 argumentList
-    : expression
-      (COMMA expression)*
+    : expression (COMMA expression)*
     ;
 
-or reuse the canonical argument-list rule.
+The actual implementation must consume the canonical expression rule rather than duplicate it.
 
-The language therefore has no grammar-defined maximum number of arguments.
+Arguments can therefore naturally contain future Zamani constructs.
 
-Any implementation/resource limit must belong to explicit compiler resource policy.
+Examples may include:
 
----
+build!(x + y)
 
-16. No Fixed Parameter Count
+build!(tensor)
 
-The same rule applies to parameters.
+build!(quantum_register)
 
-The grammar must not encode:
+build!(requires capability("gpu.compute"))
 
-MAX_MACRO_PARAMETERS
+where those expressions are valid under the relevant canonical language rules.
 
-or an equivalent finite grammar structure.
-
-Use canonical repetition.
-
-The number of parameters is constrained only by:
-
-- source representation;
-- compiler resource policy;
-- semantic rules;
-- available memory;
-- compilation budgets.
-
-Those constraints must not become language semantics.
+The macro grammar does not determine whether an argument is computationally meaningful.
 
 ---
 
-17. No Macro Count Limit
+12. No Fixed Argument Count
 
-The grammar must not impose:
+The grammar must use repetition rather than enumerating argument positions.
 
-MAX_MACROS
+Forbidden architectural pattern:
 
-or any equivalent limit.
+argument1
+argument2
+argument3
+...
+argumentN
 
-A source program may contain arbitrarily many macro declarations subject to available resources and explicit compiler policies.
+Required conceptual pattern:
 
-The compiler may provide configurable admission limits to protect against denial-of-service attacks.
+argument (separator argument)*
 
-Such limits must be:
+There is therefore no grammar-defined universal maximum argument count.
 
-- configurable;
-- documented;
-- observable;
-- diagnosable;
-- independent of language semantics.
+An implementation may enforce configurable compilation/resource safeguards.
+
+Such safeguards are not language semantics.
 
 ---
 
-18. No Expansion Depth in Grammar
+13. No Fixed Parameter Count
 
-Do not encode:
+The same principle applies to macro parameters.
+
+Do not define a fixed number of parameter positions.
+
+Do not introduce a language constant representing a maximum parameter count.
+
+Parameter lists must use grammar repetition.
+
+The actual compiler may protect itself through configurable resource policies, but those policies must remain outside the language grammar.
+
+---
+
+14. No Fixed Macro Count
+
+The language does not define a universal maximum number of macro declarations.
+
+A source program can contain as many macro declarations as its available resources permit.
+
+Compiler-side protection may include configurable:
+
+- memory budgets;
+- compilation budgets;
+- expansion budgets;
+- time budgets;
+- generated-structure budgets;
+- diagnostic budgets.
+
+These are implementation/resource policies.
+
+They must not become syntax restrictions.
+
+---
+
+15. No Artificial Expansion Ceiling
+
+The grammar must not encode an expansion ceiling.
+
+Do not encode grammar-level constructs equivalent to:
 
 MAX_EXPANSION_DEPTH
+MAX_EXPANSION_SIZE
+MAX_MACROS
+MAX_MACRO_PARAMETERS
 
-in grammar productions.
+as universal language limits.
 
-Recursive macro expansion is a compiler problem.
+The compiler may have configurable safeguards for hostile or pathological input.
 
-Expansion infrastructure may have configurable safeguards such as:
+Those safeguards must be:
 
-expansion budget
-generated-node budget
-expansion-step budget
-time budget
-memory budget
+1. configurable;
+2. documented;
+3. observable;
+4. diagnosable;
+5. independent of language meaning;
+6. separable from target hardware limits;
+7. testable;
+8. compatible with larger available resources.
 
-These must be compiler configuration, not grammar restrictions.
-
-A macro grammar must remain valid independently of the current compiler resource policy.
-
----
-
-19. Recursion
-
-Macro recursion is not equivalent to grammar recursion.
-
-The parser may parse nested source structures.
-
-The compiler must separately determine whether macro expansion:
-
-- terminates;
-- exceeds an expansion budget;
-- violates recursion policy;
-- creates excessive generated structure;
-- creates semantic cycles.
-
-The parser must not attempt to prove macro expansion termination.
+A resource safeguard is not a grammar capacity.
 
 ---
 
-20. Hygiene Boundary
+16. Important Clarification About "MAX_*" References
 
-Macro hygiene belongs primarily to compiler semantic infrastructure.
+The names of prohibited capacity constants may appear in documentation describing what must not be implemented, validation rules, negative tests, or audits.
 
-The architecture is:
+That does not make those names language limits.
+
+The prohibition concerns actual language/compiler architecture such as:
+
+MAX_QUBITS = ...
+MAX_THREADS = ...
+MAX_DEVICES = ...
+
+being used to define universal language capacity.
+
+Documentation may explicitly mention such names to detect and prevent their accidental introduction.
+
+The "hardcoding-audit" validation must therefore distinguish:
+
+documentation describing prohibited hard-coding
+
+from:
+
+actual executable or grammar capacity enforcement
+
+A naïve text search that reports every mention of "MAX_*" as a violation is insufficient.
+
+---
+
+17. Recursion
+
+Macro recursion is a compiler-expansion concern, not a grammar capacity.
+
+The parser may parse nested macro invocations.
+
+For example:
+
+outer!(inner!(value))
+
+The parser does not determine whether expansion terminates.
+
+The expansion system must independently manage:
+
+- recursion;
+- expansion ordering;
+- cycle detection;
+- expansion budgets;
+- generated-node budgets;
+- time budgets;
+- memory budgets.
+
+The grammar remains independent of those policies.
+
+---
+
+18. Expansion
+
+Macro expansion is downstream from parsing.
+
+The source pipeline is:
+
+macro invocation
+        ↓
+AST macro invocation
+        ↓
+name/module resolution
+        ↓
+macro resolution
+        ↓
+argument binding
+        ↓
+expansion
+        ↓
+hygiene
+        ↓
+provenance
+        ↓
+semantic analysis
+
+The grammar recognizes the invocation.
+
+It does not perform expansion.
+
+The macro expansion implementation must not require a grammar edit every time a new Zamani domain is introduced.
+
+That property is essential for POCO-REAF.
+
+---
+
+19. Macro Expansion Must Not Bypass Semantic Analysis
+
+Generated code is still Zamani code.
+
+After expansion, generated constructs must pass the appropriate compiler phases.
+
+Expansion must not automatically grant permission to:
+
+- use undeclared names;
+- violate types;
+- violate ownership;
+- violate effects;
+- bypass capabilities;
+- exceed resource requirements;
+- access unauthorized resources;
+- violate security policy;
+- select unavailable hardware;
+- bypass quantum validation;
+- bypass HDL validation.
+
+The architectural rule is:
+
+generated syntax
+      ↓
+ordinary Zamani validation
+
+not:
+
+generated syntax
+      ↓
+trusted executable result
+
+---
+
+20. Hygiene
+
+Macro hygiene is a compiler/semantic property.
+
+It cannot be implemented merely by grammar productions.
+
+The intended pipeline is:
 
 parse
   ↓
@@ -745,2392 +758,3623 @@ provenance
   ↓
 semantic analysis
 
-The macro grammar must not encode implementation-specific hygiene algorithms.
+The grammar must preserve sufficient source structure for hygiene implementation.
 
-It must preserve sufficient source structure for downstream hygiene.
+The implementation must prevent unintended identifier capture unless the language specification explicitly defines capture behavior.
 
-The implementation must prevent generated identifiers from accidentally capturing or being captured by caller bindings unless the language explicitly specifies such behavior.
+Generated bindings must not accidentally:
 
----
-
-21. Provenance
-
-Macro expansion must preserve provenance.
-
-The grammar therefore needs to be compatible with source-location tracking.
-
-At minimum the downstream representation must be able to determine:
-
-original source span
-macro declaration origin
-macro invocation origin
-generated construct origin
-expansion ancestry
-
-The grammar itself does not store this metadata.
-
-The parser/AST layer owns source spans.
-
-The expansion layer owns expansion provenance.
-
-Diagnostics must be able to explain both:
-
-where the macro was invoked
-
-and:
-
-where the generated construct originated
+- capture caller bindings;
+- shadow caller bindings unexpectedly;
+- become captured by caller bindings;
+- corrupt lexical scope;
+- bypass visibility rules.
 
 ---
 
-22. AST Contract
+21. Explicit Hygiene Syntax
 
-The macro grammar must map into the repository's canonical frontend AST.
+"hygiene.g4" may define syntax only if the language specification explicitly exposes source-level hygiene controls.
 
-The existing macro expression AST represents:
+Such syntax must have a complete contract containing:
 
-MacroExpression
-├── source-level macro name
-├── argument NodeIds
-└── common AST metadata
+- lexical representation;
+- grammar rule;
+- AST mapping;
+- semantic meaning;
+- hygiene behavior;
+- provenance behavior;
+- diagnostics;
+- compatibility;
+- positive tests;
+- negative tests;
+- boundary tests;
+- scalability tests.
 
-rather than embedding a second recursive AST hierarchy.
+If no user-visible hygiene syntax is specified, "hygiene.g4" must remain a documented integration boundary rather than inventing syntax merely to make the file non-empty.
 
-The grammar must therefore not require a separate:
+---
+
+22. Token Trees
+
+The existing "token-stream.g4" and "syntax-tree.g4" components provide a structured path for macros that require syntax-level token/tree manipulation.
+
+Token trees are source structure.
+
+They are not arbitrary executable host programs.
+
+A token tree may contain constructs from any Zamani domain.
+
+For example, a macro token tree may ultimately contain:
+
+quantum operation
+
+or:
+
+hdl module
+
+or:
+
+parallel computation
+
+without requiring the macro grammar to understand the complete semantics of those domains.
+
+---
+
+23. Balanced Delimiters
+
+Token-tree syntax must preserve balanced source delimiters.
+
+Supported delimiter forms must use the canonical lexical tokens.
+
+The grammar must not create separate delimiter tokens for macros.
+
+The structural representation must support arbitrary nesting subject to available resources and compiler safeguards.
+
+No grammar-level fixed nesting depth is permitted.
+
+---
+
+24. Token-Tree Ownership
+
+"token-stream.g4" owns token-tree structure.
+
+It must not own:
+
+- macro resolution;
+- expansion;
+- hygiene;
+- semantic analysis;
+- AST construction policy;
+- target selection.
+
+"syntax-tree.g4" may consume token-tree structure when syntax-tree operations are part of the language specification.
+
+Neither file may become a second parser for the whole language.
+
+---
+
+25. Macro Body
+
+Macro bodies should reuse canonical Zamani block syntax wherever possible.
+
+Do not create a parallel body language merely for macros.
+
+The conceptual relationship is:
+
+macroBody
+    ↓
+canonical block/source structure
+
+This allows macro bodies to evolve with Zamani.
+
+A macro body may contain:
+
+- classical statements;
+- quantum statements;
+- hybrid statements;
+- HDL declarations;
+- hardware intent;
+- resource requirements;
+- distributed constructs;
+- AI constructs;
+- future domain constructs.
+
+The macro grammar should not need to enumerate them all.
+
+---
+
+26. Generic Macro Parameters
+
+Generic parameters must reuse the canonical generic/type-parameter model where possible.
+
+Conceptually:
+
+macro transform<T>(value: T) {
+    ...
+}
+
+The grammar records generic syntax.
+
+It does not determine:
+
+- type inference;
+- specialization;
+- monomorphization;
+- runtime representation;
+- hardware mapping.
+
+Those belong downstream.
+
+---
+
+27. Parameter Defaults
+
+Defaults must use canonical expression syntax.
+
+Conceptually:
+
+macro build(size: Size = default_size) {
+    ...
+}
+
+The parser records the expression.
+
+The parser does not evaluate it.
+
+Default evaluation/substitution is a compiler semantic operation.
+
+A default expression must not silently execute arbitrary host code.
+
+---
+
+28. Macro Parameter Types
+
+A macro parameter type is source-level macro information unless the language specification explicitly defines another interpretation.
+
+A parameter type does not automatically imply:
+
+- runtime allocation;
+- memory allocation;
+- CPU allocation;
+- GPU allocation;
+- qubit allocation;
+- physical register allocation;
+- FPGA resource allocation;
+- network capacity.
+
+For example:
+
+macro build<T>(value: T)
+
+does not mean that "T" has a physical hardware representation at macro-expansion time.
+
+---
+
+29. Macro Resolution
+
+Macro resolution is downstream from parsing.
+
+The conceptual process is:
+
+macro invocation
+       ↓
+canonical path resolution
+       ↓
+scope lookup
+       ↓
+module/package lookup
+       ↓
+visibility checking
+       ↓
+candidate discovery
+       ↓
+parameter matching
+       ↓
+generic constraint checking
+       ↓
+macro selection
+
+The grammar must not contain a global macro registry.
+
+The parser must not perform symbol-table lookup.
+
+The grammar must not mutate compiler-global state.
+
+---
+
+30. Modules and Imports
+
+Macro paths must integrate with the existing module system.
+
+The macro subsystem must not invent another import mechanism.
+
+Macro availability must respect:
+
+- module boundaries;
+- visibility;
+- package boundaries;
+- aliases;
+- namespaces;
+- versions;
+- compatibility rules.
+
+If a macro is imported through the normal module system, the macro invocation must use the same canonical name/path semantics.
+
+---
+
+31. AST Contract
+
+The macro grammar must lower into the existing canonical frontend AST.
+
+The existing repository contains macro-expression AST infrastructure.
+
+The macro grammar must therefore not introduce a competing:
 
 MacroAst
-MacroArgumentAst
 MacroInvocationAst
+MacroArgumentAst
 
-hierarchy unless the canonical AST architecture explicitly adopts one.
+hierarchy unless the canonical AST specification explicitly changes to require it.
 
-The preferred contract is:
+The preferred architecture is:
 
-Grammar
-    ↓
+grammar
+   ↓
 canonical parser
-    ↓
+   ↓
 canonical AST
-    ↓
-MacroExpression / macro declaration nodes
+   ↓
+macro expression/declaration representation
 
 ---
 
-23. AST Responsibilities
+32. Macro Expression AST
+
+A macro invocation represented as an expression must retain enough information to identify:
+
+- the macro name/path;
+- argument node references;
+- source span;
+- ordinary AST metadata;
+- expansion/provenance metadata where supported by the canonical AST architecture.
+
+The macro expression represents the source invocation, not an already-expanded computation.
+
+This distinction must remain explicit.
+
+---
+
+33. AST Responsibilities
 
 The AST owns:
 
 - source structure;
-- source spans;
 - node identity;
-- argument references;
+- source spans;
 - declaration structure;
+- expression structure;
+- argument references;
 - source metadata.
 
 The AST does not own:
 
-- macro resolution;
-- expansion;
-- backend selection;
+- macro lookup;
+- macro expansion;
+- hygiene algorithms;
 - resource allocation;
 - target selection;
-- hardware state.
-
-This boundary is already reflected by the repository's macro AST design.
-
----
-
-24. Semantic Contract
-
-After parsing, semantic analysis must determine:
-
-- whether the macro exists;
-- whether it is visible;
-- which module/package/namespace owns it;
-- whether generic parameters are valid;
-- whether arguments correspond to parameters;
-- whether defaults are legal;
-- whether macro constraints are satisfied;
-- whether expansion is permitted in the current context;
-- whether expansion produces valid Zamani syntax/semantics;
-- whether generated constructs satisfy language rules.
-
-None of those checks belongs in the parser grammar.
+- hardware state;
+- quantum routing;
+- scheduling;
+- QEC;
+- runtime execution.
 
 ---
 
-25. Macro Resolution
+34. Source Spans
 
-Macro resolution belongs downstream of parsing.
+Every macro declaration and invocation must remain traceable to source locations.
 
-The resolution pipeline is conceptually:
+Diagnostics must be able to identify at least:
 
+macro declaration location
+macro invocation location
+argument location
+generated construct location
+
+where the underlying compiler representation supports those distinctions.
+
+The macro grammar does not implement source spans.
+
+The lexer/parser/AST infrastructure owns source location representation.
+
+---
+
+35. Expansion Provenance
+
+Expansion must preserve ancestry.
+
+Conceptually:
+
+original source
+     │
+     ▼
 macro invocation
-      ↓
-canonical path resolution
-      ↓
-scope lookup
-      ↓
-visibility checking
-      ↓
-macro candidate resolution
-      ↓
-parameter correspondence
-      ↓
-constraint checking
-      ↓
-selected macro
+     │
+     ▼
+macro declaration
+     │
+     ▼
+generated syntax
+     │
+     ▼
+nested expansion
 
-The grammar must not embed a global macro registry.
+Diagnostics must be capable of reporting the relevant expansion chain.
 
-It must not perform symbol-table lookup.
-
-It must not mutate compiler-global state.
+A compiler error originating in generated code should not lose the location at which the programmer invoked the macro.
 
 ---
 
-26. Expansion
+36. Canonical IR Boundary
 
-Expansion belongs to the compiler's macro-expansion subsystem.
+Macros must not directly create target-specific IR.
 
-The grammar produces:
-
-macro invocation
-
-not:
-
-expanded program
-
-The expansion subsystem may generate arbitrary valid Zamani source/AST/semantic structures according to the language's macro model.
-
-The macro grammar must not need modification merely because a new downstream domain is introduced.
-
-This is critical for POCO-REAF.
-
----
-
-27. Canonical IR Boundary
-
-Macros do not directly produce:
-
-quantum::ir
-
-or any target-specific representation.
-
-The correct flow is:
+The required architecture is:
 
 macro syntax
-    ↓
-AST
-    ↓
-macro resolution
-    ↓
+      ↓
+frontend AST
+      ↓
 macro expansion
-    ↓
+      ↓
 semantic analysis
-    ↓
+      ↓
 canonical semantic representation
-    ↓
-domain-specific IR
+      ↓
+canonical IR
 
 For quantum programs:
 
-macro expansion
-    ↓
-semantic quantum constructs
-    ↓
+macro
+  ↓
+AST
+  ↓
+expansion
+  ↓
+semantic quantum operation
+  ↓
 quantum::ir
-    ↓
+  ↓
 optimization
-    ↓
+  ↓
 routing
-    ↓
+  ↓
 scheduling
-    ↓
-ZQN / resilience where applicable
-    ↓
-hardware lowering
+  ↓
+QEC / resilience / ZQN where applicable
+  ↓
+HAL
+  ↓
+target
 
-The macro grammar must never create a duplicate quantum IR.
+There must not be a separate macro-specific quantum IR.
 
 ---
 
-28. Quantum Independence
+37. Quantum Independence
 
-The macro grammar must remain independent of:
+Macro grammar must not contain assumptions about:
 
-- qubit count;
+- number of qubits;
 - physical qubit IDs;
 - logical qubit IDs;
+- gate sets;
 - coupling maps;
-- topology;
-- native gates;
-- pulse schedules;
-- QPU names;
+- QPU topology;
+- QPU vendor;
 - calibration data;
-- QEC implementations;
-- ZQN models;
-- quantum backend APIs.
+- pulse representation;
+- QEC code;
+- ZQN implementation;
+- quantum backend.
 
-A macro may generate quantum syntax, but the grammar itself remains generic.
+A macro such as:
 
-For example:
+prepare!(q)
 
-make_entanglement!(register)
+does not establish any hardware limit.
 
-does not mean:
+Likewise:
 
-use exactly N qubits
+entangle!(register)
 
-and does not imply:
+does not imply a fixed number of qubits.
 
-use device X
+The generated program is evaluated against actual resource/capability information downstream.
 
 ---
 
-29. Classical Independence
+38. Generic Quantum Operations
 
-Macros must be able to generate classical constructs without the macro grammar owning classical semantics.
+The macro system must remain compatible with the repository's data-driven quantum operation model.
 
-Examples include:
+It must not require macros to enumerate gates such as:
 
-vectorize!(operation)
+H
+X
+Y
+Z
+CNOT
+...
+
+The canonical quantum operation model should remain capable of representing:
+
+apply H to q
+apply custom_gate to q
+apply vendor.operation to q
+apply operation(parameter) to q
+
+A macro may generate any valid quantum operation syntax without modifying the macro grammar for every new operation.
+
+---
+
+39. Classical Independence
+
+The macro grammar must not hard-code:
+
+- CPU count;
+- core count;
+- thread count;
+- register width;
+- cache size;
+- memory size;
+- SIMD width.
+
+A macro can generate portable classical computation.
+
+Resource realization happens downstream.
+
+For example:
+
 parallel!(work)
 
-The grammar only recognizes the macro syntax.
+does not imply:
 
-The resulting classical computation is validated and lowered by the ordinary compiler pipeline.
+8 threads
 
----
+or:
 
-30. HDL and Hardware Independence
+32 cores
 
-A macro may generate HDL or hardware-oriented constructs.
-
-The macro grammar must not need to know:
-
-- FPGA fabric size;
-- LUT count;
-- register count;
-- clock frequency;
-- memory capacity;
-- physical pins;
-- ASIC technology;
-- physical topology.
-
-Those belong to hardware descriptions, target capabilities, compilation contexts, and backend infrastructure.
+unless those are explicit program requirements rather than grammar assumptions.
 
 ---
 
-31. POCO-REAF
+40. HDL Independence
 
-The macro system must preserve POCO-REAF.
+Macros may generate HDL syntax.
 
-Program Once
+The macro grammar itself must not encode:
 
-Macro source expresses reusable program structure.
+- fixed bus widths;
+- fixed register widths;
+- fixed FPGA capacities;
+- fixed LUT counts;
+- fixed BRAM counts;
+- fixed ASIC dimensions;
+- fixed clock frequencies.
 
-Compile Once
+For example, a macro generating a parameterized hardware structure remains source-level syntax.
 
-Macro expansion must produce stable semantic structure that can feed the canonical compiler pipeline.
-
-Run Everywhere
-
-The resulting semantics can be lowered to available target classes.
-
-Run Anywhere
-
-No macro syntax should inherently require a particular execution environment.
-
-Run Forever
-
-Macro syntax must be versioned and extensible without coupling it to temporary hardware generations.
-
-The fundamental rule is:
-
-«A macro must not turn a portable Zamani program into a machine-specific program merely because the macro happens to generate implementation structure.»
+The actual implementation is resolved later.
 
 ---
 
-32. Resource Independence
+41. Hardware Independence
 
-Macro syntax must not hard-code:
+Macro expansion must never be a hidden hardware-selection mechanism.
 
-MAX_QUBITS
-MAX_CORES
-MAX_THREADS
-MAX_GPUS
-MAX_FPGAS
-MAX_DEVICES
-MAX_NODES
-MAX_MEMORY
-MAX_REGISTER_WIDTH
-MAX_VECTOR_WIDTH
-MAX_TENSOR_RANK
-MAX_MACRO_ARGUMENTS
-MAX_MACRO_PARAMETERS
-MAX_MACROS
+A macro must not silently choose:
 
-Any such limit in the grammar is an architectural defect unless it is genuinely part of the language's semantics.
+CPU 0
+GPU 1
+FPGA device 2
+QPU device 3
+physical qubit 4
 
-Compiler resource controls must instead be represented through configurable infrastructure.
+unless the language explicitly contains target-specific syntax and the construct is correctly classified as a target/deployment decision rather than portable source semantics.
 
----
+The macro grammar must preserve the distinction between:
 
-33. Resource Policy Separation
+portable requirement
 
-The compiler may define policies such as:
+and:
 
-source-byte budget
-token budget
-AST-node budget
-macro-expansion budget
-generated-node budget
-compilation-time budget
-memory budget
-diagnostic budget
-
-These are resource controls, not grammar semantics.
-
-They should be:
-
-- configurable;
-- target-independent;
-- observable;
-- diagnosable;
-- versionable;
-- testable.
-
-A user should be able to distinguish:
-
-invalid Zamani syntax
-
-from:
-
-valid Zamani syntax rejected because this compilation environment
-does not permit sufficient expansion resources
+target realization
 
 ---
 
-34. Determinism
+42. Resource Requirements
 
-Parsing must be deterministic.
+Macros may generate resource requirements if those constructs are part of the canonical Zamani language.
 
-Given identical:
+Examples:
 
-source
+requires qubits >= n
+
+requires memory >= required_memory
+
+requires capability("tensor.compute")
+
+requires capability("gpu.compute")
+
+requires capability("quantum.measurement")
+
+These are semantic requirements.
+
+They are not grammar-defined hardware limits.
+
+---
+
+43. Requirement vs Implementation Decision
+
+The compiler must distinguish:
+
+Requirement
+
+requires qubits >= n
+
+Capability
+
+requires capability("quantum.measurement")
+
+Preference
+
+prefer quantum accelerator
+
+Implementation decision
+
+map logical resource to physical resource
+
+A macro must not collapse these concepts.
+
+---
+
+44. POCO-REAF
+
+The macro subsystem contributes to:
+
+Program_Once
+Compile_Once
+Run_Everywhere
+Anywhere
+Forever
+
+by keeping macros independent of target realization.
+
+The same source-level macro invocation should be able to participate in compilation to:
+
+atom/embedded
+    ↓
+CPU
+    ↓
+multicore
+    ↓
+GPU
+    ↓
+FPGA
+    ↓
+ASIC
+    ↓
+accelerator
+    ↓
+QPU
+    ↓
+simulator
+    ↓
+HPC
+    ↓
+cluster
+    ↓
+distributed/cloud
+    ↓
+future targets
+
+provided that the resulting program's requirements can be satisfied.
+
+The macro grammar must not encode the realization.
+
+---
+
+45. Scalability
+
+Scalability means:
+
+«The language does not establish artificial finite capacity merely because a particular implementation has finite resources.»
+
+The grammar must use unbounded structural constructs where appropriate:
+
+*
 +
-lexer configuration
-+
-language version
+recursive structures
+lists
+maps
+generic structures
+nested blocks
+qualified paths
+parameterized syntax
 
-the parser must produce the same syntactic structure.
-
-Macro expansion determinism is a downstream compiler responsibility.
-
-Expansion must preserve deterministic behavior where the language specification requires reproducibility.
-
-No grammar production may depend on:
-
-- hash-map iteration;
-- current time;
-- random state;
-- hardware state;
-- network state;
-- filesystem state;
-- backend state.
+Actual implementation limits are governed by available resources and configurable policies.
 
 ---
 
-35. Security
+46. Tiny-to-Large Principle
 
-The grammar layer must be purely syntactic.
+A valid macro system must work for:
 
-It must not:
+macro x() {}
 
-- execute source;
-- execute Rust;
-- load arbitrary libraries;
-- access files;
-- access networks;
-- invoke processes;
-- communicate with hardware;
-- access secrets;
-- download dependencies.
+as well as very large macro-enabled programs.
 
-Macro expansion is security-sensitive.
+The same language model must not need a different grammar for:
 
-The compiler macro subsystem must separately enforce:
+- embedded;
+- workstation;
+- server;
+- accelerator;
+- QPU;
+- HPC;
+- cluster;
+- distributed;
+- cloud.
 
-- expansion isolation;
-- resource budgets;
-- provenance;
-- deterministic policy;
-- dependency policy;
-- capability restrictions;
-- generated-code validation.
+Scale is a property of compilation and execution resources, not macro grammar variants.
 
 ---
 
-36. Safe Rust Requirement
+47. Resource Safeguards
 
-All reference compiler implementation surrounding this grammar must target:
+A production compiler must be able to defend itself against pathological macro expansion.
 
-Rust 1.97
-Rust 1.97.1
-edition 2021
+Examples include configurable budgets for:
 
-and must use safe Rust.
-
-The implementation must contain no:
-
-unsafe
-unsafe fn
-unsafe impl
-unsafe {
-
-unless the repository's policy is explicitly changed at a higher architectural level.
-
-The grammar files themselves contain no executable Rust and therefore do not require unsafe operations.
-
-A Zamani source-level construct named "unsafe", if the language eventually supports one, must not be confused with Rust's "unsafe".
-
----
-
-37. Lexer Contract
-
-The macro grammar depends on the canonical lexer.
-
-At minimum, the canonical lexical system must provide the tokens needed by the macro grammar, such as:
-
-MACRO
-BANG
-LPAREN
-RPAREN
-COMMA
-COLON
-ASSIGN
-
-plus canonical:
-
-identifier
-
-and any shared syntax tokens.
-
-The macro grammar must not redefine these tokens.
-
-The existing macro grammar deliberately identifies "MACRO" and "BANG" as canonical lexical dependencies.
-
-If a required token does not yet have canonical lexical ownership, the lexer must be corrected before the macro grammar is declared production complete.
-
----
-
-38. Quotation and Splicing
-
-Quotation and splicing must not be invented through ordinary identifiers.
-
-Do not implement:
-
-quote -> IDENTIFIER
-splice -> IDENTIFIER
-unquote -> IDENTIFIER
-
-merely to make macro metaprogramming appear complete.
-
-If Zamani adopts quotation/splicing syntax, it must first establish:
-
-canonical lexical tokens
-        ↓
-canonical parser rules
-        ↓
-AST representation
-        ↓
-semantic contract
-        ↓
-hygiene/provenance contract
-        ↓
-expansion semantics
-        ↓
-tests
-
-Only then should those constructs be added.
-
-This avoids:
-
-- accidental keyword reservation;
-- identifier ambiguity;
-- parser/lexer divergence;
-- dialect conflicts;
-- incompatible future syntax.
-
----
-
-39. Interaction With "metaprogramming/"
-
-Macros and metaprogramming must be related but not conflated.
-
-Conceptually:
-
-macros/
-    source transformation syntax
-
-metaprogramming/
-    compile-time language facilities
-
-compile/
-    compilation controls
-
-semantic/compiler infrastructure/
-    meaning and validation
-
-A metaprogramming feature must not automatically become a macro.
-
-A macro must not automatically gain arbitrary compile-time execution privileges.
-
-Any compile-time execution facility requires its own:
-
-- security model;
-- capability model;
-- resource model;
-- determinism model;
-- dependency model;
-- provenance model.
-
----
-
-40. Interaction With "dialects/"
-
-Macros must work across Zamani dialects without becoming vendor-specific.
-
-Dialect syntax may introduce extensions, but extensions must remain explicitly versioned and namespaced.
-
-The macro grammar must not reserve arbitrary future vendor identifiers.
-
-Dialect integration should follow:
-
-dialect declaration
-    ↓
-dialect registration
-    ↓
-version/capability validation
-    ↓
-macro availability
-    ↓
-macro parsing
-    ↓
-semantic interpretation
-
-Unknown dialect-specific macro syntax must produce a precise diagnostic rather than silently becoming a different construct.
-
----
-
-41. Interaction With Modules
-
-Macros must integrate with:
-
-modules/modules.g4
-modules/imports.g4
-modules/exports.g4
-modules/namespaces.g4
-modules/packages.g4
-modules/dependencies.g4
-
-The grammar must permit macros to participate in the ordinary namespace/module system.
-
-Macro paths should therefore use the canonical qualified-name model.
-
-The macro subsystem must not create an isolated macro namespace unless the language specification explicitly requires one.
-
----
-
-42. Interaction With Types
-
-Macro parameter type syntax must reuse canonical type syntax.
-
-The macro grammar must not create:
-
-macroType
-
-when:
-
-typeExpression
-
-already owns the language's type syntax.
-
-This allows macro parameters to evolve with Zamani's type system without duplicating type grammar.
-
-Semantic type compatibility remains outside grammar.
-
----
-
-43. Interaction With Expressions
-
-Macro invocation is an expression-level construct.
-
-The central expression grammar must integrate it exactly once.
-
-Conceptually:
-
-primaryExpression
-    ├── literal
-    ├── identifier
-    ├── groupedExpression
-    ├── ...
-    └── macroExpression
-
-The macro subsystem must not introduce multiple competing forms such as:
-
-macroCall
-macroExpression
-macroStatement
-macroInvocationExpression
-
-unless each has a genuinely distinct semantic purpose.
-
-A statement such as:
-
-build!(x);
-
-should normally use the ordinary expression-statement mechanism.
-
----
-
-44. Interaction With Statements
-
-Macro invocations must not require a duplicate statement grammar when they can already participate in the canonical expression-statement grammar.
-
-This prevents syntactic divergence.
-
-The preferred model is:
-
-statement
-    ↓
-expressionStatement
-    ↓
-expression
-    ↓
-macroExpression
-    ↓
-macroInvocation
-
-If Zamani eventually introduces macro-only statements, they must be explicitly justified and semantically distinct.
-
----
-
-45. Interaction With Functions
-
-Macro parameters and function parameters are different concepts.
-
-The grammar must not silently make:
-
-macroParameter
-
-an alias for:
-
-functionParameter
-
-unless their contracts are genuinely identical.
-
-Macros operate at source/compile-time structure.
-
-Functions normally describe executable behavior.
-
-Their syntax may reuse common components while maintaining distinct semantic ownership.
-
----
-
-46. Interaction With Effects
-
-A macro declaration may eventually have effect/capability metadata.
-
-If so, the grammar must use the canonical effects grammar rather than inventing macro-specific effect syntax.
-
-For example:
-
-macro ...
-    requires capability ...
-
-must be integrated with:
-
-effects/
-resources/
-security/
-
-rather than defining independent macro capability semantics.
-
-The macro grammar itself does not determine whether an effect is permitted.
-
----
-
-47. Interaction With Resources
-
-Macros may generate resource requirements, but macros do not own resource allocation.
-
-The architecture must remain:
-
-macro syntax
-    ↓
-generated source
-    ↓
-semantic resource requirements
-    ↓
-resource analysis
-    ↓
-target capability matching
-    ↓
-scheduling / execution
-
-This preserves hardware independence.
-
----
-
-48. Interaction With Quantum IR
-
-A macro that generates quantum operations must eventually enter the canonical quantum pipeline.
-
-Correct:
-
-macro
- ↓
-AST
- ↓
-expansion
- ↓
-semantic quantum representation
- ↓
-quantum::ir
- ↓
-optimization
- ↓
-routing
- ↓
-scheduling
- ↓
-hardware
-
-Incorrect:
-
-macro grammar
- ↓
-QPU-specific gate
-
-The macro grammar must never depend directly on quantum IR types.
-
----
-
-49. Interaction With QEC
-
-Macros may generate QEC-related source constructs.
-
-However:
-
-grammar/macros/
-
-must not implement QEC.
-
-QEC owns:
-
-- error detection;
-- correction;
-- codes;
-- logical operations;
-- syndrome processing;
-- QEC-specific semantics.
-
-The macro grammar only parses macro syntax.
-
----
-
-50. Interaction With ZQN
-
-Macros may generate source that eventually invokes ZQN-related functionality.
-
-The macro grammar must not own:
-
-- noise models;
-- fault classification;
-- fault injection;
-- correlated faults;
-- leakage;
-- loss;
-- erasure;
-- calibration;
-- execution noise.
-
-ZQN remains the canonical owner of quantum noise/fault semantics.
-
----
-
-51. Interaction With Scheduling
-
-Macro expansion occurs before target scheduling.
-
-The macro grammar must not know:
-
-- instruction durations;
-- scheduling policies;
-- ASAP;
-- ALAP;
-- resource-constrained scheduling;
-- dynamical decoupling;
-- timing alignment.
-
-Generated quantum/hardware semantics eventually flow into the scheduling subsystem.
-
----
-
-52. Interaction With Optimization
-
-Macros are not optimizers.
-
-A macro may produce code that is later optimized.
-
-The optimization pipeline must remain:
-
-expanded semantics
-    ↓
-canonical IR
-    ↓
-optimization
-
-Macro syntax must not embed target-specific optimization assumptions.
-
----
-
-53. Interaction With Hardware
-
-Macro source may describe hardware-independent intent.
-
-Hardware realization remains owned by:
-
-hardware/
-compile/
-execution/
-
-A macro must not hard-code:
-
-device_id
-physical_address
-cpu_model
-gpu_model
-qpu_model
-fpga_model
-topology
-
-unless the language explicitly permits a target-specific declaration and that declaration is represented through the appropriate target/capability system.
-
----
-
-54. Interaction With Distributed Computing
-
-Macros may generate distributed constructs.
-
-The macro grammar remains independent of:
-
-- node count;
-- cluster topology;
-- network size;
-- machine addresses;
-- deployment topology.
-
-Distributed semantics belong to the distributed compiler/runtime layers.
-
----
-
-55. Interaction With AI/Data
-
-Macros may generate:
-
-- tensor operations;
-- model declarations;
-- data transformations;
-- accelerator operations.
-
-The macro grammar must remain generic.
-
-No macro grammar rule may assume:
-
-fixed tensor rank
-fixed accelerator count
-fixed memory capacity
-fixed model size
-
----
-
-56. Interoperability
-
-Macros must not become an accidental FFI mechanism.
-
-A macro may generate FFI syntax if the resulting source is valid Zamani.
-
-Actual interoperability remains owned by:
-
-interoperability/
-
-including:
-
-- ABI;
-- FFI;
-- C;
-- C++;
-- Python;
-- OpenQASM;
-- Verilog;
-- system interfaces.
-
-The macro grammar does not execute foreign code.
-
----
-
-57. Error Classification
-
-Macro-related errors must be classified by phase.
-
-Syntax errors
-
-Examples:
-
-macro foo(
-foo!(
-foo!(,)
-macro foo(a: )
-
-These belong to lexical/parser diagnostics.
-
-Name errors
-
-Examples:
-
-unknown_macro!(x)
-
-These belong to name resolution.
-
-Semantic errors
-
-Examples:
-
-macro called with incompatible arguments
-
-These belong to semantic analysis.
-
-Expansion errors
-
-Examples:
-
-expansion violates configured expansion policy
-
-These belong to macro expansion infrastructure.
-
-Resource errors
-
-Examples:
-
-expansion exceeds configured memory budget
-
-These belong to resource-policy infrastructure.
-
-The parser must not report downstream errors as syntax errors.
-
----
-
-58. Diagnostics
-
-Diagnostics must preserve:
-
-- source span;
-- macro invocation location;
-- macro declaration location when known;
-- argument location;
-- expansion provenance when applicable;
-- stable diagnostic category/code.
-
-A diagnostic should distinguish:
-
-macro syntax error
-
-from:
-
-macro not found
-
-from:
-
-macro expansion rejected
-
-from:
-
-resource budget exceeded
-
-This is essential for production tooling.
-
----
-
-59. Deterministic Source Ordering
-
-Parameter order is significant.
-
-Argument order is significant.
-
-The AST must preserve both.
-
-The macro grammar must not rely on unordered collections.
-
-For example:
-
-transform!(a, b, c)
-
-must preserve:
-
-a
-b
-c
-
-in source order.
-
-This is necessary for deterministic expansion and diagnostics.
-
----
-
-60. Duplicate Arguments
-
-Repeated arguments are syntactically legal unless a semantic rule explicitly forbids them.
-
-For example:
-
-duplicate!(x, x)
-
-must not be rejected merely because the same expression/node is used twice.
-
-Whether such usage is semantically valid depends on the macro's contract.
-
----
-
-61. Graph and Cycle Validation
-
-The grammar must not attempt graph-wide AST validation.
-
-A parser may create:
-
-MacroExpression
-
-whose arguments refer to other AST nodes.
-
-Local structural validation may reject direct malformed relationships when necessary.
-
-Global AST validation owns:
-
-- graph consistency;
-- reference integrity;
-- graph-wide cycles;
-- orphan nodes;
-- invalid node references.
-
-Macro expansion infrastructure owns:
-
-- expansion recursion;
-- expansion cycles;
-- termination policy.
-
----
-
-62. Incremental Parsing
-
-The macro grammar should remain compatible with incremental tooling.
-
-IDE tooling may parse:
-
-macro foo(
-
-while the declaration is incomplete.
-
-Error recovery must therefore:
-
-- make progress;
-- preserve useful diagnostics;
-- avoid creating misleading semantic nodes;
-- avoid infinite loops.
-
-Incomplete source must not be mistaken for valid executable semantics.
-
----
-
-63. Error Recovery
-
-Parser recovery should:
-
-1. identify the unexpected token;
-2. emit a structured diagnostic;
-3. consume input when necessary;
-4. synchronize at an appropriate grammar boundary;
-5. continue when safe;
-6. avoid fabricating valid macro declarations or invocations.
-
-Recovery is parser behavior, not macro expansion.
-
----
-
-64. Scalability Model
-
-The macro grammar contains no language-level finite limits on:
-
-- number of macros;
-- number of parameters;
-- number of arguments;
-- namespace depth;
-- macro body size;
-- program size;
-- expansion nesting represented syntactically.
-
-The theoretical model is:
-
-tiny source
-    │
-    ▼
-same macro grammar
-    │
-    ▼
-large source
-    │
-    ▼
-very large source
-
-subject only to:
-
-- available memory;
-- compiler resource policies;
-- operating-system limits;
-- parser implementation limits;
-- compilation budgets.
-
-No arbitrary grammar constant may become a semantic ceiling.
-
----
-
-65. Deep Nesting
-
-Deeply nested macro-related syntax must be tested.
-
-The compiler should avoid unnecessary host-language recursion where deep source can exhaust the Rust call stack.
-
-Where practical, compiler infrastructure should use:
-
-- explicit worklists;
-- explicit stacks;
-- iterative traversal;
-- incremental processing;
-- configurable budgets.
-
-The grammar itself must not introduce artificial nesting limits.
-
----
-
-66. Source Size
-
-The grammar must not impose a maximum source size.
-
-A compiler may expose a configurable source-byte budget for operational/security reasons.
-
-That budget is not part of the Zamani language definition.
-
-The distinction is:
-
-language accepts construct
-
-versus:
-
-this compilation invocation permits insufficient resources
-
----
-
-67. Generated-Code Scalability
-
-Macro expansion can potentially generate much more structure than the original source.
-
-Therefore expansion infrastructure must separately control:
-
-- expansion steps;
-- generated AST nodes;
-- generated source size;
+- expansion work;
+- generated nodes;
+- generated bytes;
 - memory;
-- compilation time.
-
-These are resource policies.
-
-They must not be encoded into macro grammar productions.
-
----
-
-68. No Hidden Hardware Coupling
-
-A macro grammar review must reject any addition resembling:
-
-macro_for_32_qubits
-macro_for_gpu8
-macro_for_cpu16
-macro_for_fpga256
-macro_for_qpu127
-
-when the numeric value represents a machine limitation rather than source semantics.
-
-Instead, macros should generate abstract source constructs whose requirements are resolved later.
-
----
-
-69. Extensibility
-
-A new computational domain must not require modifying fundamental macro syntax.
-
-For example, adding a future domain:
-
-neuromorphic
-photonic
-biological
-optical
-future_accelerator
-
-should permit existing macro syntax to generate constructs for that domain.
-
-The macro system therefore scales through composition, not a continuously expanding list of macro keywords.
-
----
-
-70. Reserved Keywords
-
-Only genuinely syntactic macro keywords should be reserved.
-
-Do not reserve every conceivable macro name.
-
-For example, user-defined names such as:
-
-quantum_builder
-gpu_builder
-future_builder
-my_macro
-
-should remain ordinary identifiers unless explicitly reserved elsewhere.
-
-This preserves namespace scalability.
-
----
-
-71. Versioning
-
-Macro syntax must participate in Zamani language versioning.
-
-A future breaking change must be represented through:
-
-language version
-compatibility policy
-migration guidance
-deprecation policy
-
-not by silently changing the meaning of existing macro syntax.
-
-The macro grammar must be able to coexist with compatibility infrastructure without creating version-specific duplicate macro languages.
-
----
-
-72. Backward Compatibility
-
-Existing valid macro syntax should remain valid unless the language specification explicitly changes it.
-
-Before changing macro syntax:
-
-1. identify existing users;
-2. identify parser consumers;
-3. identify AST representation;
-4. identify compiler expansion consumers;
-5. determine compatibility impact;
-6. introduce migration if necessary;
-7. update tests;
-8. update documentation.
-
-No silent breaking changes.
-
----
-
-73. Forward Compatibility
-
-The macro grammar should leave explicit extension points for:
-
-- quotation;
-- splicing;
-- token-tree-like facilities if Zamani adopts them;
-- hygienic controls;
-- compile-time reflection;
-- macro attributes;
-- dialect-specific macro metadata.
-
-However, unused extension points must not accept arbitrary syntax accidentally.
-
-Forward compatibility must not mean ambiguous parsing.
-
----
-
-74. Macro Attributes
-
-If macros support attributes, they must use the canonical attribute/annotation grammar.
-
-Do not create an isolated:
-
-macroAttribute
-
-system unless its semantics differ materially from ordinary Zamani attributes.
-
-Potential future metadata may include:
-
-- stability;
-- visibility;
-- export status;
-- compile-time capability requirements;
-- expansion policy;
+- compilation time;
 - diagnostics;
-- compatibility.
+- recursion/cycle tracking;
+- dependency traversal.
 
-Semantic interpretation remains downstream.
+These are implementation safeguards.
 
----
+They must not be represented as universal source-language ceilings.
 
-75. Capability Model
+A resource-exhaustion diagnostic should communicate:
 
-A macro may require compile-time capabilities.
+the current compilation policy cannot admit this expansion
 
-For example, a macro system could eventually distinguish:
+rather than falsely claiming:
 
-pure syntax transformation
+Zamani does not support this program
 
-from:
-
-compile-time computation
-
-from:
-
-resource-sensitive generation
-
-from:
-
-privileged compile-time operation
-
-These are semantic/capability concerns.
-
-The grammar should represent only the syntax needed to declare such requirements.
+when the language itself imposes no such semantic limitation.
 
 ---
 
-76. Compile-Time Execution Boundary
+48. Determinism
 
-The grammar must not imply that every macro executes arbitrary code.
-
-The language should distinguish:
-
-source transformation
-
-from:
-
-compile-time execution
-
-from:
-
-runtime execution
-
-A macro invocation must not automatically grant:
-
-- filesystem privileges;
-- network privileges;
-- process privileges;
-- hardware access;
-- secrets access.
-
-Those require explicit compiler security/capability policy.
-
----
-
-77. Reproducibility
-
-Macro expansion should support reproducible builds.
+Macro expansion must be deterministic where the language specification promises deterministic compilation.
 
 Given the same:
 
 source
-language version
-macro definitions
-dependency versions
++
 compiler version
-explicit configuration
-
-the compiler should be capable of producing reproducible expansion results where the language promises deterministic compilation.
-
-Macros must not silently depend on:
-
-- wall-clock time;
-- random state;
-- host machine identity;
-- environment variables;
-- filesystem ordering;
-- network responses;
-- hardware discovery.
-
-If external information is ever permitted, it must be explicitly modeled as a compiler capability/input.
-
----
-
-78. Caching
-
-Macro expansion may eventually be cached.
-
-Caching is not a grammar responsibility.
-
-A cache key should be based on canonical compiler-owned inputs such as:
-
-macro definition identity
-macro source/version
-arguments
++
 language version
-relevant semantic context
-explicit expansion configuration
-dependency identity
++
+macro definitions
++
+dependencies
++
+explicit compilation configuration
 
-The grammar must not dictate cache implementation.
+the compiler must produce the same semantic result, except where nondeterminism is explicitly part of the language model.
 
----
+The grammar itself must be deterministic.
 
-79. Parallel Compilation
-
-Macro definitions and invocations should be compatible with parallel compiler processing where dependency ordering permits.
-
-The grammar must contain no mutable global state.
-
-Parallel expansion is a compiler implementation concern.
-
-Deterministic ordering must be preserved wherever expansion order affects semantics.
+Ambiguous macro syntax must not be resolved through accidental parser behavior.
 
 ---
 
-80. Testing Contract
+49. No Hidden Side Effects During Parsing
 
-The macro grammar is not production-ready until it has tests at every relevant layer.
+Parsing a macro must not:
 
-Required test categories:
+- execute it;
+- access the filesystem;
+- access the network;
+- invoke external processes;
+- query hardware;
+- mutate global compiler state;
+- perform quantum execution;
+- perform GPU execution;
+- access secrets;
+- perform cryptographic operations.
 
-lexer
-parser
-AST
-semantic integration
-macro resolution
-macro expansion
-hygiene
-provenance
-diagnostics
-compatibility
-scalability
-determinism
-cross-domain integration
+Parsing is structural.
 
----
+Expansion is a controlled compiler phase.
 
-81. Positive Tests
-
-At minimum test:
-
-macro foo() {}
-macro foo(a) {}
-macro foo(a, b) {}
-macro foo(a: T) {}
-macro foo(a: T = value) {}
-macro foo<T>(a: T) {}
-foo!()
-foo!(x)
-foo!(x, y)
-module::foo!(x)
-deep::namespace::foo!(x)
-
-Also test macro bodies containing valid Zamani constructs.
+Execution is a later phase.
 
 ---
 
-82. Negative Syntax Tests
+50. Compile-Time Execution Boundary
 
-Test malformed constructs such as:
+If Zamani later exposes compile-time computation, it must be explicitly specified.
+
+Compile-time execution must have:
+
+- an explicit semantic boundary;
+- capability policy;
+- deterministic behavior where promised;
+- resource policy;
+- security policy;
+- provenance;
+- diagnostics;
+- cancellation;
+- failure semantics;
+- compatibility rules.
+
+A macro must never acquire unrestricted host privileges merely because it is called during compilation.
+
+---
+
+51. No Arbitrary Rust Escape Hatch
+
+The macro system must not require embedded Rust actions inside ANTLR grammar.
+
+Do not introduce grammar actions equivalent to:
+
+{ arbitrary Rust }
+
+for macro expansion.
+
+ANTLR grammar must describe syntax.
+
+Compiler behavior belongs in Rust implementation modules.
+
+The Rust implementation must remain compatible with:
+
+Rust 2021
+Rust 1.97 / 1.97.1
+
+and must not require "unsafe".
+
+---
+
+52. Safe Rust Requirement
+
+All Zamani-owned Rust implementation associated with the macro pipeline must use safe Rust.
+
+No "unsafe" is permitted for:
+
+- macro parsing;
+- macro resolution;
+- macro expansion;
+- token-tree manipulation;
+- hygiene;
+- provenance;
+- diagnostics;
+- resource accounting.
+
+If a future external backend internally requires unsafe implementation details, that implementation detail must remain outside the Zamani macro grammar and must not leak into its source-language contract.
+
+---
+
+53. Security Boundary
+
+Macros are compiler inputs and therefore untrusted input.
+
+Macro infrastructure must not implicitly grant:
+
+- filesystem permissions;
+- network permissions;
+- process permissions;
+- secret access;
+- credential access;
+- arbitrary code execution;
+- hardware-control privileges.
+
+Security-sensitive operations must pass through the repository's established capability/security model.
+
+Macro syntax alone is never authorization.
+
+---
+
+54. Macro Safety
+
+"safety.g4" must describe only source-level safety constructs that are explicitly part of the language.
+
+It must not become a second semantic analyzer.
+
+The safety contract must integrate with:
+
+grammar/security/
+grammar/resources/
+grammar/effects/
+grammar/spec/
+semantic analysis
+
+A macro cannot bypass safety because the generated syntax originated inside a macro.
+
+---
+
+55. Diagnostics
+
+Macro diagnostics must distinguish:
+
+1. declaration errors;
+2. invocation errors;
+3. path resolution errors;
+4. argument errors;
+5. parameter mismatch;
+6. generic constraint errors;
+7. expansion errors;
+8. recursion/cycle errors;
+9. hygiene errors;
+10. provenance errors;
+11. generated-code semantic errors;
+12. resource-policy failures;
+13. security-policy failures.
+
+The existing macro diagnostic vocabulary, including codes such as:
+
+ZMN-MACRO-EXPANSION
+ZMN-MACRO-HYGIENE
+ZMN-MACRO-RECURSION
+
+must remain subordinate to the repository-wide diagnostic specification.
+
+Diagnostic codes must not be duplicated across unrelated files.
+
+---
+
+56. Diagnostic Provenance
+
+A diagnostic originating from generated code should provide enough information to understand both:
+
+where generated code failed
+
+and:
+
+which macro invocation produced it
+
+where the compiler has that provenance.
+
+A useful diagnostic chain is conceptually:
+
+error in generated expression
+    ↓
+generated by macro `foo`
+    ↓
+invoked at source location X
+    ↓
+macro declared at source location Y
+
+The exact presentation belongs to the diagnostic subsystem.
+
+---
+
+57. Expansion Errors
+
+Expansion errors must be distinguishable from syntax errors.
+
+For example:
+
+invalid macro invocation
+
+is different from:
+
+macro resolved but expansion failed
+
+which is different from:
+
+expanded code is syntactically invalid
+
+which is different from:
+
+expanded code is syntactically valid but semantically invalid
+
+This separation is required for production diagnostics.
+
+---
+
+58. Token-Tree Errors
+
+Malformed token-tree structure must produce structural diagnostics such as:
+
+- unmatched delimiter;
+- unexpected delimiter;
+- incomplete token tree;
+- invalid token-tree element;
+- malformed syntax quotation.
+
+The parser must recover where the canonical error-recovery strategy allows it.
+
+---
+
+59. Macro Expansion and Other Domains
+
+The macro subsystem must integrate with:
+
+grammar/classical/
+grammar/quantum/
+grammar/hybrid/
+grammar/hdl/
+grammar/hardware/
+grammar/resources/
+grammar/distributed/
+grammar/ai/
+grammar/data/
+grammar/networking/
+grammar/security/
+grammar/compile/
+grammar/execution/
+
+The integration rule is:
 
 macro
-macro foo(
-macro foo(
-)
-foo!
-foo!(
-foo!(,
-foo!(x,)
+   ↓
+canonical syntax
+   ↓
+domain syntax
+   ↓
+domain semantic validation
 
-according to the canonical trailing-comma policy.
-
-Also test malformed:
-
-- identifiers;
-- paths;
-- generic parameter syntax;
-- type expressions;
-- defaults;
-- block bodies.
+The macro subsystem must not duplicate those domains.
 
 ---
 
-83. Semantic Negative Tests
+60. Classical Example
 
-Test:
+A macro may generate classical syntax:
 
-unknown macro
-inaccessible macro
-invalid argument correspondence
-invalid generic arguments
-invalid parameter type
-invalid default
-invalid expansion context
+vectorize!(operation)
 
-These must be reported by semantic/compiler infrastructure rather than the parser.
+The macro subsystem recognizes the invocation.
 
----
+The classical subsystem owns the meaning of generated vector operations.
 
-84. Hygiene Tests
+The macro subsystem does not decide:
 
-Test that expansion does not accidentally capture caller bindings.
-
-At minimum cover:
-
-caller variable
-macro-local generated variable
-nested expansion
-shadowing
-same-name identifiers
-nested scopes
-module boundaries
-generic scopes
-
-The grammar itself does not implement these semantics but must preserve the source structure required to test them.
+- SIMD width;
+- CPU architecture;
+- vector register width;
+- GPU execution;
+- accelerator selection.
 
 ---
 
-85. Provenance Tests
+61. Quantum Example
 
-Verify that diagnostics can distinguish:
+A macro may generate:
 
-macro declaration source
-macro invocation source
-generated source
+prepare_state!(q)
 
-A failure in generated code should remain traceable to its originating macro invocation and, where applicable, its declaration.
+The macro subsystem handles only macro syntax.
 
----
+Quantum semantic infrastructure determines what the generated operation means.
 
-86. Determinism Tests
+Quantum compilation determines:
 
-Run identical source through the parser repeatedly.
+- decomposition;
+- routing;
+- scheduling;
+- resource realization;
+- QEC;
+- resilience;
+- backend compatibility.
 
-The resulting AST structure must be stable.
-
-Test:
-
-- parameter ordering;
-- argument ordering;
-- qualified paths;
-- nested invocations;
-- nested declarations;
-- generated structures.
-
-Expansion determinism must be tested separately in compiler infrastructure.
+The macro subsystem remains unchanged.
 
 ---
 
-87. Scalability Tests
+62. HDL Example
 
-Macro tests must not use arbitrary language ceilings.
+A macro may generate parameterized HDL:
 
-Test progressively larger:
+pipeline!(stage_count, operation)
 
-- macro bodies;
-- parameter lists;
-- argument lists;
-- nested expressions;
-- namespace paths;
-- macro declarations;
-- invocation counts.
+The macro grammar does not establish:
 
-Tests should verify that failures at operational limits are reported as resource-policy failures rather than grammar-invalid constructs.
+stage_count <= fixed number
+
+nor does it establish a fixed FPGA or ASIC capacity.
+
+Hardware synthesis and resource analysis determine feasibility.
 
 ---
 
-88. Cross-Domain Tests
+63. Distributed Example
 
-Macros must be tested as a generic mechanism capable of generating:
+A macro may generate distributed computation.
 
-classical
-quantum
-hybrid
-HDL
-hardware
-distributed
-AI
-data
-networking
-security
+The macro grammar does not establish:
 
-and combinations such as:
+N nodes
 
-classical + quantum
-quantum + HDL
-quantum + hardware
-quantum + distributed
-AI + quantum
-AI + hardware
-classical + quantum + distributed
-classical + quantum + HDL + hardware
+as a universal language limit.
 
-The macro grammar must remain unchanged across these domains.
+Node count is a program/resource/deployment property.
 
 ---
 
-89. Quantum Cross-Domain Test
+64. AI Example
 
-A representative conceptual test should verify:
+A macro may generate tensor/model/dataflow syntax.
 
-macro prepare(register) {
-    ...
-}
+The macro subsystem does not hard-code:
 
-quantum computation {
-    prepare!(logical_register);
-}
+- tensor rank;
+- accelerator count;
+- GPU count;
+- memory capacity;
+- model size.
 
-The important assertion is not a particular hardware implementation.
+Those are determined by the semantic/resource/target pipeline.
 
-The assertion is:
+---
 
-source
- ↓
-macro AST
- ↓
+65. Interoperability
+
+Macros may generate or construct source representations associated with interoperability features.
+
+Examples can include:
+
+- C;
+- C++;
+- Rust;
+- Python;
+- WebAssembly;
+- OpenQASM;
+- QIR;
+- HDL;
+- other formally supported representations.
+
+However, those formats are interoperability targets.
+
+They are not the canonical Zamani semantic model.
+
+The macro subsystem must not make a foreign format the semantic authority.
+
+---
+
+66. Dialects
+
+Macros must integrate with "grammar/dialects/".
+
+A dialect must not silently become a macro-defined language.
+
+A dialect that extends syntax must have:
+
+- name;
+- version;
+- ownership;
+- syntax contract;
+- semantic contract;
+- AST mapping;
+- IR mapping;
+- compatibility;
+- feature status.
+
+Macros cannot silently register new universal keywords.
+
+---
+
+67. Macro-Generated Dialect Syntax
+
+If a macro generates dialect syntax, the dialect must still be known and validated by the compiler.
+
+The macro does not grant automatic permission to introduce unknown syntax.
+
+The correct model is:
+
+dialect declaration
+       ↓
+dialect availability
+       ↓
 macro expansion
- ↓
-semantic quantum representation
- ↓
-quantum::ir
+       ↓
+dialect-aware parsing/semantic processing
 
-without requiring the macro grammar to know the eventual number of physical qubits or target topology.
+or the equivalent architecture defined by the canonical parser.
 
 ---
 
-90. HDL Cross-Domain Test
+68. Metaprogramming Integration
 
-Similarly:
+"grammar/metaprogramming/" is the broader compile-time/metaprogramming subsystem.
 
-macro register_stage(name, width) {
-    ...
-}
+The macro subsystem must not duplicate its responsibilities.
 
-must remain independent of:
+The relationship is:
 
-- FPGA family;
-- ASIC process;
-- physical register count;
-- target clock;
-- physical placement.
+grammar/macros/
+    │
+    ├── macro declarations
+    ├── macro invocations
+    ├── token/syntax structures
+    └── macro-specific syntax
+             │
+             ▼
+grammar/metaprogramming/
+             │
+             ├── reflection
+             ├── quotation
+             ├── code generation
+             ├── compile-time facilities
+             └── type-level facilities
 
-Those are target-level concerns.
-
----
-
-91. No Grammar-to-Backend Dependency
-
-The dependency direction must remain:
-
-grammar
-  ↓
-AST
-  ↓
-semantic analysis
-  ↓
-IR
-  ↓
-compiler
-  ↓
-backend
-
-Never:
-
-grammar
-  ↑
-backend
-
-The macro grammar must not import, reference, or require backend implementations.
+Where both subsystems address the same syntax, the authority must be explicitly assigned rather than duplicated.
 
 ---
 
-92. No Grammar-to-Runtime Dependency
+69. Existing Compiler Integration
 
-The grammar must not depend on:
+The repository already contains compiler-side macro infrastructure, including:
 
-runtime state
-runtime scheduler
-runtime device
-runtime memory
-runtime topology
-runtime network
+src/compiler/macro_engine.rs
 
-Runtime consumes compiled semantics.
+and broader metaprogramming infrastructure including:
 
-The grammar produces source syntax.
+src/toolchain/meta_programming.rs
 
----
+These implementations must not be treated as interchangeable semantic authorities.
 
-93. No Grammar-to-Hardware Dependency
+The production architecture must define one clear responsibility for each.
 
-The grammar must not contain:
+The grammar layer specifies source syntax.
 
-CPU identifiers
-GPU identifiers
-QPU identifiers
-FPGA identifiers
-ASIC identifiers
-physical addresses
-machine topology
+The compiler macro engine owns actual expansion policy and behavior.
 
-Hardware-specific declarations, when explicitly part of Zamani, belong under the hardware/target grammar and are still subject to the language's abstraction rules.
+The broader metaprogramming layer may provide compiler/toolchain-level facilities that are not themselves equivalent to source-language macro syntax.
 
 ---
 
-94. No Grammar-to-QEC Dependency
+70. Important Existing Implementation Boundary
 
-The grammar can parse source syntax that eventually requests QEC behavior.
+The existing compiler macro implementation has configuration concepts for controlling expansion work/size/depth.
 
-It must not implement QEC.
+Those are useful as implementation safeguards, but they must not be confused with language limits.
 
-The QEC subsystem remains authoritative for:
+The production contract is therefore:
 
-- QEC semantics;
-- codes;
-- syndrome processing;
-- logical protection;
-- correction.
+language:
+    no artificial macro capacity ceiling
 
----
+implementation:
+    configurable protection against resource exhaustion
 
-95. No Grammar-to-ZQN Dependency
-
-The grammar can parse syntax that eventually references noise-aware execution.
-
-It must not implement:
-
-- noise;
-- faults;
-- calibration;
-- fault classification.
-
-ZQN remains authoritative.
+Changing an implementation budget must not require changing the language grammar.
 
 ---
 
-96. No Grammar-to-Scheduling Dependency
+71. Macro Implementation Must Not Pretend Expansion Is Complete
 
-The grammar may parse high-level timing/resource intent when such syntax belongs to Zamani.
+If an existing compiler API currently returns source text or performs limited substitution, the grammar README must not claim that full production token-tree/hygienic expansion is already implemented.
 
-But actual scheduling remains downstream.
+Conformance must distinguish:
 
-The macro grammar must not encode:
+syntax specified
 
-ASAP
-ALAP
-RCPSP
-hardware timing
-gate durations
+from:
 
-as macro semantics.
+syntax parsed
 
----
+from:
 
-97. Integration Matrix
+expansion implemented
 
-Component| Macro grammar relationship
-Lexer| Supplies canonical macro/shared tokens
-Parser| Integrates macro declarations/invocations
-AST| Stores source-level macro structure
-Name resolution| Resolves macro paths
-Type checker| Validates typed parameters/arguments
-Effect system| Validates declared effects/capabilities
-Resource system| Evaluates generated resource requirements
-Macro resolver| Selects macro definitions
-Macro engine| Expands invocations
-Hygiene| Prevents unintended binding capture
-Provenance| Tracks generated-source origins
-Semantic analyzer| Validates expanded program
-Classical IR| Receives classical semantics after expansion
-"quantum::ir"| Receives quantum semantics after expansion
-QEC| Consumes applicable quantum semantics later
-ZQN| Consumes applicable fault/noise semantics later
-Optimization| Optimizes resulting IR
-Routing| Maps applicable computation to topology
-Scheduling| Assigns execution order/timing
-Hardware| Supplies target capabilities
-Compilation| Performs lowering/code generation
-Runtime| Executes resulting artifact
-Interoperability| Handles FFI/foreign representations
-Dialects| Supplies explicitly registered language extensions
-Tooling| Uses grammar for parsing/navigation/diagnostics
-Tests| Verifies syntax and integration
-Documentation| Describes the stable language contract
+from:
+
+hygiene implemented
+
+from:
+
+semantic validation implemented
+
+from:
+
+IR integration implemented
+
+This information belongs in implementation conformance reporting.
 
 ---
 
-98. Dependency Graph
+72. Feature Status
 
-The macro subsystem should follow:
+Macro features must use the repository's canonical statuses:
 
-lexer
-  │
-  ├── identifiers
-  ├── punctuation
-  ├── operators
-  └── keywords
-       │
-       ▼
-core names / paths
-       │
-       ▼
-types
-       │
-       ▼
-expressions
-       │
-       ▼
-blocks / statements
-       │
-       ├──────────────┐
-       ▼              ▼
-declarations       modules
-       │              │
-       └──────┬───────┘
-              ▼
-        macro declarations
-              │
-              ▼
-        macro invocations
-              │
-              ▼
-             AST
-              │
-              ▼
-       semantic analysis
-              │
-              ▼
-       macro resolution
-              │
-              ▼
-         macro expansion
-              │
-              ▼
-       semantic validation
-              │
-              ▼
-          canonical IR
-
-No backend should appear in the grammar dependency graph.
-
----
-
-99. Integration With "grammar/Zamani.g4"
-
-"grammar/Zamani.g4" remains the canonical top-level ANTLR composition boundary.
-
-The macro subsystem must be integrated into that composition.
-
-It must not require developers to manually choose:
-
-core grammar
-
-versus:
-
-quantum grammar
-
-versus:
-
-macro grammar
-
-for ordinary Zamani programs.
-
-The top-level grammar must expose one coherent language.
-
----
-
-100. Integration With Reference Parser
-
-The reference parser may be hand-written rather than generated by ANTLR.
-
-That does not permit parser divergence.
-
-The parser must accept the same normative macro syntax defined by the canonical grammar contract.
-
-The repository's grammar documentation already establishes that the reference compiler uses a hand-written recursive-descent/Pratt parser while "Zamani.g4" remains an ANTLR representation.
-
-Therefore:
-
-ANTLR grammar
-      ↕
-reference parser
-      ↕
-AST
-
-must remain conformance-equivalent.
-
----
-
-101. Integration With "grammar/antlr/"
-
-"grammar/antlr/" may contain generated/composed ANTLR grammar components.
-
-Macro grammar components must not silently diverge from those representations.
-
-Any generated grammar artifact must have an explicit generation source and synchronization policy.
-
-Generated files must not become independent authorities.
-
----
-
-102. Integration With "grammar/Zamani-Grammar.md"
-
-"Zamani-Grammar.md" may describe the broader language design.
-
-Macro features described there must have explicit implementation status.
-
-Recommended statuses include:
-
-PROPOSED
-DESIGNED
-LEXER_IMPLEMENTED
-PARSER_IMPLEMENTED
-AST_IMPLEMENTED
-SEMANTIC_IMPLEMENTED
-EXPANSION_IMPLEMENTED
-TESTED
-STABLE
+SPECIFIED
+IMPLEMENTED
+PARTIALLY IMPLEMENTED
+PLANNED
 DEPRECATED
 
-A proposed macro feature must not be documented as production syntax merely because it appears in design documentation.
+A macro feature must not be called "stable" merely because a ".g4" file exists.
+
+Production status requires end-to-end evidence.
 
 ---
 
-103. Integration With "grammar/grammar.md"
+73. Feature Completion Contract
 
-"grammar/grammar.md" should describe the syntax actually accepted by the reference compiler.
+Every independently maintained macro grammar component must have a completion contract containing:
 
-Macro syntax documented there must correspond to actual parser behavior.
+Purpose
+Status
+Owns
+Does Not Own
+Inputs
+Outputs
+Dependencies
+Upstream Contracts
+Downstream Consumers
+Syntax
+AST Contract
+Semantic Contract
+IR Contract
+Compiler Integration
+Runtime Integration
+Diagnostics
+Security
+Resource Policy
+Scalability
+Determinism
+Compatibility
+Positive Tests
+Negative Tests
+Boundary Tests
+Scalability Tests
+Hard-Coding Audit
+Completion Criteria
 
-If the reference parser changes, its macro grammar contract must be updated in the same architectural change.
-
----
-
-104. Completion Contract for This README
-
-This README is complete when it establishes:
-
-- macro grammar ownership;
-- non-ownership;
-- syntax boundaries;
-- AST boundaries;
-- semantic boundaries;
-- expansion boundaries;
-- hygiene boundaries;
-- provenance boundaries;
-- security boundaries;
-- scalability requirements;
-- deterministic behavior;
-- versioning;
-- compatibility;
-- compiler integration;
-- quantum integration;
-- classical integration;
-- HDL integration;
-- hardware integration;
-- testing requirements.
-
-It must not contain implementation details that belong in Rust source files.
+This is mandatory.
 
 ---
 
-105. Completion Contract for "macros.g4"
+74. "macros.g4" Completion Contract
 
 "macros.g4" is complete only when:
 
-- its lexer dependencies exist;
-- its shared parser-rule dependencies have canonical owners;
-- macro declarations parse correctly;
-- macro parameters parse correctly;
-- parameter defaults parse correctly;
-- macro bodies reuse canonical blocks;
-- qualified macro paths parse correctly;
-- macro invocations parse correctly;
-- argument syntax is canonical;
-- no fixed parameter count exists;
-- no fixed argument count exists;
-- no machine limits exist;
-- no expansion semantics exist;
-- no hardware dependencies exist;
-- no backend dependencies exist;
+- composition ownership is defined;
+- canonical lexer vocabulary is used;
+- declaration integration is defined;
+- invocation integration is defined;
+- parameter integration is defined;
+- token-tree integration is defined;
+- expression integration is defined;
+- block integration is defined;
 - AST mapping is defined;
 - diagnostics are defined;
-- tests pass.
+- no duplicate root grammar exists;
+- no fixed capacity exists;
+- ANTLR generation succeeds;
+- parser integration is validated.
 
 ---
 
-106. Completion Contract for "declarations.g4"
+75. "declarations.g4" Completion Contract
 
 Complete only when:
 
-- declaration ownership is unambiguous;
-- macro declarations compose with the canonical declaration grammar;
-- visibility integrates with the canonical visibility rules;
-- generic parameters integrate with the canonical generic grammar;
-- parameters integrate with canonical type syntax;
-- bodies integrate with canonical block syntax;
-- no duplicate declaration representation exists;
-- parser/AST tests pass.
+- macro declaration syntax is fully specified;
+- visibility is defined;
+- name ownership is defined;
+- generic integration is defined;
+- parameter integration is defined;
+- body integration is defined;
+- canonical declaration syntax is reused;
+- AST mapping is specified;
+- semantic mapping is specified;
+- diagnostics are specified;
+- positive/negative/boundary tests exist.
 
 ---
 
-107. Completion Contract for "invocations.g4"
+76. "parameters.g4" Completion Contract
 
 Complete only when:
 
-- macro paths use canonical names;
-- invocation punctuation uses canonical tokens;
-- arguments use canonical argument/expression syntax;
-- invocation integrates into expressions exactly once;
-- statement-level invocation uses normal expression statements;
-- no duplicate macro-call representation exists;
-- AST mapping is stable;
-- parser tests pass.
+- parameter syntax is defined;
+- names use canonical identifiers;
+- optional types use canonical type syntax;
+- defaults use canonical expressions;
+- parameter ordering is preserved;
+- no fixed parameter count exists;
+- AST mapping exists;
+- semantic validation exists;
+- diagnostics exist;
+- tests exist.
 
 ---
 
-108. Completion Contract for "hygiene.g4"
+77. "invocations.g4" Completion Contract
 
 Complete only when:
 
-- any source-level hygiene syntax has a documented semantic meaning;
-- lexer ownership is defined;
-- AST ownership is defined;
-- provenance requirements are defined;
-- semantic expansion integration is defined;
+- invocation syntax is defined;
+- macro path integration is defined;
+- canonical "!" token is used;
+- argument integration is defined;
+- expression integration is defined;
+- nested invocations are supported;
+- qualified paths are supported;
+- no namespace depth ceiling exists;
+- no fixed argument count exists;
+- AST mapping exists;
+- diagnostics exist;
+- tests exist.
+
+---
+
+78. "token-stream.g4" Completion Contract
+
+Complete only when:
+
+- token-tree structure is specified;
+- balanced delimiters are handled;
+- canonical tokens are reused;
+- arbitrary structural nesting is supported subject to resources;
+- no fixed nesting constant is encoded;
+- token-tree AST/representation ownership is documented;
+- expansion integration is documented;
+- hygiene integration is documented;
+- diagnostics exist;
+- tests exist.
+
+---
+
+79. "syntax-tree.g4" Completion Contract
+
+Complete only when:
+
+- syntax-tree operations are explicitly specified;
+- token-tree ownership is respected;
+- AST mapping is explicit;
+- no second AST hierarchy is introduced;
+- expansion integration is explicit;
+- hygiene/provenance integration is explicit;
+- security boundaries are explicit;
+- tests exist.
+
+---
+
+80. "expansion.g4" Completion Contract
+
+Complete only when:
+
+- every expansion-related syntax form is specified;
+- no expansion implementation is embedded in grammar;
+- resource-policy integration is defined;
+- provenance integration is defined;
+- hygiene integration is defined;
+- diagnostics are defined;
+- AST mapping is defined;
+- semantic mapping is defined;
 - compatibility is defined;
-- no grammar rule falsely claims to implement hygiene.
+- tests exist.
 
-If no source-level hygiene syntax is ultimately required, this file should be removed rather than retained as an empty placeholder.
+If there is no user-visible expansion syntax, this file must remain limited to formally justified extension points rather than inventing commands such as "expand_now".
 
 ---
 
-109. Completion Contract for "expansion.g4"
+81. "hygiene.g4" Completion Contract
 
 Complete only when:
 
-- every expansion-related source construct has an explicit language meaning;
-- expansion syntax is distinct from execution;
-- expansion syntax is distinct from runtime;
-- resource policies are downstream;
-- hygiene is downstream;
-- provenance is preserved;
-- security policy is documented;
-- deterministic behavior is defined;
-- parser and semantic tests exist.
+- explicit hygiene syntax is actually specified;
+- syntax is unambiguous;
+- AST mapping exists;
+- semantic meaning exists;
+- compiler hygiene behavior exists;
+- provenance behavior exists;
+- diagnostics exist;
+- compatibility exists;
+- tests exist.
 
-If explicit expansion syntax is not required by the final Zamani language, this file should be removed rather than retained merely because the directory tree proposed it.
-
----
-
-110. Empty-File Rule
-
-No file under:
-
-grammar/macros/
-
-may exist solely because an architectural tree listed it.
-
-Each file must have:
-
-one clear owner
-one clear responsibility
-one integration contract
-one test strategy
-one completion criterion
-
-If two files have indistinguishable ownership, they should be merged.
-
-If a proposed file has no actual language responsibility, it should not be created.
+If no explicit hygiene syntax exists, hygiene remains a compiler concern and this grammar component must not fabricate syntax.
 
 ---
 
-111. Hard-Coding Audit
+82. "diagnostics.g4" Completion Contract
 
-Every macro grammar change must be checked for:
+Complete only when:
 
-MAX_MACROS
-MAX_MACRO_PARAMETERS
-MAX_MACRO_ARGUMENTS
-MAX_EXPANSION_DEPTH
-MAX_EXPANSION_STEPS
-MAX_GENERATED_NODES
-MAX_SOURCE_SIZE
-MAX_NAMESPACE_DEPTH
-MAX_QUANTUM_MACROS
-MAX_CPU_MACROS
-MAX_GPU_MACROS
-MAX_HARDWARE_MACROS
-
-Classify each discovered restriction as:
-
-1. language semantic requirement;
-2. parser implementation limitation;
-3. compiler resource policy;
-4. security/admission policy;
-5. test limitation;
-6. documentation limitation;
-7. accidental hard-coding.
-
-Only the first category belongs in language semantics.
+- macro-specific source syntax requiring diagnostics metadata is defined;
+- diagnostic identifiers are governed centrally;
+- no duplicate diagnostic authority exists;
+- source spans are preserved;
+- expansion provenance is preserved;
+- diagnostics can distinguish syntax, resolution, expansion, hygiene, and semantic failures.
 
 ---
 
-112. Security Audit
+83. "safety.g4" Completion Contract
 
-Every macro-related implementation must verify:
+Complete only when:
 
-- no unsafe Rust;
-- no arbitrary process execution;
-- no implicit filesystem access;
-- no implicit network access;
-- no implicit environment-dependent behavior;
-- no hidden global mutable state;
-- no unbounded resource consumption;
-- no uncontrolled expansion;
-- provenance preservation;
-- deterministic diagnostics;
-- explicit capability requirements where privileged compile-time behavior exists.
+- source-level safety syntax is explicitly specified;
+- safety declarations map into the canonical semantic safety/capability model;
+- grammar does not implement authorization;
+- no unsafe Rust is required;
+- no hardware privilege is granted implicitly;
+- diagnostics are defined;
+- tests are defined.
 
 ---
 
-113. Production-Readiness Checklist
+84. Expression Integration
 
-The macro grammar subsystem is production-ready only when all of the following are true.
+The existing repository contains a dedicated macro-expression grammar integration under:
 
-Language
+grammar/expressions/macros.g4
 
-- [ ] One canonical macro syntax exists.
-- [ ] Declaration syntax is defined.
-- [ ] Invocation syntax is defined.
-- [ ] Parameter syntax is defined.
-- [ ] Default syntax is defined.
-- [ ] Path syntax is canonical.
-- [ ] Macro bodies reuse canonical blocks.
-- [ ] Macro arguments reuse canonical expressions.
+This must remain consistent with:
 
-Architecture
+grammar/macros/invocations.g4
 
-- [ ] Grammar owns syntax only.
-- [ ] AST owns structure.
-- [ ] Semantic analysis owns meaning.
-- [ ] Macro resolver owns resolution.
-- [ ] Expansion engine owns expansion.
-- [ ] Hygiene owns binding protection.
-- [ ] Provenance owns expansion origin.
-- [ ] IR owns computation semantics.
-- [ ] Backends own realization.
+There must be one semantic macro invocation concept.
 
-Scalability
+The expression layer should consume the macro invocation rule rather than redefine it.
 
-- [ ] No fixed macro count.
-- [ ] No fixed parameter count.
-- [ ] No fixed argument count.
-- [ ] No fixed namespace depth.
-- [ ] No fixed source-size language limit.
-- [ ] No fixed expansion depth in grammar.
-- [ ] No fixed qubit limit.
-- [ ] No fixed CPU limit.
-- [ ] No fixed GPU limit.
-- [ ] No fixed hardware limit.
-- [ ] No fixed topology.
-- [ ] No fixed device identifier.
+Conceptually:
 
-Safety
+canonical expression
+       │
+       ├── ordinary expression forms
+       │
+       └── macro expression
+                  │
+                  ▼
+          macro invocation
 
-- [ ] Safe Rust only.
-- [ ] Rust 1.97 supported.
-- [ ] Rust 1.97.1 supported.
-- [ ] Rust 2021 supported.
-- [ ] No "unsafe".
-- [ ] No implicit I/O.
-- [ ] No implicit network access.
-- [ ] No arbitrary host execution.
-
-Quantum
-
-- [ ] Macro syntax is quantum-neutral.
-- [ ] Generated quantum semantics can reach "quantum::ir".
-- [ ] No QPU assumptions exist.
-- [ ] No physical qubit assumptions exist.
-- [ ] No native gate-set assumptions exist.
-- [ ] No topology assumptions exist.
-
-Classical
-
-- [ ] Classical expressions can be macro arguments.
-- [ ] Classical constructs can be generated.
-- [ ] No classical hardware limits are encoded.
-
-HDL/hardware
-
-- [ ] HDL constructs can be generated.
-- [ ] Hardware constructs can be generated.
-- [ ] Physical hardware is not encoded in macro syntax.
-- [ ] Target selection remains downstream.
-
-Compiler
-
-- [ ] Lexer integration passes.
-- [ ] Parser integration passes.
-- [ ] AST integration passes.
-- [ ] Semantic integration passes.
-- [ ] Macro resolution passes.
-- [ ] Expansion passes.
-- [ ] Hygiene passes.
-- [ ] Provenance passes.
-- [ ] IR lowering passes.
-
-Testing
-
-- [ ] Positive tests.
-- [ ] Negative tests.
-- [ ] Boundary tests.
-- [ ] Scalability tests.
-- [ ] Determinism tests.
-- [ ] Round-trip tests where applicable.
-- [ ] Cross-domain tests.
-- [ ] Compatibility tests.
-- [ ] Diagnostic tests.
-- [ ] Hygiene tests.
-- [ ] Provenance tests.
+No duplicate macro-expression syntax is permitted.
 
 ---
 
-114. Final Architectural Rule
+85. Statement Integration
 
-The macro grammar must embody:
+If macros are valid as statements, the statement grammar must consume the canonical macro construct.
 
-«Macros transform Zamani program structure; they do not determine the machine on which that structure will eventually execute.»
+Do not create separate semantically equivalent forms such as:
+
+macroStatement
+macroInvocationStatement
+macroExecutionStatement
+
+unless their semantics genuinely differ.
+
+A syntactic form must have one owner.
+
+---
+
+86. Declaration Integration
+
+Macro declarations must integrate with the canonical declaration dispatcher.
+
+The root grammar should eventually compose:
+
+declaration
+    ├── ordinary declarations
+    ├── function declarations
+    ├── type declarations
+    ├── module declarations
+    ├── domain declarations
+    └── macro declarations
+
+The root composition remains owned by:
+
+grammar/Zamani.g4
+
+---
+
+87. Lexer Integration
+
+The macro subsystem must consume the canonical lexer vocabulary.
+
+It must not create an independent lexer.
+
+The lexer owns:
+
+- "!";
+- identifiers;
+- delimiters;
+- commas;
+- generic punctuation;
+- keywords;
+- literals;
+- whitespace;
+- comments.
+
+Macro grammar components reference those tokens.
+
+They do not redefine them.
+
+---
+
+88. Keyword Integration
+
+The word:
+
+macro
+
+must be governed by the canonical keyword registry.
+
+If "macro" is a keyword, it must be registered centrally.
+
+If the language later changes the spelling, all macro grammar components consume the canonical token rather than independently declaring a replacement.
+
+---
+
+89. "!" Token Integration
+
+The macro invocation marker must use the canonical token representation.
+
+It must not conflict with:
+
+- logical operators;
+- factorial-like syntax;
+- other punctuation;
+- future language constructs.
+
+The ambiguity policy belongs to the lexer/operator/grammar validation system.
+
+---
+
+90. "QuestionMark" / "Question" and "Ampersand" / "BitAnd"
+
+The repository already identifies token naming/collision issues in the broader lexer architecture.
+
+Macro grammar must not reintroduce those ambiguities.
+
+The macro subsystem must consume canonical token names after the lexer authority resolves them.
+
+No macro grammar file may define aliases merely to work around unresolved lexer duplication.
+
+---
+
+91. Source Compatibility
+
+Existing accepted macro syntax must not be changed gratuitously.
+
+Before modifying syntax:
+
+1. identify current accepted forms;
+2. identify canonical specification;
+3. identify parser behavior;
+4. identify AST representation;
+5. identify tests;
+6. determine whether change is breaking;
+7. define migration if required.
+
+Do not rename existing macro grammar files without necessity.
+
+---
+
+92. Compatibility With Existing "grammar/antlr/"
+
+The repository currently contains ANTLR-related parser material under:
+
+grammar/antlr/
+
+and macro-related parser integration.
+
+This does not automatically make "grammar/antlr/" a second language authority.
+
+The production architecture must establish one canonical composition path.
+
+The intended rule is:
+
+grammar/Zamani.g4
+        ↓
+canonical ANTLR composition
+        ↓
+macro grammar components
+
+Any generated or legacy parser grammar under "grammar/antlr/" must be explicitly classified as:
+
+- generated;
+- implementation support;
+- compatibility;
+- legacy;
+- deprecated;
+
+rather than silently competing with "grammar/Zamani.g4".
+
+---
+
+93. No Second Root Grammar
+
+The repository must not maintain two independently authoritative root grammars.
+
+In particular, avoid a situation where:
+
+grammar/Zamani.g4
+
+and:
+
+grammar/antlr/ZamaniParser.g4
+
+both independently define the complete Zamani language.
+
+If generated/parser-support grammar files are retained, their relationship to the canonical root must be explicit.
+
+---
+
+94. Integration With "grammar/DESIGN.md"
+
+This subsystem follows these repository-wide principles:
+
+- one language;
+- deterministic parsing;
+- canonical lexical vocabulary;
+- no artificial hardware limits;
+- target-independent source semantics;
+- canonical frontend AST;
+- semantic/resource/capability separation;
+- canonical "quantum::ir";
+- no duplicate IR;
+- safe Rust;
+- explicit compatibility;
+- traceable source provenance.
+
+Any future macro proposal that violates these principles must not be accepted merely because it is convenient to implement.
+
+---
+
+95. Integration With "grammar/specification/"
+
+The human-readable normative specification must define:
+
+- macro existence;
+- declaration syntax;
+- invocation syntax;
+- parameter syntax;
+- body syntax;
+- token-tree syntax if standardized;
+- hygiene semantics;
+- expansion semantics;
+- visibility;
+- diagnostics;
+- compatibility.
+
+This README describes subsystem architecture.
+
+It must not silently replace normative specification text.
+
+---
+
+96. Integration With "grammar/spec/"
+
+A formal macro specification should exist under the formal specification hierarchy when the repository's specification organization provides the appropriate location.
+
+That contract should cover:
+
+syntax
+AST
+semantics
+expansion
+hygiene
+provenance
+diagnostics
+security
+resource policy
+compatibility
+tests
+
+The exact filename must follow the existing repository organization rather than creating a duplicate specification authority.
+
+---
+
+97. Integration With "grammar/validation/"
+
+The macro subsystem must be validated by:
+
+grammar/validation/
+
+Relevant validation includes:
+
+- ambiguity;
+- duplicate tokens;
+- unreachable rules;
+- left recursion where applicable;
+- parser conflicts;
+- source-span coverage;
+- AST coverage;
+- semantic coverage;
+- IR coverage;
+- hard-coding;
+- scalability;
+- determinism;
+- compatibility.
+
+The macro README must not duplicate those validation algorithms.
+
+---
+
+98. Hard-Coding Audit
+
+The macro subsystem must pass a hard-coding audit.
+
+The audit must detect actual capacity restrictions such as:
+
+fixed macro count
+fixed parameter count
+fixed argument count
+fixed token-tree depth
+fixed expansion capacity
+fixed source size
+fixed generated-node capacity
+fixed hardware capacity
+
+The audit must distinguish these from ordinary:
+
+- examples;
+- documentation;
+- negative tests;
+- explanatory references;
+- diagnostic examples.
+
+The goal is to prevent actual architectural ceilings, not to ban words from documentation.
+
+---
+
+99. Hardware Hard-Coding
+
+The macro subsystem must contain no language-level assumptions equivalent to:
+
+maximum CPUs
+maximum GPUs
+maximum FPGAs
+maximum QPUs
+maximum qubits
+maximum nodes
+maximum memory
+maximum threads
+maximum tensor rank
+maximum register width
+maximum network size
+maximum device count
+
+A macro can generate a program that requests resources.
+
+The compiler determines whether the available target can satisfy them.
+
+---
+
+100. Compiler Safeguards vs Language Semantics
+
+This distinction is mandatory.
+
+Language semantics
+
+The language permits arbitrary structural macro programs.
+
+Compiler safeguard
+
+This compilation invocation has a configured resource budget.
+
+A safeguard failure must not redefine the language.
+
+For example:
+
+configured compilation budget exhausted
+
+is not equivalent to:
+
+Zamani macro syntax has a universal maximum.
+
+---
+
+101. Memory Scaling
+
+Macro expansion can consume substantial memory.
+
+The compiler must therefore use resource-aware data structures and configurable admission controls.
+
+However, the grammar itself must not establish a memory ceiling.
+
+The architecture must permit expansion sizes appropriate to available resources.
+
+---
+
+102. Streaming and Incremental Expansion
+
+Where practical, compiler implementation may support:
+
+- incremental parsing;
+- incremental expansion;
+- streaming token processing;
+- lazy expansion;
+- demand-driven expansion;
+- cached expansion;
+- parallel expansion where deterministic ordering can be preserved.
+
+These are implementation strategies.
+
+They must not change macro language syntax.
+
+---
+
+103. Parallel Macro Expansion
+
+Independent macro expansions may be processed concurrently by the compiler when semantic dependencies allow.
+
+The language result must remain deterministic where deterministic compilation is promised.
+
+Parallel implementation must not change source meaning.
+
+No source-language macro syntax should specify an implementation-specific compiler thread count.
+
+---
+
+104. Caching
+
+Expansion results may be cached if the relevant inputs are stable.
+
+A valid cache key may need to account for:
+
+- macro identity;
+- macro definition;
+- arguments;
+- language version;
+- macro environment;
+- relevant dependencies;
+- compilation configuration;
+- feature/dialect configuration.
+
+Caching must not change semantics.
+
+---
+
+105. Reproducibility
+
+Macro expansion must support reproducible builds.
+
+The compiler should be able to identify the inputs influencing expansion.
+
+Generated output must be traceable to:
+
+- source;
+- macro definition;
+- macro invocation;
+- dependencies;
+- compiler/language version;
+- relevant configuration.
+
+---
+
+106. Dependency Changes
+
+A macro definition changing must invalidate affected expansion results.
+
+The grammar itself does not implement cache invalidation.
+
+The compiler/build system owns dependency tracking.
+
+The macro contract must nevertheless make the semantic inputs identifiable enough for such tracking.
+
+---
+
+107. Error Recovery
+
+Macro grammar must integrate with canonical parser error recovery.
+
+Malformed macro syntax must not corrupt unrelated source parsing more than necessary.
+
+Recovery should preserve enough structure for subsequent diagnostics.
+
+Error recovery must not silently reinterpret malformed macro syntax as unrelated program constructs when that would hide the actual error.
+
+---
+
+108. Ambiguity
+
+Macro syntax must have deterministic disambiguation.
+
+Potential conflicts include:
+
+- "!";
+- generic delimiters;
+- paths;
+- ordinary function calls;
+- attributes;
+- blocks;
+- token trees;
+- expression syntax;
+- statement syntax.
+
+These must be resolved centrally through the grammar validation policy.
+
+---
+
+109. Ordinary Function Call vs Macro Invocation
+
+The language must preserve a clear syntactic distinction.
+
+Conceptually:
+
+function(value)
+
+is a function call.
+
+macro!(value)
+
+is a macro invocation.
+
+The grammar must not make the two forms semantically interchangeable.
+
+---
+
+110. Macro Invocation Inside Expressions
+
+Where macro expressions are supported:
+
+let value = make_value!(input);
+
+must map through the canonical expression system.
+
+The expression grammar must not create an alternate AST hierarchy.
+
+---
+
+111. Nested Macro Invocations
+
+Nested invocations must be supported where syntactically valid:
+
+outer!(inner!(value))
+
+No fixed nesting depth belongs in the grammar.
+
+The compiler may protect itself through configurable resource policy.
+
+---
+
+112. Macro Expansion Order
+
+Expansion order is a compiler semantic concern.
+
+The grammar must not encode an arbitrary execution ordering.
+
+The compiler must specify:
+
+- dependency order;
+- nested expansion order;
+- cycle behavior;
+- visibility timing;
+- generated-definition availability.
+
+The resulting behavior must be deterministic where promised.
+
+---
+
+113. Recursive Macros
+
+Recursive macro definitions may be syntactically representable.
+
+Whether a recursive expansion terminates is a compiler concern.
+
+The compiler must detect or control pathological recursion without converting the detection mechanism into a language capacity.
+
+---
+
+114. Cycles
+
+Macro dependency cycles must be handled by semantic/compiler infrastructure.
+
+A cycle must produce a meaningful diagnostic rather than:
+
+- parser failure;
+- stack overflow;
+- uncontrolled resource exhaustion.
+
+The grammar itself does not resolve cycles.
+
+---
+
+115. Hygiene and Generated Names
+
+Generated names must have a well-defined hygiene model.
+
+The implementation must not rely on accidental string concatenation to ensure uniqueness.
+
+The canonical compiler representation should distinguish generated identifiers by provenance/context as required by the language's hygiene model.
+
+The grammar only provides the source structures from which that representation is derived.
+
+---
+
+116. User-Visible Escaping
+
+If the language provides an explicit mechanism to opt into intentional capture or unhygienic behavior, that mechanism must be formally specified.
+
+It must never be an undocumented compiler trick.
+
+Such a feature requires:
+
+- syntax;
+- semantics;
+- security implications;
+- diagnostics;
+- compatibility;
+- AST mapping;
+- provenance;
+- tests.
+
+---
+
+117. Security and Hygiene
+
+Hygiene must not be used as a security substitute.
+
+A hygienic macro can still generate code that:
+
+- requests excessive resources;
+- performs unauthorized operations;
+- violates semantic constraints;
+- uses prohibited capabilities.
 
 Therefore:
 
-Macro syntax
+hygiene
+
+and:
+
+security/capability validation
+
+remain separate concerns.
+
+---
+
+118. Macro Expansion Into Quantum Code
+
+A macro may generate quantum code.
+
+After expansion:
+
+generated quantum syntax
+        ↓
+quantum semantic analysis
+        ↓
+quantum::ir
+
+The macro subsystem does not perform:
+
+- qubit allocation;
+- gate decomposition;
+- routing;
+- scheduling;
+- QEC;
+- calibration;
+- physical mapping.
+
+---
+
+119. Macro Expansion Into HDL
+
+A macro may generate HDL.
+
+After expansion:
+
+generated HDL
+    ↓
+HDL semantic validation
+    ↓
+hardware/HDL representation
+    ↓
+synthesis/lowering
+
+The macro subsystem does not decide:
+
+- FPGA resource allocation;
+- ASIC layout;
+- clock implementation;
+- physical placement.
+
+---
+
+120. Macro Expansion Into Distributed Programs
+
+A macro may generate distributed constructs.
+
+The distributed subsystem determines:
+
+- process/service semantics;
+- communication semantics;
+- consistency;
+- replication;
+- placement;
+- fault tolerance.
+
+The macro grammar remains unchanged.
+
+---
+
+121. Macro Expansion Into AI/Data Programs
+
+A macro may generate:
+
+- tensors;
+- models;
+- training pipelines;
+- inference;
+- data transformations;
+- agents.
+
+The AI/data subsystem owns those semantics.
+
+The macro subsystem only performs its source-level role.
+
+---
+
+122. No Framework-Specific Macro Grammar
+
+The macro grammar must not contain framework-specific syntax merely to support:
+
+- CUDA;
+- ROCm;
+- vendor QPU APIs;
+- a specific FPGA vendor;
+- a specific AI framework;
+- a specific cloud provider;
+- a specific cluster scheduler.
+
+Framework integration belongs to interoperability/backend/toolchain layers.
+
+---
+
+123. Future-Proofing
+
+A new computing domain should be able to consume macro-generated syntax without changing the macro subsystem.
+
+The intended model is:
+
+new domain
+    ↓
+domain grammar
+    ↓
+domain AST/semantic contract
+    ↓
+canonical semantic model/IR
+
+Macros remain generic.
+
+This is one of the principal scalability properties of the design.
+
+---
+
+124. Versioning
+
+Macro syntax must participate in the canonical Zamani versioning model.
+
+Breaking changes require:
+
+- version identification;
+- compatibility classification;
+- migration guidance;
+- diagnostics;
+- tests.
+
+A macro extension must not silently alter the meaning of existing source programs.
+
+---
+
+125. Deprecation
+
+Deprecated macro syntax must remain documented through the repository's compatibility system.
+
+Deprecation must identify:
+
+- feature;
+- introduced version;
+- deprecated version;
+- replacement;
+- removal policy;
+- migration behavior.
+
+Do not delete old syntax merely because a newer syntax is preferred unless the compatibility policy permits it.
+
+---
+
+126. Experimental Macro Features
+
+Experimental syntax must be explicitly marked.
+
+It must not be presented as stable language syntax.
+
+Experimental macro features require:
+
+- feature identifier;
+- status;
+- grammar;
+- AST plan;
+- semantic plan;
+- implementation status;
+- compatibility expectations;
+- tests.
+
+---
+
+127. Historical Material
+
+Historical macro proposals may remain in:
+
+grammar/Zamani-Grammar.md
+
+or appropriate historical documentation.
+
+Historical material must not silently become parser input.
+
+The canonical macro grammar recognizes only formally accepted syntax.
+
+---
+
+128. Testing Architecture
+
+Macro tests must be divided into:
+
+tests/
+├── syntax/
+├── macros/
+├── negative/
+├── boundary/
+├── scalability/
+├── determinism/
+├── compatibility/
+└── diagnostics/
+
+The existing repository test organization should be extended rather than duplicated.
+
+---
+
+129. Positive Tests
+
+Positive tests must cover:
+
+- empty macro body where legal;
+- declaration;
+- visibility;
+- parameters;
+- generic parameters;
+- defaults;
+- invocation;
+- zero arguments;
+- one argument;
+- multiple arguments;
+- qualified paths;
+- nested invocations;
+- expression context;
+- statement context;
+- token trees;
+- syntax trees;
+- generated classical syntax;
+- generated quantum syntax;
+- generated HDL syntax;
+- generated hybrid syntax;
+- generated future-domain syntax through generic structures.
+
+---
+
+130. Negative Tests
+
+Negative tests must cover:
+
+- missing macro name;
+- invalid identifier;
+- malformed parameter;
+- malformed default;
+- missing delimiter;
+- unmatched delimiter;
+- invalid invocation marker;
+- invalid path;
+- invalid argument separator;
+- invalid generic syntax;
+- malformed token tree;
+- expansion cycle;
+- unresolved macro;
+- inaccessible macro;
+- argument mismatch;
+- invalid generated syntax;
+- invalid generated semantics;
+- hygiene violations;
+- resource-policy exhaustion;
+- security-policy rejection.
+
+---
+
+131. Boundary Tests
+
+Boundary tests must test structural extremes without declaring them universal limits.
+
+Examples:
+
+- zero parameters;
+- many parameters;
+- zero arguments;
+- many arguments;
+- deeply nested source;
+- deeply nested token trees;
+- large macro bodies;
+- large generated structures;
+- long paths;
+- many nested macro invocations;
+- large numbers of independent macro definitions.
+
+Tests must not encode an arbitrary implementation value as the language maximum.
+
+---
+
+132. Scalability Tests
+
+Scalability tests must vary program size according to available resources.
+
+They should establish that increasing:
+
+- macro count;
+- parameter count;
+- argument count;
+- nesting;
+- generated structure;
+- token-tree size;
+
+does not cause an artificial language ceiling.
+
+If a configured compiler budget is reached, the test must identify that as an implementation/resource-policy result.
+
+---
+
+133. Determinism Tests
+
+Repeated compilation of identical inputs must verify deterministic behavior where promised.
+
+Test:
+
+same source
+same macro definitions
+same compiler
+same configuration
+
+and compare:
+
+- AST;
+- expansion;
+- generated structure;
+- diagnostics;
+- semantic result;
+- IR.
+
+---
+
+134. Compatibility Tests
+
+Compatibility tests must verify:
+
+- old macro syntax;
+- current macro syntax;
+- versioned syntax;
+- deprecated syntax;
+- dialect interactions;
+- generated code compatibility.
+
+Breaking changes must be intentional and documented.
+
+---
+
+135. AST Conformance Tests
+
+Every accepted macro grammar production must have an AST mapping.
+
+The test should establish:
+
+grammar rule
       ↓
-Portable source structure
+parser node
       ↓
-Semantic interpretation
+canonical AST node
+
+No accepted production may terminate in an undefined AST representation.
+
+---
+
+136. Semantic Conformance Tests
+
+Every macro AST representation must have a semantic consumer or an explicitly recorded status.
+
+A grammar production that parses successfully but has no semantic interpretation is not production complete.
+
+---
+
+137. IR Conformance Tests
+
+Macro-generated constructs must ultimately map to canonical semantic/IR representations.
+
+The macro subsystem itself does not own IR generation.
+
+Tests must verify that expansion does not create an unreachable semantic island.
+
+---
+
+138. Source-to-IR Traceability
+
+Production macro conformance should be traceable as:
+
+source macro
+   ↓
+grammar rule
+   ↓
+AST node
+   ↓
+macro resolution
+   ↓
+expansion
+   ↓
+generated AST
+   ↓
+semantic node
+   ↓
+canonical IR
+
+This makes individual feature completion auditable.
+
+---
+
+139. No Re-Editing Dependency Principle
+
+A macro grammar file is not complete merely because its own text compiles.
+
+Before declaring it complete, its contract must already specify its relationships to:
+
+- lexer;
+- core;
+- expressions;
+- statements;
+- declarations;
+- modules;
+- types;
+- AST;
+- semantic analysis;
+- compiler macro engine;
+- diagnostics;
+- validation;
+- compatibility;
+- IR.
+
+This allows downstream implementation to proceed without redesigning the file every time another subsystem is completed.
+
+---
+
+140. Dependency Direction
+
+The preferred dependency direction is:
+
+lexer
+  ↓
+core syntax
+  ↓
+macro syntax
+  ↓
+AST
+  ↓
+semantic/compiler infrastructure
+
+The macro grammar must not depend on downstream hardware implementations.
+
+Likewise, hardware implementations must not force macro syntax changes unless the language itself intentionally introduces a new source-level feature.
+
+---
+
+141. Integration Matrix
+
+Component| Macro subsystem relationship
+"grammar/lexer/"| Supplies canonical tokens
+"grammar/core/"| Supplies names, paths, attributes, blocks
+"grammar/expressions/"| Supplies canonical argument/expression syntax
+"grammar/statements/"| Consumes macro statements where valid
+"grammar/declarations/"| Integrates macro declarations
+"grammar/types/"| Supplies parameter type syntax
+"grammar/modules/"| Resolves macro paths/imports
+"grammar/effects/"| Validates generated effectful constructs
+"grammar/resources/"| Validates generated resource requirements
+"grammar/security/"| Validates generated security/capability requirements
+"grammar/quantum/"| Owns generated quantum semantics
+"grammar/hdl/"| Owns generated HDL semantics
+"grammar/hardware/"| Owns hardware intent
+"grammar/classical/"| Owns classical semantics
+"grammar/hybrid/"| Owns cross-domain semantics
+"grammar/dialects/"| Owns dialect extension contracts
+"grammar/metaprogramming/"| Owns broader metaprogramming contracts
+"grammar/validation/"| Validates grammar properties
+"grammar/compatibility/"| Owns version/migration policy
+"src/frontend/ast/"| Owns canonical AST
+macro compiler infrastructure| Owns resolution/expansion/hygiene
+canonical IR| Owns post-semantic representation
+
+---
+
+142. Completion of the Whole Macro Subsystem
+
+The macro subsystem is production-ready only when all of the following are true:
+
+- [ ] authoritative specification exists;
+- [ ] macro syntax has one authority;
+- [ ] "Zamani.g4" is the canonical composition root;
+- [ ] lexer tokens are canonical;
+- [ ] no duplicate macro grammar exists;
+- [ ] declaration syntax is complete;
+- [ ] parameter syntax is complete;
+- [ ] invocation syntax is complete;
+- [ ] argument syntax is complete;
+- [ ] token-tree syntax is complete where supported;
+- [ ] syntax-tree syntax is complete where supported;
+- [ ] expansion boundary is defined;
+- [ ] hygiene boundary is defined;
+- [ ] provenance is defined;
+- [ ] diagnostics are defined;
+- [ ] AST mapping exists;
+- [ ] semantic mapping exists;
+- [ ] IR integration exists;
+- [ ] compiler integration exists;
+- [ ] security boundary exists;
+- [ ] resource policy exists;
+- [ ] deterministic behavior is specified;
+- [ ] compatibility is specified;
+- [ ] positive tests exist;
+- [ ] negative tests exist;
+- [ ] boundary tests exist;
+- [ ] scalability tests exist;
+- [ ] determinism tests exist;
+- [ ] compatibility tests exist;
+- [ ] hard-coding audit passes;
+- [ ] ANTLR generation succeeds;
+- [ ] Rust frontend conformance succeeds;
+- [ ] safe-Rust requirement passes;
+- [ ] no "unsafe" is required;
+- [ ] no target-specific language limits exist.
+
+---
+
+143. Production Acceptance Gate
+
+A macro grammar change is accepted only if all applicable stages pass:
+
+Specification
+      ↓
+Grammar
+      ↓
+ANTLR validation
+      ↓
+Lexer conformance
+      ↓
+Parser conformance
+      ↓
+AST conformance
+      ↓
+Macro resolution
+      ↓
+Expansion
+      ↓
+Hygiene
+      ↓
+Provenance
+      ↓
+Semantic analysis
       ↓
 Canonical IR
       ↓
-Target-independent compilation
+Diagnostics
       ↓
-Target-specific realization
+Security/resource validation
       ↓
-Available machine
-
-not:
-
-Macro syntax
+Positive tests
       ↓
-specific machine
+Negative tests
+      ↓
+Boundary tests
+      ↓
+Scalability tests
+      ↓
+Determinism tests
+      ↓
+Compatibility tests
 
-The resulting system must allow one macro definition to participate in programs that scale from:
-
-tiny computation
-
-to:
-
-large classical system
-
-to:
-
-large quantum computation
-
-to:
-
-hybrid quantum-classical system
-
-to:
-
-HDL/hardware implementation
-
-to:
-
-distributed heterogeneous infrastructure
-
-without changing the fundamental macro grammar.
+A grammar-only test is insufficient for a production macro feature.
 
 ---
 
-115. POCO-REAF Guarantee
+144. Macro Feature Promotion
 
-The macro subsystem contributes to POCO-REAF by preserving the following invariant:
+A macro feature moves through:
 
-One Zamani source program
-        │
-        ▼
-One macro language
-        │
-        ▼
-One semantic meaning
-        │
-        ├───────────────┬────────────────┬───────────────┐
-        ▼               ▼                ▼               ▼
-      CPU              GPU              QPU           FPGA/ASIC
-        │               │                │               │
-        └───────────────┴────────────────┴───────────────┘
-                                │
-                                ▼
-                         available resources
+HISTORICAL
+    ↓
+PROPOSED
+    ↓
+EXPERIMENTAL
+    ↓
+SPECIFIED
+    ↓
+IMPLEMENTED
+    ↓
+CONFORMANCE TESTED
+    ↓
+STABLE
 
-The physical realization may differ.
-
-The source-level macro semantics must not silently change merely because the target changes.
-
-That is the required macro-language foundation for:
-
-Zamani — From Atom to Everywhere.
+A feature must not skip semantic and test validation.
 
 ---
 
-116. Definition of Done
+145. No Silent Keyword Creation
 
-"grammar/macros/README.md" is complete when this document is treated as the architectural contract for every macro grammar component and no implementation contradicts it.
+Macros must not silently create new global Zamani keywords.
 
-"grammar/macros/" is complete when every actual macro grammar file has:
+A macro may introduce generated identifiers through expansion, but generated syntax must still obey the canonical language grammar.
 
-defined ownership
-        +
-defined dependencies
-        +
-defined AST mapping
-        +
-defined semantic boundary
-        +
-defined expansion boundary
-        +
-defined security boundary
-        +
-defined scalability model
-        +
-defined compatibility policy
-        +
-defined tests
-        +
-defined completion criteria
+If a macro system eventually supports syntax extension, that extension must be formally governed by "grammar/dialects/" and the language extensibility specification.
 
-No subsequent grammar component should require reopening a completed macro grammar component merely to establish a missing fundamental contract.
+---
 
-The governing principle is:
+146. No Semantic Bypass
 
-«Zamani macro syntax is portable source structure. Machine realization, resource availability, quantum topology, hardware capabilities, scheduling, optimization, resilience, and runtime execution are downstream concerns.»
+Macros must not become a mechanism for bypassing:
+
+- type safety;
+- ownership;
+- effect checking;
+- capability checking;
+- resource checking;
+- security;
+- quantum correctness;
+- HDL correctness;
+- hardware requirements;
+- distributed-system constraints.
+
+Generated code is still subject to normal semantic rules.
+
+---
+
+147. No Target Leakage
+
+The following must never become implicit macro semantics:
+
+CPU identity
+GPU identity
+FPGA identity
+ASIC identity
+QPU identity
+physical qubit identity
+memory-bank identity
+network-node identity
+accelerator identity
+
+If target-specific information is intentionally exposed, it must travel through the canonical target/resource/capability model.
+
+---
+
+148. Future Hardware
+
+A new hardware family must not require changing:
+
+grammar/macros/
+
+unless the new hardware introduces a genuinely new source-language semantic concept.
+
+For example, introducing a new QPU vendor must not require:
+
+vendor_x_macro.g4
+
+in the core macro grammar.
+
+Vendor integration belongs downstream.
+
+---
+
+149. Future Computing Models
+
+The same rule applies to future computation models.
+
+If Zamani later gains a new computational domain, macro syntax remains generic.
+
+The new domain defines its own:
+
+syntax
+AST
+semantics
+IR
+compiler lowering
+runtime
+
+and consumes macro-expanded canonical syntax.
+
+---
+
+150. Relationship to Sankofa
+
+Broader Sankofa/meta-programming concepts appearing in "Zamani-Grammar.md" must not automatically become macro syntax.
+
+Concepts such as:
+
+- memory;
+- recall;
+- learning;
+- inference;
+- temporal reasoning;
+- provenance;
+- consensus;
+- knowledge;
+
+must be promoted individually through the normal specification/AST/semantic/IR process.
+
+A historical concept is not automatically a parser feature.
+
+---
+
+151. Relationship to Multi-Timeline Concepts
+
+If macro-related multi-timeline functionality is eventually standardized, it must integrate with the canonical execution/timeline model.
+
+The macro grammar must not independently define a timeline runtime.
+
+No fixed number of timelines or branches belongs in the grammar.
+
+---
+
+152. Relationship to Nano Computing
+
+If macro expansion generates nano-domain syntax, the macro subsystem remains generic.
+
+The nano domain owns its semantics.
+
+The macro grammar does not need to know:
+
+- atom count;
+- molecule count;
+- material count;
+- interaction count;
+- physical device capacity.
+
+---
+
+153. Performance
+
+The macro grammar should remain structurally simple enough to support efficient parsing.
+
+Avoid unnecessary duplication of canonical expression/type/path rules.
+
+Avoid grammar alternatives that introduce excessive ambiguity.
+
+Avoid semantic predicates that make parsing dependent on compiler-global state.
+
+Performance optimization must preserve deterministic language semantics.
+
+---
+
+154. Memory Safety
+
+All Rust implementation associated with this subsystem must rely on safe Rust abstractions.
+
+Prefer:
+
+- ownership;
+- borrowing;
+- slices;
+- immutable references;
+- arenas where safely implemented;
+- vectors;
+- maps;
+- explicit resource accounting.
+
+Do not use "unsafe" merely for optimization.
+
+---
+
+155. Integer and Size Representation
+
+Implementation metadata such as:
+
+- source offsets;
+- node counts;
+- expansion accounting;
+- resource accounting;
+
+must use representations appropriate to the actual implementation requirements.
+
+Do not select a small integer type merely because ordinary programs are small.
+
+Likewise, do not introduce an arbitrary language capacity merely because a particular Rust integer type is convenient.
+
+---
+
+156. Resource Availability
+
+The phrase:
+
+«scalable to infinity»
+
+must be interpreted architecturally as:
+
+«no artificial language-defined ceiling; scale is bounded only by representational reality and resources available to the particular compilation/execution environment.»
+
+No finite physical machine can provide literally infinite memory or computation.
+
+POCO-REAF therefore means that source semantics do not need to be rewritten merely because the target scale changes.
+
+---
+
+157. Build Reproducibility
+
+Macro grammar generation must be reproducible.
+
+CI must validate:
+
+- grammar source;
+- generated parser artifacts where applicable;
+- grammar imports;
+- token vocabulary;
+- versioned dependencies;
+- Rust 1.97 / 1.97.1 compatibility.
+
+Generated artifacts must not silently become a second source of truth.
+
+---
+
+158. Generated Files
+
+If ANTLR-generated files are committed, their generated status must be explicit.
+
+If they are generated during the build, CI must regenerate and validate them.
+
+Hand-editing generated parser artifacts must not be required as part of ordinary macro grammar maintenance.
+
+---
+
+159. CI Requirements
+
+CI for the macro subsystem should perform at least:
+
+ANTLR grammar validation
+ANTLR generation
+duplicate-token validation
+ambiguity validation
+hard-coding audit
+scalability audit
+Rust formatting
+Rust compilation
+Rust tests
+macro parser tests
+AST tests
+semantic tests
+diagnostic tests
+compatibility tests
+
+The exact CI commands belong to the repository build/tooling configuration.
+
+---
+
+160. Rust Version
+
+The macro implementation must support:
+
+Rust 1.97
+Rust 1.97.1
+Rust 2021 edition
+
+No implementation should require a newer Rust feature without an explicit repository-wide version change.
+
+No "unsafe" code is permitted.
+
+---
+
+161. Documentation Integrity
+
+This README must not claim a feature is implemented merely because:
+
+- a grammar file exists;
+- an AST type exists;
+- a compiler struct exists;
+- a design document describes it.
+
+Implementation status must be derived from actual repository conformance.
+
+"grammar/grammar.md" remains responsible for reporting current implementation status.
+
+---
+
+162. Avoiding Documentation Drift
+
+The following documents must remain consistent:
+
+grammar/DESIGN.md
+grammar/README.md
+grammar/specification/
+grammar/spec/
+grammar/Zamani.g4
+grammar/grammar.md
+grammar/Zamani-Grammar.md
+grammar/macros/README.md
+grammar/macros/*.g4
+
+However, they do not all have equal authority.
+
+The macro README describes the macro subsystem.
+
+It does not become a competing root specification.
+
+---
+
+163. What Must Never Be Added to Macro Grammar
+
+Do not add universal syntax equivalent to:
+
+use_gpu_0
+use_cpu_7
+use_qpu_2
+use_qubit_31
+use_32_threads
+use_64gb_memory
+use_24gb_vram
+use_32bit_register
+
+as a general macro-language requirement.
+
+Do not encode current hardware inventories into source grammar.
+
+---
+
+164. What Is Allowed
+
+Portable requirements may express:
+
+requires qubits >= n
+
+requires memory >= required_memory
+
+requires capability("gpu.compute")
+
+requires capability("quantum.measurement")
+
+requires topology(...)
+
+These express program requirements.
+
+Actual realization is downstream.
+
+---
+
+165. Macro Expansion and Resource Requirements
+
+A macro may generate resource requirements.
+
+For example:
+
+macro quantum_algorithm(register) {
+    requires capability("quantum.measurement");
+    ...
+}
+
+The macro system does not decide whether the current machine satisfies the requirement.
+
+Resource analysis performs that check after expansion.
+
+---
+
+166. Macro Expansion and Effects
+
+A macro may generate effectful operations.
+
+The generated program must be checked by the canonical effect system.
+
+Macro expansion does not grant effect permissions.
+
+---
+
+167. Macro Expansion and Capabilities
+
+A macro may generate capability requirements.
+
+The compiler must verify those requirements through the canonical capability system.
+
+Macro invocation itself is not authorization.
+
+---
+
+168. Macro Expansion and Ownership
+
+Generated code must obey the same ownership/borrowing/reference semantics as handwritten Zamani code.
+
+The macro system must not create a hidden ownership model.
+
+---
+
+169. Macro Expansion and Types
+
+Generated expressions must pass the normal type system.
+
+Macro expansion must not use textual substitution to bypass type correctness.
+
+Where token-tree substitution is used, semantic validation remains mandatory.
+
+---
+
+170. Macro Expansion and Effects
+
+Generated effects must pass normal effect validation.
+
+The macro engine must not silently suppress effect checking.
+
+---
+
+171. Macro Expansion and Concurrency
+
+Generated concurrency constructs must pass the canonical concurrency model.
+
+The macro subsystem must not encode a fixed number of workers.
+
+---
+
+172. Macro Expansion and Distributed Computing
+
+Generated distributed constructs must pass normal distributed semantic/resource validation.
+
+Node count, topology, placement, and communication realization remain downstream.
+
+---
+
+173. Macro Expansion and Security
+
+Generated security-sensitive constructs must pass the security/capability system.
+
+Macro expansion must never be treated as an implicit trust boundary.
+
+---
+
+174. Macro Expansion and Interoperability
+
+Generated foreign-language/interoperability constructs must pass the canonical interoperability boundary.
+
+A macro must not silently create an unsupported ABI or calling convention.
+
+---
+
+175. Macro Expansion and Optimization
+
+Optimization occurs after semantic validity.
+
+The macro system must not assume that textual expansion is the final optimized representation.
+
+For example:
+
+macro
+ ↓
+expanded source
+ ↓
+semantic representation
+ ↓
+optimization
+
+rather than:
+
+macro
+ ↓
+hand-optimized target code
+
+---
+
+176. Macro Expansion and Scheduling
+
+Scheduling is downstream.
+
+A macro does not directly assign execution times unless a formally specified source-level scheduling construct exists.
+
+Even then, the scheduler determines whether the request can be realized.
+
+---
+
+177. Macro Expansion and Routing
+
+Routing is downstream.
+
+Quantum macros do not directly select physical paths or coupling-map routes.
+
+Hardware macros do not directly perform physical placement.
+
+---
+
+178. Macro Expansion and QEC
+
+Quantum macro syntax must not implement QEC.
+
+QEC remains downstream.
+
+A macro may generate an explicit fault-tolerance requirement if such syntax is part of the canonical language.
+
+---
+
+179. Macro Expansion and ZQN
+
+ZQN remains responsible for its canonical fault/noise/resilience semantics.
+
+Macro grammar must not duplicate ZQN.
+
+A macro can generate valid constructs consumed by ZQN after semantic lowering.
+
+---
+
+180. Macro Expansion and HAL
+
+HAL remains responsible for actual hardware abstraction.
+
+Macro syntax must not become a hardware-control API.
+
+---
+
+181. Testing a New Macro Feature
+
+When adding a new macro feature, the developer must complete this sequence before modifying unrelated files:
+
+1. Identify the language requirement.
+2. Identify the owning grammar file.
+3. Identify the canonical tokens.
+4. Define syntax.
+5. Define AST mapping.
+6. Define semantic mapping.
+7. Define expansion behavior.
+8. Define hygiene/provenance.
+9. Define diagnostics.
+10. Define security/resource behavior.
+11. Define IR integration.
+12. Define compatibility.
+13. Add positive tests.
+14. Add negative tests.
+15. Add boundary tests.
+16. Add scalability tests.
+17. Add determinism tests.
+18. Run validation.
+
+This is the independent-first development rule.
+
+---
+
+182. No Unnecessary File Renaming
+
+Existing filenames are part of the repository's established structure.
+
+Do not rename:
+
+grammar/macros/README.md
+grammar/macros/macros.g4
+grammar/macros/declarations.g4
+grammar/macros/invocations.g4
+grammar/macros/parameters.g4
+grammar/macros/expansion.g4
+grammar/macros/hygiene.g4
+grammar/macros/token-stream.g4
+grammar/macros/syntax-tree.g4
+grammar/macros/diagnostics.g4
+grammar/macros/safety.g4
+
+unless an actual technical conflict makes a rename necessary.
+
+Prefer completing and integrating existing files.
+
+---
+
+183. No Parallel Hierarchy
+
+Do not create another macro subsystem elsewhere merely because an existing file is inconvenient.
+
+The canonical macro grammar remains:
+
+grammar/macros/
+
+Other directories may consume it, but must not duplicate it.
+
+---
+
+184. Single Ownership Rule
+
+Every macro syntax concept must have exactly one primary owner.
+
+For example:
+
+macro declaration → declarations.g4
+macro invocation → invocations.g4
+parameter → parameters.g4
+token tree → token-stream.g4
+syntax-tree operation → syntax-tree.g4
+
+Other files may reference these rules.
+
+They must not redefine equivalent rules.
+
+---
+
+185. Integration With "grammar/expressions/macros.g4"
+
+The existing expression-level macro integration must consume the canonical invocation rule.
+
+There must not be:
+
+grammar/macros/invocations.g4
+
+defining one macro invocation model and:
+
+grammar/expressions/macros.g4
+
+defining another.
+
+The expression grammar is an integration consumer.
+
+---
+
+186. Integration With AST
+
+The parser must construct the canonical AST representation already established by the repository.
+
+If a required AST representation is missing, the feature is not complete merely because grammar syntax has been added.
+
+The AST change must be designed before marking the grammar complete.
+
+---
+
+187. Integration With Compiler Macro Engine
+
+The macro compiler engine must receive a representation that preserves:
+
+- identity;
+- arguments;
+- source locations;
+- expansion context;
+- relevant provenance.
+
+The grammar does not dictate the internal compiler data structures beyond the observable contract.
+
+---
+
+188. Existing String-Based Expansion
+
+If existing compiler infrastructure currently represents generated macro output as source text, this must be treated as an implementation stage rather than the final architectural requirement.
+
+A production system must ensure that textual expansion cannot bypass:
+
+- parsing;
+- hygiene;
+- provenance;
+- semantic analysis.
+
+The eventual implementation may use token trees/ASTs where appropriate without changing the source-language contract.
+
+---
+
+189. Macro Engine Resource Configuration
+
+Compiler resource configuration must remain separate from grammar.
+
+Configuration can provide policies such as:
+
+maximum expansion work permitted for this compilation
+
+but must not alter the accepted language grammar.
+
+Different machines can therefore use different compilation budgets without requiring different language definitions.
+
+---
+
+190. Portability Test
+
+A macro feature should be tested conceptually against multiple target classes:
+
+tiny classical
+large classical
+GPU
+FPGA
+ASIC
+QPU
+simulator
+HPC
+distributed
+future/unknown capability target
+
+The test question is:
+
+«Does macro source syntax remain unchanged while target realization changes?»
+
+If yes, the macro architecture preserves POCO-REAF.
+
+---
+
+191. Unknown Future Targets
+
+A macro should not require the compiler to know every future target today.
+
+Target-independent syntax should remain valid until semantic requirements are evaluated.
+
+An unknown future target can implement the appropriate downstream backend without requiring a rewrite of macro syntax.
+
+---
+
+192. Macro System Invariants
+
+The following are non-negotiable invariants:
+
+1. One canonical macro language.
+2. One canonical root grammar.
+3. One canonical lexer.
+4. One canonical frontend AST.
+5. One canonical semantic model.
+6. No duplicate quantum IR.
+7. No target-specific macro grammar.
+8. No artificial hardware limits.
+9. No arbitrary host execution during parsing.
+10. No implicit privilege escalation.
+11. No unsafe Rust.
+12. No silent keyword injection.
+13. No semantic bypass.
+14. Source provenance preserved.
+15. Hygiene preserved where promised.
+16. Determinism preserved where promised.
+17. Resource safeguards remain configurable implementation policy.
+18. New domains must integrate without rewriting the macro architecture.
+
+---
+
+193. Definition of Production Ready
+
+"grammar/macros/" is production-ready when a developer can answer all of these questions without guessing:
+
+Syntax
+
+- What is a macro declaration?
+- What is a macro invocation?
+- What is a macro path?
+- What is a macro parameter?
+- What is an argument?
+- What is a token tree?
+
+AST
+
+- Which AST node represents it?
+- Where are source spans stored?
+- How are arguments represented?
+
+Semantics
+
+- How is the macro resolved?
+- How are parameters matched?
+- How are defaults handled?
+- How is expansion validated?
+
+Hygiene
+
+- How are generated identifiers protected?
+- How is provenance retained?
+
+Compiler
+
+- Where does expansion happen?
+- Where are expansion budgets enforced?
+- Where are diagnostics generated?
+
+IR
+
+- How does generated code reach canonical IR?
+- How does generated quantum code reach "quantum::ir"?
+
+Scalability
+
+- Is there an artificial macro limit?
+- Is there an artificial argument/parameter limit?
+- Is there an artificial expansion ceiling?
+- Is there target-specific syntax?
+
+Safety
+
+- Does any macro implementation require "unsafe"?
+- Can a macro bypass security?
+- Can a macro perform hidden I/O?
+
+Compatibility
+
+- Which language version defines the syntax?
+- What is deprecated?
+- How are breaking changes handled?
+
+If any answer requires guessing, the subsystem is not yet production complete.
+
+---
+
+194. Final Architecture
+
+The complete macro architecture is:
+
+                         Zamani Source
+                              │
+                              ▼
+                       Canonical Lexer
+                              │
+                              ▼
+                      Canonical Parser
+                              │
+             ┌────────────────┴────────────────┐
+             │                                 │
+             ▼                                 ▼
+      Macro Declaration                 Macro Invocation
+             │                                 │
+             └────────────────┬────────────────┘
+                              ▼
+                    Canonical Frontend AST
+                              │
+                              ▼
+                    Module / Name Resolution
+                              │
+                              ▼
+                       Macro Resolution
+                              │
+                              ▼
+                       Argument Binding
+                              │
+                              ▼
+                         Expansion
+                              │
+                     ┌────────┴────────┐
+                     ▼                 ▼
+                  Hygiene          Provenance
+                     │                 │
+                     └────────┬────────┘
+                              ▼
+                     Semantic Analysis
+                              │
+            ┌─────────────────┼─────────────────┐
+            │                 │                 │
+            ▼                 ▼                 ▼
+        Classical        quantum::ir       HDL/Hardware
+            │                 │                 │
+            └─────────────────┼─────────────────┘
+                              ▼
+                         Optimization
+                              │
+             ┌────────────────┼────────────────┐
+             ▼                ▼                ▼
+          Routing         Scheduling       Resilience
+             │                │                │
+             └────────────────┼────────────────┘
+                              ▼
+                             ZQN
+                              │
+                              ▼
+                             HAL
+                              │
+                              ▼
+                      Target Realization
+                              │
+          ┌───────────┬───────┼────────┬───────────┐
+          ▼           ▼       ▼        ▼           ▼
+         CPU         GPU     FPGA     QPU        Future
+          │           │       │        │          targets
+          └───────────┴───────┼────────┴───────────┘
+                              ▼
+                          Execution
+
+The macro subsystem is therefore a portable source transformation mechanism, not a target compiler.
+
+---
+
+195. Final POCO-REAF Guarantee
+
+The architectural promise is:
+
+PROGRAM ONCE
+     │
+     ▼
+CANONICAL ZAMANI SOURCE
+     │
+     ▼
+MACROS EXPAND INTO CANONICAL ZAMANI
+     │
+     ▼
+SEMANTIC VALIDATION
+     │
+     ▼
+CANONICAL IR
+     │
+     ▼
+TARGET-SPECIFIC LOWERING
+     │
+     ├── tiny machine
+     ├── CPU
+     ├── multicore
+     ├── GPU
+     ├── FPGA
+     ├── ASIC
+     ├── accelerator
+     ├── QPU
+     ├── simulator
+     ├── HPC
+     ├── cluster
+     ├── distributed
+     ├── cloud
+     └── future architecture
+
+The programmer writes the semantic program once.
+
+Macro expansion must not force the programmer to rewrite the program for a larger or different machine.
+
+The compiler determines the appropriate realization from:
+
+program semantics
++
+requirements
++
+capabilities
++
+resources
++
+target characteristics
++
+compiler policies
+
+rather than from grammar-defined machine limits.
+
+---
+
+196. Completion Statement
+
+This file is complete when:
+
+- its ownership is unambiguous;
+- every existing macro grammar component has a defined role;
+- every cross-directory dependency is documented;
+- lexer ownership is documented;
+- AST ownership is documented;
+- semantic ownership is documented;
+- expansion ownership is documented;
+- hygiene ownership is documented;
+- provenance ownership is documented;
+- diagnostics ownership is documented;
+- resource-policy boundaries are documented;
+- security boundaries are documented;
+- canonical IR integration is documented;
+- quantum integration is documented;
+- classical integration is documented;
+- HDL/hardware integration is documented;
+- distributed/AI/data integration is documented;
+- POCO-REAF requirements are documented;
+- Rust 1.97/1.97.1 compatibility is documented;
+- safe-Rust-only requirements are documented;
+- no artificial language capacity is specified;
+- no unnecessary existing files are renamed;
+- no competing macro grammar is introduced;
+- all macro grammar files can be validated independently against this contract;
+- the complete subsystem can subsequently be integrated through "grammar/Zamani.g4" without redesigning this contract.
+
+This README is the architectural contract.
+
+The ".g4" files implement its syntax portions.
+
+The canonical AST implements its structural representation.
+
+The compiler implements resolution, expansion, hygiene, provenance, and resource policy.
+
+Semantic analysis validates generated programs.
+
+Canonical IR represents their meaning.
+
+Backends realize that meaning on available targets.
+
+That separation is the foundation for scalable Zamani macros and for "Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever (POCO-REAF)".
