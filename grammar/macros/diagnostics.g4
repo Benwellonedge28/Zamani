@@ -1,0 +1,1775 @@
+/*
+
+* ============================================================================
+* Zamani Programming Language
+* ============================================================================
+* 
+* File:
+* grammar/macros/diagnostics.g4
+* 
+* Grammar:
+* diagnostics
+* 
+* Status:
+* Canonical macro-diagnostics parser component
+* 
+* Compiler baseline:
+* Rust 1.97 / Rust 1.97.1
+* 
+* Edition:
+* Rust 2021
+* 
+* Safety:
+* Safe Rust only.
+* No unsafe Rust.
+* 
+* Grammar technology:
+* ANTLR4 parser grammar
+* 
+* ============================================================================
+* PURPOSE
+* ============================================================================
+* 
+* This file defines the syntax boundary for macro-related diagnostic
+* metadata that may be written in Zamani source.
+* 
+* IMPORTANT:
+* 
+* This grammar does NOT implement the compiler diagnostics subsystem.
+* 
+* It does NOT:
+* 
+* - emit diagnostics;
+* - format diagnostics;
+* - assign diagnostic IDs;
+* - classify compiler failures;
+* - inspect source files;
+* - resolve macros;
+* - expand macros;
+* - execute macros;
+* - evaluate expressions;
+* - inspect hardware;
+* - inspect resources;
+* - select targets;
+* - access the filesystem;
+* - access the network;
+* - execute processes;
+* - access secrets;
+* - construct IR;
+* - perform semantic analysis.
+* 
+* It only defines the parser-level structure necessary for source constructs
+* that explicitly participate in macro diagnostic metadata.
+* 
+* Compiler-generated diagnostics remain owned by the compiler diagnostics
+* subsystem.
+* 
+* ============================================================================
+* ARCHITECTURAL POSITION
+* ============================================================================
+* 
+* Zamani source
+* |
+* v
+* canonical lexer
+* |
+* v
+* canonical parser
+* |
+* +-----------------------------+
+* |                             |
+* v                             v
+* macro syntax               diagnostic metadata
+* |                             |
+* +--------------+--------------+
+*                |
+*                v
+*           frontend AST
+*                |
+*                v
+*         macro resolution
+*                |
+*                v
+*        controlled expansion
+*                |
+*      +---------+---------+
+*      |                   |
+*      v                   v
+*   hygiene           provenance
+*      |                   |
+*      +---------+---------+
+*                |
+*                v
+*         semantic analysis
+*                |
+*                v
+*         canonical IR
+*                |
+*      +---------+---------+
+*      |         |         |
+*   classical quantum::ir HDL/hardware
+*      |         |         |
+*      +---------+---------+
+*                |
+*                v
+*      optimization / lowering
+*                |
+*      routing / scheduling
+*                |
+*      resilience / QEC / ZQN
+*                |
+*               HAL
+*                |
+*         target realization
+* 
+* Diagnostics may be produced at any stage, but their rendering and
+* classification are not responsibilities of this grammar.
+* 
+* ============================================================================
+* SINGLE-AUTHORITY RULE
+* ============================================================================
+* 
+* This file owns only the macro-diagnostic grammar-level composition rules
+* declared below.
+* 
+* It MUST NOT redefine:
+* 
+* identifier
+* qualifiedName
+* expression
+* annotation
+* blockExpression
+* typeExpression
+* macroDeclaration
+* macroInvocation
+* macroExpression
+* 
+* Their canonical owners remain elsewhere in the Zamani grammar architecture.
+* 
+* The macro subsystem remains divided as follows:
+* 
+* macros/macros.g4
+*     macro grammar composition boundary
+* 
+* macros/declarations.g4
+*     macro declarations
+* 
+* macros/parameters.g4
+*     macro parameters
+* 
+* macros/invocations.g4
+*     macro invocations
+* 
+* macros/expansion.g4
+*     expansion-related metadata
+* 
+* macros/hygiene.g4
+*     hygiene-related metadata
+* 
+* macros/diagnostics.g4
+*     diagnostic-related metadata
+* 
+* This file must not duplicate rules owned by those components.
+* 
+* ============================================================================
+* CRITICAL DESIGN CORRECTION
+* ============================================================================
+* 
+* Diagnostics are not the same thing as diagnostic metadata.
+* 
+* The compiler may produce diagnostics for:
+* 
+* lexical errors
+* parse errors
+* name-resolution errors
+* macro-resolution errors
+* argument errors
+* expansion errors
+* hygiene errors
+* provenance errors
+* type errors
+* effect errors
+* resource failures
+* capability failures
+* quantum semantic errors
+* HDL semantic errors
+* hardware realization failures
+* scheduling failures
+* routing failures
+* QEC failures
+* ZQN/resilience failures
+* backend failures
+* 
+* None of those diagnostics is generated by this grammar.
+* 
+* This grammar only permits a macro-related source construct to carry
+* explicitly declared diagnostic metadata where the language specification
+* permits it.
+* 
+* ============================================================================
+* LEXER CONTRACT
+* ============================================================================
+* 
+* This is a parser grammar.
+* 
+* The canonical lexer is the sole owner of lexical tokens.
+* 
+* Therefore this file contains NO lexer rules.
+* 
+* It MUST NOT introduce tokens such as:
+* 
+* DIAGNOSTIC
+* ERROR
+* WARNING
+* NOTE
+* HELP
+* MESSAGE
+* SEVERITY
+* CODE
+* LABEL
+* SPAN
+* 
+* merely for convenience.
+* 
+* If any of those spellings become actual Zamani keywords in the future,
+* they must first be established by the canonical lexical specification and
+* token registry.
+* 
+* Until then, ordinary identifiers remain ordinary identifiers.
+* 
+* ============================================================================
+* SHARED-RULE CONTRACT
+* ============================================================================
+* 
+* This component consumes canonical parser rules supplied by the complete
+* Zamani parser composition.
+* 
+* Required shared rule:
+* 
+* annotation
+* 
+* Optional shared rules may be used by future extensions only when their
+* ownership is already established by the canonical grammar.
+* 
+* In particular, this file does NOT redefine:
+* 
+* annotation
+* identifier
+* qualifiedName
+* expression
+* typeExpression
+* 
+* ============================================================================
+* ANNOTATION BOUNDARY
+* ============================================================================
+* 
+* Existing macro components already establish annotations as the appropriate
+* syntax-level extension point for expansion and hygiene metadata.
+* 
+* Diagnostics follow the same principle.
+* 
+* A diagnostic annotation is syntactically an ordinary canonical annotation:
+* 
+* annotation
+* 
+* Its semantic meaning is determined by the annotation registry and semantic
+* analysis.
+* 
+* The parser MUST NOT assume that every annotation is a diagnostic.
+* 
+* Likewise, an annotation whose name happens to resemble a diagnostic
+* concept must not automatically gain diagnostic semantics.
+* 
+* ============================================================================
+* WHY GENERIC ANNOTATIONS ARE USED
+* ============================================================================
+* 
+* A grammar-level diagnostic keyword system would create unnecessary coupling
+* between:
+* 
+* parser
+* diagnostic renderer
+* compiler implementation
+* IDE
+* LSP
+* frontend
+* macro engine
+* 
+* Generic canonical annotations preserve separation:
+* 
+* source annotation
+*      |
+*      v
+* canonical AST metadata
+*      |
+*      v
+* annotation registry
+*      |
+*      v
+* semantic interpretation
+*      |
+*      v
+* diagnostics subsystem
+* 
+* This also allows the diagnostics subsystem to evolve without repeatedly
+* changing the parser grammar.
+* 
+* ============================================================================
+* MACRO DIAGNOSTIC METADATA
+* ============================================================================
+* 
+* The canonical grammar-level unit is:
+* 
+* macroDiagnosticAnnotation
+* 
+* which delegates to:
+* 
+* annotation
+* 
+* A sequence is represented using repetition.
+* 
+* There is intentionally no language-level maximum number of annotations.
+* 
+* ============================================================================
+* RULE OWNERSHIP
+* ============================================================================
+* 
+* macroDiagnosticAnnotation
+* This file.
+* 
+* macroDiagnosticAnnotations
+* This file.
+* 
+* optionalMacroDiagnosticAnnotations
+* This file.
+* 
+* macroDeclarationDiagnosticMetadata
+* This file.
+* 
+* macroInvocationDiagnosticMetadata
+* This file.
+* 
+* macroExpansionDiagnosticMetadata
+* This file.
+* 
+* macroHygieneDiagnosticMetadata
+* This file.
+* 
+* The following remain external:
+* 
+* annotation
+* macroDeclaration
+* macroInvocation
+* macroExpression
+* 
+* ============================================================================
+* DECLARATION INTEGRATION
+* ============================================================================
+* 
+* Macro declarations remain owned by:
+* 
+* grammar/macros/declarations.g4
+* 
+* That grammar may consume:
+* 
+* macroDeclarationDiagnosticMetadata
+* 
+* only at a source position explicitly permitted by the normative language
+* specification.
+* 
+* This file does not redefine macroDeclaration.
+* 
+* It therefore remains possible to complete this file independently without
+* changing the ownership of declaration syntax.
+* 
+* ============================================================================
+* INVOCATION INTEGRATION
+* ============================================================================
+* 
+* Macro invocations remain owned by:
+* 
+* grammar/macros/invocations.g4
+* 
+* That grammar may consume:
+* 
+* macroInvocationDiagnosticMetadata
+* 
+* only where the canonical invocation syntax permits diagnostic metadata.
+* 
+* This file does not redefine:
+* 
+* macroPath
+* macroInvocation
+* macroExpression
+* 
+* ============================================================================
+* EXPANSION INTEGRATION
+* ============================================================================
+* 
+* Expansion-related metadata remains owned by:
+* 
+* grammar/macros/expansion.g4
+* 
+* A diagnostic annotation may be associated semantically with an expansion
+* operation.
+* 
+* This file therefore provides:
+* 
+* macroExpansionDiagnosticMetadata
+* 
+* as a reusable parser boundary.
+* 
+* It does not implement expansion.
+* 
+* It does not determine whether an expansion succeeds.
+* 
+* It does not determine whether an expansion is deterministic.
+* 
+* It does not determine whether an expansion exceeds compiler resource
+* policy.
+* 
+* ============================================================================
+* HYGIENE INTEGRATION
+* ============================================================================
+* 
+* Hygiene remains primarily a compiler semantic concern.
+* 
+* If a macro-hygiene construct needs source-level diagnostic metadata,
+* the canonical parser may consume:
+* 
+* macroHygieneDiagnosticMetadata
+* 
+* This does not implement hygiene.
+* 
+* It does not create binding identities.
+* 
+* It does not rename identifiers.
+* 
+* It does not resolve scopes.
+* 
+* It does not determine capture behavior.
+* 
+* Those responsibilities remain with the compiler's hygiene and semantic
+* infrastructure.
+* 
+* ============================================================================
+* DIAGNOSTIC METADATA VERSUS DIAGNOSTIC GENERATION
+* ============================================================================
+* 
+* Source metadata can provide information such as:
+* 
+* "this macro-related construct participates in diagnostic reporting"
+* 
+* It cannot force the compiler to manufacture a diagnostic where none exists.
+* 
+* It cannot suppress mandatory diagnostics unless a separately specified
+* language mechanism explicitly permits suppression.
+* 
+* It cannot downgrade a required error to a warning merely through an
+* arbitrary annotation.
+* 
+* It cannot bypass:
+* 
+* type checking
+* capability checking
+* resource checking
+* security checking
+* portability checking
+* correctness validation
+* 
+* This prevents source-level annotations from becoming a semantic escape
+* hatch.
+* 
+* ============================================================================
+* DIAGNOSTIC OWNERSHIP
+* ============================================================================
+* 
+* The compiler diagnostics subsystem owns:
+* 
+* diagnostic identity
+* severity
+* category
+* primary span
+* secondary spans
+* notes
+* help
+* suggestions
+* machine-readable representation
+* human-readable rendering
+* localization
+* source mapping
+* macro expansion mapping
+* provenance
+* related diagnostics
+* error aggregation
+* deduplication policy
+* diagnostic ordering
+* 
+* This grammar owns none of those implementation details.
+* 
+* ============================================================================
+* SOURCE SPANS
+* ============================================================================
+* 
+* Diagnostic source spans must come from the canonical source-location system.
+* 
+* This grammar MUST NOT introduce its own:
+* 
+* line number model
+* column model
+* byte-offset model
+* source-file ID model
+* 
+* The parser already operates on canonical token/source locations.
+* 
+* Macro expansion diagnostics must preserve both:
+* 
+* invocation location
+* 
+* and, where available:
+* 
+* macro-definition location
+* generated-source location
+* expansion ancestry
+* 
+* Those relationships are compiler/provenance responsibilities.
+* 
+* ============================================================================
+* MACRO PROVENANCE
+* ============================================================================
+* 
+* Macro diagnostics are especially sensitive to provenance.
+* 
+* A diagnostic arising from:
+* 
+* user source
+*      |
+*      v
+* macro invocation
+*      |
+*      v
+* generated construct
+* 
+* must be capable of reporting the relevant source relationship.
+* 
+* The grammar does not construct this relationship.
+* 
+* It merely ensures that diagnostic metadata can survive the parse/AST
+* boundary.
+* 
+* ============================================================================
+* HYGIENE AND DIAGNOSTIC PRECISION
+* ============================================================================
+* 
+* A hygiene failure should be capable of identifying the relevant:
+* 
+* macro definition
+* invocation
+* generated identifier
+* caller binding
+* generated binding
+* 
+* without the diagnostic grammar becoming responsible for scope resolution.
+* 
+* This is why hygiene and diagnostics remain separate grammar components.
+* 
+* ============================================================================
+* EXPANSION ERRORS
+* ============================================================================
+* 
+* The following are examples of downstream diagnostic conditions:
+* 
+* macro not found
+* macro inaccessible
+* invalid arguments
+* invalid generic arguments
+* invalid expansion
+* recursive expansion
+* expansion resource exhaustion
+* generated syntax failure
+* generated semantic failure
+* hygiene conflict
+* provenance failure
+* 
+* These conditions MUST NOT become parser-only errors merely because they
+* happen during macro processing.
+* 
+* A structurally valid invocation such as:
+* 
+* unknown_macro!(value)
+* 
+* remains syntactically valid.
+* 
+* Macro resolution may later report that the macro cannot be found.
+* 
+* ============================================================================
+* RESOURCE DIAGNOSTICS
+* ============================================================================
+* 
+* Compiler resource limits are implementation policies, not language-level
+* grammar limits.
+* 
+* Possible compiler policies include configurable budgets for:
+* 
+* source bytes
+* tokens
+* AST nodes
+* macro expansion steps
+* expansion depth
+* generated nodes
+* generated source
+* compiler memory
+* compilation time
+* 
+* If a configured budget is exhausted, the compiler may emit a diagnostic.
+* 
+* This grammar MUST NOT encode those budgets.
+* 
+* In particular, it MUST NOT contain:
+* 
+* MAX_MACROS
+* MAX_MACRO_PARAMETERS
+* MAX_MACRO_ARGUMENTS
+* MAX_EXPANSION_DEPTH
+* MAX_EXPANSION_SIZE
+* MAX_GENERATED_NODES
+* 
+* or equivalent grammar-level ceilings.
+* 
+* ============================================================================
+* POCO-REAF
+* ============================================================================
+* 
+* Diagnostic metadata is target-independent.
+* 
+* The grammar must remain valid regardless of whether the eventual program
+* runs on:
+* 
+* embedded hardware
+* CPU
+* multicore CPU
+* GPU
+* FPGA
+* ASIC
+* accelerator
+* quantum processor
+* quantum simulator
+* HPC system
+* cluster
+* distributed system
+* cloud
+* future architecture
+* 
+* A diagnostic annotation must never imply:
+* 
+* CPU selection
+* GPU selection
+* FPGA selection
+* QPU selection
+* device selection
+* processor count
+* core count
+* thread count
+* qubit count
+* register width
+* memory capacity
+* network topology
+* hardware topology
+* scheduler selection
+* routing strategy
+* backend selection
+* 
+* ============================================================================
+* QUANTUM INTEGRATION
+* ============================================================================
+* 
+* A macro may expand into quantum syntax and subsequently produce diagnostics.
+* 
+* The pipeline remains:
+* 
+* macro source
+*      |
+*      v
+* AST
+*      |
+*      v
+* controlled expansion
+*      |
+*      v
+* semantic validation
+*      |
+*      v
+* quantum::ir
+* 
+* Diagnostics may refer to any of those source/semantic stages, but this
+* grammar does not know:
+* 
+* qubit count
+* physical qubit identity
+* QPU topology
+* native gate set
+* calibration
+* QEC
+* ZQN
+* routing
+* scheduling
+* 
+* No macro diagnostic syntax may introduce a second quantum IR.
+* 
+* ============================================================================
+* CLASSICAL / HDL / HARDWARE INTEGRATION
+* ============================================================================
+* 
+* The same macro diagnostic mechanism applies when expansion produces:
+* 
+* classical computation
+* quantum computation
+* hybrid computation
+* HDL
+* hardware intent
+* distributed computation
+* AI/data computation
+* networking
+* security constructs
+* future domain constructs
+* 
+* Diagnostics remain domain-neutral at this grammar boundary.
+* 
+* Domain-specific diagnostic semantics are owned by the relevant semantic
+* subsystem.
+* 
+* ============================================================================
+* SECURITY
+* ============================================================================
+* 
+* Diagnostic metadata MUST NOT become a capability-escalation mechanism.
+* 
+* A source annotation must never implicitly authorize:
+* 
+* filesystem access
+* network access
+* process execution
+* secret access
+* hardware inspection
+* compiler configuration mutation
+* plugin loading
+* macro execution
+* arbitrary host-language execution
+* 
+* A diagnostic annotation can describe source intent.
+* 
+* It cannot grant privileges.
+* 
+* ============================================================================
+* DETERMINISM
+* ============================================================================
+* 
+* Parsing this grammar is deterministic for a fixed:
+* 
+* source
+* canonical lexer
+* grammar version
+* parser configuration
+* 
+* This file contains:
+* 
+* - no semantic predicates;
+* - no embedded Rust;
+* - no random behavior;
+* - no clock-dependent behavior;
+* - no environment-dependent behavior;
+* - no filesystem access;
+* - no network access;
+* - no hardware inspection.
+* 
+* Diagnostic generation itself must be deterministic for a fixed compilation
+* context according to the compiler diagnostics contract.
+* 
+* ============================================================================
+* SAFE RUST
+* ============================================================================
+* 
+* ANTLR grammar actions are deliberately absent.
+* 
+* Therefore this file requires no embedded Rust and cannot require:
+* 
+* unsafe
+* 
+* The repository compiler implementation remains subject to:
+* 
+* Rust 1.97
+* Rust 1.97.1
+* Rust 2021
+* safe Rust only
+* 
+* No unsafe Rust may be introduced merely to support macro diagnostics.
+* 
+* ============================================================================
+* ERROR RECOVERY
+* ============================================================================
+* 
+* Parser recovery belongs to the canonical parser configuration.
+* 
+* This component must not:
+* 
+* - terminate the process;
+* - panic;
+* - perform I/O;
+* - mutate global diagnostic state;
+* - execute macro code.
+* 
+* A malformed diagnostic annotation must be recoverable according to the
+* canonical Zamani parser error-recovery policy.
+* 
+* ============================================================================
+* DIAGNOSTIC CATEGORIES
+* ============================================================================
+* 
+* The compiler diagnostics subsystem may distinguish categories such as:
+* 
+* lexical
+* syntax
+* name_resolution
+* macro_resolution
+* macro_expansion
+* macro_hygiene
+* provenance
+* type
+* effect
+* ownership
+* capability
+* resource
+* portability
+* quantum
+* classical
+* hdl
+* hardware
+* distributed
+* security
+* interoperability
+* backend
+* 
+* This grammar does NOT reserve those names as keywords.
+* 
+* Category identity belongs to the diagnostic specification and compiler
+* diagnostics model.
+* 
+* ============================================================================
+* SEVERITY
+* ============================================================================
+* 
+* The compiler diagnostics model may distinguish:
+* 
+* error
+* warning
+* note
+* help
+* 
+* and additional implementation-defined diagnostic classes where explicitly
+* specified.
+* 
+* This grammar does not make those words keywords.
+* 
+* Source-level diagnostic annotations must not redefine the compiler's
+* severity model.
+* 
+* ============================================================================
+* MACHINE-READABLE DIAGNOSTICS
+* ============================================================================
+* 
+* Diagnostic output consumed by:
+* 
+* IDEs
+* LSP clients
+* CI
+* build systems
+* tooling
+* editors
+* automated analysis
+* 
+* is not an ANTLR grammar responsibility.
+* 
+* The compiler diagnostics subsystem must provide a stable structured
+* representation independently of this parser component.
+* 
+* ============================================================================
+* DIAGNOSTIC RENDERING
+* ============================================================================
+* 
+* Rendering may include:
+* 
+* primary message
+* source excerpt
+* labels
+* notes
+* help
+* suggestions
+* macro expansion backtrace
+* provenance chain
+* 
+* None of these rendering details belong in this grammar.
+* 
+* ============================================================================
+* SUGGESTIONS AND FIX-ITS
+* ============================================================================
+* 
+* Compiler suggestions and fix-its must be generated from validated source
+* locations and semantic information.
+* 
+* This grammar must not interpret arbitrary source annotations as permission
+* to rewrite the program.
+* 
+* Any future source-level diagnostic suggestion mechanism must have:
+* 
+* specification
+* AST contract
+* semantic contract
+* security review
+* compatibility rules
+* tests
+* 
+* before becoming normative.
+* 
+* ============================================================================
+* NO AUTOMATIC DIAGNOSTIC SUPPRESSION
+* ============================================================================
+* 
+* This file deliberately does not provide a generic:
+* 
+* suppress
+* ignore
+* disable
+* 
+* grammar construct.
+* 
+* Diagnostic suppression is security- and correctness-sensitive and must not
+* be introduced as an accidental consequence of generic annotations.
+* 
+* If Zamani later specifies diagnostic suppression, it requires a dedicated
+* semantic contract defining exactly which diagnostic classes can be
+* suppressed and which diagnostics are mandatory.
+* 
+* ============================================================================
+* NO STRINGLY-TYPED DIAGNOSTIC LANGUAGE
+* ============================================================================
+* 
+* This file does not create a grammar such as:
+* 
+* diagnostic("...")
+* error("...")
+* warning("...")
+* 
+* merely to support compiler diagnostics.
+* 
+* Such a grammar would couple source syntax to diagnostic rendering and would
+* be inappropriate for compiler-generated errors.
+* 
+* Generic annotations remain the extension boundary.
+* 
+* ============================================================================
+* INTEGRATION WITH grammar/macros/expansion.g4
+* ============================================================================
+* 
+* expansion.g4 already provides a macroExpansionDiagnosticMetadata boundary.
+* 
+* That rule must not be duplicated here.
+* 
+* The ownership is:
+* 
+* expansion.g4
+*     macroExpansionDiagnosticMetadata
+* 
+* This file owns the lower-level diagnostic metadata rules used to express
+* the diagnostic annotation structure.
+* 
+* If expansion.g4 currently defines a rule with the same name as one declared
+* here, the duplicate must be removed from whichever component is not the
+* canonical owner before ANTLR composition.
+* 
+* ============================================================================
+* INTEGRATION WITH grammar/macros/hygiene.g4
+* ============================================================================
+* 
+* hygiene.g4 may provide a hygiene-specific diagnostic metadata integration
+* rule.
+* 
+* It must delegate to this component rather than duplicate annotation
+* sequences.
+* 
+* ============================================================================
+* INTEGRATION WITH grammar/macros/macros.g4
+* ============================================================================
+* 
+* macros.g4 remains the macro subsystem composition boundary.
+* 
+* It should make this component available to the canonical macro grammar
+* composition without redefining any of its rules.
+* 
+* macros.g4 remains responsible for composition, not diagnostic semantics.
+* 
+* ============================================================================
+* INTEGRATION WITH grammar/Zamani.g4
+* ============================================================================
+* 
+* Zamani.g4 remains the canonical language composition root.
+* 
+* This file MUST NOT become a second root grammar.
+* 
+* The final parser composition must expose macro diagnostic rules only through
+* the canonical macro subsystem integration path.
+* 
+* ============================================================================
+* AST CONTRACT
+* ============================================================================
+* 
+* This grammar does not define Rust AST structures.
+* 
+* Diagnostic metadata must be represented through the repository's existing
+* canonical AST metadata/annotation representation.
+* 
+* The AST must preserve, where applicable:
+* 
+* source span
+* annotation identity
+* annotation arguments
+* source order
+* declaration/invocation association
+* macro expansion provenance
+* 
+* This file must NOT introduce:
+* 
+* MacroDiagnosticAst
+* MacroDiagnosticNode
+* DiagnosticAst
+* 
+* as a competing AST hierarchy merely for grammar organization.
+* 
+* ============================================================================
+* SEMANTIC CONTRACT
+* ============================================================================
+* 
+* Semantic analysis determines:
+* 
+* - whether an annotation is recognized;
+* - whether it is permitted in the current context;
+* - whether its arguments are valid;
+* - whether its values have valid types;
+* - whether it conflicts with other metadata;
+* - whether it is legal for macro declarations;
+* - whether it is legal for macro invocations;
+* - whether it is legal for expansion metadata;
+* - whether it is legal for hygiene metadata.
+* 
+* The parser establishes syntax only.
+* 
+* ============================================================================
+* IR CONTRACT
+* ============================================================================
+* 
+* Diagnostic metadata is normally compiler metadata and does not become
+* executable program IR.
+* 
+* Therefore this grammar does not require a diagnostic IR.
+* 
+* If a future language feature requires diagnostic metadata to survive into a
+* canonical semantic representation, that representation must be specified
+* by the semantic/IR architecture rather than invented here.
+* 
+* In particular, diagnostic metadata must not create:
+* 
+* quantum diagnostic IR
+* hardware diagnostic IR
+* macro diagnostic IR
+* 
+* as parallel computational IRs.
+* 
+* ============================================================================
+* POCO-REAF AND IR SEPARATION
+* ============================================================================
+* 
+* A macro that generates:
+* 
+* classical code
+* quantum code
+* HDL
+* hardware intent
+* distributed code
+* 
+* continues through the same semantic and IR paths as directly authored
+* source.
+* 
+* Diagnostics do not alter that computational architecture.
+* 
+* For quantum:
+* 
+* macro expansion
+*      |
+*      v
+* semantic quantum representation
+*      |
+*      v
+* quantum::ir
+* 
+* remains the canonical quantum boundary.
+* 
+* ============================================================================
+* SCALABILITY
+* ============================================================================
+* 
+* This grammar imposes no finite language-level maximum on:
+* 
+* - macro diagnostic annotations;
+* - annotation sequence length;
+* - macro declarations;
+* - macro invocations;
+* - source size;
+* - generated source size;
+* - namespace depth;
+* - macro expansion depth.
+* 
+* Repetition is expressed using ANTLR repetition operators.
+* 
+* There are NO constants such as:
+* 
+* MAX_DIAGNOSTICS
+* MAX_DIAGNOSTIC_ANNOTATIONS
+* MAX_MACROS
+* MAX_MACRO_ARGUMENTS
+* MAX_MACRO_PARAMETERS
+* MAX_EXPANSION_DEPTH
+* MAX_EXPANSION_SIZE
+* 
+* and no equivalent language-level ceiling.
+* 
+* Practical compiler limits remain configurable resource policies.
+* 
+* ============================================================================
+* HARD-CODING AUDIT
+* ============================================================================
+* 
+* This file contains no:
+* 
+* CPU count
+* GPU count
+* FPGA count
+* ASIC count
+* QPU count
+* qubit count
+* node count
+* device count
+* thread count
+* memory capacity
+* register width
+* tensor rank
+* network size
+* topology size
+* 
+* It also contains no fixed macro or diagnostic capacities.
+* 
+* ============================================================================
+* DOMAIN INDEPENDENCE
+* ============================================================================
+* 
+* Diagnostic metadata remains usable for:
+* 
+* classical
+* quantum
+* hybrid
+* HDL
+* hardware
+* distributed
+* AI
+* data
+* networking
+* security
+* interoperability
+* future Zamani domains
+* 
+* Domain-specific meaning is resolved downstream.
+* 
+* ============================================================================
+* VERSIONING
+* ============================================================================
+* 
+* This component is versioned with the Zamani language grammar.
+* 
+* Adding a new diagnostic metadata rule is compatible when it:
+* 
+* - does not change existing parse meaning;
+* - does not steal existing identifier spellings;
+* - does not introduce ambiguity;
+* - does not duplicate rule ownership;
+* - has a canonical AST representation;
+* - has a semantic contract;
+* - has diagnostics for malformed usage;
+* - has compatibility tests.
+* 
+* Removing or changing existing syntax requires the language compatibility
+* and migration policy.
+* 
+* ============================================================================
+* CONFORMANCE TEST CONTRACT
+* ============================================================================
+* 
+* The following structural forms must be testable where the canonical
+* annotation grammar supports them:
+* 
+* @annotation
+* 
+* @annotation(...)
+* 
+* @annotation(...)
+* @annotation(...)
+* 
+* The exact annotation spellings are intentionally not hard-coded here.
+* 
+* Tests must verify that diagnostic metadata remains an annotation-layer
+* concern rather than becoming a new keyword language.
+* 
+* ============================================================================
+* POSITIVE TEST CATEGORIES
+* ============================================================================
+* 
+* Positive tests must cover:
+* 
+* - one diagnostic annotation;
+* - multiple diagnostic annotations;
+* - diagnostic metadata on supported macro declarations;
+* - diagnostic metadata on supported macro invocations;
+* - diagnostic metadata associated with expansion metadata;
+* - diagnostic metadata associated with hygiene metadata;
+* - empty annotation argument lists where canonical annotation syntax
+*   permits them;
+* - annotation argument expressions where canonical annotation syntax
+*   permits them;
+* - deeply nested annotation expressions where supported;
+* - Unicode identifiers where supported by the canonical lexer;
+* - macro constructs participating in classical programs;
+* - macro constructs participating in quantum programs;
+* - macro constructs participating in hybrid programs;
+* - macro constructs participating in HDL/hardware programs.
+* 
+* ============================================================================
+* NEGATIVE TEST CATEGORIES
+* ============================================================================
+* 
+* Negative tests must cover malformed canonical annotation syntax, including
+* cases rejected by the canonical annotation grammar.
+* 
+* They must also verify that this component does NOT accidentally accept:
+* 
+* - arbitrary diagnostic keywords;
+* - duplicate diagnostic languages;
+* - malformed annotation structures;
+* - invalid delimiter structure;
+* - invalid placement when the consuming grammar disallows metadata.
+* 
+* Semantic negative tests must separately cover:
+* 
+* - unknown diagnostic annotation;
+* - annotation not permitted in macro context;
+* - invalid annotation arguments;
+* - invalid diagnostic metadata combination;
+* - unauthorized diagnostic suppression if such a facility is ever added.
+* 
+* Those semantic failures must not be encoded as parser rules.
+* 
+* ============================================================================
+* BOUNDARY TESTS
+* ============================================================================
+* 
+* Boundary tests must exercise:
+* 
+* - zero diagnostic annotations where optional metadata is allowed;
+* - one annotation;
+* - many annotations;
+* - nested annotation arguments;
+* - large source programs;
+* - large macro bodies;
+* - large macro invocation argument lists;
+* - deeply qualified macro paths;
+* 
+* using configurable test-harness resource budgets rather than language-level
+* maxima.
+* 
+* ============================================================================
+* SCALABILITY TESTS
+* ============================================================================
+* 
+* Scalability tests must verify that increasing:
+* 
+* macro count
+* invocation count
+* annotation count
+* source size
+* expansion output
+* 
+* does not cause a grammar-defined semantic ceiling.
+* 
+* Resource exhaustion must be reported by the compiler's resource-policy
+* layer, not represented as a syntax restriction in this file.
+* 
+* ============================================================================
+* DETERMINISM TESTS
+* ============================================================================
+* 
+* The same source and grammar configuration must produce the same parse tree
+* structure.
+* 
+* Tests must repeat parsing of identical source and compare:
+* 
+* token sequence
+* parse structure
+* source spans
+* rule identities
+* 
+* according to the canonical parser conformance contract.
+* 
+* ============================================================================
+* SECURITY TESTS
+* ============================================================================
+* 
+* Tests must establish that parsing diagnostic metadata cannot:
+* 
+* - read files;
+* - write files;
+* - access networks;
+* - execute processes;
+* - access secrets;
+* - inspect hardware;
+* - alter compiler configuration;
+* - bypass semantic validation;
+* - grant capabilities.
+* 
+* ============================================================================
+* CROSS-DOMAIN TESTS
+* ============================================================================
+* 
+* A macro carrying diagnostic metadata must remain structurally independent
+* of the eventual computational domain.
+* 
+* Required cross-domain coverage includes:
+* 
+* classical
+* quantum
+* hybrid
+* HDL
+* hardware
+* distributed
+* AI/data
+* networking
+* security
+* 
+* Future domains must inherit the same macro-diagnostic boundary rather than
+* requiring copies such as:
+* 
+* quantumMacroDiagnostics
+* gpuMacroDiagnostics
+* hdlMacroDiagnostics
+* qpuMacroDiagnostics
+* 
+* ============================================================================
+* ANTLR GENERATION CONTRACT
+* ============================================================================
+* 
+* This is a parser grammar.
+* 
+* It uses:
+* 
+* tokenVocab = ZamaniLexer;
+* 
+* It must therefore be generated against the canonical lexer vocabulary.
+* 
+* No lexer grammar is defined here.
+* 
+* The build system must integrate this component through the repository's
+* canonical parser composition architecture.
+* 
+* This file must not be passed to the compiler as an independent production
+* language.
+* 
+* ============================================================================
+* NO DUPLICATE TOKEN OWNERSHIP
+* ============================================================================
+* 
+* This file must never define:
+* 
+* ID
+* IDENTIFIER
+* STRING
+* INTEGER
+* AT
+* LPAREN
+* RPAREN
+* COMMA
+* COLON
+* any other lexer token
+* 
+* directly.
+* 
+* Canonical lexical ownership remains with:
+* 
+* grammar/antlr/ZamaniLexer.g4
+* grammar/lexer/
+* 
+* ============================================================================
+* NO DUPLICATE AST OWNERSHIP
+* ============================================================================
+* 
+* This file does not define Rust types.
+* 
+* The canonical frontend AST remains authoritative.
+* 
+* If diagnostic metadata requires additional AST data, that requirement must
+* first be established in the frontend AST contract before changing grammar
+* semantics.
+* 
+* ============================================================================
+* NO DUPLICATE SEMANTIC OWNERSHIP
+* ============================================================================
+* 
+* This file does not decide:
+* 
+* severity
+* error identity
+* source ownership
+* macro visibility
+* expansion validity
+* hygiene validity
+* type validity
+* resource availability
+* capability availability
+* target support
+* 
+* ============================================================================
+* NO DUPLICATE IR
+* ============================================================================
+* 
+* Diagnostics are not a reason to create another computational IR.
+* 
+* In particular:
+* 
+* macro diagnostic syntax
+*     !=
+* macro diagnostic IR
+* 
+* Computational constructs continue through the existing canonical semantic
+* and IR architecture.
+* 
+* ============================================================================
+* COMPLETION CONTRACT
+* ============================================================================
+* 
+* This file is complete when all of the following are true:
+* 
+* Ownership
+* 
+* [x] Diagnostic grammar ownership is explicit.
+* [x] No declaration rules are duplicated.
+* [x] No invocation rules are duplicated.
+* [x] No expansion rules are duplicated.
+* [x] No hygiene rules are duplicated.
+* 
+* Lexer
+* 
+* [x] Canonical ZamaniLexer vocabulary is consumed.
+* [x] No lexer rules are defined.
+* [x] No diagnostic keywords are invented.
+* 
+* AST
+* 
+* [x] Existing canonical annotation/metadata representation is reused.
+* [x] No second diagnostic AST is required.
+* [x] Source provenance remains available downstream.
+* 
+* Semantics
+* 
+* [x] Compiler diagnostics remain downstream.
+* [x] Annotation meaning remains semantic.
+* [x] Diagnostic severity is not hard-coded here.
+* [x] Diagnostic suppression is not accidentally introduced.
+* 
+* Scalability
+* 
+* [x] No fixed annotation count.
+* [x] No fixed macro count.
+* [x] No fixed expansion count.
+* [x] No hardware limits.
+* [x] No resource constants.
+* 
+* Safety
+* 
+* [x] No embedded Rust.
+* [x] No unsafe Rust requirement.
+* [x] No I/O.
+* [x] No process execution.
+* [x] No hardware access.
+* 
+* Portability
+* 
+* [x] Classical-independent.
+* [x] Quantum-independent.
+* [x] HDL-independent.
+* [x] Hardware-independent.
+* [x] Distributed-independent.
+* [x] Future-domain-independent.
+* 
+* Determinism
+* 
+* [x] No semantic predicates.
+* [x] No randomness.
+* [x] No time dependency.
+* [x] No environment dependency.
+* 
+* Validation
+* 
+* [ ] Canonical ANTLR composition passes.
+* [ ] Rust parser conformance passes.
+* [ ] Annotation integration tests pass.
+* [ ] Macro declaration integration tests pass.
+* [ ] Macro invocation integration tests pass.
+* [ ] Expansion integration tests pass.
+* [ ] Hygiene integration tests pass.
+* [ ] Positive tests pass.
+* [ ] Negative tests pass.
+* [ ] Boundary tests pass.
+* [ ] Scalability tests pass.
+* [ ] Determinism tests pass.
+* [ ] Security tests pass.
+* [ ] Cross-domain tests pass.
+* 
+* The final unchecked items are repository-level validation gates and cannot
+* truthfully be marked complete by this grammar file alone.
+* 
+* ============================================================================
+* FINAL ARCHITECTURAL RULE
+* ============================================================================
+* 
+* This file exists to describe diagnostic metadata syntax.
+* 
+* It must never become:
+* 
+* the diagnostic engine
+* the macro engine
+* the hygiene engine
+* the provenance engine
+* the semantic analyzer
+* the resource manager
+* the quantum compiler
+* the HDL compiler
+* the hardware mapper
+* the runtime
+* 
+* The correct separation remains:
+* 
+* syntax
+*    |
+*    v
+* AST
+*    |
+*    v
+* semantic analysis
+*    |
+*    +-------------------------------+
+*    |                               |
+*    v                               v
+* diagnostics                    canonical IR
+*                                    |
+*                          +---------+---------+
+*                          |         |         |
+*                     classical quantum::ir HDL
+*                                    |
+*                          optimization/lowering
+*                                    |
+*                          routing/scheduling
+*                                    |
+*                            resilience/QEC/ZQN
+*                                    |
+*                                   HAL
+*                                    |
+*                              target hardware
+* 
+* This boundary preserves:
+* 
+* Program Once
+* Compile Once
+* Run Everywhere
+* Anywhere
+* Forever
+* 
+* while allowing compiler diagnostics to evolve independently of the
+* computational language syntax.
+* 
+* ============================================================================
+* GRAMMAR
+* ============================================================================
+  */
+
+parser grammar diagnostics;
+
+options {
+tokenVocab = ZamaniLexer;
+}
+
+/*
+
+* ============================================================================
+* CANONICAL MACRO DIAGNOSTIC ANNOTATION
+* ============================================================================
+* 
+* The canonical annotation grammar owns the actual annotation syntax.
+* 
+* This rule gives macro diagnostics a named integration point without
+* duplicating annotation syntax.
+* 
+* Semantic analysis determines whether the annotation actually has diagnostic
+* meaning.
+  */
+
+macroDiagnosticAnnotation
+: annotation
+;
+
+/*
+
+* ============================================================================
+* ONE OR MORE MACRO DIAGNOSTIC ANNOTATIONS
+* ============================================================================
+* 
+* Repetition deliberately introduces no finite language-level limit.
+  */
+
+macroDiagnosticAnnotations
+: macroDiagnosticAnnotation+
+;
+
+/*
+
+* ============================================================================
+* OPTIONAL MACRO DIAGNOSTIC ANNOTATIONS
+* ============================================================================
+* 
+* Used by consumers whose normative syntax permits zero or more diagnostic
+* metadata annotations.
+  */
+
+optionalMacroDiagnosticAnnotations
+: macroDiagnosticAnnotation*
+;
+
+/*
+
+* ============================================================================
+* DECLARATION-SIDE DIAGNOSTIC METADATA
+* ============================================================================
+* 
+* Macro declaration syntax remains owned by declarations.g4.
+* 
+* This rule provides the metadata boundary only.
+* 
+* The consuming declaration grammar determines whether and where this
+* metadata may occur.
+  */
+
+macroDeclarationDiagnosticMetadata
+: macroDiagnosticAnnotations
+;
+
+/*
+
+* ============================================================================
+* INVOCATION-SIDE DIAGNOSTIC METADATA
+* ============================================================================
+* 
+* Macro invocation syntax remains owned by invocations.g4.
+* 
+* This rule does not redefine macroInvocation.
+  */
+
+macroInvocationDiagnosticMetadata
+: macroDiagnosticAnnotations
+;
+
+/*
+
+* ============================================================================
+* EXPANSION-SIDE DIAGNOSTIC METADATA
+* ============================================================================
+* 
+* Expansion semantics remain owned by the macro expansion subsystem.
+* 
+* This is a parser-level metadata boundary only.
+  */
+
+macroExpansionDiagnosticMetadata
+: macroDiagnosticAnnotations
+;
+
+/*
+
+* ============================================================================
+* HYGIENE-SIDE DIAGNOSTIC METADATA
+* ============================================================================
+* 
+* Hygiene implementation remains downstream.
+* 
+* This rule permits a consuming hygiene grammar to reuse the same diagnostic
+* metadata representation without defining another annotation language.
+  */
+
+macroHygieneDiagnosticMetadata
+: macroDiagnosticAnnotations
+;
+
+/*
+
+* ============================================================================
+* OPTIONAL DECLARATION METADATA
+* ============================================================================
+* 
+* The consumer determines whether optional metadata is permitted at the
+* selected source position.
+  */
+
+optionalMacroDeclarationDiagnosticMetadata
+: optionalMacroDiagnosticAnnotations
+;
+
+/*
+
+* ============================================================================
+* OPTIONAL INVOCATION METADATA
+* ============================================================================
+  */
+
+optionalMacroInvocationDiagnosticMetadata
+: optionalMacroDiagnosticAnnotations
+;
+
+/*
+
+* ============================================================================
+* OPTIONAL EXPANSION METADATA
+* ============================================================================
+  */
+
+optionalMacroExpansionDiagnosticMetadata
+: optionalMacroDiagnosticAnnotations
+;
+
+/*
+
+* ============================================================================
+* OPTIONAL HYGIENE METADATA
+* ============================================================================
+  */
+
+optionalMacroHygieneDiagnosticMetadata
+: optionalMacroDiagnosticAnnotations
+;
+/*
+
+* ============================================================================
+* END OF FILE
+* ============================================================================
+  */
