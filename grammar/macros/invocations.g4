@@ -1,640 +1,568 @@
+
 /*
  * ============================================================================
  * Zamani Programming Language
  * ============================================================================
  *
- * File:
- *     grammar/macros/invocations.g4
+ * File: grammar/macros/invocations.g4
+ * Grammar: invocations
  *
- * Grammar:
- *     invocations
- *
- * Purpose:
- *     Canonical parser grammar for Zamani macro invocation syntax.
- *
- * ============================================================================
- * OWNERSHIP
- * ============================================================================
- *
- * THIS FILE OWNS:
- *
- *     - macro invocation syntax;
- *     - macro invocation paths;
- *     - macro invocation expression integration.
- *
- * THIS FILE DOES NOT OWN:
- *
- *     - lexer tokens;
- *     - identifiers;
- *     - qualified names;
- *     - ordinary function calls;
- *     - argument-list syntax;
- *     - expressions;
- *     - macro declarations;
- *     - macro parameters;
- *     - macro defaults;
- *     - macro bodies;
- *     - macro expansion;
- *     - macro resolution;
- *     - hygiene;
- *     - reflection;
- *     - compile-time execution;
- *     - semantic analysis;
- *     - type checking;
- *     - capability checking;
- *     - resource checking;
- *     - target selection;
- *     - hardware discovery;
- *     - routing;
- *     - scheduling;
- *     - optimization;
- *     - QEC;
- *     - ZQN;
- *     - quantum::ir;
- *     - classical IR;
- *     - HDL IR;
- *     - runtime execution.
+ * Status: Canonical macro invocation grammar component
+ * Compiler: Rust 1.97 / 1.97.1
+ * Edition: Rust 2021
+ * Safety: Safe Rust only
  *
  * ============================================================================
- * ARCHITECTURAL POSITION
+ * 1. PURPOSE
  * ============================================================================
  *
- * Source
- *   |
- *   v
- * ZamaniLexer
- *   |
- *   v
- * Canonical Zamani Parser
- *   |
- *   +--> macro invocation syntax
- *   |
- *   v
+ * Defines the canonical syntax for invoking Zamani macros.
+ *
+ * This grammar owns:
+ *
+ *   - macroPath
+ *   - macroInvocation
+ *   - macroExpression
+ *
+ * This grammar does not own:
+ *
+ *   - lexical tokens
+ *   - identifiers
+ *   - qualified-name syntax
+ *   - ordinary function calls
+ *   - argument-list syntax
+ *   - general expressions
+ *   - macro declarations
+ *   - macro parameters
+ *   - macro bodies
+ *   - macro resolution
+ *   - macro expansion
+ *   - macro execution
+ *   - hygiene implementation
+ *   - source-span implementation
+ *   - AST implementation
+ *   - semantic analysis
+ *   - type checking
+ *   - capability checking
+ *   - resource negotiation
+ *   - target selection
+ *   - compiler optimization
+ *   - quantum::ir
+ *   - classical IR
+ *   - HDL IR
+ *   - hardware realization
+ *   - routing
+ *   - scheduling
+ *   - QEC
+ *   - ZQN
+ *   - HAL
+ *   - runtime execution
+ *
+ * ============================================================================
+ * 2. ARCHITECTURAL POSITION
+ * ============================================================================
+ *
+ * Zamani source
+ *      |
+ *      v
+ * Canonical lexer
+ *      |
+ *      v
+ * Canonical parser
+ *      |
+ *      +--> macro invocation
+ *      |
+ *      v
  * Frontend AST
- *   |
- *   v
- * Name Resolution
- *   |
- *   v
- * Macro Resolution
- *   |
- *   v
- * Macro Expansion
- *   |
- *   v
- * Hygiene / Provenance
- *   |
- *   v
- * Semantic Analysis
- *   |
- *   v
- * Canonical Semantic IR
- *   |
- *   +--> Classical IR
- *   +--> quantum::ir
- *   +--> HDL / hardware representation
- *   +--> distributed representation
- *   +--> future domain representations
- *   |
- *   v
- * Optimization
- *   |
- *   v
- * Routing / Scheduling / Resilience / Lowering
- *   |
- *   v
- * Runtime
+ *      |
+ *      v
+ * Name resolution
+ *      |
+ *      v
+ * Macro resolution
+ *      |
+ *      v
+ * Controlled macro expansion
+ *      |
+ *      v
+ * Hygiene and provenance
+ *      |
+ *      v
+ * Semantic analysis
+ *      |
+ *      v
+ * Canonical semantic representation
+ *      |
+ *      +--> Classical representation
+ *      +--> quantum::ir
+ *      +--> HDL/hardware representation
+ *      +--> Distributed representation
+ *      +--> Future domain representations
+ *      |
+ *      v
+ * Optimization and lowering
+ *      |
+ *      v
+ * Routing / Scheduling / Resilience
+ *      |
+ *      v
+ * ZQN / HAL / Backend
+ *      |
+ *      v
+ * Execution
  *
- * Grammar syntax MUST NOT depend on the IR, runtime, hardware, scheduler,
- * optimizer, QEC, ZQN, or resilience implementation.
- *
- * ============================================================================
- * POCO-REAF
- * ============================================================================
- *
- * Macro invocation is a source-level construct.
- *
- * It MUST NOT inherently select:
- *
- *     - CPU;
- *     - GPU;
- *     - FPGA;
- *     - ASIC;
- *     - QPU;
- *     - simulator;
- *     - accelerator;
- *     - backend;
- *     - device;
- *     - topology;
- *     - memory capacity;
- *     - processor count;
- *     - qubit count;
- *     - register count;
- *     - deployment topology.
- *
- * The same invocation syntax must remain valid regardless of whether the
- * expanded program eventually executes on a tiny embedded target or a
- * heterogeneous distributed system.
- *
- * Physical requirements belong to the appropriate resource/capability/target
- * layers.
+ * Parsing must never execute or expand a macro.
  *
  * ============================================================================
- * SCALABILITY
+ * 3. POCO-REAF
  * ============================================================================
  *
- * No language-level finite limit is imposed on:
+ * Macro invocation is a portable source-language construct.
  *
- *     - macro invocation count;
- *     - argument count;
- *     - qualified-name depth;
- *     - source size;
- *     - nesting;
- *     - expansion result size.
+ * The same macro invocation syntax must remain meaningful across:
  *
- * This grammar deliberately contains no:
+ *   - embedded systems
+ *   - classical CPUs
+ *   - multicore processors
+ *   - GPUs
+ *   - FPGAs
+ *   - ASICs
+ *   - quantum processors
+ *   - quantum simulators
+ *   - heterogeneous accelerators
+ *   - distributed systems
+ *   - HPC
+ *   - cloud infrastructure
+ *   - future computing architectures
  *
- *     MAX_ARGUMENTS
- *     MAX_MACRO_DEPTH
- *     MAX_INVOCATIONS
- *     MAX_NAMES
- *     MAX_QUANTUM_SIZE
- *     MAX_DEVICE_COUNT
+ * The grammar MUST NOT require a particular physical target.
  *
- * or equivalent constants.
+ * It MUST NOT encode:
  *
- * Compiler implementations MAY impose configurable resource budgets for:
+ *   MAX_QUBITS
+ *   MAX_CPUS
+ *   MAX_GPUS
+ *   MAX_FPGAS
+ *   MAX_NODES
+ *   MAX_MEMORY
+ *   MAX_THREADS
+ *   MAX_TENSOR_RANK
+ *   MAX_REGISTER_WIDTH
+ *   MAX_NETWORK_SIZE
+ *   MAX_DEVICE_COUNT
  *
- *     - source bytes;
- *     - token count;
- *     - parser memory;
- *     - AST nodes;
- *     - expansion depth;
- *     - expansion steps;
- *     - generated nodes;
- *     - compilation time;
- *     - diagnostics.
- *
- * Those are implementation/resource policies and are NOT grammar semantics.
- *
- * ============================================================================
- * SAFETY
- * ============================================================================
- *
- * The Zamani compiler is implemented for Rust 1.97 / 1.97.1.
- *
- * This grammar contains no Rust executable code.
- *
- * The compiler implementation MUST use safe Rust.
- *
- * A Zamani source-language construct named `unsafe`, if supported elsewhere,
- * does not authorize Rust `unsafe`.
+ * Nor equivalent artificial limits.
  *
  * ============================================================================
- * DETERMINISM
+ * 4. SCALABILITY
  * ============================================================================
  *
- * Parsing is deterministic with respect to the canonical token stream.
+ * This grammar imposes no language-level maximum on:
  *
- * This grammar does not perform macro resolution or expansion.
+ *   - macro invocation count
+ *   - macro argument count
+ *   - namespace depth
+ *   - source size
+ *   - expression size
+ *   - nesting
+ *   - expansion output size
  *
- * Therefore deterministic expansion is a downstream compiler contract.
+ * Actual implementations remain subject to available resources.
  *
- * Expansion must preserve:
+ * Implementations MAY use configurable admission controls for:
  *
- *     - deterministic resolution;
- *     - deterministic expansion ordering;
- *     - source provenance;
- *     - diagnostic provenance;
- *     - hygiene;
- *     - reproducibility.
+ *   - source bytes
+ *   - tokens
+ *   - parser memory
+ *   - AST nodes
+ *   - expansion steps
+ *   - expansion depth
+ *   - generated nodes
+ *   - compilation time
+ *   - compiler memory
  *
- * ============================================================================
- * LEXER CONTRACT
- * ============================================================================
+ * These are compiler resource policies, not language semantics.
  *
- * This is a PARSER grammar.
- *
- * The lexer remains the sole owner of lexical definitions.
- *
- * The canonical Zamani lexer must provide the token vocabulary required here,
- * including:
- *
- *     BANG
- *     LPAREN
- *     RPAREN
- *
- * No lexer rules are defined in this file.
- *
- * In particular, this file MUST NOT define:
- *
- *     BANG : '!' ;
- *
- * or another macro-specific lexer token.
+ * A resource policy must not silently become a permanent language limit.
  *
  * ============================================================================
- * SHARED PARSER CONTRACT
+ * 5. LEXICAL CONTRACT
  * ============================================================================
  *
- * This grammar consumes canonical parser rules supplied by the composed
- * Zamani parser.
+ * This is a parser grammar.
  *
- * Required shared rule:
+ * The canonical lexer is the sole owner of token definitions.
  *
- *     qualifiedName
+ * Required token vocabulary:
  *
- * Required shared rule:
+ *   BANG
+ *   LPAREN
+ *   RPAREN
  *
- *     argumentList
+ * Additional tokens are consumed indirectly by shared parser rules.
  *
- * The expression grammar integrates:
+ * This file MUST NOT define lexer rules.
  *
- *     macroExpression
+ * In particular, it MUST NOT redefine:
  *
- * into its canonical expression hierarchy.
+ *   BANG
+ *   IDENTIFIER
+ *   DOUBLE_COLON
+ *   COMMA
  *
- * This file MUST NOT redefine those shared rules.
- *
- * ============================================================================
- * MACRO PATH CONTRACT
- * ============================================================================
- *
- * A macro path is structurally a canonical qualified name.
- *
- * Examples:
- *
- *     build
- *     math::build
- *     package::math::build
- *
- * The grammar recognizes the structure only.
- *
- * It does NOT decide whether the path:
- *
- *     - exists;
- *     - is imported;
- *     - is visible;
- *     - names a macro;
- *     - is ambiguous;
- *     - refers to a package;
- *     - refers to a dialect;
- *     - refers to another symbol.
- *
- * Name resolution owns those decisions.
+ * The actual token names must be reconciled with the canonical ZamaniLexer
+ * before generating the composed parser.
  *
  * ============================================================================
- * INVOCATION CONTRACT
+ * 6. SHARED RULE CONTRACT
  * ============================================================================
  *
- * Canonical syntax:
+ * This grammar consumes the following canonical parser rules:
  *
- *     name!()
+ *   qualifiedName
+ *   argumentList
  *
- *     name!(argument)
+ * Their ownership remains outside this file.
  *
- *     name!(argument1, argument2)
+ * qualifiedName owns:
  *
- * Qualified syntax:
+ *   - identifier segments
+ *   - namespace separators
+ *   - qualified-name structure
+ *   - namespace nesting
  *
- *     module::name!(argument)
+ * argumentList owns:
  *
- *     package::module::name!(argument)
+ *   - argument expressions
+ *   - argument separators
+ *   - trailing-comma policy
+ *   - supported argument forms
  *
- * The `!` token distinguishes macro invocation syntax from ordinary function
- * invocation syntax.
+ * expression grammar owns the general expression hierarchy.
  *
- * Therefore:
- *
- *     foo(x)
- *
- * and:
- *
- *     foo!(x)
- *
- * remain structurally distinct.
+ * No duplicate shared rule definitions are permitted here.
  *
  * ============================================================================
- * ARGUMENT CONTRACT
+ * 7. CANONICAL INVOCATION SYNTAX
  * ============================================================================
  *
- * Macro invocation reuses the canonical `argumentList` rule.
+ * Empty invocation:
  *
- * This is intentional.
+ *   build!()
  *
- * It prevents the macro system from creating a second incompatible argument
- * language.
+ * Single argument:
  *
- * The canonical argument-list owner determines:
+ *   build!(value)
  *
- *     - argument ordering;
- *     - separators;
- *     - trailing comma policy;
- *     - supported argument forms.
+ * Multiple arguments:
  *
- * This file only determines that an optional canonical argument list occurs
- * between the macro invocation parentheses.
+ *   build!(value, size, configuration)
  *
- * ============================================================================
- * AST CONTRACT
- * ============================================================================
+ * Qualified invocation:
  *
- * The parser must provide sufficient structure for the frontend AST to create
- * the repository's canonical macro invocation node.
+ *   math::build!(value)
  *
- * A macro invocation must preserve, directly or indirectly:
+ * Deeply qualified invocation:
  *
- *     - source span;
- *     - invocation path;
- *     - ordered argument references;
- *     - lexical/source identity;
- *     - provenance.
+ *   package::module::submodule::build!(value)
  *
- * The AST layer, not this grammar, determines whether these are represented
- * using NodeIds, source spans, interned names, syntax nodes, or another
- * canonical repository representation.
+ * Macro invocation and ordinary function calls are structurally distinct:
  *
- * This grammar MUST NOT create a second macro AST hierarchy.
+ *   build(value)
+ *   build!(value)
+ *
+ * The exclamation mark identifies macro invocation syntax.
+ *
+ * It does not imply immediate execution.
  *
  * ============================================================================
- * SEMANTIC CONTRACT
+ * 8. AST CONTRACT
  * ============================================================================
  *
- * Syntactic validity does not imply semantic validity.
+ * The existing frontend AST remains authoritative.
+ *
+ * The parser must preserve sufficient information for the canonical macro
+ * invocation representation to retain:
+ *
+ *   - invocation identity
+ *   - source span
+ *   - source identity
+ *   - qualified macro path
+ *   - ordered arguments
+ *   - argument source locations
+ *   - invocation provenance
+ *
+ * The grammar must not introduce another AST hierarchy.
+ *
+ * In particular, this file must not require a separate:
+ *
+ *   MacroInvocationAst
+ *   MacroExpressionAst
+ *   MacroPathAst
+ *
+ * The existing canonical frontend representation must be reused.
+ *
+ * ============================================================================
+ * 9. SEMANTIC CONTRACT
+ * ============================================================================
+ *
+ * Parsing establishes structural validity only.
+ *
+ * The following are downstream responsibilities:
+ *
+ *   - determining whether a macro exists
+ *   - determining whether it is accessible
+ *   - resolving imported names
+ *   - resolving qualified names
+ *   - matching arguments to parameters
+ *   - checking generic constraints
+ *   - checking compile-time capabilities
+ *   - checking expansion permissions
+ *   - enforcing expansion resource policies
+ *   - validating generated syntax
+ *   - validating generated semantics
+ *   - checking generated resource requirements
+ *
+ * Unknown macro names may be syntactically valid.
  *
  * For example:
  *
- *     unknown!(x)
+ *   unknown_macro!(value)
  *
- * may be syntactically valid.
- *
- * It may subsequently fail because:
- *
- *     - no macro named `unknown` exists;
- *     - the macro is not visible;
- *     - argument matching fails;
- *     - generic constraints fail;
- *     - capabilities are unavailable;
- *     - effects are incompatible;
- *     - expansion is forbidden;
- *     - expansion exceeds compiler policy.
- *
- * Such failures MUST NOT be encoded as parser productions.
+ * The parser must not reject a structurally valid invocation merely because
+ * its meaning is not yet known.
  *
  * ============================================================================
- * DOMAIN-NEUTRAL CONTRACT
+ * 10. DOMAIN-NEUTRALITY
  * ============================================================================
  *
- * Macro invocation syntax is domain-neutral.
+ * Macro arguments may participate in any supported Zamani domain:
  *
- * Arguments may eventually describe or construct:
+ *   - classical computing
+ *   - quantum computing
+ *   - hybrid computing
+ *   - HDL
+ *   - hardware/software co-design
+ *   - AI and machine learning
+ *   - distributed computing
+ *   - networking
+ *   - data processing
+ *   - scientific computing
+ *   - security
+ *   - future computing domains
  *
- *     - classical computation;
- *     - quantum computation;
- *     - hybrid computation;
- *     - HDL;
- *     - hardware;
- *     - distributed computation;
- *     - AI/ML;
- *     - networking;
- *     - cryptography;
- *     - scientific computation;
- *     - future computing paradigms.
- *
- * This grammar does not determine the resulting domain.
- *
- * Semantic analysis determines the domain after macro resolution and
- * expansion.
+ * This grammar does not enumerate those domains.
  *
  * ============================================================================
- * QUANTUM CONTRACT
+ * 11. QUANTUM INTEGRATION
  * ============================================================================
  *
- * Macro invocations may construct quantum syntax, but this grammar does not
- * define quantum semantics.
+ * Macros may produce quantum source constructs.
  *
- * There are deliberately no assumptions about:
+ * This grammar MUST NOT:
  *
- *     - qubit count;
- *     - physical qubits;
- *     - logical qubits;
- *     - QPU size;
- *     - quantum topology;
- *     - gate set;
- *     - backend;
- *     - device.
+ *   - enumerate quantum gates
+ *   - allocate physical qubits
+ *   - impose a qubit maximum
+ *   - select a QPU
+ *   - select a quantum simulator
+ *   - determine native gate availability
+ *   - determine physical topology
+ *   - perform quantum routing
+ *   - perform quantum scheduling
+ *   - implement QEC
+ *   - implement ZQN
+ *   - create a second quantum IR
  *
- * Quantum syntax produced after expansion must eventually lower through the
- * canonical quantum semantic boundary:
+ * Generated quantum semantics must eventually reach:
  *
- *     quantum::ir
- *
- * This grammar MUST NOT create, modify, or duplicate quantum::ir.
- *
- * ============================================================================
- * HARDWARE CONTRACT
- * ============================================================================
- *
- * Hardware-specific implementation is outside this grammar.
- *
- * An invocation does not inherently mean:
- *
- *     use GPU X
- *     use FPGA Y
- *     use QPU Z
- *     use N cores
- *     use N devices
- *
- * If the program expresses a genuine hardware/resource requirement, that
- * requirement is handled by the canonical resource/capability/target
- * language and semantic layers.
+ *   quantum::ir
  *
  * ============================================================================
- * EXPANSION CONTRACT
+ * 12. HARDWARE INTEGRATION
  * ============================================================================
  *
- * Parsing stops at the invocation structure.
+ * Macro invocation must not implicitly select:
+ *
+ *   - a processor
+ *   - a GPU
+ *   - an FPGA
+ *   - an ASIC
+ *   - a QPU
+ *   - a device identifier
+ *   - a physical register
+ *   - a physical memory bank
+ *   - a network node
+ *   - a machine topology
+ *
+ * Portable resource requirements belong to the canonical resource and
+ * capability layers.
+ *
+ * Target realization belongs downstream.
+ *
+ * ============================================================================
+ * 13. SECURITY AND EXECUTION BOUNDARY
+ * ============================================================================
+ *
+ * Parsing a macro invocation MUST have no external side effects.
  *
  * The parser MUST NOT:
  *
- *     - execute a macro;
- *     - expand a macro;
- *     - resolve a macro;
- *     - read files;
- *     - write files;
- *     - access the network;
- *     - execute processes;
- *     - inspect hardware;
- *     - access secrets;
- *     - select a backend.
+ *   - execute macro code
+ *   - read arbitrary files
+ *   - write arbitrary files
+ *   - access the network
+ *   - spawn processes
+ *   - inspect hardware
+ *   - access secrets
+ *   - invoke external compiler plugins
+ *   - mutate compiler-global state
  *
- * Expansion is a separate compiler phase.
+ * Macro expansion must be a separate controlled compiler phase.
  *
- * ============================================================================
- * HYGIENE CONTRACT
- * ============================================================================
+ * It must be governed by:
  *
- * This grammar does not implement hygiene.
- *
- * The invocation must nevertheless preserve enough source identity/provenance
- * for the hygiene subsystem to associate generated syntax with its invocation
- * origin.
- *
- * Hygiene must be implemented after parsing and before the expanded syntax is
- * treated as ordinary semantic input.
+ *   - explicit capabilities
+ *   - security policy
+ *   - deterministic execution rules
+ *   - provenance
+ *   - hygiene
+ *   - resource budgets
+ *   - diagnostic attribution
  *
  * ============================================================================
- * SECURITY CONTRACT
+ * 14. DETERMINISM
  * ============================================================================
  *
- * Merely parsing:
+ * The same canonical token stream must produce the same structural parse.
  *
- *     macro!(...)
+ * This grammar does not implement deterministic expansion.
  *
- * must have no observable external side effects.
+ * The downstream macro engine must define deterministic:
  *
- * Security-sensitive macro capabilities, if Zamani supports them, must be
- * checked by compiler policy and capability infrastructure rather than by
- * this parser grammar.
- *
- * ============================================================================
- * ERROR CONTRACT
- * ============================================================================
- *
- * Parser diagnostics belong to this grammar.
- *
- * Semantic diagnostics do not.
- *
- * Parser errors include malformed invocation structure, for example:
- *
- *     foo!(
- *     foo!)
- *     foo!(,)
- *
- * when those structures violate the canonical argument grammar.
- *
- * Semantic errors include:
- *
- *     unknown macro;
- *     inaccessible macro;
- *     invalid argument type;
- *     invalid argument count;
- *     invalid generic arguments;
- *     unavailable compile-time capability;
- *     invalid expansion;
- *     expansion budget exceeded.
+ *   - resolution
+ *   - argument binding
+ *   - expansion ordering
+ *   - generated-source identity
+ *   - hygiene
+ *   - provenance
+ *   - diagnostics
  *
  * ============================================================================
- * COMPATIBILITY CONTRACT
+ * 15. COMPATIBILITY
  * ============================================================================
  *
- * The existing Zamani macro invocation shape is preserved:
+ * The established invocation shape is preserved:
  *
- *     macroPath BANG LPAREN argumentList? RPAREN
+ *   macroPath BANG LPAREN argumentList? RPAREN
  *
- * This avoids unnecessarily breaking existing source programs.
+ * No unnecessary syntax change is introduced.
  *
- * Future syntax changes require:
+ * Any future syntax change must include:
  *
- *     - language-version policy;
- *     - migration documentation;
- *     - positive compatibility tests;
- *     - negative compatibility tests;
- *     - parser diagnostics.
- *
- * ============================================================================
- * LEGACY INTEGRATION CONTRACT
- * ============================================================================
- *
- * The repository currently has macro invocation logic in:
- *
- *     grammar/macros/macros.g4
- *
- * and macro-related invocation logic in:
- *
- *     grammar/antlr/Meta.g4
- *
- * Those files must NOT remain competing canonical owners.
- *
- * After migration:
- *
- *     grammar/macros/invocations.g4
- *
- * is the canonical owner of:
- *
- *     macroPath
- *     macroInvocation
- *     macroExpression
- *
- * `macros.g4` becomes the macro composition layer.
- *
- * `Meta.g4` must either:
- *
- *     - import/delegate to the canonical macro grammar;
- *     - or have its duplicate macro productions removed as part of the
- *       grammar-authority migration.
- *
- * No downstream file should need to edit this file merely because those
- * migrations occur.
+ *   - language versioning
+ *   - migration rules
+ *   - compatibility tests
+ *   - negative tests
+ *   - diagnostics
  *
  * ============================================================================
- * NO CIRCULAR DEPENDENCY CONTRACT
+ * 16. INTEGRATION OWNERSHIP
  * ============================================================================
  *
- * Valid direction:
+ * macros/macros.g4:
+ *   Composition boundary.
  *
- *     lexer
- *       |
- *       v
- *     shared parser rules
- *       |
- *       v
- *     invocations.g4
- *       |
- *       v
- *     AST
- *       |
- *       v
- *     semantic analysis
- *       |
- *       v
- *     IR
- *       |
- *       v
- *     optimization / routing / scheduling / runtime
+ * macros/declarations.g4:
+ *   Declaration syntax.
  *
- * Invalid directions include:
+ * macros/invocations.g4:
+ *   Invocation syntax. This file.
  *
- *     invocation grammar -> quantum::ir
- *     invocation grammar -> runtime
- *     invocation grammar -> scheduler
- *     invocation grammar -> hardware
- *     invocation grammar -> ZQN
- *     invocation grammar -> QEC
- *     IR -> invocation grammar
+ * macros/expansion.g4:
+ *   Explicit expansion-related source syntax, if supported.
+ *
+ * macros/hygiene.g4:
+ *   Explicit hygiene-related source syntax, if supported.
+ *
+ * expressions/:
+ *   Integrates macroExpression into the canonical expression hierarchy.
+ *
+ * core/:
+ *   Owns qualifiedName and shared naming infrastructure.
+ *
+ * Canonical argument grammar:
+ *   Owns argumentList.
+ *
+ * Frontend AST:
+ *   Owns invocation representation and source provenance.
+ *
+ * Compiler macro engine:
+ *   Owns resolution and controlled expansion.
+ *
+ * Semantic analysis:
+ *   Owns validation of expanded syntax.
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * GRAMMAR DECLARATION
+ * 17. ANTLR COMPOSITION
  * ============================================================================
  *
- * The grammar name exactly matches the filename:
+ * This file is an independently maintained parser grammar component.
  *
- *     invocations.g4
+ * Its token vocabulary is supplied by ZamaniLexer.
  *
+ * Shared parser rules are supplied by the canonical parser composition.
+ *
+ * The composition/build system must resolve shared rule references without
+ * introducing duplicate production ownership.
+ *
+ * This component must not become a second root grammar.
+ *
+ * ============================================================================
+ * 18. COMPLETION CONTRACT
+ * ============================================================================
+ *
+ * This file is complete when:
+ *
+ *   [x] Invocation ownership is explicit.
+ *   [x] Canonical invocation syntax is preserved.
+ *   [x] Qualified paths are delegated.
+ *   [x] Arguments are delegated.
+ *   [x] Lexer ownership is preserved.
+ *   [x] No duplicate expression grammar is introduced.
+ *   [x] No hardware limits are introduced.
+ *   [x] No fixed macro counts are introduced.
+ *   [x] No macro execution is performed during parsing.
+ *   [x] Quantum IR ownership remains canonical.
+ *   [x] AST ownership remains canonical.
+ *   [x] Semantic ownership remains downstream.
+ *   [x] Integration contracts are specified.
+ *
+ * Repository-level completion additionally requires:
+ *
+ *   - ANTLR generation validation
+ *   - canonical token-vocabulary validation
+ *   - shared-rule resolution validation
+ *   - AST mapping tests
+ *   - macro engine integration tests
+ *   - positive invocation tests
+ *   - negative invocation tests
+ *   - boundary tests
+ *   - scalability tests
+ *   - determinism tests
+ *   - compatibility tests
+ *   - safe-Rust CI validation
+ *
+ * ============================================================================
+ * END OF ARCHITECTURAL CONTRACT
  * ============================================================================
  */
 
 parser grammar invocations;
 
-
 options {
     tokenVocab = ZamaniLexer;
 }
-
 
 /*
  * ============================================================================
@@ -642,29 +570,25 @@ options {
  * ============================================================================
  *
  * Ownership:
+ *   This rule identifies the path position of a macro invocation.
  *
- *     This rule owns the macro-invocation use of a qualified name.
- *
- * Non-ownership:
- *
- *     qualifiedName itself remains owned by the canonical names/path grammar.
+ * Delegation:
+ *   qualifiedName owns the actual name/path syntax.
  *
  * Examples:
  *
- *     compute
- *     math::compute
- *     package::math::compute
+ *   build
+ *   math::build
+ *   package::math::build
  *
- * No finite namespace depth is imposed here.
- * The canonical qualifiedName grammar determines its syntax.
+ * No namespace-depth limit is introduced.
  *
- * ============================================================================
+ * Name existence, visibility and resolution are semantic concerns.
  */
 
 macroPath
     : qualifiedName
     ;
-
 
 /*
  * ============================================================================
@@ -673,18 +597,18 @@ macroPath
  *
  * Canonical syntax:
  *
- *     macroName!()
+ *   name!()
+ *   name!(argument)
+ *   name!(argument1, argument2)
+ *   module::name!(argument)
  *
- *     macroName!(argument)
+ * The optional argument list delegates to the canonical argumentList rule.
  *
- *     macroName!(argument1, argument2)
+ * Empty invocations are valid.
  *
- *     module::macroName!(argument)
+ * A non-empty invocation must conform to argumentList.
  *
- * The optional argument list is deliberately delegated to the canonical
- * argumentList rule.
- *
- * ============================================================================
+ * This rule does not evaluate arguments or execute macros.
  */
 
 macroInvocation
@@ -695,141 +619,19 @@ macroInvocation
       RPAREN
     ;
 
-
 /*
  * ============================================================================
  * MACRO EXPRESSION
  * ============================================================================
  *
- * This is the sole expression-level integration boundary owned by the macro
- * invocation grammar.
+ * Single integration boundary with the canonical expression grammar.
  *
- * The canonical expression grammar must include:
+ * The canonical expression grammar must reference macroExpression exactly
+ * once in its expression alternatives.
  *
- *     macroExpression
- *
- * in its expression hierarchy exactly once.
- *
- * This prevents the macro system from defining a second expression grammar.
- *
- * ============================================================================
+ * This rule must not be duplicated in another macro grammar component.
  */
 
 macroExpression
     : macroInvocation
     ;
-
-
-/*
- * ============================================================================
- * INTEGRATION NOTES
- * ============================================================================
- *
- * The canonical expression grammar should conceptually provide an alternative
- * equivalent to:
- *
- *     primaryExpression
- *         : macroExpression
- *         | ...
- *         ;
- *
- * The exact expression hierarchy and precedence remain owned by the
- * expressions grammar.
- *
- * Do NOT add expression rules here.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * COMPLETION CONTRACT
- * ============================================================================
- *
- * This file is complete when:
- *
- * [ ] Grammar name is exactly `invocations`.
- *
- * [ ] Filename is exactly `invocations.g4`.
- *
- * [ ] `tokenVocab = ZamaniLexer` resolves to the canonical Zamani lexer.
- *
- * [ ] `BANG` is owned by the lexer.
- *
- * [ ] `LPAREN` is owned by the lexer.
- *
- * [ ] `RPAREN` is owned by the lexer.
- *
- * [ ] `qualifiedName` has one canonical owner outside this file.
- *
- * [ ] `argumentList` has one canonical owner outside this file.
- *
- * [ ] `macroPath` has one canonical owner in the macro grammar.
- *
- * [ ] `macroInvocation` has one canonical owner in the macro grammar.
- *
- * [ ] `macroExpression` has one canonical owner in the macro grammar.
- *
- * [ ] `macroDeclaration` is NOT defined here.
- *
- * [ ] `macroParameter` is NOT defined here.
- *
- * [ ] `macroBody` is NOT defined here.
- *
- * [ ] macro expansion is NOT performed here.
- *
- * [ ] hygiene is NOT implemented here.
- *
- * [ ] reflection is NOT implemented here.
- *
- * [ ] compile-time execution is NOT implemented here.
- *
- * [ ] no filesystem access is possible from this grammar.
- *
- * [ ] no network access is possible from this grammar.
- *
- * [ ] no process execution is possible from this grammar.
- *
- * [ ] no hardware-specific assumptions exist.
- *
- * [ ] no quantum-machine assumptions exist.
- *
- * [ ] no fixed resource limits exist.
- *
- * [ ] no fixed qubit count exists.
- *
- * [ ] no fixed CPU/GPU/FPGA count exists.
- *
- * [ ] no topology is encoded.
- *
- * [ ] macro invocation remains domain-neutral.
- *
- * [ ] the canonical expression grammar integrates macroExpression once.
- *
- * [ ] `macros.g4` no longer duplicates macroInvocation ownership.
- *
- * [ ] `Meta.g4` no longer duplicates macroInvocation ownership.
- *
- * [ ] AST construction uses the repository's canonical AST.
- *
- * [ ] source spans/provenance are preserved.
- *
- * [ ] positive tests pass.
- *
- * [ ] negative syntax tests pass.
- *
- * [ ] boundary tests pass.
- *
- * [ ] scalability tests pass.
- *
- * [ ] deterministic parsing tests pass.
- *
- * [ ] cross-domain tests pass.
- *
- * [ ] compatibility tests pass.
- *
- * [ ] the complete composed ANTLR grammar generates successfully.
- *
- * ============================================================================
- */
