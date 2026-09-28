@@ -1,470 +1,388 @@
+
 /*
  * ============================================================================
  * Zamani Programming Language
  * ============================================================================
  *
- * File:
- *     grammar/macros/hygiene.g4
+ * File: grammar/macros/hygiene.g4
  *
- * Role:
- *     Macro-hygiene parser boundary.
+ * Grammar: hygiene
  *
- * Grammar technology:
- *     ANTLR4 parser grammar
+ * Status: Canonical macro-hygiene syntax component
  *
- * Rust implementation baseline:
- *     Rust 1.97 / Rust 1.97.1
+ * Language: Zamani
+ * Grammar technology: ANTLR4 parser grammar
+ *
+ * Compiler baseline:
+ *   Rust 1.97
+ *   Rust 1.97.1
+ *   Rust 2021
  *
  * Safety:
- *     This grammar contains no embedded Rust actions, predicates, executable
- *     host-language code, filesystem access, network access, process
- *     execution, or unsafe code.
+ *   No unsafe Rust.
+ *   No embedded Rust actions.
+ *   No executable grammar predicates.
+ *   No host-language execution.
  *
  * ============================================================================
- * ARCHITECTURAL PURPOSE
+ * 1. PURPOSE
  * ============================================================================
  *
- * Macro hygiene is a compiler-semantic property that prevents macro expansion
- * from accidentally changing the binding structure of the caller's program.
+ * This file defines the parser-level boundary for macro hygiene metadata.
  *
- * Conceptually:
+ * Macro hygiene preserves the intended relationship between identifiers,
+ * declarations, references, lexical scopes, and macro expansion contexts.
  *
- *     source
- *       |
- *       v
- *     lexer
- *       |
- *       v
- *     parser
- *       |
- *       v
- *     source AST
- *       |
- *       +--> macro resolution
- *       |
- *       +--> hygiene / provenance analysis
- *       |
- *       +--> controlled macro expansion
- *       |
- *       v
- *     semantic analysis
- *       |
- *       v
- *     canonical IR
+ * This grammar preserves the source structure required by downstream
+ * hygiene analysis.
  *
- * This file owns ONLY the parser-level boundary through which an annotation
- * may be associated with macro-hygiene intent.
- *
- * It does NOT implement hygiene.
+ * It does not implement hygiene.
  *
  * ============================================================================
- * SINGLE SOURCE OF TRUTH
+ * 2. ARCHITECTURAL POSITION
  * ============================================================================
  *
- * This file deliberately REUSES the canonical `annotation` rule.
+ * Zamani source
+ *      |
+ *      v
+ * Canonical lexer
+ *      |
+ *      v
+ * Canonical parser
+ *      |
+ *      v
+ * Frontend AST
+ *      |
+ *      v
+ * Macro resolution
+ *      |
+ *      v
+ * Controlled expansion
+ *      |
+ *      v
+ * Hygiene and provenance analysis
+ *      |
+ *      v
+ * Name resolution
+ *      |
+ *      v
+ * Type/effect/resource/capability analysis
+ *      |
+ *      v
+ * Canonical semantic model
+ *      |
+ *      v
+ * Canonical IR
  *
- * The canonical annotation syntax is owned by:
+ * Quantum constructs continue through quantum::ir.
  *
- *     grammar/core/annotations.g4
- *
- * That grammar owns:
- *
- *     annotation
- *     annotationList
- *     annotationName
- *     annotationArguments
- *     annotationArgument
- *     annotationValue
- *     ...
- *
- * This file MUST NOT redefine any of those rules.
- *
- * Consequently, hygiene syntax does not create a second:
- *
- *     identifier system
- *     annotation system
- *     attribute system
- *     qualified-name system
- *     literal system
- *     argument system
- *
- * ============================================================================
- * IMPORTANT DESIGN DECISION
- * ============================================================================
- *
- * There is currently no repository-wide canonical lexer contract establishing
- * dedicated tokens such as:
- *
- *     HYGIENE
- *     CAPTURE
- *     FRESH
- *     CALL_SITE
- *     DEF_SITE
- *     RAW_IDENTIFIER
- *     UNHYGIENIC
- *
- * Therefore this grammar MUST NOT invent such tokens.
- *
- * Likewise, this file MUST NOT invent syntax such as:
- *
- *     hygiene(...)
- *     capture(...)
- *     fresh(...)
- *     @hygienic(...)
- *     @capture(...)
- *
- * as special parser keywords.
- *
- * Those spellings, if eventually standardized, must first be established by
- * the language specification and canonical annotation/lexer contracts.
- *
- * The extensible mechanism already available is:
- *
- *     annotation
- *
- * Semantic analysis can recognize a registered hygiene annotation by its
- * canonical qualified name.
- *
- * This keeps the grammar stable when new hygiene mechanisms are introduced.
+ * No second frontend-specific quantum IR is introduced.
  *
  * ============================================================================
- * OWNERSHIP
+ * 3. OWNERSHIP
  * ============================================================================
  *
  * THIS FILE OWNS:
  *
- *     - the parser-level macro hygiene annotation boundary;
- *     - one or more hygiene annotations;
- *     - optional hygiene annotation sequences;
- *     - the explicit integration point consumed by macro declarations and/or
- *       macro expansion syntax;
- *     - the fact that hygiene metadata is represented using canonical
- *       annotation syntax.
+ *   - macroHygieneAnnotation;
+ *   - macroHygieneAnnotations;
+ *   - optionalMacroHygieneAnnotations;
+ *   - macroHygienePrefix;
+ *   - optionalMacroHygienePrefix;
+ *   - macroInvocationHygiene;
+ *   - macroDeclarationHygiene;
+ *   - macroExpansionHygiene.
  *
  * THIS FILE DOES NOT OWN:
  *
- *     - lexer tokens;
- *     - `@` lexical representation;
- *     - identifiers;
- *     - qualified names;
- *     - annotation argument syntax;
- *     - annotation value syntax;
- *     - macro declarations;
- *     - macro invocation syntax;
- *     - macro expansion;
- *     - macro resolution;
- *     - scope construction;
- *     - binding resolution;
- *     - capture analysis;
- *     - fresh-name generation;
- *     - symbol-table implementation;
- *     - source-map implementation;
- *     - provenance implementation;
- *     - AST implementation;
- *     - canonical IR;
- *     - quantum IR;
- *     - classical IR;
- *     - HDL representation;
- *     - hardware discovery;
- *     - resource discovery;
- *     - scheduling;
- *     - routing;
- *     - optimization;
- *     - QEC;
- *     - ZQN;
- *     - runtime execution.
+ *   - lexer tokens;
+ *   - annotation lexical syntax;
+ *   - identifiers;
+ *   - qualified names;
+ *   - annotation arguments;
+ *   - macro declarations;
+ *   - macro invocations;
+ *   - macro expansion algorithms;
+ *   - name resolution;
+ *   - scope construction;
+ *   - symbol identity;
+ *   - capture analysis;
+ *   - fresh identifier generation;
+ *   - source-map implementation;
+ *   - provenance storage;
+ *   - AST storage;
+ *   - semantic analysis;
+ *   - canonical IR;
+ *   - quantum::ir;
+ *   - classical IR;
+ *   - HDL IR;
+ *   - hardware realization;
+ *   - resource allocation;
+ *   - routing;
+ *   - scheduling;
+ *   - QEC;
+ *   - ZQN;
+ *   - HAL;
+ *   - runtime execution.
  *
  * ============================================================================
- * COMPILER RESPONSIBILITY BOUNDARY
+ * 4. SINGLE-AUTHORITY CONTRACT
  * ============================================================================
  *
- * LEXER
- *     Recognizes the canonical annotation marker and ordinary lexical tokens.
+ * The canonical annotation grammar owns:
  *
- * PARSER
- *     Recognizes the structural annotation syntax and exposes it through the
- *     macro-hygiene boundary defined here.
+ *   annotation
+ *   annotationList
+ *   annotationName
+ *   annotationArguments
+ *   annotationArgument
+ *   annotationValue
  *
- * AST
- *     Stores the annotation structure together with source spans and
- *     provenance.
+ * This component MUST NOT redefine those rules.
  *
- * NAME RESOLUTION
- *     Resolves annotation names and macro names.
+ * The macro declaration grammar owns:
  *
- * HYGIENE ANALYSIS
- *     Determines binding identity, lexical context, definition-site context,
- *     invocation-site context, and capture behavior.
+ *   macroDeclaration
+ *   macroParameterList
+ *   macroParameter
  *
- * MACRO EXPANSION
- *     Applies hygiene transformations during controlled expansion.
+ * The macro invocation grammar owns:
  *
- * SEMANTIC ANALYSIS
- *     Determines whether a requested hygiene operation is legal.
+ *   macroPath
+ *   macroInvocation
+ *   macroExpression
  *
- * CANONICAL IR
- *     Receives already-resolved semantic constructs.
+ * The macro expansion grammar owns:
  *
- * ============================================================================
- * HYGIENE MODEL
- * ============================================================================
+ *   expansion metadata syntax
  *
- * Macro hygiene must preserve the distinction between at least:
- *
- *     1. caller-introduced identifiers;
- *     2. macro-definition identifiers;
- *     3. macro-generated identifiers;
- *     4. explicitly captured identifiers;
- *     5. referenced external bindings;
- *     6. generated declarations;
- *     7. generated references.
- *
- * The parser does not assign those identities.
- *
- * It merely preserves the source syntax from which the semantic layer can
- * construct the appropriate identity/provenance information.
+ * The macro composition grammar owns the integration of these components.
  *
  * ============================================================================
- * PROVENANCE
+ * 5. LEXER CONTRACT
  * ============================================================================
  *
- * Every hygiene annotation parsed through this file must remain traceable to:
+ * This is a parser grammar.
  *
- *     source file
- *     source span
- *     annotation span
- *     enclosing declaration/invocation
- *     macro expansion context
+ * All lexical tokens originate from the canonical Zamani lexer.
  *
- * Provenance is essential for:
+ * This component introduces no lexer tokens.
  *
- *     diagnostics
- *     debugging
- *     IDE tooling
- *     source maps
- *     deterministic builds
- *     reproducibility
- *     security auditing
- *     macro expansion diagnostics
+ * In particular, it MUST NOT introduce speculative tokens such as:
  *
- * This grammar does not construct provenance objects itself.
+ *   HYGIENE
+ *   CAPTURE
+ *   FRESH
+ *   CALL_SITE
+ *   DEF_SITE
+ *   UNHYGIENIC
+ *   RAW_IDENTIFIER
  *
- * The parser/AST integration must preserve the source locations required by
- * the frontend provenance system.
+ * These concepts are represented through canonical annotation syntax and
+ * interpreted by the semantic annotation registry.
+ *
+ * The grammar does not reserve additional identifiers.
  *
  * ============================================================================
- * POCO-REAF
+ * 6. HYGIENE MODEL
  * ============================================================================
  *
- * Hygiene syntax must remain independent of execution hardware.
+ * The semantic implementation must distinguish:
  *
- * The same source-level macro and hygiene semantics must be usable when the
- * resulting computation targets:
+ *   - identifiers originating in macro definitions;
+ *   - identifiers originating in macro arguments;
+ *   - identifiers generated during expansion;
+ *   - references to existing bindings;
+ *   - declarations introduced by expansion;
+ *   - explicitly authorized captures;
+ *   - references resolved in definition-site context;
+ *   - references resolved in invocation-site context.
  *
- *     embedded systems
- *     CPUs
- *     multicore CPUs
- *     GPUs
- *     FPGAs
- *     ASICs
- *     quantum processors
- *     quantum simulators
- *     heterogeneous accelerators
- *     clusters
- *     supercomputers
- *     distributed systems
- *     cloud environments
- *     future architectures
+ * These are semantic identities and relationships.
  *
- * Hygiene must never imply:
- *
- *     device selection
- *     CPU selection
- *     GPU selection
- *     QPU selection
- *     qubit allocation
- *     memory allocation
- *     topology selection
- *     scheduler selection
- *     backend selection
- *
- * Those decisions belong to later compiler/resource/target layers.
+ * They are not lexer tokens or hardware resources.
  *
  * ============================================================================
- * SCALABILITY
+ * 7. CANONICAL ANNOTATION INTEGRATION
  * ============================================================================
  *
- * This grammar deliberately contains no finite machine-dependent limits.
+ * A hygiene annotation is structurally an ordinary canonical annotation.
  *
- * There is no:
+ * The parser preserves the annotation.
  *
- *     MAX_MACRO_HYGIENE_ANNOTATIONS
- *     MAX_CAPTURE_COUNT
- *     MAX_IDENTIFIER_COUNT
- *     MAX_BINDINGS
- *     MAX_SCOPES
- *     MAX_EXPANSION_DEPTH
- *     MAX_QUBITS
- *     MAX_CPUS
- *     MAX_GPUS
- *     MAX_DEVICES
- *     MAX_NODES
+ * The semantic annotation registry determines whether its qualified name
+ * denotes a recognized hygiene facility.
  *
- * The grammar therefore does not impose an artificial scalability ceiling.
+ * Unknown annotations must not acquire hygiene behavior merely because
+ * they appear near a macro.
  *
- * Compiler implementations MAY impose configurable resource budgets for:
+ * Recognized annotations must be validated for:
  *
- *     source bytes
- *     tokens
- *     AST nodes
- *     macro expansion steps
- *     expansion depth
- *     generated nodes
- *     memory
- *     compilation time
- *
- * Such limits are implementation/resource policies, not language semantics.
+ *   - permitted attachment point;
+ *   - argument shape;
+ *   - semantic meaning;
+ *   - authorization;
+ *   - compatibility;
+ *   - expansion-context legality.
  *
  * ============================================================================
- * DETERMINISM
+ * 8. CAPTURE AND HYGIENE SAFETY
  * ============================================================================
  *
- * Parsing of hygiene annotations is deterministic.
+ * Explicit capture is not equivalent to unrestricted name resolution.
  *
- * Hygiene analysis and expansion must additionally be deterministic with
- * respect to:
+ * A capture request must be validated against the macro's declared policy
+ * and the semantic context in which expansion occurs.
  *
- *     source
- *     macro definitions
- *     macro arguments
- *     lexical scope
- *     semantic environment
- *     explicit compiler policy
+ * The parser does not grant access to private bindings.
  *
- * No random identifier generation may be used as an observable semantic
- * mechanism.
+ * The parser does not grant access to unavailable capabilities.
  *
- * If internally generated hygiene identities require unique IDs, those IDs
- * belong to the compiler's deterministic identity/provenance subsystem.
+ * The parser does not bypass:
  *
- * ============================================================================
- * SECURITY
- * ============================================================================
+ *   - visibility;
+ *   - ownership;
+ *   - type checking;
+ *   - effect checking;
+ *   - resource checking;
+ *   - capability checking;
+ *   - security validation.
  *
- * Hygiene metadata MUST NOT grant permission to:
- *
- *     access the filesystem
- *     access the network
- *     execute processes
- *     execute arbitrary host code
- *     mutate compiler configuration
- *     bypass capability checks
- *     bypass effect checks
- *     bypass resource checks
- *     bypass security checks
- *     select hardware
- *     select a backend
- *
- * A macro's hygiene annotation is declarative metadata.
- *
- * It is not a privilege escalation mechanism.
+ * An invalid capture request must produce a structured semantic diagnostic.
  *
  * ============================================================================
- * DOMAIN INDEPENDENCE
+ * 9. PROVENANCE CONTRACT
  * ============================================================================
  *
- * The hygiene mechanism is domain-neutral.
+ * Every accepted hygiene annotation must preserve:
  *
- * Macro expansion may eventually generate syntax for:
+ *   - source-file identity;
+ *   - source span;
+ *   - annotation span;
+ *   - enclosing macro declaration or invocation;
+ *   - expansion-context identity;
+ *   - generated-source provenance, where applicable.
  *
- *     classical computation
- *     quantum computation
- *     hybrid computation
- *     HDL
- *     hardware
- *     distributed computation
- *     AI/ML
- *     networking
- *     cryptography
- *     scientific computing
- *     future dialects
+ * The AST must retain sufficient information to connect generated syntax
+ * to its originating source.
  *
- * This grammar does not need to know which domain the generated syntax
- * belongs to.
+ * Source locations must not be discarded during expansion.
  *
- * Domain semantics are resolved after macro expansion.
+ * Provenance must remain available to:
  *
- * ============================================================================
- * QUANTUM INTEGRATION
- * ============================================================================
+ *   - diagnostics;
+ *   - debugging;
+ *   - IDE tooling;
+ *   - source maps;
+ *   - reproducible builds;
+ *   - deterministic compilation;
+ *   - security auditing.
  *
- * A macro may generate quantum syntax.
- *
- * Hygiene remains independent of quantum semantics.
- *
- * This file therefore MUST NOT define:
- *
- *     qubit hygiene
- *     quantum binding identity
- *     physical qubit identity
- *     logical qubit identity
- *     gate identity
- *     QEC behavior
- *     ZQN behavior
- *
- * Those concepts belong to the quantum semantic/compiler layers.
- *
- * After semantic lowering, quantum constructs continue toward:
- *
- *     quantum::ir
- *
- * which remains the canonical quantum semantic boundary.
+ * This grammar does not allocate provenance identifiers.
  *
  * ============================================================================
- * HARDWARE INTEGRATION
+ * 10. SCALABILITY
  * ============================================================================
  *
- * Hygiene metadata does not select:
+ * This grammar defines no artificial machine-dependent capacity.
  *
- *     hardware device
- *     physical address
- *     topology
- *     resource count
- *     processor type
- *     accelerator
- *     timing model
+ * It introduces no fixed maximum for:
  *
- * Hardware-independent source semantics must remain portable.
+ *   - hygiene annotations;
+ *   - captures;
+ *   - identifiers;
+ *   - bindings;
+ *   - lexical scopes;
+ *   - macro declarations;
+ *   - macro invocations;
+ *   - generated declarations;
+ *   - expansion depth;
+ *   - expansion output.
  *
- * ============================================================================
- * 1. SINGLE HYGIENE ANNOTATION
- * ============================================================================
+ * Compiler implementations may provide configurable resource budgets.
  *
- * `macroHygieneAnnotation` is deliberately an aliasing boundary over the
- * canonical annotation rule.
+ * Such budgets are implementation policies, not language semantics.
  *
- * It does NOT reinterpret annotation syntax.
+ * Resource exhaustion must produce a diagnostic rather than silently
+ * changing program meaning.
  *
- * Semantic analysis determines whether the annotation's qualified name
- * identifies a recognized hygiene facility.
- *
- * Conceptually:
- *
- *     @some_annotation
- *
- * becomes:
- *
- *     annotation
- *         |
- *         v
- *     macroHygieneAnnotation
- *
- * only when consumed through a macro-hygiene grammar context.
- *
- * The parser does not determine whether `some_annotation` is actually a
- * hygiene annotation.
+ * The grammar must not contain universal MAX_* hardware or compiler limits.
  *
  * ============================================================================
+ * 11. DETERMINISM
+ * ============================================================================
+ *
+ * Parsing is deterministic for a given:
+ *
+ *   - source input;
+ *   - canonical token stream;
+ *   - grammar version;
+ *   - language configuration.
+ *
+ * Hygiene analysis must produce reproducible binding relationships for
+ * equivalent compilation inputs.
+ *
+ * Fresh internal identifiers must be generated by the compiler's
+ * deterministic identity subsystem.
+ *
+ * Random identifiers must not alter observable program semantics.
+ *
+ * ============================================================================
+ * 12. SECURITY
+ * ============================================================================
+ *
+ * Hygiene metadata is declarative source information.
+ *
+ * It must never authorize:
+ *
+ *   - filesystem access;
+ *   - network access;
+ *   - process execution;
+ *   - arbitrary host-language execution;
+ *   - compiler configuration mutation;
+ *   - capability escalation;
+ *   - security-policy bypass;
+ *   - target selection;
+ *   - resource allocation.
+ *
+ * Macro expansion must remain subject to the compiler's controlled
+ * expansion and security policies.
+ *
+ * ============================================================================
+ * 13. POCO-REAF
+ * ============================================================================
+ *
+ * Hygiene is target-independent.
+ *
+ * The same macro semantics must remain valid across:
+ *
+ *   - embedded systems;
+ *   - CPUs;
+ *   - multicore processors;
+ *   - GPUs;
+ *   - FPGAs;
+ *   - ASICs;
+ *   - quantum processors;
+ *   - quantum simulators;
+ *   - heterogeneous accelerators;
+ *   - clusters;
+ *   - HPC systems;
+ *   - distributed systems;
+ *   - cloud environments;
+ *   - future architectures.
+ *
+ * Hygiene must never select physical hardware.
+ *
+ * ============================================================================
+ * 14. CANONICAL HYGIENE ANNOTATION
+ * ============================================================================
+ *
+ * This rule delegates all annotation syntax to the canonical annotation
+ * grammar.
+ *
+ * No second annotation language is created.
+ *
+ * No hygiene behavior is inferred by the parser.
  */
 
 parser grammar hygiene;
@@ -476,24 +394,15 @@ options {
 
 /*
  * ============================================================================
- * 2. SINGLE HYGIENE ANNOTATION
+ * 15. SINGLE HYGIENE ANNOTATION
  * ============================================================================
  *
- * Reuse the canonical annotation grammar.
+ * Reuses the canonical annotation rule.
  *
- * Do NOT replace this with:
+ * The semantic registry determines whether the annotation is relevant
+ * to macro hygiene.
  *
- *     AT IDENTIFIER
- *
- * because the repository's canonical annotation syntax owns:
- *
- *     annotation names
- *     qualified names
- *     arguments
- *     structured values
- *     nested values
- *
- * Reusing `annotation` prevents a second annotation language from emerging.
+ * No annotation spelling is reserved by this component.
  */
 
 macroHygieneAnnotation
@@ -503,23 +412,14 @@ macroHygieneAnnotation
 
 /*
  * ============================================================================
- * 3. HYGIENE ANNOTATION LIST
+ * 16. HYGIENE ANNOTATION SEQUENCE
  * ============================================================================
  *
- * A macro construct may carry multiple hygiene-related annotations.
+ * One or more canonical annotations.
  *
- * No finite maximum is imposed.
+ * No grammar-level count limit is imposed.
  *
- * Example semantic possibilities include future forms equivalent to:
- *
- *     @hygiene::...
- *     @capture::...
- *     @fresh::...
- *     @scope::...
- *
- * but these names are NOT reserved here.
- *
- * Their recognition belongs to the semantic annotation registry.
+ * Ordering is preserved by the parser and AST.
  */
 
 macroHygieneAnnotations
@@ -529,15 +429,13 @@ macroHygieneAnnotations
 
 /*
  * ============================================================================
- * 4. OPTIONAL HYGIENE ANNOTATIONS
+ * 17. OPTIONAL HYGIENE ANNOTATIONS
  * ============================================================================
  *
- * Consumers that permit hygiene metadata may use this rule.
+ * Used only by consumers whose syntax explicitly permits optional
+ * hygiene metadata.
  *
- * The empty case is valid.
- *
- * The consumer decides whether hygiene metadata is permitted at its specific
- * syntactic attachment point.
+ * The empty alternative is represented by the Kleene closure.
  */
 
 optionalMacroHygieneAnnotations
@@ -547,19 +445,15 @@ optionalMacroHygieneAnnotations
 
 /*
  * ============================================================================
- * 5. HYGIENE ANNOTATION PREFIX
+ * 18. REQUIRED HYGIENE PREFIX
  * ============================================================================
  *
- * This named boundary exists so downstream macro grammar components can
- * explicitly declare:
+ * Reusable boundary for a construct that requires at least one
+ * hygiene annotation.
  *
- *     "this construct accepts hygiene metadata"
+ * This rule does not establish the attachment position.
  *
- * without duplicating annotation syntax.
- *
- * It intentionally does not determine which annotations are legal.
- *
- * Semantic validation performs that determination.
+ * The consuming grammar owns that position.
  */
 
 macroHygienePrefix
@@ -569,20 +463,14 @@ macroHygienePrefix
 
 /*
  * ============================================================================
- * 6. OPTIONAL HYGIENE PREFIX
+ * 19. OPTIONAL HYGIENE PREFIX
  * ============================================================================
  *
- * This is the preferred integration rule for macro declarations and other
- * macro-owned syntax that permits optional hygiene metadata.
+ * Reusable boundary for a construct that permits zero or more
+ * hygiene annotations.
  *
- * Example structural shape:
- *
- *     [optional hygiene annotations]
- *     macro declaration
- *
- * The exact attachment position belongs to the consuming macro grammar.
- *
- * This file does not force annotations onto every macro declaration.
+ * A consumer must use this rule only where the normative syntax
+ * explicitly allows it.
  */
 
 optionalMacroHygienePrefix
@@ -592,27 +480,16 @@ optionalMacroHygienePrefix
 
 /*
  * ============================================================================
- * 7. INVOCATION-SIDE HYGIENE BOUNDARY
+ * 20. INVOCATION-SIDE HYGIENE
  * ============================================================================
  *
- * Macro invocation syntax remains owned by:
+ * Integration boundary for invocation-related hygiene metadata.
  *
- *     grammar/macros/invocations.g4
+ * The invocation grammar continues to own macroInvocation.
  *
- * This rule provides an integration boundary for an invocation grammar that
- * explicitly supports hygiene metadata.
+ * This rule does not redefine invocation syntax.
  *
- * It does NOT redefine:
- *
- *     macroInvocation
- *     macroPath
- *     argumentList
- *
- * A consuming grammar may attach this boundary to the invocation syntax once
- * the language specification defines the permitted source position.
- *
- * The attachment position must be standardized before it is accepted as a
- * new source construct.
+ * It does not introduce a new invocation spelling.
  */
 
 macroInvocationHygiene
@@ -622,15 +499,17 @@ macroInvocationHygiene
 
 /*
  * ============================================================================
- * 8. DECLARATION-SIDE HYGIENE BOUNDARY
+ * 21. DECLARATION-SIDE HYGIENE
  * ============================================================================
  *
- * Macro declarations may eventually expose declaration-level hygiene policy.
+ * Integration boundary for declaration-related hygiene metadata.
  *
- * This grammar provides the reusable syntax boundary.
+ * The declaration grammar continues to own macroDeclaration.
  *
- * The declaration grammar remains responsible for deciding where this rule
- * appears.
+ * This rule does not redefine declaration syntax.
+ *
+ * It does not imply that every macro declaration must carry
+ * hygiene annotations.
  */
 
 macroDeclarationHygiene
@@ -640,15 +519,16 @@ macroDeclarationHygiene
 
 /*
  * ============================================================================
- * 9. EXPANSION-SIDE HYGIENE BOUNDARY
+ * 22. EXPANSION-SIDE HYGIENE
  * ============================================================================
  *
- * Expansion syntax may need to preserve hygiene metadata attached to generated
- * source structures.
+ * Integration boundary for hygiene metadata preserved during expansion.
  *
- * The expansion grammar consumes this rule.
+ * The expansion grammar owns expansion metadata syntax.
  *
- * Expansion itself is NOT performed here.
+ * The expansion engine owns the transformation.
+ *
+ * This rule only preserves the canonical annotation structure.
  */
 
 macroExpansionHygiene
@@ -658,874 +538,297 @@ macroExpansionHygiene
 
 /*
  * ============================================================================
- * 10. SEMANTIC REGISTRY BOUNDARY
+ * 23. AST CONTRACT
  * ============================================================================
  *
- * This grammar intentionally accepts generic canonical annotations.
+ * The frontend AST must represent the result of these rules as canonical
+ * annotation nodes, not as a second hygiene-specific annotation hierarchy.
  *
- * The semantic annotation registry is responsible for deciding whether an
- * annotation is a recognized hygiene annotation.
+ * Required information:
  *
- * Examples of possible semantic categories include:
+ *   annotation identity;
+ *   annotation arguments;
+ *   source span;
+ *   attachment context;
+ *   original source provenance.
  *
- *     capture avoidance
- *     explicit capture
- *     definition-site binding
- *     invocation-site binding
- *     fresh generated binding
- *     transparent binding
- *     scope preservation
- *     provenance preservation
- *     hygiene diagnostics
+ * The AST must not assign binding identities during parsing.
  *
- * These are semantic categories, not grammar productions.
+ * The AST must not perform name resolution.
  *
- * Adding a new hygiene semantic operation MUST NOT require modifying this
- * grammar unless its source syntax itself changes.
+ * The AST must not execute macro expansion.
  *
  * ============================================================================
- * 11. INTENTIONAL CAPTURE
+ * 24. SEMANTIC CONTRACT
  * ============================================================================
  *
- * Intentional capture is a semantic operation.
+ * Semantic analysis must:
  *
- * This grammar does not create a special `capture` keyword.
+ *   1. Resolve annotation names.
+ *   2. Identify registered hygiene annotations.
+ *   3. Validate attachment locations.
+ *   4. Validate annotation arguments.
+ *   5. Establish expansion-context relationships.
+ *   6. Preserve definition-site and invocation-site distinctions.
+ *   7. Validate explicit captures.
+ *   8. Reject unauthorized binding access.
+ *   9. Preserve provenance.
+ *  10. Produce deterministic diagnostics.
  *
- * If the language standardizes an explicit capture annotation, it should use
- * the canonical annotation infrastructure and be registered semantically.
+ * An annotation that is not registered for hygiene has no implicit
+ * hygiene effect.
  *
- * This provides:
- *
- *     syntax stability
- *     namespace extensibility
- *     compatibility
- *     domain independence
- *
- * without turning the parser into a list of compiler implementation details.
- *
- * ============================================================================
- * 12. FRESH IDENTIFIERS
- * ============================================================================
- *
- * Fresh binding generation is NOT a lexical or parser operation.
- *
- * The parser must preserve the source structure that requires hygiene.
- *
- * The macro expansion subsystem is responsible for creating hygienic binding
- * identities.
- *
- * It must not derive semantic uniqueness merely from:
- *
- *     source spelling
- *     textual suffixes
- *     machine IDs
- *     memory addresses
- *     process IDs
- *     timestamps
- *     random values
- *
- * unless such mechanisms are explicitly hidden implementation details and do
- * not affect deterministic semantic identity.
- *
- * ============================================================================
- * 13. CALL-SITE / DEFINITION-SITE CONTEXT
- * ============================================================================
- *
- * Call-site and definition-site context are semantic provenance properties.
- *
- * This grammar does not define separate identifier tokens for them.
- *
- * The AST/provenance layer must retain enough source identity for the hygiene
- * engine to distinguish:
- *
- *     caller source
- *     macro definition source
- *     generated source
- *     nested expansion source
- *
- * ============================================================================
- * 14. NESTED MACROS
- * ============================================================================
- *
- * Hygiene must remain compositional across nested expansion.
- *
- * Example conceptual structure:
- *
- *     macro A
- *         |
- *         +--> macro B
- *                 |
- *                 +--> generated binding
- *
- * Each expansion must retain its provenance and lexical context.
- *
- * This grammar does not impose a nesting limit.
- *
- * Expansion depth limits, if required for resource protection, belong to the
- * macro expansion policy and must be configurable.
- *
- * ============================================================================
- * 15. CROSS-DOMAIN MACROS
- * ============================================================================
- *
- * Hygiene must work identically when macros generate:
- *
- *     classical syntax
- *     quantum syntax
- *     hybrid syntax
- *     HDL syntax
- *     hardware syntax
- *     distributed syntax
- *     AI syntax
- *     data syntax
- *     networking syntax
- *     security syntax
- *     future dialect syntax
- *
- * No domain-specific hygiene grammar is permitted here.
- *
- * ============================================================================
- * 16. RESOURCE AND CAPABILITY SEPARATION
- * ============================================================================
- *
- * Hygiene annotations must never silently become resource requirements.
- *
- * For example, macro hygiene must not implicitly mean:
- *
- *     requires N qubits
- *     requires N CPUs
- *     requires GPU
- *     requires FPGA
- *     requires QPU
- *     requires device X
- *
- * If an annotation also carries resource metadata, that meaning must be
- * explicitly represented by the canonical resource/capability semantic system.
- *
- * Hygiene and resource requirements remain separate semantic dimensions.
- *
- * ============================================================================
- * 17. EFFECT SEPARATION
- * ============================================================================
- *
- * Macro hygiene is not an effect.
- *
- * Hygiene metadata must not bypass:
- *
- *     IO checking
- *     capability checking
- *     security checking
- *     effect checking
- *     resource checking
- *
- * Macro expansion must produce syntax that is subsequently subjected to the
- * normal semantic analysis pipeline.
- *
- * ============================================================================
- * 18. AST CONTRACT
- * ============================================================================
- *
- * This grammar does not introduce a second macro-hygiene AST hierarchy.
- *
- * The parser should represent:
- *
- *     macroHygieneAnnotation
- *
- * using the repository's canonical annotation AST representation.
- *
- * The enclosing macro declaration/invocation/expansion node remains the owner
- * of its macro-specific structure.
- *
- * The resulting AST must preserve:
- *
- *     annotation identity
- *     annotation name
- *     annotation arguments
- *     source span
- *     enclosing construct
- *     source provenance
- *
- * The hygiene engine may then create its own semantic analysis structures.
- *
- * Those structures are NOT parser AST nodes.
- *
- * ============================================================================
- * 19. NO SECOND IDENTIFIER SYSTEM
- * ============================================================================
- *
- * This file MUST NOT introduce:
- *
- *     HYGIENE_IDENTIFIER
- *     CAPTURE_IDENTIFIER
- *     FRESH_IDENTIFIER
- *     RAW_IDENTIFIER
- *     CALL_SITE_IDENTIFIER
- *     DEF_SITE_IDENTIFIER
- *
- * unless the language specification explicitly establishes such lexical
- * categories in the canonical lexer.
- *
- * Ordinary identifiers remain ordinary identifiers.
- *
- * Hygiene identity is semantic identity.
- *
- * ============================================================================
- * 20. NO SECOND QUALIFIED-NAME SYSTEM
- * ============================================================================
- *
- * Hygiene annotation names use the canonical annotation/qualified-name
- * infrastructure.
- *
- * This file MUST NOT redefine:
- *
- *     qualifiedName
- *     path
- *     identifier
- *
- * ============================================================================
- * 21. NO SECOND ATTRIBUTE SYSTEM
- * ============================================================================
- *
- * `annotation` is the canonical source-level annotation construct.
- *
- * This file must not introduce:
- *
- *     hygieneAttribute
- *     macroAttribute
- *     captureAttribute
- *
- * as competing syntax systems.
- *
- * If the semantic layer distinguishes attributes from annotations, that
- * distinction must remain owned by the canonical core grammar/specification.
- *
- * ============================================================================
- * 22. MACRO DECLARATION INTEGRATION
- * ============================================================================
- *
- * `grammar/macros/declarations.g4` remains responsible for macro declaration
- * syntax.
- *
- * It may consume:
- *
- *     optionalMacroHygienePrefix
- *
- * if the language specification permits hygiene metadata on declarations.
- *
- * It must NOT redefine:
- *
- *     macroHygieneAnnotation
- *     annotation
- *     annotationList
- *
- * Example conceptual composition:
- *
- *     optionalMacroHygienePrefix
- *     macro declaration core
- *
- * The exact ordering must be chosen once by the macro syntax specification and
- * kept stable for compatibility.
- *
- * ============================================================================
- * 23. MACRO INVOCATION INTEGRATION
- * ============================================================================
- *
- * `grammar/macros/invocations.g4` remains responsible for:
- *
- *     macroPath
- *     macroInvocation
- *     macroExpression
- *
- * It may consume `macroInvocationHygiene` only after the invocation-side
- * placement has been explicitly standardized.
- *
- * This file does not redefine invocation syntax.
- *
- * The existing canonical invocation structure remains:
- *
- *     macroPath
- *     BANG
- *     LPAREN
- *     argumentList?
- *     RPAREN
- *
- * ============================================================================
- * 24. MACRO EXPANSION INTEGRATION
- * ============================================================================
- *
- * `grammar/macros/expansion.g4` owns source-level expansion directives, if
- * such directives are standardized.
- *
- * It may consume:
- *
- *     macroExpansionHygiene
- *
- * but must not implement the expansion algorithm in ANTLR grammar actions.
- *
- * Expansion belongs to safe Rust compiler infrastructure.
- *
- * ============================================================================
- * 25. MACROS.G4 INTEGRATION
- * ============================================================================
- *
- * `grammar/macros/macros.g4` should become the macro grammar composition
- * boundary.
- *
- * It must import/delegate to the macro subcomponents rather than redefining
- * hygiene rules.
- *
- * The final architecture should therefore be conceptually:
- *
- *     macros.g4
- *       |
- *       +--> declarations.g4
- *       |
- *       +--> invocations.g4
- *       |
- *       +--> hygiene.g4
- *       |
- *       +--> expansion.g4
- *
- * Each component owns a distinct concern.
- *
- * ============================================================================
- * 26. META.G4 RECONCILIATION
- * ============================================================================
- *
- * The repository currently has macro-related syntax in:
- *
- *     grammar/antlr/Meta.g4
- *
- * while the newer architecture also has:
- *
- *     grammar/macros/
- *
- * This creates a duplicate ownership risk.
- *
- * `Meta.g4` MUST NOT remain a competing canonical definition of macro hygiene.
- *
- * The migration strategy should be:
- *
- *     Meta.g4
- *         |
- *         +--> consume/delegate to canonical macros grammar
- *         |
- *         or
- *         |
- *         +--> remove duplicated macro productions after compatibility
- *             migration
- *
- * There must ultimately be exactly one canonical source grammar for macro
- * hygiene.
- *
- * ============================================================================
- * 27. ANNOTATION LEXER INTEGRATION
- * ============================================================================
- *
- * The canonical annotation marker is owned by the lexer annotation component.
- *
- * This parser grammar must consume the canonical annotation token indirectly
- * through:
- *
- *     annotation
- *
- * It must NOT define:
- *
- *     AT
- *     ANNOTATION_MARKER
- *     IDENTIFIER
- *
- * itself.
- *
- * This is especially important because the repository currently has an
- * integration mismatch between macro documentation using `AT` and the
- * canonical annotation grammar using `ANNOTATION_MARKER`.
- *
- * That token naming discrepancy must be resolved at the canonical lexer/parser
- * integration boundary, not duplicated or hidden inside this file.
- *
- * ============================================================================
- * 28. HARDWARE / TARGET NON-DEPENDENCY
- * ============================================================================
- *
- * This file has no dependency on:
- *
- *     hardware
- *     target
- *     backend
- *     scheduler
- *     routing
- *     optimization
- *     runtime
- *     quantum device
- *     simulator
- *
- * This non-dependency is intentional and MUST remain true.
- *
- * ============================================================================
- * 29. QUANTUM IR NON-DEPENDENCY
- * ============================================================================
- *
- * This file does not import or reference:
- *
- *     quantum::ir
- *
- * Hygiene occurs before semantic lowering.
- *
- * If a macro expands into quantum constructs, those constructs eventually
- * undergo normal semantic lowering into the canonical quantum IR.
- *
- * No macro grammar file may become a second quantum semantic boundary.
- *
- * ============================================================================
- * 30. ZQN / QEC NON-DEPENDENCY
- * ============================================================================
- *
- * This file does not own:
- *
- *     QEC
- *     ZQN
- *     fault models
- *     noise models
- *     error correction
- *     mitigation
- *
- * Macro hygiene is independent of execution faults.
- *
- * ============================================================================
- * 31. DIAGNOSTIC CONTRACT
- * ============================================================================
- *
- * Parser diagnostics are limited to syntactic failures.
- *
- * Examples of parser-level failures:
- *
- *     malformed annotation
- *     malformed annotation arguments
- *     malformed annotation value
- *
- * Examples that are NOT parser errors:
- *
- *     unknown hygiene annotation
- *     illegal capture request
- *     capture of an unavailable binding
- *     hygiene conflict
- *     invalid macro scope
- *     expansion-cycle violation
- *     expansion budget exhaustion
- *
- * Those belong to semantic/macro-expansion diagnostics.
- *
- * ============================================================================
- * 32. COMPATIBILITY CONTRACT
- * ============================================================================
- *
- * Existing valid annotation syntax must remain valid.
- *
- * Existing annotation names must not become parser-reserved merely because a
- * future annotation is used for macro hygiene.
- *
- * Introducing a new recognized hygiene annotation is therefore normally a
- * semantic-registry change rather than a grammar-breaking change.
- *
- * If a future hygiene facility requires genuinely new punctuation or lexical
- * syntax, that change must proceed through:
- *
- *     language specification
- *     lexer contract
- *     parser contract
- *     AST contract
- *     compatibility policy
- *     tests
- *
- * ============================================================================
- * 33. VERSIONING
- * ============================================================================
- *
- * Hygiene semantics must be version-aware.
- *
- * The grammar itself should remain as stable as possible by treating hygiene
- * names as canonical annotation names rather than hard-coded parser keywords.
- *
- * A compiler may therefore distinguish:
- *
- *     language version
- *     annotation schema version
- *     macro system version
- *     hygiene semantic version
- *
- * without changing this parser boundary.
- *
- * ============================================================================
- * 34. DETERMINISTIC EXPANSION CONTRACT
- * ============================================================================
- *
- * The macro engine must ensure that identical:
- *
- *     source
- *     macro definitions
- *     arguments
- *     language version
- *     semantic environment
- *     compiler policy
- *
- * produce equivalent hygiene semantics.
- *
- * The parser contributes deterministic source structure.
- *
- * It must not use:
- *
- *     timestamps
- *     randomness
- *     process identifiers
- *     memory addresses
- *     machine identifiers
- *
- * as semantic input.
- *
  * ============================================================================
- * 35. RESOURCE-BUDGET CONTRACT
+ * 25. IR CONTRACT
  * ============================================================================
- *
- * A production compiler may need protection against pathological macro input.
  *
- * Examples:
+ * Hygiene is a source-expansion and semantic-analysis concern.
  *
- *     enormous annotation lists
- *     deeply nested annotations
- *     enormous annotation values
- *     pathological macro nesting
- *     expansion cycles
+ * The parser grammar does not create a hygiene IR.
  *
- * Those limits belong to configurable compiler resource policy.
+ * Fully expanded, validated constructs proceed through the existing
+ * canonical semantic and IR pipeline.
  *
- * They MUST NOT be represented as grammar constants.
+ * Quantum constructs continue to use quantum::ir.
  *
  * ============================================================================
- * 36. TEST CONTRACT — POSITIVE
+ * 26. DIAGNOSTIC CONTRACT
  * ============================================================================
  *
- * The macro grammar integration tests must verify that canonical annotations
- * can reach the hygiene boundary without creating a second annotation syntax.
+ * Diagnostics must distinguish:
  *
- * Examples:
+ *   - malformed canonical annotation syntax;
+ *   - unknown hygiene annotation;
+ *   - unsupported attachment point;
+ *   - invalid annotation arguments;
+ *   - unauthorized capture;
+ *   - unresolved generated reference;
+ *   - invalid definition-site reference;
+ *   - invalid invocation-site reference;
+ *   - provenance loss;
+ *   - expansion-context mismatch.
  *
- *     @hygiene
- *     @hygiene::scope
- *     @custom_hygiene
- *     @future::hygiene
+ * Syntax errors belong to the parser.
  *
- * The exact names are examples only.
+ * Annotation and capture validity belong to semantic analysis.
  *
- * Tests should use the repository's canonical annotation forms.
+ * Resource exhaustion belongs to compiler resource diagnostics.
  *
  * ============================================================================
- * 37. TEST CONTRACT — STRUCTURED ANNOTATIONS
+ * 27. INTEGRATION CONTRACT
  * ============================================================================
- *
- * Verify that hygiene annotations can preserve canonical annotation structure,
- * including forms equivalent to:
- *
- *     @name()
- *     @name(value)
- *     @name(key = value)
- *     @namespace::name(value)
- *     @name([value1, value2])
- *     @name({key = value})
  *
- * These are handled by the canonical annotation grammar.
+ * Direct dependencies:
  *
- * `hygiene.g4` must not duplicate those productions.
+ *   grammar/antlr/ZamaniLexer.g4
+ *       Canonical token vocabulary.
  *
- * ============================================================================
- * 38. TEST CONTRACT — NEGATIVE
- * ============================================================================
+ *   Canonical annotation grammar
+ *       Owns annotation syntax.
  *
- * Negative tests must verify that this file does not accidentally accept
- * invented hygiene-specific syntax.
+ *   grammar/macros/declarations.g4
+ *       Owns macro declarations.
  *
- * In particular, unless separately standardized, the parser must NOT acquire
- * special syntax merely because source contains conceptual words such as:
+ *   grammar/macros/invocations.g4
+ *       Owns macro invocations.
  *
- *     capture
- *     fresh
- *     hygienic
- *     call_site
- *     def_site
+ *   grammar/macros/expansion.g4
+ *       Owns expansion metadata syntax.
  *
- * as bare special keywords.
+ *   grammar/macros/macros.g4
+ *       Owns macro component composition.
  *
- * Ordinary identifiers remain governed by the canonical language grammar.
+ *   grammar/expressions/macros.g4
+ *       Owns expression-side macro integration.
  *
- * ============================================================================
- * 39. TEST CONTRACT — CROSS-DOMAIN
- * ============================================================================
+ * Downstream consumers:
  *
- * Hygiene metadata must remain usable around syntax involving:
+ *   src/frontend/ast/
+ *       Preserves annotation nodes and source spans.
  *
- *     classical constructs
- *     quantum constructs
- *     hybrid constructs
- *     HDL constructs
- *     hardware constructs
- *     distributed constructs
- *     AI/data constructs
- *     networking constructs
- *     future dialect constructs
+ *   src/compiler/macro_engine.rs
+ *       Performs controlled expansion.
  *
- * The hygiene grammar must not require domain-specific branches.
+ *   src/toolchain/meta_programming.rs
+ *       Integrates metaprogramming policy.
  *
- * ============================================================================
- * 40. TEST CONTRACT — SCALABILITY
- * ============================================================================
+ *   Semantic analysis
+ *       Resolves hygiene annotations and binding contexts.
  *
- * Tests must verify that no grammar-level artificial limit exists for:
+ *   Provenance/source-map infrastructure
+ *       Preserves generated-source relationships.
  *
- *     number of hygiene annotations
- *     annotation nesting
- *     qualified annotation names
- *     macro declarations
- *     macro invocations
- *     nested macro structures
+ *   Canonical IR
+ *       Receives validated expanded constructs.
  *
- * Test harnesses MAY use finite values for practical execution.
+ * Integration rule:
  *
- * Such finite test values are test configuration, not language limits.
+ *   This file must be imported or composed by the authoritative parser
+ *   build in a way that makes its rules reachable.
  *
- * ============================================================================
- * 41. TEST CONTRACT — DETERMINISM
- * ============================================================================
+ *   A separate parser grammar file is not automatically visible to
+ *   another parser grammar merely because both use the same token
+ *   vocabulary.
  *
- * Parsing the same source repeatedly must produce structurally equivalent
- * parse trees.
+ *   The build must explicitly establish grammar imports or generate
+ *   the canonical parser from the repository's supported composition
+ *   mechanism.
  *
- * Hygiene analysis must additionally be tested for deterministic semantic
- * identity.
+ * No duplicate rule definitions may be introduced during composition.
  *
  * ============================================================================
- * 42. TEST CONTRACT — ROUND TRIP
+ * 28. COMPATIBILITY
  * ============================================================================
  *
- * Where the repository provides a source printer:
+ * Existing public rule names are retained.
  *
- *     source
- *       -> lexer
- *       -> parser
- *       -> AST
- *       -> printer
- *       -> parser
+ * The canonical annotation rule remains the source of annotation syntax.
  *
- * must preserve the intended annotation/hygiene structure.
+ * No new reserved keywords are introduced.
  *
- * ============================================================================
- * 43. TEST CONTRACT — PROVENANCE
- * ============================================================================
+ * No new lexer tokens are required.
  *
- * Tests must verify that hygiene annotations retain source locations through:
+ * Any future change to annotation attachment positions requires:
  *
- *     source
- *       -> lexer
- *       -> parser
- *       -> AST
- *       -> macro resolution
- *       -> expansion
+ *   - specification approval;
+ *   - AST compatibility review;
+ *   - parser integration review;
+ *   - semantic validation review;
+ *   - positive and negative tests;
+ *   - versioned compatibility treatment.
  *
- * Diagnostics for hygiene failures must be able to identify the relevant
- * source locations.
- *
  * ============================================================================
- * 44. TEST CONTRACT — MACRO EXPANSION
+ * 29. CONFORMANCE TEST CONTRACT
  * ============================================================================
- *
- * Integration tests must verify that:
- *
- *     macro definition
- *         +
- *     invocation
- *         +
- *     hygiene metadata
- *
- * produces a semantic expansion whose bindings do not accidentally capture
- * caller bindings.
- *
- * These tests belong primarily to the macro semantic/expansion test suite.
- *
- * The parser test verifies only structural preservation.
  *
- * ============================================================================
- * 45. TEST CONTRACT — INTENTIONAL CAPTURE
- * ============================================================================
+ * Positive tests:
  *
- * If the semantic annotation registry later provides an explicit intentional
- * capture facility, tests must verify:
+ *   - one canonical hygiene annotation;
+ *   - multiple canonical hygiene annotations;
+ *   - optional hygiene metadata where permitted;
+ *   - declaration-side integration;
+ *   - invocation-side integration;
+ *   - expansion-side integration;
+ *   - qualified annotation names;
+ *   - annotations with canonical arguments;
+ *   - annotations containing nested canonical values.
  *
- *     implicit capture -> rejected/prevented
+ * Negative tests:
  *
- *     explicit capture -> accepted only where policy permits
+ *   - malformed annotation;
+ *   - malformed annotation arguments;
+ *   - malformed qualified name;
+ *   - invalid attachment location;
+ *   - duplicate conflicting semantic directives;
+ *   - unauthorized capture;
+ *   - unknown annotation treated as hygiene;
+ *   - malformed macro expansion context.
  *
- *     unrelated binding -> remains unaffected
+ * Boundary tests:
  *
- * The grammar itself remains unchanged unless the source syntax changes.
+ *   - empty permitted annotation sequence;
+ *   - single annotation;
+ *   - multiple annotations;
+ *   - nested annotation values;
+ *   - deeply nested source structures;
+ *   - generated declarations and references.
  *
- * ============================================================================
- * 46. TEST CONTRACT — NESTED EXPANSION
- * ============================================================================
+ * Scalability tests:
  *
- * Test:
+ *   - large annotation sequences;
+ *   - large generated syntax trees;
+ *   - deeply nested macro invocations;
+ *   - large binding environments;
+ *   - large expansion provenance graphs.
  *
- *     macro A
- *       -> invokes macro B
- *          -> generates binding
+ * Determinism tests:
  *
- * and verify that hygiene identities remain distinct and provenance remains
- * recoverable.
+ *   - identical source produces identical parse structure;
+ *   - identical expansion inputs preserve binding identity;
+ *   - deterministic diagnostics;
+ *   - reproducible provenance relationships.
  *
- * ============================================================================
- * 47. HARD-CODING AUDIT
- * ============================================================================
+ * Portability tests:
  *
- * This file must contain no:
- *
- *     MAX_*
- *     MIN_*
- *     fixed qubit count
- *     fixed CPU count
- *     fixed GPU count
- *     fixed FPGA count
- *     fixed node count
- *     fixed memory size
- *     fixed topology
- *     fixed device ID
- *     fixed backend ID
- *     fixed hardware address
- *
- * Any finite value appearing in tests is test infrastructure only.
+ *   - hygiene metadata does not depend on target hardware;
+ *   - the same source-level binding semantics hold across target profiles.
  *
  * ============================================================================
- * 48. SAFE RUST CONTRACT
+ * 30. HARD-CODING AUDIT
  * ============================================================================
  *
- * This grammar contains no Rust implementation code.
+ * Prohibited:
  *
- * Generated Zamani compiler code must target:
+ *   MAX_MACRO_HYGIENE_ANNOTATIONS
+ *   MAX_CAPTURE_COUNT
+ *   MAX_BINDINGS
+ *   MAX_SCOPES
+ *   MAX_EXPANSION_DEPTH
+ *   MAX_GENERATED_NODES
+ *   MAX_QUBITS
+ *   MAX_CPUS
+ *   MAX_GPUS
+ *   MAX_FPGAS
+ *   MAX_NODES
+ *   MAX_MEMORY
  *
- *     Rust 1.97
- *     Rust 1.97.1
+ * These must not become universal grammar or language limits.
  *
- * and must use safe Rust.
+ * Configurable implementation resource budgets are permitted.
  *
- * No `unsafe` implementation is required by this grammar.
- *
  * ============================================================================
- * 49. COMPLETION CRITERIA
+ * 31. DEFINITION OF DONE
  * ============================================================================
- *
- * `grammar/macros/hygiene.g4` is COMPLETE only when all of the following are
- * true:
  *
- *     [ ] File name matches grammar name: hygiene.g4 / hygiene.
+ * This file is complete when:
  *
- *     [ ] It is a parser grammar.
+ *   [ ] It parses with the canonical Zamani token vocabulary.
+ *   [ ] The canonical annotation rule is available through composition.
+ *   [ ] No annotation syntax is duplicated.
+ *   [ ] No lexer tokens are invented.
+ *   [ ] Existing public hygiene rule names are preserved.
+ *   [ ] Declaration-side integration is established.
+ *   [ ] Invocation-side integration is established.
+ *   [ ] Expansion-side integration is established.
+ *   [ ] The authoritative parser reaches these rules.
+ *   [ ] AST annotation nodes preserve source spans.
+ *   [ ] Provenance requirements are implemented downstream.
+ *   [ ] Semantic hygiene analysis is separate from parsing.
+ *   [ ] Capture validation cannot bypass security checks.
+ *   [ ] No fixed resource limits are introduced.
+ *   [ ] No domain-specific syntax is introduced.
+ *   [ ] No second IR is introduced.
+ *   [ ] Positive tests pass.
+ *   [ ] Negative tests pass.
+ *   [ ] Boundary tests pass.
+ *   [ ] Scalability tests pass.
+ *   [ ] Determinism tests pass.
+ *   [ ] Compatibility tests pass.
+ *   [ ] Rust implementation uses Rust 1.97.1.
+ *   [ ] No unsafe Rust is required.
  *
- *     [ ] `tokenVocab = ZamaniLexer` resolves in the canonical build.
- *
- *     [ ] It defines no lexer rules.
- *
- *     [ ] It defines no duplicate annotation grammar.
- *
- *     [ ] It defines no duplicate identifier grammar.
- *
- *     [ ] It defines no duplicate qualified-name grammar.
- *
- *     [ ] It defines no macro declaration grammar.
- *
- *     [ ] It defines no macro invocation grammar.
- *
- *     [ ] It introduces no speculative hygiene keywords.
- *
- *     [ ] It reuses the canonical `annotation` rule.
- *
- *     [ ] It introduces no hardware assumptions.
- *
- *     [ ] It introduces no quantum-machine assumptions.
- *
- *     [ ] It introduces no resource limits.
- *
- *     [ ] It introduces no runtime behavior.
- *
- *     [ ] It introduces no macro-expansion algorithm.
- *
- *     [ ] It preserves source/provenance integration requirements.
- *
- *     [ ] It integrates with declarations.g4.
- *
- *     [ ] It integrates with invocations.g4 without redefining invocation
- *         syntax.
- *
- *     [ ] It integrates with expansion.g4.
- *
- *     [ ] It is reachable through macros.g4.
- *
- *     [ ] Duplicate macro/hygiene definitions in Meta.g4 are reconciled.
- *
- *     [ ] Canonical annotation token naming is reconciled at lexer integration.
- *
- *     [ ] Positive parser tests pass.
- *
- *     [ ] Negative parser tests pass.
- *
- *     [ ] Cross-domain tests pass.
- *
- *     [ ] Scalability tests pass.
- *
- *     [ ] Determinism tests pass.
- *
- *     [ ] Round-trip tests pass where supported.
- *
- *     [ ] Provenance tests pass.
- *
- *     [ ] Safe-Rust generation/build tests pass under Rust 1.97/1.97.1.
- *
  * ============================================================================
- * FINAL ARCHITECTURAL GUARANTEE
+ * FINAL GUARANTEE
  * ============================================================================
- *
- * This file establishes:
- *
- *     annotation syntax
- *         !=
- *     hygiene semantics
- *
- * and:
  *
- *     macro syntax
- *         !=
- *     macro expansion
+ * This grammar preserves the boundary:
  *
- * and:
+ *   annotation syntax != hygiene semantics
  *
- *     source binding
- *         !=
- *     physical resource identity
+ *   macro syntax != macro expansion
  *
- * and:
+ *   source identifier != physical resource identity
  *
- *     language semantics
- *         !=
- *     target hardware.
+ *   source-level capture != unrestricted privilege
  *
- * Therefore macro hygiene remains compatible with:
+ *   language semantics != target hardware
  *
- *     Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
+ * Zamani macro hygiene therefore remains compatible with:
  *
- * and with Zamani's larger principle:
+ *   Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
  *
- *     one program
- *         -> one semantic meaning
- *         -> many targets
- *         -> many architectures
- *         -> many scales
- *         -> many execution environments
+ * The same source-level binding meaning must be preserved across
+ * different hardware, execution environments, and scales.
  *
  * ============================================================================
  */
