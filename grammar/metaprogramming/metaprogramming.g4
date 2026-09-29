@@ -10,329 +10,240 @@
  *     Metaprogramming
  *
  * Status:
- *     Production parser-composition unit
+ *     Production integration contract
  *
- * Rust implementation target:
+ * Compiler baseline:
  *     Rust 1.97 / Rust 1.97.1
  *
  * Safety:
- *     This grammar contains no target-language actions and requires no Rust
- *     `unsafe`. All compiler implementation code consuming this grammar MUST
- *     remain safe Rust.
+ *     No embedded target-language actions.
+ *     No unsafe Rust required or permitted.
  *
  * ============================================================================
- * PURPOSE
+ * 1. PURPOSE
  * ============================================================================
  *
- * This file defines the COMMON METAPROGRAMMING COMPOSITION BOUNDARY.
+ * This grammar defines the canonical metaprogramming composition boundary.
  *
- * It does not attempt to implement the macro engine, evaluator, reflection
- * engine, specialization engine, source generator, compiler, optimizer,
- * scheduler, hardware layer, runtime, quantum IR, QEC, ZQN, or simulator.
+ * It integrates:
  *
- * The grammar is responsible only for recognizing metaprogramming constructs
- * and connecting them to the repository's canonical parser rules.
+ *     - macros;
+ *     - compile-time computation;
+ *     - reflection;
+ *     - source generation;
+ *     - specialization;
+ *     - quotation;
+ *     - unquotation.
  *
- * The semantic pipeline remains:
+ * It recognizes syntax only.
  *
- *     Zamani source
- *          |
- *          v
- *       lexer
- *          |
- *          v
- *       parser
- *          |
- *          v
- *     canonical AST
- *          |
- *          v
- *     semantic analysis
- *          |
- *          +--> macro expansion
- *          +--> compile-time evaluation
- *          +--> reflection
- *          +--> specialization
- *          +--> generation
- *          |
- *          v
- *     canonical semantic representation / IR
- *          |
- *          +--> classical IR
- *          +--> quantum::ir
- *          +--> HDL/hardware representation
- *          +--> other domain IRs
- *          |
- *          v
- *     optimization
- *          |
- *     routing / scheduling / lowering
- *          |
- *     hardware abstraction
- *          |
- *     runtime
+ * It does not execute metaprograms, expand macros, evaluate expressions,
+ * construct AST implementations, generate machine code, or create IR.
  *
  * ============================================================================
- * OWNERSHIP
+ * 2. ARCHITECTURAL AUTHORITY
  * ============================================================================
  *
- * THIS FILE OWNS:
+ * Normative architecture:
+ *     grammar/DESIGN.md
  *
- *   - the metaprogramming composition entry point;
- *   - the distinction between metaprogramming declaration and metaprogramming
- *     expression/statement contexts;
- *   - composition of macro syntax;
- *   - composition of compile-time syntax;
- *   - composition of generation syntax;
- *   - composition of reflection syntax;
- *   - composition of specialization syntax;
- *   - the shared dispatch boundary used by the canonical parser.
+ * Metaprogramming architecture:
+ *     grammar/metaprogramming/README.md
  *
- * THIS FILE DOES NOT OWN:
+ * Macro syntax:
+ *     grammar/macros/
  *
- *   - lexer tokens;
- *   - identifiers;
- *   - paths;
- *   - expressions;
- *   - statements;
- *   - declarations;
- *   - types;
- *   - patterns;
- *   - generic parameters;
- *   - ordinary functions;
- *   - macro expansion semantics;
- *   - macro hygiene;
- *   - compile-time evaluation;
- *   - reflection semantics;
- *   - specialization algorithms;
- *   - generated-code semantics;
- *   - resource discovery;
- *   - hardware discovery;
- *   - backend selection;
- *   - target selection;
- *   - classical IR;
- *   - quantum::ir;
- *   - QEC;
- *   - ZQN;
- *   - optimization;
- *   - routing;
- *   - scheduling;
- *   - runtime dispatch.
+ * Compile-time syntax:
+ *     grammar/metaprogramming/compile-time-execution.g4
+ *
+ * Reflection syntax:
+ *     grammar/metaprogramming/reflection.g4
+ *
+ * Generation syntax:
+ *     grammar/metaprogramming/generation.g4
+ *
+ * Specialization syntax:
+ *     grammar/metaprogramming/specialization.g4
+ *
+ * Quotation syntax:
+ *     grammar/metaprogramming/quotation.g4
+ *
+ * Canonical frontend:
+ *     src/lexer.rs
+ *     src/parser.rs
+ *     src/frontend/ast/
+ *
+ * Canonical quantum representation:
+ *     quantum::ir
+ *
+ * This grammar must not become another language authority.
  *
  * ============================================================================
- * CRITICAL ARCHITECTURAL RULE
+ * 3. OWNERSHIP
  * ============================================================================
  *
- * This file MUST NOT become a second complete parser.
+ * OWNS:
  *
- * Shared language constructs MUST be imported/composed from their canonical
- * owners.
+ *     - metaprogramming entry-point dispatch;
+ *     - integration categories;
+ *     - shared metaprogramming boundaries;
+ *     - feature composition;
+ *     - declaration/expression/statement dispatch;
+ *     - canonical source-structure boundaries.
  *
- * In particular, this file MUST NOT define local replacements for:
+ * DOES NOT OWN:
  *
- *     identifier
- *     qualifiedName
- *     expression
- *     statement
- *     item
- *     declaration
- *     typeExpression
- *     pattern
- *     block
- *     genericParameters
- *     parameterList
- *     argumentList
- *     attribute
- *     visibilityModifier
- *
- * The canonical parser composition layer owns those rules.
- *
- * ============================================================================
- * SIBLING FILE OWNERSHIP
- * ============================================================================
- *
- *     macros/
- *         owns macro declaration/invocation syntax.
- *
- *     compile-time-execution.g4
- *         owns explicit compile-time execution syntax.
- *
- *     generation.g4
- *         owns source-generation syntax.
- *
- *     reflection.g4
- *         owns reflection-request syntax.
- *
- *     specialization.g4
- *         owns specialization-request syntax.
- *
- * This file composes those facilities.
- *
- * If one of those sibling files requires a new production, that production
- * belongs in that sibling file rather than being copied here.
+ *     - ordinary expressions;
+ *     - ordinary statements;
+ *     - declarations;
+ *     - identifiers;
+ *     - names;
+ *     - paths;
+ *     - types;
+ *     - patterns;
+ *     - attributes;
+ *     - generic parameters;
+ *     - lexer tokens;
+ *     - keyword definitions;
+ *     - macro expansion;
+ *     - macro hygiene;
+ *     - compile-time evaluation;
+ *     - reflection implementation;
+ *     - source generation implementation;
+ *     - specialization algorithms;
+ *     - canonical AST implementation;
+ *     - semantic analysis;
+ *     - canonical IR;
+ *     - quantum::ir;
+ *     - HDL/hardware IR;
+ *     - optimization;
+ *     - scheduling;
+ *     - routing;
+ *     - QEC;
+ *     - ZQN;
+ *     - HAL;
+ *     - runtime execution.
  *
  * ============================================================================
- * POCO-REAF
+ * 4. SCALABILITY AND PORTABILITY
  * ============================================================================
  *
- * Metaprogramming must preserve:
+ * This grammar introduces no language-level resource limits.
  *
- *     Program Once
- *          |
- *          v
- *     portable source semantics
- *          |
- *          v
- *     deterministic / explicitly-authorized transformation
- *          |
- *          v
- *     canonical semantic representation
- *          |
- *          v
- *     target adaptation
+ * It must not define fixed limits for:
  *
- * Metaprogramming syntax MUST NOT require:
+ *     macros
+ *     generated declarations
+ *     generated expressions
+ *     generated statements
+ *     specializations
+ *     reflection projections
+ *     quotation nesting
+ *     type complexity
+ *     expression complexity
+ *     compile-time computations
+ *     quantum operations
+ *     hardware devices
+ *     distributed nodes
  *
- *     a fixed CPU count
- *     a fixed GPU count
- *     a fixed FPGA count
- *     a fixed QPU count
- *     a fixed qubit count
- *     a fixed memory size
- *     a fixed register count
- *     a fixed topology
- *     a fixed device ID
- *     a fixed vendor
- *     a fixed backend
- *     a fixed timing grid
- *     a fixed physical address
+ * Compiler resource admission, cancellation, memory budgets, recursion
+ * protection, and execution budgets belong to implementation policy.
  *
- * Resource requirements and capabilities are expressed through the repository's
- * resource/capability/target systems and resolved downstream.
+ * Such policies must not silently become language-level syntax restrictions.
  *
  * ============================================================================
- * SCALABILITY
+ * 5. SECURITY
  * ============================================================================
  *
- * No language-level maximum is encoded here.
+ * Parsing is never execution.
  *
- * In particular, there is no:
- *
- *     MAX_MACROS
- *     MAX_PARAMETERS
- *     MAX_GENERATED_ITEMS
- *     MAX_SPECIALIZATIONS
- *     MAX_REFLECTION_DEPTH
- *     MAX_COMPILE_TIME_OPERATIONS
- *     MAX_TYPES
- *     MAX_EXPRESSIONS
- *     MAX_QUbits
- *     MAX_DEVICES
- *
- * Compiler resource budgets, recursion protection, cancellation, timeouts,
- * memory admission, expansion budgets, and execution limits are implementation
- * policy. They MUST NOT become grammar semantics.
- *
- * ============================================================================
- * DETERMINISM
- * ============================================================================
- *
- * Parsing must be deterministic.
- *
- * Whether a metaprogram executes deterministically is a semantic/compiler
- * property.
- *
- * The grammar MUST NOT implicitly grant access to:
+ * A metaprogram must not gain implicit access to:
  *
  *     filesystem
  *     network
- *     environment
+ *     environment variables
  *     credentials
  *     subprocesses
- *     hardware
  *     devices
+ *     hardware
  *     clocks
- *     random sources
+ *     randomness
  *
- * A compiler may expose explicitly authorized capabilities through semantic
- * analysis, provenance, sandboxing, and policy.
+ * Such access requires explicit semantic authorization.
  *
- * ============================================================================
- * SECURITY
- * ============================================================================
- *
- * Parsing a metaprogramming construct MUST NEVER execute it.
- *
- * Generated source MUST pass through normal:
- *
- *     parsing
- *     validation
- *     name resolution
- *     type checking
- *     capability checking
- *     effect checking
- *     semantic validation
- *
- * before entering the canonical compiler pipeline.
- *
- * A generated quantum construct must ultimately enter the same quantum semantic
- * pipeline as handwritten quantum source. It must not create a parallel
- * quantum representation.
+ * Generated code must pass through the normal frontend and semantic pipeline.
  *
  * ============================================================================
- * AST CONTRACT
+ * 6. POCO-REAF
  * ============================================================================
  *
- * Every metaprogramming construct must preserve:
+ * Metaprogramming must preserve portable source meaning.
  *
- *     source span
- *     source ordering
- *     syntactic identity
- *     nesting
- *     explicit meta intent
- *     attributes
- *     names/paths
- *     argument structure
+ * It must not implicitly select:
  *
- * The ANTLR parse tree is not the canonical AST.
+ *     a CPU;
+ *     a GPU;
+ *     an FPGA;
+ *     a QPU;
+ *     a physical qubit;
+ *     a vendor;
+ *     a backend;
+ *     a memory bank;
+ *     a network node;
+ *     a physical address.
  *
- * The frontend owns conversion from this parser representation to the
- * repository's canonical AST.
- *
- * ============================================================================
- * IR CONTRACT
- * ============================================================================
- *
- * This grammar creates NO IR.
- *
- * In particular:
- *
- *     grammar/metaprogramming/
- *
- * MUST NOT create:
- *
- *     QuantumGate
- *     Qubit
- *     PhysicalQubit
- *     ClassicalInstruction
- *     HardwareInstruction
- *     ScheduleOperation
- *     ZQN fault
- *     QEC operation
- *
- * Generated source is reintroduced into the normal semantic pipeline.
- *
- * Quantum generated source ultimately lowers through `quantum::ir`.
+ * Resource requirements and capabilities are resolved downstream.
  *
  * ============================================================================
- * RUST SAFETY
+ * 7. AST CONTRACT
  * ============================================================================
  *
- * This grammar has no embedded Rust actions.
+ * The parser produces syntax structure.
  *
- * Rust 1.97 / 1.97.1 implementations consuming it MUST use safe Rust.
+ * The frontend maps that structure to the canonical domain-neutral AST.
  *
- * The absence of `unsafe` in this grammar is intentional.
+ * The AST mapping must preserve:
+ *
+ *     source spans;
+ *     source ordering;
+ *     nesting;
+ *     syntactic identity;
+ *     names and paths;
+ *     attributes;
+ *     argument structure;
+ *     quotation structure;
+ *     transformation origin;
+ *     generated-source provenance.
+ *
+ * ============================================================================
+ * 8. IR CONTRACT
+ * ============================================================================
+ *
+ * This grammar creates no IR.
+ *
+ * Generated quantum source follows the ordinary pipeline:
+ *
+ *     source
+ *       -> lexer
+ *       -> parser
+ *       -> canonical AST
+ *       -> semantic analysis
+ *       -> quantum::ir
+ *
+ * No parallel quantum frontend IR is permitted.
+ *
+ * ============================================================================
+ * 9. COMPOSITION CONTRACT
+ * ============================================================================
+ *
+ * This file is a parser grammar component.
+ *
+ * The final parser composition must supply every delegated rule.
+ *
+ * The component names and rule names documented below are integration
+ * requirements, not definitions of implementations.
+ *
+ * No unresolved parser-rule references may remain in the final composition.
  *
  * ============================================================================
  */
@@ -343,17 +254,14 @@ options {
     tokenVocab = ZamaniLexer;
 }
 
-
-/* ============================================================================
- * 1. TOP-LEVEL METAPROGRAMMING DISPATCH
+/*
+ * ============================================================================
+ * 10. PUBLIC ENTRY POINTS
  * ============================================================================
  *
- * The canonical parser should invoke `metaprogrammingDeclaration`,
- * `metaprogrammingExpression`, or `metaprogrammingStatement` at the
- * appropriate syntactic locations.
+ * The canonical parser may call these rules from its appropriate contexts.
  *
- * This file deliberately does not decide where those entry points are legal.
- * The canonical parser owns that integration.
+ * The canonical parser determines where metaprogramming is legal.
  */
 
 metaprogrammingDeclaration
@@ -364,12 +272,6 @@ metaprogrammingDeclaration
     | specializationDeclaration
     ;
 
-
-/*
- * Expression-level metaprogramming is intentionally a dispatcher.
- *
- * Detailed syntax remains in its owning component.
- */
 metaprogrammingExpression
     : macroExpression
     | compileTimeExpression
@@ -378,10 +280,6 @@ metaprogrammingExpression
     | specializationExpression
     ;
 
-
-/*
- * Statement-level metaprogramming is also a dispatcher.
- */
 metaprogrammingStatement
     : macroStatement
     | compileTimeStatement
@@ -390,14 +288,23 @@ metaprogrammingStatement
     | specializationStatement
     ;
 
-
-/* ============================================================================
- * 2. MACRO COMPOSITION
+/*
+ * ============================================================================
+ * 11. MACRO INTEGRATION
  * ============================================================================
  *
- * Macro syntax belongs to the macro grammar.
+ * Owner:
+ *     grammar/macros/
  *
- * This file only establishes the integration point.
+ * The macro grammar must expose the following integration rules:
+ *
+ *     macroDeclarationCore
+ *     macroInvocationCore
+ *     macroInvocationStatementCore
+ *
+ * These are delegated contracts.
+ *
+ * Macro syntax must not be independently redefined here.
  */
 
 macroDeclaration
@@ -412,26 +319,21 @@ macroStatement
     : macroInvocationStatementCore
     ;
 
-
 /*
- * These names are integration contracts for the canonical macro grammar.
- *
- * They prevent this file from copying macro syntax and thereby creating two
- * competing definitions.
- *
- * The implementation of those rules belongs to grammar/macros/.
- */
-
-
-/* ============================================================================
- * 3. COMPILE-TIME EXECUTION COMPOSITION
+ * ============================================================================
+ * 12. COMPILE-TIME EXECUTION
  * ============================================================================
  *
- * Compile-time execution syntax belongs to:
- *
+ * Owner:
  *     grammar/metaprogramming/compile-time-execution.g4
  *
- * That component must expose these semantic syntax categories.
+ * Required integration rules:
+ *
+ *     compileTimeDeclarationCore
+ *     compileTimeExpressionCore
+ *     compileTimeStatementCore
+ *
+ * Parsing must not evaluate these constructs.
  */
 
 compileTimeDeclaration
@@ -446,14 +348,21 @@ compileTimeStatement
     : compileTimeStatementCore
     ;
 
-
-/* ============================================================================
- * 4. SOURCE GENERATION COMPOSITION
+/*
+ * ============================================================================
+ * 13. SOURCE GENERATION
  * ============================================================================
  *
- * Generation syntax belongs to:
- *
+ * Owner:
  *     grammar/metaprogramming/generation.g4
+ *
+ * Required integration rules:
+ *
+ *     generationDeclarationCore
+ *     generationExpressionCore
+ *     generationStatementCore
+ *
+ * Generated code must re-enter the canonical frontend.
  */
 
 generationDeclaration
@@ -468,17 +377,21 @@ generationStatement
     : generationStatementCore
     ;
 
-
-/* ============================================================================
- * 5. REFLECTION COMPOSITION
+/*
+ * ============================================================================
+ * 14. REFLECTION
  * ============================================================================
  *
- * Reflection syntax belongs to:
- *
+ * Owner:
  *     grammar/metaprogramming/reflection.g4
  *
- * Runtime reflection and compile-time reflection remain semantically distinct.
- * The grammar only preserves their explicit source form.
+ * Required integration rules:
+ *
+ *     reflectionDeclarationCore
+ *     reflectionExpressionCore
+ *     reflectionStatementCore
+ *
+ * Reflection must not create another type system or hardware model.
  */
 
 reflectionDeclaration
@@ -493,17 +406,22 @@ reflectionStatement
     : reflectionStatementCore
     ;
 
-
-/* ============================================================================
- * 6. SPECIALIZATION COMPOSITION
+/*
+ * ============================================================================
+ * 15. SPECIALIZATION
  * ============================================================================
  *
- * Specialization syntax belongs to:
- *
+ * Owner:
  *     grammar/metaprogramming/specialization.g4
  *
- * Specialization is an optimization/compilation concern after semantic
- * validation. It must never change the source program's portable semantics.
+ * Required integration rules:
+ *
+ *     specializationDeclarationCore
+ *     specializationExpressionCore
+ *     specializationStatementCore
+ *
+ * Specialization may change implementation strategy but must preserve
+ * observable source semantics.
  */
 
 specializationDeclaration
@@ -518,58 +436,26 @@ specializationStatement
     : specializationStatementCore
     ;
 
-
-/* ============================================================================
- * 7. CANONICAL METAPROGRAMMING VALUE
+/*
+ * ============================================================================
+ * 16. QUOTATION AND UNQUOTATION
  * ============================================================================
  *
- * A metaprogram may manipulate source structure, values, types, patterns,
- * declarations, or metadata.
+ * Owner:
+ *     grammar/metaprogramming/quotation.g4
  *
- * This grammar does not invent a second type/value hierarchy.
+ * Quotation and unquotation must be integrated through the generation
+ * subsystem.
  *
- * The canonical AST/semantic layer determines the actual meta-value category.
+ * They must not establish a second quotation language.
  *
- * The following rule exists only as a composition contract for components
- * needing a shared meta-value boundary.
- */
-
-metaValue
-    : expression
-    | typeExpression
-    | pattern
-    | qualifiedName
-    ;
-
-
-/* ============================================================================
- * 8. SOURCE-STRUCTURE BOUNDARY
- * ============================================================================
+ * Required integration rules:
  *
- * Generated syntax must be represented using canonical Zamani syntax.
+ *     metaQuoteCore
+ *     metaSpliceCore
  *
- * No embedded ANTLR grammar language is accepted here.
- *
- * A language-definition facility may describe a grammar as data, but that
- * description belongs to the language-definition/dialect subsystem.
- */
-
-metaSource
-    : expression
-    | statement
-    | item
-    ;
-
-
-/* ============================================================================
- * 9. QUOTED SOURCE BOUNDARY
- * ============================================================================
- *
- * Quotation/splicing syntax is owned by the macro/generation subsystem.
- *
- * These aliases exist only as explicit integration contracts.
- *
- * They intentionally do not define another quotation language.
+ * These rules must be supplied exactly once by the quotation/generation
+ * composition.
  */
 
 metaQuote
@@ -580,24 +466,44 @@ metaSplice
     : metaSpliceCore
     ;
 
-
-/* ============================================================================
- * 10. META IDENTIFIERS
+/*
+ * ============================================================================
+ * 17. CANONICAL META-VALUE BOUNDARIES
  * ============================================================================
  *
- * Names remain ordinary Zamani names.
+ * These rules deliberately delegate ordinary language constructs.
  *
- * This is critical for:
+ * They do not redefine the canonical expression, type, pattern, or name
+ * grammar.
  *
- *     hygiene
- *     source maps
- *     diagnostics
- *     deterministic name resolution
- *     IDE tooling
- *     refactoring
+ * Required canonical rules:
  *
- * The grammar does not invent compiler-specific identifier syntax.
+ *     expression
+ *     typeExpression
+ *     pattern
+ *     qualifiedName
+ *     identifier
+ *     statement
+ *     item
+ *     block
+ *     genericParameters
+ *     parameterList
+ *     argumentList
+ *     attribute
  */
+
+metaValue
+    : expression
+    | typeExpression
+    | pattern
+    | qualifiedName
+    ;
+
+metaSource
+    : expression
+    | statement
+    | item
+    ;
 
 metaName
     : identifier
@@ -607,551 +513,117 @@ metaPath
     : qualifiedName
     ;
 
-
-/* ============================================================================
- * 11. META ATTRIBUTES
- * ============================================================================
- *
- * Attributes are owned by the canonical attribute grammar.
- *
- * Metaprogramming may consume them, but does not redefine their syntax.
- */
-
-metaAttribute
-    : attribute
-    ;
-
-
-/* ============================================================================
- * 12. META TYPE BOUNDARY
- * ============================================================================
- *
- * Types remain owned by the canonical type grammar.
- *
- * This allows metaprogramming to manipulate types without establishing a
- * second type system.
- */
-
 metaType
     : typeExpression
     ;
-
-
-/* ============================================================================
- * 13. META PATTERN BOUNDARY
- * ============================================================================
- *
- * Patterns remain owned by the canonical pattern grammar.
- */
 
 metaPattern
     : pattern
     ;
 
-
-/* ============================================================================
- * 14. META BLOCK BOUNDARY
- * ============================================================================
- *
- * Blocks remain canonical language blocks.
- *
- * There is no separate "meta block language".
- */
-
 metaBlock
     : block
     ;
-
-
-/* ============================================================================
- * 15. META EXPRESSION BOUNDARY
- * ============================================================================
- *
- * Metaprogramming may consume ordinary expressions.
- *
- * Expression precedence and expression semantics remain owned by the
- * canonical expression grammar.
- */
 
 metaExpression
     : expression
     ;
 
-
-/* ============================================================================
- * 16. META STATEMENT BOUNDARY
- * ============================================================================
- *
- * Statements remain canonical statements.
- */
-
 metaStatement
     : statement
     ;
-
-
-/* ============================================================================
- * 17. META DECLARATION BOUNDARY
- * ============================================================================
- *
- * Generated declarations must be canonical Zamani declarations/items.
- */
 
 metaDeclaration
     : item
     ;
 
-
-/* ============================================================================
- * 18. META GENERIC BOUNDARY
- * ============================================================================
- *
- * Generic syntax remains owned by the canonical type/function/declaration
- * grammar.
- */
-
 metaGenericParameters
     : genericParameters
     ;
-
-
-/* ============================================================================
- * 19. META PARAMETER BOUNDARY
- * ============================================================================
- */
 
 metaParameterList
     : parameterList
     ;
 
-
-/* ============================================================================
- * 20. META ARGUMENT BOUNDARY
- * ============================================================================
- */
-
 metaArgumentList
     : argumentList
     ;
 
-
-/* ============================================================================
- * 21. PORTABLE RESOURCE BOUNDARY
- * ============================================================================
- *
- * Metaprogramming may produce or inspect resource requirements only through
- * the canonical resource/capability syntax.
- *
- * This grammar deliberately does NOT define:
- *
- *     qubit counts
- *     CPU counts
- *     GPU counts
- *     FPGA counts
- *     memory sizes
- *     device identifiers
- *     topology
- *     addresses
- *
- * Those are owned by grammar/resources and grammar/hardware where appropriate.
- */
-
-metaResourceExpression
-    : expression
+metaAttribute
+    : attribute
     ;
 
-
-/* ============================================================================
- * 22. TARGET-INDEPENDENT META INTENT
+/*
+ * ============================================================================
+ * 18. SOURCE STRUCTURE
  * ============================================================================
  *
- * A metaprogram may produce target-independent source.
+ * Source structure is represented through canonical Zamani constructs.
  *
- * Target-specific specialization must remain an explicit downstream semantic
- * operation and must not become an implicit parser-side machine dependency.
+ * This grammar does not accept embedded ANTLR grammar definitions.
+ *
+ * Language-definition and dialect-description syntax belongs to the
+ * appropriate language-definition subsystem.
  */
 
-metaTargetIndependentSource
+metaSourceStructure
     : metaSource
     ;
 
-
-/* ============================================================================
- * 23. GENERATED-SOURCE REENTRY CONTRACT
+/*
+ * ============================================================================
+ * 19. TRANSFORMATION BOUNDARY
  * ============================================================================
  *
- * Generated source MUST re-enter the normal parser/semantic pipeline.
+ * Transformations are represented as semantic requests.
  *
- * There is intentionally no direct:
+ * The grammar does not perform transformations.
  *
- *     meta -> IR
- *
- * production.
- *
- * The required architecture is:
- *
- *     meta syntax
- *         |
- *         v
- *     canonical AST
- *         |
- *         v
- *     semantic validation
- *         |
- *         v
- *     generated canonical AST
- *         |
- *         v
- *     semantic IR
- *
- * This preserves the same semantic guarantees for generated and handwritten
- * source.
+ * The compiler must validate every transformed or generated construct.
  */
 
-generatedSource
-    : metaSource
+metaprogrammingTransformation
+    : metaprogrammingExpression
     ;
 
-
-/* ============================================================================
- * 24. CROSS-DOMAIN CONTRACT
+/*
+ * ============================================================================
+ * 20. PORTABILITY CONTRACT
  * ============================================================================
  *
- * Generated source may describe any domain supported by Zamani:
+ * A metaprogramming transformation must preserve:
  *
- *     classical
- *     quantum
- *     hybrid
- *     HDL
- *     hardware
- *     distributed
- *     AI
- *     data
- *     networking
- *     security
- *     future dialects
+ *     source meaning;
+ *     type safety;
+ *     effect correctness;
+ *     capability correctness;
+ *     resource requirements;
+ *     provenance;
+ *     deterministic behavior where required.
  *
- * This grammar does not introduce domain-specific duplicates.
+ * Target-specific specialization must remain an implementation decision
+ * downstream of semantic validation.
  *
- * For example, generated quantum source must use the normal quantum grammar
- * and ultimately lower through quantum::ir.
- */
-
-crossDomainGeneratedSource
-    : generatedSource
-    ;
-
-
-/* ============================================================================
- * 25. QUANTUM INTEGRATION CONTRACT
+ * ============================================================================
+ * 21. INTEGRATION ACCEPTANCE
  * ============================================================================
  *
- * This file deliberately contains no:
+ * The final ANTLR composition must verify:
  *
- *     qubit
- *     physical qubit
- *     logical qubit
- *     quantum gate
- *     circuit
- *     QEC
- *     ZQN
- *
- * productions.
- *
- * A metaprogram may generate quantum source, but the generated source must
- * enter the ordinary quantum frontend.
- *
- * Consequently:
- *
- *     metaprogramming
- *          |
- *          v
- *     generated Zamani quantum syntax
- *          |
- *          v
- *     quantum frontend
- *          |
- *          v
- *     quantum::ir
- *
- * No alternate quantum representation is permitted.
- */
-
-
-/* ============================================================================
- * 26. HARDWARE / HDL INTEGRATION CONTRACT
- * ============================================================================
- *
- * A metaprogram may generate HDL or hardware-oriented Zamani source.
- *
- * This grammar does not define:
- *
- *     ports
- *     wires
- *     clocks
- *     physical resources
- *     topology
- *     device IDs
- *
- * Those remain owned by their respective grammar components.
- */
-
-
-/* ============================================================================
- * 27. DISTRIBUTED INTEGRATION CONTRACT
- * ============================================================================
- *
- * A metaprogram may generate distributed source.
- *
- * Node count, deployment topology, placement, network resources, and runtime
- * capacity are never encoded as grammar-level finite limits here.
- */
-
-
-/* ============================================================================
- * 28. AI / DATA INTEGRATION CONTRACT
- * ============================================================================
- *
- * Generated AI/data source uses canonical:
- *
- *     types
- *     expressions
- *     functions
- *     tensors
- *     data
- *     resource
- *     accelerator
- *
- * grammars.
- *
- * No fixed tensor/resource/device maximum belongs here.
- */
-
-
-/* ============================================================================
- * 29. DIALECT INTEGRATION CONTRACT
- * ============================================================================
- *
- * Dialects extend Zamani through the dialect subsystem.
- *
- * Metaprogramming MUST NOT silently create a dialect merely by generating
- * source text.
- *
- * Dialect registration, versioning, capability declarations, compatibility,
- * and vendor/experimental policy remain owned by grammar/dialects.
- */
-
-
-/* ============================================================================
- * 30. SECURITY INTEGRATION CONTRACT
- * ============================================================================
- *
- * Meta operations that require effects are validated against the canonical
- * effect/capability/security model.
- *
- * Syntax alone MUST NOT imply permission.
- *
- * In particular:
- *
- *     quote
- *     generation
- *     reflection
- *     specialization
- *     compile-time execution
- *
- * do not imply filesystem/network/process/device privileges.
- */
-
-
-/* ============================================================================
- * 31. RESOURCE INTEGRATION CONTRACT
- * ============================================================================
- *
- * The following distinction is mandatory:
- *
- *     semantic requirement
- *     capability requirement
- *     hard constraint
- *     soft preference
- *     implementation hint
- *
- * Metaprogramming MUST preserve those distinctions.
- *
- * A generated resource request must remain portable unless the program
- * explicitly declares a semantically meaningful target constraint.
- */
-
-
-/* ============================================================================
- * 32. COMPILER INTEGRATION CONTRACT
- * ============================================================================
- *
- * Compiler responsibilities after parsing:
- *
- *     1. Build canonical AST.
- *     2. Resolve names.
- *     3. Resolve macro/meta constructs.
- *     4. Validate permissions/effects.
- *     5. Evaluate authorized compile-time computation.
- *     6. Expand/generate source structures.
- *     7. Revalidate generated structures.
- *     8. Type-check generated structures.
- *     9. Lower to canonical semantic IR.
- *    10. Continue through normal optimization/lowering.
- *
- * No compiler phase may assume that parser acceptance means semantic validity.
- */
-
-
-/* ============================================================================
- * 33. RUNTIME INTEGRATION CONTRACT
- * ============================================================================
- *
- * Runtime does not depend directly on this grammar.
- *
- * Runtime receives compiled semantic artifacts.
- *
- * This is essential to POCO-REAF:
- *
- *     source syntax
- *         !=
- *     runtime hardware configuration
- *
- * The grammar therefore has no runtime hardware dependency.
- */
-
-
-/* ============================================================================
- * 34. TOOLING CONTRACT
- * ============================================================================
- *
- * IDEs, formatters, language servers, diagnostics, source maps, and
- * documentation generators must be able to distinguish metaprogramming
- * constructs by parse-tree context.
- *
- * They must not need to execute metaprograms merely to parse or format them.
- *
- * Source locations must survive:
- *
- *     macro invocation
- *     expansion
- *     generation
- *     specialization
- *     reflection
- *
- * through compiler-generated provenance metadata.
- */
-
-
-/* ============================================================================
- * 35. ERROR-DIAGNOSTIC CONTRACT
- * ============================================================================
- *
- * Syntax errors are owned by the parser/lexer.
- *
- * The semantic compiler owns:
- *
- *     unknown macro
- *     invalid macro context
- *     forbidden compile-time effect
- *     unauthorized reflection
- *     invalid specialization
- *     generated-code type failure
- *     generated-code capability failure
- *     expansion-cycle failure
- *     resource-policy violation
- *
- * The grammar MUST NOT encode these semantic errors as parser hacks.
- */
-
-
-/* ============================================================================
- * 36. SCALABILITY CONTRACT
- * ============================================================================
- *
- * This grammar intentionally contains no finite:
- *
- *     arity limits
- *     nesting limits
- *     generated-item limits
- *     specialization limits
- *     reflection limits
- *     macro-count limits
- *     domain-count limits
- *     resource-count limits
- *
- * The parser implementation may of course be constrained by available memory,
- * input size, stack strategy, cancellation, and compiler policy.
- *
- * Such operational limits are not language semantics.
- */
-
-
-/* ============================================================================
- * 37. DETERMINISM CONTRACT
- * ============================================================================
- *
- * Given identical source bytes, lexer configuration, grammar version, and
- * parser configuration, parsing must produce the same syntactic structure.
- *
- * Any nondeterminism introduced by:
- *
- *     macro evaluation
- *     reflection
- *     external resources
- *     compilation environment
- *
- * must be handled after parsing by explicit semantic/effect/provenance policy.
- */
-
-
-/* ============================================================================
- * 38. VERSIONING CONTRACT
- * ============================================================================
- *
- * This grammar must evolve through the language-version and compatibility
- * mechanisms rather than silently changing the meaning of an existing
- * production.
- *
- * New metaprogramming facilities should normally be introduced by:
- *
- *     sibling grammar component
- *         ->
- *     explicit composition rule
- *         ->
- *     semantic implementation
- *         ->
- *     compatibility tests
- *
- * rather than by adding unrelated behavior here.
- */
-
-
-/* ============================================================================
- * 39. COMPLETION CONTRACT
- * ============================================================================
- *
- * This file is complete only when:
- *
- *   [ ] It contains no duplicate canonical language rules.
- *   [ ] It contains no machine-size constants.
- *   [ ] It contains no hardware assumptions.
- *   [ ] It contains no quantum-machine assumptions.
- *   [ ] It contains no Rust actions.
- *   [ ] It contains no unsafe implementation requirement.
- *   [ ] It contains no compile-time execution implementation.
- *   [ ] It contains no macro-expansion implementation.
- *   [ ] It contains no reflection implementation.
- *   [ ] It contains no specialization algorithm.
- *   [ ] It composes all metaprogramming sibling grammars.
- *   [ ] All referenced shared rules have exactly one canonical owner.
- *   [ ] Generated source re-enters the normal semantic pipeline.
- *   [ ] Quantum output ultimately uses quantum::ir.
- *   [ ] Resource constraints remain separate from syntax.
- *   [ ] Parser behavior remains deterministic.
- *   [ ] Negative tests exist for invalid composition.
- *   [ ] Cross-domain tests exist.
- *   [ ] POCO-REAF scalability tests exist.
+ *     [ ] All delegated rules resolve.
+ *     [ ] Every delegated rule has one authoritative owner.
+ *     [ ] No duplicate parser rule names exist.
+ *     [ ] No duplicate lexer vocabulary exists.
+ *     [ ] The canonical parser imports or composes this component correctly.
+ *     [ ] Canonical expression/type/name rules are reused.
+ *     [ ] Macro syntax is not duplicated.
+ *     [ ] Quotation syntax is not duplicated.
+ *     [ ] Generated code re-enters the canonical frontend.
+ *     [ ] AST source spans and provenance are preserved.
+ *     [ ] No target-language actions execute during parsing.
+ *     [ ] No hardware limits are encoded.
+ *     [ ] No second quantum IR is introduced.
+ *     [ ] Rust implementation uses safe Rust.
  *
  * ============================================================================
  */
