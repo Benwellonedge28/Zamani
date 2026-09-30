@@ -1,1718 +1,623 @@
 Zamani Compatibility Matrix
 
 Path: "grammar/compatibility/compatibility-matrix.md"
-Status: Normative compatibility contract
-Scope: Zamani language grammar, parser/frontend, AST, semantic model, IR, compiler, runtime, hardware/resource abstraction, quantum stack, HDL, interoperability, tooling, tests, and future language evolution
-Rust implementation baseline: Rust 1.97.1
-Safety requirement: "unsafe" Rust is prohibited
-Primary design objective: Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever (POCO-REAF)
+Status: Normative
+Scope: Repository-wide language, grammar, frontend, semantic, IR, compiler, runtime, resource, hardware, quantum, classical, HDL, hybrid, distributed, AI, networking, security, interoperability, dialect, tooling, and compatibility integration
+Language: Zamani
+Grammar technology: ANTLR4
+Rust edition: 2021
+Rust implementation baseline: Rust 1.97 / Rust 1.97.1
+Rust safety policy: Zamani implementation code MUST NOT use Rust "unsafe"
+Primary portability objective: "Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever" (POCO-REAF)
 
 ---
 
 1. Purpose
 
-This document defines the compatibility contract for the Zamani language grammar and its integration with the rest of the Zamani repository.
+This file defines the repository-wide compatibility matrix for Zamani.
 
-It answers:
+It establishes how independently maintained language layers remain compatible without creating competing authorities.
 
-- Which syntax is stable?
-- Which syntax is experimental?
-- Which syntax is deprecated?
-- Which changes are breaking?
-- Which representations are authoritative?
-- How do grammar changes propagate to the parser, AST, semantic model, IR, compiler, runtime, tooling, and documentation?
-- How are quantum, classical, HDL, distributed, accelerator, AI, networking, security, and future constructs kept compatible?
-- How does Zamani preserve POCO-REAF while hardware and execution environments evolve?
-- How are scalability guarantees protected against accidental hard-coded limits?
+This file answers:
 
-This file is a compatibility policy, not a second grammar.
+- What does compatibility mean for Zamani?
+- Which repository artifact owns each compatibility decision?
+- Which changes are source-breaking?
+- Which changes are AST-breaking?
+- Which changes are semantic-breaking?
+- Which changes are IR-breaking?
+- Which changes are target-specific?
+- How are language versions separated from compiler versions?
+- How are dialects versioned?
+- How are deprecated constructs migrated?
+- How are future extensions handled?
+- How are quantum, classical, HDL, hybrid, distributed, AI, networking, security, and future computing features integrated?
+- How is "quantum::ir" protected as the canonical quantum semantic boundary?
+- How are QEC and ZQN kept downstream of the grammar?
+- How is POCO-REAF preserved?
+- How is scalability protected from artificial hardware limits?
+- How are Rust 1.97 / 1.97.1 and safe-Rust requirements enforced?
+- How does a grammar change propagate through the complete repository?
 
-It must never become a second source of syntax truth.
+This file is a compatibility authority only.
 
----
+It is not:
 
-2. Normative Authority
-
-Zamani compatibility has several distinct layers of authority.
-
-They MUST NOT be confused.
-
-Layer| Authority| Responsibility
-Lexical syntax| authoritative grammar source| Tokens and lexical boundaries
-Surface grammar| authoritative ANTLR grammar| Accepted Zamani syntax
-Parser implementation| conformance implementation| Converts syntax into AST
-AST| structural representation| Represents source structure without target semantics
-Semantic model| semantic authority| Meaning, typing, effects, capabilities, requirements
-"quantum::ir"| canonical quantum semantic boundary| Quantum semantic representation
-Domain IR| domain-specific semantic representation| Classical/HDL/other domain lowering
-Compiler| transformation authority| Lowering, optimization, target realization
-Runtime| execution authority| Runtime resource discovery and execution
-Hardware/resource model| physical capability authority| Actual available machine resources
-This document| compatibility authority| Versioning and evolution policy
-
-2.1 Critical rule
-
-No compatibility document, example, generated parser, README, or implementation convenience may silently become a competing syntax authority.
-
-If two artifacts disagree, the disagreement MUST be resolved explicitly.
+- a second grammar;
+- a second lexer;
+- a second AST;
+- a second semantic model;
+- a second quantum IR;
+- a runtime specification;
+- a hardware specification;
+- a QEC implementation specification;
+- a ZQN implementation specification.
 
 ---
 
-3. Current Repository Compatibility Baseline
+2. Authority Model
 
-The current repository contains multiple grammar representations with different historical purposes.
+Zamani has multiple authoritative artifacts, but each artifact owns a different concern.
 
-In particular:
+They MUST NOT be treated as interchangeable.
 
-- "grammar/Zamani.g4"
-- "grammar/Zamani-Grammar.md"
-- "grammar/grammar.md"
-- Rust lexer/parser/AST implementation
-- domain-specific grammar files
-- grammar tests and examples
+2.1 Authority hierarchy
 
-The parser-derived "grammar.md" describes the syntax accepted by the current Rust implementation, while "Zamani.g4" contains a substantially broader language specification.
+The production relationship is:
 
-Therefore the repository MUST NOT treat all existing representations as equally authoritative.
+grammar/DESIGN.md
+        │
+        ▼
+grammar/specification/
+        │
+        ├── language specification
+        ├── grammar authority
+        ├── language version
+        └── semantic contracts
+        │
+        ▼
+grammar/spec/
+        │
+        ├── formal contracts
+        ├── type system
+        ├── effects
+        ├── resources
+        ├── diagnostics
+        ├── domains
+        └── compatibility contracts
+        │
+        ▼
+grammar/Zamani.g4
+        │
+        ▼
+canonical lexical/parser implementation
+        │
+        ▼
+frontend AST
+        │
+        ▼
+semantic analysis
+        │
+        ▼
+canonical semantic representation
+        │
+        ├───────────────┬────────────────┐
+        ▼               ▼                ▼
+   classical        quantum::ir        HDL/
+   semantics         canonical       hardware semantics
+        │               │                │
+        └───────────────┼────────────────┘
+                        ▼
+                 optimization/lowering
+                        │
+          ┌─────────────┼──────────────┐
+          ▼             ▼              ▼
+       routing       scheduling      resilience
+                                         │
+                              ┌──────────┼──────────┐
+                              ▼          ▼          ▼
+                             QEC        ZQN        other
+                              │          │
+                              └────┬─────┘
+                                   ▼
+                                  HAL
+                                   │
+                                   ▼
+                              target/runtime
 
-The production architecture establishes:
+2.2 Ownership matrix
 
-Normative Zamani language specification
-             │
-             ▼
-      Authoritative grammar
-             │
-             ▼
-       Lexer / Parser
-             │
-             ▼
-            AST
-             │
-             ▼
-   Structural validation
-             │
-             ▼
-      Semantic model
-             │
-       ┌─────┴─────┐
-       ▼           ▼
-  Classical/     quantum::ir
-  domain IR      canonical
-       │           │
-       └─────┬─────┘
-             ▼
-       Optimization
-             │
-       Routing/Scheduling
-             │
-       Target realization
-             │
-             ▼
-          Runtime
-             │
-             ▼
-      Available resources
-
-The grammar MUST NOT depend on the runtime to determine whether syntax is valid.
-
-The runtime MUST NOT be required to understand source-level grammar rules.
-
----
-
-4. Compatibility Principles
-
-Zamani compatibility is governed by the following principles.
-
-4.1 Semantic compatibility over textual compatibility
-
-A source-compatible change is not automatically semantically compatible.
-
-Compatibility MUST consider:
-
-1. lexical meaning;
-2. syntactic meaning;
-3. AST structure;
-4. type meaning;
-5. effect meaning;
-6. capability meaning;
-7. resource requirements;
-8. IR meaning;
-9. compiler meaning;
-10. runtime meaning.
-
----
-
-4.2 Additive evolution by default
-
-New language capabilities SHOULD be introduced additively.
-
-Examples:
-
-new keyword
-new optional clause
-new attribute
-new capability
-new resource constraint
-new dialect
-new target
-
-must not unnecessarily invalidate existing programs.
-
-However, additive syntax is not allowed if it creates:
-
-- ambiguity;
-- incompatible parsing;
-- semantic reinterpretation;
-- hidden target dependence;
-- impossible AST ownership;
-- incompatible IR lowering.
+Artifact| Owns| Does not own
+"grammar/DESIGN.md"| Architecture and boundaries| Individual feature syntax
+"grammar/specification/"| Normative language specification| Implementation internals
+"grammar/spec/"| Formal contracts| Release migration execution
+"grammar/Zamani.g4"| Canonical ANTLR composition| Runtime behavior
+"grammar/lexer/"| Lexical contracts| Semantic interpretation
+"grammar/grammar.md"| Implementation/conformance reference| Normative language authority
+"grammar/Zamani-Grammar.md"| Historical/extended/proposed design material| Automatic stable syntax
+"grammar/compatibility/versions.md"| Version policy| Cross-layer matrix details
+"grammar/compatibility/migrations.md"| Migration procedures| Grammar ownership
+"grammar/compatibility/deprecated.md"| Deprecation lifecycle| Migration implementation
+"grammar/compatibility/reserved.md"| Reserved identifiers/syntax| General version policy
+"grammar/compatibility/compatibility-matrix.md"| Cross-layer compatibility relationships| Grammar rules
+"grammar/validation/"| Validation rules| Language semantics
+"src/lexer.rs"| Lexer implementation| Language specification
+"src/parser.rs"| Parser implementation| Language specification
+"src/frontend/ast/"| Frontend structural representation| Target realization
+semantic analysis| Meaning/type/effect/resource validation| Surface grammar
+"src/quantum/ir/"| Canonical quantum semantic IR| Surface syntax
+QEC subsystem| Error-correction policy/implementation| Surface grammar
+ZQN subsystem| Fault/noise semantics| Surface grammar
+routing| Physical/logical mapping| Source grammar
+scheduling| Execution/implementation scheduling| Source grammar
+HAL| Target/device realization| Language semantics
+runtime| Execution| Source syntax
 
 ---
 
-4.3 No silent reinterpretation
+3. Fundamental Compatibility Invariant
 
-A previously valid program MUST NOT silently acquire a different meaning merely because the compiler version changed.
+The primary invariant is:
 
-If semantics must change:
+«A compatible implementation MUST NOT silently change the specified meaning of valid Zamani source code.»
 
-- introduce a language-version boundary;
-- provide diagnostics;
-- provide migration guidance;
-- preserve an old compatibility mode when feasible;
-- explicitly document the migration.
+A change MAY be breaking when explicitly classified and versioned.
 
----
+A breaking change MUST:
 
-4.4 No machine-size compatibility promises
+1. be identified;
+2. be classified;
+3. have an owning specification;
+4. have a version boundary;
+5. have diagnostics;
+6. have tests;
+7. have migration guidance where practical;
+8. be reflected in the compatibility matrix.
 
-Zamani source compatibility MUST NOT depend on fixed machine capacities.
-
-The language MUST NOT define compatibility in terms of:
-
-MAX_QUBITS
-MAX_CPUS
-MAX_CORES
-MAX_THREADS
-MAX_GPUS
-MAX_FPGAS
-MAX_MEMORY
-MAX_NODES
-MAX_DEVICES
-MAX_TENSOR_RANK
-MAX_CLUSTER_SIZE
-
-unless such a value is an intrinsic representation boundary rather than a machine-capacity assumption.
+No implementation convenience may silently override the language contract.
 
 ---
 
-5. POCO-REAF Compatibility Contract
+4. Compatibility Dimensions
 
-POCO-REAF is a semantic portability requirement.
+Compatibility is multidimensional.
 
-The source program describes:
+A feature MUST NOT be described simply as "compatible" without identifying which dimension is meant.
 
-- computation;
-- data;
-- control flow;
-- effects;
-- capabilities;
-- requirements;
-- constraints;
-- preferences;
-- correctness;
-- resource-independent intent.
+Dimension| Question
+Lexical| Does the same source tokenize the same way?
+Syntactic| Does the source parse under the same rules?
+AST| Does the source produce an equivalent frontend structure?
+Name| Do identifiers/modules resolve equivalently?
+Type| Do types retain equivalent meaning?
+Effect| Do effects retain equivalent meaning?
+Resource| Do resource requirements retain equivalent meaning?
+Capability| Do capability requirements retain equivalent meaning?
+Semantic| Does execution meaning remain equivalent?
+Determinism| Does deterministic source produce equivalent deterministic results?
+IR| Does the canonical representation preserve the same semantics?
+Artifact| Can produced artifacts be consumed under the declared contract?
+ABI| Are foreign/binary boundaries compatible where explicitly promised?
+Runtime| Can the runtime execute the artifact without semantic change?
+Target| Can the target satisfy the program requirements?
+Tooling| Do supported tools understand the same language contract?
+Documentation| Does documentation accurately describe the supported language?
+Dialect| Does an extension retain its declared versioned meaning?
 
-It MUST NOT unnecessarily describe:
+A feature can therefore be:
 
-- a particular processor;
-- a particular quantum device;
-- a particular GPU;
-- a particular number of nodes;
-- a particular physical topology;
-- a fixed memory size;
-- a fixed accelerator count.
+source-compatible
+but
+IR-incompatible
 
-The architecture is:
+or:
 
-One source program
-       │
-       ▼
-One stable semantic meaning
-       │
-       ▼
-Architecture-independent representation
-       │
-       ├── CPU
-       ├── GPU
-       ├── FPGA
-       ├── ASIC
-       ├── quantum processor
-       ├── simulator
-       ├── cluster
-       ├── cloud
-       ├── embedded system
-       └── future architecture
+source-compatible
+but
+target-infeasible
 
-Target-specific decisions belong downstream.
+or:
+
+syntax-compatible
+but
+semantic-incompatible
+
+These cases MUST NOT be conflated.
+
+---
+
+5. Compatibility Status Versus Feature Lifecycle
+
+Compatibility status and feature lifecycle are different concepts.
+
+A feature MAY be:
+
+- experimental and source-compatible;
+- experimental and breaking;
+- stable and source-compatible;
+- deprecated but still source-compatible;
+- removed and intentionally incompatible.
+
+The feature lifecycle remains owned by the existing compatibility/deprecation policy:
+
+PROPOSED
+    ↓
+DESIGNED
+    ↓
+EXPERIMENTAL
+    ↓
+IMPLEMENTED
+    ↓
+STABLE
+    ↓
+DEPRECATED
+    ↓
+REMOVED
+
+This matrix records the compatibility consequences of those states.
+
+It does not replace "deprecated.md".
 
 ---
 
 6. Compatibility Levels
 
-Every Zamani construct MUST have one compatibility level.
+The repository MAY classify a construct using the following implementation-independent levels:
 
-Level 0 — Internal
+Level| Meaning
+Internal| Not part of the public language contract
+Experimental| Public but unstable
+Provisional| Defined enough for controlled use but not permanently stable
+Stable| Public stable contract
+Long-term stable| Foundational contract intended for long-term preservation
 
-Implementation-only.
-
-Not part of the public language contract.
-
-May change without source compatibility guarantees.
-
-Examples:
-
-- internal parser node;
-- temporary lowering representation;
-- parser optimization;
-- private compiler metadata.
+A construct's lifecycle state MUST NOT be inferred merely from its existence in "Zamani.g4".
 
 ---
 
-Level 1 — Experimental
+7. Canonical Repository Compatibility Matrix
 
-Publicly available but not stable.
-
-Experimental constructs MUST be explicitly marked.
-
-They MUST NOT silently become permanent semantics.
-
-Experimental constructs SHOULD use:
-
-- experimental namespace;
-- explicit feature/dialect marker;
-- documented version;
-- compatibility diagnostics.
-
----
-
-Level 2 — Provisional
-
-Semantics are substantially defined but may receive controlled breaking changes before stabilization.
-
-Provisional features MUST have:
-
-- specification;
-- tests;
-- migration notes;
-- ownership;
-- compatibility status.
+Layer| Primary owner| Backward compatibility| Forward compatibility| Breaking-change trigger
+Language specification| "grammar/specification/"| Required for stable features| Explicitly versioned| Meaning changes
+Lexical rules| "grammar/lexer/"| Required for stable tokens| Unknown future syntax rejected unless extension is defined| Token meaning changes
+Root grammar| "grammar/Zamani.g4"| Required for stable syntax| Version/feature-gated| Parse meaning changes
+Domain grammar| Domain directory| Required for stable constructs| Explicit extension mechanism| Domain syntax changes
+AST| "src/frontend/ast/"| Required for promised schema| Versioned extension| Structural meaning changes
+Type system| "grammar/spec/type-system.md" + implementation| Required| New types additive where possible| Type meaning changes
+Effects| "grammar/spec/effects.md"| Required| New effects versioned| Effect semantics change
+Resources| "grammar/spec/resources.md" + resource subsystem| Semantic compatibility| New resource/capability forms additive| Requirement meaning changes
+Capabilities| capability contracts| Semantic compatibility| New capabilities additive| Existing capability meaning changes
+Classical semantics| classical semantic layer| Required| Extensible| Existing computation meaning changes
+Quantum semantics| "quantum::ir"| Required| Versioned extension| Quantum meaning changes
+QEC| QEC subsystem| Semantic contract| New strategies/codes additive| Existing correction semantics change
+ZQN| ZQN subsystem| Semantic contract| New fault/noise models additive| Existing fault semantics change
+HDL| "grammar/hdl/" + hardware semantics| Required| Extension/dialect mechanism| Hardware semantics change
+Hardware capabilities| hardware subsystem| Requirement semantics stable| Capability discovery| Existing capability meaning changes
+Routing| routing subsystem| Logical semantics preserved| New physical realization| Logical meaning changes
+Scheduling| scheduling subsystem| Semantic ordering preserved| New scheduling strategy| Ordering semantics change
+Compiler| compiler subsystem| Language semantics preserved| New backends additive| Compiler changes source meaning
+Runtime| runtime subsystem| Artifact semantics preserved| New targets additive| Runtime changes execution semantics
+Dialects| "grammar/dialects/"| Versioned per dialect| Explicit extension| Dialect contract changes
+Interoperability| "grammar/interoperability/"| Translation contract| New formats additive| Translation semantics change
+Tooling| tooling contracts| Supported-version compatibility| Explicit support declaration| Tool silently changes interpretation
+Documentation| normative/derived docs| Must remain truthful| New material additive| Documentation contradicts authority
 
 ---
 
-Level 3 — Stable
+8. Language Version Compatibility
 
-Stable syntax and semantics.
+Language versioning is owned by:
 
-Breaking changes require:
+grammar/compatibility/versions.md
+grammar/specification/language-version.md
 
-- language-version change;
-- migration policy;
-- compatibility documentation;
-- diagnostics;
-- tests proving old/new behavior where relevant.
+This file consumes that policy.
 
----
+Zamani language versions MUST be independent from:
 
-Level 4 — Long-Term Stable
+- Rust versions;
+- compiler implementation versions;
+- runtime versions;
+- operating-system versions;
+- CPU generations;
+- GPU generations;
+- FPGA generations;
+- ASIC generations;
+- QPU generations;
+- target firmware;
+- hardware topology.
 
-Core language constructs intended to survive indefinitely.
-
-Examples should include:
-
-- identifiers;
-- functions;
-- basic types;
-- expressions;
-- declarations;
-- control flow;
-- modules;
-- core effects;
-- resource-independent semantics.
+A new target MUST NOT require a language major-version change merely because the target is new.
 
 ---
 
-7. Language Versioning
+9. Language Version Matrix
 
-Zamani MUST distinguish:
-
-language version
-grammar version
-AST schema version
-IR version
-artifact version
-runtime compatibility version
-dialect version
-target capability version
-
-These MUST NOT be conflated.
-
-For example:
-
-language = 2.x
-grammar = 2.x
-AST schema = 4.x
-quantum IR = 3.x
-runtime = 5.x
-target capability = device-defined
-
-A runtime implementation version MUST NOT automatically redefine language syntax.
+Change| Patch| Minor| Major
+Documentation correction| Yes| No| No
+Diagnostic improvement preserving semantics| Yes| No| No
+Parser bug fix preserving specified semantics| Yes| No| No
+New additive capability| No| Yes| No
+New optional syntax| No| Yes| No
+New dialect| No| Yes/versioned| No
+New target backend| No| Usually no language change| No
+New stable type| No| Yes| No
+Removal of stable syntax| No| No| Yes
+Meaning change of stable syntax| No| No| Yes
+Stable precedence change| No| No| Yes
+Stable ownership semantics change| No| No| Yes
+Stable quantum semantic change| No| No| Yes
+Stable effect semantic change| No| No| Yes
+Stable resource meaning change| No| No| Yes
+Stable module resolution change| No| No| Yes
 
 ---
 
-8. Compatibility Matrix
+10. Compiler-Version Compatibility
 
-Component| Backward compatibility| Forward compatibility| Breaking change policy
-Lexer| Required for stable tokens| Limited| Versioned token changes
-Parser| Required for stable syntax| Reject unknown syntax deterministically| Language-versioned
-AST| Stable semantic structure| Unknown extensions represented explicitly where possible| AST schema version
-Type system| Stable meaning| New types additive| Language/semantic version
-Expressions| Stable precedence/meaning| New operators require explicit grammar evolution| Versioned
-Statements| Stable meaning| New forms additive| Versioned
-Modules| Stable import/export meaning| Unknown module metadata ignored only when explicitly allowed| Versioned
-Effects| Stable effect identity| New effects additive| Effect version
-Resources| Semantic requirements stable| New capabilities additive| Capability schema
-Classical IR| Semantic compatibility| New operations via versioned extension| IR version
-"quantum::ir"| Canonical quantum semantics| Extension points required| Quantum IR version
-QEC| Semantic compatibility| New codes/strategies additive| Domain version
-ZQN| Fault/noise semantic compatibility| New fault models additive| Domain version
-Scheduling| Semantic ordering preserved| New policies additive| Scheduler capability
-Routing| Logical semantics preserved| New physical realizations additive| Target capability
-HDL| Hardware semantics preserved| New target constructs additive| HDL dialect version
-Hardware model| No source dependence on device size| Capability discovery| Hardware capability version
-Runtime| Program semantics preserved| New execution environments| Runtime compatibility contract
-Tooling| Diagnostics/schema compatibility| Unknown metadata tolerated when safe| Tool protocol version
-Examples| Must remain valid unless intentionally versioned| N/A| CI enforced
-Documentation| Must reflect normative grammar| N/A| Documentation validation
+Compiler implementation version and language version are independent.
+
+A compiler MAY support multiple language versions:
+
+Compiler C
+ ├── Zamani 1.x
+ ├── Zamani 2.x
+ └── selected dialect versions
+
+The compiler MUST:
+
+- identify supported language versions;
+- reject unsupported versions deterministically;
+- never silently reinterpret an unsupported version as another version;
+- preserve declared semantics.
+
+Compiler upgrades MUST NOT silently redefine language semantics.
 
 ---
 
-9. Lexical Compatibility
-
-The lexer MUST provide deterministic tokenization.
-
-Stable token spellings MUST NOT change silently.
-
-A keyword can become reserved only through an explicit compatibility process.
-
-Before introducing a new keyword:
-
-1. Search existing source identifiers.
-2. Determine collision impact.
-3. Determine whether contextual keyword behavior is possible.
-4. Determine parser ambiguity.
-5. Provide migration guidance.
-6. Add compatibility tests.
-
-9.1 Identifier compatibility
-
-If a previously legal identifier becomes a keyword, this is a source-breaking change.
-
-Preferred migration:
-
-old_identifier
-
-to:
-
-escaped_identifier
-
-if the language provides identifier escaping.
-
-If identifier escaping does not exist, the keyword SHOULD remain contextual where practical.
-
----
-
-10. Operator Compatibility
-
-Operators MUST have globally defined precedence and associativity.
-
-Changing:
-
-precedence
-associativity
-arity
-overload meaning
-
-is potentially breaking.
-
-Such changes require:
-
-- parser tests;
-- AST comparison tests;
-- semantic tests;
-- migration documentation.
-
-No new operator may create an unintended parse ambiguity.
-
----
-
-11. Type Compatibility
-
-Type syntax and type semantics MUST remain distinct.
-
-For example:
-
-Optional<T>
-Result<T, E>
-Array<T>
-Vector<T>
-Tensor<T>
-Qubit
-LogicalQubit
-PhysicalQubit
-Resource<T>
-Capability<T>
-
-must not be interpreted as machine-specific resource guarantees merely because they have physical implementations.
-
-Type compatibility MUST distinguish:
-
-semantic type
-resource requirement
-hardware capability
-physical representation
-
----
-
-12. Resource Compatibility
-
-Resource expressions MUST be semantic.
-
-Correct:
-
-requires quantum
-requires capability quantum.entanglement
-requires memory >= requirement
-requires accelerator capability("tensor")
-requires parallelism
-
-Incorrect architecture:
-
-requires 64 cpu
-requires 32 qubits
-requires gpu0
-requires topology ring32
-
-unless the programmer is deliberately expressing an actual semantic constraint rather than an accidental implementation assumption.
-
-Even explicit resource quantities MUST remain runtime/compiler constraints rather than grammar-level maximums.
-
----
-
-13. Capability Compatibility
-
-Capabilities represent what an execution environment can provide.
-
-Examples:
-
-quantum
-classical
-vector
-tensor
-parallel
-distributed
-gpu
-fpga
-asic
-simulation
-network
-secure
-trusted
-accelerated
-
-Capabilities MUST NOT imply a particular vendor or device.
-
-For example:
-
-requires capability quantum
-
-does not mean:
-
-requires IBM device X
-
-or:
-
-requires N physical qubits
-
-The compiler/runtime performs capability negotiation and realization.
-
----
-
-14. Constraint Compatibility
-
-Constraints describe requirements that MUST be satisfied.
-
-Examples:
-
-requires
-constrain
-ensure
-where
-
-A constraint MUST NOT silently become an implementation decision.
-
-The distinction is:
-
-Requirement
-    ↓
-Capability matching
-    ↓
-Candidate target selection
-    ↓
-Optimization
-    ↓
-Placement
-    ↓
-Scheduling
-    ↓
-Execution
-
----
-
-15. Preference Compatibility
-
-Preferences are not guarantees.
-
-For example:
-
-prefer gpu
-prefer low_latency
-prefer energy_efficiency
-
-must not mean:
-
-must use gpu
-must achieve a fixed latency
-must use a specific device
-
-The semantic model MUST preserve this distinction.
-
----
-
-16. Hardware Compatibility
-
-Hardware syntax MUST describe hardware semantics without requiring a fixed hardware universe.
-
-Supported conceptual categories include:
-
-CPU
-GPU
-FPGA
-ASIC
-accelerator
-memory
-interconnect
-device
-controller
-interface
-clock
-pipeline
-resource
-capability
-topology
-
-Hardware descriptions MUST be parameterized.
-
-Bad:
-
-gpu_count = 8
-cores = 64
-memory = 128GB
-
-as universal language semantics.
-
-Better:
-
-requires capability gpu
-requires memory >= requested
-requires parallel execution
-
-Physical values may appear in:
-
-- hardware descriptions;
-- deployment specifications;
-- target configurations;
-- test fixtures;
-- benchmarking;
-- explicit optimization constraints.
-
----
-
-17. Quantum Compatibility
-
-Quantum source syntax MUST remain hardware-independent unless physical realization is explicitly requested.
-
-The grammar MAY express:
-
-qubit
-logical qubit
-physical qubit
-register
-state
-gate
-operation
-measurement
-observable
-reset
-controlled operation
-parameterized operation
-dynamic circuit
-mid-circuit measurement
-classical control
-quantum resource
-error correction
-
-But source syntax MUST NOT impose arbitrary maximums.
-
-Invalid architectural assumptions include:
-
-q[0]
-q[1]
-
-as universal semantic requirements.
-
-Valid examples include dynamically resolved references and resource-derived dimensions.
-
----
-
-18. "quantum::ir" Compatibility
-
-"quantum::ir" remains the canonical quantum semantic boundary.
-
-The grammar MUST NOT create a competing quantum semantic IR.
-
-The compatibility flow is:
-
-Quantum source
-      │
-      ▼
-Quantum grammar
-      │
-      ▼
-AST
-      │
-      ▼
-Semantic validation
-      │
-      ▼
-quantum::ir
-      │
-      ├── optimization
-      ├── QEC
-      ├── ZQN
-      ├── routing
-      ├── scheduling
-      ├── calibration
-      ├── HAL
-      └── backend realization
-
-Quantum grammar changes therefore require evaluation against:
-
-- AST representation;
-- "quantum::ir";
-- QEC;
-- ZQN;
-- routing;
-- scheduling;
-- HAL;
-- runtime.
-
----
-
-19. Quantum Resource Compatibility
-
-Quantum resource declarations MUST distinguish:
-
-logical resource
-physical resource
-capability
-requirement
-constraint
-implementation choice
-
-For example:
-
-requires logical qubits
-
-does not determine:
-
-physical qubit count
-
-The compiler/runtime may map logical resources to physical resources through:
-
-QEC
-routing
-hardware topology
-calibration
-scheduling
-resource management
-
----
-
-20. QEC Compatibility
-
-The grammar may express QEC intent.
-
-It MUST NOT duplicate QEC implementation policy.
-
-The grammar MUST NOT define independent global resource limits that conflict with the repository's canonical QEC resource policy.
-
-The existing QEC architecture establishes "QecLimits" as the declarative resource policy boundary.
-
-Therefore:
-
-grammar
-  → semantic QEC requirement
-  → QEC subsystem
-  → QecLimits/resource policy
-  → decoder/correction
-
-The grammar MUST NOT invent a second "QecLimits".
-
-QEC implementation details remain owned by the quantum error-correction subsystem.
-
----
-
-21. ZQN Compatibility
-
-ZQN/fault semantics belong to the quantum fault/noise semantic layer.
-
-The grammar may express:
-
-- fault model selection;
-- resilience intent;
-- acceptable fault characteristics;
-- error-awareness;
-- verification requirements.
-
-The grammar MUST NOT encode physical fault behavior as parser constants.
-
-For example:
-
-fault_model = ...
-
-may identify semantic behavior.
-
-It must not imply:
-
-maximum fixed number of faults
-
-unless that is an explicit program-level semantic constraint.
-
----
-
-22. Scheduling Compatibility
-
-Scheduling syntax MUST express ordering/resource intent.
-
-The grammar MUST NOT hard-code:
-
-- number of scheduler lanes;
-- number of devices;
-- number of cores;
-- number of qubits;
-- fixed execution slots.
-
-Scheduling remains downstream of semantic representation.
-
-The compatibility flow is:
-
-source intent
-   ↓
-AST
-   ↓
-semantic model
-   ↓
-IR
-   ↓
-resource discovery
-   ↓
-routing
-   ↓
-scheduling
-   ↓
-execution
-
----
-
-23. Routing Compatibility
-
-Routing is a physical realization concern.
-
-Logical program semantics MUST remain valid independent of physical topology whenever the program does not explicitly require topology semantics.
-
-The grammar MUST NOT require:
-
-line topology
-ring topology
-mesh topology
-fixed qubit adjacency
-fixed node adjacency
-
-unless topology itself is part of the program's explicit semantics.
-
----
-
-24. HDL Compatibility
-
-HDL syntax MUST distinguish:
-
-hardware behavior
-hardware structure
-hardware timing
-hardware interfaces
-hardware parameters
-hardware resources
-physical realization
-
-A hardware module should remain portable across implementation scales where semantics permit.
-
-For example:
-
-pipeline
-
-describes a semantic structure.
-
-A specific number of pipeline stages is an implementation property unless explicitly required.
-
----
-
-25. Classical Compatibility
-
-Stable classical constructs include:
-
-- expressions;
-- statements;
-- declarations;
-- functions;
-- types;
-- control flow;
-- modules;
-- memory semantics;
-- concurrency;
-- generic abstractions.
-
-Classical language evolution MUST NOT prevent future quantum/HDL/hybrid extensions.
-
-The core grammar therefore MUST remain domain-neutral.
-
----
-
-26. Hybrid Compatibility
-
-Hybrid programs may combine:
-
-classical
-quantum
-HDL
-accelerator
-distributed
-AI
-data
-
-without requiring separate source languages.
-
-The semantic boundary must remain explicit.
-
-Example architecture:
-
-classical source
-      │
-quantum source ──► common AST ──► semantic model
-      │                              │
-HDL source ──────────────────────────┤
-                                     ▼
-                              domain IRs
-
-The AST MUST NOT become a hardware-specific or quantum-specific IR.
-
----
-
-27. AI/Data Compatibility
-
-AI/data constructs MUST avoid embedding fixed deployment dimensions.
-
-Tensor dimensions may be explicit when they are semantic properties.
-
-However:
-
-device count
-GPU count
-memory capacity
-cluster size
-
-are not intrinsic tensor semantics.
-
-The language MUST permit runtime/compiler selection of available acceleration resources.
-
----
-
-28. Distributed Compatibility
-
-Distributed syntax MUST distinguish:
-
-logical node
-service
-communication
-message
-replication
-consistency
-placement intent
-fault tolerance
-
-from:
-
-actual machine count
-IP addresses
-physical cluster topology
-cloud provider
-
-Logical distribution MUST remain portable.
-
----
-
-29. Networking Compatibility
-
-Network syntax MAY describe semantic endpoints, protocols, channels, messages, and services.
-
-Physical addresses MUST NOT be embedded as universal grammar constraints.
-
-Endpoint discovery and deployment configuration belong downstream.
-
----
-
-30. Security Compatibility
-
-Security syntax MUST preserve semantic intent.
-
-Examples:
-
-permission
-capability
-identity
-trust
-privacy
-cryptographic requirement
-security policy
-
-must remain independent from a particular operating system or vendor implementation where possible.
-
-Security-breaking language changes require explicit compatibility review.
-
----
-
-31. Interoperability Compatibility
-
-Foreign interfaces include:
-
-C
-C++
-Python
-OpenQASM
-Verilog
-SystemVerilog
-VHDL
-ABI
-FFI
-system interfaces
-
-Interoperability syntax MUST be isolated from core language semantics.
-
-A foreign dialect MUST NOT force the core grammar to inherit foreign implementation limitations.
-
----
-
-32. Dialect Compatibility
-
-Dialects MUST have:
-
-name
-namespace
-version
-capabilities
-syntax ownership
-semantic ownership
-compatibility policy
-
-Vendor-specific syntax MUST be isolated.
-
-Vendor extensions MUST NOT silently become universal Zamani semantics.
-
-Recommended structure:
-
-dialect vendor.namespace version
-
-with explicit capability registration.
-
----
-
-33. Experimental Compatibility
-
-Experimental constructs MUST be identifiable.
-
-They SHOULD be placed under:
-
-grammar/dialects/
-
-or another explicit extension boundary.
-
-Experimental syntax MUST NOT silently become stable syntax.
-
-When stabilized:
-
-experimental
-    ↓
-provisional
-    ↓
-stable
-
-The migration MUST be documented.
-
----
-
-34. Deprecated Syntax
-
-Deprecated constructs MUST remain parseable for the documented deprecation window unless they introduce unacceptable ambiguity or security problems.
-
-Deprecation requires:
-
-1. documentation;
-2. warning/diagnostic;
-3. replacement syntax;
-4. migration example;
-5. compatibility test;
-6. removal target version.
-
-Deprecated syntax MUST NOT be removed merely because a cleaner syntax exists.
-
----
-
-35. Reserved Syntax
-
-Reserved words and syntax MUST be documented centrally.
-
-Reserved syntax may be held for:
-
-- future language constructs;
-- future hardware models;
-- future quantum models;
-- future distributed semantics;
-- future compiler features.
-
-Reserved syntax MUST NOT accidentally become available as ordinary identifiers.
-
----
-
-36. AST Compatibility
-
-The AST MUST represent syntax structurally and generically.
-
-The AST MUST NOT become:
-
-- LLVM IR;
-- QIR;
-- MLIR;
-- hardware topology;
-- QEC representation;
-- scheduler representation;
-- vendor backend representation.
-
-Quantum operations should use generic operation structures rather than forcing a closed enum of today's gates.
-
-Conceptually:
-
-Operation {
-    name,
-    namespace,
-    operands,
-    parameters,
-    results,
-    attributes,
-    modifiers,
-    effects,
-    capabilities,
-    source
-}
-
-This permits future operations without changing the fundamental AST architecture.
-
----
-
-37. IR Compatibility
-
-IR changes MUST preserve semantic meaning.
-
-An IR extension MUST specify:
-
-operation identity
-operands
-results
-types
-attributes
-effects
-capabilities
-resource requirements
-lowering behavior
-version
-
-An IR version MUST NOT be inferred solely from the source-language version.
-
----
-
-38. Compiler Compatibility
-
-Compiler passes MUST consume semantic representations.
-
-They MUST NOT inspect source text to determine hardware-specific behavior where the semantic model already represents that information.
-
-Correct:
-
-AST
- → semantic model
- → IR
- → optimization
- → routing
- → scheduling
- → target
-
-Incorrect:
-
-AST
- → compiler guesses hardware
- → parser changes semantics
-
----
-
-39. Runtime Compatibility
-
-The runtime owns actual execution.
-
-Runtime discovery may determine:
-
-- available devices;
-- resource capacity;
-- capabilities;
-- topology;
-- calibration;
-- current health;
-- scheduling availability.
-
-The runtime MUST NOT redefine the language semantics.
-
-When resources are insufficient, the runtime SHOULD report a structured capability/resource failure rather than causing undefined semantic behavior.
-
----
-
-40. Hardware Scaling Contract
-
-Zamani MUST support scaling over the resource range actually available.
-
-The language must not impose artificial ceilings.
-
-The practical limits of an execution are determined by:
-
-available resources
-compiler resource policy
-runtime resource policy
-target capabilities
-memory
-time
-storage
-network capacity
-hardware limits
-algorithmic complexity
-
-not by arbitrary grammar constants.
-
-"Infinite" or "unbounded" language scalability therefore means:
-
-«No artificial language-level machine-size ceiling is imposed where the semantic model can represent the computation.»
-
-It does not mean physical hardware limitations disappear.
-
----
-
-41. Integer and Representation Boundaries
-
-A representation limit is different from a machine-capacity limit.
-
-For example:
-
-u64
-usize
-source-file byte offsets
-token positions
-AST node identifiers
-
-may have implementation representation bounds.
-
-These MUST be documented separately.
-
-They MUST NOT be presented as:
-
-maximum program size
-maximum qubits
-maximum nodes
-maximum devices
-
-unless they genuinely are such semantic restrictions.
-
-Where repository architecture permits, resource quantities SHOULD use representations capable of expressing arbitrary valid resource requests without artificial grammar ceilings.
-
----
-
-42. No "unsafe" Compatibility Policy
-
-The Rust implementation of the grammar infrastructure MUST use:
-
-#![deny(unsafe_code)]
-#![deny(unsafe_op_in_unsafe_fn)]
-
-where applicable.
-
-No compatibility feature may require unsafe Rust.
-
-Generated parser code MUST be audited for the selected ANTLR/Rust generation strategy.
-
-If a dependency introduces unsafe implementation internally, that is a dependency concern; Zamani source code itself MUST NOT introduce unsafe blocks or unsafe functions.
-
----
-
-43. Rust 1.97.1 Compatibility
+11. Rust Compatibility
 
 The production implementation baseline is:
 
+Rust 1.97
 Rust 1.97.1
-Edition: repository-defined compatible edition
+Rust edition 2021
 
-The grammar infrastructure MUST compile under Rust 1.97.1.
+The repository MUST treat the supported Rust baseline as an implementation constraint, not a Zamani language-version identifier.
 
-Language/library features introduced after Rust 1.97.1 MUST NOT become mandatory implementation dependencies unless the repository explicitly raises its minimum Rust version.
+Rust implementation code MUST NOT use:
 
-The compatibility policy is about the Rust implementation toolchain; it does not limit the Zamani language's computational expressiveness.
+unsafe
 
----
+or require unsafe Rust for:
 
-44. Parser Compatibility
+- parsing;
+- lexing;
+- AST construction;
+- semantic analysis;
+- compatibility validation;
+- IR construction;
+- migration;
+- diagnostics;
+- grammar tooling.
 
-Parser behavior MUST be deterministic.
+Generated parser code and dependencies MUST also be reviewed so that the repository does not accidentally introduce an unsafe implementation requirement.
 
-For identical:
+The absence of Rust "unsafe" MUST NOT be confused with the existence of a Zamani-language file named:
 
-source
-grammar version
-dialect set
-language version
+grammar/statements/unsafe.g4
 
-the parser MUST produce the same structural result.
+If that file remains part of Zamani syntax, it represents a language construct, not permission to use Rust "unsafe".
 
-Parser changes MUST include:
-
-- valid syntax tests;
-- invalid syntax tests;
-- ambiguity tests;
-- precedence tests;
-- diagnostic tests;
-- AST compatibility tests.
+Its semantic status MUST be explicitly defined by the language specification and MUST NOT override the Rust implementation safety policy.
 
 ---
 
-45. Grammar Change Classification
+12. Lexical Compatibility
 
-Every grammar change MUST be classified as one of:
+Lexical compatibility includes:
 
-Change| Classification
-New unambiguous syntax| Additive
-New optional attribute| Additive
-New dialect| Additive
-New capability| Additive
-New resource expression| Additive if semantics are independent
-New keyword| Potentially breaking
-Removed keyword| Breaking
-Changed precedence| Breaking
-Changed associativity| Breaking
-Changed literal meaning| Breaking
-Changed type meaning| Breaking
-Changed IR meaning| Semantic breaking
-Changed diagnostics only| Usually non-breaking
-New optimization| Non-breaking if semantics preserved
-New backend| Non-breaking
-New hardware target| Non-breaking
-New runtime capability| Non-breaking
-Removal of deprecated syntax| Versioned breaking
-Vendor extension| Dialect-scoped
+- token spelling;
+- identifier rules;
+- keyword rules;
+- contextual keywords;
+- numeric literals;
+- string literals;
+- character literals;
+- Unicode;
+- comments;
+- operators;
+- delimiters;
+- quantum literals;
+- interpolation.
 
----
+The canonical lexical contract belongs under:
 
-46. Compatibility Review Procedure
+grammar/lexer/
 
-Every grammar change MUST pass this sequence.
+The Rust implementation belongs to the repository frontend.
 
-1. Identify affected syntax
-        ↓
-2. Identify affected AST nodes
-        ↓
-3. Identify semantic contracts
-        ↓
-4. Identify affected IR
-        ↓
-5. Identify compiler consumers
-        ↓
-6. Identify runtime consumers
-        ↓
-7. Identify tooling
-        ↓
-8. Identify examples/tests
-        ↓
-9. Run hard-coding audit
-        ↓
-10. Classify compatibility
-        ↓
-11. Add migration if required
-        ↓
-12. Update matrix
-        ↓
-13. Validate full repository
-
-No grammar file should be declared complete before this analysis is performed for changes affecting its public contract.
+The two MUST remain conformant.
 
 ---
 
-47. Cross-File Integration Contract
+13. Keyword Compatibility
 
-The compatibility matrix integrates with the following grammar areas.
+Before introducing a new reserved keyword, the implementation MUST evaluate:
 
-File/area| Integration responsibility
-"specification/language-version.md"| Language-version semantics
-"specification/grammar-authority.md"| Authority hierarchy
-"specification/poco-reaf.md"| Portability guarantees
-"core/versioning.g4"| Surface version declarations
-"core/capabilities.g4"| Capability syntax
-"core/requirements.g4"| Requirements
-"core/constraints.g4"| Constraints
-"resources/*.g4"| Resource semantics
-"dialects/*.g4"| Extension compatibility
-"validation/compatibility-rules.md"| Validation rules
-"compatibility/versions.md"| Version history
-"compatibility/migrations.md"| Migration procedures
-"compatibility/deprecated.md"| Deprecation policy
-"compatibility/reserved.md"| Reserved syntax
-"tests/compatibility/"| Automated compatibility validation
-"tests/scalability/"| Scale-independence validation
+1. existing identifiers;
+2. contextual-keyword alternatives;
+3. parser ambiguity;
+4. dialect collisions;
+5. source migration;
+6. diagnostics;
+7. compatibility tests.
 
-This file owns the compatibility matrix and policy.
-
-It does not own the grammar rules themselves.
+A previously legal identifier becoming a reserved keyword is source-breaking unless a defined escape/contextual mechanism preserves compatibility.
 
 ---
 
-48. Ownership Boundary
+14. Token Compatibility
 
-This file OWNS:
+The repository must not accidentally maintain multiple semantic token concepts.
 
-- compatibility classifications;
-- compatibility levels;
-- compatibility matrix;
-- version compatibility policy;
-- breaking-change policy;
-- migration requirements;
-- cross-domain compatibility rules;
-- POCO-REAF compatibility guarantees;
-- hardware-independence compatibility rules.
+Known areas requiring explicit audit include:
 
-This file DOES NOT OWN:
+Question / QuestionMark
+Ampersand / BitAnd
 
-- lexical token definitions;
-- parser productions;
-- AST implementation;
-- semantic type checking;
-- quantum IR;
-- QEC implementation;
-- ZQN implementation;
-- scheduling implementation;
-- routing implementation;
-- runtime resource discovery;
-- hardware drivers.
+The correct outcome MUST be determined by lexical meaning rather than by whichever file was edited first.
+
+Token aliases MAY exist for compatibility, but aliases MUST have:
+
+- explicit owner;
+- canonical token identity;
+- migration status;
+- parser behavior;
+- tests.
 
 ---
 
-49. Compatibility With Existing Quantum Infrastructure
+15. Operator Compatibility
 
-The existing repository's QEC architecture already separates declarative resource limits from actual runtime/resource accounting.
+Operator compatibility covers:
 
-The compatibility model MUST preserve this separation:
+- spelling;
+- token identity;
+- precedence;
+- associativity;
+- arity;
+- AST shape;
+- semantic meaning.
 
-language requirement
-        │
-        ▼
-semantic resource requirement
-        │
-        ▼
-QEC / resource policy
-        │
-        ▼
-runtime resource observation
-        │
-        ▼
-execution decision
+A precedence or associativity change is potentially breaking even when source tokens remain unchanged.
 
-A grammar change MUST NOT introduce a second resource-policy authority.
+Such a change MUST include:
 
-The same principle applies to:
-
-- scheduling;
-- routing;
-- calibration;
-- HAL;
-- benchmarking;
-- runtime resource management.
+- parser tests;
+- AST tests;
+- semantic tests;
+- compatibility tests;
+- migration documentation where required.
 
 ---
 
-50. Compatibility With Existing "grammar.md"
+16. AST Compatibility
 
-"grammar/grammar.md" is currently described as the parser-derived description of what the Rust implementation accepts.
+The frontend AST is the structural contract between parsing and semantic analysis.
 
-Therefore it MUST NOT silently remain a competing normative specification.
+Every stable grammar construct MUST have a predetermined AST representation.
 
-Production policy:
+The required chain is:
 
-Authoritative grammar/specification
-              │
-              ├── generated/validated parser grammar
-              │
-              └── derived grammar documentation
+Grammar
+   ↓
+Parse tree
+   ↓
+Frontend AST
+   ↓
+Semantic model
+   ↓
+Canonical IR
 
-If "grammar.md" remains, its status MUST be explicitly documented as:
+A grammar feature MUST NOT be considered complete merely because ANTLR accepts it.
 
-derived implementation reference
+AST compatibility includes:
 
-or it must be regenerated from the authoritative grammar/specification.
-
-It MUST NOT claim authority over syntax that the authoritative grammar intentionally defines differently.
-
----
-
-51. Compatibility With "Zamani.g4"
-
-"Zamani.g4" contains substantial existing language functionality.
-
-No valid feature should be silently removed.
-
-Before changing it:
-
-1. inventory existing productions;
-2. identify parser consumers;
-3. identify AST consumers;
-4. classify semantic ownership;
-5. preserve valid constructs;
-6. migrate misplaced constructs;
-7. deprecate only with policy;
-8. remove only with explicit compatibility justification.
-
-The production grammar architecture may split "Zamani.g4" into maintainable grammar modules, but the resulting composed grammar MUST preserve the public language contract.
+- node identity;
+- field identity;
+- field meaning;
+- field optionality;
+- ordering;
+- source spans;
+- attributes;
+- modifiers;
+- semantic payload;
+- version metadata where applicable.
 
 ---
 
-52. Generated Artifact Policy
+17. Domain-Neutral Frontend AST
 
-Generated parser/lexer artifacts MUST NOT become authoritative source files.
+The frontend AST MUST remain domain-neutral where required by the architecture.
 
-Generated artifacts are:
+Hardware-specific realization objects MUST NOT leak into the frontend merely because source syntax mentions hardware.
 
-derived
-reproducible
-versioned according to project policy
-validated against source grammar
+Quantum source constructs MUST NOT require physical device objects in the frontend AST.
 
-The repository MUST be able to determine:
+HDL source constructs MUST NOT require actual FPGA/ASIC objects.
 
-source grammar
-    ↓
-generation process
-    ↓
-generated parser
-    ↓
-tests
+Distributed source constructs MUST NOT require actual cluster nodes.
 
-A generated artifact modified manually without corresponding source-grammar changes MUST fail validation.
+Target realization occurs later.
 
 ---
 
-53. Documentation Compatibility
+18. Semantic Compatibility
 
-Documentation MUST identify whether a document is:
+Semantic compatibility is stronger than syntactic compatibility.
 
-normative
-explanatory
-generated
-historical
-experimental
-deprecated
+Changes requiring semantic compatibility review include:
 
-A documentation file MUST NOT describe unsupported syntax as stable syntax.
+- name resolution;
+- type inference;
+- ownership;
+- borrowing;
+- effects;
+- resource requirements;
+- capability requirements;
+- evaluation order;
+- concurrency;
+- determinism;
+- numerical semantics;
+- quantum measurement;
+- quantum state semantics;
+- module resolution;
+- security semantics;
+- hardware semantics.
 
-Examples MUST be compiled or parser-tested where feasible.
-
----
-
-54. Example Compatibility
-
-Every canonical example MUST have:
-
-- language version;
-- required dialects;
-- expected parse result;
-- expected semantic result where practical;
-- compatibility status.
-
-Examples MUST NOT contain hidden fixed-resource assumptions unless the example is specifically a hardware/deployment example.
+A syntax-preserving semantic change may therefore require a major language-version transition.
 
 ---
 
-55. Negative Compatibility Tests
+19. Resource and Capability Compatibility
 
-The compatibility suite MUST test:
+Zamani MUST distinguish:
 
-- removed keywords;
-- invalid versions;
-- invalid dialect versions;
-- invalid capability expressions;
-- malformed resource constraints;
-- ambiguous syntax;
-- unsupported vendor syntax;
-- invalid quantum constructs;
-- invalid hybrid constructs;
-- invalid HDL constructs;
-- incompatible AST constructs;
-- unsupported IR versions.
-
-The parser MUST fail deterministically.
-
----
-
-56. Forward Compatibility
-
-Where safe, future-compatible structures SHOULD permit unknown metadata to survive without semantic corruption.
+Requirement
+Constraint
+Capability
+Preference
+Hint
+Implementation decision
 
 For example:
 
-attributes
-metadata
-dialect extensions
-capability descriptors
-resource annotations
+requires qubits >= n
 
-may support extension namespaces.
+is a resource requirement.
 
-However, unknown semantic operations MUST NOT be silently accepted as known operations.
+requires capability("quantum.measurement")
 
-The rule is:
+is a capability requirement.
 
-unknown metadata → potentially ignorable
-unknown semantics → explicit error
+prefer accelerator("quantum")
 
-unless a defined extension mechanism exists.
+is a preference.
 
----
+A physical mapping such as:
 
-57. Source Migration Policy
+logical q0 -> physical resource X
 
-Migration tools SHOULD support:
+is a target-realization decision.
 
-old source
-   ↓
-version-aware parser
-   ↓
-migration transformation
-   ↓
-new source
-
-Migration MUST preserve semantics.
-
-A migration that merely changes syntax while altering execution meaning is invalid.
+These categories MUST NOT be collapsed.
 
 ---
 
-58. Deprecation Lifecycle
+20. No Universal Hardware-Capacity Limits
 
-The lifecycle is:
-
-Stable
-  ↓
-Deprecated
-  ↓
-Migration-supported
-  ↓
-Removal candidate
-  ↓
-Removed in declared breaking version
-
-Every deprecated construct MUST identify:
-
-deprecated since
-replacement
-removal target
-migration method
-reason
-
----
-
-59. Reserved-Keyword Lifecycle
-
-Reserved syntax follows:
-
-unreserved
-  ↓
-reserved
-  ↓
-experimental
-  ↓
-provisional
-  ↓
-stable
-
-Reserved syntax MUST NOT be assigned casually.
-
-A reserved identifier must have a documented reason.
-
----
-
-60. Scalability Compatibility Matrix
-
-Property| Grammar may constrain?| Correct authority
-Program semantics| Yes| Language
-Type rules| Yes| Type system
-Qubit count| No arbitrary maximum| Resource/compiler/runtime
-CPU count| No arbitrary maximum| Resource/runtime
-GPU count| No arbitrary maximum| Resource/runtime
-FPGA count| No arbitrary maximum| Hardware/runtime
-Memory capacity| No arbitrary maximum| Runtime/resource
-Cluster size| No arbitrary maximum| Deployment/runtime
-Network size| No arbitrary maximum| Deployment/runtime
-Tensor dimension| Only when semantically intrinsic| Type/semantic model
-Physical topology| Only when semantically required| Hardware model
-Device ID| Only in explicit deployment/target contexts| Target/runtime
-Address| Only where address is semantic| Platform/interop
-QEC limits| No duplicate policy| QEC resource policy
-Scheduling capacity| No grammar ceiling| Scheduler/resource manager
-Routing topology| No hidden fixed topology| Routing/HAL
-Execution parallelism| Intent only| Scheduler/runtime
-
----
-
-61. Hard-Coding Compatibility Audit
-
-Every grammar release MUST be audited for:
+The language MUST NOT establish arbitrary universal limits such as:
 
 MAX_QUBITS
 MAX_CPUS
@@ -1720,281 +625,1995 @@ MAX_CORES
 MAX_THREADS
 MAX_GPUS
 MAX_FPGAS
-MAX_DEVICES
 MAX_NODES
 MAX_MEMORY
-MAX_TENSOR_DIM
+MAX_TENSOR_RANK
+MAX_REGISTER_WIDTH
+MAX_NETWORK_SIZE
+MAX_DEVICE_COUNT
+MAX_TIMELINES
 MAX_CLUSTER_SIZE
-MAX_TOPOLOGY_SIZE
 
-and equivalent hidden forms.
+These names may legitimately appear in negative examples, audits, or validation documentation when the text is explicitly describing what is prohibited.
 
-Each discovered constant MUST be classified:
+Their presence as documentation does not itself constitute a language limit.
 
-1. Semantic invariant
-2. Representation invariant
-3. Resource policy
-4. Runtime limit
-5. Test fixture
-6. Serialization limit
-7. Accidental hard-code
-
-Only accidental hard-coding MUST be removed automatically.
-
-A genuine representation invariant MUST be documented rather than disguised as unlimited capacity.
+Their presence as a grammar rule, implementation ceiling, or semantic restriction requires correction unless the value is a genuine representation invariant or explicitly scoped implementation/resource policy.
 
 ---
 
-62. Compatibility and Determinism
+21. Hard-Coding Classification
 
-The same source, language version, dialect set, and grammar version MUST produce deterministic parsing.
+Every discovered fixed quantity MUST be classified as one of:
 
-Compatibility tests MUST verify:
+Classification| Allowed?
+Program-level constant| Yes
+Mathematical constant| Yes
+Explicit user resource requirement| Yes
+Target configuration| Yes
+Deployment configuration| Yes
+Test fixture| Yes
+Serialization/representation invariant| Only when technically necessary and documented
+Runtime resource limit| Yes when implementation-scoped and not presented as language capacity
+Language-wide machine capacity| No
+Hidden compiler ceiling| No
+Hidden parser capacity presented as language semantics| No
 
-source
- → lexer tokens
- → parser tree
- → AST
+Example:
 
-is stable.
+let n = 1024;
+allocate qubits[n];
 
-Semantic determinism must be separately tested at:
+is program semantics.
 
-AST
- → semantic model
- → IR
+A compiler rule such as:
 
-Runtime nondeterminism MUST NOT be confused with parser nondeterminism.
+maximum supported qubits = 1024
 
----
-
-63. Compatibility and Round Trips
-
-Where a canonical printer/serializer exists:
-
-source
- → AST
- → canonical form
- → AST
-
-must preserve semantics.
-
-For IR:
-
-source
- → semantic model
- → IR
- → serialization
- → deserialization
-
-must preserve the defined IR contract.
-
-Version migration must be explicit.
+is not a POCO-REAF language rule.
 
 ---
 
-64. Compatibility and Security
+22. Repository Hard-Coding Audit
 
-A grammar compatibility change MUST be reviewed for:
+The compatibility audit MUST inspect at minimum:
 
-- parser denial-of-service;
-- ambiguity explosions;
-- excessive recursion;
-- unbounded diagnostic memory;
-- pathological token streams;
-- unsafe generated code;
-- foreign-function boundary changes;
-- capability bypasses.
+grammar/**/*.g4
+grammar/**/*.md
+src/**/*.rs
+tests/**
+examples/**
+generated artifacts
+configuration files
+build scripts
 
-No compatibility feature may weaken security boundaries merely to preserve syntax.
+The audit MUST detect both explicit and disguised capacity limits.
 
----
+Examples include:
 
-65. Compatibility and Diagnostics
+MAX_*
+fixed array sizes
+fixed resource counts
+fixed device IDs
+fixed physical qubit ranges
+fixed register widths
+fixed topology sizes
+fixed node counts
+fixed tensor ranks
+fixed pipeline depths
+fixed timeline counts
 
-Diagnostics are part of the developer-facing compatibility contract, but exact wording SHOULD NOT normally be treated as a stable ABI.
-
-Stable diagnostic properties SHOULD include:
-
-error category
-source span
-machine-readable code
-severity
-migration guidance where applicable
-
-Human-readable wording may evolve.
-
----
-
-66. Compatibility and Tooling
-
-Language servers, formatters, linters, documentation generators, IDEs, and build tools MUST consume the same authoritative grammar/version information.
-
-Tooling MUST NOT maintain private grammar forks.
-
-If a tool intentionally supports only a subset, it MUST declare the supported language version and feature set.
+The validator MUST distinguish prohibited language ceilings from legitimate examples or tests that intentionally exercise a particular finite target.
 
 ---
 
-67. Compatibility and Build Artifacts
+23. Scalability Compatibility
 
-Compiled Zamani artifacts MUST carry sufficient version information to determine compatibility.
+Zamani scalability means:
 
-At minimum, where applicable:
+«The language architecture MUST NOT impose arbitrary domain ceilings merely because a current implementation or target has finite resources.»
 
-language version
-grammar/schema version
-IR version
-dialect versions
-target requirements
-capability requirements
+Actual execution remains bounded by:
 
-Runtime MUST reject incompatible artifacts deterministically.
+- the mathematical/semantic requirements of the program;
+- representational requirements;
+- declared constraints;
+- compiler implementation resources;
+- runtime resources;
+- target capabilities.
 
----
+Therefore:
 
-68. Compatibility and Reproducibility
+language expressiveness
+        ≠
+implementation capacity
+        ≠
+test capacity
+        ≠
+target capacity
 
-A program compiled under a fixed:
-
-language version
-grammar version
-dialect set
-compiler version
-IR version
-
-SHOULD produce reproducible semantic artifacts where deterministic compilation is requested.
-
-Hardware-specific scheduling and runtime decisions may vary when the target environment differs.
-
-That variation MUST NOT alter source-level semantics.
+A test environment supporting a finite quantity MUST NOT establish that quantity as a language limit.
 
 ---
 
-69. Compatibility Across Machine Scale
+24. POCO-REAF Compatibility
 
-The same semantic program MUST remain valid across:
+POCO-REAF requires separation between:
 
-atom-scale conceptual computation
-tiny embedded systems
-single-core machines
-multicore systems
-manycore systems
-GPU systems
-FPGA systems
-ASIC systems
-quantum systems
-hybrid systems
-clusters
-supercomputers
-cloud systems
-distributed systems
-future computational substrates
+WHAT
+
+and:
+
+HOW
+WHERE
+ON WHICH DEVICE
+WITH WHICH PHYSICAL RESOURCE
+
+The preferred flow is:
+
+Zamani source
+     ↓
+portable semantic meaning
+     ↓
+requirements + capabilities + constraints + preferences
+     ↓
+canonical IR
+     ↓
+optimization/lowering
+     ↓
+resource discovery
+     ↓
+routing
+     ↓
+scheduling
+     ↓
+target realization
+     ↓
+runtime
+
+A source program SHOULD remain usable across:
+
+- tiny systems;
+- embedded systems;
+- CPUs;
+- multicore CPUs;
+- manycore systems;
+- GPUs;
+- FPGAs;
+- ASICs;
+- accelerators;
+- quantum processors;
+- simulators;
+- hybrid systems;
+- clusters;
+- HPC systems;
+- cloud environments;
+- distributed systems;
+- future computational substrates;
 
 provided the target satisfies the program's semantic requirements.
 
-The grammar MUST NOT need a new language syntax merely because resource quantity increases.
+---
+
+25. Quantum Compatibility
+
+Quantum syntax MUST remain target-independent unless physical realization is explicitly requested.
+
+Supported semantic categories MAY include:
+
+- qubits;
+- logical qubits;
+- registers;
+- states;
+- operations;
+- parameterized operations;
+- controls;
+- adjoints;
+- measurement;
+- reset;
+- observables;
+- channels;
+- noise;
+- dynamic circuits;
+- classical feed-forward;
+- error-correction intent;
+- resilience intent;
+- resource requirements.
+
+The grammar MUST NOT establish a fixed universal gate inventory as the semantic universe.
+
+The preferred model is:
+
+quantumOperation
+    ↓
+operation specification
+    +
+target list
+    +
+parameters
+    +
+modifiers
+
+rather than a permanent enumeration of every gate known today.
+
+This allows constructs such as:
+
+apply H
+apply custom_gate
+apply vendor.operation
+apply operation(parameter)
+
+to share one semantic operation model.
 
 ---
 
-70. Compatibility Matrix for Major Domains
+26. "quantum::ir" Canonical Boundary
 
-Domain| Source semantics| Target realization| Compatibility requirement
-Classical| Algorithm/data/control| CPU/GPU/etc.| Preserve semantics
-Quantum| Quantum operations| QPU/simulator| Preserve quantum meaning
-Hybrid| Quantum/classical interaction| Heterogeneous system| Preserve boundary
-HDL| Hardware behavior| FPGA/ASIC/RTL| Preserve hardware semantics
-HPC| Parallel computation| Cluster/supercomputer| Preserve computation
-AI| Models/tensors/training| CPU/GPU/accelerator| Preserve model semantics
-Data| Data/schema/transforms| Local/distributed/cloud| Preserve data semantics
-Networking| Communication intent| Network implementation| Preserve protocol semantics
-Security| Security policy| Platform/security backend| Preserve policy
-Embedded| Resource-aware semantics| MCU/SoC/etc.| Preserve semantics
-Distributed| Logical distribution| Actual topology| Preserve logical behavior
-Future| Extension/dialect| Future backend| Preserve extension contract
+The repository's canonical quantum semantic boundary remains:
 
----
+quantum::ir
 
-71. Compatibility Rules for New Grammar Files
+The compatibility architecture MUST NOT introduce a competing frontend quantum IR.
 
-Before adding a grammar file, the author MUST define:
+Required flow:
 
-File:
-Purpose:
-Owns:
-Does Not Own:
-Inputs:
-Outputs:
-Dependencies:
-Upstream Contracts:
-Downstream Consumers:
-Public Grammar Contract:
-AST Contract:
-Semantic Contract:
-IR Integration:
-Compiler Integration:
-Runtime Integration:
-Tooling Integration:
-Cross-Domain Integration:
-Tests:
-Negative Tests:
-Boundary Tests:
-Compatibility Requirements:
-Scalability Requirements:
-Hard-Coding Audit:
-Completion Criteria:
+Quantum source
+      ↓
+Quantum grammar
+      ↓
+Frontend AST
+      ↓
+Semantic validation
+      ↓
+quantum::ir
+      ↓
+optimization
+      ↓
+routing
+      ↓
+scheduling
+      ↓
+QEC / resilience / ZQN
+      ↓
+HAL
+      ↓
+target
 
-The file MUST NOT be considered complete until all fields are resolved.
+Changes to quantum grammar MUST be reviewed against the actual repository "src/quantum/ir/" contracts.
 
-This ensures independent completion without requiring architectural redesign when later files are implemented.
+The compatibility matrix therefore protects:
+
+- qubit identity;
+- operation identity;
+- measurement semantics;
+- classical control;
+- resources;
+- capabilities;
+- mapping;
+- validation;
+- serialization;
+- hashing;
+- analysis;
+- pulse semantics where applicable.
 
 ---
 
-72. Dependency Rule
+27. Quantum Resource Compatibility
 
-Compatibility metadata may be consumed downstream, but grammar modules MUST NOT create circular dependencies.
+The following MUST remain distinct:
 
-Forbidden:
+logical qubit
+physical qubit
+qubit requirement
+qubit capability
+physical mapping
+QEC overhead
+target capacity
 
-grammar → runtime → grammar
-grammar → IR → grammar
-quantum grammar → scheduler → quantum grammar
+For example:
 
-Required direction:
+requires qubits >= n
 
-grammar
-   ↓
-AST
-   ↓
+does not itself determine:
+
+physical qubit IDs
+physical topology
+device vendor
+calibration
+QEC code
+routing strategy
+
+Those decisions belong downstream.
+
+---
+
+28. QEC Compatibility
+
+The grammar MAY express QEC intent.
+
+It MUST NOT become the QEC implementation.
+
+The repository's canonical QEC resource-policy ownership MUST remain authoritative.
+
+Where the existing implementation defines "QecLimits", the compatibility architecture MUST NOT create another independent "QecLimits" type or policy authority.
+
+Required relationship:
+
+Zamani source
+      ↓
+semantic QEC requirement
+      ↓
+QEC subsystem
+      ↓
+canonical QecLimits/resource policy
+      ↓
+QEC analysis/correction
+
+A compatibility change affecting QEC MUST review:
+
+- resource requirements;
+- QEC configuration;
+- QEC limits/policy;
+- logical/physical resource relationships;
+- diagnostics;
+- serialization;
+- IR compatibility;
+- runtime behavior.
+
+---
+
+29. ZQN Compatibility
+
+ZQN remains a downstream fault/noise semantic layer.
+
+The grammar MAY express:
+
+- fault-model intent;
+- resilience requirements;
+- noise-awareness;
+- reliability requirements;
+- verification intent;
+- acceptable error characteristics.
+
+The grammar MUST NOT hard-code a physical noise universe.
+
+A new ZQN model is compatible when it extends the defined semantic model without changing existing stable fault meanings.
+
+---
+
+30. Routing Compatibility
+
+Routing is a physical realization concern.
+
+Logical semantics MUST remain independent of physical topology unless topology itself is explicit program semantics.
+
+The grammar MUST NOT silently assume:
+
+- line topology;
+- ring topology;
+- fixed mesh;
+- fixed qubit adjacency;
+- fixed node adjacency;
+- fixed network size.
+
+A target may have any topology capable of satisfying the program's requirements.
+
+---
+
+31. Scheduling Compatibility
+
+Scheduling is downstream from semantic intent.
+
+The source may express:
+
+- ordering;
+- dependency;
+- concurrency;
+- latency requirement;
+- timing requirement;
+- synchronization;
+- preference.
+
+The grammar MUST NOT impose:
+
+- fixed scheduler lanes;
+- fixed device count;
+- fixed execution slots;
+- fixed thread count;
+- fixed qubit count;
+- fixed pipeline count.
+
+Scheduling changes MUST preserve declared semantic ordering and constraints.
+
+---
+
+32. HDL Compatibility
+
+HDL compatibility MUST distinguish:
+
+- hardware behavior;
+- hardware structure;
+- timing;
+- interfaces;
+- parameters;
+- resources;
+- verification;
+- synthesis intent;
+- physical intent.
+
+The grammar MUST NOT turn today's FPGA/ASIC characteristics into permanent language ceilings.
+
+Examples such as:
+
+32-bit register
+64-stage pipeline
+8 devices
+128 ports
+
+may be explicit program or target requirements.
+
+They MUST NOT become universal parser limits.
+
+---
+
+33. Hardware Compatibility
+
+Hardware descriptions SHOULD express:
+
+capabilities
+requirements
+interfaces
+resources
+topology
+timing
+power
+thermal constraints
+reliability
+deployment intent
+
+rather than assuming a fixed machine universe.
+
+Vendor-specific features MUST be isolated through explicit:
+
+dialects
+interoperability
+target descriptions
+backend contracts
+
+and MUST NOT silently redefine core Zamani semantics.
+
+---
+
+34. Classical Compatibility
+
+Classical computing remains part of the same language.
+
+Compatibility covers:
+
+- scalar computation;
+- integer arithmetic;
+- floating-point computation;
+- vectors;
+- matrices;
+- tensors;
+- symbolic computation;
+- numerical computation;
+- statistics;
+- signal processing;
+- optimization;
+- linear algebra;
+- control;
+- scientific computing.
+
+Mathematical library operations SHOULD generally be semantic operations or library/intrinsic capabilities rather than an ever-growing list of grammar keywords.
+
+---
+
+35. Hybrid Compatibility
+
+Hybrid programs MUST preserve the boundary between:
+
+classical semantics
+quantum semantics
+hardware semantics
+
+without creating separate languages.
+
+A hybrid program may therefore express:
+
+classical computation
+       ↓
+quantum operation
+       ↓
+measurement
+       ↓
+classical decision
+       ↓
+quantum operation
+
+The compatibility chain remains:
+
+frontend AST
+      ↓
 semantic model
-   ↓
-IR
-   ↓
-compiler
-   ↓
-runtime
+      ↓
+quantum::ir + classical semantics
+      ↓
+hybrid lowering
 
-Capability/resource information may flow back as compilation inputs, but this MUST NOT make runtime implementation part of grammar ownership.
+No second hybrid quantum IR is permitted.
 
 ---
 
-73. Compatibility Test Categories
+36. Distributed Compatibility
+
+Distributed syntax MUST remain independent of actual machine count.
+
+The language may express:
+
+- logical processes;
+- actors;
+- services;
+- messages;
+- channels;
+- replication;
+- partitioning;
+- consistency;
+- transactions;
+- collective operations;
+- placement intent;
+- fault tolerance.
+
+It MUST NOT establish an arbitrary maximum node count.
+
+A source program requiring a resource quantity larger than the target provides is a target/resource failure, not a syntax incompatibility.
+
+---
+
+37. AI Compatibility
+
+AI language constructs MUST preserve semantic categories such as:
+
+- models;
+- tensors;
+- datasets;
+- training;
+- inference;
+- optimization;
+- differentiability;
+- probabilistic computation;
+- symbolic reasoning;
+- agents;
+- pipelines;
+- deployment.
+
+Framework-specific behavior MUST NOT silently become core Zamani semantics.
+
+A new AI backend MUST be additive where possible.
+
+---
+
+38. Data Compatibility
+
+Data constructs MUST preserve:
+
+- type;
+- shape;
+- schema;
+- ordering where significant;
+- nullability;
+- provenance where specified;
+- serialization semantics;
+- transformation semantics.
+
+Data movement between CPU, GPU, FPGA, QPU, distributed storage, or network environments MUST NOT change the source-level data meaning.
+
+---
+
+39. Networking Compatibility
+
+Networking constructs MUST distinguish:
+
+logical endpoint
+protocol
+communication semantics
+physical address
+physical route
+
+A network implementation may change while preserving protocol semantics.
+
+A physical address MUST NOT become a universal source-level requirement unless addressing is itself part of the program semantics.
+
+---
+
+40. Security Compatibility
+
+Security semantics MUST preserve:
+
+- identity;
+- authorization;
+- capabilities;
+- policy;
+- isolation;
+- trust;
+- cryptographic meaning;
+- provenance;
+- secure-computation intent.
+
+Adding a stronger implementation MUST NOT silently weaken a stable security contract.
+
+Vendor-specific security mechanisms belong downstream or in explicit dialects/interoperability layers.
+
+---
+
+41. Memory Compatibility
+
+Memory syntax MUST distinguish:
+
+semantic memory
+ownership
+borrowing
+allocation
+region
+address space
+persistence
+shared memory
+distributed memory
+accelerator memory
+quantum resource semantics
+
+The grammar MUST NOT assume a fixed:
+
+- RAM size;
+- VRAM size;
+- register width;
+- address-space capacity;
+- memory-bank count.
+
+---
+
+42. Concurrency Compatibility
+
+Concurrency constructs MUST describe semantic concurrency.
+
+Examples:
+
+parallel
+async
+await
+spawn
+task
+actor
+channel
+pipeline
+data-parallel
+task-parallel
+
+A semantic "parallel" construct MUST NOT silently mean a fixed number of hardware threads.
+
+Thread/core count is a resource realization property unless explicitly expressed as a program requirement.
+
+---
+
+43. Effects Compatibility
+
+Effects are semantic contracts.
+
+Compatibility MUST preserve:
+
+- effect identity;
+- operation meaning;
+- handler behavior;
+- effect composition;
+- effect polymorphism.
+
+Effect implementation limits MUST NOT be represented as universal language capacity limits.
+
+---
+
+44. Module Compatibility
+
+Module compatibility covers:
+
+- module identity;
+- import paths;
+- exports;
+- visibility;
+- aliases;
+- package identity;
+- dependencies;
+- version constraints.
+
+A module path change is breaking when existing source resolution changes.
+
+Dependency resolution MUST remain deterministic under the declared compatibility policy.
+
+---
+
+45. Interoperability Compatibility
+
+External representations such as:
+
+- OpenQASM;
+- QIR;
+- HDL formats;
+- LLVM-related formats;
+- MLIR-related formats;
+- C/C++;
+- Python;
+- Rust;
+- WebAssembly;
+
+are interoperability boundaries.
+
+They MUST NOT silently become competing Zamani semantic authorities.
+
+Required flow:
+
+external format
+      ↓
+interoperability adapter
+      ↓
+Zamani semantic model
+      ↓
+canonical Zamani IR
+
+not:
+
+external format
+      ↓
+new competing Zamani IR
+
+---
+
+46. Dialect Compatibility
+
+Every dialect MUST identify:
+
+name
+version
+owner
+syntax extensions
+semantic extensions
+AST mapping
+IR mapping
+capabilities
+feature gates
+compatibility rules
+migration rules
+
+A dialect MUST NOT silently modify core Zamani semantics.
+
+Dialect changes MUST be classified independently from core-language changes.
+
+---
+
+47. Macro Compatibility
+
+Macros MUST NOT bypass compatibility validation.
+
+Macro expansion MUST remain subject to:
+
+- version rules;
+- lexical rules;
+- syntax rules;
+- AST validation;
+- semantic validation;
+- diagnostics.
+
+A macro that expands differently across compiler versions in a semantic-breaking manner MUST be versioned or rejected.
+
+---
+
+48. Metaprogramming Compatibility
+
+Compile-time and reflective constructs MUST preserve declared semantics.
+
+Metaprogramming MUST NOT provide an unrestricted mechanism for bypassing:
+
+- type checking;
+- capability checking;
+- resource validation;
+- security boundaries;
+- compatibility rules.
+
+Generated source must be checked against the effective language version.
+
+---
+
+49. Diagnostics Compatibility
+
+Diagnostics are part of the developer-facing compatibility contract.
+
+The following properties SHOULD remain stable:
+
+diagnostic code
+severity
+source span
+category
+structured metadata
+migration guidance where applicable
+
+Human-readable diagnostic wording MAY evolve.
+
+A compatibility-breaking diagnostic MUST NOT hide a source semantic change.
+
+---
+
+50. Source Spans
+
+Stable constructs MUST preserve useful source provenance.
+
+Where a grammar or AST change affects source spans, the change MUST be tested.
+
+Source-span compatibility is important for:
+
+- diagnostics;
+- IDE tooling;
+- migrations;
+- formatting;
+- debugging;
+- provenance;
+- semantic analysis.
+
+---
+
+51. Determinism
+
+Given identical:
+
+source
+language version
+dialect set
+grammar version
+toolchain contract
+
+the lexer/parser MUST produce equivalent results.
+
+Deterministic parsing means:
+
+source
+  ↓
+tokens
+  ↓
+parse tree
+  ↓
+AST
+
+must not depend on:
+
+- random state;
+- hardware discovery;
+- target order;
+- nondeterministic iteration;
+- runtime state.
+
+Runtime nondeterminism is a separate semantic concern.
+
+---
+
+52. Round-Trip Compatibility
+
+Where a canonical serializer/printer exists:
+
+source
+  ↓
+AST
+  ↓
+canonical representation
+  ↓
+AST
+
+must preserve defined semantics.
+
+Where IR serialization exists:
+
+semantic model
+  ↓
+IR
+  ↓
+serialize
+  ↓
+deserialize
+
+must preserve the declared IR contract.
+
+Version changes MUST be explicit.
+
+---
+
+53. Generated Artifact Compatibility
+
+Generated parser/lexer artifacts are derived artifacts.
+
+They MUST NOT become authority.
+
+Required relationship:
+
+authoritative grammar
+      ↓
+generation
+      ↓
+generated artifacts
+      ↓
+tests
+
+Manual modification of generated artifacts without corresponding source changes MUST be detectable.
+
+Generated artifacts MUST be reproducible.
+
+---
+
+54. "grammar.md" Compatibility
+
+The current repository uses:
+
+grammar/grammar.md
+
+as an implementation/conformance reference derived from the actual frontend.
+
+It MUST NOT become a competing normative grammar.
+
+Its status MUST distinguish at least:
+
+SPECIFIED
+IMPLEMENTED
+PARTIALLY IMPLEMENTED
+PLANNED
+DEPRECATED
+
+Where "grammar.md" and "Zamani.g4" disagree, the repository MUST record the discrepancy and resolve it through the authority hierarchy.
+
+---
+
+55. "Zamani-Grammar.md" Compatibility
+
+"grammar/Zamani-Grammar.md" remains valuable historical/extended design material.
+
+It MUST distinguish:
+
+stable
+proposed
+experimental
+deprecated
+historical
+not implemented
+
+Presence in "Zamani-Grammar.md" does not automatically make syntax legal.
+
+Promotion remains:
+
+design proposal
+      ↓
+semantic design
+      ↓
+AST contract
+      ↓
+canonical grammar
+      ↓
+implementation
+      ↓
+IR contract
+      ↓
+tests
+      ↓
+stable
+
+---
+
+56. "Zamani.g4" Compatibility
+
+"grammar/Zamani.g4" remains the canonical ANTLR composition root.
+
+It MUST:
+
+- compose modular grammar components;
+- preserve universal entry points;
+- dispatch declarations/statements/expressions/types;
+- provide EOF;
+- use the canonical token vocabulary;
+- avoid becoming a second semantic implementation.
+
+It SHOULD NOT become a monolithic list of every hardware, quantum, AI, mathematical, or vendor operation.
+
+Domain-specific constructs belong in their existing domain directories and are composed through the root.
+
+---
+
+57. Existing File Preservation
+
+Existing major files MUST NOT be renamed merely to fit this compatibility architecture.
+
+In particular:
+
+grammar/Zamani.g4
+grammar/Zamani-Grammar.md
+grammar/grammar.md
+grammar/DESIGN.md
+grammar/compatibility/versions.md
+grammar/compatibility/migrations.md
+grammar/compatibility/deprecated.md
+grammar/compatibility/reserved.md
+grammar/compatibility/compatibility-matrix.md
+
+retain their established roles.
+
+New files/directories MAY be added where necessary.
+
+Existing domain directories SHOULD be populated rather than duplicated under a new hierarchy.
+
+---
+
+58. Compatibility Ownership of Existing Compatibility Files
+
+File| Compatibility responsibility
+"compatibility/versions.md"| Version policy and release classification
+"compatibility/migrations.md"| Source migration procedures
+"compatibility/deprecated.md"| Deprecation lifecycle
+"compatibility/reserved.md"| Reserved syntax/identifier policy
+"compatibility/compatibility-matrix.md"| Cross-layer compatibility relationships
+"spec/compatibility.md"| Formal semantic compatibility concepts
+"grammar/grammar.md"| Implementation conformance
+"specification/grammar-authority.md"| Grammar authority
+"specification/language-version.md"| Language-version semantics
+
+No file should silently absorb another file's authority.
+
+---
+
+59. Compatibility Change Procedure
+
+Every public grammar change MUST follow:
+
+1. Identify feature
+        ↓
+2. Identify owning specification
+        ↓
+3. Identify lexical impact
+        ↓
+4. Identify grammar impact
+        ↓
+5. Identify AST impact
+        ↓
+6. Identify semantic impact
+        ↓
+7. Identify resource/capability impact
+        ↓
+8. Identify IR impact
+        ↓
+9. Identify compiler impact
+        ↓
+10. Identify runtime/target impact
+        ↓
+11. Identify tooling impact
+        ↓
+12. Classify compatibility
+        ↓
+13. Update tests
+        ↓
+14. Update migration/deprecation data if needed
+        ↓
+15. Update this matrix
+        ↓
+16. Validate repository-wide
+
+No public feature is complete merely because its ".g4" file parses.
+
+---
+
+60. Feature Completion Contract
+
+Every production grammar feature MUST be traceable through:
+
+Feature ID
+    ↓
+Specification
+    ↓
+Lexer
+    ↓
+Grammar
+    ↓
+AST
+    ↓
+Semantic model
+    ↓
+IR
+    ↓
+Compiler
+    ↓
+Runtime/target
+    ↓
+Tooling
+    ↓
+Tests
+    ↓
+Compatibility
+
+The owning feature file MUST identify these relationships before it is declared complete.
+
+This prevents later files from forcing completed files to be redesigned solely because integration contracts were omitted.
+
+---
+
+61. Cross-File Integration Matrix
+
+Area| Must integrate with
+Lexical contracts| "grammar/lexer/", "src/lexer.rs"
+Root grammar| "grammar/Zamani.g4"
+Syntax specification| "grammar/specification/", "grammar/spec/"
+Parser| "src/parser.rs"
+AST| "src/frontend/ast/"
+Classical| "grammar/classical/" + semantic/compiler layers
+Quantum| "grammar/quantum/" + "src/quantum/ir/"
+QEC| quantum semantic model + QEC subsystem
+ZQN| quantum/resilience/fault semantics
+HDL| "grammar/hdl/"
+Hardware| "grammar/hardware/"
+Resources| "grammar/resources/"
+Effects| "grammar/effects/"
+Memory| "grammar/memory/"
+Concurrency| "grammar/concurrency/"
+Distributed| "grammar/distributed/"
+AI| "grammar/ai/"
+Data| "grammar/data/"
+Networking| "grammar/networking/"
+Security| "grammar/security/"
+Compilation| "grammar/compile/"
+Execution| "grammar/execution/"
+Interoperability| "grammar/interoperability/"
+Dialects| "grammar/dialects/"
+Macros| "grammar/macros/"
+Metaprogramming| "grammar/metaprogramming/"
+Versioning| "compatibility/versions.md"
+Migration| "compatibility/migrations.md"
+Deprecation| "compatibility/deprecated.md"
+Reserved syntax| "compatibility/reserved.md"
+Compatibility matrix| this file
+Validation| "grammar/validation/"
+Conformance| "grammar/tests/"
+
+---
+
+62. Dependency Direction
+
+The compatibility architecture MUST preserve this dependency direction:
+
+lexical contracts
+      ↓
+core grammar
+      ↓
+expressions/types/declarations/statements
+      ↓
+domain grammar
+      ↓
+Zamani.g4
+      ↓
+lexer/parser
+      ↓
+frontend AST
+      ↓
+semantic analysis
+      ↓
+canonical semantic representation
+      ↓
+canonical IR
+      ↓
+optimization/lowering
+      ↓
+routing/scheduling/resilience
+      ↓
+HAL
+      ↓
+runtime/target
+
+The grammar MUST NOT depend on runtime implementation.
+
+The grammar MUST NOT depend on physical hardware discovery.
+
+The grammar MUST NOT depend on target-specific routing.
+
+The grammar MUST NOT depend on QEC implementation.
+
+The grammar MUST NOT depend on ZQN implementation.
+
+---
+
+63. Resource Information Flow
+
+Resource information may flow into compilation as an input:
+
+source requirement
+       ↓
+semantic requirement
+       ↓
+capability/resource discovery
+       ↓
+candidate targets
+       ↓
+optimization
+       ↓
+routing
+       ↓
+scheduling
+       ↓
+execution
+
+This does NOT mean:
+
+runtime
+   ↓
+grammar
+
+is a dependency.
+
+Runtime observations inform realization, not source-language ownership.
+
+---
+
+64. Target Compatibility
+
+A target is compatible when it can satisfy the source program's declared semantics.
+
+A target MAY fail because it lacks:
+
+- required capability;
+- required memory;
+- required quantum resources;
+- required precision;
+- required timing;
+- required interconnect;
+- required reliability;
+- required protocol;
+- required accelerator capability.
+
+Such failure MUST be reported as a target/resource/capability failure.
+
+The compiler MUST NOT silently change program semantics to make an incompatible target appear compatible.
+
+---
+
+65. Approximation Compatibility
+
+Approximation is compatible only when explicitly permitted by source semantics.
+
+For example:
+
+prefer error <= bound
+
+may permit implementation variation within that declared contract.
+
+An exact operation MUST NOT silently become approximate.
+
+A new approximation strategy requires semantic compatibility review.
+
+---
+
+66. Hardware Scaling Matrix
+
+Source intent| Tiny target| CPU| GPU| FPGA| ASIC| QPU| Cluster| Future target
+Classical computation| Realize if capable| Realize| Realize| Realize| Realize| Through hybrid boundary where applicable| Realize| Capability-dependent
+Parallel computation| Limited by resources| Realize| Realize| Realize| Realize| Domain-dependent| Realize| Capability-dependent
+Tensor computation| Realize if capable| Realize| Realize| Realize| Realize| Domain-dependent| Realize| Capability-dependent
+Quantum computation| Simulator/compatible device| Simulator/device| Simulator/accelerator| Hybrid| Hybrid| Native QPU| Distributed quantum/hybrid| Capability-dependent
+HDL intent| Limited| Co-design| Accelerator| Native| Native| Hybrid| Distributed hardware| Capability-dependent
+Distributed computation| Limited| Single-node semantics| Multi-device| Deployment-dependent| Deployment-dependent| Hybrid| Native| Capability-dependent
+
+The table describes realization possibilities, not mandatory target support.
+
+---
+
+67. Domain Compatibility Matrix
+
+Domain| Source-level owner| Canonical downstream boundary| Target realization
+Classical| "grammar/classical/"| Classical semantic/IR layer| CPU/GPU/FPGA/ASIC/etc.
+Quantum| "grammar/quantum/"| "quantum::ir"| QPU/simulator/hybrid
+Hybrid| "grammar/hybrid/"| Combined semantic representation| Heterogeneous target
+HDL| "grammar/hdl/"| Hardware semantic/IR layer| FPGA/ASIC/accelerator
+Hardware| "grammar/hardware/"| Hardware semantic model| Physical target
+Distributed| "grammar/distributed/"| Distributed semantic model| Cluster/cloud/network
+AI| "grammar/ai/"| AI/model semantic layer| CPU/GPU/accelerator/QPU
+Data| "grammar/data/"| Data semantic layer| Local/distributed/cloud
+Networking| "grammar/networking/"| Communication semantic layer| Network implementation
+Security| "grammar/security/"| Security semantic layer| Platform/security backend
+Nano/future domains| Explicit domain owner| Domain semantic layer| Capability-dependent
+
+---
+
+68. Quantum + HDL Compatibility
+
+Hybrid quantum hardware MUST preserve:
+
+HDL intent
+   ↓
+hardware semantic model
+   ↓
+hybrid semantic model
+   ↓
+quantum::ir
+   ↓
+optimization
+   ↓
+routing
+   ↓
+scheduling
+   ↓
+QEC/resilience
+   ↓
+ZQN
+   ↓
+HAL
+
+HDL MUST NOT create another quantum IR.
+
+Quantum grammar MUST NOT duplicate HDL implementation semantics.
+
+---
+
+69. QEC + ZQN Compatibility
+
+The separation MUST remain:
+
+quantum semantics
+       ↓
+quantum::ir
+       ↓
+QEC/resilience
+       +
+ZQN/fault/noise semantics
+       ↓
+physical realization
+
+QEC owns correction strategy.
+
+ZQN owns fault/noise semantics.
+
+Routing owns physical mapping.
+
+Scheduling owns ordering/time/resource scheduling.
+
+HAL owns target interaction.
+
+The compatibility matrix MUST preserve these ownership boundaries.
+
+---
+
+70. Compatibility of Physical IDs
+
+Physical IDs MAY exist in explicit target/deployment contexts.
+
+They MUST NOT become implicit universal source semantics.
+
+Examples of target-specific constructs include:
+
+physical_qubit(...)
+target_device(...)
+deployment_target(...)
+
+when explicitly scoped to target realization.
+
+They MUST NOT redefine portable logical constructs.
+
+---
+
+71. Compatibility of Resource Quantities
+
+Explicit quantities remain legal when they are program semantics.
+
+Examples:
+
+requires qubits >= n
+requires memory >= required_memory
+requires bandwidth >= required_bandwidth
+requires latency <= required_latency
+
+These express requirements.
+
+They do not establish compiler maximums.
+
+---
+
+72. Representation Limits
+
+Zamani cannot claim that every implementation can represent literally infinite data.
+
+Compatibility therefore means:
+
+«No arbitrary language-level domain ceiling may be imposed merely because a particular implementation or present-day target is finite.»
+
+A genuine representation limit MUST:
+
+1. be technically necessary;
+2. be documented;
+3. be implementation-scoped where possible;
+4. not masquerade as a language semantic limit;
+5. produce a deterministic diagnostic;
+6. not silently change program meaning.
+
+---
+
+73. Security Compatibility
+
+Compatibility validation MUST consider:
+
+- parser denial-of-service;
+- pathological nesting;
+- excessive macro expansion;
+- compile-time computation exhaustion;
+- resource-exhaustion attacks;
+- malformed external formats;
+- capability bypasses;
+- foreign-function boundary changes;
+- generated-code safety;
+- dialect injection;
+- ambiguous grammar behavior.
+
+Resource controls are implementation security controls.
+
+They MUST NOT silently become language semantics.
+
+---
+
+74. Safe Rust Compatibility
+
+Production Zamani Rust code MUST remain safe Rust.
+
+The compatibility matrix requires:
+
+Rust 1.97 / Rust 1.97.1
+Rust 2021
+no unsafe Rust
+
+This applies to Zamani-owned implementation code.
+
+Dependencies MUST be reviewed according to repository security policy.
+
+The language keyword "unsafe", if retained as a Zamani source construct, MUST be specified independently from Rust implementation safety.
+
+If Zamani ultimately prohibits unsafe source semantics as well, that decision belongs to the language specification and MUST be reflected through a separate compatibility change rather than being silently inferred from the Rust safety rule.
+
+---
+
+75. Tooling Compatibility
+
+Language tooling MUST consume the same authoritative version/grammar information.
+
+Affected tools include:
+
+- parser tooling;
+- language servers;
+- formatters;
+- linters;
+- documentation generators;
+- migration tools;
+- build tools;
+- IDE integrations;
+- test harnesses.
+
+Tooling MUST NOT maintain an undocumented private grammar fork.
+
+A tool supporting only a subset MUST identify:
+
+supported language version
+supported dialects
+supported feature set
+
+---
+
+76. Example Compatibility
+
+Canonical examples MUST identify, where applicable:
+
+- language version;
+- dialect;
+- expected parse;
+- expected semantic behavior;
+- required capabilities;
+- required resources;
+- target assumptions;
+- compatibility status.
+
+Examples used only for a specific physical target MUST clearly identify that scope.
+
+A target-specific example MUST NOT become evidence of a universal language limit.
+
+---
+
+77. Negative Compatibility Tests
 
 The compatibility suite MUST include:
 
-Positive
+- invalid language versions;
+- unsupported dialect versions;
+- removed syntax;
+- deprecated syntax;
+- keyword collisions;
+- malformed operators;
+- invalid type constructs;
+- invalid resource requirements;
+- invalid capability expressions;
+- unsupported quantum operations;
+- malformed quantum targets;
+- invalid hybrid constructs;
+- invalid HDL constructs;
+- incompatible IR versions;
+- invalid external formats;
+- invalid feature combinations.
 
-Previously valid programs remain valid.
+Failures MUST be deterministic and machine-readable.
 
-Negative
+---
 
-Previously invalid programs remain invalid unless intentionally promoted.
+78. Positive Compatibility Tests
 
-Boundary
+The suite MUST verify that stable constructs remain valid.
 
-Smallest and largest practical representations.
+Coverage MUST include:
 
-Cross-domain
+minimal.zm
+classical.zm
+generic.zm
+quantum.zm
+hybrid.zm
+hdl.zm
+poco-reaf.zm
+
+and all applicable repository examples.
+
+Each stable example MUST be associated with its declared compatibility contract.
+
+---
+
+79. Boundary Tests
+
+Boundary tests MUST distinguish:
+
+language invalidity
+        ≠
+implementation resource exhaustion
+        ≠
+target resource exhaustion
+
+Tests SHOULD cover:
+
+- smallest valid values;
+- symbolic values;
+- large values;
+- parameterized values;
+- empty values where legal;
+- zero values where illegal;
+- deeply nested programs;
+- large module graphs;
+- large tensors;
+- large quantum resource requirements;
+- large HDL structures;
+- large distributed descriptions.
+
+No boundary test may establish an arbitrary universal maximum.
+
+---
+
+80. Scalability Tests
+
+Scalability tests MUST vary quantities such as:
+
+- module count;
+- declaration count;
+- expression size;
+- tensor dimensions;
+- qubit requirements;
+- operation count;
+- HDL modules;
+- ports;
+- signals;
+- nets;
+- memories;
+- pipeline stages;
+- distributed processes;
+- services;
+- messages;
+- AI tensors/models;
+- network endpoints;
+- timelines where supported.
+
+Tests MUST verify that increasing a semantic quantity does not require a new language construct.
+
+---
+
+81. Determinism Tests
+
+Repeated compilation of the same:
+
+source
+language version
+dialect set
+toolchain contract
+
+MUST produce equivalent:
+
+tokens
+parse tree
+AST
+semantic representation
+IR
+
+where deterministic behavior is promised.
+
+Target scheduling MAY vary when target resources differ, provided source semantics remain preserved.
+
+---
+
+82. Migration Compatibility
+
+Migration ownership remains:
+
+grammar/compatibility/migrations.md
+
+The matrix records whether migration is required.
+
+A migration MUST preserve semantics.
+
+Required conceptual flow:
+
+old source
+    ↓
+version-aware parser
+    ↓
+migration transformation
+    ↓
+new source
+    ↓
+new semantic model
+
+A migration that only makes syntax compile while changing meaning is invalid.
+
+---
+
+83. Deprecation Compatibility
+
+Deprecation ownership remains:
+
+grammar/compatibility/deprecated.md
+
+A deprecated feature MUST identify:
+
+- deprecated version;
+- current status;
+- replacement;
+- migration path;
+- removal policy;
+- compatibility consequences.
+
+The matrix MUST record whether use remains source-compatible.
+
+---
+
+84. Reserved Syntax Compatibility
+
+Reserved syntax ownership remains:
+
+grammar/compatibility/reserved.md
+
+A reserved identifier MUST NOT be promoted to stable syntax without:
+
+- specification;
+- lexical analysis;
+- parser analysis;
+- AST contract;
+- semantic contract;
+- compatibility review;
+- tests.
+
+Reserved words MUST NOT be allocated merely for speculative convenience.
+
+---
+
+85. Forward Compatibility
+
+Future syntax MUST NOT be silently interpreted as existing semantics.
+
+The rule is:
+
+unknown metadata
+    → may be preserved/ignored where explicitly permitted
+
+unknown semantic construct
+    → explicit error
+
+known extension namespace
+    → extension-specific interpretation
+
+A compiler MUST NOT accept future syntax merely because it can parse it.
+
+---
+
+86. Compatibility of Unknown Attributes
+
+Unknown attributes MAY be preserved where the attribute contract explicitly permits forward-compatible metadata.
+
+However, an unknown attribute MUST NOT silently alter core semantics.
+
+Attributes affecting:
+
+- type;
+- ownership;
+- effects;
+- resources;
+- capabilities;
+- quantum semantics;
+- security;
+- hardware semantics;
+
+require explicit semantic ownership.
+
+---
+
+87. Artifact Compatibility
+
+Artifacts SHOULD carry sufficient metadata to identify, where applicable:
+
+language version
+grammar/schema version
+AST schema version
+IR version
+dialect versions
+required capabilities
+resource requirements
+target constraints
+compiler compatibility
+
+An incompatible artifact MUST be rejected deterministically.
+
+Runtime MUST NOT silently execute an artifact under incompatible semantics.
+
+---
+
+88. IR Compatibility
+
+IR compatibility MUST be evaluated independently from source compatibility.
+
+A source program may remain stable while the compiler changes its internal IR.
+
+Therefore:
+
+source compatibility
+      ≠
+internal IR compatibility
+
+An IR becomes a public compatibility boundary only when explicitly designated as such.
+
+Where an IR is public, it requires:
+
+- schema version;
+- migration policy;
+- serialization policy;
+- compatibility tests;
+- semantic invariants.
+
+---
+
+89. "quantum::ir" IR Compatibility
+
+"quantum::ir" is a canonical semantic boundary and therefore receives special protection.
+
+Any change affecting it MUST identify:
+
+- affected quantum nodes/types;
+- qubit identity;
+- operation identity;
+- measurement;
+- classical control;
+- resources;
+- capabilities;
+- mapping;
+- pulse semantics where applicable;
+- serialization;
+- validation;
+- downstream consumers.
+
+No frontend grammar file may introduce an alternative canonical quantum IR.
+
+---
+
+90. Classical/HDL IR Compatibility
+
+Classical and HDL domain representations MAY evolve independently when they remain behind stable semantic contracts.
+
+A domain IR MUST NOT leak target-specific assumptions backward into the source grammar.
+
+Target-specific IR transformations belong downstream.
+
+---
+
+91. Compiler Compatibility
+
+Compiler transformations MUST preserve semantic invariants.
+
+Optimization MAY change:
+
+- instruction order where permitted;
+- representation;
+- layout;
+- implementation strategy;
+- resource allocation;
+- scheduling;
+- routing.
+
+Optimization MUST NOT change declared program meaning.
+
+---
+
+92. Runtime Compatibility
+
+Runtime changes MUST preserve the semantics of compatible artifacts.
+
+Runtime MAY change:
+
+- resource allocation;
+- scheduling strategy;
+- caching;
+- placement;
+- device selection;
+- execution strategy;
+
+when these remain within the source semantic contract.
+
+Runtime MUST NOT silently reinterpret source-level semantics.
+
+---
+
+93. Target Compatibility
+
+Target compatibility is conditional:
+
+program requirements
+        ↓
+target capabilities
+        ↓
+resource feasibility
+
+A target is not "language-incompatible" merely because it lacks resources.
+
+It is target-infeasible for that program.
+
+This distinction is essential for POCO-REAF.
+
+---
+
+94. Compatibility and Future Computing
+
+A future target SHOULD require only:
+
+capability declaration
+semantic lowering
+backend realization
+
+rather than a new core language.
+
+Examples include future:
+
+- processors;
+- accelerators;
+- quantum architectures;
+- neuromorphic systems;
+- photonic systems;
+- molecular/nano systems;
+- heterogeneous systems;
+- distributed computational substrates.
+
+The compatibility architecture must preserve extension without redesigning the core language for every new machine class.
+
+---
+
+95. Compatibility of Nano/Future Domains
+
+If nano/future computing remains a first-class Zamani domain, its source constructs MUST integrate through:
+
+domain grammar
+      ↓
+domain-neutral AST
+      ↓
+semantic model
+      ↓
+domain IR/canonical boundary
+      ↓
+target realization
+
+The grammar MUST NOT encode a fixed physical universe.
+
+---
+
+96. Sankofa/Temporal Compatibility
+
+Sankofa-related concepts such as:
+
+- history;
+- recall;
+- learning;
+- temporal state;
+- provenance;
+- consensus;
+- memory;
+- timelines;
+
+MUST remain semantic constructs.
+
+They MUST NOT impose fixed:
+
+- history depth;
+- timeline count;
+- branch count;
+- timestamp capacity;
+- memory capacity.
+
+If multi-timeline syntax is introduced, compatibility MUST be defined independently of any implementation's finite number of timelines.
+
+---
+
+97. Compatibility of Feature Manifests
+
+Where the repository adopts feature manifests, each manifest SHOULD identify:
+
+feature ID
+name
+status
+language version
+grammar location
+lexer tokens
+AST nodes
+semantic rules
+IR mapping
+compiler consumers
+runtime consumers
+capabilities
+resource requirements
+positive tests
+negative tests
+boundary tests
+scalability tests
+compatibility policy
+migration policy
+
+The manifest does not replace this matrix.
+
+It supplies feature-level evidence consumed by this matrix.
+
+---
+
+98. Compatibility Test Taxonomy
+
+Every stable public feature SHOULD have:
+
+positive/
+negative/
+boundary/
+scalability/
+determinism/
+round-trip/
+compatibility/
+migration/
+cross-domain/
+security/
+
+tests where applicable.
+
+Quantum features additionally require:
+
+logical-resource
+physical-resource
+dynamic-control
+measurement
+custom-operation
+routing
+QEC
+ZQN
+
+coverage where applicable.
+
+---
+
+99. Cross-Domain Compatibility Tests
+
+The test suite MUST include combinations such as:
 
 classical + quantum
 classical + HDL
@@ -2005,172 +2624,587 @@ AI + quantum
 AI + hardware
 classical + quantum + distributed
 classical + quantum + HDL + hardware
+AI + quantum + distributed
+data + networking + security
 
-Scalability
-
-No source-level artificial machine-size limits.
-
-Version
-
-Old versions parse under their declared rules.
-
-Migration
-
-Deprecated syntax migrates correctly.
-
-Round-trip
-
-Parser/printer preserves semantics.
-
-Determinism
-
-Repeated parsing gives equivalent results.
-
-Security
-
-Pathological syntax does not bypass parser/security boundaries.
+The purpose is to verify that domains compose rather than become separate languages.
 
 ---
 
-74. Compatibility CI Requirements
+100. Repository-Wide Compatibility Validation
 
-CI SHOULD validate at minimum:
+A production compatibility release MUST validate:
+
+specification
+      ↓
+grammar
+      ↓
+lexer
+      ↓
+parser
+      ↓
+AST
+      ↓
+semantic analysis
+      ↓
+IR
+      ↓
+compiler
+      ↓
+runtime
+      ↓
+tests
+
+The repository MUST detect mismatches such as:
+
+specified but not parsed
+parsed but no AST
+AST but no semantics
+semantics but no IR
+IR but no compiler consumer
+compiler support but no tests
+documentation claiming stable support when implementation is partial
+
+---
+
+101. Compatibility Status Vocabulary
+
+Repository documentation MUST use these terms consistently:
+
+Status| Meaning
+"SPECIFIED"| Normatively defined
+"IMPLEMENTED"| Implemented and validated
+"PARTIALLY IMPLEMENTED"| Some contract exists but implementation is incomplete
+"EXPERIMENTAL"| Public but unstable
+"PROVISIONAL"| Controlled unstable feature
+"PLANNED"| Intended but not implemented
+"DEPRECATED"| Still recognized but scheduled for migration/removal
+"REMOVED"| No longer accepted under that language version
+"HISTORICAL"| Retained for design/history only
+"NOT IMPLEMENTED"| Described but not available
+
+No documentation may call a feature "stable" when the implementation is only "PLANNED" or "PARTIALLY IMPLEMENTED".
+
+---
+
+102. Compatibility of Documentation
+
+Documentation MUST declare its role:
+
+normative
+derived
+explanatory
+experimental
+historical
+deprecated
+
+The following must never happen:
+
+historical design
+       ↓
+accidentally treated as
+       ↓
+stable syntax
+
+Examples should be parser-tested wherever practical.
+
+---
+
+103. Compatibility of Generated Documentation
+
+Generated documentation MUST identify its source.
+
+For example:
+
+authoritative specification
+        ↓
+generated reference
+
+Generated output MUST NOT become the source of truth.
+
+---
+
+104. Compatibility and Repository Refactoring
+
+Internal directory organization MAY evolve without changing language compatibility.
+
+A file move is compatibility-neutral only when:
+
+- public ownership remains unchanged;
+- references are updated;
+- generated paths are updated;
+- tooling is updated;
+- no public import/path contract changes;
+- tests remain valid.
+
+Existing filenames MUST NOT be renamed merely for stylistic consistency.
+
+---
+
+105. Compatibility and File Independence
+
+Every production grammar file SHOULD be completable independently with its integration contract already specified.
+
+Before marking a file complete, its contract must identify:
+
+Purpose
+Owns
+Does Not Own
+Inputs
+Outputs
+Dependencies
+Upstream contracts
+Downstream consumers
+Grammar contract
+AST contract
+Semantic contract
+IR integration
+Compiler integration
+Runtime integration
+Tooling integration
+Cross-domain integration
+Diagnostics
+Versioning
+Compatibility
+Positive tests
+Negative tests
+Boundary tests
+Scalability tests
+Determinism tests
+Hard-coding audit
+Security/resource analysis
+Completion criteria
+
+This matrix is the cross-file compatibility consumer of those declarations.
+
+---
+
+106. Completion Rule
+
+A compatibility-sensitive file is complete only when:
+
+1. its authority is known;
+2. its ownership is known;
+3. its non-ownership is known;
+4. all downstream consumers are identified;
+5. compatibility impact is classified;
+6. version impact is classified;
+7. AST impact is known;
+8. semantic impact is known;
+9. IR impact is known;
+10. compiler impact is known;
+11. runtime impact is known;
+12. tests exist;
+13. scalability is considered;
+14. hard-coding is audited;
+15. diagnostics are defined;
+16. migration/deprecation impact is known.
+
+Later implementation of another file MUST NOT require architectural redesign merely to discover these relationships.
+
+---
+
+107. Compatibility CI
+
+Production CI MUST validate, as applicable:
 
 cargo fmt --check
 cargo check
 cargo test
 cargo test --all-targets
-grammar validation
 ANTLR grammar generation
-parser tests
-negative grammar tests
+grammar validation
+lexer conformance
+parser conformance
+AST conformance
+semantic conformance
+IR conformance
 compatibility tests
+negative tests
+boundary tests
+scalability tests
+determinism tests
 round-trip tests
 hard-coding audit
 documentation consistency
 
-All must use Rust 1.97.1 for the supported baseline.
+The supported implementation baseline is:
 
-No unsafe Rust is permitted.
+Rust 1.97 / Rust 1.97.1
+Rust 2021
+safe Rust only
+
+No Rust "unsafe" may be introduced to satisfy compatibility requirements.
 
 ---
 
-75. Release Compatibility Checklist
+108. Compatibility Release Checklist
 
-Before a grammar release:
+Before a production grammar release:
 
-- [ ] Authority hierarchy is unchanged or explicitly updated.
+- [ ] Normative authority hierarchy is unchanged or explicitly updated.
 - [ ] Language version is identified.
-- [ ] Grammar version is identified.
-- [ ] AST compatibility reviewed.
-- [ ] Semantic compatibility reviewed.
-- [ ] IR compatibility reviewed.
-- [ ] Quantum compatibility reviewed.
-- [ ] QEC integration reviewed.
-- [ ] ZQN integration reviewed.
-- [ ] routing integration reviewed.
-- [ ] scheduling integration reviewed.
-- [ ] hardware integration reviewed.
-- [ ] runtime integration reviewed.
-- [ ] tooling integration reviewed.
-- [ ] interoperability reviewed.
-- [ ] deprecated syntax reviewed.
-- [ ] reserved syntax reviewed.
-- [ ] migration documentation updated.
-- [ ] compatibility tests pass.
-- [ ] scalability tests pass.
-- [ ] hard-coding audit passes.
-- [ ] no unsafe Rust introduced.
-- [ ] Rust 1.97.1 compatibility verified.
-- [ ] examples pass.
-- [ ] generated artifacts are reproducible.
-- [ ] no competing grammar authority was introduced.
+- [ ] Grammar version is identified where applicable.
+- [ ] Lexer impact is reviewed.
+- [ ] Parser impact is reviewed.
+- [ ] AST impact is reviewed.
+- [ ] Semantic impact is reviewed.
+- [ ] Type impact is reviewed.
+- [ ] Effect impact is reviewed.
+- [ ] Resource impact is reviewed.
+- [ ] Capability impact is reviewed.
+- [ ] Classical impact is reviewed.
+- [ ] Quantum impact is reviewed.
+- [ ] "quantum::ir" compatibility is reviewed.
+- [ ] QEC impact is reviewed.
+- [ ] ZQN impact is reviewed.
+- [ ] HDL impact is reviewed.
+- [ ] Hardware impact is reviewed.
+- [ ] Routing impact is reviewed.
+- [ ] Scheduling impact is reviewed.
+- [ ] Runtime impact is reviewed.
+- [ ] Tooling impact is reviewed.
+- [ ] Dialect impact is reviewed.
+- [ ] Interoperability impact is reviewed.
+- [ ] Deprecation impact is reviewed.
+- [ ] Migration impact is reviewed.
+- [ ] Reserved syntax impact is reviewed.
+- [ ] Positive tests pass.
+- [ ] Negative tests pass.
+- [ ] Boundary tests pass.
+- [ ] Scalability tests pass.
+- [ ] Determinism tests pass.
+- [ ] Round-trip tests pass where applicable.
+- [ ] Cross-domain tests pass.
+- [ ] Hard-coding audit passes.
+- [ ] Rust 1.97 / 1.97.1 compatibility passes.
+- [ ] No Rust "unsafe" is introduced.
+- [ ] Generated artifacts are reproducible.
+- [ ] No competing grammar authority was introduced.
+- [ ] No competing quantum IR was introduced.
+- [ ] Existing filenames were not unnecessarily renamed.
+- [ ] "grammar.md" status is synchronized.
+- [ ] "Zamani-Grammar.md" status is not accidentally promoted.
+- [ ] Compatibility matrix is updated.
 
 ---
 
-76. Completion Criteria
+109. Production Compatibility Invariants
 
-"grammar/compatibility/compatibility-matrix.md" is complete only when:
+The following are permanent architecture invariants unless deliberately changed through an explicit major language/architecture decision.
 
-1. Every public grammar feature has a compatibility classification.
-2. Every language-version transition has defined rules.
-3. Every stable construct has backward-compatibility expectations.
-4. Breaking changes have a documented procedure.
-5. Experimental constructs are identifiable.
-6. Deprecated constructs have migration rules.
-7. Reserved syntax is documented.
-8. Quantum compatibility explicitly preserves "quantum::ir" as the canonical quantum semantic boundary.
-9. QEC compatibility preserves the repository's canonical resource-policy ownership.
-10. Hardware compatibility does not impose arbitrary machine-size limits.
-11. POCO-REAF is explicitly protected.
-12. Cross-domain compatibility is defined.
-13. AST/IR/compiler/runtime ownership boundaries are explicit.
-14. Generated artifacts cannot silently become grammar authority.
-15. Compatibility tests are specified.
-16. Scalability tests are specified.
-17. Hard-coding audits are specified.
-18. Rust 1.97.1 is supported.
-19. Zamani implementation code remains free of "unsafe".
-20. The document does not create a second grammar or semantic IR.
+Invariant 1 — One language authority
+
+There MUST be one normative language specification.
+
+Invariant 2 — One canonical grammar composition root
+
+grammar/Zamani.g4
+
+remains the canonical ANTLR composition root.
+
+Invariant 3 — One frontend AST contract
+
+Domain-specific syntax MUST map into the established frontend AST architecture.
+
+Invariant 4 — One canonical quantum semantic boundary
+
+quantum::ir
+
+remains canonical.
+
+Invariant 5 — No hardware-derived language ceilings
+
+Current target capacity MUST NOT become a universal language limit.
+
+Invariant 6 — Requirements are not realization
+
+A resource requirement MUST NOT silently become a physical mapping.
+
+Invariant 7 — Capabilities are not devices
+
+A capability MUST NOT silently identify a vendor/device.
+
+Invariant 8 — QEC remains downstream
+
+Grammar expresses QEC intent; QEC implementation remains downstream.
+
+Invariant 9 — ZQN remains downstream
+
+Grammar expresses relevant fault/noise intent; ZQN remains downstream.
+
+Invariant 10 — Routing remains downstream
+
+Logical semantics are not physical placement.
+
+Invariant 11 — Scheduling remains downstream
+
+Semantic concurrency/order is not a fixed hardware schedule.
+
+Invariant 12 — Runtime does not define syntax
+
+Runtime capability cannot silently redefine source grammar.
+
+Invariant 13 — Documentation does not override specification
+
+Historical/proposed documentation cannot silently create stable syntax.
+
+Invariant 14 — Rust implementation is safe
+
+Zamani-owned Rust implementation does not use "unsafe".
+
+Invariant 15 — Compatibility is explicit
+
+No breaking change is introduced silently.
 
 ---
 
-77. Final Compatibility Invariant
+110. Final POCO-REAF Compatibility Model
 
-The fundamental invariant of Zamani is:
+The production architecture is:
 
-SOURCE SEMANTICS
-       ≠
-CURRENT MACHINE
+                         Zamani Source
+                               │
+                               ▼
+                    Language Version Resolution
+                               │
+                               ▼
+                       Canonical Lexer
+                               │
+                               ▼
+                    grammar/Zamani.g4
+                               │
+                               ▼
+                       Canonical Parser
+                               │
+                               ▼
+                    Frontend Domain-Neutral AST
+                               │
+                               ▼
+                       Semantic Analysis
+                               │
+             ┌─────────────────┼─────────────────┐
+             │                 │                 │
+             ▼                 ▼                 ▼
+           Types           Resources        Capabilities
+             │                 │                 │
+             └─────────────────┼─────────────────┘
+                               │
+                               ▼
+                    Portable Semantic Model
+                               │
+             ┌─────────────────┼─────────────────┐
+             │                 │                 │
+             ▼                 ▼                 ▼
+        Classical         quantum::ir          HDL/
+        semantics         canonical          hardware
+             │                 │              semantics
+             └─────────────────┼─────────────────┘
+                               │
+                               ▼
+                       Optimization/Lowering
+                               │
+               ┌───────────────┼────────────────┐
+               │               │                │
+               ▼               ▼                ▼
+            Routing         Scheduling       Resilience
+                                                │
+                                      ┌─────────┼─────────┐
+                                      ▼         ▼         ▼
+                                     QEC       ZQN       other
+                                      │         │
+                                      └────┬────┘
+                                           ▼
+                                          HAL
+                                           │
+                                           ▼
+                                  Target Realization
+                                           │
+             ┌─────────────┬───────────────┼──────────────┐
+             ▼             ▼               ▼              ▼
+            CPU           GPU             FPGA           ASIC
+             │             │               │              │
+             └─────────────┴──────┬────────┴──────────────┘
+                                  │
+                                  ▼
+                                QPU
+                                  │
+                                  ▼
+                           Distributed/HPC
+                                  │
+                                  ▼
+                         Future substrates
 
-Instead:
+The source program defines meaning.
 
-SOURCE SEMANTICS
-       ↓
-PORTABLE SEMANTIC MODEL
-       ↓
-CAPABILITIES + REQUIREMENTS + CONSTRAINTS + PREFERENCES
-       ↓
-COMPILATION / LOWERING
-       ↓
-RESOURCE DISCOVERY
-       ↓
-ROUTING / SCHEDULING / OPTIMIZATION
-       ↓
-TARGET REALIZATION
-       ↓
-RUNTIME
+The semantic model defines requirements and guarantees.
+
+The compiler determines implementation strategy.
+
+The runtime determines execution strategy.
+
+The target provides actual resources and capabilities.
+
+The compatibility system guarantees that those layers do not silently redefine one another.
+
+---
+
+111. Final Compatibility Principle
+
+The fundamental Zamani compatibility rule is:
+
+«SOURCE SEMANTICS MUST NOT BECOME CURRENT-MACHINE SEMANTICS.»
 
 Therefore:
 
-«A change in available hardware must not require rewriting a Zamani program merely because the hardware became larger, smaller, faster, slower, quantum, classical, heterogeneous, distributed, embedded, or otherwise different.»
+Program
+   ↓
+Portable Meaning
+   ↓
+Requirements
+   +
+Capabilities
+   +
+Constraints
+   +
+Preferences
+   ↓
+Canonical Representation
+   ↓
+Compilation
+   ↓
+Optimization
+   ↓
+Resource Discovery
+   ↓
+Routing / Scheduling / Resilience
+   ↓
+Target Realization
+   ↓
+Execution
 
-And:
+A machine becoming:
 
-«A compatibility change must never turn an implementation detail into permanent language semantics merely because one current target happens to have that limitation.»
+- larger;
+- smaller;
+- faster;
+- slower;
+- multicore;
+- manycore;
+- GPU-based;
+- FPGA-based;
+- ASIC-based;
+- quantum;
+- hybrid;
+- distributed;
+- embedded;
+- cloud-based;
+- HPC-based;
+- or based on a future computational substrate
 
-The long-term contract is:
+MUST NOT by itself require a rewrite of the Zamani program.
 
-One Program
-     ↓
-One Semantic Meaning
-     ↓
-One Portable Compilation Model
-     ↓
-Many Targets
-     ↓
-Many Architectures
-     ↓
-Many Resource Configurations
-     ↓
-Many Execution Environments
-     ↓
-Future Computing Paradigms
+The program may become infeasible on a particular target when its explicit requirements cannot be satisfied. That is a resource/capability/target failure, not a reason to redefine the language.
 
-This is the compatibility foundation required for:
+Likewise, a new hardware capability MUST NOT force a new core language syntax when the existing semantic extension mechanisms are sufficient.
+
+---
+
+112. Final Production Contract
+
+"grammar/compatibility/compatibility-matrix.md" is production-ready when it remains the single cross-layer compatibility relationship authority while preserving the existing ownership model:
+
+versions.md
+    → version policy
+
+migrations.md
+    → migration procedure
+
+deprecated.md
+    → deprecation lifecycle
+
+reserved.md
+    → reserved syntax
+
+compatibility-matrix.md
+    → cross-layer compatibility relationships
+
+specification/
+    → normative language meaning
+
+spec/
+    → formal contracts
+
+Zamani.g4
+    → canonical grammar composition
+
+grammar.md
+    → implementation/conformance reference
+
+Zamani-Grammar.md
+    → historical/extended/proposed design
+
+src/lexer.rs
+    → lexer implementation
+
+src/parser.rs
+    → parser implementation
+
+src/frontend/ast/
+    → frontend structural representation
+
+semantic analysis
+    → meaning
+
+quantum::ir
+    → canonical quantum semantic boundary
+
+QEC
+    → error-correction implementation/policy
+
+ZQN
+    → fault/noise semantics
+
+routing
+    → physical mapping
+
+scheduling
+    → execution/implementation schedule
+
+HAL
+    → target realization
+
+runtime
+    → execution
+
+No layer may silently assume ownership belonging to another layer.
+
+No current machine capacity may become a permanent language ceiling.
+
+No target-specific implementation may become a hidden grammar rule.
+
+No external format may become a competing Zamani semantic authority.
+
+No frontend quantum IR may replace "quantum::ir".
+
+No Rust "unsafe" is required or permitted for the Zamani implementation.
+
+And the governing portability invariant remains:
+
+Program Once
+      ↓
+Compile Once
+      ↓
+Preserve One Semantic Meaning
+      ↓
+Adapt Through Capabilities + Resources
+      ↓
+Run Everywhere
+      ↓
+Anywhere
+      ↓
+Forever
 
 Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever (POCO-REAF)
-
-and for Zamani's governing principle:
 
 From Atom to Everywhere.
