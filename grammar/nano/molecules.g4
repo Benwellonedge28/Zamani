@@ -2,55 +2,40 @@
 /*
  * ============================================================================
  * Zamani Universal Computing Language
- * ============================================================================
  *
- * FILE
- * ----
- * grammar/nano/molecules.g4
+ * File: grammar/nano/molecules.g4
+ * Grammar: NanoMolecules
+ * Status: Proposed canonical molecular-domain parser component
  *
- * GRAMMAR
- * -------
- * NanoMolecules
- *
- * STATUS
- * ------
- * PROPOSED CANONICAL NANO-MOLECULE DOMAIN GRAMMAR
- *
- * LANGUAGE
- * --------
- * Zamani
- *
- * COMPILER BASELINE
- * -----------------
- * Rust 1.97 / Rust 1.97.1
- * Rust 2021
- * Safe Rust only; no unsafe Rust
+ * Baseline:
+ *   Rust 1.97 / 1.97.1
+ *   Rust 2021
+ *   Safe Rust only
+ *   No unsafe Rust
  *
  * ============================================================================
  * 1. PURPOSE
  * ============================================================================
  *
- * This grammar owns the source-level STRUCTURE of molecular declarations
- * and molecular composition in Zamani.
+ * Owns the source-level syntax for molecular structures and composition.
  *
- * It provides syntax for:
- *
- *   - annotated molecule declarations;
- *   - named and parameterized molecule declarations;
- *   - optional molecule types;
- *   - molecule bodies;
+ * Supports:
+ *   - annotated molecular declarations;
+ *   - named and generic molecules;
+ *   - optional molecular types;
+ *   - molecular parameters;
  *   - typed molecular members;
- *   - member initializers;
- *   - component bindings and references;
- *   - nested molecular declarations;
- *   - open-world molecular annotations/directives;
- *   - ordinary Zamani statements inside a molecule body;
- *   - references and expressions supplied by the canonical language grammar.
+ *   - component bindings;
+ *   - nested nano constructs;
+ *   - open-world annotations and directives;
+ *   - initialization expressions;
+ *   - ordinary Zamani statements;
+ *   - symbolic molecular dimensions and properties.
  *
- * This is a syntax contract, not a chemistry implementation.
+ * This grammar describes computational and structural intent.
  *
- * The grammar does not determine whether a molecular structure is chemically
- * possible, stable, synthesizable, safe, or physically realizable.
+ * It does not implement chemistry, quantum mechanics, molecular simulation,
+ * chemical feasibility, physical synthesis, or target realization.
  *
  * ============================================================================
  * 2. ARCHITECTURAL POSITION
@@ -62,7 +47,7 @@
  * ZamaniLexer
  *      |
  *      v
- * Canonical Zamani parser composition
+ * Canonical parser composition
  *      |
  *      v
  * NanoMolecules
@@ -71,13 +56,16 @@
  * Domain-neutral frontend AST
  *      |
  *      v
- * Name resolution / type checking / semantic validation
+ * Name resolution / type analysis
  *      |
- *      +--> molecular structure validation
- *      +--> atom and component resolution
- *      +--> capability and resource analysis
- *      +--> quantum/classical/hybrid analysis
- *      +--> physical-model validation, where applicable
+ *      +--> atom resolution
+ *      +--> component resolution
+ *      +--> molecular validation
+ *      +--> resource analysis
+ *      +--> capability analysis
+ *      +--> classical analysis
+ *      +--> quantum analysis
+ *      +--> physical-model validation
  *      |
  *      v
  * Canonical semantic model
@@ -85,11 +73,17 @@
  *      v
  * Canonical IR
  *      |
+ *      +--> classical IR
+ *      +--> quantum::ir
+ *      +--> hardware/HDL IR where applicable
+ *      |
  *      v
- * Optimization / simulation / lowering / target realization
+ * Optimization / simulation / lowering
+ *      |
+ *      v
+ * Target realization
  *
- * Quantum-related computation MUST use the existing canonical quantum::ir
- * boundary. This grammar MUST NOT introduce a second quantum IR.
+ * This grammar MUST NOT introduce another quantum IR.
  *
  * ============================================================================
  * 3. OWNERSHIP
@@ -101,6 +95,8 @@
  *   nanoMoleculeAnnotatedConstruct
  *   nanoMoleculeAnnotation
  *   nanoMoleculeTail
+ *   nanoMoleculeInvocation
+ *   nanoMoleculeInvocationTail
  *   nanoMoleculeDeclaration
  *   nanoMoleculeName
  *   nanoMoleculeParameterClause
@@ -108,6 +104,7 @@
  *   nanoMoleculeParameter
  *   nanoMoleculeTypeClause
  *   nanoMoleculeInitializer
+ *   nanoMoleculeDeclarationTail
  *   nanoMoleculeBody
  *   nanoMoleculeMember
  *   nanoMoleculeTypedMember
@@ -115,250 +112,199 @@
  *   nanoMoleculeNestedConstruct
  *   nanoMoleculeDirective
  *   nanoMoleculeDirectiveTail
+ *   nanoMoleculeMemberAnnotation
  *
- * THIS FILE DOES NOT OWN:
+ * DOES NOT OWN:
  *
- *   - lexical token definitions or tokenization;
- *   - identifiers, qualified names, or name resolution;
- *   - general expression precedence;
- *   - general type syntax;
- *   - general statements or blocks;
+ *   - lexical tokens;
+ *   - identifiers or qualified-name resolution;
+ *   - general expressions or expression precedence;
+ *   - general types;
+ *   - ordinary statements;
  *   - atom declarations;
  *   - agent declarations;
  *   - material declarations;
- *   - chemical element or isotope registries;
- *   - periodic-table data;
- *   - molecular bonding rules;
- *   - chemical reaction models;
- *   - physical constants or simulation algorithms;
- *   - quantum state representation or quantum operations;
- *   - hardware topology or device discovery;
- *   - resource allocation, placement, routing, or scheduling;
- *   - calibration, QEC, ZQN, or HAL;
- *   - backend implementation, runtime execution, or IR construction.
+ *   - interactions;
+ *   - chemical element/isotope registries;
+ *   - molecular bond semantics;
+ *   - chemistry algorithms;
+ *   - physical constants;
+ *   - simulation algorithms;
+ *   - quantum state representation;
+ *   - quantum operation implementation;
+ *   - resource allocation;
+ *   - hardware topology;
+ *   - physical placement;
+ *   - routing or scheduling;
+ *   - QEC, ZQN, calibration, or HAL.
  *
  * ============================================================================
- * 4. DEPENDENCIES
+ * 4. CANONICAL DEPENDENCIES
  * ============================================================================
  *
  * Lexer vocabulary:
  *
- *     ZamaniLexer
+ *   ZamaniLexer
  *
  * Required token names:
  *
- *     AT
- *     LPAREN
- *     RPAREN
- *     LBRACE
- *     RBRACE
- *     LBRACKET
- *     RBRACKET
- *     COMMA
- *     COLON
- *     SEMICOLON
- *     ASSIGN
+ *   AT LPAREN RPAREN
+ *   LBRACE RBRACE
+ *   COMMA COLON SEMICOLON ASSIGN
+ *   LT GT
  *
- * Canonical parser rules consumed:
+ * Imported parser grammars:
  *
- *     identifier
- *     typeExpression
- *     expression
- *     argumentList
- *     statement
+ *   Types       -> typeExpression
+ *   Expressions -> expression, argumentList
+ *   Statements  -> statement
  *
- * These rules are owned by the canonical Types, Expressions, and Statements
- * parser grammars. This file does not redefine them.
- *
- * The token names above are integration requirements. Before enabling this
- * grammar in the ANTLR build, verify that the actual ZamaniLexer vocabulary
- * exports each name. Do not add duplicate token definitions here.
+ * The canonical lexer MUST export these tokens.
+ * This grammar must not define duplicate lexer tokens.
  *
  * ============================================================================
  * 5. OPEN-WORLD DESIGN
  * ============================================================================
  *
- * Annotation names are identifiers, not a closed list of reserved words.
+ * Annotation names are identifiers, not a closed keyword enumeration.
  *
  * Examples:
  *
- *     @molecule
- *     @component
- *     @atom
- *     @bond
- *     @interaction
- *     @property
- *     @requires
- *     @capability
- *     @constraint
- *     @prefer
- *     @future_extension
+ *   @molecule
+ *   @atom
+ *   @material
+ *   @bond
+ *   @interaction
+ *   @component
+ *   @property
+ *   @requires
+ *   @capability
+ *   @constraint
+ *   @prefer
  *
- * The parser recognizes the structural annotation form. Semantic analysis
- * owns the registered meaning, validation, versioning, and compatibility of
- * each annotation name.
- *
- * Adding a new molecular annotation must not require adding a lexer keyword
- * or enumerating a new parser alternative.
+ * New annotation names do not require changes to the lexer or this grammar.
+ * Their meaning is determined by registered semantic extensions.
  *
  * ============================================================================
  * 6. SCALABILITY AND POCO-REAF
  * ============================================================================
  *
- * The grammar imposes no universal upper bound on:
+ * No artificial grammar-level maximum is imposed on:
  *
- *     molecules
- *     components
- *     members
- *     parameters
- *     annotations
- *     references
- *     nesting
- *     expressions
- *     declarations
- *     source units
+ *   molecules
+ *   components
+ *   parameters
+ *   annotations
+ *   members
+ *   references
+ *   nesting
+ *   molecular dimensions
+ *   source declarations
  *
- * It MUST NOT introduce artificial limits such as:
+ * Prohibited universal language limits include:
  *
- *     MAX_MOLECULES
- *     MAX_COMPONENTS
- *     MAX_ATOMS_PER_MOLECULE
- *     MAX_BONDS
- *     MAX_MOLECULAR_DEPTH
- *     MAX_MOLECULAR_SIZE
+ *   MAX_MOLECULES
+ *   MAX_COMPONENTS
+ *   MAX_ATOMS_PER_MOLECULE
+ *   MAX_BONDS
+ *   MAX_MOLECULAR_DEPTH
+ *   MAX_MOLECULAR_SIZE
  *
- * Explicit numeric values are valid when they are part of program meaning.
- * They must not be interpreted as language-wide implementation ceilings.
+ * Numeric values explicitly written in source are program semantics,
+ * not universal implementation ceilings.
  *
- * "Scale to infinity" means no arbitrary language-level maximum. Actual
- * compilation and execution remain subject to semantic requirements,
- * implementation policy, and available resources.
- *
- * POCO-REAF requires source to describe WHAT is intended. The compiler and
- * runtime determine HOW and WHERE that intent can be realized.
+ * Resource availability and implementation limits are evaluated downstream.
  *
  * ============================================================================
- * 7. SYNTAX MODEL
+ * 7. AST CONTRACT
  * ============================================================================
  *
- * A molecule is introduced by an annotation followed by a name:
+ * Preserve:
  *
- *     @molecule Water {
- *         ...
- *     }
- *
- * A typed or parameterized declaration may be written as:
- *
- *     @molecule Complex<T>(left: T, right: T): MolecularStructure {
- *         ...
- *     }
- *
- * The annotation name is not interpreted by the parser. The canonical nano
- * dispatcher and semantic layer determine whether the annotation denotes a
- * molecule declaration, another nano construct, or an invalid use.
- *
- * Within a molecule body, members have distinct structural forms:
- *
- *     name: Type;
- *     name: Type = expression;
- *     component = expression;
- *     @annotation;
- *     @annotation(arguments);
- *     @annotation { ... }
- *     ordinary_statement
- *
- * The grammar deliberately does not infer chemistry from member names.
- *
- * ============================================================================
- * 8. AST CONTRACT
- * ============================================================================
- *
- * The frontend should preserve:
- *
- *   - the annotation and its source span;
- *   - the declared name and source span;
- *   - parameter syntax and source spans;
- *   - optional type and initializer syntax;
+ *   - complete declaration source span;
+ *   - annotation name and span;
+ *   - molecule name and span;
+ *   - parameter syntax and spans;
+ *   - optional type;
+ *   - initializer;
  *   - ordered body members;
- *   - member annotations/directives;
+ *   - member annotations;
  *   - component expressions;
- *   - ordinary statement nodes;
- *   - complete source spans for the declaration and its children.
+ *   - nested declarations;
+ *   - ordinary statements;
+ *   - original source locations.
  *
- * Prefer existing domain-neutral AST representations for attributes,
- * declarations, bindings, expressions, blocks, and statements.
+ * Prefer domain-neutral AST nodes.
  *
- * Do not introduce NanoMoleculeIR or a second quantum IR merely because this
- * parser grammar exists. Any specialized semantic representation must be
- * designed at the canonical semantic-model/IR boundary.
+ * Do not introduce NanoMoleculeIR or a second quantum IR.
  *
  * ============================================================================
- * 9. SEMANTIC CONTRACT
+ * 8. SEMANTIC CONTRACT
  * ============================================================================
  *
- * Semantic analysis, not parsing, is responsible for:
+ * Semantic analysis owns:
  *
- *   - resolving the molecule name and referenced components;
- *   - validating parameter names, types, and scopes;
- *   - validating component types and composition relationships;
- *   - detecting invalid or cyclic composition where prohibited;
- *   - interpreting registered annotations and directives;
- *   - checking domain-specific molecular constraints;
- *   - checking capabilities, effects, and resource requirements;
- *   - determining whether a requested physical model is supported;
- *   - producing stable, source-located diagnostics.
+ *   - determining whether an annotation denotes a molecule;
+ *   - resolving molecular identities;
+ *   - resolving referenced atoms and components;
+ *   - validating parameter scopes and types;
+ *   - validating component relationships;
+ *   - detecting prohibited cyclic composition;
+ *   - interpreting annotations;
+ *   - validating molecular properties;
+ *   - checking capabilities and resources;
+ *   - validating physical-model requirements;
+ *   - producing source-located diagnostics.
  *
- * Unknown annotation names must follow the language's configured extension
- * policy: preserve them for registered extensions or report a semantic
- * diagnostic. The parser must not silently assign them physical meaning.
- *
- * ============================================================================
- * 10. INTEGRATION CONTRACT
- * ============================================================================
- *
- * Expected neighboring files:
- *
- *     grammar/nano/agents.g4
- *     grammar/nano/atoms.g4
- *     grammar/nano/materials.g4
- *     grammar/nano/interactions.g4
- *     grammar/nano/protocols.g4
- *
- * The canonical parser composition layer must:
- *
- *   1. import NanoMolecules;
- *   2. expose nanoMoleculeConstruct through the nano/domain dispatcher;
- *   3. ensure only one dispatcher owns the decision to parse a top-level
- *      nano construct;
- *   4. use the same Types, Expressions, and Statements contracts;
- *   5. avoid importing this grammar through a cycle.
- *
- * Atoms, materials, interactions, and protocols remain separate owners.
- * Their declarations may be referenced through canonical expressions,
- * types, or registered annotations; this grammar does not duplicate them.
- *
- * Rust integration remains in the existing frontend:
- *
- *     src/lexer.rs
- *     src/parser.rs
- *     src/frontend/ast/
- *
- * The Rust frontend must implement or explicitly mark this syntax as
- * unsupported until its AST and parser support are complete. ANTLR grammar
- * acceptance alone does not establish Rust frontend conformance.
+ * Unknown annotations must follow the configured extension policy.
+ * Parsing must never silently assign physical meaning.
  *
  * ============================================================================
- * 11. DETERMINISM AND SAFETY
+ * 9. INTEGRATION CONTRACT
  * ============================================================================
  *
- * This grammar contains no actions, semantic predicates, embedded code,
- * hardware queries, file access, network access, or physical execution.
+ * Existing neighboring components:
  *
- * Parsing is determined by the input token sequence and grammar version.
+ *   grammar/nano/atoms.g4
+ *   grammar/nano/agents.g4
+ *   grammar/nano/materials.g4       (when present)
+ *   grammar/nano/interactions.g4    (when present)
+ *   grammar/nano/protocols.g4       (when present)
  *
- * Runtime/compiler implementation must use Rust 2021 and Rust 1.97 or
- * Rust 1.97.1, and must not use unsafe Rust.
+ * Shared grammar dependencies:
  *
+ *   Types
+ *   Expressions
+ *   Statements
+ *
+ * The canonical nano dispatcher owns top-level nano construct selection.
+ *
+ * Atom, agent, material, and interaction grammars retain their own ownership.
+ * This file references their constructs through the shared syntax boundary.
+ *
+ * Rust frontend integration:
+ *
+ *   src/lexer.rs
+ *   src/parser.rs
+ *   src/frontend/ast/
+ *
+ * ANTLR acceptance does not imply Rust frontend implementation.
+ *
+ * ============================================================================
+ * 10. DETERMINISM AND SAFETY
+ * ============================================================================
+ *
+ * No grammar actions.
+ * No semantic predicates.
+ * No embedded Rust.
+ * No hardware queries.
+ * No file or network access.
+ * No physical execution.
+ *
+ * Parsing depends only on the input token sequence and grammar version.
+ *
+ * Production Rust implementation must use Rust 2021 and Rust 1.97 or
+ * Rust 1.97.1, with no unsafe code.
  * ============================================================================
  */
 
@@ -372,48 +318,73 @@ import Types,
        Expressions,
        Statements;
 
+
 /*
- * Public entry point.
+ * ============================================================================
+ * 11. PUBLIC ENTRY POINT
+ * ============================================================================
  *
- * The universal parser decides when a nano molecule construct is legal.
- * This grammar does not create another program/source-unit root.
+ * The canonical nano dispatcher invokes nanoMoleculeConstruct.
+ *
+ * This grammar does not create another program root.
  */
+
 nanoMoleculeConstruct
     : nanoMoleculeAnnotatedConstruct
     ;
 
+
 /*
- * Annotation-led construct.
+ * ============================================================================
+ * 12. ANNOTATION-LED CONSTRUCT
+ * ============================================================================
  *
- * The annotation name remains open-world. Semantic analysis determines
- * whether it is a molecule declaration or another registered construct.
+ * The annotation's meaning is semantic.
+ *
+ * The structural tail determines whether the source is:
+ *
+ *   - a named declaration;
+ *   - an annotation invocation;
+ *   - an annotated body;
+ *   - an empty annotation directive.
+ *
+ * This avoids treating every annotation as a molecule declaration.
  */
+
 nanoMoleculeAnnotatedConstruct
     : nanoMoleculeAnnotation
       nanoMoleculeTail
     ;
 
+
 nanoMoleculeAnnotation
     : AT identifier
     ;
 
-/*
- * Structural alternatives are distinguished by their following punctuation:
- *
- *   identifier ...  named declaration
- *   ( ... )         annotation invocation
- *   { ... }         anonymous annotated body
- *   ;               empty directive
- *
- * A directive without a declaration name cannot accidentally consume an
- * arbitrary expression.
- */
+
 nanoMoleculeTail
     : nanoMoleculeDeclaration
     | nanoMoleculeInvocation
     | nanoMoleculeBody
     | SEMICOLON
     ;
+
+
+/*
+ * ============================================================================
+ * 13. ANNOTATION INVOCATION
+ * ============================================================================
+ *
+ * Examples:
+ *
+ *   @molecule(...)
+ *   @component(...)
+ *   @requires(...)
+ *
+ * An invocation may optionally have a body or terminate with a semicolon.
+ *
+ * The invocation itself does not establish a molecular declaration.
+ */
 
 nanoMoleculeInvocation
     : LPAREN
@@ -422,22 +393,35 @@ nanoMoleculeInvocation
       nanoMoleculeInvocationTail
     ;
 
+
 nanoMoleculeInvocationTail
     : nanoMoleculeBody
     | SEMICOLON
     ;
 
+
 /*
- * Named molecule declaration.
+ * ============================================================================
+ * 14. MOLECULAR DECLARATION
+ * ============================================================================
  *
- * Examples:
+ * Supported structural forms:
  *
  *   @molecule Water { ... }
- *   @molecule Complex<T>(left: T): Structure { ... }
+ *
+ *   @molecule Complex<T> {
+ *       ...
+ *   }
+ *
+ *   @molecule Complex<T>(left: T, right: T): Structure {
+ *       ...
+ *   }
+ *
  *   @molecule Complex = expression;
  *
- * The annotation's semantic role is validated outside the parser.
+ * The semantic layer verifies that the annotation is valid for this form.
  */
+
 nanoMoleculeDeclaration
     : nanoMoleculeName
       nanoMoleculeParameterClause?
@@ -446,9 +430,11 @@ nanoMoleculeDeclaration
       nanoMoleculeDeclarationTail
     ;
 
+
 nanoMoleculeName
     : identifier
     ;
+
 
 nanoMoleculeParameterClause
     : LT
@@ -456,11 +442,13 @@ nanoMoleculeParameterClause
       GT
     ;
 
+
 nanoMoleculeParameterList
     : nanoMoleculeParameter
       (COMMA nanoMoleculeParameter)*
       COMMA?
     ;
+
 
 nanoMoleculeParameter
     : identifier
@@ -468,40 +456,87 @@ nanoMoleculeParameter
       (ASSIGN expression)?
     ;
 
+
 nanoMoleculeTypeClause
     : COLON typeExpression
     ;
 
+
 nanoMoleculeInitializer
     : ASSIGN expression
     ;
+
 
 nanoMoleculeDeclarationTail
     : nanoMoleculeBody
     | SEMICOLON
     ;
 
+
 /*
- * A body is an ordered sequence. Repetition is not a language-level
- * cardinality limit; practical parser/resource budgets belong to tooling
- * policy and must be diagnosed separately from language validity.
+ * ============================================================================
+ * 15. MOLECULAR BODY
+ * ============================================================================
+ *
+ * An ordered, extensible sequence of molecular members.
+ *
+ * No arbitrary member count is imposed.
+ *
+ * A body may contain nested nano constructs, typed members, component
+ * bindings, directives, and ordinary Zamani statements.
  */
+
 nanoMoleculeBody
     : LBRACE
       nanoMoleculeMember*
       RBRACE
     ;
 
+
 nanoMoleculeMember
     : nanoMoleculeNestedConstruct
+    | nanoMoleculeMemberAnnotation
     | nanoMoleculeTypedMember
     | nanoMoleculeComponentBinding
     | nanoMoleculeDirective
     | statement
     ;
 
+
 /*
- * A typed member declares a molecular property/component slot.
+ * ============================================================================
+ * 16. MEMBER ANNOTATIONS
+ * ============================================================================
+ *
+ * An annotation attached to a member is distinct from a nested declaration.
+ *
+ * Examples:
+ *
+ *   @property;
+ *   @property(...);
+ *
+ * An annotation followed by a body is represented as a nested construct.
+ */
+
+nanoMoleculeMemberAnnotation
+    : nanoMoleculeAnnotation
+      nanoMoleculeMemberAnnotationTail
+    ;
+
+
+nanoMoleculeMemberAnnotationTail
+    : LPAREN
+      argumentList?
+      RPAREN
+      SEMICOLON
+    | SEMICOLON
+    ;
+
+
+/*
+ * ============================================================================
+ * 17. TYPED MOLECULAR MEMBER
+ * ============================================================================
  *
  * Examples:
  *
@@ -509,10 +544,13 @@ nanoMoleculeMember
  *   geometry: MolecularGeometry = geometry_expression;
  *   substrate: AtomType;
  *
- * The grammar does not decide whether a member is an atom, bond, property,
- * site, or another domain concept. Registered annotations and semantic
- * types provide that meaning.
+ * The grammar does not infer whether a member represents an atom, bond,
+ * property, site, or another molecular concept.
+ *
+ * The optional semicolon preserves compatibility with the existing grammar.
+ * A future strict syntax profile may require it.
  */
+
 nanoMoleculeTypedMember
     : identifier
       COLON
@@ -521,16 +559,25 @@ nanoMoleculeTypedMember
       SEMICOLON?
     ;
 
+
 /*
- * Component binding is intentionally generic.
+ * ============================================================================
+ * 18. COMPONENT BINDING
+ * ============================================================================
  *
  * Examples:
  *
  *   oxygen = oxygen_component;
  *   ligand = resolve_ligand(configuration);
  *
- * Whether the expression denotes a valid component is semantic analysis.
+ * The expression is parsed using the canonical expression grammar.
+ *
+ * Whether it denotes a valid molecular component is semantic.
+ *
+ * Semicolon is required to distinguish a completed binding from a following
+ * statement.
  */
+
 nanoMoleculeComponentBinding
     : identifier
       ASSIGN
@@ -538,25 +585,32 @@ nanoMoleculeComponentBinding
       SEMICOLON
     ;
 
+
 /*
- * Nested annotation-led constructs allow open-world molecular composition
- * without importing atom/material grammars into one another.
+ * ============================================================================
+ * 19. NESTED NANO CONSTRUCT
+ * ============================================================================
  *
- * Examples:
+ * Supports composition such as:
  *
  *   @atom Oxygen { ... }
  *   @molecule Ligand { ... }
  *   @material Substrate { ... }
  *
- * The nano domain dispatcher/semantic layer validates which nested
- * constructs are permitted in the enclosing context.
+ * This is structural reuse, not ownership transfer.
+ *
+ * The enclosing semantic context decides which nested constructs are valid.
  */
+
 nanoMoleculeNestedConstruct
     : nanoMoleculeAnnotatedConstruct
     ;
 
+
 /*
- * Open-world directive inside a molecule.
+ * ============================================================================
+ * 20. OPEN-WORLD DIRECTIVE
+ * ============================================================================
  *
  * Examples:
  *
@@ -565,19 +619,74 @@ nanoMoleculeNestedConstruct
  *   @constraint(valid_geometry);
  *   @future_extension { ... }
  *
- * Directive names are identifiers. Their meanings and argument contracts
- * are registered and checked semantically.
+ * Directive names remain identifiers.
+ *
+ * Their meaning is registered and checked semantically.
  */
+
 nanoMoleculeDirective
     : nanoMoleculeAnnotation
       nanoMoleculeDirectiveTail
     ;
 
+
 nanoMoleculeDirectiveTail
     : LPAREN
       argumentList?
       RPAREN
-      (nanoMoleculeBody | SEMICOLON)?
+      (
+          nanoMoleculeBody
+        | SEMICOLON
+      )
     | nanoMoleculeBody
     | SEMICOLON
     ;
+
+
+/*
+ * ============================================================================
+ * 21. INTEGRATION INVARIANTS
+ * ============================================================================
+ *
+ * The following invariants are mandatory.
+ *
+ * 1. One canonical lexer vocabulary.
+ *
+ * 2. One canonical expression grammar.
+ *
+ * 3. One canonical type grammar.
+ *
+ * 4. One canonical statement grammar.
+ *
+ * 5. One canonical nano dispatcher.
+ *
+ * 6. Atom declarations remain owned by NanoAtoms.
+ *
+ * 7. Agent declarations remain owned by NanoAgents.
+ *
+ * 8. Material declarations remain owned by their material grammar.
+ *
+ * 9. Interaction declarations remain owned by their interaction grammar.
+ *
+ * 10. Molecular syntax maps into the domain-neutral AST.
+ *
+ * 11. Quantum computation uses quantum::ir.
+ *
+ * 12. No molecular-specific parallel quantum IR is permitted.
+ *
+ * 13. Resource and capability checks happen after parsing.
+ *
+ * 14. Physical feasibility is not a parsing decision.
+ *
+ * 15. No arbitrary molecular-size limits are introduced.
+ *
+ * 16. No parser rule performs execution or physical simulation.
+ *
+ * 17. Source spans must be preserved for every declaration and member.
+ *
+ * 18. Grammar acceptance and Rust frontend acceptance are tracked separately.
+ *
+ * ============================================================================
+ * END OF FILE
+ * ============================================================================
+ */
