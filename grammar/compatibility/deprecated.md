@@ -3,10 +3,11 @@ Zamani Deprecation Policy
 Path: "grammar/compatibility/deprecated.md"
 Status: Normative
 Language: Zamani
-Scope: Source-language features, lexical constructs, grammar constructs, AST contracts, semantic constructs, dialects, interoperability constructs, tooling-facing syntax, and other user-visible language features subject to deprecation
-Implementation baseline: Rust 1.97 / Rust 1.97.1
-Safety requirement: Zamani's Rust implementation MUST use safe Rust; "unsafe" Rust MUST NOT be required by this policy or by its implementation
-Primary objective: Preserve semantic stability, portability, scalability, extensibility, and POCO-REAF while allowing controlled language evolution
+Repository: "Benwellonedge28/Zamani"
+Rust baseline: Rust 1.97 / Rust 1.97.1
+Rust edition: 2021
+Safety requirement: Production Zamani Rust implementation MUST use safe Rust. Rust "unsafe" MUST NOT be required or used.
+Primary objective: Preserve semantic stability, portability, scalability, extensibility, and POCO-REAF while allowing controlled language evolution.
 
 POCO-REAF:
 
@@ -21,175 +22,319 @@ This document defines the normative deprecation policy for Zamani.
 It establishes:
 
 - what may be deprecated;
-- why a feature may be deprecated;
-- how deprecation is declared;
-- how deprecation is communicated;
-- how long deprecated functionality remains supported;
-- how migration paths are defined;
-- how deprecated syntax interacts with the grammar;
-- how deprecated constructs interact with the AST and semantic model;
-- how deprecated constructs interact with canonical IR;
-- how quantum, classical, HDL, hardware, distributed, AI, networking, security, and future-domain features are deprecated;
+- what must not be deprecated merely because of implementation limitations;
+- how a feature becomes deprecated;
+- how deprecation is represented;
+- how deprecated syntax remains compatible;
+- how deprecation interacts with language versions;
+- how deprecation interacts with "Zamani.g4";
+- how deprecation interacts with the lexer and parser;
+- how deprecation interacts with the domain-neutral AST;
+- how deprecation interacts with semantic analysis;
+- how deprecation interacts with canonical IR;
+- how quantum syntax reaches "quantum::ir";
+- how classical, HDL, hardware, distributed, AI, networking, security, and future domains evolve;
+- how migrations are connected to "compatibility/migrations.md";
 - how removal is approved;
-- how compatibility is preserved;
-- how tooling reports deprecated constructs;
+- how diagnostics are emitted;
 - how deprecation is tested;
-- how deprecation avoids introducing artificial scalability limits.
+- how deprecation remains deterministic;
+- how deprecation preserves scalability;
+- how deprecation preserves POCO-REAF.
 
-Deprecation MUST be deliberate, explicit, deterministic, documented, testable, and reversible until the removal stage.
+The governing rule is:
+
+«Deprecate representations when necessary; preserve specified semantics whenever possible.»
+
+Deprecation is a controlled language-evolution mechanism. It is not a mechanism for shrinking the language to match temporary compiler, runtime, vendor, or hardware limitations.
 
 A feature MUST NOT become deprecated merely because its current implementation is incomplete.
 
-A feature MUST NOT be removed merely because a particular backend or machine cannot support it.
+A feature MUST NOT be removed merely because a particular backend, device, runtime, or machine cannot support it.
 
 ---
 
-2. Fundamental Principle
+2. Normative Language
 
-The governing principle is:
+The following terms are normative:
 
-«Deprecate representations when necessary; preserve stable semantics whenever possible.»
+- MUST — mandatory.
+- MUST NOT — prohibited.
+- REQUIRED — mandatory.
+- SHOULD — recommended unless a documented technical reason exists otherwise.
+- SHOULD NOT — discouraged unless justified.
+- MAY — permitted.
+- OPTIONAL — permitted but not required.
 
-Deprecation is a language-evolution mechanism.
+A deprecation claim is normative only when it is represented by the feature's authoritative compatibility metadata and supported by conformance tests.
 
-It is NOT:
-
-- a substitute for fixing implementation bugs;
-- a substitute for backend capability management;
-- a substitute for resource management;
-- a substitute for migration tooling;
-- a way to encode hardware limitations;
-- a way to remove difficult compiler functionality without a compatibility decision.
-
-The preferred lifecycle is:
-
-PROPOSED
-   ↓
-EXPERIMENTAL
-   ↓
-STABLE
-   ↓
-DEPRECATED
-   ↓
-MIGRATION AVAILABLE
-   ↓
-REMOVAL ELIGIBLE
-   ↓
-REMOVED
-
-A feature MAY move directly from experimental status to removal when it was never promised as stable.
-
-A stable feature MUST NOT silently jump from:
-
-STABLE
-
-to:
-
-REMOVED
-
-without an explicit compatibility decision.
+A statement in an example, historical document, comment, or proposal MUST NOT by itself create a deprecation guarantee.
 
 ---
 
-3. Ownership Boundaries
+3. File Completion Contract
 
-This file owns deprecation policy.
+This file is complete only when its responsibilities can be implemented without requiring another file to redefine what deprecation means.
 
-It does NOT own:
+3.1 Purpose
+
+This file defines the lifecycle and compatibility policy for deprecated Zamani features.
+
+3.2 Owns
+
+This file owns:
+
+- deprecation semantics;
+- deprecation lifecycle;
+- deprecation eligibility;
+- deprecation status;
+- deprecation metadata;
+- deprecation diagnostics policy;
+- removal eligibility;
+- removal prerequisites;
+- deprecation compatibility guarantees;
+- relationship between deprecation and language versions;
+- relationship between deprecation and migration;
+- rules governing deprecated source constructs.
+
+3.3 Does not own
+
+This file does NOT own:
 
 - language version numbering;
-- migration mechanics;
-- reserved identifiers;
-- compatibility matrices;
-- canonical grammar authority;
-- semantic definitions;
-- compiler implementation;
-- runtime policy;
-- hardware capability definitions.
+- grammar syntax;
+- lexer token definitions;
+- AST node definitions;
+- semantic meaning of ordinary features;
+- canonical IR definitions;
+- quantum IR definitions;
+- resource semantics;
+- hardware capabilities;
+- routing;
+- scheduling;
+- QEC;
+- ZQN;
+- HAL;
+- runtime implementation;
+- compiler optimization;
+- migration transformation algorithms;
+- reserved identifiers.
 
-The ownership relationship is:
+Those remain owned by their existing repository contracts.
 
-specification/language-version.md
+---
+
+4. Repository Authority Model
+
+Deprecation is part of a larger authority system.
+
+The intended relationship is:
+
+grammar/DESIGN.md
         │
-        │ owns language-version semantics
         ▼
-specification/compatibility.md
+grammar/specification/
         │
-        │ owns compatibility dimensions
+        ├── language specification
+        ├── language version
+        └── domain semantics
+        │
         ▼
-compatibility/versions.md
+grammar/spec/
         │
-        │ owns version policy
+        ├── compatibility
+        ├── versioning
+        ├── portability
+        └── semantic contracts
+        │
         ▼
-compatibility/deprecated.md
+grammar/compatibility/
         │
-        ├──────────────► compatibility/migrations.md
+        ├── versions.md
+        ├── deprecated.md
+        ├── migrations.md
+        ├── compatibility-matrix.md
+        └── dialect compatibility
         │
-        ├──────────────► compatibility/reserved.md
+        ▼
+grammar/Zamani.g4
         │
-        └──────────────► compatibility/compatibility-matrix.md
+        ▼
+lexer
+        │
+        ▼
+parser
+        │
+        ▼
+domain-neutral AST
+        │
+        ▼
+semantic analysis
+        │
+        ▼
+canonical semantic representation
+        │
+        ├── classical
+        ├── quantum
+        ├── HDL/hardware
+        └── other domains
+        │
+        ▼
+canonical IR
+        │
+        ├── quantum::ir
+        └── other domain IR
+        │
+        ▼
+optimization / lowering
+        │
+        ├── routing
+        ├── scheduling
+        ├── resilience
+        ├── QEC
+        └── ZQN
+        │
+        ▼
+HAL / runtime / target realization
 
-3.1 "versions.md"
+No lower layer may redefine a higher-level language contract merely because it has a different implementation representation.
 
-Owns:
+---
+
+5. Relationship to Existing Compatibility Files
+
+5.1 "compatibility/versions.md"
+
+"versions.md" owns:
 
 - language version numbering;
 - major/minor/patch rules;
-- version compatibility classes;
-- version declaration;
-- language/compiler-version separation.
+- version compatibility;
+- supported-version policy;
+- language/compiler version separation.
 
-3.2 "migrations.md"
+It answers:
 
-Owns:
+«What does a version mean?»
 
-- migration procedures;
-- source transformation;
+This file answers:
+
+«What does it mean for a feature to be deprecated within that version system?»
+
+---
+
+5.2 "compatibility/migrations.md"
+
+"migrations.md" owns:
+
+- migration mechanics;
+- transformation algorithms;
+- source migration;
 - AST migration;
-- semantic migration;
+- semantic normalization;
 - artifact migration;
 - migration validation;
 - migration tooling.
 
-3.3 "deprecated.md"
+It answers:
 
-Owns:
+«How does an old representation move to a new representation?»
 
-- deprecation lifecycle;
-- deprecation eligibility;
-- deprecation metadata;
-- warnings and diagnostics;
-- removal eligibility;
-- deprecation compatibility guarantees.
+This file answers:
 
-3.4 "reserved.md"
+«Why is the old representation deprecated, what is its lifecycle, and when can it be removed?»
 
-Owns:
-
-- reserved identifiers;
-- reserved keywords;
-- future-reserved syntax;
-- reserved namespaces.
-
-3.5 "compatibility-matrix.md"
-
-Owns:
-
-- compatibility relationships among language versions;
-- compiler versions;
-- grammar versions;
-- AST schemas;
-- IR schemas;
-- dialect versions;
-- runtime protocols.
-
-No file may silently redefine another file's ownership.
+No migration algorithm should be duplicated here.
 
 ---
 
-4. Definition of Deprecation
+5.3 "compatibility/compatibility-matrix.md"
 
-A feature is deprecated when Zamani continues to recognize and support the feature under an explicitly defined compatibility policy, while communicating that new source should normally use a replacement or newer representation.
+The compatibility matrix owns explicit relationships among:
+
+- language versions;
+- grammar versions;
+- lexer/parser implementations;
+- AST contracts;
+- semantic contracts;
+- IR versions;
+- dialect versions;
+- compiler versions;
+- runtime contracts;
+- artifacts.
+
+This file supplies the deprecation status that the matrix must represent.
+
+---
+
+5.4 "specification/language-version.md"
+
+Owns the semantic meaning of language versions.
+
+A deprecation version MUST use that version model.
+
+---
+
+5.5 "spec/versioning.md"
+
+Owns cross-layer version propagation and implementation conformance.
+
+Deprecation metadata MUST be propagated consistently across the layers described there.
+
+---
+
+5.6 "spec/compatibility.md"
+
+Owns compatibility dimensions.
+
+Deprecation MUST distinguish:
+
+- source compatibility;
+- lexical compatibility;
+- grammar compatibility;
+- AST compatibility;
+- semantic compatibility;
+- IR compatibility;
+- artifact compatibility;
+- runtime compatibility;
+- target compatibility.
+
+---
+
+5.7 "grammar/grammar.md"
+
+"grammar.md" remains an implementation-conformance reference.
+
+It MUST identify deprecated syntax when it remains accepted.
+
+It MUST NOT become the authority for deciding whether a feature is deprecated.
+
+---
+
+5.8 "grammar/Zamani-Grammar.md"
+
+"Zamani-Grammar.md" remains a broad historical/extended design source.
+
+Features appearing there MUST be classified appropriately.
+
+Presence in that document alone MUST NOT make a feature:
+
+- stable;
+- implemented;
+- deprecated;
+- removable.
+
+---
+
+6. Definition of Deprecation
+
+A feature is deprecated when:
+
+1. it remains recognized or supported under an applicable language/version contract;
+2. its use is discouraged for new source;
+3. a replacement, rationale, or explicit reason for eventual removal is documented;
+4. its compatibility behavior is defined;
+5. its lifecycle is tracked.
 
 Deprecation does NOT automatically mean:
 
@@ -199,673 +344,678 @@ Deprecation does NOT automatically mean:
 - unsafe;
 - inefficient;
 - hardware-specific;
-- semantically obsolete.
+- semantically incorrect;
+- unavailable on every target.
 
-A deprecated construct remains usable until the applicable removal policy says otherwise.
-
----
-
-5. What Can Be Deprecated
-
-The following may be deprecated independently:
-
-5.1 Lexical features
-
-Examples:
-
-- keywords;
-- literal spellings;
-- escape forms;
-- operator spellings;
-- annotation spellings;
-- comment forms.
-
-5.2 Grammar constructs
-
-Examples:
-
-- declarations;
-- statements;
-- expressions;
-- module syntax;
-- legacy syntax aliases.
-
-5.3 Semantic constructs
-
-Examples:
-
-- obsolete ownership semantics;
-- obsolete effect forms;
-- obsolete resource declarations;
-- obsolete execution semantics.
-
-5.4 Types
-
-Examples:
-
-- obsolete built-in types;
-- legacy aliases;
-- superseded type constructors.
-
-5.5 APIs and language-facing interfaces
-
-Examples:
-
-- legacy standard-library interfaces;
-- old module paths;
-- legacy intrinsics.
-
-5.6 Dialects
-
-A dialect may be deprecated independently from the core language.
-
-5.7 Interoperability constructs
-
-Examples:
-
-- obsolete FFI declarations;
-- obsolete ABI declarations;
-- legacy interoperability syntax.
-
-5.8 Tooling syntax
-
-Examples:
-
-- obsolete annotations;
-- legacy compilation directives;
-- deprecated source-level configuration constructs.
-
-5.9 Serialization or schema forms
-
-A serialized language representation may be deprecated without deprecating the corresponding source construct.
-
-5.10 Hardware-facing syntax
-
-Hardware syntax may be deprecated when a more portable semantic abstraction replaces it.
-
-However, target-specific implementation constraints MUST NOT be treated as language deprecations.
+A deprecated feature remains valid until the applicable removal policy says otherwise.
 
 ---
 
-6. What Must Not Be Deprecated for the Wrong Reason
+7. Deprecation Is Not Implementation Failure
 
-The following are NOT valid reasons to deprecate a language construct by themselves:
+The following are implementation states and MUST NOT automatically become deprecation states:
 
-- a particular CPU cannot execute it;
-- a particular GPU lacks support;
-- a QPU has too few physical qubits;
+specified
+parsed
+AST-supported
+semantically-supported
+IR-supported
+compiler-supported
+runtime-supported
+backend-supported
+target-supported
+
+For example:
+
+grammar supports feature
+backend does not support feature
+
+does NOT imply:
+
+feature is deprecated
+
+Instead:
+
+feature remains part of the language
+        │
+        ▼
+capability analysis
+        │
+        ▼
+target/backend feasibility
+
+must determine whether a particular realization is possible.
+
+---
+
+8. Invalid Reasons for Deprecation
+
+A feature MUST NOT be deprecated solely because:
+
+- one CPU cannot execute it;
+- one GPU lacks support;
+- one FPGA lacks a required resource;
+- one ASIC lacks an implementation;
+- one QPU lacks a native operation;
+- one QPU has too few physical qubits;
 - a device has insufficient memory;
 - a topology cannot realize an operation;
-- a backend has not implemented it;
-- a scheduler has not implemented it;
-- a runtime currently lacks a feature;
-- a vendor prefers another representation;
-- a particular machine is too small;
-- a test environment is resource constrained.
+- routing is currently unavailable;
+- scheduling is currently unavailable;
+- QEC is currently unavailable;
+- ZQN is currently incomplete;
+- a runtime has not implemented it;
+- a vendor does not support it;
+- the compiler implementation is currently difficult;
+- a test machine is small;
+- a test environment lacks an accelerator;
+- a particular compiler build has a fixed internal capacity.
 
-These are implementation, target, capability, or resource issues.
+Those are capability, resource, implementation, or target issues.
 
-They must be represented through:
+They MUST be represented using the appropriate subsystem:
 
 - capabilities;
 - requirements;
 - constraints;
-- targets;
-- resource contexts;
-- scheduling;
+- resource analysis;
 - routing;
-- runtime availability;
-- deployment configuration.
-
-They MUST NOT be disguised as source-language deprecation.
+- scheduling;
+- resilience;
+- QEC;
+- ZQN;
+- HAL;
+- runtime;
+- deployment.
 
 ---
 
-7. POCO-REAF Requirement
+9. POCO-REAF Requirement
 
 Deprecation MUST preserve the distinction between:
 
-Program Semantics
+program semantics
 
 and:
 
-Target Realization
+target realization
 
-A deprecated construct MUST NOT be replaced by a target-specific construct merely because the target implementation is easier.
+A deprecated portable feature MUST NOT be replaced by a target-specific representation merely because the latter is easier to implement.
 
-For example, this is acceptable:
+Correct:
 
-legacy_quantum_operation
-        ↓
-portable quantum operation
-        ↓
-quantum::ir
-        ↓
-target-specific realization
+legacy source
+    ↓
+portable semantic meaning
+    ↓
+canonical semantic model
+    ↓
+canonical IR
+    ↓
+target realization
 
-This is NOT acceptable as a general migration:
+Incorrect:
 
-legacy_quantum_operation
-        ↓
-specific-qpu-operation
+legacy portable source
+    ↓
+specific CPU
+specific GPU
+specific QPU
+specific FPGA
+specific physical qubit
 
-unless the source program explicitly requested that target-specific behavior.
+unless the original program explicitly required that target-specific behavior.
+
+---
+
+10. Scalability Invariant
+
+Deprecation MUST preserve Zamani's scalability objective:
+
+«From the smallest supported computation to arbitrarily large realizations, subject only to actual available resources and explicit semantic requirements.»
+
+Deprecation MUST NOT introduce universal language limits such as:
+
+MAX_QUBITS
+MAX_LOGICAL_QUBITS
+MAX_PHYSICAL_QUBITS
+MAX_CPUS
+MAX_CORES
+MAX_THREADS
+MAX_GPUS
+MAX_FPGAS
+MAX_ASICS
+MAX_NODES
+MAX_MEMORY
+MAX_REGISTER_WIDTH
+MAX_TENSOR_RANK
+MAX_NETWORK_SIZE
+MAX_DEVICE_COUNT
+MAX_TIMELINES
+
+or equivalent constants.
+
+A migration from old to new syntax MUST NOT introduce such limits either.
+
+---
+
+11. Resource Availability Is Not Deprecation
+
+These are semantically different:
+
+feature is deprecated
+
+and:
+
+target lacks capability
+
+and:
+
+target lacks resources
+
+and:
+
+backend does not implement lowering
+
+For example:
+
+requires qubits >= n
+
+may be valid indefinitely.
+
+If a target has insufficient qubits, the result is a resource/capability failure, not language deprecation.
 
 Likewise:
 
-requires parallel execution
+requires capability("quantum.measurement")
 
-MUST NOT be deprecated into:
-
-requires exactly N cores
-
-merely because one compiler backend currently uses a fixed configuration.
+must not become deprecated because one QPU lacks measurement support.
 
 ---
 
-8. No Hard-Coded Scalability Limits
+12. Deprecation Lifecycle
 
-Deprecation policy MUST remain independent of physical scale.
+The normative lifecycle is:
 
-No deprecated feature may be replaced with a construct that permanently hard-codes:
+PROPOSED
+    ↓
+EXPERIMENTAL
+    ↓
+STABLE
+    ↓
+DEPRECATED
+    ↓
+MIGRATION_AVAILABLE
+    ↓
+REMOVAL_ELIGIBLE
+    ↓
+REMOVED
 
-- maximum qubits;
-- maximum logical qubits;
-- maximum physical qubits;
-- maximum CPUs;
-- maximum cores;
-- maximum threads;
-- maximum GPUs;
-- maximum FPGAs;
-- maximum accelerators;
-- fixed memory capacity;
-- fixed register count;
-- fixed vector width;
-- fixed tensor dimensions where abstraction is appropriate;
-- fixed device counts;
-- fixed cluster size;
-- fixed network size;
-- fixed topology;
-- fixed program size;
-- fixed module count;
-- fixed data size.
+Not every feature must traverse every state.
 
-A replacement MUST use scalable abstractions where the concept is inherently scalable.
+An experimental feature MAY transition directly:
 
----
+EXPERIMENTAL → REMOVED
 
-9. Required Deprecation Metadata
+A stable feature SHOULD follow:
 
-Every deprecated feature MUST have a canonical deprecation record.
+STABLE
+  ↓
+DEPRECATED
+  ↓
+MIGRATION_AVAILABLE
+  ↓
+REMOVAL_ELIGIBLE
+  ↓
+REMOVED
 
-The conceptual record is:
+A stable feature MUST NOT silently transition directly from:
 
-Feature:
-Stable Name:
-Feature Kind:
-Status:
-Introduced:
-Stable Since:
-Deprecated Since:
-Deprecation Reason:
-Replacement:
-Migration Path:
-Migration Class:
-Automatic Migration:
-Manual Action:
-Semantic Preservation:
-Compatibility Guarantee:
-Warning Policy:
-Removal Eligibility:
-Earliest Removal Version:
-Removal Conditions:
-Affected Files:
-Affected Tests:
-Documentation:
-Owner:
+STABLE → REMOVED
 
-These fields MUST be resolved before the deprecation is considered complete.
+except under the explicit security/correctness emergency process defined below.
 
 ---
 
-10. Feature Identity
+13. Status Definitions
 
-Every deprecated feature MUST have a stable identity independent of its spelling.
-
-The identity SHOULD be based on:
-
-domain
-namespace
-feature-name
-semantic-role
-
-rather than solely on the textual spelling.
-
-This is important because:
-
-old_name
-
-may later become:
-
-new_name
-
-while representing the same semantic feature.
-
-A spelling change is therefore not necessarily a semantic feature replacement.
-
----
-
-11. Deprecation Status Model
-
-Zamani defines the following normative states.
-
-11.1 "PROPOSED"
+13.1 "PROPOSED"
 
 The feature is under design.
 
-It is not a compatibility promise.
+No compatibility promise exists.
 
-11.2 "EXPERIMENTAL"
+---
+
+13.2 "EXPERIMENTAL"
 
 The feature exists for experimentation.
 
-Experimental features:
+Experimental functionality:
 
 - MAY change;
 - MAY be removed;
-- SHOULD carry explicit experimental status;
-- MUST NOT be presented as stable language guarantees.
+- SHOULD be explicitly marked;
+- MUST NOT be represented as a stable guarantee.
 
-11.3 "STABLE"
+---
+
+13.3 "STABLE"
 
 The feature is part of the supported language contract.
 
-Stable features receive normal compatibility guarantees.
+Normal compatibility guarantees apply.
 
-11.4 "DEPRECATED"
+---
 
-The feature remains supported but new source should normally avoid it.
+13.4 "DEPRECATED"
 
-11.5 "MIGRATION_AVAILABLE"
+The feature remains supported but new source SHOULD use the replacement or preferred representation.
 
-A supported replacement and migration path exist.
+---
 
-This status SHOULD normally precede removal.
+13.5 "MIGRATION_AVAILABLE"
 
-11.6 "REMOVAL_ELIGIBLE"
+The feature remains supported and a documented migration path exists.
 
-The feature has satisfied all removal prerequisites.
+Automatic migration SHOULD be provided when safe.
 
-It is still not necessarily removed.
+---
 
-11.7 "REMOVED"
+13.6 "REMOVAL_ELIGIBLE"
 
-The feature is no longer part of the current language version.
+All required removal prerequisites have been satisfied.
+
+The feature is still not necessarily removed.
+
+---
+
+13.7 "REMOVED"
+
+The feature is no longer part of the current language contract.
 
 Historical migration documentation MUST remain available.
 
 ---
 
-12. Experimental Features and Deprecation
+14. Stable Feature Identity
 
-Experimental features are different from deprecated stable features.
+Every deprecated feature MUST have an identity independent of its spelling.
 
-An experimental feature:
+The identity SHOULD be based on:
 
-EXPERIMENTAL → REMOVED
-
-may be valid without a long deprecation period.
-
-A stable feature:
-
-STABLE → DEPRECATED → MIGRATION_AVAILABLE → REMOVAL_ELIGIBLE → REMOVED
-
-requires stronger compatibility guarantees.
-
-The compiler and documentation MUST distinguish these cases.
-
----
-
-13. Deprecation Reasons
-
-A deprecation MUST have a documented reason.
-
-Allowed reasons include:
-
-13.1 Redundant syntax
-
-Two constructs express the same stable semantics and one is unnecessarily duplicative.
-
-13.2 Ambiguous syntax
-
-A construct creates persistent lexical or grammatical ambiguity.
-
-13.3 Unsound semantic model
-
-The construct cannot express its intended semantics correctly.
-
-13.4 Security weakness
-
-The construct creates a security problem that cannot reasonably be corrected without replacing its interface.
-
-13.5 Semantic inconsistency
-
-The construct conflicts with the canonical language semantic model.
-
-13.6 Maintainability
-
-A construct creates unnecessary duplicate compiler architecture.
-
-This reason alone SHOULD NOT be sufficient to remove stable user-facing semantics.
-
-13.7 Superseded representation
-
-A more general representation provides the same semantics with better extensibility.
-
-13.8 Interoperability evolution
-
-An external standard or interface has changed.
-
-13.9 Namespace or terminology correction
-
-A name is misleading or conflicts with the language's canonical terminology.
-
-13.10 Specification correction
-
-A previous feature definition was incorrect and must be replaced.
-
----
-
-14. Invalid Deprecation Reasons
-
-The following MUST NOT be used as sole justification:
-
-- "the implementation is hard";
-- "the backend does not support it";
-- "the hardware is too small";
-- "we currently only have one device";
-- "the compiler currently has a fixed limit";
-- "the parser implementation is inconvenient";
-- "a vendor does not use it";
-- "another language does not have it".
-
-The language must not shrink merely to match a temporary implementation limitation.
-
----
-
-15. Deprecation and Grammar Authority
-
-The grammar architecture is:
-
-Canonical Language Specification
-            ↓
-Canonical Grammar
-            ↓
-Lexer / Parser
-            ↓
-AST
-            ↓
-Semantic Analysis
-            ↓
-Canonical IR
-
-A deprecated construct may remain in the canonical grammar while it remains source-compatible.
-
-Its status MUST be represented through the compatibility/specification layer.
-
-The presence of a grammar rule alone MUST NOT imply that the feature is:
-
-- stable;
-- recommended;
-- semantically implemented;
-- backend-supported.
-
----
-
-16. Deprecated Syntax Must Remain Deterministic
-
-A deprecated construct MUST parse deterministically.
-
-Deprecation MUST NOT introduce:
-
-- ambiguous parsing;
-- silent fallback;
-- heuristic interpretation;
-- target-dependent parsing;
-- random interpretation;
-- compiler-version-dependent reinterpretation.
-
-A deprecated construct must either:
-
-1. parse according to its specified historical semantics; or
-2. produce a deterministic diagnostic.
-
----
-
-17. Deprecated Syntax Must Not Be Silently Reinterpreted
-
-The compiler MUST NOT silently reinterpret:
-
-deprecated old construct
-
-as a different semantic construct merely because the new construct has a similar spelling.
-
-If the meanings differ, the compiler MUST either:
-
-- preserve old semantics;
-- require an explicit migration;
-- or reject the construct according to the version policy.
-
----
-
-18. Warning Requirements
-
-Use of a deprecated feature SHOULD produce a structured deprecation diagnostic when compiling a version in which the feature remains supported.
-
-The diagnostic SHOULD contain:
-
+domain
+namespace
 feature
-deprecated-since
-reason
-replacement
-migration guidance
-removal information
+semantic role
 
-Example conceptual diagnostic:
-
-warning: deprecated feature `legacy.form`
-
-deprecated since: 1.4.0
-replacement: `modern.form`
-migration: automatic
-earliest removal: 2.0.0
-
-The diagnostic MUST NOT falsely claim that the feature is already removed.
-
----
-
-19. Diagnostic Stability
-
-Deprecation diagnostics MUST be machine-readable where compiler tooling supports structured diagnostics.
-
-A diagnostic SHOULD expose stable fields such as:
-
-code
-severity
-feature-id
-deprecated-since
-replacement
-migration-kind
-source-span
-
-Human-readable text MAY evolve without changing the semantic diagnostic identity.
-
----
-
-20. Deprecation Severity
-
-The preferred severity levels are:
-
-INFO
-WARNING
-ERROR
-
-INFO
-
-Used when the tool is explicitly inspecting compatibility status without requiring an ordinary compilation warning.
-
-WARNING
-
-Used when deprecated but still-supported source is compiled.
-
-ERROR
-
-Used after the feature has been removed or when use violates an explicitly declared compatibility mode.
-
-A compiler MUST NOT report a removed feature merely as a warning if the current language version no longer accepts it.
-
----
-
-21. Warning Suppression
-
-If Zamani supports warning suppression, suppression MUST NOT:
-
-- restore removed syntax;
-- alter semantic meaning;
-- bypass mandatory compatibility checks;
-- bypass security checks;
-- silently downgrade errors to successful compilation.
-
-Suppression affects diagnostics, not language semantics.
-
-Any suppression mechanism MUST itself have a stable specification and compatibility policy.
-
----
-
-22. Replacement Requirements
-
-A stable feature SHOULD NOT be deprecated without identifying a replacement unless:
-
-- the feature is inherently obsolete;
-- there is no meaningful replacement;
-- retaining it creates a documented correctness/security problem;
-- the feature was never stable.
-
-A replacement MUST be semantically described.
-
-A replacement is not sufficient merely because:
-
-old syntax → new syntax
-
-is mechanically possible.
-
-The language must establish:
-
-old meaning
-    ↓
-new meaning
-
-with sufficient precision.
-
----
-
-23. Replacement Must Be More General or Correct
-
-Where a feature is deprecated because it is too narrow, its replacement SHOULD be more general.
+rather than only its textual representation.
 
 For example:
 
-fixed hardware declaration
+quantum.operation
 
-should preferably migrate toward:
+may remain the same semantic feature even if an old spelling changes.
+
+Therefore:
+
+old spelling → new spelling
+
+does not automatically mean:
+
+old semantic feature → new semantic feature
+
+---
+
+15. Required Deprecation Record
+
+Every stable feature entering deprecation MUST have a record containing, at minimum:
+
+Feature ID:
+Canonical Name:
+Domain:
+Namespace:
+Feature Kind:
+Status:
+
+Introduced:
+Stable Since:
+Deprecated Since:
+Earliest Removal Version:
+
+Reason:
+Replacement:
+Migration ID:
+Migration Class:
+
+Source Compatibility:
+Lexical Compatibility:
+Grammar Compatibility:
+AST Compatibility:
+Semantic Compatibility:
+IR Compatibility:
+Runtime Compatibility:
+Target Compatibility:
+
+Automatic Migration:
+Manual Action Required:
+Semantic Preservation:
+
+Diagnostic Code:
+Warning Policy:
+
+Affected Grammar Files:
+Affected Lexer Files:
+Affected AST Nodes:
+Affected Semantic Components:
+Affected IR Components:
+Affected Compiler Components:
+Affected Runtime Components:
+Affected Dialects:
+
+Positive Tests:
+Negative Tests:
+Boundary Tests:
+Scalability Tests:
+Determinism Tests:
+Compatibility Tests:
+
+Documentation:
+Provenance:
+Owner:
+
+A deprecation record is incomplete until all applicable fields are resolved.
+
+---
+
+16. Machine-Readable Feature Metadata
+
+Where the repository uses feature manifests under:
+
+grammar/specification/features/
+
+the deprecation state MUST be represented there as well.
+
+The manifest SHOULD contain fields equivalent to:
+
+id:
+name:
+domain:
+status:
+introduced:
+stable_since:
+deprecated_since:
+earliest_removal:
+replacement:
+migration:
+semantic_preservation:
+source_compatibility:
+grammar_compatibility:
+ast_compatibility:
+semantic_compatibility:
+ir_compatibility:
+runtime_compatibility:
+target_compatibility:
+diagnostic:
+tests:
+provenance:
+
+The manifest MUST NOT contradict this document.
+
+Generated documentation MAY be derived from the manifests, but generated output MUST NOT become a competing authority.
+
+---
+
+17. Feature Identity Versus File Location
+
+A feature's deprecation state is global.
+
+A feature MUST NOT be:
+
+deprecated in grammar/quantum/
+stable in grammar/Zamani.g4
+
+or:
+
+deprecated in documentation
+stable in lexer
+
+without an explicitly documented implementation-conformance discrepancy.
+
+The feature identity determines status, not the file in which it happens to appear.
+
+---
+
+18. Lexical Deprecation
+
+The following may be deprecated independently:
+
+- keywords;
+- operators;
+- punctuation spellings;
+- literal spellings;
+- escape forms;
+- annotations;
+- comment forms;
+- identifier aliases.
+
+Lexical deprecation MUST account for tokenization precedence.
+
+In particular, known token-collision areas such as:
+
+Question / QuestionMark
+Ampersand / BitAnd
+
+MUST have one canonical lexical interpretation.
+
+A deprecation MUST NOT be used to conceal unresolved lexical ambiguity.
+
+---
+
+19. Grammar Deprecation
+
+A grammar construct may remain in "Zamani.g4" while deprecated.
+
+The grammar rule MUST remain deterministic for as long as the feature is supported.
+
+Deprecation metadata belongs to compatibility/specification metadata, not to grammar syntax alone.
+
+A grammar rule existing in:
+
+Zamani-Grammar.md
+
+does not establish stable syntax.
+
+A grammar rule existing in an experimental modular grammar does not automatically establish stable syntax.
+
+---
+
+20. Deprecated Syntax Must Be Deterministic
+
+Deprecated syntax MUST NOT be parsed using:
+
+- heuristic guessing;
+- random choice;
+- target-dependent interpretation;
+- runtime-dependent interpretation;
+- compiler-build-dependent interpretation;
+- machine-size-dependent interpretation.
+
+For the same:
+
+source
+language version
+dialect set
+compiler compatibility configuration
+
+the interpretation MUST be deterministic.
+
+---
+
+21. Deprecated Syntax Must Not Be Silently Reinterpreted
+
+If old and new forms have different semantics, the compiler MUST NOT silently reinterpret the old form as the new form.
+
+It must instead:
+
+1. preserve the historical meaning;
+2. require explicit migration; or
+3. reject the construct under the applicable language version.
+
+---
+
+22. Deprecation Diagnostics
+
+When a deprecated feature remains accepted, compilation SHOULD produce a structured diagnostic.
+
+A diagnostic SHOULD identify:
+
+diagnostic code
+feature ID
+feature name
+deprecated since
+reason
+replacement
+migration ID
+earliest removal version
+source span
+
+Example:
+
+warning: deprecated Zamani feature
+
+feature: <feature-id>
+deprecated-since: <version>
+replacement: <replacement>
+migration: <migration-id>
+earliest-removal: <version>
+
+The exact human-readable wording MAY evolve.
+
+The machine-readable diagnostic identity MUST remain stable.
+
+---
+
+23. Diagnostic Severity
+
+The preferred levels are:
+
+INFO
+WARNING
+ERROR
+
+"INFO" may be used by compatibility inspection tools.
+
+"WARNING" is appropriate for deprecated but supported source.
+
+"ERROR" is required when a feature has been removed from the effective language version.
+
+A removed feature MUST NOT be reported as merely deprecated.
+
+---
+
+24. Warning Suppression
+
+If Zamani supports warning suppression, suppression:
+
+MUST NOT:
+
+- restore removed syntax;
+- change semantic meaning;
+- bypass compatibility checks;
+- bypass security checks;
+- turn a removed feature into valid syntax.
+
+Suppression affects diagnostics only.
+
+---
+
+25. Replacement Requirements
+
+A stable feature SHOULD NOT be deprecated without a documented replacement unless:
+
+- no meaningful replacement exists;
+- the feature is inherently obsolete;
+- retaining it causes a documented correctness problem;
+- retaining it creates a documented security problem;
+- it was never actually part of the stable implementation contract.
+
+A replacement MUST describe semantic meaning, not merely spelling.
+
+---
+
+26. Replacement Generality
+
+Where a feature is deprecated because it is too target-specific or narrow, the replacement SHOULD be more general.
+
+For example:
+
+fixed device selection
+
+should normally migrate toward:
 
 capability
 requirement
 constraint
-target description
+preference
+placement intent
 
-rather than another fixed hardware declaration.
+rather than another fixed device identifier.
 
 This preserves POCO-REAF.
 
 ---
 
-24. Automatic Migration
+27. Automatic Migration
 
-A deprecated feature SHOULD have an automatic migration when the transformation is deterministic.
+Automatic migration SHOULD be provided when:
+
+- the transformation is deterministic;
+- the transformation is semantics-preserving;
+- no information is lost;
+- there is one unambiguous replacement;
+- source provenance can be retained.
+
+Examples of suitable migrations include simple spelling changes where semantics are identical.
+
+Automatic migration MUST NOT guess when multiple semantic replacements are possible.
+
+---
+
+28. Migration Ownership
+
+All transformation mechanics belong to:
+
+grammar/compatibility/migrations.md
+
+This file MUST NOT duplicate the migration engine.
+
+For every deprecated feature with a migration path, this file references a stable migration identity.
 
 Example:
 
-old_keyword X
+Migration ID: ZM-MIG-<stable-id>
 
-to:
+The migration document owns the transformation.
 
-new_keyword X
-
-is suitable when semantics are identical.
-
-Automatic migration MUST NOT guess.
-
-If multiple replacements are possible:
-
-old_feature
-    ↓
-new_feature_a
-or
-new_feature_b
-
-the migration MUST become assisted or manual.
+This document owns the deprecation lifecycle.
 
 ---
 
-25. Migration Integration
+29. Migration Invariants
 
-All deprecation migrations MUST integrate with:
+A migration SHOULD be:
 
-"grammar/compatibility/migrations.md"
+- deterministic;
+- idempotent;
+- lossless;
+- source-span preserving;
+- provenance preserving;
+- semantics-preserving where promised;
+- scalable;
+- independent of target hardware.
 
-The migration file owns:
-
-- transformation mechanics;
-- migration ordering;
-- source rewriting;
-- AST migration;
-- semantic validation;
-- migration testing.
-
-This file owns:
-
-- why the feature is deprecated;
-- its lifecycle;
-- its replacement;
-- removal eligibility.
-
-No duplicate migration algorithm should be defined here.
-
----
-
-26. Migration Record
-
-Each deprecated feature with a migration path SHOULD provide a migration record conceptually equivalent to:
-
-source-version
-target-version
-feature-id
-old-form
-new-form
-migration-class
-semantic-equivalence
-manual-review-required
-diagnostic-code
-test-suite
-
-The concrete representation belongs to the migration infrastructure.
-
----
-
-27. Migration Must Be Idempotent
-
-Where a migration is automatic:
+For automatic migration:
 
 migrate(migrate(source))
 
@@ -873,58 +1023,30 @@ MUST produce the same semantic result as:
 
 migrate(source)
 
-The migration tool MUST NOT repeatedly transform already-migrated source.
-
 ---
 
-28. Migration Must Be Deterministic
+30. Lossless Deprecation
 
-Given:
+Migration SHOULD preserve:
 
-same source
-same source version
-same target version
-same migration configuration
-
-the migration result MUST be deterministic.
-
-It MUST NOT depend on:
-
-- machine size;
-- CPU count;
-- available GPUs;
-- available QPUs;
-- network topology;
-- scheduler state;
-- runtime timing;
-- random choices.
-
----
-
-29. Lossless Migration
-
-A migration SHOULD be lossless.
-
-Where possible, migration MUST preserve:
-
-- comments;
+- comments where practical;
 - source spans;
-- annotations;
-- metadata;
-- attributes;
-- documentation;
 - identifiers;
+- attributes;
+- annotations;
+- documentation;
+- metadata;
 - semantic information.
 
-If information cannot be preserved, the migration MUST explicitly report the loss.
+If information cannot be preserved, the migration MUST explicitly identify the loss.
 
 Silent information loss is prohibited.
 
 ---
 
-30. Semantic Validation
+31. Semantic Equivalence
 
-After migration:
+Where a deprecation promises semantic preservation:
 
 old source
     ↓
@@ -936,17 +1058,19 @@ migrated source
     ↓
 new semantics
 
-MUST be compared wherever semantic equivalence is promised.
+MUST be equivalent according to the applicable semantic contract.
 
-Validation MUST occur before the migration is declared successful.
+Textual similarity is not sufficient.
+
+AST similarity is not sufficient.
+
+IR similarity is not necessarily required if different IR representations have equivalent semantics.
 
 ---
 
-31. AST Integration
+32. AST Integration
 
-A deprecated grammar construct MUST map to an AST representation capable of preserving its historical semantics.
-
-Preferred architecture:
+Deprecated syntax SHOULD normally follow:
 
 deprecated source
        ↓
@@ -954,175 +1078,223 @@ lexer
        ↓
 parser
        ↓
-normal AST
+normal/domain-neutral AST
        ↓
 semantic normalization
        ↓
 current semantic model
 
-The AST SHOULD NOT accumulate permanent duplicate node families solely for historical syntax.
+The AST SHOULD NOT accumulate permanent duplicate node families merely because multiple historical spellings exist.
 
 If two syntactic forms have identical semantics, they SHOULD normalize to the same semantic representation.
 
 ---
 
-32. AST Compatibility
+33. AST Compatibility
 
-An AST migration MUST preserve:
+A deprecation migration MUST preserve applicable:
 
-- source meaning;
 - names;
+- bindings;
 - scopes;
 - types;
+- generics;
 - effects;
 - capabilities;
-- resource intent;
+- resource requirements;
+- resource constraints;
 - control flow;
+- ownership;
 - concurrency semantics;
 - quantum semantics;
-- hardware intent.
+- HDL semantics;
+- provenance.
 
-AST compatibility MUST NOT require target-specific data that did not exist in the source semantics.
+Deprecated syntax MUST NOT force target-specific structures into the domain-neutral AST.
 
 ---
 
-33. Canonical IR Integration
+34. Semantic Analysis Integration
 
-Deprecated syntax MUST ultimately lower into the canonical semantic representation.
+Semantic analysis determines whether a deprecated construct is valid under the effective language version.
 
-The grammar compatibility layer MUST NOT introduce a permanent parallel IR merely to retain historical syntax.
+Preferred flow:
 
-The preferred flow is:
-
-Deprecated Source
-       ↓
-Parser
+historical syntax
        ↓
 AST
        ↓
-Semantic Normalization
+semantic normalization
        ↓
-Canonical IR
+current semantic model
 
-For quantum:
+Semantic normalization MUST happen before domain-specific target realization.
 
-Deprecated Quantum Syntax
+---
+
+35. Canonical IR Integration
+
+Deprecated syntax MUST ultimately reach the current canonical semantic/IR architecture.
+
+The compatibility layer MUST NOT create a permanent legacy IR solely for historical syntax.
+
+Preferred flow:
+
+deprecated source
        ↓
 AST
        ↓
-Quantum Semantic Normalization
+semantic normalization
        ↓
+canonical IR
+
+---
+
+36. Quantum Deprecation
+
+Quantum features MUST be deprecated according to semantic meaning, not hardware age.
+
+A quantum feature MUST NOT be deprecated merely because:
+
+- a QPU lacks a native operation;
+- a simulator handles it differently;
+- a topology cannot directly implement it;
+- a device has insufficient physical qubits;
+- routing is unavailable;
+- scheduling is unavailable;
+- a backend has not implemented a decomposition.
+
+Those are downstream concerns.
+
+---
+
+37. Quantum Canonical Boundary
+
+All quantum deprecation paths MUST preserve:
+
+quantum source
+    ↓
+domain-neutral AST
+    ↓
+quantum semantic normalization
+    ↓
 quantum::ir
-       ↓
-QEC / Optimization / Routing / Scheduling
-       ↓
-HAL / Target
+    ↓
+optimization
+    ↓
+routing
+    ↓
+scheduling
+    ↓
+QEC / resilience / ZQN
+    ↓
+HAL
+    ↓
+target
 
 "quantum::ir" remains the canonical quantum semantic boundary.
 
----
-
-34. Quantum Deprecation
-
-Quantum constructs MUST be deprecated according to semantic meaning, not hardware age.
-
-A quantum construct MUST NOT be deprecated merely because:
-
-- a QPU does not support it;
-- a gate is not native;
-- a topology is inconvenient;
-- a device has insufficient qubits;
-- a backend has not implemented a lowering;
-- a simulator performs it differently.
-
-Those are backend or capability issues.
+No new permanent frontend quantum IR may be introduced merely to accommodate deprecated syntax.
 
 ---
 
-35. Quantum Operation Evolution
+38. Quantum Operation Evolution
 
-Where possible, a deprecated quantum operation spelling SHOULD migrate to a generic operation model.
+The grammar MUST NOT evolve toward a new fixed enumeration of physical gates merely because old gate syntax is deprecated.
 
-Conceptually:
+The preferred semantic model remains data-driven:
 
-legacy_operation
-       ↓
-canonical operation
-       ↓
-quantum::ir
+operation name
+namespace
+operands
+parameters
+results
+attributes
+modifiers
+effects
+capabilities
+source provenance
 
-The grammar MUST NOT require a new keyword or grammar production for every future physical gate.
+Therefore historical syntax such as a legacy fixed operation form SHOULD normalize into the generic quantum operation model where semantics permit.
 
-This preserves extensibility.
+The migration MUST preserve:
+
+- operation identity;
+- namespace;
+- operands;
+- parameters;
+- controls;
+- modifiers;
+- measurement semantics;
+- ordering;
+- source provenance.
 
 ---
 
-36. Qubit Scalability
+39. Quantum Scalability
 
-Deprecation policy MUST NOT introduce:
+Deprecation MUST NOT introduce:
 
 MAX_QUBITS
 MAX_LOGICAL_QUBITS
 MAX_PHYSICAL_QUBITS
 MAX_REGISTER_SIZE
 
-or equivalent restrictions.
+or equivalent universal restrictions.
 
-A deprecated quantum syntax may be replaced with a scalable declaration.
+A source declaration such as:
 
-For example:
+Qubit[n]
 
-legacy fixed-register form
+expresses program/resource semantics.
 
-may migrate toward a semantic resource expression without imposing a permanent maximum.
+It does not establish a compiler maximum.
 
 ---
 
-37. Logical and Physical Quantum Separation
+40. Logical Versus Physical Quantum State
 
 If a deprecated construct conflates logical and physical qubits, migration MUST preserve the distinction.
 
-The source-level semantic model SHOULD distinguish:
+Portable source describes logical quantum intent.
 
-logical quantum intent
+Physical realization belongs to:
 
-from:
-
-physical realization
-
-Physical mapping belongs to:
-
+- resource analysis;
 - routing;
 - scheduling;
+- QEC;
 - HAL;
-- target description;
-- resource management.
+- target description.
 
-It does not belong in a historical syntax compatibility shim.
+A migration MUST NOT silently replace logical qubits with physical device identities.
 
 ---
 
-38. QEC Integration
+41. QEC Integration
 
-Deprecating quantum error-correction syntax MUST preserve QEC intent.
+Deprecating QEC-related syntax MUST preserve QEC intent.
 
 A migration MUST distinguish:
 
-error-correction requirement
+required resilience/error correction
 
 from:
 
-specific implementation
+specific code
+specific decoder
+specific physical layout
+specific device
 
-A source program specifying a resilience requirement MUST NOT be silently rewritten to a particular device topology or fixed number of physical qubits.
+unless the original source explicitly specified those details.
 
 The QEC subsystem remains responsible for realization.
 
 ---
 
-39. ZQN Integration
+42. ZQN Integration
 
-ZQN-related syntax MUST be deprecated independently from:
+ZQN-related syntax MUST remain separate from:
 
 - quantum semantic representation;
 - QEC;
@@ -1130,63 +1302,71 @@ ZQN-related syntax MUST be deprecated independently from:
 - scheduling;
 - hardware abstraction.
 
-A deprecated ZQN syntax MUST lower through the existing canonical semantic boundary rather than introducing a second quantum fault representation.
+A deprecated ZQN construct MUST normalize into the existing canonical architecture.
+
+No duplicate fault/noise IR may be introduced solely for migration.
 
 ---
 
-40. Classical Deprecation
+43. Classical Deprecation
 
-Classical constructs MUST preserve:
+Classical migrations MUST preserve applicable:
 
-- evaluation semantics;
-- numeric semantics;
-- control flow;
-- memory semantics;
-- ownership;
-- concurrency;
-- synchronization;
-- error behavior.
-
-Numerical changes require particular care.
-
-A deprecation MUST NOT silently alter:
-
+- arithmetic semantics;
+- numeric representation;
 - overflow behavior;
 - rounding;
 - precision;
 - signedness;
+- exceptional values;
 - evaluation order;
-- exceptional values.
+- control flow;
+- ownership;
+- memory behavior;
+- concurrency;
+- synchronization;
+- error behavior.
 
-If those semantics change, the migration MUST be classified as semantic.
+A change to any of these is semantic and MUST NOT be classified as a mere spelling migration.
 
 ---
 
-41. HDL Deprecation
+44. HDL Deprecation
 
-HDL constructs MUST preserve hardware intent where the language promises semantic equivalence.
-
-A deprecated HDL representation MAY be replaced by a more expressive representation.
-
-However, migration MUST preserve, where applicable:
+HDL deprecation MUST preserve applicable hardware intent:
 
 - signal behavior;
 - combinational semantics;
 - sequential semantics;
 - state transitions;
-- timing semantics;
-- reset behavior;
 - clock relationships;
-- interface semantics;
-- parameterization.
+- reset behavior;
+- timing constraints;
+- interfaces;
+- parameterization;
+- verification intent.
 
-A target-specific synthesis limitation MUST NOT become a language-level deprecation.
+A synthesis limitation is not automatically a language deprecation.
 
 ---
 
-42. Hardware Deprecation
+45. Parameterized HDL
 
-Hardware syntax must distinguish:
+A deprecated fixed-width representation SHOULD migrate toward parameterized semantics where the width itself is program meaning.
+
+The migration MUST NOT turn an implementation-specific width into a universal language maximum.
+
+For example, a fixed-width construct must not cause the grammar to establish:
+
+MAX_REGISTER_WIDTH
+
+as a language rule.
+
+---
+
+46. Hardware Deprecation
+
+Hardware-facing syntax MUST distinguish:
 
 hardware intent
 
@@ -1194,301 +1374,291 @@ from:
 
 hardware instance
 
-Deprecated constructs should migrate toward:
+Portable replacements SHOULD prefer:
 
-- capabilities;
-- requirements;
-- constraints;
-- targets;
-- placement;
-- resources.
+capability
+requirement
+constraint
+resource
+preference
+topology intent
+placement intent
 
-A language feature MUST NOT become deprecated simply because a newer generation of hardware exists.
+over fixed device identities where portability is intended.
 
 ---
 
-43. Resource Deprecation
+47. Resource Deprecation
 
-Resource-related constructs MUST preserve the distinction among:
+Resource features MUST preserve the distinction among:
 
 resource
 requirement
 constraint
+capability
 preference
 hint
-capability
 availability
 allocation
 placement
 
-A deprecated resource construct MUST NOT collapse these concepts.
+A migration MUST NOT collapse these concepts.
 
 For example:
 
-requires quantum
+requires qubits >= n
 
-must not become:
+is semantically different from:
 
-use device "X"
+map q0 -> physical_qubit(17)
 
-unless device selection was explicitly part of the original semantics.
+The former is portable resource intent.
+
+The latter is target realization.
 
 ---
 
-44. Distributed Computing Deprecation
+48. Distributed Computing Deprecation
 
-Deprecated distributed constructs MUST preserve, where applicable:
+Distributed migrations MUST preserve applicable:
 
 - communication semantics;
 - ordering;
 - consistency;
-- replication intent;
+- replication;
+- partitioning;
 - fault behavior;
-- placement intent;
 - service identity;
+- placement intent;
 - message semantics.
 
-A migration MUST NOT replace an abstract distributed requirement with a fixed node count.
+A migration MUST NOT introduce a fixed maximum node count.
 
 ---
 
-45. AI/ML Deprecation
+49. AI and Data Deprecation
 
-AI/ML syntax MUST remain independent of:
+AI/data migrations MUST preserve semantic meaning independently of:
 
-- fixed tensor dimensions where abstraction is appropriate;
-- fixed accelerator counts;
-- fixed device types;
-- fixed memory capacities.
+- accelerator vendor;
+- accelerator count;
+- fixed memory capacity;
+- fixed tensor rank where abstraction is appropriate;
+- fixed tensor dimensions where not semantically required;
+- framework implementation.
 
-A deprecated AI construct SHOULD migrate toward semantic model/data/operation representations rather than backend-specific syntax.
-
----
-
-46. Networking Deprecation
-
-Deprecated networking constructs MUST preserve semantic intent.
-
-A network construct MUST NOT be deprecated solely because:
-
-- a protocol implementation changes;
-- a particular network topology changes;
-- a device lacks support.
-
-Protocol-specific compatibility belongs to the networking/interoperability layer.
+Framework-specific syntax MUST remain outside the portable language core unless explicitly standardized as part of the language.
 
 ---
 
-47. Security Deprecation
+50. Networking Deprecation
 
-Security-sensitive constructs require special treatment.
+Networking syntax may be deprecated because of:
+
+- obsolete protocol semantics;
+- obsolete API representation;
+- security requirements;
+- incompatible external standards.
+
+It MUST NOT be deprecated merely because a particular network topology or device does not support it.
+
+Portable network requirements SHOULD remain abstract.
+
+---
+
+51. Security Deprecation
+
+Security-sensitive features require additional safeguards.
 
 A deprecated security feature MUST NOT silently weaken security.
 
-If a replacement provides stronger guarantees, migration SHOULD make the security improvement explicit.
+If a replacement has stronger guarantees, the migration SHOULD make the change explicit.
 
-If the old feature is unsafe by specification, continued support MAY be shortened, but the compiler MUST provide a clear diagnostic and migration path where practical.
+If the old construct has a severe security defect, accelerated removal MAY be used under the emergency process.
 
 ---
 
-48. Dialect Deprecation
+52. Dialect Deprecation
 
-Dialect deprecation MUST be isolated from core-language compatibility.
+Dialect deprecation is independent of core-language deprecation.
 
 A dialect MUST have:
 
-- stable identity;
-- namespace;
-- version;
-- owner;
-- compatibility status.
+identity
+namespace
+version
+owner
+status
+compatibility contract
+migration policy
 
 Deprecating:
 
 dialect X
 
-MUST NOT automatically deprecate the core Zamani construct that the dialect interoperates with.
+does not automatically deprecate a core Zamani semantic feature used by that dialect.
 
 ---
 
-49. Vendor Extensions
+53. Vendor Extensions
 
-Vendor extensions MAY be deprecated independently.
+Vendor-specific syntax MAY be deprecated independently.
 
-Vendor-specific syntax MUST NOT become part of the portable core merely because it is widely implemented.
+Vendor syntax MUST NOT become core syntax merely because it is popular.
 
-Conversely, a vendor extension MUST NOT constrain the core language's scalability model.
+Likewise, a vendor extension MUST NOT force the core language to adopt:
+
+- fixed device counts;
+- fixed topologies;
+- fixed register widths;
+- fixed memory capacities;
+- fixed quantum hardware limits.
 
 ---
 
-50. Reserved Syntax Integration
+54. Interoperability Deprecation
 
-When a deprecated feature is removed, its former syntax MAY become:
+Interoperability formats such as:
+
+- OpenQASM;
+- QIR;
+- HDL formats;
+- LLVM-related formats;
+- MLIR-related formats;
+- foreign-language interfaces;
+
+are compatibility boundaries, not replacements for the canonical Zamani semantic model.
+
+Deprecating an interoperability format MUST NOT deprecate the underlying Zamani semantics automatically.
+
+The interoperability layer owns external-format conversion.
+
+---
+
+55. Deprecated OpenQASM/External Quantum Syntax
+
+A deprecated external quantum representation MUST normalize through:
+
+external format
+    ↓
+Zamani semantic model
+    ↓
+quantum::ir
+
+It MUST NOT establish an external format as a second canonical quantum IR.
+
+Any existing OpenQASM frontend structure MUST remain integrated with the current repository organization rather than creating a competing quantum frontend architecture.
+
+---
+
+56. Reserved Syntax
+
+When a deprecated feature is removed, its former syntax may become:
 
 - reserved;
+- reusable under an explicit version rule;
+- available to a dialect;
 - available for a replacement;
-- available to extensions;
-- released for reuse only under an explicit compatibility policy.
+- permanently unavailable.
 
-"grammar/compatibility/reserved.md" owns the reserved-space decision.
+Reserved identifiers and namespaces remain owned by the repository's reserved-syntax contract if present.
 
-This file MUST record the relationship when necessary.
-
----
-
-51. Removed Syntax Must Not Be Reused Immediately
-
-A removed keyword or syntax form SHOULD NOT immediately be reassigned to unrelated semantics.
-
-Reusing historical syntax can make old source dangerous to interpret.
-
-Before reuse, the compatibility analysis MUST establish that:
-
-- historical source cannot be silently reinterpreted;
-- migration boundaries are clear;
-- version resolution is deterministic.
+Removal MUST record any change in reserved status.
 
 ---
 
-52. Removal Is Different From Deprecation
+57. Removed Syntax Must Not Be Silently Reused
 
-Deprecation means:
+A removed syntax form SHOULD NOT immediately acquire unrelated semantics.
 
-recognized + supported + discouraged
+Before reuse, the repository MUST establish that old source cannot be silently reinterpreted.
 
-Removal means:
-
-not part of the current language contract
-
-A compiler supporting the version in which a feature is deprecated MUST continue to implement its specified semantics unless the compatibility policy explicitly says otherwise.
+Version resolution MUST make the distinction deterministic.
 
 ---
 
-53. Removal Prerequisites
+58. Experimental Features
 
-A stable feature MUST NOT become removable until all applicable conditions are satisfied:
+Experimental features have different guarantees from deprecated stable features.
 
-1. feature identity is documented;
-2. deprecation version is documented;
-3. reason is documented;
-4. replacement is documented;
-5. migration path exists where practical;
-6. migration tests exist;
-7. diagnostics exist;
-8. documentation identifies the change;
-9. compatibility matrix is updated;
-10. affected examples are updated;
-11. AST implications are resolved;
-12. semantic implications are resolved;
-13. IR implications are resolved;
-14. tooling implications are resolved;
-15. cross-domain implications are resolved;
-16. removal version is documented;
-17. no hidden stable consumer remains;
-18. repository-wide tests pass.
+An experimental feature may change or disappear without the same compatibility window as a stable feature.
+
+However, experimental status MUST be explicit.
+
+The compiler and documentation MUST distinguish:
+
+EXPERIMENTAL
+
+from:
+
+DEPRECATED
+
+They are not interchangeable.
 
 ---
 
-54. Removal Version
+59. Stable Features
 
-The earliest removal version MUST be explicit.
+A stable feature receives normal compatibility guarantees.
 
-Example:
+Before stable functionality is deprecated:
 
-Deprecated since: 1.4.0
-Earliest removal: 2.0.0
-
-The actual removal MUST still satisfy the compatibility policy.
-
-A feature MUST NOT be removed earlier than its declared earliest removal version unless an emergency security/correctness policy explicitly permits accelerated removal.
-
----
-
-55. Security and Correctness Exception
-
-An immediate or accelerated removal MAY occur when retaining a feature would create a severe:
-
-- security vulnerability;
-- semantic unsoundness;
-- data-integrity problem;
-- compiler correctness problem.
-
-In such a case the release documentation MUST state:
-
-- the affected feature;
-- the reason;
-- affected versions;
-- mitigation;
-- replacement;
-- migration instructions;
-- compatibility consequences.
-
-This exception MUST NOT become a general mechanism for avoiding normal compatibility work.
+1. its identity must be known;
+2. its consumers must be audited;
+3. its semantic contract must be known;
+4. its replacement must be defined where practical;
+5. its migration path must be defined where practical;
+6. its diagnostics must be defined;
+7. its tests must exist;
+8. the compatibility matrix must be updated.
 
 ---
 
-56. Deprecation of Broken Features
+60. Deprecation of Never-Implemented Features
 
-A feature that was never correctly implemented MUST NOT be presented as a normal stable feature merely because a grammar rule exists.
+A feature appearing only in:
 
-The feature status should instead reflect its actual maturity:
+- historical documentation;
+- proposals;
+- incomplete grammar;
+- experimental files;
+- unimplemented examples;
 
-Specified
-Parsed
-AST-supported
-Semantically-supported
-IR-supported
-Backend-supported
-Runtime-supported
-Stable
+MUST NOT automatically receive a stable deprecation promise.
 
-If a grammar-only feature is removed because it was never part of the implemented language contract, documentation MUST make that distinction explicit.
+The repository MUST first determine whether the feature was ever:
 
----
+- normative;
+- accepted by the implementation;
+- documented as stable;
+- part of a compatibility guarantee.
 
-57. Grammar-Only Deprecation
+If not, it may instead be classified as:
 
-If a construct exists only in documentation or an obsolete grammar but has no valid implementation contract, it MUST NOT automatically receive a stable deprecation promise.
+PROPOSED
+EXPERIMENTAL
+PLANNED
+NOT IMPLEMENTED
+HISTORICAL
 
-The authority audit MUST determine:
+as appropriate.
 
-- whether it was normative;
-- whether users could compile it;
-- whether compatibility was promised;
-- whether migration is required.
-
-This prevents obsolete documentation from creating accidental language guarantees.
-
----
-
-58. Existing Feature Preservation
-
-Before deprecating any existing feature:
-
-1. identify every occurrence;
-2. identify all grammar rules;
-3. identify lexer tokens;
-4. identify parser rules;
-5. identify AST nodes;
-6. identify semantic consumers;
-7. identify IR consumers;
-8. identify compiler consumers;
-9. identify runtime consumers;
-10. identify tooling consumers;
-11. identify tests;
-12. identify examples;
-13. identify documentation;
-14. identify cross-domain consumers.
-
-Only then may deprecation be approved.
+This is particularly important for the broad material retained in "Zamani-Grammar.md".
 
 ---
 
-59. Repository-Wide Consumer Audit
+61. Repository-Wide Deprecation Audit
 
-A deprecation audit MUST search at minimum:
+Before approving a stable-feature deprecation, the repository MUST be searched for:
 
 grammar/
+src/
+tests/
+examples/
+docs/
+
+and, where present:
+
 src/lexer.rs
 src/parser.rs
 src/frontend/
@@ -1501,406 +1671,360 @@ src/compiler/
 src/runtime/
 src/hardware/
 src/hdl/
-tests/
-examples/
-docs/
 
-The exact directories MUST follow the actual repository structure.
+The exact paths MUST follow the actual repository.
 
-A feature MUST NOT be considered removable merely because it disappeared from the grammar.
+The audit MUST identify:
 
----
+- grammar definitions;
+- lexer tokens;
+- parser rules;
+- AST nodes;
+- semantic consumers;
+- IR consumers;
+- compiler consumers;
+- runtime consumers;
+- backend consumers;
+- interoperability consumers;
+- tests;
+- examples;
+- documentation;
+- feature manifests;
+- dialects.
 
-60. Integration With "grammar/Zamani.g4"
-
-"grammar/Zamani.g4" is the canonical ANTLR grammar representation.
-
-For every deprecated syntax still supported:
-
-- its lexical representation MUST remain defined;
-- its parser representation MUST remain deterministic;
-- its semantic status MUST be documented;
-- its deprecation diagnostic MUST be available through the compiler/tooling layer where supported.
-
-The grammar itself MUST NOT become the repository's only source of deprecation metadata.
-
-Deprecation metadata belongs in the compatibility specification and implementation metadata.
+A feature MUST NOT be considered safely removable merely because its grammar rule disappeared.
 
 ---
 
-61. Integration With Modular Grammar Files
+62. Integration With "Zamani.g4"
 
-If the grammar is split into:
+"grammar/Zamani.g4" remains the canonical ANTLR composition root.
+
+Deprecated syntax that remains supported MUST have:
+
+- deterministic lexical representation;
+- deterministic parser representation;
+- semantic compatibility;
+- diagnostic support;
+- migration metadata.
+
+"Zamani.g4" MUST NOT become a deprecation registry.
+
+The compatibility layer owns lifecycle metadata.
+
+---
+
+63. Integration With Modular Grammar Files
+
+If grammar functionality is split across:
 
 lexer/
 core/
 types/
 expressions/
 statements/
+quantum/
+hdl/
+hardware/
 ...
 
-deprecation status MUST remain globally consistent.
+the deprecation status remains global.
 
-A construct MUST NOT be:
+A modular file MAY define syntax.
 
-deprecated
-
-in one grammar component and:
-
-stable
-
-in another.
-
-The feature identity, not the grammar-file location, determines status.
+It MUST NOT independently redefine lifecycle status.
 
 ---
 
-62. Integration With "grammar/grammar.md"
+64. Integration With "grammar.md"
 
-"grammar/grammar.md" MUST accurately describe the currently accepted and supported language.
+"grammar.md" MUST report the implementation status of deprecated features accurately.
 
-Deprecated constructs MAY be documented there when they remain accepted, but their status MUST be explicit.
+A deprecated-but-supported feature MAY appear as accepted syntax.
 
-The document MUST NOT imply that deprecated constructs are recommended new syntax.
+Its status MUST clearly indicate:
 
----
+DEPRECATED
 
-63. Integration With "grammar/Zamani-Grammar.md"
-
-"Zamani-Grammar.md" may contain broader language design information.
-
-It MUST distinguish:
-
-- stable;
-- experimental;
-- deprecated;
-- proposed;
-- future.
-
-A proposed or future construct MUST NOT be presented as a stable compatibility guarantee.
+rather than presenting it as recommended syntax.
 
 ---
 
-64. Integration With "specification/language-version.md"
+65. Integration With "Zamani-Grammar.md"
 
-The language-version specification determines the version in which deprecation becomes effective.
+The broad grammar/design document may retain historical syntax.
 
-This file determines:
+It MUST classify it appropriately.
 
-- what deprecation means;
-- how it progresses;
-- what metadata is required;
-- what removal requires.
+A historical feature MUST NOT be revived accidentally merely because a developer copies an old rule into the canonical grammar.
 
----
+Promotion requires the established lifecycle:
 
-65. Integration With "specification/compatibility.md"
-
-Compatibility policy determines whether a deprecation is:
-
-- source-compatible;
-- syntax-compatible;
-- AST-compatible;
-- semantic-compatible;
-- IR-compatible;
-- target-compatible;
-- runtime-compatible.
-
-Deprecation MUST NOT collapse these dimensions.
+proposal
+→ semantic design
+→ AST contract
+→ grammar
+→ implementation
+→ IR
+→ tests
+→ compatibility review
+→ stable
 
 ---
 
-66. Integration With "compatibility/versions.md"
+66. Integration With the Lexer
 
-"versions.md" determines version semantics.
+The lexer MUST continue to recognize deprecated lexical forms while they remain supported.
 
-For every deprecation:
+If a deprecated spelling is removed:
 
-deprecated-since
-earliest-removal-version
+1. the lexical contract changes;
+2. parser behavior is updated;
+3. diagnostics are updated;
+4. migration metadata is updated;
+5. tests are updated.
 
-MUST refer to the language-version model defined there.
-
-Rust version MUST NOT be used as the Zamani feature version.
-
----
-
-67. Rust Version Independence
-
-The Zamani language version MUST remain independent of:
-
-Rust 1.97
-Rust 1.97.1
-
-Rust is an implementation toolchain.
-
-It is not the Zamani language version.
-
-The implementation baseline is:
-
-minimum supported Rust: 1.97
-production validation: Rust 1.97.1
-
-The implementation MUST use safe Rust only.
-
-No deprecation mechanism may require Rust "unsafe".
+A lexer implementation change MUST NOT silently alter the semantic meaning of unrelated syntax.
 
 ---
 
-68. Integration With AST
+67. Integration With the AST
 
-The AST implementation under "src/frontend/ast/" MUST remain domain-neutral.
+The AST MUST remain domain-neutral at the frontend boundary.
 
-Deprecation handling MUST NOT turn the AST into a target-specific representation.
+Deprecation MUST NOT introduce:
 
-In particular, deprecated syntax MUST NOT force AST nodes to contain:
-
-- LLVM-specific structures;
-- vendor-specific backend structures;
 - physical topology;
+- vendor backend structures;
 - calibration state;
-- QEC implementation details;
 - routing decisions;
-- scheduler decisions.
+- scheduling decisions;
+- QEC implementation details;
 
-Those belong downstream.
+into the frontend AST merely to support historical syntax.
 
 ---
 
-69. Integration With Semantic Analysis
+68. Integration With Semantic Analysis
 
-Semantic analysis determines whether a deprecated construct remains valid under the effective language version.
+Semantic analysis MUST determine:
 
-The semantic layer SHOULD normalize equivalent historical syntax before domain-specific lowering.
+- whether the deprecated feature is legal for the effective version;
+- its historical meaning;
+- its normalized meaning;
+- whether migration is required;
+- whether semantic equivalence is preserved.
 
-Preferred model:
+---
 
-historical syntax
-       ↓
+69. Integration With Canonical IR
+
+Deprecated source MUST ultimately lower through current canonical IR contracts.
+
+No permanent legacy IR should be added solely to preserve deprecated source.
+
+For quantum:
+
+deprecated quantum syntax
+        ↓
 AST
-       ↓
-normalization
-       ↓
-current semantic representation
+        ↓
+semantic normalization
+        ↓
+quantum::ir
+
+For classical and HDL/hardware constructs, the corresponding canonical domain IR remains authoritative.
 
 ---
 
-70. Integration With Classical IR
+70. Integration With Routing, Scheduling, QEC, and ZQN
 
-Deprecated classical syntax MUST lower into the existing canonical classical semantic/IR pathway.
+Deprecation MUST NOT transfer ownership of downstream responsibilities into the grammar.
 
-No permanent "legacy classical IR" should be introduced solely to preserve deprecated syntax.
+Routing owns physical realization.
 
----
+Scheduling owns ordering and resource scheduling.
 
-71. Integration With "quantum::ir"
+QEC owns error-correction realization.
 
-"quantum::ir" remains the canonical quantum semantic boundary.
+ZQN owns its defined resilience/noise/fault semantics.
 
-Deprecated quantum syntax MUST be normalized before or during semantic lowering into that canonical boundary.
+HAL owns hardware realization.
 
-The deprecation layer MUST NOT:
-
-- duplicate quantum IR;
-- define competing Qubit IDs;
-- create alternate physical-qubit identity systems;
-- encode target topology;
-- encode QEC implementation;
-- encode routing decisions.
+Deprecation merely determines how historical source reaches those current systems.
 
 ---
 
-72. Qubit Identity Compatibility
+71. Runtime Integration
 
-Where quantum source explicitly refers to semantic qubits, compatibility must preserve canonical identity.
+Runtime behavior MUST NOT silently change merely because source syntax became deprecated.
 
-The repository's canonical:
-
-quantum::ir::qubit::QubitId
-quantum::ir::qubit::PhysicalQubitId
-
-must remain authoritative where those identities are applicable.
-
-A deprecated syntax MUST NOT introduce competing identifiers.
+If runtime semantics change, that is a separate compatibility event and MUST receive its own compatibility classification.
 
 ---
 
-73. QEC Integration
-
-Deprecated QEC syntax MUST preserve QEC intent.
-
-The migration MUST distinguish:
-
-desired error-correction behavior
-
-from:
-
-specific decoder
-specific code implementation
-specific hardware mapping
-
-unless the source explicitly specifies those implementation details.
-
----
-
-74. Scheduling Integration
-
-Deprecation MUST NOT encode scheduler policy into source compatibility.
-
-Scheduling remains responsible for:
-
-- ordering;
-- timing;
-- resource availability;
-- dependencies;
-- hardware realization.
-
-A deprecated scheduling hint may be replaced by a portable semantic hint or requirement.
-
----
-
-75. Routing Integration
-
-Routing decisions are not language-version semantics unless explicitly defined as source semantics.
-
-A deprecated syntax MUST NOT permanently bind a program to:
-
-- a topology;
-- physical qubit locations;
-- a fixed path;
-- a fixed device.
-
----
-
-76. Hardware Abstraction Integration
-
-Hardware abstraction remains responsible for target realization.
-
-A deprecation replacement MUST prefer:
-
-capability
-requirement
-constraint
-target
-resource
-
-over:
-
-fixed machine
-
-where portability is intended.
-
----
-
-77. Runtime Integration
-
-Runtime behavior MUST NOT silently change because a source construct became deprecated.
-
-If runtime behavior changes, that change requires its own compatibility classification.
-
-The deprecation system may communicate the lifecycle of source syntax, but it does not own runtime semantics.
-
----
-
-78. Tooling Integration
+72. Tooling Integration
 
 Tooling SHOULD provide:
 
 - deprecation diagnostics;
-- migration suggestions;
 - feature status;
-- replacement information;
+- replacement suggestions;
+- migration links/identifiers;
 - machine-readable metadata;
-- source transformation where safe;
-- compatibility checks.
+- compatibility inspection;
+- safe automatic migration where available.
 
-Tooling MUST use the same feature identity as the language specification.
+Tooling MUST use the same feature identity as the specification.
 
 ---
 
-79. Documentation Integration
+73. Documentation Integration
 
-Every deprecated feature MUST have documentation in:
+Every deprecated feature MUST be represented in:
 
 - compatibility documentation;
-- relevant feature documentation;
-- migration documentation where migration exists;
-- release notes when the deprecation is introduced;
+- feature documentation;
+- migration documentation when applicable;
+- release documentation when introduced;
 - removal documentation when removed.
 
-Documentation MUST NOT silently delete the historical explanation immediately after removal.
-
-Historical compatibility information is required for long-lived source maintenance.
+Historical information MUST remain available after removal.
 
 ---
 
-80. Test Integration
+74. Test Requirements
 
-Every deprecated feature MUST have tests covering:
+Every stable deprecated feature MUST have, where applicable:
 
-Positive
+Positive tests
 
-The old syntax remains accepted while supported.
+Old syntax remains accepted while supported.
 
-Diagnostic
+Diagnostic tests
 
-The deprecation warning is emitted correctly.
+Deprecation warning is emitted with the expected identity.
 
-Migration
+Migration tests
 
-The replacement is correct.
+Migration produces the intended replacement.
 
-Semantic equivalence
+Semantic tests
 
-Old and migrated source have equivalent meaning where promised.
+Old and migrated source have equivalent semantics where promised.
 
-Removal
+Removal tests
 
-The feature is rejected in the removal version.
+Removed syntax is rejected under the removal version.
 
-Regression
+Regression tests
 
-The replacement remains supported.
+Replacement syntax remains valid.
 
 ---
 
-81. Negative Tests
+75. Negative Tests
 
 Negative tests MUST cover:
 
 - malformed deprecated syntax;
 - invalid version declarations;
-- unsupported future versions;
+- unsupported versions;
 - removed constructs;
-- invalid migration targets;
 - ambiguous replacements;
-- unsupported combinations.
+- invalid migration targets;
+- incompatible dialect versions;
+- conflicting compatibility requirements.
 
-A compiler MUST fail deterministically.
+Failures MUST be deterministic.
 
 ---
 
-82. Boundary Tests
+76. Boundary Tests
 
-Boundary tests MUST include:
+Boundary tests SHOULD cover:
 
-- smallest valid program using the deprecated construct;
-- nested use;
-- repeated use;
+- smallest valid deprecated program;
+- nested deprecated constructs;
+- repeated deprecated constructs;
+- interactions with modules;
+- interactions with generics;
+- interactions with effects;
+- interactions with resources;
+- interactions with quantum constructs;
+- interactions with HDL;
+- interactions with distributed constructs;
 - large source files;
-- deeply nested syntax where supported;
-- large collections of deprecated constructs;
-- many modules;
-- many quantum operations;
-- large resource expressions.
+- large numbers of declarations;
+- large operation sequences.
 
-No test may use an artificial fixed maximum merely because it is convenient.
+No artificial maximum should be encoded merely for testing convenience.
 
 ---
 
-83. Cross-Domain Deprecation Tests
+77. Scalability Tests
 
-At minimum, compatibility testing SHOULD cover:
+Deprecation tests MUST demonstrate that semantics do not depend on arbitrary machine limits.
+
+The same semantic construct SHOULD be testable against:
+
+tiny realization
+small realization
+medium realization
+large realization
+distributed realization
+heterogeneous realization
+future realization
+
+subject to actual resource and capability availability.
+
+---
+
+78. Determinism Tests
+
+Given identical:
+
+source
+language version
+dialect set
+compiler compatibility configuration
+migration configuration
+
+deprecation behavior MUST be identical.
+
+It MUST NOT depend on:
+
+- CPU count;
+- GPU availability;
+- QPU availability;
+- memory size;
+- network state;
+- wall-clock time;
+- random numbers;
+- hash iteration order;
+- undocumented environment variables.
+
+---
+
+79. Reproducibility
+
+Deprecation decisions MUST be reproducible.
+
+A fixed:
+
+language version
+compiler version
+dependency set
+dialect set
+migration configuration
+
+must produce deterministic deprecation classification and diagnostics.
+
+---
+
+80. Cross-Domain Tests
+
+The repository SHOULD test deprecated features in combinations including:
 
 classical + quantum
 classical + HDL
@@ -1912,51 +2036,13 @@ AI + hardware
 classical + quantum + distributed
 classical + quantum + HDL + hardware
 
-Deprecated constructs must preserve the intended cross-domain semantics.
+This prevents a deprecation from appearing correct in isolation while breaking cross-domain semantics.
 
 ---
 
-84. Scalability Tests
+81. Round-Trip Tests
 
-Deprecation tests MUST verify that migration semantics are independent of resource scale.
-
-The same source semantics must remain valid across:
-
-tiny target
-small target
-medium target
-large target
-distributed target
-heterogeneous target
-future target
-
-subject only to actual capability/resource availability.
-
----
-
-85. Determinism Tests
-
-For identical:
-
-source
-language version
-compiler compatibility configuration
-migration configuration
-
-the deprecation result MUST be deterministic.
-
-No hidden random state may influence:
-
-- warning classification;
-- migration choice;
-- feature status;
-- semantic interpretation.
-
----
-
-86. Round-Trip Tests
-
-Where a source printer/serializer exists:
+Where source serialization exists:
 
 old source
    ↓
@@ -1976,956 +2062,647 @@ must preserve intended semantics.
 
 ---
 
-87. Deprecation Must Not Break Reproducibility
+82. No Regex-Only Semantic Migration
 
-A program compiled with a fixed:
+Textual replacement MUST NOT be used as the sole migration mechanism for semantic changes.
 
-language version
-compiler version
-dependency set
-dialect versions
-migration configuration
+Safe lexical spelling changes may use token-aware transformation.
 
-must produce deterministic compatibility behavior.
+Semantic migrations SHOULD operate on:
 
-Deprecation decisions MUST NOT depend on:
+tokens
+AST
+semantic model
+canonical representation
 
-- current hardware;
-- current machine size;
-- current QPU availability;
-- network availability;
-- wall-clock time;
-- undocumented environment variables.
+as appropriate.
+
+For example, changing a quantum operation's semantic representation MUST NOT rely solely on replacing text strings.
 
 ---
 
-88. Deprecation and Dependencies
+83. Source Provenance
 
-A dependency may deprecate an API without automatically deprecating the Zamani language feature that uses it.
+Migration and deprecation processing SHOULD preserve:
 
-The compiler MUST distinguish:
+- original source span;
+- original spelling;
+- normalized spelling;
+- feature ID;
+- migration ID;
+- language version;
+- dialect version;
+- transformation status.
 
-language deprecation
-
-from:
-
-dependency deprecation
-
-Migration tooling SHOULD identify dependency-level changes separately.
+This allows diagnostics and debugging to explain how historical source reached the current representation.
 
 ---
 
-89. Deprecation and Dialect Versioning
+84. Compatibility Classification
 
-A dialect may have its own lifecycle.
+Every deprecation MUST be classified across applicable dimensions:
+
+Dimension| Possible status
+Source| compatible / incompatible
+Lexer| compatible / incompatible
+Grammar| compatible / incompatible
+AST| compatible / normalized / incompatible
+Semantics| equivalent / changed / incompatible
+IR| equivalent / translated / incompatible
+Artifact| compatible / translated / incompatible
+Runtime| compatible / conditional / incompatible
+Target| compatible / capability-dependent / incompatible
+Dialect| compatible / translated / incompatible
+
+A syntax-only deprecation SHOULD normally preserve semantic compatibility.
+
+A semantic change MUST NOT be mislabeled as a spelling-only deprecation.
+
+---
+
+85. Deprecation and Versioning
+
+A deprecation record MUST identify:
+
+deprecated since
+earliest removal version
+
+using the language version system from:
+
+grammar/compatibility/versions.md
+grammar/specification/language-version.md
+
+Rust versions MUST NOT be used as deprecation version identifiers.
 
 For example:
 
-core Zamani: stable
-dialect X: deprecated
-dialect Y: stable
+Deprecated since: Zamani 1.4.0
 
-This is valid.
+is meaningful.
 
-Deprecating a dialect MUST NOT require a core-language major version unless the dialect is part of the core language contract.
+Deprecated since: Rust 1.97.1
+
+is not a Zamani language deprecation.
 
 ---
 
-90. Compatibility Modes
+86. Rust Implementation Requirements
 
-A compiler MAY support compatibility modes such as:
+The reference implementation baseline is:
+
+Rust 1.97 / Rust 1.97.1
+Rust 2021
+
+The implementation MUST use safe Rust.
+
+Deprecation handling MUST NOT require:
+
+unsafe
+
+or equivalent unsafe behavior.
+
+Implementation SHOULD favor deterministic data structures and processing.
+
+Where output order is observable, ordering MUST be explicitly defined rather than depending on hash iteration order.
+
+---
+
+87. No Network-Dependent Deprecation
+
+Compiler deprecation classification MUST NOT depend on live network access.
+
+The result MUST be derivable from:
+
+- source;
+- language specification;
+- local compatibility metadata;
+- compiler configuration;
+- declared dependencies/dialects.
+
+Network-based package metadata may be a tooling concern, but it MUST NOT silently redefine language deprecation semantics during compilation.
+
+---
+
+88. No Hardware-Dependent Deprecation
+
+The compiler MUST NOT decide that a feature is deprecated because the current machine is:
+
+- too small;
+- too large;
+- missing a GPU;
+- missing a QPU;
+- missing an FPGA;
+- missing memory;
+- missing a particular topology.
+
+Hardware feasibility belongs downstream.
+
+---
+
+89. Compatibility Modes
+
+A compiler MAY provide modes such as:
 
 strict
 default
 legacy
 migration
 
-if the implementation needs them.
+if required.
 
-Such modes MUST NOT change the underlying language semantics silently.
+Any such mode MUST:
 
-A compatibility mode MUST have a documented purpose and deterministic behavior.
+- be explicitly defined;
+- be deterministic;
+- report the effective language version;
+- not silently alter semantics;
+- not restore removed language features.
 
----
-
-91. Legacy Mode
-
-A legacy mode MAY allow additional historical syntax.
-
-If supported:
-
-- it MUST be explicitly selected;
-- it MUST report the effective language version;
-- it MUST not silently reinterpret current syntax;
-- it MUST remain deterministic;
-- it MUST have a documented removal policy.
-
-Legacy mode MUST NOT become a permanent excuse for avoiding migration.
+Legacy mode MUST NOT become a permanent replacement for normal migration.
 
 ---
 
-92. Forward Compatibility
+90. Legacy Mode
 
-A compiler MUST NOT assume that unknown future constructs are deprecated constructs.
+If supported, legacy mode MAY accept historical constructs that are otherwise difficult to infer from the current source version.
 
-Unknown future syntax MUST either:
+Legacy mode MUST:
 
-- be handled by an explicitly defined extension mechanism; or
-- produce an unsupported-version/unknown-feature diagnostic.
+- be explicit;
+- identify the source/language version;
+- produce appropriate diagnostics;
+- remain deterministic;
+- use the same semantic model;
+- ultimately reach the current canonical IR.
 
-It MUST NOT be silently treated as an old construct.
-
----
-
-93. Extension Namespaces
-
-Future and experimental functionality SHOULD use explicit namespaces or extension identities where appropriate.
-
-This reduces collisions between:
-
-stable core
-experimental features
-vendor extensions
-future language features
-
-Deprecation MUST preserve those namespace boundaries.
+Legacy mode MUST NOT create a permanent parallel compiler architecture.
 
 ---
 
-94. Feature Flags
+91. Forward Compatibility
 
-If feature flags exist, a deprecated feature's status MUST be independent from whether the feature happens to be enabled in one compiler build.
+Unknown future syntax MUST NOT be treated as deprecated syntax.
 
-A compiler build configuration MUST NOT redefine the language specification.
+A compiler encountering unknown syntax MUST either:
 
-Feature flags may control implementation availability, but the compatibility model remains authoritative.
+- use an explicitly defined extension mechanism; or
+- report an unknown-feature/unsupported-version diagnostic.
 
----
-
-95. Deprecating a Keyword
-
-A keyword deprecation requires analysis of:
-
-- lexer;
-- parser;
-- identifier collisions;
-- contextual keyword behavior;
-- dialects;
-- macros;
-- tooling;
-- migration.
-
-If possible:
-
-keyword
-
-should transition through contextual handling before becoming unavailable.
+It MUST NOT guess that future syntax means an old deprecated construct.
 
 ---
 
-96. Deprecating an Operator
+92. Feature Flags
 
-Operator deprecation requires:
+Feature flags MAY control implementation availability.
 
-- lexical analysis;
-- precedence analysis;
-- associativity analysis;
-- parser analysis;
-- semantic analysis;
-- migration examples.
+They MUST NOT redefine the normative language contract.
 
-If the replacement changes precedence, the migration MUST insert explicit grouping where required.
-
-Example conceptually:
-
-old: a op b op c
-
-must not become an ambiguous:
-
-new: a new_op b new_op c
-
-without preserving the original evaluation structure.
+A compiler build lacking an experimental feature does not thereby change whether that feature is deprecated.
 
 ---
 
-97. Deprecating a Type
+93. Security and Correctness Emergency
 
-Type deprecation requires:
+Accelerated removal MAY occur when retaining a stable feature creates a severe:
 
-- type identity;
-- conversion semantics;
-- generic behavior;
-- ownership;
-- ABI implications;
-- serialization implications;
-- numerical semantics.
+- security vulnerability;
+- semantic unsoundness;
+- data-integrity risk;
+- compiler-correctness defect.
 
-A type alias may be deprecated mechanically when the semantic type is unchanged.
+The release MUST document:
 
-A representation change requires semantic analysis.
-
----
-
-98. Deprecating a Module or Namespace
-
-A deprecated module path MUST identify:
-
-old path
-new path
-visibility changes
-name conflicts
-dependency effects
-migration
-
-Import migration MUST preserve symbol resolution.
-
----
-
-99. Deprecating a Declaration
-
-Declaration migration MUST preserve:
-
-- scope;
-- visibility;
-- binding;
-- initialization;
-- lifetime;
-- type;
-- attributes;
-- effects.
-
-A declaration syntax change MUST NOT accidentally change initialization or evaluation order.
-
----
-
-100. Deprecating Concurrency Syntax
-
-Concurrency deprecation requires special care.
-
-The migration MUST preserve:
-
-- task semantics;
-- synchronization;
-- ordering;
-- cancellation;
-- error propagation;
-- ownership;
-- shared-state semantics.
-
-A deprecated concurrency construct MUST NOT be replaced with a construct that assumes a fixed thread count.
-
----
-
-101. Deprecating Memory Syntax
-
-Memory migration MUST preserve:
-
-- ownership;
-- borrowing;
-- lifetime;
-- allocation semantics;
-- deallocation semantics;
-- aliasing guarantees;
-- shared-memory semantics;
-- distributed-memory semantics.
-
-A target's memory capacity is not a language compatibility property.
-
----
-
-102. Deprecating Compile-Time Features
-
-Compile-time constructs require distinction between:
-
-compile-time semantics
-
-and:
-
-compiler implementation
-
-A feature MUST NOT be deprecated merely because one compiler implementation cannot evaluate it efficiently.
-
----
-
-103. Deprecating Runtime Features
-
-Runtime behavior belongs to runtime compatibility.
-
-A source construct may remain stable even if a runtime API changes.
-
-Where a runtime change requires source changes, the source-facing migration MUST be explicitly documented.
-
----
-
-104. Deprecation and ABI
-
-ABI compatibility is distinct from source compatibility.
-
-A source feature may be deprecated while its ABI remains supported.
-
-Conversely, an ABI may change while source syntax remains stable.
-
-These cases MUST be tracked independently.
-
----
-
-105. Deprecation and Serialization
-
-Serialization formats MUST have independent lifecycle metadata.
-
-A deprecated source feature MUST NOT automatically make all serialized artifacts invalid.
-
-If serialization changes:
-
-source compatibility
-
-and:
-
-artifact compatibility
-
-must be tracked separately.
-
----
-
-106. Deprecation and Determinism
-
-A deprecation MUST NOT alter deterministic semantics unless the specification explicitly defines the change.
-
-If a deprecated construct had deterministic behavior, migration must preserve that behavior where compatibility is promised.
-
----
-
-107. Deprecation and Numerical Semantics
-
-Numerical features require special protection.
-
-Deprecation MUST NOT silently change:
-
-- precision;
-- rounding;
-- overflow;
-- underflow;
-- signedness;
-- NaN behavior;
-- infinity behavior;
-- evaluation order.
-
-If such behavior changes, the migration must be classified accordingly.
-
----
-
-108. Deprecation and Security
-
-Security-sensitive deprecated constructs require explicit security classification.
-
-The compiler SHOULD identify:
-
-security impact
-replacement security properties
-migration risk
-
-A migration MUST NOT weaken a security guarantee without explicit source-level acknowledgement where required by the language specification.
-
----
-
-109. Deprecation and Provenance
-
-Migration tooling SHOULD record provenance:
-
-original language version
-migration performed
-migration tool version
-migration rule
-target language version
-
-This enables reproducibility and debugging.
-
-Provenance MUST NOT contain secrets.
-
----
-
-110. Deprecation and Source Spans
-
-Where possible, deprecation diagnostics SHOULD preserve accurate source spans.
-
-A migration should preserve enough source-location information to allow developers to locate the historical construct.
-
----
-
-111. Deprecation and Comments
-
-Comments SHOULD be preserved during automatic migration when the tooling promises source-preserving migration.
-
-A migration MUST NOT silently delete documentation attached to a deprecated declaration.
-
----
-
-112. Deprecation and Formatting
-
-Formatting may change during migration if the migration tool explicitly operates as a formatter.
-
-However:
-
-semantic migration
-
-and:
-
-formatting
-
-must remain conceptually separate.
-
----
-
-113. Deprecation Registry
-
-The implementation SHOULD maintain a machine-readable internal registry derived from this normative policy.
-
-Each record SHOULD contain:
-
-feature_id
-status
-introduced_version
-deprecated_version
-removal_version
-replacement
-migration_kind
-diagnostic_code
-semantic_contract
-
-The registry MUST have one authoritative representation.
-
-Generated documentation MUST NOT become an independent authority.
-
----
-
-114. Generated Deprecation Documentation
-
-If deprecation metadata is generated:
-
-canonical metadata
-       ↓
-generated documentation
-
-must be the direction of derivation.
-
-The reverse:
-
-documentation
-       ↓
-implementation semantics
-
-must not occur.
-
----
-
-115. Grammar Generation
-
-If modular grammar files generate "Zamani.g4", the dependency direction must remain:
-
-canonical grammar components
-        ↓
-generated/composed grammar
-        ↓
-ANTLR
-        ↓
-parser
-
-Deprecation metadata must not introduce:
-
-parser
-  ↓
-grammar
-  ↓
-deprecated registry
-
-cycles.
-
----
-
-116. No Circular Dependency
-
-The architecture MUST NOT contain:
-
-deprecated.md
-    ↓
-parser
-    ↓
-deprecated.md
-
-or:
-
-grammar
-    ↓
-runtime
-    ↓
-grammar
-
-or:
-
-quantum grammar
-    ↓
-hardware grammar
-    ↓
-quantum grammar
-
-Deprecation is a compatibility specification layer consumed by validation/tooling.
-
----
-
-117. File Contract
-
-This file is independently complete under the repository's file-completion standard.
-
-File
-
-"grammar/compatibility/deprecated.md"
-
-Purpose
-
-Define the normative lifecycle and compatibility policy for deprecated Zamani language features.
-
-Owns
-
-- deprecation lifecycle;
-- deprecation metadata;
-- deprecation eligibility;
-- deprecation warnings;
-- removal eligibility;
-- replacement requirements;
-- deprecation-specific compatibility guarantees.
-
-Does Not Own
-
-- version numbering;
-- migration algorithms;
-- canonical grammar semantics;
-- AST implementation;
-- IR definitions;
-- runtime behavior;
-- target selection;
-- hardware capabilities.
-
-Inputs
-
-- language-version policy;
-- compatibility policy;
-- canonical grammar;
-- semantic specifications;
-- existing feature inventory;
-- migration specifications;
-- repository implementation state.
-
-Outputs
-
-- deprecation status;
-- feature lifecycle;
-- replacement requirements;
-- removal requirements;
-- diagnostic requirements;
-- compatibility obligations.
-
-Dependencies
-
-Normative dependencies:
-
-specification/language-version.md
-specification/compatibility.md
-compatibility/versions.md
-compatibility/migrations.md
-compatibility/reserved.md
-compatibility/compatibility-matrix.md
-
-Implementation dependencies:
-
-lexer
-parser
-AST
-semantic analysis
-IR
-compiler
-tooling
-tests
-
-Upstream Contracts
-
-Must consume:
-
-- canonical language version model;
-- canonical compatibility model;
-- canonical grammar authority;
-- semantic contracts.
-
-Downstream Consumers
-
-Expected consumers:
-
-- lexer/parser compatibility handling;
-- semantic validation;
-- compiler diagnostics;
-- migration tooling;
-- IDE/tooling;
-- compatibility tests;
-- documentation generation.
-
-Public Grammar Contract
-
-This file does not directly define ordinary source syntax.
-
-It defines the lifecycle of syntax and language features that the canonical grammar recognizes.
-
-AST Contract
-
-Deprecated syntax must remain representable until removal where required for source compatibility.
-
-Equivalent historical syntax SHOULD normalize into current semantic representations.
-
-Semantic Contract
-
-Deprecation MUST NOT silently change semantics.
-
-Semantic changes require explicit migration classification.
-
-IR Integration
-
-Deprecated syntax must lower into existing canonical IR.
-
-No legacy permanent IR may be introduced solely for deprecation support.
-
-Quantum constructs continue to lower through "quantum::ir".
-
-Compiler Integration
-
-The compiler must:
-
-- resolve language version;
-- recognize deprecated constructs;
-- emit structured diagnostics;
-- enforce removal versions;
-- invoke migration tooling where supported.
-
-Runtime Integration
-
-Runtime behavior is not owned here.
-
-Source deprecation MUST NOT silently alter runtime semantics.
-
-Tooling Integration
-
-Tooling SHOULD expose:
-
-- status;
+- feature identity;
+- affected versions;
+- reason;
+- severity;
+- mitigation;
 - replacement;
 - migration;
-- removal version;
-- machine-readable diagnostic identity.
+- compatibility consequences.
 
-Cross-Domain Integration
-
-The policy applies consistently to:
-
-- classical;
-- quantum;
-- hybrid;
-- HDL;
-- hardware;
-- distributed;
-- AI/ML;
-- data;
-- networking;
-- security;
-- accelerators;
-- embedded;
-- future domains.
-
-Tests
-
-Required:
-
-- status tests;
-- warning tests;
-- migration tests;
-- semantic-equivalence tests;
-- removal tests;
-- version tests;
-- cross-domain tests;
-- determinism tests;
-- scalability tests;
-- round-trip tests.
-
-Negative Tests
-
-Required:
-
-- removed feature;
-- unknown feature;
-- invalid version;
-- invalid replacement;
-- invalid migration;
-- unsupported future feature;
-- ambiguous historical syntax.
-
-Boundary Tests
-
-Required:
-
-- smallest source;
-- large source;
-- repeated deprecated constructs;
-- deeply nested constructs where supported;
-- large quantum programs;
-- large resource expressions;
-- many modules;
-- many operations.
-
-No artificial machine-scale maximum may be introduced.
-
-Compatibility Requirements
-
-Must preserve the compatibility guarantees defined by "versions.md" and "specification/compatibility.md".
-
-Scalability Requirements
-
-Deprecation behavior MUST NOT depend on:
-
-- machine size;
-- number of CPUs;
-- number of cores;
-- number of threads;
-- number of GPUs;
-- number of FPGAs;
-- number of QPUs;
-- qubit count;
-- memory size;
-- network size;
-- cluster size;
-- topology.
-
-Hard-Coding Audit
-
-The implementation MUST reject or remove accidental constants representing:
-
-- hardware limits;
-- resource limits;
-- topology;
-- device counts;
-- qubit counts;
-- fixed accelerator counts;
-- fixed memory;
-- fixed deployment size.
-
-Feature lifecycle versions are NOT considered hardware hard-coding.
-
-Completion Criteria
-
-This file is complete when:
-
-1. every deprecation has a stable identity;
-2. lifecycle states are defined;
-3. ownership boundaries are defined;
-4. migration integration is defined;
-5. version integration is defined;
-6. reserved-space integration is defined;
-7. grammar integration is defined;
-8. AST integration is defined;
-9. semantic integration is defined;
-10. IR integration is defined;
-11. quantum integration is defined;
-12. hardware integration is defined;
-13. diagnostics are defined;
-14. removal policy is defined;
-15. test obligations are defined;
-16. scalability obligations are defined;
-17. no circular dependency exists;
-18. no accidental hardware limitation is introduced.
+This mechanism MUST NOT become a general shortcut around normal deprecation.
 
 ---
 
-118. Required Implementation Order
+94. Removal Prerequisites
 
-The deprecation policy should be implemented in dependency order.
+A stable feature is "REMOVAL_ELIGIBLE" only after all applicable conditions are satisfied:
 
-Recommended sequence:
-
-1. specification/language-version.md
-2. specification/compatibility.md
-3. compatibility/versions.md
-4. compatibility/deprecated.md
-5. compatibility/reserved.md
-6. compatibility/migrations.md
-7. compatibility/compatibility-matrix.md
-8. validation/compatibility-rules.md
-9. lexer compatibility implementation
-10. parser compatibility implementation
-11. AST compatibility
-12. semantic compatibility
-13. IR compatibility
-14. compiler diagnostics
-15. migration tooling
-16. compatibility tests
-17. cross-domain tests
-18. scalability tests
-
-"deprecated.md" must be completed before implementation of deprecation diagnostics because those diagnostics depend on its lifecycle contract.
+1. stable feature identity exists;
+2. deprecation version is documented;
+3. reason is documented;
+4. replacement is documented where practical;
+5. migration ID exists where applicable;
+6. migration is tested where applicable;
+7. diagnostics exist;
+8. compatibility matrix is updated;
+9. grammar status is updated;
+10. lexer status is updated;
+11. parser status is updated;
+12. AST implications are resolved;
+13. semantic implications are resolved;
+14. IR implications are resolved;
+15. compiler consumers are audited;
+16. runtime consumers are audited;
+17. dialect consumers are audited;
+18. documentation is updated;
+19. positive tests are updated;
+20. negative tests exist;
+21. boundary tests exist;
+22. scalability tests exist;
+23. determinism tests exist;
+24. no hidden stable consumer remains;
+25. repository-wide conformance passes.
 
 ---
 
-119. Required Repository-Wide Integration Checklist
+95. Removal Version
 
-Before declaring deprecation infrastructure production-ready, verify:
+The earliest removal version MUST be explicit.
+
+Example:
+
+Deprecated since: 1.4.0
+Earliest removal: 2.0.0
+
+The feature MUST NOT be removed before the declared earliest removal version except through the documented security/correctness emergency process.
+
+---
+
+96. Removal Behavior
+
+When removed:
+
+removed source
+    ↓
+deterministic diagnostic
+
+The compiler MUST NOT:
+
+- silently reinterpret it;
+- silently migrate it;
+- silently ignore it;
+- execute it under another semantic meaning.
+
+Automatic migration MAY be offered as a separate tooling action.
+
+---
+
+97. Historical Records Are Immutable
+
+Once a deprecation record has been published for a released language version, its identity and historical meaning MUST remain stable.
+
+Corrections MAY clarify:
+
+- documentation;
+- diagnostics;
+- migration instructions;
+- implementation details.
+
+They MUST NOT rewrite history in a way that changes what an already-released language version meant.
+
+---
+
+98. No Unnecessary File Renaming
+
+This policy MUST integrate with the repository's existing filenames.
+
+In particular, it MUST retain:
+
+grammar/compatibility/deprecated.md
+grammar/compatibility/migrations.md
+grammar/compatibility/versions.md
+grammar/compatibility/compatibility-matrix.md
+grammar/Zamani.g4
+grammar/grammar.md
+grammar/Zamani-Grammar.md
+grammar/DESIGN.md
+
+unless a separately approved repository-wide architectural change establishes a compelling reason otherwise.
+
+No duplicate replacement file should be created merely to rename an existing authority.
+
+---
+
+99. Feature Completion Contract
+
+A deprecation is complete only when the feature has a traceable path through:
+
+feature identity
+      ↓
+deprecation record
+      ↓
+language version
+      ↓
+canonical syntax
+      ↓
+lexer
+      ↓
+parser
+      ↓
+AST
+      ↓
+semantic normalization
+      ↓
+canonical IR
+      ↓
+compiler
+      ↓
+runtime
+      ↓
+target
+
+and corresponding tests.
+
+For quantum features:
+
+feature
+      ↓
+AST
+      ↓
+quantum semantics
+      ↓
+quantum::ir
+      ↓
+optimization
+      ↓
+routing
+      ↓
+scheduling
+      ↓
+QEC / resilience / ZQN
+      ↓
+HAL
+      ↓
+target
+
+No compatibility feature is complete merely because its source spelling has been removed.
+
+---
+
+100. Repository Integration Checklist
+
+Before marking a feature deprecated, verify:
+
+Specification
+
+- [ ] feature has a stable identity;
+- [ ] semantic meaning is documented;
+- [ ] deprecation reason is documented;
+- [ ] replacement is documented where applicable;
+- [ ] language version is defined.
 
 Grammar
 
-- [ ] "Zamani.g4" agrees with the specification.
-- [ ] Modular grammar components agree with "Zamani.g4".
-- [ ] Deprecated syntax is deterministic.
-- [ ] Removed syntax is rejected at the correct version.
+- [ ] "Zamani.g4" status is known;
+- [ ] modular grammar status is known;
+- [ ] no duplicate grammar authority exists;
+- [ ] deprecated syntax remains deterministic while supported.
 
 Lexer
 
-- [ ] Keyword transitions are tested.
-- [ ] Identifier collisions are tested.
-- [ ] Literal changes are tested.
-- [ ] Operator changes are tested.
+- [ ] token behavior is known;
+- [ ] keyword/operator collisions are resolved;
+- [ ] lexical migration is defined if necessary.
 
 Parser
 
-- [ ] Deprecated constructs parse correctly.
-- [ ] Removed constructs fail correctly.
-- [ ] No ambiguity is introduced.
+- [ ] parser behavior is deterministic;
+- [ ] negative cases are covered.
 
 AST
 
-- [ ] Historical semantics are representable.
-- [ ] Equivalent syntax normalizes correctly.
-- [ ] No target-specific information leaks into AST.
+- [ ] AST mapping is known;
+- [ ] no unnecessary legacy AST hierarchy exists;
+- [ ] source provenance is preserved where required.
 
-Semantic Analysis
+Semantics
 
-- [ ] Deprecated constructs retain historical semantics.
-- [ ] Semantic changes are explicit.
-- [ ] Resource semantics remain scalable.
+- [ ] historical meaning is defined;
+- [ ] semantic normalization is defined;
+- [ ] semantic compatibility is classified.
 
-Quantum
+IR
 
-- [ ] Quantum deprecations preserve semantic intent.
-- [ ] "quantum::ir" remains canonical.
-- [ ] No competing Qubit IDs are introduced.
-- [ ] No fixed qubit limits are introduced.
-- [ ] QEC intent remains intact.
-- [ ] ZQN integration remains intact.
+- [ ] current canonical IR mapping exists;
+- [ ] no unnecessary legacy IR exists;
+- [ ] quantum features reach "quantum::ir".
 
-Hardware
+Compiler/runtime
 
-- [ ] No device is silently selected.
-- [ ] No topology is hard-coded.
-- [ ] Capability and requirement remain separate.
-- [ ] Target realization remains downstream.
+- [ ] consumers are audited;
+- [ ] backend implications are known;
+- [ ] runtime implications are known.
 
-Compiler
+Compatibility
 
-- [ ] Diagnostics are deterministic.
-- [ ] Version resolution is deterministic.
-- [ ] Removed features are rejected correctly.
-
-Tooling
-
-- [ ] Migration suggestions are available where possible.
-- [ ] Machine-readable deprecation metadata exists.
-- [ ] Provenance is available where required.
+- [ ] "versions.md" is consistent;
+- [ ] "migrations.md" contains the migration;
+- [ ] compatibility matrix is updated;
+- [ ] dialect compatibility is updated if applicable.
 
 Testing
 
-- [ ] Positive tests exist.
-- [ ] Negative tests exist.
-- [ ] Boundary tests exist.
-- [ ] Cross-domain tests exist.
-- [ ] Determinism tests exist.
-- [ ] Round-trip tests exist.
-- [ ] Scalability tests exist.
+- [ ] positive tests;
+- [ ] diagnostic tests;
+- [ ] migration tests;
+- [ ] negative tests;
+- [ ] boundary tests;
+- [ ] scalability tests;
+- [ ] determinism tests;
+- [ ] cross-domain tests.
 
-Rust
+Scalability
 
-- [ ] Rust 1.97 is supported.
-- [ ] Rust 1.97.1 is production-validated.
-- [ ] No "unsafe" Rust is required.
-- [ ] Zamani language version remains independent of Rust version.
+- [ ] no universal capacity limit was introduced;
+- [ ] no "MAX_*" language limit was introduced;
+- [ ] no fixed hardware replacement was introduced;
+- [ ] resource requirements remain semantic;
+- [ ] capability requirements remain semantic.
+
+Safety
+
+- [ ] Rust 1.97/1.97.1 compatibility considered;
+- [ ] Rust 2021 considered;
+- [ ] no "unsafe" requirement;
+- [ ] no network-dependent compiler behavior;
+- [ ] deterministic implementation behavior.
 
 ---
 
-120. Final Architectural Rule
+101. Definition of Done
 
-The definitive rule for Zamani deprecation is:
+A deprecation is DONE only when:
 
-«A feature may be deprecated because its language representation or semantics genuinely need to evolve; it must never be deprecated merely because the currently available machine, backend, scheduler, QPU, compiler implementation, or resource pool is limited.»
+Identity
+   +
+Reason
+   +
+Version
+   +
+Replacement
+   +
+Migration
+   +
+Diagnostics
+   +
+Grammar
+   +
+Lexer
+   +
+Parser
+   +
+AST
+   +
+Semantics
+   +
+IR
+   +
+Compiler
+   +
+Runtime
+   +
+Dialect
+   +
+Tests
+   +
+Compatibility Matrix
+   +
+Scalability Audit
+   +
+Determinism Audit
 
-The intended evolution is:
+are all resolved as applicable.
 
-Historical Source
-       │
-       ▼
-Deprecated Syntax
-       │
-       ▼
-Deterministic Migration
-       │
-       ▼
-Current Semantic Model
-       │
-       ▼
-Canonical IR
-       │
-       ├───────────────┐
-       ▼               ▼
-Classical IR       quantum::ir
-       │               │
-       └───────┬───────┘
-               ▼
-      Optimization / QEC
-               ▼
-       Routing / Scheduling
-               ▼
-      Hardware Abstraction
-               ▼
-       Resource Resolution
-               ▼
-          Runtime
+A feature MUST NOT be declared deprecated merely because a developer intends to replace it later.
 
-The source program remains a description of computation and intent.
+---
 
-The machine remains a description of available realization.
+102. Production Invariant
+
+The following invariant is mandatory:
+
+«Deprecation changes the lifecycle of a representation; it does not silently reduce the semantic capabilities of the Zamani language.»
 
 Therefore:
 
-one program
-     ↓
-one semantic meaning
-     ↓
-many compiler targets
-     ↓
-many architectures
-     ↓
-many hardware configurations
-     ↓
-many scales
-     ↓
-many execution environments
-     ↓
-future platforms
+deprecated syntax
+        ↓
+current semantics
+        ↓
+current canonical IR
+        ↓
+current compiler architecture
 
-while preserving:
+is preferred over:
 
-Semantic Stability
-Hardware Independence
-Quantum/Classical Interoperability
-HDL Capability
-Extensibility
-Deterministic Parsing
-Strong Diagnostics
-Version Compatibility
-Canonical IR Boundaries
-Repository-Wide Integration
-No Accidental Hard-Coded Limits
-Safe Rust
-POCO-REAF
+deprecated syntax
+        ↓
+legacy compiler
+        ↓
+legacy IR
+        ↓
+legacy runtime
 
-Zamani deprecation is therefore a controlled language-evolution mechanism, not a mechanism for shrinking the language to fit today's hardware.
+---
+
+103. POCO-REAF Final Invariant
+
+The deprecation system MUST preserve:
+
+Program
+   ↓
+portable semantics
+   ↓
+canonical representation
+   ↓
+target-independent compilation
+   ↓
+target adaptation
+   ↓
+actual resources
+
+It MUST NOT turn:
+
+today's hardware
+
+into:
+
+tomorrow's language limitation
+
+A language construct may be deprecated because its representation is obsolete, ambiguous, insecure, redundant, or semantically superseded.
+
+It MUST NOT be deprecated merely because hardware, backend implementations, or current resource availability changed.
+
+---
+
+104. Final Architecture
+
+The complete deprecation architecture is:
+
+                    Zamani Source
+                         │
+                         ▼
+              Effective Language Version
+                         │
+                         ▼
+                Deprecation Resolution
+                         │
+             ┌───────────┴───────────┐
+             │                       │
+        supported               removed
+             │                       │
+             ▼                       ▼
+       normal parsing           diagnostic
+             │
+             ▼
+            AST
+             │
+             ▼
+     Semantic Normalization
+             │
+             ▼
+      Canonical Semantic Model
+             │
+       ┌─────┴──────────┐
+       │                │
+       ▼                ▼
+ Classical          Quantum
+   IR              quantum::ir
+       │                │
+       └───────┬────────┘
+               ▼
+          Optimization
+               │
+       ┌───────┼────────┐
+       ▼       ▼        ▼
+    Routing Scheduling QEC/ZQN
+       │       │        │
+       └───────┼────────┘
+               ▼
+              HAL
+               │
+               ▼
+       Target Realization
+               │
+       ┌───────┼──────────┐
+       ▼       ▼          ▼
+      CPU     GPU       FPGA/QPU
+       │       │          │
+       └───────┼──────────┘
+               ▼
+        Available Resources
+
+The central invariant is:
+
+«Zamani deprecates syntax and representations when necessary, while preserving the strongest possible stable semantic contract.»
+
+That contract remains independent of the number of CPUs, GPUs, FPGAs, QPUs, nodes, threads, qubits, tensor dimensions, memory capacity, network participants, or other physical resources.
+
+The language therefore remains capable of scaling from the smallest supported realization to arbitrarily large realizations subject only to the actual resources and capabilities required by the program.
+
+POCO-REAF remains the governing objective:
+
+«Program Once → Compile Once → Run Everywhere, Anywhere, Forever.»
