@@ -14,6 +14,228 @@
 
 
 
+
+/**
+ * ============================================================================
+ * ZAMANI PRODUCTION LEXER
+ * ============================================================================
+ *
+ * File:
+ *     grammar/antlr/ZamaniLexer.g4
+ *
+ * Grammar:
+ *     ZamaniLexer
+ *
+ * Authority:
+ *     grammar/lexer/lexer.g4
+ *
+ * Status:
+ *     CANONICAL ANTLR LEXER COMPOSITION BOUNDARY
+ *
+ * PURPOSE
+ * ============================================================================
+ *
+ * This grammar defines the canonical ANTLR lexical entry point for Zamani.
+ *
+ * The complete lexical vocabulary is composed from:
+ *
+ *     grammar/lexer/lexer.g4
+ *
+ * This file owns only the Zamani-specific lexical composition boundary.
+ *
+ * It MUST NOT duplicate:
+ *
+ *     - identifiers
+ *     - literals
+ *     - numeric literals
+ *     - string literals
+ *     - character literals
+ *     - comments
+ *     - whitespace
+ *     - operators
+ *     - punctuation
+ *     - delimiters
+ *     - Unicode character classes
+ *     - lexical error handling
+ *
+ * Those responsibilities belong to the imported lexical grammar.
+ *
+ * ============================================================================
+ * INTEGRATION CONTRACT
+ * ============================================================================
+ *
+ * DEPENDS_ON:
+ *
+ *     grammar/lexer/lexer.g4
+ *     grammar/lexer/tokens.g4
+ *     grammar/lexer/keywords.g4
+ *     grammar/lexer/identifiers.g4
+ *     grammar/lexer/operators.g4
+ *     grammar/lexer/punctuation.g4
+ *     grammar/lexer/literals.g4
+ *     grammar/lexer/numeric-literals.g4
+ *     grammar/lexer/string-literals.g4
+ *     grammar/lexer/character-literals.g4
+ *     grammar/lexer/comments.g4
+ *     grammar/lexer/unicode.g4
+ *
+ * EXPORTS:
+ *
+ *     ZamaniLexer token vocabulary
+ *
+ * CONSUMED_BY:
+ *
+ *     grammar/Zamani.g4
+ *     grammar/antlr/ZamaniParser.g4
+ *     ANTLR-generated lexer consumers
+ *
+ * AST_OWNER:
+ *
+ *     src/ast/
+ *
+ * SEMANTIC_OWNER:
+ *
+ *     semantic analysis
+ *
+ * IR_OWNER:
+ *
+ *     canonical compiler IR
+ *     quantum::ir
+ *
+ * TEST_OWNER:
+ *
+ *     grammar/tests/lexical/
+ *
+ * SPEC_OWNER:
+ *
+ *     grammar/specification/
+ *     grammar/lexer/
+ *
+ * ============================================================================
+ * ARCHITECTURAL INVARIANTS
+ * ============================================================================
+ *
+ * 1. Exactly one canonical Zamani ANTLR lexer exists.
+ *
+ * 2. The imported lexical grammar is the authority for shared tokens.
+ *
+ * 3. Parser grammars consume this lexer's vocabulary.
+ *
+ * 4. Domain grammars do not independently redefine shared tokens.
+ *
+ * 5. Quantum operations are not exhaustively enumerated here.
+ *
+ * 6. Hardware vendors and device names are not reserved here.
+ *
+ * 7. New capabilities must not require introducing arbitrary universal
+ *    hardware limits.
+ *
+ * 8. Lexical processing must not inspect physical hardware.
+ *
+ * 9. Lexical processing must not depend on runtime state.
+ *
+ * 10. No target-language actions are required.
+ *
+ * 11. No Rust unsafe implementation is required.
+ *
+ * 12. Source spelling is preserved for downstream processing.
+ *
+ * ============================================================================
+ * PORTABILITY
+ * ============================================================================
+ *
+ * This lexer recognizes source-language constructs.
+ *
+ * It does not select:
+ *
+ *     CPU
+ *     GPU
+ *     FPGA
+ *     ASIC
+ *     QPU
+ *     simulator
+ *     accelerator
+ *     cluster
+ *     distributed system
+ *
+ * Such decisions belong to downstream semantic analysis and compilation.
+ *
+ * ============================================================================
+ * RESOURCE SCALABILITY
+ * ============================================================================
+ *
+ * This grammar MUST NOT introduce universal limits for:
+ *
+ *     identifiers
+ *     declarations
+ *     modules
+ *     numeric values
+ *     qubits
+ *     CPUs
+ *     GPUs
+ *     FPGAs
+ *     ASICs
+ *     nodes
+ *     threads
+ *     memory
+ *     tensor dimensions
+ *     tensor rank
+ *     register width
+ *     network size
+ *     device count
+ *
+ * Actual implementation resource constraints must be handled outside
+ * the lexical specification.
+ *
+ * ============================================================================
+ * SECURITY
+ * ============================================================================
+ *
+ * No embedded target-language actions.
+ *
+ * No filesystem access.
+ *
+ * No network access.
+ *
+ * No hardware discovery.
+ *
+ * No dynamic code execution.
+ *
+ * No environment-variable inspection.
+ *
+ * No unsafe Rust dependency.
+ *
+ * ============================================================================
+ * ANTLR COMPOSITION
+ * ============================================================================
+ *
+ * IMPORTANT:
+ *
+ * ANTLR imports grammars by grammar name.
+ *
+ * The source grammar:
+ *
+ *     grammar/lexer/lexer.g4
+ *
+ * must declare:
+ *
+ *     lexer grammar lexer;
+ *
+ * The ANTLR invocation must include:
+ *
+ *     -lib grammar/lexer
+ *
+ * This makes the imported grammar available without duplicating its rules.
+ *
+ * ============================================================================
+ */
+
+lexer grammar ZamaniLexer;
+
+import lexer;
+
+
+
 // grammar/ZamaniLexer.g4
 //
 // Zamani language lexer extension.
