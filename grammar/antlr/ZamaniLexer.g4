@@ -11,6 +11,462 @@
  *
  * Status:
  *     CANONICAL PRODUCTION LEXER
+
+
+
+// grammar/ZamaniLexer.g4
+//
+// Zamani language lexer extension.
+//
+// Authority:
+//   grammar/lexer/lexer.g4
+//
+// Build contract:
+//   - grammar/lexer/lexer.g4 must declare: lexer grammar Lexer;
+//   - compile with grammar/lexer on ANTLR's library path (-lib grammar/lexer).
+//   - the imported Lexer grammar owns identifiers, literals, comments,
+//     whitespace, operators, delimiters, and shared lexical fragments.
+//   - this file owns only Zamani-reserved words not already defined by Lexer.
+//   - do not duplicate a token rule from the imported grammar.
+//   - parser grammars should consume this vocabulary through tokenVocab=ZamaniLexer.
+//
+// This file defines lexical identity only. Types, effects, resource requirements,
+// capabilities, policies, contracts, and target feasibility are semantic concerns.
+//
+// Rust implementation constraint:
+//   Rust 1.97 / 1.97.1; no unsafe Rust is required or permitted by this design.
+
+lexer grammar ZamaniLexer;
+
+import Lexer;
+
+// -----------------------------------------------------------------------------
+// Universal declarations and module structure
+// -----------------------------------------------------------------------------
+
+MODULE          : 'module';
+IMPORT          : 'import';
+EXPORT          : 'export';
+FROM            : 'from';
+AS              : 'as';
+PUB             : 'pub';
+PRIVATE         : 'private';
+PROTECTED       : 'protected';
+INTERNAL        : 'internal';
+
+NAMESPACE       : 'namespace';
+PACKAGE         : 'package';
+USE             : 'use';
+INCLUDE         : 'include';
+
+CONST           : 'const';
+LET             : 'let';
+VAR             : 'var';
+STATIC          : 'static';
+MUT             : 'mut';
+
+FN              : 'fn';
+FUNCTION        : 'function';
+RETURN          : 'return';
+YIELD           : 'yield';
+ASYNC           : 'async';
+AWAIT           : 'await';
+GENERATOR       : 'generator';
+
+STRUCT          : 'struct';
+RECORD          : 'record';
+ENUM            : 'enum';
+UNION           : 'union';
+CLASS           : 'class';
+INTERFACE       : 'interface';
+TRAIT           : 'trait';
+IMPL            : 'impl';
+EXTENDS         : 'extends';
+IMPLEMENTS      : 'implements';
+TYPE            : 'type';
+TYPEOF          : 'typeof';
+WHERE           : 'where';
+ASSOCIATED      : 'associated';
+OPAQUE          : 'opaque';
+
+NEW             : 'new';
+SELF            : 'self';
+SUPER           : 'super';
+THIS            : 'this';
+INIT            : 'init';
+DROP            : 'drop';
+DEFER           : 'defer';
+
+// -----------------------------------------------------------------------------
+// Control flow and pattern matching
+// -----------------------------------------------------------------------------
+
+IF              : 'if';
+ELSE            : 'else';
+THEN            : 'then';
+MATCH           : 'match';
+CASE            : 'case';
+DEFAULT         : 'default';
+WHEN            : 'when';
+FOR             : 'for';
+WHILE           : 'while';
+LOOP            : 'loop';
+IN              : 'in';
+OF              : 'of';
+BREAK           : 'break';
+CONTINUE        : 'continue';
+NEXT            : 'next';
+SELECT          : 'select';
+SWITCH          : 'switch';
+
+TRY             : 'try';
+CATCH           : 'catch';
+FINALLY         : 'finally';
+THROW           : 'throw';
+RAISE           : 'raise';
+ERROR           : 'error';
+RESULT          : 'result';
+OPTION          : 'option';
+SOME            : 'some';
+NONE            : 'none';
+OK              : 'ok';
+ERR             : 'err';
+
+// -----------------------------------------------------------------------------
+// Types, generic constraints, and value semantics
+// -----------------------------------------------------------------------------
+
+BOOL            : 'bool';
+BOOLEAN         : 'boolean';
+INTEGER         : 'integer';
+INT             : 'int';
+FLOAT           : 'float';
+REAL            : 'real';
+DECIMAL         : 'decimal';
+RATIONAL        : 'rational';
+COMPLEX         : 'complex';
+STRING          : 'string';
+CHAR            : 'char';
+BYTE            : 'byte';
+BYTES           : 'bytes';
+UNIT            : 'unit';
+NEVER           : 'never';
+ANY             : 'any';
+VOID            : 'void';
+
+GENERIC         : 'generic';
+EXTENDS_TYPE    : 'extends_type';
+SUPER_TYPE      : 'super_type';
+LINEAR          : 'linear';
+AFFINE          : 'affine';
+OWN             : 'own';
+BORROW          : 'borrow';
+SHARED          : 'shared';
+MOVE            : 'move';
+REF             : 'ref';
+MAYBE           : 'maybe';
+DISTINCT        : 'distinct';
+SEALED          : 'sealed';
+ABSTRACT        : 'abstract';
+FINAL           : 'final';
+OVERRIDE        : 'override';
+VIRTUAL         : 'virtual';
+STATIC_TYPE     : 'static_type';
+
+// -----------------------------------------------------------------------------
+// Contracts, validation, assumptions, and proofs
+// -----------------------------------------------------------------------------
+
+REQUIRES        : 'requires';
+ENSURES         : 'ensures';
+INVARIANT       : 'invariant';
+PRECONDITION    : 'precondition';
+POSTCONDITION   : 'postcondition';
+ASSERT          : 'assert';
+ASSUME          : 'assume';
+GUARANTEE       : 'guarantee';
+PROPERTY        : 'property';
+PROVE           : 'prove';
+PROOF           : 'proof';
+VERIFY          : 'verify';
+VALIDATE        : 'validate';
+REFINE          : 'refine';
+SATISFIES       : 'satisfies';
+CONTRACT        : 'contract';
+SPEC            : 'spec';
+
+// -----------------------------------------------------------------------------
+// Effects, capabilities, resources, and portable execution intent
+// -----------------------------------------------------------------------------
+
+EFFECT          : 'effect';
+EFFECTS         : 'effects';
+PURE            : 'pure';
+CAPABILITY      : 'capability';
+CAPABILITIES    : 'capabilities';
+RESOURCE        : 'resource';
+RESOURCES       : 'resources';
+CONSTRAINT      : 'constraint';
+CONSTRAINTS     : 'constraints';
+BUDGET          : 'budget';
+PREFERENCE      : 'prefer';
+PREFER          : 'preference';
+HINT            : 'hint';
+NEGOTIATE       : 'negotiate';
+ALLOW           : 'allow';
+FORBID          : 'forbid';
+DENY            : 'deny';
+PERMIT          : 'permit';
+RESTRICT        : 'restrict';
+REQUIRE         : 'require';
+PROVIDE         : 'provide';
+AVAILABLE       : 'available';
+OPTIONAL        : 'optional';
+MANDATORY       : 'mandatory';
+FALLBACK        : 'fallback';
+PRIORITY        : 'priority';
+PORTABLE        : 'portable';
+SPECIALIZE      : 'specialize';
+TARGET          : 'target';
+BACKEND         : 'backend';
+DEPLOY          : 'deploy';
+EXECUTE         : 'execute';
+EXECUTION       : 'execution';
+SCHEDULE        : 'schedule';
+PLACEMENT       : 'placement';
+TOPOLOGY        : 'topology';
+CAPACITY        : 'capacity';
+
+// -----------------------------------------------------------------------------
+// Classical, numerical, tensor, and data-oriented computation
+// -----------------------------------------------------------------------------
+
+ARRAY           : 'array';
+SLICE           : 'slice';
+VECTOR          : 'vector';
+MATRIX          : 'matrix';
+TENSOR          : 'tensor';
+SHAPE           : 'shape';
+RANK            : 'rank';
+INDEX           : 'index';
+SHARD           : 'shard';
+PARTITION       : 'partition';
+STREAM          : 'stream';
+ITERATOR        : 'iterator';
+COLLECTION      : 'collection';
+MAP             : 'map';
+SET             : 'set';
+GRAPH           : 'graph';
+NODE            : 'node';
+EDGE            : 'edge';
+TABLE           : 'table';
+COLUMN          : 'column';
+ROW             : 'row';
+SCHEMA          : 'schema';
+QUERY           : 'query';
+TRANSACTION     : 'transaction';
+COMMIT          : 'commit';
+ROLLBACK        : 'rollback';
+
+// -----------------------------------------------------------------------------
+// Knowledge, reasoning, learning, uncertainty, and explanation
+// -----------------------------------------------------------------------------
+
+INFER           : 'infer';
+DEDUCE          : 'deduce';
+REASON          : 'reason';
+INDUCE          : 'induce';
+ABDUCE          : 'abduce';
+LEARN           : 'learn';
+ADAPT           : 'adapt';
+RETRACT         : 'retract';
+EXPLAIN         : 'explain';
+EVIDENCE        : 'evidence';
+PROVENANCE      : 'provenance';
+DECISION        : 'decision';
+CONFIDENCE      : 'confidence';
+UNCERTAIN       : 'uncertain';
+PROBABILITY     : 'probability';
+DISTRIBUTION    : 'distribution';
+BELIEF          : 'belief';
+CAUSE           : 'cause';
+CAUSAL          : 'causal';
+INTERVENTION    : 'intervention';
+COUNTERFACTUAL  : 'counterfactual';
+OBSERVATION     : 'observation';
+PREMISE         : 'premise';
+CONCLUSION      : 'conclusion';
+KNOWLEDGE       : 'knowledge';
+FACT            : 'fact';
+BELIEF_STATE    : 'belief_state';
+OBJECTIVE       : 'objective';
+FEEDBACK        : 'feedback';
+MODEL           : 'model';
+TRAIN           : 'train';
+INFERRED        : 'inferred';
+
+// -----------------------------------------------------------------------------
+// Agents and concurrency. Actor lifecycle remains owned by concurrency specs.
+// -----------------------------------------------------------------------------
+
+ACTOR           : 'actor';
+AGENT           : 'agent';
+SPAWN           : 'spawn';
+TASK            : 'task';
+TASKS           : 'tasks';
+CHANNEL         : 'channel';
+MESSAGE         : 'message';
+SEND            : 'send';
+RECEIVE         : 'receive';
+SELECTOR        : 'selector';
+PARALLEL        : 'parallel';
+CONCURRENT      : 'concurrent';
+CONCURRENCY     : 'concurrency';
+PAR              : 'par';
+RACE            : 'race';
+JOIN            : 'join';
+CANCEL          : 'cancel';
+CANCELLATION    : 'cancellation';
+ATOMIC          : 'atomic';
+SYNCHRONIZED    : 'synchronized';
+LOCK            : 'lock';
+UNLOCK          : 'unlock';
+
+// -----------------------------------------------------------------------------
+// Classical/quantum hybrid and quantum intent
+// -----------------------------------------------------------------------------
+
+QUANTUM         : 'quantum';
+QUBIT           : 'qubit';
+QUBITS          : 'qubits';
+QREGISTER       : 'qregister';
+QREG            : 'qreg';
+QSTATE          : 'qstate';
+CIRCUIT         : 'circuit';
+MEASURE         : 'measure';
+MEASUREMENT     : 'measurement';
+RESET           : 'reset';
+BARRIER         : 'barrier';
+CHANNEL_Q       : 'quantum_channel';
+NOISE           : 'noise';
+ENTANGLE        : 'entangle';
+CONTROL         : 'control';
+HYBRID          : 'hybrid';
+CLASSICAL       : 'classical';
+COHERENCE       : 'coherence';
+OBSERVABLE      : 'observable';
+OPERATOR        : 'operator';
+UNITARY         : 'unitary';
+QEC             : 'qec';
+ERROR_CORRECTION: 'error_correction';
+DECOMPOSE       : 'decompose';
+ROUTE           : 'route';
+ROUTING         : 'routing';
+
+// -----------------------------------------------------------------------------
+// HDL and hardware description intent
+// -----------------------------------------------------------------------------
+
+HDL             : 'hdl';
+HARDWARE        : 'hardware';
+SIGNAL          : 'signal';
+WIRE            : 'wire';
+PORT            : 'port';
+INPUT           : 'input';
+OUTPUT          : 'output';
+INOUT           : 'inout';
+CLOCK           : 'clock';
+RESET_SIGNAL    : 'reset_signal';
+EDGE_TRIGGERED  : 'edge_triggered';
+COMBINATIONAL   : 'combinational';
+SEQUENTIAL      : 'sequential';
+PROCESS         : 'process';
+COMPONENT       : 'component';
+MODULE_INSTANCE : 'instance';
+SYNTHESIZE      : 'synthesize';
+SYNTHESIS       : 'synthesis';
+TIMING          : 'timing';
+LATENCY         : 'latency';
+THROUGHPUT      : 'throughput';
+PIPELINE        : 'pipeline';
+VERIFY_HARDWARE : 'verify_hardware';
+
+// -----------------------------------------------------------------------------
+// Security, policies, sandboxing, and controlled reflection
+// -----------------------------------------------------------------------------
+
+POLICY          : 'policy';
+POLICIES        : 'policies';
+SANDBOX         : 'sandbox';
+TRUST           : 'trust';
+AUTHORIZE       : 'authorize';
+AUTHORIZATION   : 'authorization';
+AUDIT           : 'audit';
+ISOLATE         : 'isolate';
+ISOLATION       : 'isolation';
+REFLECT         : 'reflect';
+REFLECTION      : 'reflection';
+INTROSPECT      : 'introspect';
+METADATA        : 'metadata';
+ANNOTATION      : 'annotation';
+ATTRIBUTE       : 'attribute';
+
+// -----------------------------------------------------------------------------
+// Simulation, resilience, and reproducibility
+// -----------------------------------------------------------------------------
+
+SIMULATE        : 'simulate';
+SIMULATION      : 'simulation';
+DETERMINISTIC   : 'deterministic';
+NONDETERMINISTIC: 'nondeterministic';
+REPRODUCIBLE    : 'reproducible';
+SEED            : 'seed';
+RETRY           : 'retry';
+RECOVER         : 'recover';
+RECOVERY        : 'recovery';
+RESILIENT       : 'resilient';
+RESILIENCE      : 'resilience';
+DEGRADED        : 'degraded';
+QUARANTINE      : 'quarantine';
+ESCALATE        : 'escalate';
+
+// -----------------------------------------------------------------------------
+// Interoperability and foreign boundaries
+// -----------------------------------------------------------------------------
+
+FFI             : 'ffi';
+ABI             : 'abi';
+FOREIGN         : 'foreign';
+EXTERN          : 'extern';
+LINK            : 'link';
+LINKAGE         : 'linkage';
+CALLING         : 'calling';
+CONVENTION      : 'convention';
+NATIVE          : 'native';
+INTEROP         : 'interop';
+INTEROPERABILITY: 'interoperability';
+ENCODE          : 'encode';
+DECODE          : 'decode';
+SERIALIZE       : 'serialize';
+DESERIALIZE     : 'deserialize';
+
+// -----------------------------------------------------------------------------
+// Compile-time and controlled code generation
+// -----------------------------------------------------------------------------
+
+COMPTIME        : 'comptime';
+CONSTEXPR       : 'constexpr';
+MACRO           : 'macro';
+QUOTE           : 'quote';
+UNQUOTE         : 'unquote';
+GENERATE        : 'generate';
+CODEGEN         : 'codegen';
+SYNTAX          : 'syntax';
+DIALECT         : 'dialect';
+EXTENSION       : 'extension';
+VERSION         : 'version';
+DEPRECATED      : 'deprecated';
+EXPERIMENTAL    : 'experimental';
  *
  * ============================================================================
  *
