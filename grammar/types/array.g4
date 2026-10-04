@@ -1,508 +1,337 @@
+
 /*
  * ============================================================================
  * Zamani Programming Language
- * ============================================================================
  *
- * File:
- *     grammar/types/array.g4
+ * File: grammar/types/array.g4
+ * Grammar: Array
+ * Status: Canonical modular array-type grammar
  *
- * Status:
- *     Canonical modular array-type grammar.
- *
- * Purpose:
- *     Defines the source-level syntax for Zamani array types while delegating
- *     element-type syntax and type-level value syntax to the canonical Types
- *     grammar.
- *
- * Architecture:
- *
- *     Zamani.g4
- *          |
- *          v
- *     Types
- *          |
- *          +--> Array
- *          |
- *          v
- *     typeExpression
- *          |
- *          v
- *     frontend TypeExpr::Array
- *          |
- *          v
- *     semantic type system
- *          |
- *          v
- *     canonical semantic IR
- *
- * This grammar MUST NOT become a second type system.
+ * Compiler baseline:
+ *   Rust 1.97 / Rust 1.97.1
+ *   Rust 2021
+ *   Safe Rust only; no unsafe.
  *
  * ============================================================================
- * AUTHORITY
+ * PURPOSE
  * ============================================================================
  *
- * This file owns:
+ * Defines portable, target-independent source syntax for array types.
  *
- *     - arrayType
- *     - arrayLength
- *     - the source-level distinction between:
+ * Supported forms:
  *
- *           [T]
+ *   [T]                    Dynamically sized or context-sized array
+ *   [T; N]                 Explicit cardinality
+ *   [T; N + M]             Computed cardinality
+ *   [T; Rows * Columns]    Symbolic cardinality
+ *   [[T; N]; M]            Nested arrays
+ *   [Qubit; qubit_count]   Quantum element collection
+ *   [Signal; signal_count] Hardware-related element collection
  *
- *       and:
- *
- *           [T; N]
- *
- *     - the syntactic association between an element type and an optional
- *       source-level cardinality expression.
- *
- * This file does NOT own:
- *
- *     - lexer definitions;
- *     - identifiers;
- *     - paths;
- *     - primitive types;
- *     - generic types;
- *     - tuples;
- *     - functions;
- *     - references;
- *     - pointers;
- *     - options;
- *     - results;
- *     - quantum types;
- *     - hardware types;
- *     - resource types;
- *     - type-value expression syntax;
- *     - type inference;
- *     - constant evaluation;
- *     - dependent-value evaluation;
- *     - type checking;
- *     - memory allocation;
- *     - ownership;
- *     - borrowing;
- *     - ABI layout;
- *     - runtime representation;
- *     - hardware selection;
- *     - topology;
- *     - routing;
- *     - scheduling;
- *     - QEC;
- *     - ZQN;
- *     - HAL;
- *     - optimization;
- *     - backend selection;
- *     - runtime execution.
+ * This grammar describes source-level types. It does not allocate memory,
+ * evaluate cardinalities, select hardware, or impose machine capacities.
  *
  * ============================================================================
- * ANTLR COMPOSITION CONTRACT
+ * OWNERSHIP
  * ============================================================================
  *
- * This is a parser delegate.
+ * OWNS:
+ *   arrayType
+ *   arrayLength
  *
- * The canonical composition owner is:
- *
- *     grammar/types/types.g4
- *
- * `Types` owns:
- *
- *     typeExpression
- *     typeValueExpression
- *
- * This grammar intentionally references those canonical rules.
- *
- * ANTLR grammar imports allow delegate rules to resolve rule references
- * supplied/overridden by the delegating grammar. Therefore this file must be
- * composed through `Types`; it must not create a duplicate type-expression
- * grammar merely to become standalone.
- *
- * The root composition is:
- *
- *     Zamani.g4
- *          |
- *          v
- *        Types
- *          |
- *          +--> Array
+ * DOES NOT OWN:
+ *   typeExpression
+ *   typeCore
+ *   typeValueExpression
+ *   identifiers
+ *   generic arguments
+ *   numeric literals
+ *   arithmetic operators
+ *   type inference
+ *   constant evaluation
+ *   dependent-value evaluation
+ *   memory allocation
+ *   ownership or borrowing
+ *   ABI layout
+ *   tensor semantics
+ *   hardware selection
+ *   quantum allocation
+ *   quantum routing
+ *   QEC, ZQN, or HAL
+ *   backend lowering
  *
  * ============================================================================
- * LEXER CONTRACT
+ * COMPOSITION CONTRACT
  * ============================================================================
  *
- * Lexer ownership remains:
+ * This is a parser delegate composed by grammar/types/types.g4.
  *
- *     grammar/lexer/tokens.g4
+ * The delegating Types grammar owns:
  *
- * Canonical lexer vocabulary:
+ *   typeExpression
+ *   typeValueExpression
  *
- *     ZamaniTokens
+ * The rules in this grammar deliberately reuse those canonical rules.
  *
- * This file therefore declares no lexer rules.
+ * This grammar MUST NOT define a second type-expression or value-expression
+ * language.
  *
- * Required tokens are supplied by the canonical vocabulary:
+ * The Types grammar MUST import this grammar and MUST NOT retain a competing
+ * inline definition of arrayType or arrayLength.
  *
- *     LBRACKET
- *     RBRACKET
- *     SEMICOLON
+ * ============================================================================
+ * LEXICAL CONTRACT
+ * ============================================================================
+ *
+ * Canonical parser vocabulary:
+ *
+ *   ZamaniLexer
+ *
+ * Token ownership:
+ *
+ *   LBRACKET  -> grammar/lexer/punctuation.g4
+ *   RBRACKET  -> grammar/lexer/punctuation.g4
+ *   SEMICOLON -> grammar/lexer/punctuation.g4
+ *
+ * No lexer rules or literal spellings are declared here.
  *
  * ============================================================================
  * AST CONTRACT
  * ============================================================================
  *
- * Array syntax maps to the existing canonical frontend representation:
+ * Existing canonical representation:
  *
- *     TypeExpr::Array {
- *         element: Box<TypeExpr>,
- *         length: Option<TypeValueExpr>
- *     }
+ *   TypeExpr::Array {
+ *       element: Box<TypeExpr>,
+ *       length: Option<TypeValueExpr>
+ *   }
  *
  * Mapping:
  *
- *     [T]
- *         ->
- *     TypeExpr::Array {
- *         element: T,
- *         length: None
- *     }
+ *   [T]
+ *       -> Array {
+ *              element: T,
+ *              length: None
+ *          }
  *
- *     [T; N]
- *         ->
- *     TypeExpr::Array {
- *         element: T,
- *         length: Some(N)
- *     }
+ *   [T; N]
+ *       -> Array {
+ *              element: T,
+ *              length: Some(N)
+ *          }
  *
- * This grammar MUST NOT introduce:
+ * The parser must preserve source spans for the opening delimiter, element
+ * type, optional cardinality, and closing delimiter.
  *
- *     ArrayTypeIR
- *     QuantumArrayIR
- *     HardwareArrayIR
- *     RuntimeArrayIR
- *
- * or any second array representation.
- *
- * The repository's typed `ArrayType` façade already wraps the canonical
- * `TypeExpr::Array` representation and preserves symbolic `TypeValueExpr`
- * lengths. The grammar therefore lowers into that existing representation.
+ * This grammar MUST NOT introduce another array AST or IR.
  *
  * ============================================================================
  * SEMANTIC CONTRACT
  * ============================================================================
  *
- * This grammar answers only:
- *
- *     "What array type did the programmer write?"
+ * Parsing establishes structure only.
  *
  * Semantic analysis determines:
  *
- *     - whether the element type is valid;
- *     - whether a length expression is valid;
- *     - whether the length is constant;
- *     - whether the length is symbolic;
- *     - whether the length depends on generic parameters;
- *     - whether the type is dynamically sized;
- *     - whether the type is legal in a particular context;
- *     - whether the required resources are available.
+ *   - whether the element type is valid;
+ *   - whether the cardinality expression is valid;
+ *   - whether the cardinality is constant or symbolic;
+ *   - whether generic parameters occur in the cardinality;
+ *   - whether the array is dynamically sized;
+ *   - whether zero cardinality is permitted by the applicable type rules;
+ *   - whether cardinality is representable by the selected implementation;
+ *   - whether the type satisfies ownership and lifetime rules;
+ *   - whether the target can realize the required resources.
  *
- * The grammar MUST NOT evaluate array lengths.
+ * The grammar MUST NOT:
  *
- * ============================================================================
- * POCO-REAF CONTRACT
- * ============================================================================
- *
- * Array syntax must remain independent of machine capacity.
- *
- * This grammar MUST NOT contain:
- *
- *     MAX_ARRAY_LENGTH
- *     MAX_ARRAY_ELEMENTS
- *     MAX_ARRAY_DIMENSIONS
- *     MAX_TENSOR_RANK
- *     MAX_MEMORY
- *     MAX_REGISTER_WIDTH
- *     MAX_VECTOR_WIDTH
- *     MAX_QUBITS
- *     MAX_THREADS
- *     MAX_GPUS
- *     MAX_FPGAS
- *     MAX_NODES
- *
- * or equivalent implementation limits.
- *
- * Examples:
- *
- *     [int]
- *     [int; 1024]
- *     [int; N]
- *     [int; Rows * Cols]
- *     [Qubit; number_of_qubits]
- *     [[float; M]; N]
- *
- * are all syntactically valid where their component type/value expressions
- * are valid.
- *
- * A number such as `1024` is program semantics.
- *
- * A compiler-wide restriction such as:
- *
- *     "arrays may never contain more than 1024 elements"
- *
- * is NOT language grammar.
- *
- * Operational parser/compiler safety budgets may exist outside this grammar,
- * but such budgets must be configurable implementation policy and must not
- * alter Zamani language semantics.
+ *   - evaluate expressions;
+ *   - convert cardinalities to usize;
+ *   - allocate storage;
+ *   - unroll arrays;
+ *   - resolve generic parameters;
+ *   - impose target-specific limits.
  *
  * ============================================================================
- * SCALABILITY
+ * PORTABILITY AND SCALABILITY
  * ============================================================================
  *
- * Arrays are recursively compositional.
+ * Array syntax is independent of:
  *
- * Examples:
+ *   CPU, GPU, FPGA, ASIC, QPU, embedded devices, accelerators,
+ *   distributed systems, clusters, HPC, and future targets.
  *
- *     [T]
- *     [[T]]
- *     [[[T]]]
+ * No grammar-level maximum exists for:
  *
- *     [T; N]
- *     [[T; N]; M]
- *     [[[T; A]; B]; C]
+ *   array length;
+ *   array nesting;
+ *   tensor rank;
+ *   number of elements;
+ *   number of dimensions;
+ *   hardware resources.
  *
- * There is no grammar-level dimensionality limit.
+ * A nested array is represented compositionally, not by enumerating
+ * array1, array2, array3, or array4.
  *
- * The grammar does not unroll dimensions into:
+ * Practical parser/compiler safety budgets, if required, belong to explicit
+ * implementation policy and must not silently change language semantics.
  *
- *     array1
- *     array2
- *     array3
- *     array4
- *
- * Instead, an array element may itself be an array because `arrayType`
- * consumes the canonical `typeExpression`.
- *
- * This permits arbitrary nesting subject only to implementation resource
- * availability and explicit downstream compiler policies.
- *
- * ============================================================================
- * TYPE-LEVEL CARDINALITY
- * ============================================================================
- *
- * The cardinality expression is delegated to:
- *
- *     typeValueExpression
- *
- * owned by the canonical type grammar.
- *
- * Examples:
- *
- *     [T; N]
- *     [T; size]
- *     [T; Rows + Cols]
- *     [T; Rows * Cols]
- *     [T; 2 * N]
- *     [T; namespace::Dimension]
- *
- * are represented without converting the source value to a machine-sized
- * integer during parsing.
+ * Physical feasibility is evaluated downstream.
  *
  * ============================================================================
  * QUANTUM INTEGRATION
  * ============================================================================
  *
- * Quantum element types are permitted because the element is a canonical
- * `typeExpression`.
+ * Examples:
  *
- * For example:
+ *   [Qubit]
+ *   [Qubit; N]
+ *   [[Qubit; M]; N]
  *
- *     [Qubit]
- *     [Qubit; N]
- *     [[Qubit; M]; N]
+ * These are source-level collections, not physical qubit allocations.
  *
- * describe source-level collections.
- *
- * They do NOT mean:
- *
- *     - physical qubit IDs;
- *     - physical qubit allocation;
- *     - QPU selection;
- *     - coupling topology;
- *     - routing;
- *     - scheduling;
- *     - calibration;
- *     - QEC implementation;
- *     - ZQN implementation;
- *     - HAL operations.
- *
- * Quantum semantics eventually integrate with the existing canonical
- * `quantum::ir` boundary.
+ * Quantum-specific semantic lowering must use the canonical quantum::ir
+ * boundary. This grammar does not define a quantum array IR.
  *
  * ============================================================================
- * CLASSICAL INTEGRATION
+ * CLASSICAL / HDL / HARDWARE INTEGRATION
  * ============================================================================
  *
- * Array element types may represent:
+ * Examples:
  *
- *     integers
- *     floating-point values
- *     vectors
- *     matrices
- *     tensors
- *     records
- *     user-defined types
- *     symbolic types
- *     resources
- *     capabilities
+ *   [float; N]
+ *   [TensorElement; N]
+ *   [Signal; N]
+ *   [Register<Value>; N]
  *
- * This grammar does not need separate array syntax for each domain.
+ * Whether these types are valid is determined by their respective semantic
+ * systems. This grammar does not determine physical layout, synthesis,
+ * placement, register width, or memory-bank allocation.
  *
  * ============================================================================
- * HDL / HARDWARE INTEGRATION
+ * UBUNTU-DERIVED UNIVERSAL SEMANTICS
  * ============================================================================
  *
- * Hardware-related types may appear as array elements where permitted by the
- * semantic type system:
+ * Array types may be used by reasoning, knowledge, learning, adaptation,
+ * probabilistic computation, agents, data processing, and neural-symbolic
+ * programs.
  *
- *     [Signal; N]
- *     [Register<T>; N]
- *     [Port<T>; N]
+ * Those features do not require separate array grammars.
  *
- * The grammar does not determine:
- *
- *     - FPGA placement;
- *     - ASIC layout;
- *     - register-file size;
- *     - memory-bank selection;
- *     - physical wiring;
- *     - synthesis strategy;
- *     - timing implementation.
+ * Their constraints, effects, capabilities, policies, contracts, evidence,
+ * and provenance are handled by their respective semantic owners.
  *
  * ============================================================================
- * RESOURCE / CAPABILITY INTEGRATION
+ * DIAGNOSTICS
  * ============================================================================
  *
- * Array cardinality may describe semantic resource quantities:
+ * Structurally invalid examples:
  *
- *     [Resource; N]
- *     [Qubit; required_qubits]
- *     [Node; node_count]
+ *   []
+ *   [; N]
+ *   [T;]
+ *   [T N]
+ *   [T; ; N]
  *
- * This expresses source-level intent only.
+ * These must produce parser diagnostics rather than silently recovering into
+ * a different valid array type.
  *
- * It does NOT allocate those resources.
- *
- * Resource discovery and realization remain downstream responsibilities.
- *
- * ============================================================================
- * PORTABILITY
- * ============================================================================
- *
- * Array syntax must remain portable across:
- *
- *     CPU
- *     GPU
- *     FPGA
- *     QPU
- *     ASIC
- *     embedded systems
- *     distributed systems
- *     HPC systems
- *     edge systems
- *     cloud systems
- *     future computational targets
- *
- * Target realization occurs after semantic analysis.
+ * A syntactically valid but semantically invalid cardinality must produce a
+ * semantic diagnostic, not an artificial grammar restriction.
  *
  * ============================================================================
- * ERROR / DIAGNOSTIC CONTRACT
+ * TEST CONTRACT
  * ============================================================================
  *
- * This grammar must permit the parser to report precise source spans for:
+ * Positive:
  *
- *     [
- *     ]
- *     ;
- *     element type
- *     cardinality expression
+ *   [int]
+ *   [int; 0]
+ *   [int; 1024]
+ *   [int; N]
+ *   [int; Rows * Columns]
+ *   [[float; M]; N]
+ *   [Qubit; qubit_count]
+ *   [Signal; signal_count]
+ *   [Map<Key, Value>; N]
  *
- * Malformed examples:
+ * Negative:
  *
- *     []
- *     [; N]
- *     [T;]
- *     [T N]
- *     [T; ; N]
+ *   []
+ *   [; N]
+ *   [T;]
+ *   [T N]
+ *   [T; ; N]
  *
- * must be rejected structurally.
+ * Boundary:
  *
- * Semantic errors such as:
+ *   [T; N + M]
+ *   [T; namespace::Dimension]
+ *   [T; 2 * N]
+ *   [[T; N]; M]
+ *   [T; generic_parameter]
  *
- *     [T; negative_value]
+ * Scalability:
  *
- * are NOT grammar errors when the expression itself is syntactically valid.
+ *   - deeply nested arrays;
+ *   - arbitrarily large source cardinality expressions;
+ *   - symbolic cardinalities;
+ *   - generic-dependent cardinalities;
+ *   - large element types;
+ *   - cross-domain element types.
  *
- * Such legality belongs to semantic/type validation.
- *
- * ============================================================================
- * DETERMINISM
- * ============================================================================
- *
- * The grammar is deterministic with respect to the array delimiter:
- *
- *     LBRACKET
- *         typeExpression
- *         [SEMICOLON typeValueExpression]
- *     RBRACKET
- *
- * The semicolon is the sole syntactic discriminator between an unsized source
- * form and an explicitly cardinality-parameterized source form.
- *
- * ============================================================================
- * SECURITY
- * ============================================================================
- *
- * This grammar:
- *
- *     - performs no I/O;
- *     - performs no execution;
- *     - performs no allocation based on array cardinality;
- *     - performs no hardware discovery;
- *     - performs no runtime resource allocation;
- *     - contains no Rust;
- *     - contains no unsafe operation.
- *
- * Generated Rust integration must remain:
- *
- *     Rust 1.97
- *     Rust 1.97.1
- *     edition 2021
- *     stable Rust
- *     no unsafe code
+ * Test resource budgets must not become language limits.
  *
  * ============================================================================
- * INTEGRATION CHECKLIST
+ * INTEGRATION CONTRACT
  * ============================================================================
  *
- * This file is complete when:
+ * DEPENDS_ON:
+ *   grammar/types/types.g4
+ *   grammar/antlr/ZamaniLexer.g4
+ *   grammar/lexer/punctuation.g4
  *
- *     [x] Owns only array syntax.
- *     [x] Uses canonical ZamaniTokens.
- *     [x] Reuses canonical typeExpression.
- *     [x] Reuses canonical typeValueExpression.
- *     [x] Supports unsized/source-cardinality-omitted arrays.
- *     [x] Supports symbolic cardinalities.
- *     [x] Supports nested arrays.
- *     [x] Supports arbitrary element types.
- *     [x] Does not introduce machine limits.
- *     [x] Does not duplicate TypeExpr.
- *     [x] Does not introduce an array IR.
- *     [x] Does not allocate runtime storage.
- *     [x] Does not select hardware.
- *     [x] Does not implement QEC/ZQN/HAL.
- *     [x] Preserves POCO-REAF.
- *     [x] Is compatible with the existing frontend ArrayType contract.
+ * EXPORTS:
+ *   arrayType
+ *   arrayLength
  *
- * Remaining repository integration is described below and must be performed
- * as part of the composition change, not by modifying this grammar later.
+ * CONSUMED_BY:
+ *   grammar/types/types.g4
+ *
+ * AST_OWNER:
+ *   Existing frontend TypeExpr
+ *
+ * SEMANTIC_OWNER:
+ *   Canonical type semantic analysis
+ *
+ * IR_OWNER:
+ *   Existing canonical semantic IR
+ *
+ * QUANTUM_IR_OWNER:
+ *   quantum::ir
+ *
+ * SPEC_OWNER:
+ *   grammar/specification/types.md
+ *
+ * TEST_OWNER:
+ *   grammar/tests/types/array/
+ *
+ * ============================================================================
+ * COMPLETION CRITERIA
+ * ============================================================================
+ *
+ * [ ] Types imports Array.
+ * [ ] Types has no duplicate arrayType definition.
+ * [ ] Types has no duplicate arrayLength definition.
+ * [ ] All parser grammars use ZamaniLexer.
+ * [ ] ANTLR delegate composition succeeds.
+ * [ ] AST mapping matches existing TypeExpr::Array.
+ * [ ] Symbolic cardinalities are preserved.
+ * [ ] Nested arrays parse correctly.
+ * [ ] Positive and negative tests pass.
+ * [ ] No machine-capacity constants are introduced.
+ * [ ] No unsafe Rust is introduced.
+ * [ ] Rust 1.97 and 1.97.1 compatibility is verified.
  *
  * ============================================================================
  */
@@ -510,51 +339,28 @@
 parser grammar Array;
 
 options {
-    tokenVocab = ZamaniTokens;
+    tokenVocab = ZamaniLexer;
 }
 
-
 /*
- * ============================================================================
- * Canonical array type
- * ============================================================================
+ * Public rule:
  *
- * Unsized/source-cardinality-omitted form:
+ *   [T]
+ *   [T; N]
  *
- *     [T]
- *
- * Explicit cardinality form:
- *
- *     [T; N]
- *
- * The element type is deliberately delegated to the canonical `typeExpression`
- * rule supplied by the Types delegator.
+ * The element type and cardinality are delegated to the canonical Types
+ * grammar. This rule does not define their syntax independently.
  */
 arrayType
-    : LBRACKET
-      typeExpression
-      arrayLength?
-      RBRACKET
+    : LBRACKET typeExpression arrayLength? RBRACKET
     ;
 
-
 /*
- * ============================================================================
- * Explicit cardinality
- * ============================================================================
+ * Optional explicit cardinality.
  *
- * The semicolon distinguishes:
- *
- *     [T]
- *
- * from:
- *
- *     [T; N]
- *
- * `typeValueExpression` is owned by Types and therefore remains a single
- * canonical type-level value grammar for the entire language.
+ * The semicolon distinguishes an explicitly cardinalized array from an
+ * array whose cardinality is omitted.
  */
 arrayLength
-    : SEMICOLON
-      typeValueExpression
+    : SEMICOLON typeValueExpression
     ;
