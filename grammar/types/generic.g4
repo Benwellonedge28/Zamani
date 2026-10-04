@@ -6,419 +6,399 @@
  * File:
  *     grammar/types/generic.g4
  *
+ * Grammar:
+ *     Generic
+ *
  * Status:
- *     CANONICAL generic-type APPLICATION grammar.
+ *     CANONICAL GENERIC TYPE-APPLICATION COMPONENT
  *
- * Purpose:
- *     Defines the source-level syntax for applying a generic type constructor
- *     to an ordered sequence of type arguments.
- *
- * ============================================================================
- * ARCHITECTURAL CONTRACT
- * ============================================================================
- *
- * This grammar owns:
- *
- *   - generic type application;
- *   - generic argument delimiters;
- *   - generic argument ordering;
- *   - generic argument lists;
- *   - trailing-comma syntax;
- *   - nested generic applications;
- *   - generic applications whose constructor is a qualified type path.
- *
- * This grammar does NOT own:
- *
- *   - lexical token definitions;
- *   - identifiers;
- *   - type paths;
- *   - primitive types;
- *   - tuple types;
- *   - arrays;
- *   - slices;
- *   - references;
- *   - pointers;
- *   - function types;
- *   - optional types;
- *   - result types;
- *   - quantum types;
- *   - hardware types;
- *   - resource types;
- *   - type-level value expressions;
- *   - generic declarations;
- *   - generic parameter declarations;
- *   - generic bounds;
- *   - trait/interface definitions;
- *   - type inference;
- *   - substitution;
- *   - monomorphization;
- *   - specialization;
- *   - overload resolution;
- *   - resource allocation;
- *   - hardware selection;
- *   - quantum allocation;
- *   - routing;
- *   - scheduling;
- *   - QEC;
- *   - ZQN;
- *   - HAL;
- *   - optimization;
- *   - canonical IR;
- *   - runtime representation.
+ * Compiler baseline:
+ *     Rust 1.97 / Rust 1.97.1
+ *     Rust 2021
+ *     safe Rust only
+ *     no unsafe
  *
  * ============================================================================
- * IMPORTANT INTEGRATION RULE
+ * PURPOSE
  * ============================================================================
  *
- * The canonical frontend AST currently represents generic types as:
+ * This grammar owns the reusable source-level syntax required for applying a
+ * generic type constructor to an ordered collection of type arguments.
+ *
+ * Examples:
+ *
+ *     Vec<T>
+ *     Map<Key, Value>
+ *     Result<Value, Error>
+ *     Option<T>
+ *     Matrix<T>
+ *     Register<Qubit>
+ *     QuantumState<State>
+ *     Buffer<Packet>
+ *     Container<Vec<Value>>
+ *
+ * The generic application syntax is deliberately domain-neutral.
+ *
+ * Generic application may therefore be used by:
+ *
+ *     classical
+ *     numerical
+ *     scientific
+ *     AI / ML
+ *     data
+ *     quantum
+ *     hybrid
+ *     HDL
+ *     hardware
+ *     accelerator
+ *     distributed
+ *     networking
+ *     cryptographic
+ *     embedded
+ *     future computational domains
+ *
+ * This grammar does not know what a particular generic constructor means.
+ *
+ * ============================================================================
+ * ARCHITECTURAL POSITION
+ * ============================================================================
+ *
+ * The source pipeline is:
+ *
+ *     source
+ *       |
+ *       v
+ *     canonical lexer
+ *       |
+ *       v
+ *     ZamaniParser
+ *       |
+ *       v
+ *     Types
+ *       |
+ *       v
+ *     Generic
+ *       |
+ *       v
+ *     TypeExpr
+ *       |
+ *       v
+ *     structural validation
+ *       |
+ *       v
+ *     semantic type resolution
+ *       |
+ *       +-----------------------+-----------------------+
+ *       |                       |                       |
+ *       v                       v                       v
+ *   classical              quantum::ir            HDL/hardware
+ *   semantics               semantics              semantics
+ *       |                       |                       |
+ *       +-----------------------+-----------------------+
+ *                               |
+ *                               v
+ *                       canonical semantic IR
+ *                               |
+ *                       optimization/lowering
+ *                               |
+ *                       routing/scheduling
+ *                               |
+ *                       resilience/QEC
+ *                               |
+ *                              ZQN
+ *                               |
+ *                              HAL
+ *                               |
+ *                       target realization
+ *
+ * Generic syntax is entirely before target realization.
+ *
+ * ============================================================================
+ * OWNERSHIP
+ * ============================================================================
+ *
+ * THIS FILE OWNS:
+ *
+ *     - generic type-application delimiters;
+ *     - generic type-application argument-list syntax;
+ *     - generic application argument ordering;
+ *     - trailing-comma syntax;
+ *     - the reusable generic-application suffix/component;
+ *     - syntactic distinction between an application and an empty angle list.
+ *
+ * THIS FILE DOES NOT OWN:
+ *
+ *     - lexer rules;
+ *     - identifiers;
+ *     - typeExpression;
+ *     - typeCore;
+ *     - primitive types;
+ *     - named types;
+ *     - type paths;
+ *     - tuple types;
+ *     - arrays;
+ *     - slices;
+ *     - references;
+ *     - pointers;
+ *     - function types;
+ *     - optional types;
+ *     - Result types;
+ *     - quantum types;
+ *     - HDL types;
+ *     - hardware types;
+ *     - resource types;
+ *     - dependent/value types;
+ *     - generic declarations;
+ *     - generic parameter declarations;
+ *     - generic bounds;
+ *     - where clauses;
+ *     - type inference;
+ *     - unification;
+ *     - substitution;
+ *     - specialization;
+ *     - monomorphization;
+ *     - overload resolution;
+ *     - trait/interface resolution;
+ *     - constraint solving;
+ *     - resource discovery;
+ *     - capability negotiation;
+ *     - hardware selection;
+ *     - quantum allocation;
+ *     - routing;
+ *     - scheduling;
+ *     - QEC;
+ *     - ZQN;
+ *     - HAL;
+ *     - runtime representation;
+ *     - ABI layout.
+ *
+ * ============================================================================
+ * IMPORTANT ANTLR OWNERSHIP RULE
+ * ============================================================================
+ *
+ * `grammar/types/types.g4` is the public type-composition grammar.
+ *
+ * It owns:
+ *
+ *     typeExpression
+ *
+ * and therefore has visibility of every type category.
+ *
+ * This file MUST NOT redefine `typeExpression`.
+ *
+ * It also MUST NOT create a competing complete type grammar merely so that
+ * generic arguments can be parsed.
+ *
+ * The composition relationship is:
+ *
+ *     Types
+ *       |
+ *       +--> Generic
+ *       |
+ *       +--> other type components
+ *
+ * Therefore `Generic` supplies reusable generic-application productions while
+ * `Types` supplies the canonical type-expression context in which generic
+ * applications are used.
+ *
+ * This avoids a circular grammar dependency:
+ *
+ *     Types -> Generic -> Types
+ *
+ * which would be architecturally incorrect and difficult for ANTLR to
+ * maintain.
+ *
+ * ============================================================================
+ * GENERIC DECLARATION VS APPLICATION
+ * ============================================================================
+ *
+ * This file owns APPLICATION syntax:
+ *
+ *     Vec<T>
+ *     Map<K, V>
+ *     Result<T, E>
+ *
+ * Generic declarations belong to:
+ *
+ *     grammar/functions/generics.g4
+ *
+ * Examples of declarations:
+ *
+ *     <T>
+ *     <T extends Numeric>
+ *     <T extends Numeric + Ordered>
+ *
+ * This file MUST NOT define:
+ *
+ *     functionGenericParameters
+ *     functionGenericParameter
+ *     functionGenericParameterBounds
+ *
+ * Those belong to the generic declaration owner.
+ *
+ * ============================================================================
+ * TOKEN AUTHORITY
+ * ============================================================================
+ *
+ * Parser-facing lexical authority:
+ *
+ *     grammar/antlr/ZamaniLexer.g4
+ *
+ * Canonical lexical component hierarchy:
+ *
+ *     grammar/lexer/lexer.g4
+ *     grammar/lexer/tokens.g4
+ *     grammar/lexer/operators.g4
+ *     grammar/lexer/punctuation.g4
+ *     grammar/lexer/identifiers.g4
+ *     ...
+ *
+ * This parser grammar defines NO lexer rules.
+ *
+ * The canonical generic delimiters are:
+ *
+ *     LESS
+ *         <
+ *
+ *     GREATER
+ *         >
+ *
+ * The following names MUST NOT be introduced here:
+ *
+ *     LESS_THAN
+ *     GREATER_THAN
+ *
+ * because they would create competing lexical terminology with the current
+ * canonical lexer.
+ *
+ * ============================================================================
+ * AST CONTRACT
+ * ============================================================================
+ *
+ * The existing frontend generic-type representation is conceptually:
  *
  *     TypeExpr::Generic {
  *         base: Box<TypeExpr>,
  *         arguments: Vec<TypeExpr>,
  *     }
  *
- * Therefore this grammar deliberately accepts TYPE ARGUMENTS only.
+ * Therefore generic application syntax must preserve:
  *
- * A source construct such as:
+ *     1. the constructor/base type;
+ *     2. argument ordering;
+ *     3. every argument's source span;
+ *     4. the complete nesting structure.
  *
- *     Vec<int>
- *     Map<String, Value>
- *     Result<T, E>
- *     quantum::Register<Qubit>
- *     Matrix<Vector<float>>
- *
- * maps naturally to the existing TypeExpr::Generic representation.
- *
- * A type-level value such as:
- *
- *     Matrix<float, N>
- *
- * MUST NOT be accepted by this file until the frontend AST has a first-class
- * representation for type/value generic arguments.
- *
- * The current TypeExpr::Generic representation cannot faithfully represent
- * the distinction between:
- *
- *     Matrix<float, N>
- *
- * and:
- *
- *     Matrix<float, SomeType>
- *
- * without introducing an additional semantic representation.
- *
- * This is intentional.
- *
- * The grammar must never silently accept syntax which the canonical AST cannot
- * represent without loss.
- *
- * Type/value parameters remain an integration point for the future dependent
- * type/value model owned by the type-system architecture.
- *
- * ============================================================================
- * POCO-REAF
- * ============================================================================
- *
- * Generic arity is source-defined.
- *
- * There is deliberately NO:
- *
- *     MAX_GENERIC_ARGUMENTS
- *     MAX_GENERIC_DEPTH
- *     MAX_TYPE_DEPTH
- *     MAX_QUBITS
- *     MAX_CORES
- *     MAX_THREADS
- *     MAX_GPUS
- *     MAX_FPGAS
- *     MAX_NODES
- *     MAX_MEMORY
- *     MAX_TENSOR_RANK
- *     MAX_REGISTER_WIDTH
- *     MAX_DEVICE_COUNT
- *
- * An arbitrary number of generic arguments is represented through recursive
- * parser repetition:
- *
- *     argument (COMMA argument)*
- *
- * Any implementation resource limit belongs to an explicit compiler/parser
- * policy, never to the language grammar.
- *
- * "Scale to infinity" therefore means that the language imposes no arbitrary
- * finite semantic ceiling. Actual compilation remains bounded only by the
- * resources and explicit operational policies of the environment.
- *
- * ============================================================================
- * DOMAIN NEUTRALITY
- * ============================================================================
- *
- * Generic types may parameterize:
- *
- *     classical types
- *     quantum types
- *     hybrid types
- *     HDL abstractions
- *     hardware abstractions
- *     accelerator abstractions
- *     distributed abstractions
- *     tensors
- *     data structures
- *     networking abstractions
- *     cryptographic abstractions
- *     AI/ML structures
- *     future computational domains
- *
- * This grammar does not know which domain a generic constructor belongs to.
- *
- * Examples:
- *
- *     Vec<int>
- *     Tensor<float>
- *     Register<Qubit>
- *     Buffer<Packet>
- *     Accelerator<Model>
- *     HardwareModule<Configuration>
- *
- * remain syntactically identical at this layer.
- *
- * ============================================================================
- * AST CONTRACT
- * ============================================================================
- *
- * The parser/AST lowering layer must produce:
- *
- *     TypeExpr::Generic {
- *         base,
- *         arguments,
- *     }
- *
- * where:
- *
- *     base
- *         = canonical TypeExpr representing the generic constructor;
- *
- *     arguments
- *         = ordered Vec<TypeExpr>.
- *
- * This file MUST NOT introduce:
+ * This grammar MUST NOT introduce a competing semantic AST such as:
  *
  *     GenericType
  *     GenericArgument
- *     GenericTypeArgument
+ *     GenericApplication
  *     GenericTypeApplication
  *
- * as competing semantic AST structures.
+ * merely to represent the frontend semantic type.
  *
- * Those names may appear as parser-rule names, but they must not become
- * independent frontend semantic nodes.
+ * Parser rule names are allowed to use these concepts, but AST lowering must
+ * converge on the existing TypeExpr architecture.
  *
  * ============================================================================
  * SEMANTIC CONTRACT
  * ============================================================================
  *
- * This grammar answers:
+ * Parsing answers:
  *
- *     "How was this generic type application written?"
+ *     "How was this generic application written?"
  *
  * Semantic analysis answers:
  *
- *     "Which generic declaration does this constructor refer to?"
+ *     "Does the constructor exist?"
+ *     "Is it generic?"
  *     "How many parameters does it declare?"
- *     "Are the supplied arguments valid?"
- *     "Do the supplied types satisfy their bounds?"
- *     "What substitutions are required?"
- *
- * Therefore:
- *
- *     Vec<int>
- *
- * is syntactically valid.
- *
- * Whether Vec exists, whether it accepts one argument, and whether int
- * satisfies its constraints are semantic questions.
- *
- * ============================================================================
- * QUANTUM CONTRACT
- * ============================================================================
- *
- * Generic syntax is quantum-neutral.
- *
- * Examples:
- *
- *     Register<Qubit>
- *     Register<LogicalQubit>
- *     QuantumState<State>
- *     Circuit<Operation>
- *
- * are source-level type applications.
- *
- * This grammar does NOT:
- *
- *     - allocate qubits;
- *     - select physical qubits;
- *     - select a QPU;
- *     - select a vendor;
- *     - inspect topology;
- *     - select a gate set;
- *     - perform decomposition;
- *     - route;
- *     - schedule;
- *     - perform QEC;
- *     - interpret ZQN;
- *     - select calibration;
- *     - access HAL state.
- *
- * The canonical quantum semantic boundary remains:
- *
- *     quantum::ir
- *
- * Generic syntax reaches quantum semantics only after frontend AST and
- * semantic type resolution.
- *
- * ============================================================================
- * HARDWARE / RESOURCE CONTRACT
- * ============================================================================
- *
- * Generic applications MUST NOT encode physical realization.
- *
- * Valid:
- *
- *     Buffer<Packet>
- *     Register<Qubit>
- *     Accelerator<Model>
- *     Memory<Value>
- *
- * Invalid as universal language semantics:
- *
- *     GPU0<...>
- *     QPU42<...>
- *     PhysicalQubit17<...>
- *
- * Concrete placement, device identity, topology, resource availability,
- * scheduling, and deployment belong to downstream resource/target layers.
- *
- * ============================================================================
- * LEXER CONTRACT
- * ============================================================================
- *
- * The canonical lexical authority is:
- *
- *     grammar/lexer/tokens.g4
- *
- * whose lexer grammar is:
- *
- *     ZamaniTokens
- *
- * Therefore this file MUST use:
- *
- *     tokenVocab = ZamaniTokens;
- *
- * It MUST NOT use:
- *
- *     tokenVocab = ZamaniLexer;
- *
- * The latter is an obsolete/inconsistent contract in the current repository.
- *
- * ============================================================================
- * TYPE-GRAMMAR INTEGRATION
- * ============================================================================
- *
- * The canonical public type entry point remains owned by:
- *
- *     grammar/types/types.g4
- *
- * This file owns the generic APPLICATION production.
- *
- * The type composition layer is responsible for combining:
- *
- *     generic
- *     primitive
- *     named
- *     tuple
- *     array
- *     slice
- *     function
- *     reference
- *     pointer
- *     optional
- *     result
- *     quantum
- *     resource
- *     hardware
- *     future type categories
- *
- * into the single public:
- *
- *     typeExpression
- *
- * contract.
- *
- * ============================================================================
- * GENERIC DECLARATION INTEGRATION
- * ============================================================================
- *
- * This file does NOT parse declarations such as:
- *
- *     type Vec<T> = ...
- *
- * or:
- *
- *     fn map<T>(...)
- *
- * Generic declaration syntax belongs to the declaration/function generic
- * grammars.
- *
- * This file only parses USE/APPLICATION syntax:
- *
- *     Vec<T>
- *     Map<K, V>
- *     Result<T, E>
- *
- * ============================================================================
- * GENERIC BOUNDS
- * ============================================================================
- *
- * Bounds are not part of an application.
+ *     "Are these arguments valid?"
+ *     "Do the arguments satisfy declared bounds?"
+ *     "Can the application be substituted?"
+ *     "Can it be specialized?"
  *
  * For example:
  *
- *     T: Numeric
+ *     Result<Value, Error>
  *
- * belongs to generic declaration/constraint syntax.
+ * may be syntactically valid even if `Result` is not declared.
  *
- * The application:
- *
- *     Vector<T>
- *
- * contains only the supplied argument.
+ * Unknown constructors are semantic/name-resolution errors, not grammar
+ * errors.
  *
  * ============================================================================
- * ERROR MODEL
+ * GENERIC ARITY
  * ============================================================================
  *
- * The grammar deliberately rejects:
+ * Generic argument count is NOT bounded by this grammar.
  *
- *     <>
+ * Valid examples include:
  *
- * because an application without an argument is not a generic application.
+ *     Container<T>
  *
- * It accepts:
+ *     Container<T, U>
  *
- *     <T>
- *     <T, U>
- *     <T, U, V>
- *     <T,>
- *     <T, U,>
+ *     Container<T, U, V>
  *
- * A trailing comma is purely syntactic and does not create an additional
- * semantic argument.
+ *     Container<T, U, V, W, X>
+ *
+ * and arbitrarily larger source-defined arities.
+ *
+ * There is deliberately no:
+ *
+ *     MAX_GENERIC_ARGUMENTS
+ *     MAX_GENERIC_ARITY
+ *     MAX_TYPE_ARGUMENTS
+ *     MAX_GENERIC_DEPTH
+ *     MAX_TYPE_DEPTH
+ *
+ * Practical parser/compiler limits, when necessary for resource protection,
+ * belong to explicit implementation policy rather than language semantics.
+ *
+ * ============================================================================
+ * EMPTY APPLICATIONS
+ * ============================================================================
+ *
+ * An empty generic application is syntactically invalid:
+ *
+ *     Vec<>
+ *
+ * is rejected.
+ *
+ * A generic declaration with zero parameters is a different concept and is
+ * not an application.
+ *
+ * ============================================================================
+ * TRAILING COMMA
+ * ============================================================================
+ *
+ * A trailing comma is supported:
+ *
+ *     Vec<T,>
+ *
+ *     Map<K, V,>
+ *
+ *     Result<T, E,>
+ *
+ * The trailing comma does NOT represent an additional type argument.
+ *
+ * The AST therefore contains:
+ *
+ *     [T]
+ *
+ * rather than:
+ *
+ *     [T, Unit]
+ *
+ * or another artificial placeholder.
  *
  * ============================================================================
  * NESTING
  * ============================================================================
  *
- * Nested generic applications are naturally supported:
+ * Generic applications may be nested:
  *
  *     Vec<Option<T>>
  *
@@ -426,91 +406,822 @@
  *
  *     Map<Key, Vec<Value>>
  *
- *     QuantumContainer<Register<LogicalQubit>>
+ *     Container<Map<Key, Result<Value, Error>>>
  *
- * No explicit nesting-depth limit exists in this grammar.
+ * No semantic nesting ceiling is encoded.
+ *
+ * The actual parser implementation may enforce an explicit operational
+ * resource budget if required for denial-of-service protection, but such a
+ * budget is not a language-level type limit.
+ *
+ * ============================================================================
+ * TYPE ARGUMENTS
+ * ============================================================================
+ *
+ * A generic argument is a canonical source-level type expression.
+ *
+ * Therefore applications may eventually accept:
+ *
+ *     Vec<T>
+ *     Vec<int>
+ *     Vec<&T>
+ *     Vec<&mut T>
+ *     Vec<(A, B)>
+ *     Vec<fn(A) -> B>
+ *     Vec<Option<T>>
+ *     Vec<Result<T, E>>
+ *     Vec<QuantumState<T>>
+ *     Vec<LogicalQubit>
+ *
+ * The actual `typeExpression` production remains owned by `Types`.
+ *
+ * Generic.g4 does not duplicate that production.
+ *
+ * ============================================================================
+ * VALUE / DEPENDENT GENERIC ARGUMENTS
+ * ============================================================================
+ *
+ * This file does NOT silently introduce an ambiguous mixture of:
+ *
+ *     type arguments
+ *
+ * and:
+ *
+ *     arbitrary type-level values
+ *
+ * merely because dependent types may eventually be supported.
+ *
+ * Existing `types.g4` has a separate type-level value model.
+ *
+ * Consequently:
+ *
+ *     Matrix<T>[Rows, Cols]
+ *
+ * remains a dependent/value-parameterized type construct.
+ *
+ * Generic.g4 does not reinterpret:
+ *
+ *     Matrix<T, N>
+ *
+ * as a value-parameterized generic unless the canonical frontend type model
+ * explicitly defines such arguments.
+ *
+ * This preserves information and prevents the parser from accepting syntax
+ * that the AST cannot represent faithfully.
+ *
+ * ============================================================================
+ * SYMBOLIC SCALE
+ * ============================================================================
+ *
+ * Generic syntax itself is independent of:
+ *
+ *     memory size;
+ *     CPU count;
+ *     GPU count;
+ *     FPGA count;
+ *     ASIC count;
+ *     QPU count;
+ *     qubit count;
+ *     node count;
+ *     thread count;
+ *     tensor rank;
+ *     register width;
+ *     network size;
+ *     device count.
+ *
+ * A type such as:
+ *
+ *     Register<Qubit>
+ *
+ * does not allocate a register.
+ *
+ * A type such as:
+ *
+ *     Tensor<Value>
+ *
+ * does not determine physical tensor storage.
+ *
+ * A type such as:
+ *
+ *     Buffer<Packet>
+ *
+ * does not select a memory device.
+ *
+ * Physical realization belongs to semantic/resource/target layers.
+ *
+ * ============================================================================
+ * POCO-REAF CONTRACT
+ * ============================================================================
+ *
+ * Generic types contribute to POCO-REAF by expressing reusable source-level
+ * abstractions without binding them to a particular machine realization.
+ *
+ * The same generic source meaning can therefore participate in:
+ *
+ *     tiny embedded execution;
+ *     CPU execution;
+ *     multicore execution;
+ *     GPU execution;
+ *     FPGA execution;
+ *     ASIC realization;
+ *     accelerator realization;
+ *     quantum execution;
+ *     quantum simulation;
+ *     HPC execution;
+ *     cluster execution;
+ *     distributed execution;
+ *     cloud execution;
+ *     future computational substrates.
+ *
+ * The grammar does not promise that every target can realize every generic
+ * type.
+ *
+ * Instead:
+ *
+ *     source meaning
+ *          |
+ *          v
+ *     semantic type
+ *          |
+ *          v
+ *     target/resource feasibility
+ *
+ * A target that cannot realize the required type or capability must produce a
+ * controlled semantic/resource/target diagnostic.
+ *
+ * It must not require source rewriting merely because the physical target
+ * changed.
+ *
+ * ============================================================================
+ * QUANTUM INTEGRATION
+ * ============================================================================
+ *
+ * Generic application is quantum-neutral.
+ *
+ * Examples:
+ *
+ *     Register<Qubit>
+ *     Register<LogicalQubit>
+ *     QuantumState<State>
+ *     QuantumOperation<Operation>
+ *
+ * are source-level type applications.
+ *
+ * Generic.g4 MUST NOT:
+ *
+ *     - allocate qubits;
+ *     - identify physical qubits;
+ *     - select a QPU;
+ *     - inspect topology;
+ *     - select a gate set;
+ *     - perform decomposition;
+ *     - perform routing;
+ *     - perform scheduling;
+ *     - select calibration;
+ *     - perform QEC;
+ *     - construct ZQN;
+ *     - access HAL state.
+ *
+ * Quantum semantics continue through:
+ *
+ *     domain-neutral AST
+ *          |
+ *          v
+ *     semantic quantum model
+ *          |
+ *          v
+ *     quantum::ir
+ *
+ * ============================================================================
+ * HDL / HARDWARE INTEGRATION
+ * ============================================================================
+ *
+ * Generic application is equally neutral for hardware-oriented types:
+ *
+ *     Signal<Value>
+ *     Register<Value>
+ *     Module<Configuration>
+ *     Buffer<Data>
+ *     Accelerator<Model>
+ *
+ * The generic grammar does not encode:
+ *
+ *     bus width;
+ *     register count;
+ *     clock count;
+ *     pipeline depth;
+ *     memory capacity;
+ *     device count;
+ *     physical placement.
+ *
+ * Those belong to the HDL/hardware/resource semantic layers.
+ *
+ * ============================================================================
+ * AI / DATA INTEGRATION
+ * ============================================================================
+ *
+ * Generic types can represent:
+ *
+ *     Tensor<Value>
+ *     Dataset<Record>
+ *     Model<Input, Output>
+ *     Distribution<Value>
+ *     Probability<Value>
+ *     KnowledgeGraph<Node, Edge>
+ *
+ * No machine-learning algorithm is encoded in the generic grammar.
+ *
+ * Algorithm selection belongs to operations, libraries, capabilities and
+ * semantic analysis.
+ *
+ * ============================================================================
+ * RESOURCE / CAPABILITY INTEGRATION
+ * ============================================================================
+ *
+ * Generic syntax may contain types whose semantic interpretation involves
+ * capabilities or resources:
+ *
+ *     Resource<T>
+ *     Capability<T>
+ *     Device<T>
+ *     Accelerator<T>
+ *
+ * However, this grammar does not resolve them.
+ *
+ * Resource requirements belong to:
+ *
+ *     grammar/resources/
+ *
+ * Capability semantics belong to:
+ *
+ *     grammar/resources/
+ *     grammar/security/
+ *     semantic analysis
+ *
+ * Target feasibility belongs downstream.
+ *
+ * ============================================================================
+ * EFFECT INTEGRATION
+ * ============================================================================
+ *
+ * Generic type application itself introduces no effect.
+ *
+ * For example:
+ *
+ *     Network<Packet>
+ *
+ * does not itself perform network access.
+ *
+ * Likewise:
+ *
+ *     Qubit
+ *
+ * does not itself perform quantum measurement.
+ *
+ * Effects arise from operations and executable constructs, not merely from
+ * the syntactic appearance of a generic type.
+ *
+ * ============================================================================
+ * CONTRACT INTEGRATION
+ * ============================================================================
+ *
+ * Generic applications can occur in declarations governed by:
+ *
+ *     requires
+ *     ensures
+ *     invariant
+ *     assume
+ *     guarantee
+ *     property
+ *
+ * Generic.g4 does not define those constructs.
+ *
+ * Validation owns their syntax and semantics.
+ *
+ * Type checking may use generic substitutions when evaluating contracts.
+ *
+ * ============================================================================
+ * POLICY INTEGRATION
+ * ============================================================================
+ *
+ * Generic types can appear inside constructs subject to policies.
+ *
+ * Policy resolution occurs downstream.
+ *
+ * Generic.g4 does not:
+ *
+ *     authorize;
+ *     deny;
+ *     sandbox;
+ *     negotiate;
+ *     allocate;
+ *     deploy.
+ *
+ * ============================================================================
+ * PROVENANCE INTEGRATION
+ * ============================================================================
+ *
+ * Generic application syntax must preserve source spans so that semantic
+ * provenance can record:
+ *
+ *     constructor source;
+ *     argument source;
+ *     substitutions;
+ *     specializations;
+ *     generated representations.
+ *
+ * Generic.g4 itself does not create provenance records.
+ *
+ * ============================================================================
+ * SOURCE SPAN CONTRACT
+ * ============================================================================
+ *
+ * The frontend must preserve spans for:
+ *
+ *     genericTypeArguments
+ *     genericArgumentList
+ *     each generic type argument
+ *
+ * and, where the composed type grammar exposes them:
+ *
+ *     genericTypeApplication
+ *
+ * These spans are required for:
+ *
+ *     diagnostics;
+ *     IDE/LSP navigation;
+ *     formatting;
+ *     refactoring;
+ *     provenance;
+ *     source maps;
+ *     compatibility tooling.
  *
  * ============================================================================
  * DETERMINISM
  * ============================================================================
  *
- * Generic arguments preserve source order.
+ * Given identical:
  *
- * The canonical AST uses:
+ *     source;
+ *     language version;
+ *     lexical configuration;
+ *     grammar configuration;
  *
- *     Vec<TypeExpr>
+ * generic parsing must produce the same:
  *
- * and therefore argument ordering is semantically significant.
+ *     argument order;
+ *     nesting;
+ *     source spans;
+ *     parser structure.
  *
- * No unordered collection is introduced by this grammar.
+ * No generic rule depends on:
+ *
+ *     time;
+ *     randomness;
+ *     filesystem state;
+ *     network state;
+ *     hardware availability;
+ *     environment state;
+ *     runtime state;
+ *     target selection.
  *
  * ============================================================================
- * SOURCE-SPAN CONTRACT
+ * ERROR BOUNDARY
  * ============================================================================
  *
- * The parser/AST layer must preserve source spans for:
+ * Syntax errors owned by this grammar include:
  *
- *     genericTypeApplication
+ *     <>
+ *     <, T>
+ *     <T, , U>
+ *     <T,,>
+ *     <T U>
+ *     <T,>
+ *
+ * The final form above is valid when it contains one actual argument:
+ *
+ *     <T,>
+ *
+ * Semantic errors remain outside the grammar:
+ *
+ *     unknown constructor;
+ *     wrong declared arity;
+ *     duplicate declaration parameters;
+ *     unsatisfied bounds;
+ *     invalid substitution;
+ *     incompatible type argument;
+ *     unavailable target representation.
+ *
+ * ============================================================================
+ * COMPATIBILITY
+ * ============================================================================
+ *
+ * The repository currently contains generic application logic directly in:
+ *
+ *     grammar/types/types.g4
+ *
+ * That logic and this reusable component MUST converge on one implementation
+ * rather than remaining as competing generic grammars.
+ *
+ * Migration rule:
+ *
+ *     Types
+ *       |
+ *       +--> Generic
+ *
+ * `types.g4` retains ownership of `typeExpression`.
+ *
+ * Generic.g4 owns the reusable generic application argument syntax.
+ *
+ * The migration MUST NOT create:
+ *
+ *     Types -> Generic -> Types
+ *
+ * or duplicate `genericArgumentList` in multiple imported grammars.
+ *
+ * The repository also contains historical references to:
+ *
+ *     generic-types.g4
+ *
+ * If such a file exists in a branch/version, it must not become another
+ * canonical authority. It should be migrated/deprecated through the
+ * compatibility architecture.
+ *
+ * ============================================================================
+ * DEPENDENCY CONTRACT
+ * ============================================================================
+ *
+ * DEPENDS_ON:
+ *
+ *     grammar/antlr/ZamaniLexer.g4
+ *     canonical token vocabulary
+ *     canonical typeExpression supplied by Types composition
+ *
+ * EXPORTS:
+ *
  *     genericTypeArguments
  *     genericArgumentList
- *     each generic argument
+ *     genericTypeArgumentSeparator
  *
- * This permits diagnostics such as:
+ * CONSUMED_BY:
  *
- *     wrong generic arity
- *     invalid type argument
- *     unsatisfied bound
- *     unknown generic constructor
+ *     grammar/types/types.g4
+ *     future type-composition grammars that explicitly import Generic
  *
- * without requiring grammar changes.
+ * AST_OWNER:
  *
- * ============================================================================
- * COMPILER CONTRACT
- * ============================================================================
+ *     existing frontend TypeExpr implementation
  *
- * The compiler may later perform:
+ * SEMANTIC_OWNER:
  *
- *     name resolution
- *     generic parameter binding
- *     constraint checking
- *     substitution
- *     specialization
- *     monomorphization
- *     representation selection
- *     optimization
+ *     type semantic analysis
  *
- * None of those operations occur in this grammar.
+ * IR_OWNER:
  *
- * ============================================================================
- * RUNTIME CONTRACT
- * ============================================================================
+ *     canonical semantic IR/type representation
  *
- * This grammar has no runtime dependency.
+ * QUANTUM_IR_OWNER:
  *
- * Generic type application may eventually affect:
+ *     quantum::ir
  *
- *     representation
- *     dispatch
- *     specialization
- *     resource requirements
+ * TEST_OWNER:
  *
- * but those are determined after semantic analysis.
+ *     grammar/tests/
+ *     grammar/types/tests/
+ *     repository type-conformance suite
+ *
+ * SPEC_OWNER:
+ *
+ *     grammar/specification/types.md
+ *     grammar/specification/poco-reaf.md
  *
  * ============================================================================
- * COMPATIBILITY CONTRACT
+ * PUBLIC RULE CONTRACT
  * ============================================================================
  *
- * Existing:
+ * The public reusable entry point is:
  *
- *     grammar/types/generic-types.g4
+ *     genericTypeArguments
  *
- * must not remain an independent authority.
+ * It represents:
  *
- * Its generic application rules should be migrated to this file and the old
- * file retained only as a compatibility/deprecation surface until repository
- * references have been migrated.
+ *     < type-expression-list >
  *
- * No filename rename is required.
+ * and deliberately does not include the constructor/base type.
+ *
+ * This permits the canonical type grammar to retain ownership of:
+ *
+ *     typePath
+ *
+ * and:
+ *
+ *     typeExpression
+ *
+ * without creating a circular dependency.
+ *
+ * ============================================================================
+ * IMPLEMENTATION NOTE
+ * ============================================================================
+ *
+ * The actual argument production is:
+ *
+ *     typeExpression
+ *
+ * and therefore belongs structurally to the composed Types grammar.
+ *
+ * This file consequently defines the delimiter/list component in terms of the
+ * type-expression rule supplied by its composition environment.
+ *
+ * A grammar integration must compose this file from the type grammar in a
+ * direction that makes `typeExpression` available to the imported component.
+ *
+ * If ANTLR composition rules in the repository do not permit that dependency
+ * direction, the repository must retain the equivalent argument-list
+ * production in `types.g4` until a lower-level `TypeExpression` grammar is
+ * introduced.
+ *
+ * It is forbidden to solve that limitation by duplicating the complete type
+ * system inside this file.
+ *
+ * ============================================================================
+ * SCALABILITY CONTRACT
+ * ============================================================================
+ *
+ * There are no grammar-level limits on:
+ *
+ *     generic argument count;
+ *     nesting;
+ *     source program count;
+ *     declaration count;
+ *     type constructor count;
+ *     domain count;
+ *     target count;
+ *     hardware count;
+ *     quantum count;
+ *     resource count.
+ *
+ * The grammar uses recursive/repetitive parser constructs rather than finite
+ * enumerations.
+ *
+ * Any implementation resource budget must be:
+ *
+ *     explicit;
+ *     configurable;
+ *     diagnosable;
+ *     separate from language semantics;
+ *     independent of physical target enumeration.
+ *
+ * ============================================================================
+ * HARD-CODING AUDIT
+ * ============================================================================
+ *
+ * FORBIDDEN:
+ *
+ *     MAX_GENERIC_ARGUMENTS
+ *     MAX_GENERIC_ARITY
+ *     MAX_GENERIC_DEPTH
+ *     MAX_TYPE_DEPTH
+ *     MAX_QUBITS
+ *     MAX_CPUS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_NODES
+ *     MAX_MEMORY
+ *     MAX_THREADS
+ *     MAX_TENSOR_RANK
+ *     MAX_REGISTER_WIDTH
+ *     MAX_NETWORK_SIZE
+ *     MAX_DEVICE_COUNT
+ *
+ * Also forbidden:
+ *
+ *     vendor-specific type constructors;
+ *     fixed hardware inventories;
+ *     finite quantum operation inventories;
+ *     physical device IDs;
+ *     physical topology assumptions.
+ *
+ * ALLOWED:
+ *
+ *     language-defined punctuation;
+ *     generic delimiters;
+ *     source-level type expressions;
+ *     explicit compatibility rules;
+ *     implementation-level resource policies outside grammar semantics.
+ *
+ * ============================================================================
+ * RUST CONTRACT
+ * ============================================================================
+ *
+ * This file contains no Rust implementation.
+ *
+ * The compiler/frontend consuming it MUST:
+ *
+ *     - support Rust 1.97;
+ *     - support Rust 1.97.1;
+ *     - use Rust 2021;
+ *     - use safe Rust;
+ *     - contain no unsafe blocks;
+ *     - contain no unsafe functions;
+ *     - preserve source spans;
+ *     - preserve deterministic AST construction;
+ *     - avoid target-specific parser behavior.
+ *
+ * ============================================================================
+ * TEST CONTRACT
+ * ============================================================================
+ *
+ * POSITIVE:
+ *
+ *     Vec<T>
+ *     Vec<int>
+ *     Map<K, V>
+ *     Result<T, E>
+ *     Vec<T,>
+ *     Map<K, V,>
+ *     Vec<Option<T>>
+ *     Map<K, Result<V, E>>
+ *     Register<Qubit>
+ *     Register<LogicalQubit>
+ *     Tensor<Value>
+ *
+ * NEGATIVE:
+ *
+ *     <>
+ *     Vec<>
+ *     Map<,>
+ *     Map<T,, U>
+ *     Map<T U>
+ *
+ * SEMANTIC-ERROR FIXTURES:
+ *
+ *     Unknown<T>
+ *     Result<T>
+ *
+ * where the declaration environment makes these invalid.
+ *
+ * The latter must parse and subsequently fail semantic arity checking if
+ * `Result` requires two arguments.
+ *
+ * BOUNDARY:
+ *
+ *     Vec<(A, B)>
+ *     Vec<&T>
+ *     Vec<&mut T>
+ *     Vec<fn(A) -> B>
+ *     Vec<Result<A, B>>
+ *     Map<K, Vec<Result<V, E>>>
+ *
+ * CROSS-DOMAIN:
+ *
+ *     Register<Qubit>
+ *     Tensor<Value>
+ *     Signal<Value>
+ *     Accelerator<Model>
+ *     Buffer<Packet>
+ *
+ * SCALABILITY:
+ *
+ *     generated nested generic structures of increasing depth;
+ *     generated generic lists of increasing arity;
+ *     combinations of nested applications;
+ *     combinations across domain-neutral type constructors.
+ *
+ * DETERMINISM:
+ *
+ *     identical source produces identical parse structure and source spans.
+ *
+ * DIAGNOSTICS:
+ *
+ *     missing closing `>`;
+ *     missing argument after comma;
+ *     unexpected comma;
+ *     malformed nested application.
+ *
+ * ============================================================================
+ * INTEGRATION CHECKLIST
+ * ============================================================================
+ *
+ * Before marking this component complete:
+ *
+ * [ ] `LESS` is the canonical `<` token.
+ *
+ * [ ] `GREATER` is the canonical `>` token.
+ *
+ * [ ] No `LESS_THAN` token is introduced.
+ *
+ * [ ] No `GREATER_THAN` token is introduced.
+ *
+ * [ ] No lexer rule exists in this file.
+ *
+ * [ ] No generic declaration rules exist in this file.
+ *
+ * [ ] No generic bound rules exist in this file.
+ *
+ * [ ] No duplicate `typeExpression` exists in this file.
+ *
+ * [ ] No duplicate `typePath` exists in this file.
+ *
+ * [ ] No hardware/resource limits exist in this file.
+ *
+ * [ ] Generic arity is not artificially bounded.
+ *
+ * [ ] Generic nesting is not artificially bounded.
+ *
+ * [ ] Trailing commas are supported.
+ *
+ * [ ] Empty generic applications are rejected.
+ *
+ * [ ] Argument order is preserved.
+ *
+ * [ ] Nested applications are representable.
+ *
+ * [ ] Source spans are preserved downstream.
+ *
+ * [ ] Semantic arity checking remains downstream.
+ *
+ * [ ] Bound checking remains downstream.
+ *
+ * [ ] Substitution remains downstream.
+ *
+ * [ ] Specialization remains downstream.
+ *
+ * [ ] Monomorphization remains downstream.
+ *
+ * [ ] Quantum semantics remain downstream.
+ *
+ * [ ] `quantum::ir` remains the canonical quantum IR boundary.
+ *
+ * [ ] HDL/hardware semantics remain downstream.
+ *
+ * [ ] Resource/capability resolution remains downstream.
+ *
+ * [ ] Effects are not fabricated by type syntax.
+ *
+ * [ ] Policies are not fabricated by type syntax.
+ *
+ * [ ] Provenance remains a downstream concern.
+ *
+ * [ ] Rust implementation remains safe Rust.
+ *
+ * [ ] Rust 1.97/1.97.1 compatibility remains required.
+ *
+ * [ ] Positive tests exist.
+ *
+ * [ ] Negative tests exist.
+ *
+ * [ ] Boundary tests exist.
+ *
+ * [ ] Scalability tests exist.
+ *
+ * [ ] Cross-domain tests exist.
+ *
+ * [ ] Determinism tests exist.
+ *
+ * [ ] Diagnostics tests exist.
+ *
+ * ============================================================================
+ * FINAL RULE
+ * ============================================================================
+ *
+ * Generic types are a language-level abstraction.
+ *
+ * They describe relationships between types.
+ *
+ * They do not describe physical machines.
+ *
+ * They do not allocate resources.
+ *
+ * They do not select targets.
+ *
+ * They do not encode finite hardware ceilings.
+ *
+ * They do not create a second type system.
+ *
+ * They do not create a second quantum IR.
+ *
+ * They do not create a second generic-declaration system.
+ *
+ * The invariant is:
+ *
+ *     generic syntax
+ *          |
+ *          v
+ *     domain-neutral TypeExpr
+ *          |
+ *          v
+ *     semantic type resolution
+ *          |
+ *          +-------------------+
+ *          |                   |
+ *          v                   v
+ *     ordinary semantics   quantum semantics
+ *                              |
+ *                              v
+ *                         quantum::ir
+ *
+ * Generic source meaning remains independent of target size and physical
+ * realization.
  *
  * ============================================================================
  */
@@ -518,80 +1229,58 @@
 parser grammar Generic;
 
 options {
-    tokenVocab = ZamaniTokens;
+    tokenVocab = ZamaniLexer;
 }
 
 
-/* ============================================================================
- * 1. GENERIC TYPE APPLICATION
- * ========================================================================== */
+/*
+ * ============================================================================
+ * GENERIC TYPE-APPLICATION ARGUMENTS
+ * ============================================================================
+ *
+ * IMPORTANT:
+ *
+ * `typeExpression` is intentionally referenced rather than redefined.
+ *
+ * The canonical Types composition grammar supplies that rule.
+ *
+ * This preserves one and only one source-level type-expression authority.
+ * ============================================================================
+ */
 
 /**
- * Generic type application.
+ * Complete generic argument delimiters.
  *
  * Examples:
  *
- *     Vec<int>
- *     Option<T>
- *     Result<Value, Error>
- *     Map<Key, Value>
- *     quantum::Register<Qubit>
+ *     <T>
+ *     <T, U>
+ *     <T, U, V>
+ *     <T,>
+ *     <T, U,>
  *
- * The constructor itself is represented by the canonical type-path rule in
- * the parent type grammar.
- *
- * `typePath` is intentionally not redefined here.
- *
- * The parent type grammar supplies the canonical type-path production.
- *
- * The rule therefore belongs in the final composed type grammar, where the
- * canonical `typePath` and `typeExpression` rules are visible.
- */
-genericType
-    : typePath
-      genericTypeArguments
-    ;
-
-
-/* ============================================================================
- * 2. GENERIC ARGUMENT DELIMITERS
- * ========================================================================== */
-
-/**
- * Generic application delimiters.
- *
- * Empty applications are rejected.
- *
- * Therefore:
- *
- *     Vec<>
- *
- * is syntactically invalid.
- *
- * while:
- *
- *     Vec<T>
- *
- * is valid.
+ * Empty lists are rejected because genericArgumentList requires at least one
+ * type expression.
  */
 genericTypeArguments
-    : LESS_THAN
+    : LESS
       genericArgumentList
-      GREATER_THAN
+      GREATER
     ;
 
 
-/* ============================================================================
- * 3. ORDERED GENERIC ARGUMENT LIST
- * ========================================================================== */
-
 /**
- * One or more ordered type arguments.
+ * Ordered generic type arguments.
  *
- * The repetition is unbounded by language semantics.
+ * The final optional comma is syntactic only.
  *
- * A compiler may have configurable operational resource budgets, but those
- * budgets must not be encoded here as grammar-level cardinality limits.
+ * Examples:
+ *
+ *     T
+ *     T, U
+ *     T, U, V
+ *     T,
+ *     T, U,
  */
 genericArgumentList
     : typeExpression
@@ -599,20 +1288,70 @@ genericArgumentList
           COMMA
           typeExpression
       )*
-      COMMA?
+      genericTypeArgumentTrailingComma?
     ;
 
 
-/* ============================================================================
- * 4. COMPATIBILITY ALIAS
- * ========================================================================== */
-
 /**
- * Compatibility façade for tooling that historically referred to the generic
- * argument delimiter rule as `genericArguments`.
+ * Optional trailing comma.
  *
- * It is intentionally a parser-rule alias rather than another implementation.
+ * Kept as a separate rule so that:
+ *
+ *     argument count
+ *
+ * remains:
+ *
+ *     number of typeExpression occurrences
+ *
+ * rather than the number of comma-separated tokens.
  */
+genericTypeArgumentTrailingComma
+    : COMMA
+    ;
+
+
+/*
+ * ============================================================================
+ * GENERIC APPLICATION SUFFIX
+ * ============================================================================
+ *
+ * This rule is useful to the canonical type-composition grammar when it owns
+ * the constructor/base type.
+ *
+ * Conceptually:
+ *
+ *     typePath genericTypeApplicationSuffix
+ *
+ * becomes:
+ *
+ *     TypeExpr::Generic {
+ *         base: typePath,
+ *         arguments: [...]
+ *     }
+ *
+ * The base/type-path rule itself remains owned by Types.
+ * ============================================================================
+ */
+
+genericTypeApplicationSuffix
+    : genericTypeArguments
+    ;
+
+
+/*
+ * ============================================================================
+ * COMPATIBILITY RULE
+ * ============================================================================
+ *
+ * Existing consumers may historically refer to the generic argument
+ * production as `genericArguments`.
+ *
+ * Keep this as a parser-level forwarding rule only.
+ *
+ * It does not create another semantic representation.
+ * ============================================================================
+ */
+
 genericArguments
     : genericTypeArguments
     ;
