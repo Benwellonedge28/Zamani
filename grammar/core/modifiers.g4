@@ -1,1346 +1,450 @@
 /*
  * ============================================================================
- * Zamani Universal Programming Language
+ * Zamani Programming Language
  * ============================================================================
  *
- * File:
- *     grammar/core/modifiers.g4
+ * FILE
+ * ----
+ * grammar/core/modifiers.g4
  *
- * Grammar identity:
- *     Modifiers
+ * GRAMMAR
+ * -------
+ * Modifiers
  *
- * Status:
- *     Production parser component.
- *
- * Purpose:
- *     Canonical, reusable parser grammar for source-level modifiers.
- *
- * Grammar technology:
- *     ANTLR4 parser grammar.
- *
- * Rust implementation baseline:
- *     Rust 1.97 / Rust 1.97.1
- *
- * Safety:
- *     This grammar contains no embedded Rust actions, semantic predicates,
- *     filesystem access, network access, runtime callbacks, or unsafe code.
+ * STATUS
+ * ------
+ * CANONICAL / PRODUCTION
  *
  * ============================================================================
- * 1. ARCHITECTURAL ROLE
+ * FEATURE CONTRACT
  * ============================================================================
  *
- * A modifier is source-level declaration/type/member/function/parameter
- * metadata that changes or qualifies the syntactic or semantic interpretation
- * of the construct to which it is attached.
+ * PURPOSE
+ * -------
  *
- * This grammar answers:
+ * This file is the canonical parser-level composition point for reusable
+ * source-level modifiers.
  *
- *     "Does this sequence form a syntactically valid modifier?"
+ * A modifier qualifies another source construct without becoming a second
+ * declaration, expression, attribute, resource, capability, policy, or
+ * domain language.
  *
- * It does NOT answer:
+ * This grammar owns STRUCTURE.
  *
- *     "Is this modifier legal here?"
- *     "What does this modifier mean?"
- *     "Can this modifier be honored by the target?"
+ * Semantic analysis owns MEANING.
  *
- * Those questions belong to structural and semantic analysis.
  *
- * The intended pipeline is:
+ * PRIMARY DESIGN
+ * --------------
  *
- *     source
+ *     modifier
  *         |
- *         v
- *     ZamaniTokens
+ *         +--> coreModifier
  *         |
- *         v
- *     Modifiers
- *         |
- *         v
- *     frontend AST
- *         |
- *         v
- *     structural validation
- *         |
- *         v
- *     semantic modifier registry
- *         |
- *         +--> type semantics
- *         +--> effect semantics
- *         +--> capability semantics
- *         +--> resource semantics
- *         +--> compilation policy
- *         +--> domain semantics
- *         |
- *         v
- *     canonical semantic model / IR
- *         |
- *         +--> classical IR
- *         +--> quantum::ir
- *         +--> HDL / hardware IR
- *         |
- *         v
- *     optimization / routing / scheduling / resilience / ZQN / HAL
- *         |
- *         v
- *     target realization
+ *         +--> extensionModifier
+ *
+ *
+ * Core modifiers are vocabulary controlled by the language.
+ *
+ * Extension modifiers are open-world and namespace-qualified so that future
+ * language domains do not require continuously expanding this grammar.
+ *
+ *
+ * POCO-REAF PRINCIPLE
+ * -------------------
+ *
+ * A modifier describes portable source intent.
+ *
+ * It MUST NOT select or encode:
+ *
+ *     CPU identity
+ *     GPU identity
+ *     FPGA identity
+ *     ASIC identity
+ *     QPU identity
+ *     accelerator identity
+ *     node identity
+ *     physical qubit identity
+ *     memory-bank identity
+ *     device address
+ *     vendor-specific machine topology
+ *
+ * Target realization belongs downstream.
+ *
  *
  * ============================================================================
- * 2. OWNERSHIP
+ * OWNS
  * ============================================================================
  *
- * THIS FILE OWNS:
+ * This file owns:
  *
- *     - generic modifier syntax;
- *     - modifier sequences;
- *     - individual modifier categories;
- *     - visibility modifiers;
- *     - storage/declaration modifiers;
- *     - linkage modifiers;
- *     - behavioral modifiers;
- *     - type/object-model modifiers;
- *     - safety modifiers;
- *     - extension/namespaced modifiers;
- *     - optional modifier values;
- *     - modifier lists;
- *     - reusable modifier integration points.
+ *     modifier
+ *     modifierList
+ *     optionalModifierList
+ *     coreModifier
+ *     storageModifier
+ *     linkageModifier
+ *     behaviorModifier
+ *     objectModelModifier
+ *     safetyModifier
+ *     extensionModifier
+ *     qualifiedModifierName
+ *     modifierArguments
+ *     modifierArgumentList
+ *     modifierArgument
+ *     modifierValue
+ *     modifierValueList
  *
- * THIS FILE DOES NOT OWN:
  *
- *     - lexer definitions;
- *     - identifier lexical rules;
- *     - keyword spelling;
- *     - qualified-name syntax;
- *     - attributes;
- *     - annotations;
- *     - expressions;
- *     - types;
- *     - declarations;
- *     - functions;
- *     - modules;
- *     - effects;
- *     - memory;
- *     - concurrency;
- *     - classical semantics;
- *     - quantum semantics;
- *     - quantum::ir;
- *     - HDL semantics;
- *     - hardware discovery;
- *     - resource allocation;
- *     - target selection;
- *     - topology;
- *     - routing;
- *     - scheduling;
- *     - QEC;
- *     - ZQN;
- *     - calibration;
- *     - runtime execution;
- *     - deployment.
- *
- * ============================================================================
- * 3. LEXICAL AUTHORITY
+ * DOES NOT OWN
  * ============================================================================
  *
- * The canonical modular lexical vocabulary is:
+ * This file does NOT own:
  *
- *     grammar/lexer/tokens.g4
+ *     lexical token definitions
+ *     keyword spelling
+ *     identifiers
+ *     qualified-name lexical rules
+ *     visibility semantics
+ *     attributes
+ *     annotations
+ *     expressions
+ *     types
+ *     declarations
+ *     functions
+ *     modules
+ *     effects
+ *     capabilities
+ *     resources
+ *     requirements
+ *     constraints
+ *     contracts
+ *     policies
+ *     provenance
+ *     concurrency
+ *     classical semantics
+ *     quantum semantics
+ *     quantum::ir
+ *     HDL semantics
+ *     hardware realization
+ *     routing
+ *     scheduling
+ *     QEC
+ *     ZQN
+ *     HAL
+ *     runtime execution
  *
- * whose grammar identity is:
- *
- *     ZamaniTokens
- *
- * This file therefore uses:
- *
- *     tokenVocab = ZamaniTokens
- *
- * and MUST NOT define lexer rules.
- *
- * In particular, this grammar does not redefine:
- *
- *     IDENTIFIER
- *     K_PUB
- *     K_PUBLIC
- *     K_PRIVATE
- *     K_PROTECTED
- *     K_INTERNAL
- *     K_STATIC
- *     K_CONST
- *     K_LET
- *     K_VAR
- *     K_VAL
- *     K_MUT
- *     K_EXTERN
- *     K_VOLATILE
- *     K_INLINE
- *     K_FINAL
- *     K_SEALED
- *     K_PARTIAL
- *     K_OVERRIDE
- *     K_VIRTUAL
- *     K_ABSTRACT
- *     K_ASYNC
- *     K_SAFE
- *     K_UNSAFE
- *     DOUBLE_COLON
- *     EQUALS
- *
- * The lexer remains the sole owner of their spelling and token identity.
  *
  * ============================================================================
- * 4. NAME AUTHORITY
+ * AUTHORITY
  * ============================================================================
  *
- * Canonical source-level name syntax is owned by:
+ * LEXER
+ * -----
+ *
+ * The canonical parser-facing lexical vocabulary is:
+ *
+ *     grammar/antlr/ZamaniLexer.g4
+ *
+ * Parser grammars therefore consume:
+ *
+ *     ZamaniLexer
+ *
+ * and MUST NOT create a competing lexer vocabulary.
+ *
+ *
+ * NAMES
+ * -----
+ *
+ * Source-level names are owned by:
  *
  *     grammar/core/names.g4
  *
- * whose grammar identity is:
- *
- *     Names
- *
- * This grammar imports Names and reuses:
+ * This file reuses:
  *
  *     identifier
  *     qualifiedName
  *
- * It MUST NOT redefine:
+ * where appropriate.
  *
- *     identifier
- *     simpleName
- *     nameSegment
- *     qualifiedName
  *
- * This permits open-ended extension modifiers such as:
+ * VISIBILITY
+ * ----------
  *
- *     zamani::async
- *     zamani::inline
- *     quantum::entry
- *     quantum::adaptive
- *     hardware::pipeline
- *     distributed::replicated
- *     future::domain::modifier
+ * Visibility syntax is independently owned by:
  *
- * without changing this grammar.
+ *     grammar/core/visibility.g4
  *
- * ============================================================================
- * 5. FUNDAMENTAL DESIGN: CLOSED CORE, OPEN EXTENSIONS
- * ============================================================================
+ * This file MUST NOT redefine visibility alternatives.
  *
- * The core language has a finite set of reserved modifier keywords because
- * their lexical spelling and language-level role are part of the current
- * Zamani language contract.
  *
- * Extension modifiers remain open-ended.
- *
- * Therefore:
- *
- *     modifier
- *         -> reservedModifier
- *         | extensionModifier
- *
- * Reserved modifiers provide stable core semantics.
- *
- * Extension modifiers provide future/domain/dialect extensibility without
- * requiring every new modifier to become a core keyword.
- *
- * This is deliberately NOT an unrestricted:
- *
- *     IDENTIFIER
- *
- * modifier.
- *
- * An arbitrary identifier by itself remains an ordinary name. A modifier
- * extension must have explicit namespace qualification so that declarations
- * do not accidentally consume ordinary identifiers as modifiers.
- *
- * ============================================================================
- * 6. MODIFIER VS ATTRIBUTE
- * ============================================================================
- *
- * Modifiers and attributes are distinct syntactic mechanisms.
- *
- * Modifiers:
- *
- *     pub fn ...
- *     async fn ...
- *     quantum::adaptive fn ...
- *
- * Attributes:
- *
- *     @quantum::resource(...)
- *     @compile(...)
+ * ATTRIBUTES
+ * ----------
  *
  * Attribute syntax is owned by:
  *
  *     grammar/core/attributes.g4
  *
- * Annotation compatibility is owned by the annotation/metadata layer.
+ * This file MUST NOT redefine attribute syntax.
  *
- * This grammar MUST NOT redefine:
- *
- *     @
- *     attribute arguments
- *     attribute maps
- *     attribute lists
- *
- * A semantic system may map modifier information and attribute information
- * into related metadata, but the parser must preserve their distinct source
- * structures.
  *
  * ============================================================================
- * 7. MODIFIER VS REQUIREMENT / CAPABILITY / HINT
+ * DEPENDENCY CONTRACT
  * ============================================================================
  *
- * A modifier MUST NOT silently become:
+ * DEPENDS_ON:
  *
- *     - a requirement;
- *     - a capability declaration;
- *     - a resource allocation;
- *     - a placement command;
- *     - a scheduling command;
- *     - a routing command;
- *     - an optimization command;
- *     - a hardware selection.
+ *     grammar/antlr/ZamaniLexer.g4
+ *     grammar/core/names.g4
+ *     grammar/core/visibility.g4
+ *
+ * EXPORTS:
+ *
+ *     modifier
+ *     modifierList
+ *     optionalModifierList
+ *     coreModifier
+ *     extensionModifier
+ *     qualifiedModifierName
+ *     modifierArguments
+ *     modifierValue
+ *
+ * CONSUMED_BY:
+ *
+ *     declarations
+ *     functions
+ *     modules
+ *     types
+ *     classical
+ *     quantum
+ *     hybrid
+ *     hdl
+ *     hardware
+ *     distributed
+ *     networking
+ *     AI
+ *     data
+ *     interoperability
+ *     dialects
+ *     macros
+ *     metaprogramming
+ *
+ * AST_OWNER:
+ *
+ *     frontend AST / source syntax model
+ *
+ * SEMANTIC_OWNER:
+ *
+ *     semantic modifier registry / declaration-specific validation
+ *
+ * IR_OWNER:
+ *
+ *     canonical semantic model and downstream domain IRs
+ *
+ * TEST_OWNER:
+ *
+ *     grammar/tests/modifiers/
+ *
+ * SPEC_OWNER:
+ *
+ *     grammar/specification/
+ *     grammar/spec/
+ *
+ *
+ * ============================================================================
+ * FUNDAMENTAL RULE
+ * ============================================================================
+ *
+ * Parsing a modifier does NOT mean that the modifier is legal in every
+ * syntactic context.
  *
  * For example:
  *
  *     inline
  *
- * is not:
+ * may be legal for a function but not for a module.
  *
- *     requires inline
+ * Likewise:
  *
- * and:
- *
- *     quantum::adaptive
- *
- * does not select a particular QPU.
- *
- * Semantic analysis determines the meaning of each modifier.
- *
- * ============================================================================
- * 8. POCO-REAF CONTRACT
- * ============================================================================
- *
- * Modifiers MUST remain target-independent at the language level.
- *
- * A modifier may express source-level intent such as:
- *
- *     async
- *     inline
- *     const
- *     static
- *     quantum::adaptive
- *     hardware::pipeline
- *     distributed::replicated
- *
- * but it MUST NOT encode:
- *
- *     cpu0
- *     gpu0
- *     qpu7
- *     fpga3
- *     physical_qubit17
- *     memory_bank2
- *     node42
- *     device_address
- *
- * Target realization belongs downstream.
- *
- * The same source program may therefore be compiled against:
- *
- *     a tiny embedded system;
- *     a multicore CPU;
- *     a GPU;
- *     an FPGA;
- *     an ASIC;
- *     a simulator;
- *     a QPU;
- *     a distributed cluster;
- *     a future computational architecture.
- *
- * ============================================================================
- * 9. HARD-CODING PROHIBITION
- * ============================================================================
- *
- * This grammar MUST NOT introduce:
- *
- *     MAX_MODIFIERS
- *     MAX_MODIFIER_ARGUMENTS
- *     MAX_MODIFIER_DEPTH
- *     MAX_NAMESPACE_DEPTH
- *     MAX_QUBITS
- *     MAX_CPUS
- *     MAX_CORES
- *     MAX_THREADS
- *     MAX_GPUS
- *     MAX_FPGAS
- *     MAX_QPUS
- *     MAX_NODES
- *     MAX_MEMORY
- *     MAX_DEVICES
- *     MAX_TENSOR_RANK
- *
- * It MUST NOT contain physical resource enumerations such as:
- *
- *     cpuModifier
- *     gpuModifier
- *     qpuModifier
- *     fpgaModifier
- *
- * merely to represent hardware.
- *
- * Hardware capabilities and requirements belong to the corresponding
- * capability/resource/target grammars.
- *
- * ============================================================================
- * 10. SCALABILITY
- * ============================================================================
- *
- * There is no language-level finite limit on:
- *
- *     - number of modifiers;
- *     - number of modifier sequences;
- *     - number of extension modifiers;
- *     - qualified-name depth;
- *     - modifier value size;
- *     - number of declarations;
- *     - number of functions;
- *     - number of types;
- *     - number of computational domains;
- *     - number of resources;
- *     - number of devices;
- *     - number of qubits;
- *     - number of distributed nodes.
- *
- * Repetition is represented with ANTLR repetition operators.
- *
- * Practical parser/compiler limits are implementation/resource policy and
- * MUST NOT become language semantics.
- *
- * ============================================================================
- * 11. MODIFIER ORDER
- * ============================================================================
- *
- * The grammar preserves source order.
- *
- * It intentionally does NOT canonicalize:
- *
- *     public async inline fn ...
- *
- * into:
- *
- *     inline public async fn ...
- *
- * Semantic analysis may later determine whether modifier order is:
- *
- *     - irrelevant;
- *     - constrained;
- *     - canonicalizable;
- *     - conflicting.
- *
- * This preserves source provenance and deterministic diagnostics.
- *
- * ============================================================================
- * 12. DUPLICATES
- * ============================================================================
- *
- * The grammar permits repeated modifiers structurally.
- *
- * Example:
- *
- *     inline inline fn ...
- *
- * Whether this is legal is a semantic rule.
- *
- * This is intentional.
- *
- * The parser must preserve source structure rather than silently discarding
- * repeated modifiers.
- *
- * Examples of possible semantic outcomes include:
- *
- *     accepted;
- *     warning;
- *     error;
- *     normalized;
- *
- * The grammar does not choose among them.
- *
- * ============================================================================
- * 13. CONFLICTS
- * ============================================================================
- *
- * The grammar does not encode modifier conflicts.
- *
- * For example, a sequence such as:
- *
- *     abstract final
- *
- * may or may not be semantically meaningful depending on the construct and
- * language version.
- *
- * Semantic validation determines:
- *
- *     - incompatibilities;
- *     - required combinations;
- *     - mutually exclusive modifiers;
- *     - context-specific modifiers;
- *     - version-specific legality.
- *
- * This avoids duplicating declaration-specific semantic policy throughout
- * the parser grammar.
- *
- * ============================================================================
- * 14. CONTEXT-SPECIFIC VALIDATION
- * ============================================================================
- *
- * This file provides generic modifier syntax.
- *
- * Consuming grammars determine where modifiers may occur.
- *
- * Examples:
- *
- *     functions/functions.g4
- *     declarations/*.g4
- *     modules/*.g4
- *     types/*.g4
- *     memory/*.g4
- *     concurrency/*.g4
- *     quantum/*.g4
- *     hdl/*.g4
- *     hardware/*.g4
- *
- * A consumer may therefore define:
- *
- *     functionModifierList
- *         : modifierList
- *         ;
- *
- * or:
- *
- *     typeModifierList
- *         : modifierList
- *         ;
- *
- * without duplicating modifier syntax.
- *
- * The semantic layer determines whether each modifier is legal for that
- * context.
- *
- * ============================================================================
- * 15. RESERVED VISIBILITY MODIFIERS
- * ============================================================================
- *
- * These tokens already exist in the canonical lexer:
- *
- *     K_PUB
- *     K_PUBLIC
- *     K_PRIVATE
- *     K_PROTECTED
- *     K_INTERNAL
- *
- * Both `pub` and `public` are accepted because both are already part of the
- * repository's lexical vocabulary.
- *
- * They are syntax-level alternatives.
- *
- * Semantic normalization may determine whether they are equivalent.
- *
- * ============================================================================
- * 16. STORAGE / MUTABILITY MODIFIERS
- * ============================================================================
- *
- * The canonical lexer currently exposes:
- *
- *     K_STATIC
- *     K_CONST
- *     K_LET
- *     K_VAR
- *     K_VAL
- *     K_MUT
- *
- * These are syntactically available through this generic modifier grammar.
- *
- * IMPORTANT:
- *
- * This does not mean every declaration may use every one of them.
- *
- * Contextual legality remains semantic/declaration-owned.
- *
- * ============================================================================
- * 17. LINKAGE MODIFIERS
- * ============================================================================
- *
- * The canonical lexical vocabulary provides:
- *
- *     K_EXTERN
- *
- * `extern` is therefore a generic modifier token.
- *
- * ABI/calling-convention semantics belong to interoperability/function
- * subsystems.
- *
- * This grammar does not select an ABI.
- *
- * ============================================================================
- * 18. BEHAVIORAL / IMPLEMENTATION MODIFIERS
- * ============================================================================
- *
- * The canonical lexical vocabulary currently provides:
- *
- *     K_VOLATILE
- *     K_INLINE
- *     K_ASYNC
- *
- * These are accepted syntactically here.
- *
- * Their exact legality depends on the consuming declaration/context.
- *
- * ============================================================================
- * 19. OBJECT-MODEL / TYPE MODIFIERS
- * ============================================================================
- *
- * The canonical lexer provides:
- *
- *     K_FINAL
- *     K_SEALED
- *     K_PARTIAL
- *     K_OVERRIDE
- *     K_VIRTUAL
- *     K_ABSTRACT
- *
- * These remain generic modifier syntax.
- *
- * Class/interface/trait/declaration grammars decide which combinations are
- * valid.
- *
- * ============================================================================
- * 20. SAFETY MODIFIERS
- * ============================================================================
- *
- * The canonical lexer provides:
- *
- *     K_SAFE
- *     K_UNSAFE
- *
- * The presence of `unsafe` in the lexical vocabulary does NOT mean that
- * Zamani's compiler is permitted to use Rust `unsafe`.
- *
- * These are language-level source constructs.
- *
- * The Rust implementation remains required to use safe Rust.
- *
- * In particular:
- *
- *     Zamani `unsafe`
- *
- * and:
- *
- *     Rust `unsafe`
- *
- * are completely different architectural concepts.
- *
- * Semantic validation decides whether a Zamani construct may use an unsafe
- * language capability.
- *
- * The Rust compiler implementation MUST still compile without `unsafe` code.
- *
- * ============================================================================
- * 21. EXTENSION MODIFIERS
- * ============================================================================
- *
- * Extension modifiers are explicitly namespaced:
- *
- *     qualifiedName
- *
- * Examples:
- *
- *     quantum::adaptive
- *     quantum::entry
- *     hardware::pipeline
- *     distributed::replicated
- *     ai::differentiable
- *     data::streaming
- *     future::domain::modifier
- *
- * This mechanism is essential for POCO-REAF.
- *
- * A future domain does not need to modify the core modifier grammar merely
- * because it introduces a new modifier identity.
- *
- * The extension registry determines:
- *
- *     - whether the modifier exists;
- *     - who owns it;
- *     - which constructs accept it;
- *     - its version;
- *     - its semantic meaning;
- *     - its compatibility;
- *     - its AST/semantic mapping.
- *
- * ============================================================================
- * 22. EXTENSION MODIFIER VALUES
- * ============================================================================
- *
- * Extension modifiers may optionally carry a structural value:
- *
- *     quantum::mode = symbolic
- *     hardware::policy = portable
- *     future::domain::mode = "example"
- *
- * The grammar intentionally restricts modifier values to structural forms:
- *
- *     literal
- *     qualifiedName
- *
- * It does NOT create a second expression language.
- *
- * If arbitrary expressions are eventually permitted, that must be integrated
- * explicitly with the canonical expressions grammar.
- *
- * ============================================================================
- * 23. VALUE OWNERSHIP
- * ============================================================================
- *
- * Literal syntax belongs to the canonical lexer/literal grammar.
- *
- * Name syntax belongs to Names.
- *
- * This file therefore uses:
- *
- *     modifierValue
- *
- * as a structural integration boundary.
- *
- * Semantic analysis determines:
- *
- *     - expected type;
- *     - valid value domain;
- *     - constant requirements;
- *     - compatibility;
- *     - portability;
- *     - target applicability.
- *
- * ============================================================================
- * 24. GENERIC MODIFIER STRUCTURE
- * ============================================================================
- *
- * The primary public rule is:
- *
- *     modifier
- *
- * and the reusable list rule is:
- *
- *     modifierList
- *
- * Consumers should normally use:
- *
- *     modifierList
- *
- * rather than reproducing:
- *
- *     modifier*
- *
- * throughout the repository.
- *
- * This creates a stable integration point for future syntax evolution.
- *
- * ============================================================================
- * 25. AST CONTRACT
- * ============================================================================
- *
- * The frontend AST must preserve:
- *
- *     - modifier ordering;
- *     - modifier spelling/token identity where required;
- *     - modifier category;
- *     - extension namespace;
- *     - extension name;
- *     - optional value;
- *     - source span;
- *     - source order.
- *
- * Conceptual representation:
- *
- *     Modifier
- *         Reserved(...)
- *         Extension {
- *             name,
- *             value
- *         }
- *
- * The repository's function AST already uses a namespaced/open-ended
- * `FunctionModifier` representation. This grammar is therefore designed to
- * lower naturally into that model rather than forcing a closed Rust enum.
- *
- * The exact Rust AST representation belongs to:
- *
- *     src/frontend/ast/
- *
- * This grammar MUST NOT import Rust types.
- *
- * ============================================================================
- * 26. SEMANTIC CONTRACT
- * ============================================================================
- *
- * Semantic analysis is responsible for:
- *
- *     - modifier resolution;
- *     - context validation;
- *     - duplicate detection;
- *     - conflict detection;
- *     - required-combination checking;
- *     - version checking;
- *     - dialect/extension validation;
- *     - capability validation;
- *     - resource implications;
- *     - portability analysis;
- *     - deprecation diagnostics;
- *     - normalization;
- *     - semantic lowering.
- *
- * Unknown extension modifiers may remain syntactically valid.
- *
- * The active compatibility policy determines whether an unknown modifier is:
- *
- *     informational;
- *     warning;
- *     compatibility diagnostic;
- *     semantic error.
- *
- * This decision MUST NOT be encoded in parser syntax.
- *
- * ============================================================================
- * 27. IR CONTRACT
- * ============================================================================
- *
- * Modifiers do not constitute an independent IR.
- *
- * After semantic validation, a modifier may become:
- *
- *     - semantic metadata;
- *     - effect metadata;
- *     - capability requirements;
- *     - resource requirements;
- *     - optimization metadata;
- *     - execution policy;
- *     - interoperability metadata;
- *     - quantum operation metadata;
- *     - HDL/hardware intent metadata.
- *
- * A modifier may influence lowering, but:
- *
- *     modifier grammar
- *
- * MUST NOT become:
- *
- *     modifier IR
- *
- * merely to duplicate the canonical semantic model.
- *
- * ============================================================================
- * 28. QUANTUM INTEGRATION
- * ============================================================================
- *
- * Quantum modifiers remain source-level intent.
- *
- * Examples:
- *
- *     quantum::adaptive
- *     quantum::entry
- *     quantum::logical
- *     quantum::resource
- *
- * The modifier grammar MUST NOT import:
- *
- *     quantum::ir
- *     QubitId
- *     PhysicalQubitId
- *     GateKind
- *     topology
- *     calibration
- *
- * A quantum modifier may influence semantic analysis and subsequently affect
- * lowering toward:
- *
- *     quantum::ir
- *
- * followed by:
- *
- *     optimization
- *     QEC
- *     ZQN
- *     routing
- *     scheduling
- *     HAL
- *
- * No second quantum IR is introduced.
- *
- * ============================================================================
- * 29. CLASSICAL INTEGRATION
- * ============================================================================
- *
- * Classical constructs may use:
- *
- *     static
- *     const
- *     inline
- *     async
- *     and extension modifiers.
- *
- * The grammar does not distinguish CPU architectures, instruction sets,
- * vector widths, register files, or core counts.
- *
- * Those concerns belong downstream.
- *
- * ============================================================================
- * 30. HDL / HARDWARE INTEGRATION
- * ============================================================================
- *
- * HDL and hardware domains may use namespaced extension modifiers:
- *
- *     hdl::pipeline
- *     hdl::synthesizable
- *     hardware::pipeline
- *     hardware::resource_sharing
- *
- * These are syntactic identifiers only.
- *
- * They do NOT select:
- *
- *     FPGA model
- *     ASIC process
- *     clock network
- *     physical placement
- *     synthesis tool
- *     vendor
- *     device
- *
- * Such decisions belong to hardware/compiler/backend layers.
- *
- * ============================================================================
- * 31. DISTRIBUTED INTEGRATION
- * ============================================================================
- *
- * Distributed extensions may express semantic intent such as:
- *
- *     distributed::replicated
- *     distributed::partitioned
- *     distributed::locality
- *
- * They MUST NOT encode:
- *
- *     node0
- *     node1
- *     host42
- *     fixed cluster size
- *     fixed provider
- *
- * Placement and deployment remain downstream.
- *
- * ============================================================================
- * 32. AI / DATA INTEGRATION
- * ============================================================================
- *
- * Open-ended extension modifiers can express:
- *
- *     ai::differentiable
- *     ai::batched
- *     data::streaming
- *     data::parallel
- *     tensor::layout
- *
- * without making AI frameworks or tensor dimensions part of core syntax.
- *
- * ============================================================================
- * 33. SECURITY INTEGRATION
- * ============================================================================
- *
- * Security-related modifiers may express language-level properties:
- *
- *     security::confidential
- *     security::constant_time
- *     security::verified
- *
- * but they do not grant authorization and do not perform security operations.
- *
- * Authorization, key management, cryptographic execution and secure hardware
- * selection remain downstream responsibilities.
- *
- * ============================================================================
- * 34. DETERMINISM
- * ============================================================================
- *
- * This grammar contains:
- *
- *     - no semantic predicates;
- *     - no embedded actions;
- *     - no filesystem access;
- *     - no network access;
- *     - no hardware discovery;
- *     - no runtime callbacks;
- *     - no randomness.
- *
- * Parsing therefore depends only on the input token stream.
- *
- * ============================================================================
- * 35. SOURCE-SPAN CONTRACT
- * ============================================================================
- *
- * The frontend must preserve source spans for:
- *
- *     modifier;
- *     modifier category;
- *     extension namespace;
- *     extension name;
- *     optional modifier value.
- *
- * This is required for:
- *
- *     - diagnostics;
- *     - IDE tooling;
- *     - formatting;
- *     - source maps;
- *     - provenance;
- *     - compatibility migration;
- *     - semantic validation.
- *
- * ============================================================================
- * 36. DIAGNOSTICS
- * ============================================================================
- *
- * Parser diagnostics are limited to structural errors.
- *
- * Examples:
- *
- *     quantum:: fn ...
- *     ::adaptive fn ...
- *     quantum::adaptive:: fn ...
- *
- * may be syntax errors depending on the exact token sequence.
- *
- * The parser MUST NOT report:
- *
- *     "quantum::adaptive is unsupported by this QPU"
- *
- * because that is semantic/runtime information.
- *
- * Similarly, the parser MUST NOT inspect hardware while parsing.
- *
- * ============================================================================
- * 37. COMPILER INTEGRATION
- * ============================================================================
- *
- * Consumers should import this grammar and use:
- *
- *     modifier
- *     modifierList
- *
- * rather than implementing local modifier alternatives.
- *
- * In particular, `grammar/functions/functions.g4` currently owns a closed
- * `functionModifier` rule. Production integration should replace that local
- * vocabulary with:
- *
- *     functionModifier
- *         : modifier
- *         ;
- *
- * or:
- *
- *     functionModifierList
- *         : modifierList
- *         ;
- *
- * while keeping the existing public function grammar names as compatibility
- * wrappers where necessary.
- *
- * This avoids forcing a rename of existing function grammar rules.
- *
- * The same wrapper strategy applies to declaration-specific grammars.
- *
- * ============================================================================
- * 38. COMPATIBILITY STRATEGY
- * ============================================================================
- *
- * Existing consumers do not need to rename their contextual rule immediately.
- *
- * They may retain:
- *
- *     functionModifier
- *     typeModifier
- *     declarationModifier
- *
- * as thin forwarding rules:
- *
- *     functionModifier
- *         : modifier
- *         ;
- *
- * This preserves existing public rule names while centralizing ownership.
- *
- * The canonical syntax remains owned by this file.
- *
- * ============================================================================
- * 39. RUST CONTRACT
- * ============================================================================
- *
- * This file contains no Rust implementation.
- *
- * Generated parser/frontend integration MUST:
- *
- *     - compile with Rust 1.97;
- *     - compile with Rust 1.97.1;
- *     - use Edition 2021;
- *     - use safe Rust;
- *     - contain no `unsafe`;
- *     - preserve source spans;
- *     - preserve deterministic parse structure;
- *     - avoid machine-specific assumptions.
- *
- * The Rust implementation should enforce the repository's safe-Rust policy,
- * including denial of unsafe code at the crate level where configured.
- *
- * ============================================================================
- * 40. TEST CONTRACT
- * ============================================================================
- *
- * The production test suite should exercise this file independently.
- *
- * --------------------------------------------------------------------------
- * Positive syntax
- * --------------------------------------------------------------------------
- *
- *     public
- *     pub
- *     private
- *     protected
- *     internal
- *     static
- *     const
- *     let
- *     var
- *     val
- *     mut
- *     extern
- *     volatile
- *     inline
- *     final
- *     sealed
- *     partial
- *     override
- *     virtual
  *     abstract
+ *
+ * may be legal for a type declaration but not for an expression.
+ *
+ * Contextual legality is semantic/declaration-owned.
+ *
+ *
+ * ============================================================================
+ * MODIFIER VS ATTRIBUTE
+ * ============================================================================
+ *
+ * Modifier:
+ *
+ *     inline
  *     async
- *     safe
- *     unsafe
+ *     static
+ *     quantum::adaptive
  *
- * --------------------------------------------------------------------------
- * Modifier sequences
- * --------------------------------------------------------------------------
+ * Attribute:
  *
- *     public static
- *     pub const
- *     private inline
- *     public async
- *     extern unsafe
- *     public static inline
+ *     @compile(...)
+ *     @quantum::resource(...)
  *
- * --------------------------------------------------------------------------
- * Extension modifiers
- * --------------------------------------------------------------------------
+ * They are deliberately different source constructs.
+ *
+ * This grammar MUST NOT transform one into the other.
+ *
+ * The AST may later normalize both into a common metadata representation
+ * where appropriate, but source provenance must remain recoverable.
+ *
+ *
+ * ============================================================================
+ * MODIFIER VS REQUIREMENT / CAPABILITY / RESOURCE
+ * ============================================================================
+ *
+ * A modifier is NOT automatically:
+ *
+ *     a resource requirement
+ *     a capability requirement
+ *     a resource allocation
+ *     a target selection
+ *     a scheduling directive
+ *     a routing directive
+ *     a hardware selection
+ *
+ * For example:
+ *
+ *     quantum::adaptive
+ *
+ * expresses source-level intent.
+ *
+ * It does not select a QPU.
+ *
+ * Likewise:
+ *
+ *     hardware::pipeline
+ *
+ * does not select a particular FPGA or ASIC.
+ *
+ * Such meaning belongs to semantic analysis and resource/capability
+ * negotiation.
+ *
+ *
+ * ============================================================================
+ * CLOSED CORE / OPEN EXTENSION MODEL
+ * ============================================================================
+ *
+ * The core modifier vocabulary is intentionally finite at any language
+ * version.
+ *
+ * The extension vocabulary is open-ended.
+ *
+ * Therefore:
+ *
+ *     modifier
+ *         : coreModifier
+ *         | extensionModifier
+ *
+ * Extension modifiers MUST be namespace-qualified.
+ *
+ * This prevents an arbitrary identifier from being consumed as a modifier.
+ *
+ * A bare:
+ *
+ *     compute
+ *
+ * remains an identifier.
+ *
+ * A namespaced:
+ *
+ *     quantum::adaptive
+ *
+ * can be recognized structurally as an extension modifier.
+ *
+ *
+ * ============================================================================
+ * EXTENSION EXAMPLES
+ * ============================================================================
+ *
+ * The following are structurally representable without adding new core
+ * grammar rules:
  *
  *     quantum::adaptive
  *     quantum::entry
+ *     quantum::dynamic
+ *
  *     hardware::pipeline
+ *     hardware::streaming
+ *
  *     distributed::replicated
+ *     distributed::deterministic
+ *
  *     ai::differentiable
- *     data::streaming
+ *     ai::symbolic
+ *
+ *     execution::adaptive
+ *     execution::reproducible
+ *
+ *     security::restricted
+ *
  *     future::domain::modifier
  *
- * --------------------------------------------------------------------------
- * Extension values
- * --------------------------------------------------------------------------
+ * Their semantic existence must be established by the appropriate registry
+ * or specification.
  *
- *     quantum::mode = symbolic
- *     hardware::policy = portable
- *     future::domain::mode = "example"
- *
- * --------------------------------------------------------------------------
- * Long sequences
- * --------------------------------------------------------------------------
- *
- * Tests should construct arbitrarily large modifier sequences subject only to
- * the test runner's resource budget.
- *
- * No grammar test may assert a fixed maximum modifier count.
- *
- * --------------------------------------------------------------------------
- * Negative syntax
- * --------------------------------------------------------------------------
- *
- *     ::modifier
- *     namespace::
- *     namespace::::modifier
- *     ::
- *     namespace:: = value
- *     namespace::modifier =
- *
- * where the relevant token sequence is structurally invalid.
- *
- * --------------------------------------------------------------------------
- * Semantic-negative cases
- * --------------------------------------------------------------------------
- *
- * These MUST be tested downstream rather than rejected here:
- *
- *     abstract final
- *     duplicate visibility
- *     duplicate const
- *     invalid modifier for a declaration kind
- *     unknown extension modifier
- *     deprecated modifier
- *     incompatible modifier combination
- *     target-inapplicable modifier
- *
- * The parser should preserve valid structure so semantic validation can issue
- * the correct diagnostic.
- *
- * --------------------------------------------------------------------------
- * Boundary cases
- * --------------------------------------------------------------------------
- *
- *     one modifier;
- *     many modifiers;
- *     deeply qualified extension modifier;
- *     long modifier value;
- *     repeated modifiers;
- *     mixed reserved and extension modifiers;
- *     modifiers in different declaration contexts.
- *
- * --------------------------------------------------------------------------
- * Scalability cases
- * --------------------------------------------------------------------------
- *
- * Verify that the grammar imposes no fixed limit on:
- *
- *     modifier count;
- *     extension namespace depth;
- *     value size;
- *     declaration count;
- *     computational domain count.
- *
- * --------------------------------------------------------------------------
- * Compatibility cases
- * --------------------------------------------------------------------------
- *
- * Verify that:
- *
- *     functions/functions.g4
- *     declarations/*.g4
- *     modules/*.g4
- *     types/*.g4
- *     interoperability/*.g4
- *     domain grammars
- *
- * all consume the same canonical modifier structure.
  *
  * ============================================================================
- * 41. COMPLETION CRITERIA
+ * CORE MODIFIER CATEGORIES
  * ============================================================================
  *
- * This file is complete when:
+ * Core modifiers are grouped structurally rather than by hardware domain.
  *
- *     [x] grammar identity is `Modifiers`;
- *     [x] canonical lexer vocabulary is `ZamaniTokens`;
- *     [x] canonical name grammar is imported from `Names`;
- *     [x] no lexer rules are duplicated;
- *     [x] no identifier rules are duplicated;
- *     [x] generic modifier syntax is defined;
- *     [x] modifier lists are defined;
- *     [x] visibility modifiers are centralized;
- *     [x] storage/mutability modifiers are centralized;
- *     [x] linkage modifiers are centralized;
- *     [x] behavioral modifiers are centralized;
- *     [x] object-model modifiers are centralized;
- *     [x] safety modifiers are centralized;
- *     [x] open-ended namespaced modifiers are supported;
- *     [x] modifier values have an explicit structural boundary;
- *     [x] modifier order is preserved;
- *     [x] duplicate modifiers remain available for semantic validation;
- *     [x] context-specific legality remains downstream;
- *     [x] no hardware IDs are encoded;
- *     [x] no machine limits are encoded;
- *     [x] no quantum IR is duplicated;
- *     [x] quantum modifiers remain source-level intent;
- *     [x] HDL/hardware modifiers remain target-independent;
- *     [x] distributed modifiers do not select nodes;
- *     [x] AI/data modifiers do not encode framework-specific limits;
- *     [x] source spans are preserved by the frontend contract;
- *     [x] diagnostics remain deterministic;
- *     [x] Rust 1.97/1.97.1 compatibility is specified;
- *     [x] no unsafe Rust is required;
- *     [x] positive/negative/boundary/scalability/compatibility tests are
- *         specified;
- *     [x] existing contextual rule names can remain as compatibility wrappers.
+ * Categories:
  *
+ *     visibility
+ *     storage/mutability
+ *     linkage
+ *     behavior/implementation
+ *     object-model/type qualification
+ *     safety
+ *
+ * Domain-specific modifiers should normally use extension namespaces rather
+ * than expanding the universal core vocabulary.
+ *
+ *
+ * ============================================================================
+ * PUBLIC ENTRY POINTS
  * ============================================================================
  */
 
-parser grammar Modifiers;
-
-options {
-    tokenVocab = ZamaniTokens;
-}
-
-import Names;
-
-
-/*
- * ============================================================================
- * PUBLIC ENTRY POINT
- * ============================================================================
- *
- * A single modifier.
- *
- * Reserved modifiers have stable core lexical identities.
- * Extension modifiers use explicit qualified names.
- */
 modifier
-    : reservedModifier
+    : coreModifier
     | extensionModifier
     ;
 
-
-/*
- * ============================================================================
- * PUBLIC MODIFIER LIST
- * ============================================================================
- *
- * One or more modifiers.
- *
- * Contextual consumers that need zero or more modifiers should use:
- *
- *     modifierList?
- *
- * rather than duplicating the underlying alternatives.
- */
 modifierList
     : modifier+
     ;
 
+optionalModifierList
+    : modifier*
+    ;
+
 
 /*
  * ============================================================================
- * RESERVED MODIFIER
+ * CORE MODIFIER
  * ============================================================================
  *
- * These alternatives correspond only to modifier keywords already present in
- * the canonical Zamani lexical vocabulary.
+ * Visibility is imported from the canonical Visibility grammar.
  *
- * Their semantic legality is contextual.
+ * The other categories are owned structurally here until a more granular
+ * modifier grammar is introduced.
+ *
+ * No semantic legality is encoded here.
+ * ============================================================================
  */
-reservedModifier
+
+coreModifier
     : visibilityModifier
     | storageModifier
     | linkageModifier
@@ -1354,14 +458,38 @@ reservedModifier
  * ============================================================================
  * VISIBILITY
  * ============================================================================
+ *
+ * Single owner:
+ *
+ *     grammar/core/visibility.g4
+ *
+ * Do not duplicate:
+ *
+ *     pub
+ *     public
+ *     private
+ *     protected
+ *     internal
+ *
+ * here.
+ *
+ * This keeps visibility semantics independently reusable by declarations,
+ * modules, functions, types, quantum constructs, HDL constructs, and future
+ * domains.
+ *
+ * ============================================================================
  */
 
 visibilityModifier
-    : K_PUB
-    | K_PUBLIC
-    | K_PRIVATE
-    | K_PROTECTED
-    | K_INTERNAL
+    : visibilityModifierCore
+    ;
+
+visibilityModifierCore
+    : PUBLIC
+    | PUB
+    | PRIVATE
+    | PROTECTED
+    | INTERNAL
     ;
 
 
@@ -1369,15 +497,31 @@ visibilityModifier
  * ============================================================================
  * STORAGE / MUTABILITY
  * ============================================================================
+ *
+ * These tokens are lexical language vocabulary.
+ *
+ * Their legality depends on the consuming declaration.
+ *
+ * For example, the semantic layer may distinguish:
+ *
+ *     let
+ *     var
+ *     const
+ *     mut
+ *     static
+ *
+ * according to the declaration model.
+ *
+ * No machine representation is implied.
+ * ============================================================================
  */
 
 storageModifier
-    : K_STATIC
-    | K_CONST
-    | K_LET
-    | K_VAR
-    | K_VAL
-    | K_MUT
+    : STATIC
+    | CONST
+    | LET
+    | VAR
+    | MUT
     ;
 
 
@@ -1385,10 +529,16 @@ storageModifier
  * ============================================================================
  * LINKAGE
  * ============================================================================
+ *
+ * `extern` is source-level linkage intent.
+ *
+ * ABI, calling convention, symbol visibility, linker behavior and foreign
+ * runtime integration are owned by interoperability/function semantics.
+ * ============================================================================
  */
 
 linkageModifier
-    : K_EXTERN
+    : EXTERN
     ;
 
 
@@ -1396,12 +546,17 @@ linkageModifier
  * ============================================================================
  * BEHAVIOR / IMPLEMENTATION
  * ============================================================================
+ *
+ * These modifiers qualify execution or implementation strategy.
+ *
+ * They do NOT select a physical target.
+ * ============================================================================
  */
 
 behaviorModifier
-    : K_VOLATILE
-    | K_INLINE
-    | K_ASYNC
+    : VOLATILE
+    | INLINE
+    | ASYNC
     ;
 
 
@@ -1412,12 +567,12 @@ behaviorModifier
  */
 
 objectModelModifier
-    : K_FINAL
-    | K_SEALED
-    | K_PARTIAL
-    | K_OVERRIDE
-    | K_VIRTUAL
-    | K_ABSTRACT
+    : OVERRIDE
+    | VIRTUAL
+    | ABSTRACT
+    | FINAL
+    | SEALED
+    | PARTIAL
     ;
 
 
@@ -1426,52 +581,72 @@ objectModelModifier
  * SAFETY
  * ============================================================================
  *
- * These are Zamani source-language modifiers.
+ * The language currently has an `unsafe` lexical construct.
  *
- * They do NOT authorize Rust `unsafe`.
+ * It is deliberately kept distinct from Rust safety.
+ *
+ * A Zamani `unsafe` modifier may be represented in the language AST, but the
+ * compiler implementation itself MUST remain safe Rust.
+ *
+ * If the canonical language vocabulary later introduces `safe`, it may be
+ * added to this category through the normal lexical/specification process.
+ *
+ * ============================================================================
  */
+
 safetyModifier
-    : K_SAFE
-    | K_UNSAFE
+    : UNSAFE
     ;
 
 
 /*
  * ============================================================================
- * OPEN-WORLD EXTENSION MODIFIER
+ * EXTENSION MODIFIER
  * ============================================================================
  *
- * Extension modifiers require a qualified name.
+ * A namespaced modifier may optionally carry:
+ *
+ *     arguments
+ *     a structural value
  *
  * Examples:
  *
  *     quantum::adaptive
- *     hardware::pipeline
- *     distributed::replicated
- *     future::domain::modifier
  *
- * The namespace/name structure is inherited from the canonical Names grammar.
+ *     quantum::mode = symbolic
  *
- * A bare identifier is deliberately not accepted here because it could be
- * indistinguishable from an ordinary declaration name.
+ *     execution::policy(portable)
+ *
+ *     hardware::pipeline(stage)
+ *
+ * The grammar does not assign semantic meaning to any namespace.
+ * ============================================================================
  */
+
 extensionModifier
-    : qualifiedModifierName modifierValueClause?
+    : qualifiedModifierName modifierArguments?
+      modifierValueClause?
     ;
 
 
 /*
  * ============================================================================
- * EXTENSION MODIFIER NAME
+ * QUALIFIED MODIFIER NAME
  * ============================================================================
  *
- * A modifier extension is a qualified name containing at least two segments.
+ * A modifier extension requires at least two name segments.
  *
- * `qualifiedName` is the canonical name syntax.
+ * This deliberately avoids:
  *
- * The separate rule makes the minimum qualification requirement explicit
- * without redefining qualified-name syntax.
+ *     modifier : IDENTIFIER
+ *
+ * because a bare identifier would be indistinguishable from an ordinary
+ * declaration/name token.
+ *
+ * The namespace depth is unbounded by the grammar.
+ * ============================================================================
  */
+
 qualifiedModifierName
     : identifier DOUBLE_COLON identifier
       (DOUBLE_COLON identifier)*
@@ -1480,19 +655,60 @@ qualifiedModifierName
 
 /*
  * ============================================================================
- * OPTIONAL EXTENSION MODIFIER VALUE
+ * MODIFIER ARGUMENTS
  * ============================================================================
  *
- * Example:
+ * Arguments are structural rather than executable expressions.
+ *
+ * This is intentionally smaller than the general expression grammar.
+ *
+ * The reason is architectural:
+ *
+ *     modifier
+ *
+ * should remain declarative metadata/intent rather than silently becoming
+ * an executable expression context.
+ *
+ * If a future feature genuinely requires arbitrary compile-time expressions,
+ * it must explicitly integrate with the canonical expression/metaprogramming
+ * system.
+ *
+ * ============================================================================
+ */
+
+modifierArguments
+    : LPAREN modifierArgumentList? RPAREN
+    ;
+
+modifierArgumentList
+    : modifierArgument (COMMA modifierArgument)* COMMA?
+    ;
+
+modifierArgument
+    : identifier ASSIGN modifierValue
+    | modifierValue
+    ;
+
+
+/*
+ * ============================================================================
+ * OPTIONAL VALUE CLAUSE
+ * ============================================================================
+ *
+ * Examples:
  *
  *     quantum::mode = symbolic
+ *     execution::strategy = adaptive
  *     hardware::policy = portable
- *     future::domain::mode = "example"
  *
- * The value is structural data, not an arbitrary expression.
+ * The value is structural.
+ *
+ * It is not evaluated by the parser.
+ * ============================================================================
  */
+
 modifierValueClause
-    : EQUALS modifierValue
+    : ASSIGN modifierValue
     ;
 
 
@@ -1501,26 +717,940 @@ modifierValueClause
  * MODIFIER VALUE
  * ============================================================================
  *
- * A modifier value intentionally does not define a second expression grammar.
+ * Values use the canonical lexer literal categories and canonical names.
  *
- * Values are limited to:
+ * No literal width, precision, register width, tensor rank, memory size,
+ * quantum capacity or hardware capacity is encoded here.
  *
- *     - canonical qualified names;
- *     - lexical literals.
- *
- * If arbitrary expressions become a language requirement, this rule must be
- * integrated with the canonical expression grammar rather than creating a
- * duplicate expression implementation here.
+ * Qualified names remain symbolic until semantic analysis.
+ * ============================================================================
  */
+
 modifierValue
     : qualifiedName
     | INTEGER_LITERAL
     | DECIMAL_LITERAL
+    | FLOAT_LITERAL
     | STRING_LITERAL
-    | CHARACTER_LITERAL
+    | CHAR_LITERAL
     | BOOLEAN_LITERAL
-    | QUANTUM_LITERAL
-    | HARDWARE_LITERAL
+    | NIL_LITERAL
+    | COMPLEX_LITERAL
     | DURATION_LITERAL
     | SIZE_LITERAL
+    | QUANTUM_LITERAL
+    | HARDWARE_LITERAL
+    ;
+
+
+/*
+ * ============================================================================
+ * VALUE LIST
+ * ============================================================================
+ *
+ * This reusable rule permits future consumers to explicitly request a
+ * structural list of modifier values without inventing another grammar.
+ *
+ * No fixed cardinality is imposed.
+ * ============================================================================
+ */
+
+modifierValueList
+    : modifierValue (COMMA modifierValue)*
+    ;
+
+
+/*
+ * ============================================================================
+ * AST CONTRACT
+ * ============================================================================
+ *
+ * Each parsed modifier occurrence must preserve:
+ *
+ *     category
+ *     source spelling/token identity
+ *     qualified namespace
+ *     modifier name
+ *     argument order
+ *     named/positional distinction
+ *     optional value
+ *     source span
+ *     source order
+ *
+ * Conceptually:
+ *
+ *     ModifierSyntax
+ *         category
+ *         name
+ *         namespace
+ *         arguments
+ *         value
+ *         source_span
+ *         source_order
+ *
+ * This grammar does not define Rust AST structures.
+ *
+ *
+ * ============================================================================
+ * SEMANTIC CONTRACT
+ * ============================================================================
+ *
+ * Semantic analysis determines:
+ *
+ *     whether a modifier exists;
+ *     whether it is enabled by the language version;
+ *     whether it is legal in the current context;
+ *     whether duplicate modifiers are legal;
+ *     whether modifier order matters;
+ *     whether two modifiers conflict;
+ *     whether required companion modifiers exist;
+ *     whether modifier arguments have valid types;
+ *     whether modifier values are valid;
+ *     whether the modifier requires a capability;
+ *     whether the modifier creates an effect;
+ *     whether it imposes a resource requirement;
+ *     whether it participates in a policy;
+ *     whether it is compatible with the target.
+ *
+ * The parser does not perform these checks.
+ *
+ *
+ * ============================================================================
+ * TYPE CONTRACT
+ * ============================================================================
+ *
+ * Modifier arguments and values may refer to source-level symbolic names and
+ * literals.
+ *
+ * Their type is resolved downstream.
+ *
+ * No modifier syntax establishes:
+ *
+ *     integer width;
+ *     floating-point width;
+ *     pointer width;
+ *     register width;
+ *     tensor rank;
+ *     vector width;
+ *     memory representation.
+ *
+ *
+ * ============================================================================
+ * EFFECT CONTRACT
+ * ============================================================================
+ *
+ * A modifier may semantically declare or request effects such as:
+ *
+ *     IO
+ *     network
+ *     mutation
+ *     randomness
+ *     native
+ *     foreign
+ *     distributed
+ *     measurement
+ *     learning
+ *     adaptation
+ *     reflection
+ *     simulation
+ *
+ * However, this grammar does not enumerate those effects.
+ *
+ * The canonical effects subsystem owns their semantic representation.
+ *
+ *
+ * ============================================================================
+ * CAPABILITY CONTRACT
+ * ============================================================================
+ *
+ * A modifier may be associated semantically with capabilities such as:
+ *
+ *     quantum.measurement
+ *     tensor.compute
+ *     distributed.execution
+ *     hardware.reconfiguration
+ *     network.streaming
+ *
+ * Capability identity is not hard-coded into this grammar.
+ *
+ * Resolution belongs to:
+ *
+ *     resources/capabilities
+ *     semantic analysis
+ *     target negotiation
+ *
+ *
+ * ============================================================================
+ * RESOURCE CONTRACT
+ * ============================================================================
+ *
+ * Modifiers may semantically contribute resource requirements.
+ *
+ * For example:
+ *
+ *     quantum::adaptive
+ *
+ * may cause a semantic subsystem to require a capability supporting dynamic
+ * execution.
+ *
+ * The modifier grammar itself does not contain:
+ *
+ *     qubit counts
+ *     CPU counts
+ *     GPU counts
+ *     node counts
+ *     memory capacities
+ *     tensor-rank limits
+ *     device counts
+ *
+ * Resource quantities remain semantic expressions handled by the resource
+ * subsystem.
+ *
+ *
+ * ============================================================================
+ * CONTRACT CONTRACT
+ * ============================================================================
+ *
+ * Modifiers may participate in:
+ *
+ *     requires
+ *     ensures
+ *     invariant
+ *     assume
+ *     guarantee
+ *     property
+ *
+ * only through semantic integration.
+ *
+ * This grammar MUST NOT duplicate the contract grammar.
+ *
+ *
+ * ============================================================================
+ * POLICY CONTRACT
+ * ============================================================================
+ *
+ * Modifiers may be constrained by policies involving:
+ *
+ *     security
+ *     execution
+ *     resource selection
+ *     adaptation
+ *     deployment
+ *     simulation
+ *     interoperability
+ *
+ * Policy interpretation belongs to the policy subsystem.
+ *
+ *
+ * ============================================================================
+ * PROVENANCE CONTRACT
+ * ============================================================================
+ *
+ * Modifier provenance must preserve:
+ *
+ *     source location
+ *     source spelling
+ *     source order
+ *     language version
+ *     dialect context, where applicable
+ *     semantic normalization
+ *     transformations applied downstream
+ *
+ * A compiler must not discard the original modifier merely because it later
+ * normalizes it into semantic metadata.
+ *
+ *
+ * ============================================================================
+ * QUANTUM BOUNDARY
+ * ============================================================================
+ *
+ * Quantum modifiers may qualify source constructs such as:
+ *
+ *     quantum declarations
+ *     quantum operations
+ *     circuits
+ *     dynamic execution
+ *     adaptive execution
+ *     measurement
+ *     resilience intent
+ *
+ * Example:
+ *
+ *     quantum::adaptive
+ *
+ * remains source intent.
+ *
+ * It does NOT directly encode:
+ *
+ *     physical qubits
+ *     topology
+ *     routing
+ *     calibration
+ *     QEC implementation
+ *     QPU identity
+ *
+ * Semantic quantum lowering remains:
+ *
+ *     source
+ *       ->
+ *     domain-neutral AST
+ *       ->
+ *     semantic model
+ *       ->
+ *     quantum::ir
+ *       ->
+ *     optimization
+ *       ->
+ *     decomposition
+ *       ->
+ *     routing
+ *       ->
+ *     scheduling
+ *       ->
+ *     resilience / QEC
+ *       ->
+ *     ZQN
+ *       ->
+ *     HAL
+ *       ->
+ *     target
+ *
+ *
+ * ============================================================================
+ * HDL / HARDWARE BOUNDARY
+ * ============================================================================
+ *
+ * Hardware-oriented extensions may express portable intent:
+ *
+ *     hardware::pipeline
+ *     hardware::streaming
+ *     hardware::reconfigurable
+ *
+ * They MUST NOT identify a particular physical machine.
+ *
+ * Widths, timing, topology, resources and implementation constraints belong
+ * to HDL/hardware semantics and target analysis.
+ *
+ *
+ * ============================================================================
+ * BACKEND BOUNDARY
+ * ============================================================================
+ *
+ * Backends consume semantic modifier information only after:
+ *
+ *     parsing
+ *     AST construction
+ *     validation
+ *     name resolution
+ *     type analysis
+ *     effect analysis
+ *     capability analysis
+ *     resource analysis
+ *     policy analysis
+ *
+ * The backend may then specialize the program for:
+ *
+ *     CPU
+ *     GPU
+ *     FPGA
+ *     ASIC
+ *     accelerator
+ *     QPU
+ *     simulator
+ *     HPC
+ *     cluster
+ *     distributed execution
+ *     future targets
+ *
+ * without changing the source modifier grammar.
+ *
+ *
+ * ============================================================================
+ * DUPLICATES
+ * ============================================================================
+ *
+ * The grammar permits repeated modifiers structurally.
+ *
+ * Example:
+ *
+ *     inline inline fn compute() {}
+ *
+ * Whether this is:
+ *
+ *     valid;
+ *     redundant;
+ *     deprecated;
+ *     an error;
+ *
+ * is semantic policy.
+ *
+ * The parser must preserve both occurrences for diagnostics and provenance.
+ *
+ *
+ * ============================================================================
+ * ORDER
+ * ============================================================================
+ *
+ * Modifier order is preserved.
+ *
+ * The grammar does not canonicalize:
+ *
+ *     public async inline
+ *
+ * into another order.
+ *
+ * A semantic layer may normalize order where the language specification
+ * declares modifier order semantically irrelevant.
+ *
+ *
+ * ============================================================================
+ * CONFLICTS
+ * ============================================================================
+ *
+ * The parser does not encode conflicts such as:
+ *
+ *     abstract final
+ *     const mut
+ *     immutable mut
+ *
+ * because legality can depend on the declaration kind and language version.
+ *
+ * Semantic validation owns conflict detection.
+ *
+ *
+ * ============================================================================
+ * SCALABILITY CONTRACT
+ * ============================================================================
+ *
+ * The grammar imposes no language-level finite maximum on:
+ *
+ *     modifier count
+ *     modifier argument count
+ *     modifier value size
+ *     namespace depth
+ *     qualified-name depth
+ *     source declarations
+ *     functions
+ *     types
+ *     modules
+ *     quantum operations
+ *     qubits
+ *     processors
+ *     accelerators
+ *     nodes
+ *     devices
+ *     memory
+ *     tensor rank
+ *     network size
+ *
+ * There is intentionally no:
+ *
+ *     MAX_MODIFIERS
+ *     MAX_MODIFIER_ARGUMENTS
+ *     MAX_MODIFIER_DEPTH
+ *     MAX_NAMESPACE_DEPTH
+ *     MAX_QUBITS
+ *     MAX_CPUS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_NODES
+ *     MAX_MEMORY
+ *     MAX_THREADS
+ *     MAX_TENSOR_RANK
+ *     MAX_REGISTER_WIDTH
+ *     MAX_NETWORK_SIZE
+ *     MAX_DEVICE_COUNT
+ *
+ * Practical limits are implementation/resource constraints and must not
+ * become source-language semantics.
+ *
+ *
+ * ============================================================================
+ * DETERMINISM
+ * ============================================================================
+ *
+ * Parsing is deterministic.
+ *
+ * This grammar performs:
+ *
+ *     no filesystem access
+ *     no network access
+ *     no hardware discovery
+ *     no runtime execution
+ *     no randomness
+ *     no environment inspection
+ *     no scheduling
+ *     no target selection
+ *
+ * The parse depends on the source token stream and grammar/version context.
+ *
+ *
+ * ============================================================================
+ * SECURITY CONTRACT
+ * ============================================================================
+ *
+ * Modifier parsing MUST NOT execute:
+ *
+ *     modifier arguments
+ *     modifier values
+ *     capabilities
+ *     policies
+ *     hardware queries
+ *     foreign calls
+ *     reflection
+ *     generated code
+ *
+ * All such operations belong to controlled downstream phases.
+ *
+ *
+ * ============================================================================
+ * COMPATIBILITY CONTRACT
+ * ============================================================================
+ *
+ * Existing public rule:
+ *
+ *     modifier
+ *
+ * remains stable.
+ *
+ * Existing public list rule:
+ *
+ *     modifierList
+ *
+ * remains stable.
+ *
+ * The additional:
+ *
+ *     optionalModifierList
+ *
+ * is additive.
+ *
+ * Existing semantic modifier categories remain represented where their
+ * lexical vocabulary exists.
+ *
+ * Extension modifiers remain open-ended through qualified names.
+ *
+ *
+ * ============================================================================
+ * TEST CONTRACT
+ * ============================================================================
+ *
+ * POSITIVE
+ * --------
+ *
+ *     pub
+ *     public
+ *     private
+ *     protected
+ *     internal
+ *
+ *     static
+ *     const
+ *     let
+ *     var
+ *     mut
+ *
+ *     extern
+ *
+ *     inline
+ *     volatile
+ *     async
+ *
+ *     final
+ *     sealed
+ *     partial
+ *     override
+ *     virtual
+ *     abstract
+ *
+ *     unsafe
+ *
+ *     quantum::adaptive
+ *
+ *     quantum::adaptive(mode)
+ *
+ *     quantum::mode = symbolic
+ *
+ *     execution::policy(portable)
+ *
+ *     hardware::pipeline(stage = streaming)
+ *
+ *     future::domain::modifier
+ *
+ *
+ * NEGATIVE
+ * --------
+ *
+ *     ::
+ *
+ *     quantum::
+ *
+ *     ::adaptive
+ *
+ *     quantum::adaptive::
+ *
+ *     ordinaryIdentifier
+ *
+ *     quantum::adaptive(
+ *
+ *     quantum::adaptive(
+ *         value,
+ *     )
+ *     // when the parser reaches an incomplete delimiter
+ *
+ *
+ * BOUNDARY
+ * --------
+ *
+ *     quantum::a::b::c::d
+ *
+ *     future::domain::deep::extension::modifier
+ *
+ *     quantum::adaptive(a, b, c, d)
+ *
+ *     quantum::mode = "portable"
+ *
+ *     quantum::mode = very_large_symbolic_name
+ *
+ *
+ * SCALABILITY
+ * ----------
+ *
+ * Tests must verify that no grammar change is required merely because:
+ *
+ *     namespace depth increases;
+ *     number of modifiers increases;
+ *     number of arguments increases;
+ *     source program size increases;
+ *     target hardware size increases;
+ *     number of quantum resources increases;
+ *     number of distributed nodes increases.
+ *
+ *
+ * CROSS-DOMAIN
+ * -----------
+ *
+ * The same modifier infrastructure must be consumable by:
+ *
+ *     classical
+ *     quantum
+ *     hybrid
+ *     HDL
+ *     hardware
+ *     AI
+ *     data
+ *     distributed
+ *     networking
+ *     security
+ *     interoperability
+ *     metaprogramming
+ *     future domains
+ *
+ *
+ * DETERMINISM
+ * -----------
+ *
+ * Repeated parsing of identical source must produce equivalent parse trees.
+ *
+ *
+ * ============================================================================
+ * HARD-CODING AUDIT
+ * ============================================================================
+ *
+ * PASS CONDITIONS:
+ *
+ *     no physical device enumeration;
+ *     no vendor enumeration;
+ *     no resource-capacity constants;
+ *     no qubit ceiling;
+ *     no CPU ceiling;
+ *     no GPU ceiling;
+ *     no FPGA ceiling;
+ *     no node ceiling;
+ *     no memory ceiling;
+ *     no tensor-rank ceiling;
+ *     no topology ceiling;
+ *     no fixed namespace depth;
+ *     no fixed modifier count;
+ *     no runtime behavior;
+ *     no backend selection.
+ *
+ *
+ * ============================================================================
+ * RUST CONTRACT
+ * ============================================================================
+ *
+ * This grammar contains no Rust implementation code.
+ *
+ * The generated/frontend/compiler implementation MUST remain compatible
+ * with:
+ *
+ *     Rust 1.97
+ *     Rust 1.97.1
+ *
+ * and MUST use safe Rust.
+ *
+ * This grammar does not require:
+ *
+ *     unsafe blocks
+ *     unsafe functions
+ *     unsafe traits
+ *
+ *
+ * ============================================================================
+ * COMPLETION CRITERIA
+ * ============================================================================
+ *
+ * This file is DONE when:
+ *
+ *     [x] canonical parser-facing lexer vocabulary is used;
+ *     [x] canonical names are reused;
+ *     [x] visibility ownership is not duplicated;
+ *     [x] core modifier categories are structurally represented;
+ *     [x] extension modifiers are namespace-qualified;
+ *     [x] extension arguments are supported;
+ *     [x] extension values are supported;
+ *     [x] named and positional extension arguments are distinguishable;
+ *     [x] source order is preserved;
+ *     [x] duplicate modifiers remain available for semantic validation;
+ *     [x] conflicts remain semantic;
+ *     [x] attributes remain separate;
+ *     [x] expressions remain separate;
+ *     [x] resources remain separate;
+ *     [x] capabilities remain separate;
+ *     [x] policies remain separate;
+ *     [x] contracts remain separate;
+ *     [x] provenance requirements are defined;
+ *     [x] quantum boundary is defined;
+ *     [x] HDL boundary is defined;
+ *     [x] backend boundary is defined;
+ *     [x] no physical hardware is encoded;
+ *     [x] no language-level machine ceiling is encoded;
+ *     [x] deterministic parsing is preserved;
+ *     [x] Rust 1.97/1.97.1 compatibility is specified;
+ *     [x] no unsafe Rust is required.
+ *
+ * ============================================================================
+ * INTEGRATION REQUIREMENT
+ * ============================================================================
+ *
+ * The following one-time repository integration is REQUIRED before this file
+ * can be generated successfully:
+ *
+ *     grammar/core/visibility.g4
+ *
+ * must use the same canonical parser-facing lexer vocabulary as this file:
+ *
+ *     tokenVocab = ZamaniLexer;
+ *
+ * and its visibility alternatives must consume the current canonical lexical
+ * token names:
+ *
+ *     PUB
+ *     PUBLIC
+ *     PRIVATE
+ *     PROTECTED
+ *     INTERNAL
+ *
+ * rather than obsolete K_* token names.
+ *
+ * This is a compatibility/ownership correction, not a new visibility feature.
+ *
+ * After that migration:
+ *
+ *     Modifiers
+ *         |
+ *         +--> Visibility
+ *
+ * has exactly one visibility owner.
+ *
+ * No later edit to `modifiers.g4` should be required merely because
+ * `visibility.g4` is completed.
+ *
+ * ============================================================================
+ * END OF FILE
+ * ============================================================================
+ */
+
+parser grammar Modifiers;
+
+options {
+    tokenVocab = ZamaniLexer;
+}
+
+import
+    Names,
+    Visibility
+    ;
+
+
+/*
+ * ============================================================================
+ * PUBLIC MODIFIER RULES
+ * ============================================================================
+ */
+
+modifier
+    : coreModifier
+    | extensionModifier
+    ;
+
+modifierList
+    : modifier+
+    ;
+
+optionalModifierList
+    : modifier*
+    ;
+
+
+/*
+ * ============================================================================
+ * CORE MODIFIER COMPOSITION
+ * ============================================================================
+ */
+
+coreModifier
+    : visibilityModifier
+    | storageModifier
+    | linkageModifier
+    | behaviorModifier
+    | objectModelModifier
+    | safetyModifier
+    ;
+
+
+/*
+ * ============================================================================
+ * STORAGE / MUTABILITY
+ * ============================================================================
+ */
+
+storageModifier
+    : STATIC
+    | CONST
+    | LET
+    | VAR
+    | MUT
+    ;
+
+
+/*
+ * ============================================================================
+ * LINKAGE
+ * ============================================================================
+ */
+
+linkageModifier
+    : EXTERN
+    ;
+
+
+/*
+ * ============================================================================
+ * BEHAVIOR / IMPLEMENTATION
+ * ============================================================================
+ */
+
+behaviorModifier
+    : VOLATILE
+    | INLINE
+    | ASYNC
+    ;
+
+
+/*
+ * ============================================================================
+ * OBJECT MODEL / TYPE QUALIFICATION
+ * ============================================================================
+ */
+
+objectModelModifier
+    : OVERRIDE
+    | VIRTUAL
+    | ABSTRACT
+    | FINAL
+    | SEALED
+    | PARTIAL
+    ;
+
+
+/*
+ * ============================================================================
+ * SAFETY
+ * ============================================================================
+ */
+
+safetyModifier
+    : UNSAFE
+    ;
+
+
+/*
+ * ============================================================================
+ * OPEN-WORLD EXTENSION MODIFIER
+ * ============================================================================
+ */
+
+extensionModifier
+    : qualifiedModifierName modifierArguments? modifierValueClause?
+    ;
+
+qualifiedModifierName
+    : identifier DOUBLE_COLON identifier
+      (DOUBLE_COLON identifier)*
+    ;
+
+
+/*
+ * ============================================================================
+ * EXTENSION ARGUMENTS
+ * ============================================================================
+ */
+
+modifierArguments
+    : LPAREN modifierArgumentList? RPAREN
+    ;
+
+modifierArgumentList
+    : modifierArgument (COMMA modifierArgument)* COMMA?
+    ;
+
+modifierArgument
+    : identifier ASSIGN modifierValue
+    | modifierValue
+    ;
+
+
+/*
+ * ============================================================================
+ * OPTIONAL STRUCTURAL VALUE
+ * ============================================================================
+ */
+
+modifierValueClause
+    : ASSIGN modifierValue
+    ;
+
+
+/*
+ * ============================================================================
+ * STRUCTURAL MODIFIER VALUES
+ * ============================================================================
+ */
+
+modifierValue
+    : qualifiedName
+    | INTEGER_LITERAL
+    | DECIMAL_LITERAL
+    | FLOAT_LITERAL
+    | STRING_LITERAL
+    | CHAR_LITERAL
+    | BOOLEAN_LITERAL
+    | NIL_LITERAL
+    | COMPLEX_LITERAL
+    | DURATION_LITERAL
+    | SIZE_LITERAL
+    | QUANTUM_LITERAL
+    | HARDWARE_LITERAL
     ;
