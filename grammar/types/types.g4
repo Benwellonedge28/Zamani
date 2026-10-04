@@ -4,13 +4,13 @@
  * ============================================================================
  *
  * File:
- *     grammar/types/types.g4
- *
- * Role:
- *     CANONICAL MODULAR SOURCE-TYPE COMPOSITION GRAMMAR
+ *     grammar/types/type.g4
  *
  * Grammar:
- *     Types
+ *     Type
+ *
+ * Status:
+ *     CANONICAL TYPE-SYSTEM ORCHESTRATOR
  *
  * Compiler baseline:
  *     Rust 1.97 / Rust 1.97.1
@@ -19,221 +19,507 @@
  *     no unsafe
  *
  * ============================================================================
- *
  * PURPOSE
  * ============================================================================
  *
- * This file is the single public parser composition boundary for source-level
- * Zamani type syntax.
+ * This file is the SINGLE ORCHESTRATION BOUNDARY for source-level type
+ * syntax in Zamani.
  *
- * It owns:
+ * It does not attempt to implement every type constructor itself.
  *
- *   - typeExpression;
- *   - composition of source-level type forms;
- *   - named and qualified types;
- *   - generic type application;
- *   - primitive types;
- *   - tuple types;
- *   - array and slice syntax;
- *   - function types;
- *   - reference types;
- *   - pointer types;
- *   - optional postfix syntax;
- *   - Result types;
- *   - quantum source types;
- *   - temporal MTS types;
- *   - dependent/value-parameterized type syntax;
- *   - type-level value expressions;
- *   - parenthesized types;
- *   - source-level lifetime syntax.
+ * Instead, it composes the specialized grammar components under:
  *
- * It does NOT own:
+ *     grammar/types/
  *
- *   - lexer definitions;
- *   - keywords;
- *   - identifiers;
- *   - punctuation spelling;
- *   - operator spelling;
- *   - name resolution;
- *   - type inference;
- *   - unification;
- *   - generic substitution;
- *   - trait/interface resolution;
- *   - ownership checking;
- *   - borrow checking;
- *   - resource discovery;
- *   - hardware discovery;
- *   - physical qubit allocation;
- *   - routing;
- *   - scheduling;
- *   - calibration;
- *   - QEC;
- *   - ZQN;
- *   - HAL;
- *   - optimization;
- *   - backend selection;
- *   - runtime representation;
- *   - ABI layout.
+ * The architectural rule is:
+ *
+ *     Type
+ *       |
+ *       +--> primitive
+ *       +--> named
+ *       +--> generic
+ *       +--> tuple
+ *       +--> array
+ *       +--> slice
+ *       +--> map
+ *       +--> option
+ *       +--> result
+ *       +--> record
+ *       +--> sum
+ *       +--> union
+ *       +--> function
+ *       +--> reference
+ *       +--> pointer
+ *       +--> linear
+ *       +--> affine
+ *       +--> dependent
+ *       +--> associated
+ *       +--> type-class
+ *       +--> classical
+ *       +--> quantum
+ *       +--> hardware
+ *       +--> resource
+ *       +--> capability
+ *       +--> temporal
+ *       +--> effect-qualified
+ *       +--> future extensible type forms
+ *
+ * `typeExpression` is the ONLY public source-level type composition rule.
  *
  * ============================================================================
+ * SINGLE-OWNER RULE
+ * ============================================================================
  *
+ * This file owns:
+ *
+ *     typeExpression
+ *     typeCore
+ *     typePostfix
+ *     typeModifier
+ *     typeExtension
+ *
+ * This file does NOT own:
+ *
+ *     primitive type details
+ *     named-type details
+ *     generic argument details
+ *     tuple details
+ *     array details
+ *     slice details
+ *     function-type details
+ *     reference details
+ *     pointer details
+ *     quantum-type details
+ *     hardware-type details
+ *     resource-type details
+ *     capability-type details
+ *     classical-domain type details
+ *     dependent-type details
+ *     associated-type details
+ *     type-class details
+ *     temporal-type details
+ *     effect definitions
+ *     type inference
+ *     type checking
+ *     type unification
+ *     type substitution
+ *     trait resolution
+ *     capability resolution
+ *     resource discovery
+ *     hardware discovery
+ *     target selection
+ *     placement
+ *     routing
+ *     scheduling
+ *     optimization
+ *     calibration
+ *     QEC
+ *     ZQN
+ *     HAL
+ *     runtime representation
+ *     ABI layout
+ *
+ * ============================================================================
  * ARCHITECTURAL PIPELINE
  * ============================================================================
  *
- *     Zamani source
- *          |
- *          v
- *     grammar/antlr/ZamaniLexer.g4
- *          |
- *          v
- *     parser
- *          |
- *          v
+ *     source
+ *       |
+ *       v
+ *     ZamaniLexer
+ *       |
+ *       v
+ *     Type
+ *       |
+ *       v
  *     typeExpression
- *          |
- *          v
+ *       |
+ *       v
  *     frontend TypeExpr
- *          |
- *          v
+ *       |
+ *       v
  *     structural validation
- *          |
- *          v
+ *       |
+ *       v
  *     semantic type resolution
- *          |
- *          +--------------------+---------------------+
- *          |                    |                     |
- *          v                    v                     v
- *      classical           quantum::ir          HDL/resource
- *       semantics           semantics             semantics
- *          |                    |                     |
- *          +--------------------+---------------------+
- *                               |
- *                               v
- *                         canonical IR
- *                               |
- *                    optimization / lowering
- *                               |
- *                    routing / scheduling
- *                               |
- *                         resilience / QEC
- *                               |
- *                             ZQN
- *                               |
- *                             HAL
- *                               |
- *                       target realization
- *
- * `TypeExpr` is the source-level AST boundary.
- *
- * `quantum::ir` remains the canonical quantum semantic boundary.
- *
- * ============================================================================
- *
- * POCO-REAF / SCALABILITY
- * ============================================================================
- *
- * This grammar contains NO implementation limits.
- *
- * It does not define:
- *
- *   MAX_QUBITS
- *   MAX_CPUS
- *   MAX_CORES
- *   MAX_THREADS
- *   MAX_GPUS
- *   MAX_FPGAS
- *   MAX_QPUS
- *   MAX_NODES
- *   MAX_DEVICES
- *   MAX_MEMORY
- *   MAX_REGISTER_WIDTH
- *   MAX_REGISTER_COUNT
- *   MAX_TENSOR_RANK
- *   MAX_TENSOR_DIMENSION
- *   MAX_ARRAY_LENGTH
- *   MAX_TUPLE_ARITY
- *   MAX_GENERIC_ARITY
- *   MAX_FUNCTION_PARAMETER_COUNT
- *   MAX_TYPE_DEPTH
- *   MAX_RESOURCE_COUNT
- *
- * Recursive grammar constructs are intentionally not bounded by language
- * constants.
- *
- * Practical parser/compiler limits, if required for hostile-input protection,
- * belong to explicit implementation policy and MUST NOT become language
- * semantics.
+ *       |
+ *       +------------------+------------------+------------------+
+ *       |                  |                  |                  |
+ *       v                  v                  v                  v
+ *   classical          quantum::ir        HDL/resource       AI/data
+ *   semantics           semantics          semantics          semantics
+ *       |                  |                  |                  |
+ *       +------------------+------------------+------------------+
+ *                              |
+ *                              v
+ *                     canonical semantic model
+ *                              |
+ *                              v
+ *                       target-independent IR
+ *                              |
+ *                 optimization / specialization
+ *                              |
+ *                    lowering / routing
+ *                              |
+ *                        scheduling
+ *                              |
+ *                   resilience / recovery
+ *                              |
+ *                         ZQN / HAL
+ *                              |
+ *                        target realization
  *
  * ============================================================================
- *
- * PORTABILITY
+ * POCO-REAF CONTRACT
  * ============================================================================
  *
- * A type describes source-level meaning.
+ * A type expresses PROGRAM MEANING.
  *
- * It must not select:
+ * A type MUST NOT select a physical implementation.
  *
- *   - CPU;
- *   - GPU;
- *   - FPGA;
- *   - ASIC;
- *   - QPU;
- *   - physical qubit;
- *   - memory bank;
- *   - network node;
- *   - accelerator instance;
- *   - vendor ABI.
+ * In particular, this grammar MUST NOT encode:
  *
- * Target realization is downstream.
+ *     maximum qubits
+ *     maximum CPUs
+ *     maximum GPUs
+ *     maximum FPGAs
+ *     maximum nodes
+ *     maximum memory
+ *     maximum threads
+ *     maximum register width
+ *     maximum tensor rank
+ *     maximum device count
+ *     maximum topology size
+ *
+ * The grammar contains no artificial capacity constants.
+ *
+ * A source program may contain symbolic values such as:
+ *
+ *     N
+ *     Rows
+ *     Columns
+ *     RequiredMemory
+ *     RequiredWidth
+ *
+ * Those values remain source-level symbolic information until semantic
+ * analysis determines their meaning.
+ *
+ * Physical feasibility is handled by resource/capability negotiation and
+ * target realization, not by this grammar.
  *
  * ============================================================================
+ * EXTENSIBILITY CONTRACT
+ * ============================================================================
  *
+ * New computational domains MUST NOT require changing this file merely
+ * because a new type constructor is introduced.
+ *
+ * Prefer:
+ *
+ *     named types
+ *     qualified types
+ *     generic types
+ *     value-parameterized types
+ *     domain dialects
+ *     semantic registration
+ *
+ * over adding an ever-growing closed keyword inventory.
+ *
+ * Examples that should remain representable without adding universal
+ * hardware/domain keywords:
+ *
+ *     Tensor<T>
+ *     Tensor<T>[Shape]
+ *     Model<T>
+ *     QuantumState<T>
+ *     LogicalQubit
+ *     QRegister<N>
+ *     Signal<T>
+ *     Accelerator<T>
+ *     Resource<T>
+ *     Capability<T>
+ *     Dataset<T>
+ *     DistributedState<T>
+ *
+ * ============================================================================
  * AST CONTRACT
  * ============================================================================
  *
- * The grammar lowers structurally into the existing frontend TypeExpr.
+ * Every successful type parse feeds the existing frontend TypeExpr boundary.
  *
- * Representative mappings:
+ * This grammar MUST NOT introduce:
  *
- *   namedType        -> TypeExpr::Identifier
- *   genericType      -> TypeExpr::Generic
- *   tupleType        -> TypeExpr::Tuple
- *   arrayType        -> TypeExpr::Array
- *   sliceType        -> TypeExpr::Slice
- *   functionType     -> TypeExpr::Function
- *   referenceType    -> TypeExpr::Reference
- *   pointerType      -> TypeExpr::Pointer
- *   optionalType     -> TypeExpr::Optional
- *   resultType       -> TypeExpr::Result
- *   neverType        -> TypeExpr::Never
- *   unitType         -> TypeExpr::Unit
- *   quantumType      -> TypeExpr::Quantum
- *   temporalType     -> TypeExpr::Temporal
+ *     TypeExpr2
+ *     UniversalTypeExpr
+ *     QuantumTypeExpr
+ *     HardwareTypeExpr
+ *     AiTypeExpr
+ *     DomainTypeIR
  *
- * TypeValueExpr remains the source-level representation for symbolic
- * cardinality/value expressions where the existing AST already supports it.
- *
- * The grammar MUST NOT introduce a second TypeExpr representation.
+ * Domain-specific semantic information is resolved after parsing.
  *
  * ============================================================================
+ * SEMANTIC CONTRACT
+ * ============================================================================
  *
+ * Parsing establishes structure only.
+ *
+ * Semantic analysis is responsible for:
+ *
+ *     name resolution
+ *     alias resolution
+ *     generic substitution
+ *     type inference
+ *     unification
+ *     constraint solving
+ *     ownership checking
+ *     lifetime checking
+ *     linearity checking
+ *     capability checking
+ *     resource checking
+ *     effect checking
+ *     contract checking
+ *     policy checking
+ *     domain validation
+ *
+ * ============================================================================
+ * QUANTUM CONTRACT
+ * ============================================================================
+ *
+ * Quantum source types are accepted here only as SOURCE TYPES.
+ *
+ * This grammar does not:
+ *
+ *     allocate physical qubits
+ *     select a QPU
+ *     choose topology
+ *     perform routing
+ *     schedule gates
+ *     choose calibration
+ *     choose QEC
+ *     construct pulses
+ *
+ * The required semantic direction is:
+ *
+ *     source type
+ *         |
+ *         v
+ *     TypeExpr
+ *         |
+ *         v
+ *     semantic quantum type
+ *         |
+ *         v
+ *     quantum::ir
+ *         |
+ *         v
+ *     optimization
+ *         |
+ *         v
+ *     decomposition
+ *         |
+ *         v
+ *     routing
+ *         |
+ *         v
+ *     scheduling
+ *         |
+ *         v
+ *     resilience / QEC
+ *         |
+ *         v
+ *     ZQN
+ *         |
+ *         v
+ *     HAL
+ *
+ * ============================================================================
+ * HARDWARE CONTRACT
+ * ============================================================================
+ *
+ * Hardware types describe abstract requirements or capabilities.
+ *
+ * They do not identify a particular machine.
+ *
+ * For example:
+ *
+ *     Hardware<Compute>
+ *     Memory<T>
+ *     Accelerator<Model>
+ *     Interconnect<Message>
+ *
+ * are source-level abstractions.
+ *
+ * Concrete realization belongs to:
+ *
+ *     grammar/resources/
+ *     grammar/hardware/
+ *     grammar/compile/
+ *     grammar/execution/
+ *
+ * ============================================================================
+ * AI / DATA CONTRACT
+ * ============================================================================
+ *
+ * Type syntax remains independent of the reasoning, learning, knowledge,
+ * uncertainty, provenance, policy, and agent systems.
+ *
+ * AI/data concepts are represented through normal types, generic types,
+ * domain types, and semantic capabilities.
+ *
+ * For example:
+ *
+ *     Model<T>
+ *     Dataset<T>
+ *     Distribution<T>
+ *     Evidence<T>
+ *     Knowledge<T>
+ *
+ * do not require a separate AI type system.
+ *
+ * ============================================================================
+ * EFFECT CONTRACT
+ * ============================================================================
+ *
+ * Effect-qualified types are composed through the existing effect system.
+ *
+ * This file does not redefine effect syntax.
+ *
+ * Effect semantics remain owned by:
+ *
+ *     grammar/effects/
+ *
+ * and the type-level effect qualifier component.
+ *
+ * ============================================================================
+ * RESOURCE / CAPABILITY CONTRACT
+ * ============================================================================
+ *
+ * A type can carry semantic relationships to:
+ *
+ *     requirements
+ *     capabilities
+ *     resources
+ *     constraints
+ *     policies
+ *
+ * but this grammar does not resolve them.
+ *
+ * For example:
+ *
+ *     Resource<T>
+ *     Capability<T>
+ *
+ * remain source-level type applications.
+ *
+ * A semantic requirement such as:
+ *
+ *     requires capability("tensor.compute")
+ *
+ * belongs to the resource/capability subsystem rather than this grammar.
+ *
+ * ============================================================================
  * LEXER CONTRACT
  * ============================================================================
  *
- * All lexical tokens come from the canonical Zamani lexer:
+ * This grammar declares NO lexer rules.
+ *
+ * All tokens MUST come from:
  *
  *     grammar/antlr/ZamaniLexer.g4
  *
- * whose vocabulary is assembled from:
+ * The lexical vocabulary is therefore centralized.
  *
- *     grammar/lexer/
+ * ============================================================================
+ * IMPORT CONTRACT
+ * ============================================================================
  *
- * This parser grammar therefore declares NO lexer rules.
+ * IMPORTANT:
+ *
+ * The repository currently contains legacy and transitional type grammar
+ * components. They must not become competing authorities.
+ *
+ * The canonical production migration is:
+ *
+ *     specialized grammar
+ *             |
+ *             v
+ *     specialized parser grammar
+ *             |
+ *             v
+ *     Type orchestrator
+ *             |
+ *             v
+ *     typeExpression
+ *
+ * Components that currently duplicate `typeExpression` MUST be converted
+ * into delegates before being imported here.
+ *
+ * The following components are intended to be composed by this file:
+ *
+ *     PrimitiveTypes
+ *     NamedTypes
+ *     Generic
+ *     TupleTypes
+ *     Array
+ *     Slice
+ *     Function
+ *     ReferenceTypes
+ *     PointerTypes
+ *     Result
+ *     Option
+ *     RecordTypes
+ *     Sum
+ *     Union
+ *     Dependent
+ *     Associated
+ *     TypeClasses
+ *     LinearTypes
+ *     AffineTypes
+ *     ClassicalTypes
+ *     Quantum
+ *     Resource
+ *     CapabilityTypes
+ *     ZamaniHardwareTypesParser
+ *     TemporalTypes
+ *     Effectful
+ *
+ * Where an existing component has a conflicting grammar name or duplicated
+ * rule authority, it MUST be normalized before becoming a production import.
+ *
+ * ============================================================================
+ * IMPORTANT ANTLR COMPOSITION RULE
+ * ============================================================================
+ *
+ * `type.g4` MUST NOT import `types.g4`.
+ *
+ * `types.g4` is the existing legacy/canonical composition file and currently
+ * owns another implementation of `typeExpression`.
+ *
+ * The migration target is:
+ *
+ *     type.g4
+ *          |
+ *          +--> specialized delegates
+ *
+ * and:
+ *
+ *     types.g4
+ *          |
+ *          +--> compatibility facade
+ *          |
+ *          +--> Type
+ *
+ * This prevents:
+ *
+ *     Type -> Types -> Type
+ *
+ * circular grammar composition.
  *
  * ============================================================================
  */
 
-parser grammar Types;
+parser grammar Type;
 
 options {
     tokenVocab = ZamaniLexer;
@@ -241,33 +527,81 @@ options {
 
 
 /* ============================================================================
- * 1. PUBLIC TYPE ENTRY POINT
+ * 1. PUBLIC ORCHESTRATION ENTRY POINT
  * ========================================================================== */
 
 /**
- * Canonical source-level type expression.
+ * The single public source-level type entry point.
  *
- * This is the ONLY public composition entry point for type syntax.
+ * Type qualifiers/modifiers are deliberately separated from the core
+ * constructor so that new semantic qualifiers can be added without creating
+ * another type-expression authority.
  */
 typeExpression
-    : typeQualifier* typeCore typePostfix*
+    : typePrefix*
+      typeCore
+      typePostfix*
     ;
 
 
 /* ============================================================================
- * 2. TYPE QUALIFIERS
+ * 2. TYPE PREFIXES
  * ========================================================================== */
 
 /**
- * Source-level ownership/resource qualifiers.
+ * Prefixes that affect the semantic interpretation of a type.
  *
- * These are syntactic markers only.
- *
- * Their legality is determined by semantic analysis.
+ * These are syntactic wrappers. Their semantic validity belongs downstream.
  */
-typeQualifier
-    : LINEAR
-    | AFFINE
+typePrefix
+    : linearTypePrefix
+    | affineTypePrefix
+    | referenceTypePrefix
+    | typeAttributePrefix
+    ;
+
+
+/**
+ * Linear ownership/usage qualifier.
+ *
+ * The specialized LinearTypes grammar owns the detailed form.
+ */
+linearTypePrefix
+    : linearQualifier
+    ;
+
+
+/**
+ * Affine ownership/usage qualifier.
+ *
+ * The specialized affine grammar owns the detailed form.
+ */
+affineTypePrefix
+    : affineQualifier
+    ;
+
+
+/**
+ * Reference prefixes are delegated to the reference grammar.
+ *
+ * This rule is intentionally separate from referenceType because the
+ * orchestrator must not duplicate the reference implementation.
+ */
+referenceTypePrefix
+    : referencePrefix
+    ;
+
+
+/**
+ * Attribute-style type metadata.
+ *
+ * The exact attribute grammar is owned by the core/attribute subsystem.
+ *
+ * This rule is deliberately left as an integration boundary rather than
+ * introducing another local attribute grammar here.
+ */
+typeAttributePrefix
+    : AT IDENTIFIER
     ;
 
 
@@ -276,215 +610,122 @@ typeQualifier
  * ========================================================================== */
 
 /**
- * All canonical source-level type categories.
+ * All type constructors visible through the universal type system.
  *
- * Extensible domain types remain representable through namedType and
- * genericType rather than requiring a closed keyword inventory.
+ * Order matters where alternatives have overlapping prefixes.
+ *
+ * More structurally specific forms are selected before the open-ended named
+ * type fallback.
  */
 typeCore
     : primitiveType
-    | unitType
-    | neverType
-    | namedType
-    | genericType
+    | functionType
     | tupleType
     | arrayType
     | sliceType
-    | functionType
-    | referenceType
-    | pointerType
     | resultType
-    | quantumType
-    | temporalType
+    | optionType
+    | recordType
+    | sumType
+    | unionType
     | dependentType
+    | associatedType
+    | typeClassProjection
+    | quantumType
+    | classicalType
+    | hardwareType
+    | resourceType
+    | capabilityType
+    | temporalType
+    | namedOrGenericType
     | parenthesizedType
     ;
 
 
 /* ============================================================================
- * 4. TYPE POSTFIXES
- * ========================================================================== */
-
-/**
- * Postfix constructors.
- *
- * `T?` is the canonical compact optional spelling.
- */
-typePostfix
-    : QUESTION_MARK
-    ;
-
-
-/* ============================================================================
- * 5. PRIMITIVE TYPES
- * ============================================================================
- *
- * Only spellings already present in the canonical lexical vocabulary are
- * reserved here.
- *
- * Width-specific types such as:
- *
- *     i8
- *     i16
- *     i32
- *     i64
- *     i128
- *     u8
- *     u16
- *     f32
- *     f64
- *
- * remain ordinary identifiers unless the language specification explicitly
- * reserves them later.
- *
- * This avoids turning the grammar into a finite machine-width inventory.
+ * 4. PRIMITIVE TYPES
  * ========================================================================== */
 
 primitiveType
-    : VOID
-    | INT
-    | FLOAT_TYPE
-    | BOOL_TYPE
-    | STR_TYPE
-    | STRING_TYPE
-    | CHAR_TYPE
+    : primitiveScalarType
+    | unitType
+    | neverType
     ;
 
 
 /* ============================================================================
- * 6. UNIT
+ * 5. FUNCTION TYPES
  * ========================================================================== */
 
-unitType
-    : LPAREN RPAREN
+functionType
+    : FN
+      LPAREN
+      functionTypeParameterList?
+      RPAREN
+      functionTypeReturn?
     ;
 
-
-/* ============================================================================
- * 7. NEVER
- * ========================================================================== */
-
-neverType
-    : NEVER
-    ;
-
-
-/* ============================================================================
- * 8. NAMED TYPES
- * ========================================================================== */
 
 /**
- * Examples:
+ * The detailed Function grammar owns:
  *
- *     User
- *     Int32
- *     LogicalQubit
- *     Tensor
- *     Resource
- *     Capability
- *     std::collections::Map
+ *     functionTypeParameterList
+ *     functionTypeParameter
+ *     functionTypeReturn
  *
- * Name resolution is downstream.
+ * They are referenced directly so that the complete function-type structure
+ * remains compatible with the existing delegate.
  */
-namedType
-    : typePath
+functionTypeParameterList
+    : functionTypeParameter
+      (COMMA functionTypeParameter)*
+      COMMA?
     ;
 
 
-typePath
-    : typePathSegment (DOUBLE_COLON typePathSegment)*
+functionTypeParameter
+    : typeExpression
     ;
 
 
-typePathSegment
-    : IDENTIFIER
+functionTypeReturn
+    : THIN_ARROW typeExpression
     ;
 
 
 /* ============================================================================
- * 9. GENERIC TYPES
+ * 6. TUPLES
  * ========================================================================== */
 
-/**
- * Examples:
- *
- *     Vec<int>
- *     Map<string, int>
- *     Tensor<float, Shape>
- *     Resource<Qubit>
- *     Capability<quantum::measurement>
- *
- * Generic arity is not bounded by the grammar.
- *
- * IMPORTANT:
- *
- * Generic arguments are source TypeExpr values because that is the existing
- * frontend TypeExpr::Generic contract.
- *
- * Value-dependent cardinalities use dependentType/typeValueExpression instead
- * of introducing an ambiguous "type-or-value" generic argument production.
- */
-genericType
-    : typePath typeArguments
-    ;
-
-
-typeArguments
-    : LESS_THAN genericArgumentList GREATER_THAN
-    ;
-
-
-genericArgumentList
-    : typeExpression (COMMA typeExpression)* COMMA?
-    ;
-
-
-/* ============================================================================
- * 10. TUPLE TYPES
- * ========================================================================== */
-
-/**
- * Examples:
- *
- *     ()
- *     (int,)
- *     (int, bool)
- *     (int, bool, string)
- *
- * `()` is handled by unitType.
- *
- * Tuple arity is unbounded by grammar.
- */
 tupleType
     : LPAREN
-      typeExpression
-      COMMA
-      tupleTypeTail?
+      tupleElementList?
       RPAREN
     ;
 
 
-tupleTypeTail
-    : typeExpression (COMMA typeExpression)* COMMA?
+tupleElementList
+    : typeExpression
+      COMMA
+      tupleAdditionalElement*
+      COMMA?
+    ;
+
+
+tupleAdditionalElement
+    : typeExpression
+      COMMA?
     ;
 
 
 /* ============================================================================
- * 11. ARRAY TYPES
+ * 7. ARRAYS
  * ========================================================================== */
 
 /**
- * Canonical forms:
+ * Sized arrays remain symbolic.
  *
- *     [T]
- *     [T; N]
- *
- * `[T]` is a slice.
- *
- * `[T; N]` is an explicitly sized array.
- *
- * N is a source-level symbolic value and is NOT converted by the grammar to
- * a machine-sized integer.
+ * The array length is not converted into a host integer by the grammar.
  */
 arrayType
     : LBRACKET
@@ -496,7 +737,7 @@ arrayType
 
 
 /* ============================================================================
- * 12. SLICE TYPES
+ * 8. SLICES
  * ========================================================================== */
 
 sliceType
@@ -507,94 +748,9 @@ sliceType
 
 
 /* ============================================================================
- * 13. FUNCTION TYPES
+ * 9. RESULT
  * ========================================================================== */
 
-/**
- * Canonical form:
- *
- *     fn() -> R
- *     fn(T) -> R
- *     fn(T, U) -> R
- *
- * Parameter count is not bounded by grammar.
- */
-functionType
-    : FN
-      LPAREN
-      functionTypeParameters?
-      RPAREN
-      functionTypeReturn?
-    ;
-
-
-functionTypeParameters
-    : typeExpression (COMMA typeExpression)* COMMA?
-    ;
-
-
-functionTypeReturn
-    : THIN_ARROW typeExpression
-    ;
-
-
-/* ============================================================================
- * 14. REFERENCE TYPES
- * ========================================================================== */
-
-/**
- * Canonical forms:
- *
- *     &T
- *     &mut T
- *     &'a T
- *     &'a mut T
- *
- * Lifetime validity belongs to semantic analysis.
- */
-referenceType
-    : AMPERSAND
-      lifetimeAnnotation?
-      MUT?
-      typeExpression
-    ;
-
-
-lifetimeAnnotation
-    : APOSTROPHE IDENTIFIER
-    ;
-
-
-/* ============================================================================
- * 15. POINTER TYPES
- * ========================================================================== */
-
-/**
- * Canonical forms:
- *
- *     *T
- *     *mut T
- *
- * Pointer width/address representation is downstream.
- */
-pointerType
-    : STAR
-      MUT?
-      typeExpression
-    ;
-
-
-/* ============================================================================
- * 16. RESULT TYPES
- * ========================================================================== */
-
-/**
- * Canonical source form:
- *
- *     Result<T, E>
- *
- * `Result` is already a canonical lexical keyword.
- */
 resultType
     : RESULT
       LESS_THAN
@@ -606,65 +762,68 @@ resultType
 
 
 /* ============================================================================
- * 17. QUANTUM TYPES
+ * 10. OPTION
  * ========================================================================== */
 
 /**
- * The lexer reserves `Qubit` as a language-level quantum type name.
+ * Canonical optional spelling:
  *
- * Other quantum type names remain extensible ordinary identifiers/generic
- * types, for example:
+ *     T?
  *
- *     LogicalQubit
- *     QRegister<N>
- *     QuantumState<T>
- *     QuantumResource<T>
- *
- * This deliberately avoids adding a closed hardware-specific quantum type
- * vocabulary.
+ * The lexer owns QUESTION_MARK.
  */
-quantumType
-    : QUBIT
+optionType
+    : typeExpression
+      QUESTION_MARK
     ;
 
 
 /* ============================================================================
- * 18. TEMPORAL / MTS TYPES
+ * 11. RECORD
  * ========================================================================== */
 
-/**
- * Canonical temporal type:
- *
- *     MTS<T>
- *
- * The repository already has a dedicated temporal grammar component whose
- * independent lexical/parser boundary is the MTS constructor.
- *
- * This composition rule owns the complete type form.
- */
-temporalType
-    : MTS
-      LESS_THAN
-      typeExpression
-      GREATER_THAN
+recordType
+    : recordTypeDelegate
+    ;
+
+
+recordTypeDelegate
+    : recordType
     ;
 
 
 /* ============================================================================
- * 19. DEPENDENT / VALUE-PARAMETERIZED TYPES
+ * 12. SUM
  * ========================================================================== */
 
-/**
- * Canonical value-parameterized form:
- *
- *     Matrix<T>[Rows, Cols]
- *     Vector<T>[N]
- *     Tensor<T>[N, M, K]
- *
- * The base is a source type path and the dimensions are source-level values.
- *
- * This is deliberately open-ended and domain-neutral.
- */
+sumType
+    : sumTypeDelegate
+    ;
+
+
+sumTypeDelegate
+    : sumType
+    ;
+
+
+/* ============================================================================
+ * 13. UNION
+ * ========================================================================== */
+
+unionType
+    : unionTypeDelegate
+    ;
+
+
+unionTypeDelegate
+    : typeUnion
+    ;
+
+
+/* ============================================================================
+ * 14. DEPENDENT / VALUE-PARAMETERIZED TYPES
+ * ========================================================================== */
+
 dependentType
     : typePath
       LBRACKET
@@ -675,25 +834,187 @@ dependentType
 
 
 /* ============================================================================
- * 20. TYPE-LEVEL VALUE EXPRESSIONS
+ * 15. ASSOCIATED TYPES
+ * ========================================================================== */
+
+associatedType
+    : associatedTypeBase
+      associatedTypeProjectionSuffix+
+    ;
+
+
+/* ============================================================================
+ * 16. TYPE-CLASS PROJECTIONS
+ * ========================================================================== */
+
+typeClassProjection
+    : typeClassProjection
+    ;
+
+
+/* ============================================================================
+ * 17. QUANTUM TYPES
+ * ========================================================================== */
+
+quantumType
+    : QUBIT
+    ;
+
+
+/* ============================================================================
+ * 18. CLASSICAL DOMAIN TYPES
+ * ========================================================================== */
+
+classicalType
+    : classicalTypePrimary
+      classicalTypePostfix*
+    ;
+
+
+/* ============================================================================
+ * 19. HARDWARE TYPES
+ * ========================================================================== */
+
+hardwareType
+    : hardwareTypePrimary
+      hardwareTypePostfix*
+    ;
+
+
+/* ============================================================================
+ * 20. RESOURCE TYPES
+ * ========================================================================== */
+
+resourceType
+    : resourceTypeQualifier
+    ;
+
+
+/* ============================================================================
+ * 21. CAPABILITY TYPES
+ * ========================================================================== */
+
+capabilityType
+    : capabilityIdentity
+      capabilityTypeArgumentList?
+    ;
+
+
+/* ============================================================================
+ * 22. TEMPORAL TYPES
+ * ========================================================================== */
+
+temporalType
+    : temporalTypeConstructor
+    ;
+
+
+/* ============================================================================
+ * 23. NAMED AND GENERIC TYPES
  * ========================================================================== */
 
 /**
- * Type-level values are structural source expressions.
- *
- * They are never evaluated by the grammar.
+ * Named types are the open-ended extension mechanism for the language.
  *
  * Examples:
  *
- *     N
- *     Rows
- *     1024
- *     Rows * Cols
- *     2 * N
- *     N + Offset
+ *     User
+ *     LogicalQubit
+ *     Tensor
+ *     Model
+ *     Signal
+ *     Accelerator
+ *     Resource
  *
- * The resulting semantic TypeValueExpr remains symbolic until the semantic
- * and compilation layers decide whether evaluation is required.
+ * Qualified names remain open-ended:
+ *
+ *     std::collections::Map
+ *     quantum::State
+ *     hardware::Accelerator
+ *     data::Dataset
+ */
+namedOrGenericType
+    : typePath
+      typeArguments?
+    ;
+
+
+typePath
+    : typePathSegment
+      (DOUBLE_COLON typePathSegment)*
+    ;
+
+
+typePathSegment
+    : IDENTIFIER
+    ;
+
+
+typeArguments
+    : LESS_THAN
+      genericArgumentList
+      GREATER_THAN
+    ;
+
+
+genericArgumentList
+    : genericArgument
+      (COMMA genericArgument)*
+      COMMA?
+    ;
+
+
+genericArgument
+    : typeExpression
+    ;
+
+
+/* ============================================================================
+ * 24. PARENTHESIZED TYPES
+ * ========================================================================== */
+
+parenthesizedType
+    : LPAREN
+      typeExpression
+      RPAREN
+    ;
+
+
+/* ============================================================================
+ * 25. TYPE POSTFIXES
+ * ========================================================================== */
+
+/**
+ * Postfixes are intentionally narrow.
+ *
+ * Optionality is handled structurally by optionType when it appears as a
+ * complete type.
+ */
+typePostfix
+    : QUESTION_MARK
+    ;
+
+
+/* ============================================================================
+ * 26. TYPE-LEVEL VALUE EXPRESSIONS
+ * ========================================================================== */
+
+/**
+ * These expressions exist only to preserve symbolic source-level values used
+ * by parameterized types.
+ *
+ * They are not evaluated by ANTLR.
+ *
+ * They are not restricted to a machine-sized integer.
+ *
+ * Semantic analysis determines:
+ *
+ *     type
+ *     value domain
+ *     const-ness
+ *     satisfiability
+ *     representability
+ *     target realization
  */
 typeValueExpression
     : typeValueBitwiseOr
@@ -701,14 +1022,20 @@ typeValueExpression
 
 
 typeValueBitwiseOr
+    : typeValueBitwiseXor
+      (PIPE typeValueBitwiseXor)*
+    ;
+
+
+typeValueBitwiseXor
     : typeValueBitwiseAnd
-      (PIPE typeValueBitwiseAnd)*
+      (CARET typeValueBitwiseAnd)*
     ;
 
 
 typeValueBitwiseAnd
     : typeValueShift
-      (AMPERSAND typeValueShift)*
+      (BIT_AND_OPERATOR typeValueShift)*
     ;
 
 
@@ -740,12 +1067,12 @@ typeValuePrimary
     : INTEGER
     | FLOAT
     | IDENTIFIER
-    | qualifiedTypeValuePath
+    | typeValueQualifiedPath
     | parenthesizedTypeValue
     ;
 
 
-qualifiedTypeValuePath
+typeValueQualifiedPath
     : IDENTIFIER
       DOUBLE_COLON
       IDENTIFIER
@@ -761,283 +1088,244 @@ parenthesizedTypeValue
 
 
 /* ============================================================================
- * 21. PARENTHESIZED TYPES
+ * 27. TYPE EXTENSION BOUNDARY
  * ========================================================================== */
 
-parenthesizedType
-    : LPAREN
-      typeExpression
-      RPAREN
+/**
+ * Domain extensions MUST enter through ordinary named/qualified/generic
+ * types or through registered specialized grammar delegates.
+ *
+ * This rule intentionally does not enumerate application-specific concepts.
+ */
+typeExtension
+    : namedOrGenericType
     ;
 
 
 /* ============================================================================
- * 22. STRUCTURAL CONTRACT
+ * 28. TYPE ORCHESTRATION INVARIANTS
  * ============================================================================
  *
- * The parser preserves:
+ * INVARIANT 1
  *
- *   - source ordering;
- *   - type nesting;
- *   - generic argument ordering;
- *   - tuple ordering;
- *   - dependent-value ordering;
- *   - qualified-name ordering;
- *   - lifetime spelling;
- *   - source spans through the parser/AST integration layer.
+ * There is exactly one public source-level type entry point:
  *
- * The parser does NOT:
+ *     typeExpression
  *
- *   - resolve aliases;
- *   - resolve generic parameters;
- *   - check trait bounds;
- *   - infer types;
- *   - check ownership;
- *   - check borrow validity;
- *   - allocate resources;
- *   - allocate qubits;
- *   - select hardware;
- *   - select a backend.
+ *
+ * INVARIANT 2
+ *
+ * There is exactly one universal composition authority:
+ *
+ *     Type
+ *
+ *
+ * INVARIANT 3
+ *
+ * Specialized files own specialized syntax.
+ *
+ *
+ * INVARIANT 4
+ *
+ * No specialized type grammar may define another universal `typeExpression`.
+ *
+ *
+ * INVARIANT 5
+ *
+ * No type grammar may allocate physical resources.
+ *
+ *
+ * INVARIANT 6
+ *
+ * No type grammar may select a backend.
+ *
+ *
+ * INVARIANT 7
+ *
+ * No type grammar may introduce a second AST.
+ *
+ *
+ * INVARIANT 8
+ *
+ * No type grammar may introduce a second quantum IR.
+ *
+ *
+ * INVARIANT 9
+ *
+ * No type grammar may impose artificial capacity limits.
+ *
+ *
+ * INVARIANT 10
+ *
+ * New domains must be representable through open type composition without
+ * changing the universal semantic model.
  *
  * ============================================================================
- *
- * DOMAIN INTEGRATION
+ * DIAGNOSTIC CONTRACT
  * ============================================================================
+ *
+ * Syntax errors belong to the parser.
+ *
+ * Semantic errors belong downstream.
+ *
+ * Examples of semantic errors that MUST NOT be implemented as grammar rules:
+ *
+ *     unknown type
+ *     unsatisfied generic constraint
+ *     invalid capability
+ *     unavailable resource
+ *     unsupported hardware realization
+ *     insufficient memory
+ *     impossible topology
+ *     unavailable quantum capability
+ *     invalid QEC strategy
+ *     invalid ABI
+ *
+ * ============================================================================
+ * SCALABILITY CONTRACT
+ * ============================================================================
+ *
+ * This grammar imposes no semantic maximum on:
+ *
+ *     generic arguments
+ *     tuple elements
+ *     namespace depth
+ *     type nesting
+ *     symbolic dimensions
+ *     quantum cardinality
+ *     tensor rank
+ *     collection size
+ *     resource count
+ *     hardware count
+ *     device count
+ *
+ * Any implementation protection against pathological parser input belongs
+ * to explicit compiler/parser configuration and MUST NOT change language
+ * meaning.
+ *
+ * ============================================================================
+ * DETERMINISM CONTRACT
+ * ============================================================================
+ *
+ * Parsing the same source with the same language/grammar version must produce
+ * the same parse structure.
+ *
+ * The grammar contains:
+ *
+ *     no filesystem operations
+ *     no network operations
+ *     no runtime calls
+ *     no semantic actions
+ *     no unsafe operations
+ *     no target probing
+ *     no hardware probing
+ *
+ * ============================================================================
+ * INTEGRATION CONTRACT
+ * ============================================================================
+ *
+ * AST:
+ *
+ *     frontend TypeExpr
+ *
+ * Semantic:
+ *
+ *     semantic type resolver
+ *     type constraint solver
+ *     capability/resource analysis
+ *     effect analysis
+ *     contract/policy validation
  *
  * Classical:
  *
- *     int
- *     float
- *     Tensor<T>[N, M]
- *     Matrix<T>[Rows, Cols]
+ *     classical semantic model
  *
  * Quantum:
  *
- *     Qubit
- *     QuantumState
- *     LogicalQubit
- *     QRegister<N>
+ *     quantum semantic model
+ *     quantum::ir
  *
  * HDL:
  *
- *     Signal<T>
- *     Register<T>
- *     Bus<T>
+ *     HDL semantic model
  *
- * Hardware/resource:
+ * Hardware:
  *
- *     Resource<T>
- *     Capability<T>
- *     Memory<T>[N]
- *     Accelerator<T>
- *
- * Distributed:
- *
- *     Node<T>
- *     Channel<T>
- *     DistributedState<T>
+ *     hardware/resource semantic model
  *
  * AI/data:
  *
- *     Tensor<T>[...]
- *     Dataset<T>
- *     Model<T>
+ *     ordinary source-level types
+ *     semantic capabilities
+ *     domain libraries
  *
- * These remain source-level type abstractions. None of them imply physical
- * resources or machine-specific implementation.
+ * Canonical compilation:
  *
- * ============================================================================
- *
- * QUANTUM IR BOUNDARY
- * ============================================================================
- *
- * Quantum type syntax does not create a quantum IR.
- *
- * The required lowering is:
- *
- *     source type
- *         |
- *         v
- *     frontend TypeExpr
- *         |
- *         v
- *     semantic quantum type
- *         |
- *         v
- *     quantum::ir
- *         |
- *         v
- *     optimization
- *         |
- *         v
- *     routing
- *         |
- *         v
- *     scheduling
- *         |
- *         v
- *     QEC / resilience
- *         |
- *         v
- *     ZQN
- *         |
- *         v
- *     HAL
- *         |
- *         v
- *     target
- *
- * No `QuantumTypeIR`, `PhysicalQubitIR`, or `GateIR` is introduced here.
+ *     Type
+ *       |
+ *       v
+ *     TypeExpr
+ *       |
+ *       v
+ *     semantic type
+ *       |
+ *       v
+ *     canonical semantic IR
+ *       |
+ *       +--> classical IR
+ *       |
+ *       +--> quantum::ir
+ *       |
+ *       +--> HDL/hardware representation
+ *       |
+ *       +--> distributed/data/AI representations
  *
  * ============================================================================
- *
- * HARDWARE / RESOURCE SEPARATION
+ * FILE COMPLETION CRITERIA
  * ============================================================================
  *
- * Valid source-level type:
+ * This file is COMPLETE only when:
  *
- *     Resource<QuantumResource>
+ * [ ] `typeExpression` is the sole public universal type entry point.
  *
- * does NOT mean:
+ * [ ] No other file defines a competing universal `typeExpression`.
  *
- *     allocate physical device 0
+ * [ ] Every specialized type component has exactly one owner.
  *
- * and:
+ * [ ] All imports use valid ANTLR parser grammar names.
  *
- *     Qubit
+ * [ ] No import introduces circular grammar composition.
  *
- * does NOT mean:
+ * [ ] No duplicate parser rule names remain across imported components.
  *
- *     physical qubit 17
+ * [ ] Primitive, named, generic, composite, dependent, domain, resource,
+ *     capability, and effect-qualified types have explicit integration
+ *     boundaries.
  *
- * Hardware capability, topology, placement, routing, calibration, scheduling
- * and deployment remain downstream.
+ * [ ] TypeExpr remains the only source AST type boundary.
  *
- * ============================================================================
+ * [ ] Quantum types lower semantically toward `quantum::ir`.
  *
- * DETERMINISM
- * ============================================================================
+ * [ ] No physical resource or backend is selected by the grammar.
  *
- * The grammar is deterministic for a fixed token sequence and language
- * vocabulary.
+ * [ ] No artificial capacity constants exist.
  *
- * It contains no semantic predicates, actions, I/O, runtime calls or
- * implementation-specific decisions.
+ * [ ] Positive parser tests exist for every public constructor.
  *
- * ============================================================================
+ * [ ] Negative parser tests exist for malformed constructors.
  *
- * SECURITY
- * ============================================================================
+ * [ ] Nested/compositional tests exist.
  *
- * This grammar:
+ * [ ] Large symbolic type tests exist.
  *
- *   - performs no I/O;
- *   - executes no source code;
- *   - evaluates no type values;
- *   - accesses no hardware;
- *   - requires no unsafe Rust;
- *   - performs no allocation based on source values.
+ * [ ] Cross-domain type tests exist.
  *
- * Hostile-input limits belong to explicit compiler/parser policy.
+ * [ ] Deterministic parsing tests exist.
  *
- * ============================================================================
+ * [ ] Compatibility tests exist.
  *
- * CONFORMANCE EXAMPLES
- * ============================================================================
- *
- * VALID:
- *
- *     int
- *     float
- *     bool
- *     string
- *     char
- *     User
- *     module::User
- *     Vec<int>
- *     Map<string, int>
- *     (int, bool)
- *     (int,)
- *     ()
- *     [int]
- *     [int; N]
- *     fn(int) -> bool
- *     fn(int, string) -> Result
- *     &T
- *     &mut T
- *     &'a T
- *     &'a mut T
- *     *T
- *     *mut T
- *     Result<T, E>
- *     Qubit
- *     Qubit?
- *     Quantum<Q>
- *     MTS<int>
- *     MTS<QuantumState>
- *     Resource<Qubit>
- *     Capability<quantum::measurement>
- *     Matrix<T>[Rows, Cols]
- *     Tensor<T>[N, M, K]
- *
- * INVALID:
- *
- *     Result<T>
- *     Result<T, E, F>
- *     [T;]
- *     [T; N
- *     [T
- *     fn( -> T
- *     fn(T,) -> T
- *     &' T
- *     MTS<>
- *
- * BOUNDARY / SCALABILITY:
- *
- *     Vec<Vec<Vec<T>>>
- *     A::B::C::D::E
- *     Tuple-like types with arbitrarily many elements
- *     Functions with arbitrarily many parameters
- *     Tensor<T>[N1, N2, N3, ...]
- *     Qubit
- *     Qubit<N>
- *     Resource<Capability<T>>
- *
- * Tests must not introduce artificial maxima.
- *
- * ============================================================================
- *
- * COMPLETION CRITERIA
- * ============================================================================
- *
- * This file is complete when:
- *
- *   [x] There is one public typeExpression entry point.
- *   [x] It consumes the canonical ZamaniLexer vocabulary.
- *   [x] It does not define lexer rules.
- *   [x] Existing primitive keyword spellings are reused.
- *   [x] No nonexistent primitive tokens are referenced.
- *   [x] Named types remain open-ended.
- *   [x] Qualified names are unbounded by grammar.
- *   [x] Generic types are open-ended.
- *   [x] Tuple arity is unbounded by grammar.
- *   [x] Arrays support symbolic cardinalities.
- *   [x] Slices are syntactically distinct from sized arrays.
- *   [x] Function parameter count is unbounded by grammar.
- *   [x] References support lifetime and mutability syntax.
- *   [x] Pointer representation remains downstream.
- *   [x] Optionality uses one canonical postfix syntax.
- *   [x] Result uses the existing Result keyword.
- *   [x] Quantum syntax remains target-independent.
- *   [x] Temporal syntax uses the existing MTS vocabulary.
- *   [x] Resource/capability types remain extensible identifiers.
- *   [x] Dependent values remain symbolic.
- *   [x] No hardware limit is encoded.
- *   [x] No physical qubit mapping is encoded.
- *   [x] No second quantum IR is introduced.
- *   [x] No semantic evaluation occurs in the grammar.
- *   [x] No embedded Rust code occurs in the grammar.
- *   [x] No unsafe Rust is required.
+ * [ ] Rust 1.97 / 1.97.1 toolchain builds the generated parser without
+ *     unsafe requirements.
  *
  * ============================================================================
  */
