@@ -3,327 +3,633 @@
  * Zamani Universal Programming Language
  * ============================================================================
  *
- * File:
- *     grammar/core/names.g4
+ * FILE
+ * ----
+ * grammar/core/names.g4
  *
- * Grammar identity:
- *     Names
+ * GRAMMAR
+ * -------
+ * Names
  *
- * Role:
- *     Canonical parser-level name syntax for the Zamani language.
- *
- * Baseline:
- *     Rust 1.97 / Rust 1.97.1
- *
- * Safety:
- *     This grammar contains no embedded Rust actions, predicates, filesystem
- *     access, network access, runtime callbacks, or unsafe code.
+ * STATUS
+ * ------
+ * CANONICAL / PRODUCTION
  *
  * ============================================================================
- * ARCHITECTURAL POSITION
+ * FEATURE CONTRACT
  * ============================================================================
  *
- *     source
- *       |
- *       v
- *     grammar/lexer/tokens.g4
- *       |
- *       |  IDENTIFIER
- *       |  K_AS
- *       |  DOUBLE_COLON
- *       |
- *       v
- *     grammar/core/names.g4
- *       |
- *       +--> declarations
- *       +--> modules
- *       +--> types
- *       +--> functions
- *       +--> expressions
- *       +--> effects
- *       +--> memory
- *       +--> concurrency
- *       +--> classical
- *       +--> quantum
- *       +--> hybrid
- *       +--> HDL
- *       +--> hardware
- *       +--> distributed
- *       +--> AI
- *       +--> data
- *       +--> networking
- *       +--> security
- *       |
- *       v
- *     frontend AST
- *       |
- *       v
- *     structural / semantic analysis
- *       |
- *       v
- *     symbol / module / type resolution
- *       |
- *       v
- *     canonical semantic model / IR
- *
- * ============================================================================
  * PURPOSE
- * ============================================================================
+ * -------
  *
- * This file defines reusable STRUCTURAL NAME SYNTAX.
+ * This file is the canonical parser-level owner of source-level names.
  *
- * It answers:
+ * It defines the reusable syntactic representation of:
  *
- *     "Does this token sequence form a valid source-level name?"
+ *     identifier
+ *     simpleName
+ *     nameSegment
+ *     qualifiedName
+ *     nameList
+ *     optionalNameList
+ *     qualifiedNameList
+ *     optionalQualifiedNameList
+ *     nameAlias
+ *     nameReference
+ *     nameReferenceList
+ *     optionalNameReferenceList
+ *
+ * The grammar answers only:
+ *
+ *     "Is this token sequence a valid source-level name reference?"
  *
  * It does NOT answer:
  *
- *     "What does this name mean?"
+ *     "What entity does this name denote?"
  *
- * Semantic meaning belongs to later compiler phases.
+ * Name meaning is determined by semantic analysis.
  *
- * ============================================================================
- * OWNERSHIP
- * ============================================================================
  *
- * THIS FILE OWNS:
+ * OWNERS
+ * ------
  *
- *   - simple names;
- *   - identifier references;
- *   - qualified names;
- *   - name segments;
- *   - lists of names;
- *   - lists of qualified names;
- *   - name aliases;
- *   - reusable name-reference syntax.
+ * This file owns:
  *
- * THIS FILE DOES NOT OWN:
+ *     - parser-level identifier use;
+ *     - simple names;
+ *     - qualified-name segments;
+ *     - qualified names;
+ *     - reusable name lists;
+ *     - qualified-name lists;
+ *     - generic name aliases;
+ *     - generic symbolic name references.
  *
- *   - lexical identifier spelling;
- *   - Unicode identifier classification;
- *   - Unicode normalization;
- *   - keyword recognition;
- *   - comments;
- *   - whitespace;
- *   - literals;
- *   - filesystem paths;
- *   - URLs;
- *   - package resolution;
- *   - module resolution;
- *   - symbol resolution;
- *   - type resolution;
- *   - scope construction;
- *   - resource allocation;
- *   - hardware discovery;
- *   - target selection;
- *   - physical qubit selection;
- *   - QEC;
- *   - ZQN;
- *   - routing;
- *   - scheduling;
- *   - optimization;
- *   - runtime execution.
  *
- * ============================================================================
- * LEXICAL AUTHORITY
- * ============================================================================
+ * DOES NOT OWN
+ * ------------
  *
- * The canonical lexical authority is:
+ * This file does NOT own:
  *
- *     grammar/lexer/tokens.g4
+ *     - lexical identifier recognition;
+ *     - Unicode identifier classification;
+ *     - Unicode normalization;
+ *     - keyword spelling;
+ *     - comments;
+ *     - whitespace;
+ *     - literals;
+ *     - operators;
+ *     - punctuation;
+ *     - filesystem paths;
+ *     - URLs;
+ *     - package resolution;
+ *     - module resolution;
+ *     - namespace resolution;
+ *     - symbol resolution;
+ *     - type resolution;
+ *     - scope construction;
+ *     - capability resolution;
+ *     - resource resolution;
+ *     - effect checking;
+ *     - contract checking;
+ *     - policy checking;
+ *     - AI semantics;
+ *     - quantum semantics;
+ *     - quantum physical mapping;
+ *     - HDL semantics;
+ *     - hardware realization;
+ *     - routing;
+ *     - scheduling;
+ *     - QEC;
+ *     - ZQN;
+ *     - optimization;
+ *     - lowering;
+ *     - runtime execution;
+ *     - target selection.
  *
- * This grammar consumes its tokens through:
  *
- *     tokenVocab = ZamaniTokens
+ * DEPENDS_ON
+ * ----------
  *
- * In particular:
+ * Canonical lexer boundary:
+ *
+ *     grammar/antlr/ZamaniLexer.g4
+ *
+ * Required lexer tokens:
  *
  *     IDENTIFIER
+ *     AS
+ *     DOUBLE_COLON
+ *     COMMA
+ *
+ * No parser grammar dependency is required.
+ *
+ * This is intentionally a low-level leaf parser grammar.
+ *
+ *
+ * EXPORTS
+ * -------
+ *
+ *     identifier
+ *     simpleName
+ *     nameSegment
+ *     qualifiedName
+ *     nameList
+ *     optionalNameList
+ *     qualifiedNameList
+ *     optionalQualifiedNameList
+ *     nameAlias
+ *     nameReference
+ *     nameReferenceList
+ *     optionalNameReferenceList
+ *
+ *
+ * CONSUMED_BY
+ * -----------
+ *
+ * Higher-level grammar components may consume these rules through:
+ *
+ *     grammar/core/qualified-names.g4
+ *     grammar/core/paths.g4
+ *     grammar/modules/
+ *     grammar/declarations/
+ *     grammar/types/
+ *     grammar/functions/
+ *     grammar/expressions/
+ *     grammar/statements/
+ *     grammar/effects/
+ *     grammar/resources/
+ *     grammar/security/
+ *     grammar/classical/
+ *     grammar/quantum/
+ *     grammar/hybrid/
+ *     grammar/hdl/
+ *     grammar/hardware/
+ *     grammar/distributed/
+ *     grammar/ai/
+ *     grammar/data/
+ *     grammar/networking/
+ *     grammar/interoperability/
+ *     grammar/dialects/
+ *     grammar/macros/
+ *     grammar/metaprogramming/
+ *
+ * Consumers must reuse these rules rather than recreate equivalent
+ * identifier/qualified-name syntax.
+ *
+ *
+ * AST_OWNER
+ * ---------
+ *
+ * The grammar creates ANTLR parser contexts only.
+ *
+ * The frontend AST layer owns the actual AST representation.
+ *
+ * The AST must preserve:
+ *
+ *     - original spelling;
+ *     - source span;
+ *     - source ordering;
+ *     - segment ordering;
+ *     - alias structure where present;
+ *     - syntactic context.
+ *
+ * Names must remain unresolved at parse time.
+ *
+ *
+ * SEMANTIC_OWNER
+ * --------------
+ *
+ * Semantic analysis / name-resolution subsystem.
+ *
+ * Semantic analysis determines whether a name denotes:
+ *
+ *     - value;
+ *     - variable;
+ *     - constant;
+ *     - function;
+ *     - type;
+ *     - module;
+ *     - namespace;
+ *     - resource;
+ *     - capability;
+ *     - effect;
+ *     - policy;
+ *     - contract;
+ *     - quantum object;
+ *     - HDL object;
+ *     - hardware abstraction;
+ *     - distributed object;
+ *     - AI/data object;
+ *     - dialect-defined object;
+ *     - future-domain object.
+ *
+ *
+ * IR_OWNER
+ * --------
+ *
+ * No IR is owned by this grammar.
+ *
+ * Name occurrences may later become symbolic references in:
+ *
+ *     semantic model;
+ *     classical representation;
+ *     quantum::ir;
+ *     HDL/hardware representation;
+ *     distributed representation;
+ *     other domain representations.
+ *
+ *
+ * TEST_OWNER
+ * ----------
+ *
+ *     grammar/tests/
+ *
+ * Recommended ownership:
+ *
+ *     grammar/tests/core/names/
+ *
+ *
+ * SPEC_OWNER
+ * ----------
+ *
+ * Normative language specification:
+ *
+ *     grammar/specification/
+ *
+ * Machine-checkable grammar/conformance material:
+ *
+ *     grammar/spec/
+ *
+ *
+ * ============================================================================
+ * LEXICAL CONTRACT
+ * ============================================================================
+ *
+ * The lexer is the sole owner of the spelling and classification of:
+ *
+ *     IDENTIFIER
+ *     AS
+ *     DOUBLE_COLON
+ *     COMMA
+ *
+ * This grammar MUST NOT define lexer rules.
+ *
+ * In particular, it MUST NOT define:
+ *
+ *     IDENTIFIER
+ *     AS
  *     K_AS
  *     DOUBLE_COLON
  *     COMMA
  *
- * are lexer-owned concepts.
+ * as lexer tokens.
  *
- * This file MUST NOT redefine IDENTIFIER.
+ * The canonical production parser vocabulary is:
  *
- * It MUST NOT recreate lexical Unicode/ASCII rules.
+ *     ZamaniLexer
  *
- * It MUST NOT impose identifier-length limits.
+ * Therefore:
  *
- * It MUST NOT maintain a second keyword table.
+ *     options {
+ *         tokenVocab = ZamaniLexer;
+ *     }
  *
- * ============================================================================
- * NAME SEMANTICS
- * ============================================================================
+ * is intentional.
  *
- * Names are syntactic values.
+ * `AS` is the canonical repository token for the source spelling:
  *
- * Their interpretation is determined later by context and semantic analysis.
+ *     as
  *
- * A qualified name such as:
+ * There is no `K_AS` token dependency here.
  *
- *     quantum::ir
- *
- * may denote a namespace, module, type, declaration, semantic subsystem,
- * domain object, or another language-defined entity depending on context.
- *
- * The parser MUST NOT decide which one.
  *
  * ============================================================================
- * POCO-REAF CONTRACT
+ * NAME MODEL
  * ============================================================================
  *
- * Name syntax is independent of execution hardware.
+ * The source-level hierarchy is:
  *
- * There are deliberately no grammar limits on:
+ *     IDENTIFIER
+ *          |
+ *          v
+ *     identifier
+ *          |
+ *          v
+ *     nameSegment
+ *          |
+ *          v
+ *     qualifiedName
+ *          |
+ *          +--> nameAlias
+ *          |
+ *          v
+ *     nameReference
  *
- *   - identifier length;
- *   - qualified-name depth;
- *   - namespace depth;
- *   - number of names;
- *   - number of aliases;
- *   - number of declarations;
- *   - number of modules;
- *   - number of resources;
- *   - number of machines;
- *   - number of qubits;
- *   - number of CPUs;
- *   - number of GPUs;
- *   - number of FPGAs;
- *   - number of nodes;
- *   - number of accelerators.
+ * The parser does not assign semantic identity.
  *
- * Repetition is represented structurally with `*` or `+`.
- *
- * Any practical resource limitation belongs to implementation policy,
- * compiler configuration, operating-system resources, or deployment
- * resources—not to the language's name grammar.
  *
  * ============================================================================
- * HARD-CODING PROHIBITION
+ * SIMPLE IDENTIFIERS
  * ============================================================================
  *
- * This file MUST NOT contain constructs such as:
+ * The lexical layer determines whether a source spelling is an IDENTIFIER.
  *
- *     MAX_IDENTIFIER_LENGTH
- *     MAX_NAME_DEPTH
- *     MAX_NAMESPACE_DEPTH
- *     MAX_MODULES
- *     MAX_ALIASES
- *     MAX_QUBITS
- *     MAX_CPUS
- *     MAX_GPUS
- *     MAX_FPGAS
- *     MAX_NODES
+ * This grammar merely provides the parser-level rule:
  *
- * It also MUST NOT contain fixed domain-specific name categories such as:
+ *     identifier
  *
- *     QubitName
- *     PhysicalQubitName
- *     GPUName
- *     CPUName
- *     FPGAName
- *     QPUName
- *     AcceleratorName
+ * No identifier-length limit is imposed here.
  *
- * Domain-specific meaning is established after parsing.
+ * No ASCII-only restriction is imposed here.
+ *
+ * No Unicode normalization is performed here.
+ *
+ * No case folding is performed here.
+ *
  *
  * ============================================================================
- * QUALIFICATION
+ * SIMPLE NAME
  * ============================================================================
  *
- * Zamani uses DOUBLE_COLON (`::`) for qualified names.
+ * `simpleName` is a complete source-level name consisting of exactly one
+ * identifier.
+ *
+ * Example:
+ *
+ *     value
+ *
+ * It is deliberately separate from `identifier` so higher-level grammars can
+ * express the distinction between a lexical identifier occurrence and a
+ * complete simple-name construct without introducing another lexical type.
+ *
+ *
+ * ============================================================================
+ * NAME SEGMENT
+ * ============================================================================
+ *
+ * `nameSegment` represents one segment of a qualified name.
+ *
+ * Current syntax:
+ *
+ *     identifier
+ *
+ * Keeping this as a parser rule gives the grammar a stable semantic boundary
+ * while allowing future language evolution without requiring every consumer
+ * to redefine qualified-name structure.
+ *
+ *
+ * ============================================================================
+ * QUALIFIED NAME
+ * ============================================================================
+ *
+ * Canonical syntax:
+ *
+ *     nameSegment (DOUBLE_COLON nameSegment)*
  *
  * Examples:
  *
+ *     value
  *     math::linear
  *     math::linear::matrix
  *     quantum::ir
  *     hardware::capability
  *     accelerator::tensor
  *
- * No finite qualification depth is imposed.
+ * A qualified name has no finite grammar-defined qualification depth.
+ *
+ * The `*` repetition is intentional.
+ *
+ * Practical limits are determined by:
+ *
+ *     - available memory;
+ *     - parser implementation;
+ *     - compiler configuration;
+ *     - operating-system resources;
+ *     - deployment environment.
+ *
+ * Those limits are not language semantics.
+ *
  *
  * ============================================================================
- * PATH SEPARATION
+ * QUALIFIED NAME VS MEMBER ACCESS
  * ============================================================================
  *
- * A qualified name is NOT a filesystem path.
+ * Qualified names use:
  *
- * Examples that do not belong to this grammar:
+ *     ::
  *
- *     ./src/module.zm
- *     ../module.zm
- *     /absolute/path
- *     https://example.org
+ * Member access uses:
  *
- * Path syntax belongs to:
+ *     .
  *
- *     grammar/core/paths.g4
- *
- * A path may contain names, but the path itself is not a name.
- *
- * ============================================================================
- * MEMBER ACCESS SEPARATION
- * ============================================================================
- *
- * This:
+ * Therefore:
  *
  *     object.member
  *
- * is expression/member-access syntax.
- *
- * It is NOT a qualified name.
- *
- * Therefore DOT is deliberately not used by qualifiedName.
+ * is NOT a qualified name.
  *
  * Likewise:
  *
  *     object.member.method
  *
- * remains expression syntax.
+ * belongs to expression/member-access grammar.
+ *
+ * This grammar deliberately does not consume DOT.
+ *
  *
  * ============================================================================
- * TYPE / GENERIC SEPARATION
+ * QUALIFIED NAME VS PATH
  * ============================================================================
  *
- * A name may participate in a type expression:
+ * A qualified name is a symbolic source-level reference.
  *
- *     math::Vector
+ * It is not:
  *
- * but generic arguments belong to the type grammar:
+ *     ./src/module.zm
+ *     ../module.zm
+ *     /absolute/path
+ *     C:/path
+ *     https://example
  *
- *     math::Vector<T>
+ * Path syntax belongs to:
  *
- * This file therefore does not consume generic argument syntax.
+ *     grammar/core/paths.g4
+ *
+ * A path may contain names, but a path and a qualified name are distinct
+ * syntactic categories.
+ *
  *
  * ============================================================================
- * ALIAS SEMANTICS
+ * QUALIFIED NAME VS HARDWARE IDENTITY
  * ============================================================================
  *
- * This file defines only the structural form:
+ * The following remain ordinary source names:
+ *
+ *     cpu
+ *     gpu
+ *     fpga
+ *     qpu
+ *     accelerator
+ *     node
+ *     device
+ *     memory
+ *
+ * Their spelling does not make them physical resources.
+ *
+ * Semantic analysis determines their meaning.
+ *
+ * This is required for POCO-REAF.
+ *
+ *
+ * ============================================================================
+ * QUALIFIED NAME VS QUANTUM IDENTITY
+ * ============================================================================
+ *
+ * Names such as:
+ *
+ *     q
+ *     logical_q
+ *     physical_q
+ *     operation
+ *     circuit
+ *     register
+ *
+ * remain source-level names.
+ *
+ * This grammar does NOT create:
+ *
+ *     QubitId
+ *     LogicalQubitId
+ *     PhysicalQubitId
+ *     QPUId
+ *
+ * Physical quantum identity is a semantic/backend concern.
+ *
+ * Quantum lowering remains:
+ *
+ *     source
+ *       ->
+ *     domain-neutral AST
+ *       ->
+ *     semantic quantum model
+ *       ->
+ *     quantum::ir
+ *       ->
+ *     optimization
+ *       ->
+ *     decomposition
+ *       ->
+ *     routing
+ *       ->
+ *     scheduling
+ *       ->
+ *     resilience/QEC
+ *       ->
+ *     ZQN
+ *       ->
+ *     HAL
+ *       ->
+ *     target
+ *
+ *
+ * ============================================================================
+ * NAME LISTS
+ * ============================================================================
+ *
+ * `nameList` represents a non-empty comma-separated list of simple
+ * identifiers.
+ *
+ * Example:
+ *
+ *     a, b, c
+ *
+ * `qualifiedNameList` represents a non-empty comma-separated list of qualified
+ * names.
+ *
+ * Example:
+ *
+ *     math::Vector, math::Matrix
+ *
+ * No finite cardinality is encoded.
+ *
+ *
+ * ============================================================================
+ * OPTIONAL LISTS
+ * ============================================================================
+ *
+ * Optional wrappers are deliberately separated from their non-empty forms.
+ *
+ * Therefore:
+ *
+ *     nameList
+ *
+ * always contains at least one name, while:
+ *
+ *     optionalNameList
+ *
+ * may contain none.
+ *
+ * This makes cardinality explicit at grammar boundaries.
+ *
+ *
+ * ============================================================================
+ * ALIAS CONTRACT
+ * ============================================================================
+ *
+ * Generic alias syntax:
+ *
+ *     qualified::name as alias
  *
  *     name as alias
  *
- * The legality of an alias in a particular context is decided by the
- * consuming grammar and semantic analysis.
+ * is represented by:
  *
- * The `as` spelling is represented by the canonical lexical token:
+ *     nameAlias
  *
- *     K_AS
+ * The keyword token is:
+ *
+ *     AS
+ *
+ * The target name and alias are both syntactic names.
+ *
+ * Alias legality is determined by the consuming grammar.
+ *
+ * For example, module/import/export grammars may impose additional rules,
+ * while this file remains reusable.
+ *
+ * This grammar does NOT resolve aliases.
+ *
+ *
+ * ============================================================================
+ * NAME REFERENCE CONTRACT
+ * ============================================================================
+ *
+ * `nameReference` represents either:
+ *
+ *     qualifiedName
+ *
+ * or:
+ *
+ *     nameAlias
+ *
+ * The alias alternative is placed first so the parser recognizes the
+ * structured form before its prefix-only form.
+ *
+ * No semantic predicate is required.
+ *
  *
  * ============================================================================
  * AST CONTRACT
  * ============================================================================
  *
- * The frontend AST should preserve enough source information to construct
- * canonical name nodes without resolving them.
- *
- * Recommended conceptual forms:
+ * The parse tree should map conceptually to:
  *
  *     IdentifierName
  *         spelling
+ *         source_span
+ *
+ *     NameSegment
+ *         identifier
  *         source_span
  *
  *     QualifiedName
@@ -335,133 +641,315 @@
  *         alias
  *         source_span
  *
- * The exact AST type names belong to src/frontend/ast/.
+ * The actual AST type names belong to the frontend AST implementation.
  *
- * This grammar MUST NOT depend on the AST implementation.
+ * The parser grammar MUST NOT import or depend on Rust AST implementation
+ * types.
+ *
  *
  * ============================================================================
  * SEMANTIC CONTRACT
  * ============================================================================
  *
- * After parsing:
+ * Parsing a name does not perform lookup.
  *
- *     identifier
- *         -> unresolved source name
+ * Later phases are responsible for:
  *
- *     qualifiedName
- *         -> ordered unresolved name segments
+ *     lexical-scope lookup;
+ *     module lookup;
+ *     namespace lookup;
+ *     package lookup;
+ *     symbol resolution;
+ *     type resolution;
+ *     capability resolution;
+ *     resource interpretation;
+ *     policy interpretation;
+ *     domain interpretation.
  *
- *     nameAlias
- *         -> alias declaration/reference syntax
+ * Unknown names are semantic errors, not grammar errors.
  *
- * Semantic analysis is responsible for:
  *
- *     scope lookup
- *     namespace lookup
- *     module resolution
- *     package resolution
- *     symbol resolution
- *     type resolution
- *     capability resolution
- *     resource interpretation
- *     domain interpretation
+ * ============================================================================
+ * TYPE CONTRACT
+ * ============================================================================
+ *
+ * Names can participate in type syntax without owning type syntax.
+ *
+ * For example:
+ *
+ *     math::Vector
+ *
+ * can be consumed by a type grammar.
+ *
+ * Generic arguments remain owned by the type subsystem:
+ *
+ *     math::Vector<T>
+ *
+ * This grammar does NOT consume:
+ *
+ *     <
+ *     >
+ *     generic arguments
+ *     type bounds
+ *     dependent expressions
+ *     associated types
+ *
+ *
+ * ============================================================================
+ * EFFECT CONTRACT
+ * ============================================================================
+ *
+ * Name parsing has no effects.
+ *
+ * A name such as:
+ *
+ *     network::send
+ *
+ * does not itself authorize network access.
+ *
+ * A name such as:
+ *
+ *     native::execute
+ *
+ * does not itself authorize native execution.
+ *
+ * Effects are determined by semantic context and the effect system.
+ *
+ *
+ * ============================================================================
+ * CAPABILITY CONTRACT
+ * ============================================================================
+ *
+ * Name syntax does not grant capabilities.
+ *
+ * For example:
+ *
+ *     quantum::operation
+ *     hardware::accelerator
+ *     tensor::compute
+ *
+ * are merely names at this layer.
+ *
+ * Capability requirements and resolution belong to:
+ *
+ *     grammar/resources/
+ *     grammar/security/
+ *     semantic capability analysis.
+ *
+ *
+ * ============================================================================
+ * RESOURCE CONTRACT
+ * ============================================================================
+ *
+ * Names can syntactically represent resource-related symbols, but this file
+ * does not assign resource quantities or physical identities.
+ *
+ * There are no grammar-level limits on:
+ *
+ *     resource names;
+ *     device names;
+ *     node names;
+ *     accelerator names;
+ *     qubit-related names.
+ *
+ * Requirements such as:
+ *
+ *     requires qubits >= required_qubits;
+ *     requires memory >= required_memory;
+ *     requires capability("tensor.compute");
+ *
+ * belong to resource/capability grammar and semantic analysis.
+ *
+ *
+ * ============================================================================
+ * CONTRACT CONTRACT
+ * ============================================================================
+ *
+ * Names may occur inside:
+ *
+ *     requires
+ *     ensures
+ *     invariant
+ *     assume
+ *     guarantee
+ *     property
+ *     assert
+ *
+ * expressions.
+ *
+ * This grammar does not own those constructs.
+ *
+ * It only supplies names to the consuming contract grammar.
+ *
+ *
+ * ============================================================================
+ * POLICY CONTRACT
+ * ============================================================================
+ *
+ * Names may identify:
+ *
+ *     policies;
+ *     permissions;
+ *     prohibitions;
+ *     requirements;
+ *     constraints;
+ *     preferences;
+ *     fallbacks;
+ *     deployment intents;
+ *     security rules.
+ *
+ * This file does not define policy semantics.
+ *
+ *
+ * ============================================================================
+ * PROVENANCE CONTRACT
+ * ============================================================================
+ *
+ * Every name occurrence must remain source-locatable.
+ *
+ * Downstream provenance may record:
+ *
+ *     source span;
+ *     original spelling;
+ *     containing declaration;
+ *     containing module;
+ *     resolution result;
+ *     transformation history.
+ *
+ * This grammar does not create provenance records.
+ *
  *
  * ============================================================================
  * IR CONTRACT
  * ============================================================================
  *
- * Names are not themselves a domain IR.
+ * This grammar produces no IR.
  *
- * They may become:
+ * Names may become references in:
  *
- *     symbol references
- *     type references
- *     module references
- *     operation names
- *     capability names
- *     resource requirement names
- *     quantum operation names
- *     HDL identifiers
- *     hardware capability identifiers
+ *     semantic model;
+ *     classical IR;
+ *     quantum::ir;
+ *     HDL/hardware representation;
+ *     distributed representation;
+ *     future domain representations.
  *
- * according to semantic context.
+ * A name must never force a particular backend representation.
  *
- * Quantum names MUST eventually lower through the established semantic
- * quantum pipeline and MUST NOT create a second competing quantum IR.
  *
  * ============================================================================
- * QUANTUM INDEPENDENCE
+ * QUANTUM BOUNDARY
  * ============================================================================
  *
- * This grammar intentionally does not distinguish:
+ * This file has no direct quantum grammar dependency.
  *
- *     qubit
- *     logical qubit
- *     physical qubit
- *     gate
- *     circuit
- *     QPU
+ * Quantum grammars reuse source-level names through this file.
  *
- * at the identifier syntax level.
+ * This guarantees that adding:
  *
- * For example:
+ *     a new gate;
+ *     a new quantum operation;
+ *     a new QPU family;
+ *     a new quantum representation;
+ *     a new quantum architecture;
  *
- *     q
- *     logical_q
- *     physical_q
- *     custom_gate
- *     quantum::ir
+ * does not require changing name syntax.
  *
- * are ordinary names as far as this grammar is concerned.
+ * No finite gate catalog is permitted here.
  *
- * Their meaning belongs to quantum semantic analysis and quantum::ir.
- *
- * This permits future quantum architectures without changing name syntax.
  *
  * ============================================================================
- * HARDWARE INDEPENDENCE
+ * HDL BOUNDARY
  * ============================================================================
  *
- * A name such as:
+ * HDL grammars may use names for:
  *
- *     gpu
- *     qpu
- *     accelerator
- *     node
- *     memory
- *     device
+ *     modules;
+ *     signals;
+ *     ports;
+ *     interfaces;
+ *     memories;
+ *     clocks;
+ *     parameters;
+ *     hardware abstractions.
  *
- * is not a hardware allocation merely because of its spelling.
+ * This file does not define widths, buses, registers, timing, placement,
+ * synthesis, technology mapping, or physical hardware.
  *
- * Physical mapping, placement, topology, capacity, calibration and target
- * selection remain downstream concerns.
  *
  * ============================================================================
- * CROSS-DOMAIN CONTRACT
+ * BACKEND BOUNDARY
  * ============================================================================
  *
- * The same name grammar is reusable by:
+ * Backend selection is downstream.
  *
- *     classical
- *     quantum
- *     hybrid
- *     HDL
- *     hardware
- *     distributed
- *     AI
- *     data
- *     networking
- *     security
- *     memory
- *     concurrency
- *     effects
- *     interoperability
- *     dialects
- *     macros
- *     metaprogramming
+ * Name syntax is independent of whether the eventual realization uses:
  *
- * Domain grammars may add contextual wrappers but MUST NOT create another
- * general-purpose identifier/qualified-name implementation.
+ *     tiny embedded hardware;
+ *     CPU;
+ *     multicore CPU;
+ *     GPU;
+ *     FPGA;
+ *     ASIC;
+ *     accelerator;
+ *     QPU;
+ *     simulator;
+ *     HPC;
+ *     cluster;
+ *     distributed infrastructure;
+ *     cloud;
+ *     heterogeneous hardware;
+ *     future computing systems.
+ *
+ *
+ * ============================================================================
+ * UB... FEATURE INTEGRATION
+ * ============================================================================
+ *
+ * The universal name system is intentionally sufficient for constructs
+ * introduced by the language's reasoning, knowledge, learning, adaptation,
+ * uncertainty, evidence, provenance, explainability, policy, agent,
+ * interoperability, simulation, and metaprogramming capabilities.
+ *
+ * Examples such as:
+ *
+ *     reasoning::model
+ *     knowledge::fact
+ *     learning::model
+ *     adaptation::policy
+ *     evidence::source
+ *     provenance::record
+ *     policy::execution
+ *     agent::planner
+ *
+ * remain names.
+ *
+ * The name grammar does not need new rules when such domains expand.
+ *
+ *
+ * ============================================================================
+ * NO APPLICATION-SPECIFIC NAME CATALOG
+ * ============================================================================
+ *
+ * This file MUST NOT reserve or enumerate names for:
+ *
+ *     computer vision;
+ *     sentiment analysis;
+ *     robotics;
+ *     blockchain;
+ *     VR;
+ *     AR;
+ *     payments;
+ *     administration;
+ *     legal operations;
+ *     vendor products;
+ *     particular AI models;
+ *     particular quantum gates;
+ *     particular hardware devices.
+ *
+ * Such concepts remain identifiers, libraries, dialects, policies, models,
+ * capabilities, or application-level constructs.
+ *
  *
  * ============================================================================
  * DETERMINISM
@@ -474,24 +962,121 @@
  *     - no filesystem access;
  *     - no network access;
  *     - no runtime callbacks;
- *     - no random behavior;
- *     - no target-specific branches.
+ *     - no randomness;
+ *     - no target inspection;
+ *     - no hardware discovery.
  *
- * Therefore name parsing depends only on the input token stream.
+ * Given the same canonical token stream and parser configuration, parsing is
+ * deterministic.
+ *
  *
  * ============================================================================
- * COMPATIBILITY
+ * SECURITY CONTRACT
  * ============================================================================
  *
- * Existing consumers that currently implement:
+ * Parsing a name MUST have no side effects.
+ *
+ * The parser MUST NOT:
+ *
+ *     - execute a command because of a name;
+ *     - open a file because of a name;
+ *     - contact a network because of a name;
+ *     - load a library because of a name;
+ *     - inspect credentials;
+ *     - inspect hardware;
+ *     - mutate the filesystem;
+ *     - invoke a backend.
+ *
+ *
+ * ============================================================================
+ * SCALABILITY CONTRACT
+ * ============================================================================
+ *
+ * The grammar imposes no finite language-level limits on:
+ *
+ *     - identifier length;
+ *     - qualification depth;
+ *     - namespace depth;
+ *     - number of names in a list;
+ *     - number of aliases;
+ *     - number of declarations using names;
+ *     - number of modules;
+ *     - number of resources;
+ *     - number of devices;
+ *     - number of nodes;
+ *     - number of qubits;
+ *     - number of CPUs;
+ *     - number of GPUs;
+ *     - number of FPGAs;
+ *     - number of accelerators;
+ *     - tensor rank;
+ *     - topology size.
+ *
+ * These are all unbounded at the language level.
+ *
+ * "Unbounded" here means "not artificially bounded by this grammar"; actual
+ * compilation is necessarily constrained by available computational
+ * resources and implementation limits.
+ *
+ *
+ * ============================================================================
+ * HARD-CODING AUDIT
+ * ============================================================================
+ *
+ * This file contains:
+ *
+ *     NO machine-capacity constants;
+ *     NO language-size constants;
+ *     NO fixed identifier length;
+ *     NO fixed qualification depth;
+ *     NO fixed namespace count;
+ *     NO CPU count;
+ *     NO GPU count;
+ *     NO FPGA count;
+ *     NO QPU count;
+ *     NO qubit count;
+ *     NO node count;
+ *     NO device count;
+ *     NO memory capacity;
+ *     NO register width;
+ *     NO tensor-rank ceiling;
+ *     NO topology ceiling;
+ *     NO vendor-specific resource identity.
+ *
+ * The only finite vocabulary referenced here is the lexical syntax supplied
+ * by the canonical lexer:
+ *
+ *     IDENTIFIER
+ *     AS
+ *     DOUBLE_COLON
+ *     COMMA
+ *
+ *
+ * ============================================================================
+ * COMPATIBILITY CONTRACT
+ * ============================================================================
+ *
+ * Existing consumers that require:
  *
  *     identifier
- *     (DOUBLE_COLON identifier)*
  *
- * should migrate to this canonical rule instead of defining another
- * equivalent qualified-name grammar.
+ * must use this canonical rule.
  *
- * Domain-specific wrappers are permitted, for example:
+ * Existing consumers that require:
+ *
+ *     qualifiedName
+ *
+ * must use this canonical rule.
+ *
+ * Existing consumers must NOT create parallel implementations such as:
+ *
+ *     identifier DOT identifier
+ *     identifier (COLON COLON identifier)*
+ *     identifier (DOUBLE_COLON identifier)+
+ *
+ * when they mean the same source-level qualified-name concept.
+ *
+ * Context-specific wrappers are permitted:
  *
  *     moduleName
  *         : qualifiedName
@@ -505,41 +1090,155 @@
  *         : qualifiedName
  *         ;
  *
- * Such wrappers express context without duplicating name syntax.
+ *     resourceName
+ *         : qualifiedName
+ *         ;
+ *
+ * Such wrappers add context without duplicating syntax.
+ *
+ *
+ * ============================================================================
+ * ANTLR COMPOSITION CONTRACT
+ * ============================================================================
+ *
+ * This file is a parser grammar and therefore declares:
+ *
+ *     parser grammar Names;
+ *
+ * The canonical lexer vocabulary is:
+ *
+ *     ZamaniLexer
+ *
+ * Therefore the parser option is:
+ *
+ *     tokenVocab = ZamaniLexer;
+ *
+ * Higher-level parser composition may import:
+ *
+ *     Names
+ *
+ * directly or indirectly.
+ *
+ * `grammar/core/qualified-names.g4` is the integration wrapper for contexts
+ * requiring qualified-reference abstractions.
+ *
+ * It must continue to import this grammar rather than duplicate:
+ *
+ *     qualifiedName
+ *     nameAlias
+ *     nameReference
+ *
+ *
+ * ============================================================================
+ * INTEGRATION CONTRACT
+ * ============================================================================
+ *
+ * REQUIRED UPSTREAM:
+ *
+ *     grammar/lexer/
+ *         provides canonical lexical tokens.
+ *
+ * REQUIRED CANONICAL LEXER:
+ *
+ *     grammar/antlr/ZamaniLexer.g4
+ *
+ * REQUIRED DOWNSTREAM:
+ *
+ *     grammar/core/qualified-names.g4
+ *     grammar/core/paths.g4
+ *     grammar/modules/
+ *     grammar/declarations/
+ *     grammar/types/
+ *     grammar/functions/
+ *     grammar/expressions/
+ *     grammar/statements/
+ *     grammar/resources/
+ *     grammar/security/
+ *     grammar/classical/
+ *     grammar/quantum/
+ *     grammar/hybrid/
+ *     grammar/hdl/
+ *     grammar/hardware/
+ *     grammar/distributed/
+ *     grammar/ai/
+ *     grammar/data/
+ *     grammar/networking/
+ *     grammar/interoperability/
+ *     grammar/metaprogramming/
+ *
+ * REQUIRED FRONTEND INTEGRATION:
+ *
+ *     parser
+ *         ->
+ *     parse tree
+ *         ->
+ *     domain-neutral AST
+ *         ->
+ *     name-resolution semantic model
+ *
+ * REQUIRED QUANTUM INTEGRATION:
+ *
+ *     source name
+ *         ->
+ *     AST reference
+ *         ->
+ *     semantic quantum object
+ *         ->
+ *     quantum::ir
+ *
+ * REQUIRED HARDWARE INTEGRATION:
+ *
+ *     source name
+ *         ->
+ *     AST reference
+ *         ->
+ *     hardware/resource semantics
+ *         ->
+ *     target realization
+ *
+ * No backend-specific syntax is required here.
+ *
  *
  * ============================================================================
  * RUST CONTRACT
  * ============================================================================
  *
- * This file contains no Rust code.
+ * The grammar itself contains no Rust code.
  *
- * Generated parser integration MUST:
+ * Generated parser integration MUST remain compatible with:
  *
- *     - compile with Rust 1.97 / 1.97.1;
- *     - remain safe Rust;
- *     - require no `unsafe`;
- *     - preserve source spans;
- *     - preserve deterministic parsing;
- *     - avoid machine-size assumptions.
+ *     Rust 1.97
+ *     Rust 1.97.1
+ *     Rust 2021
+ *
+ * and MUST use safe Rust.
+ *
+ * This file requires no `unsafe`.
+ *
+ * The grammar must not embed:
+ *
+ *     Rust actions;
+ *     Rust predicates;
+ *     runtime callbacks;
+ *     unsafe blocks;
+ *     backend calls.
+ *
  *
  * ============================================================================
- * TEST CONTRACT
+ * DIAGNOSTICS
  * ============================================================================
  *
- * Positive cases MUST include:
+ * Parser diagnostics for this grammar should identify:
  *
- *     value
- *     state
- *     quantum::ir
- *     math::linear::matrix
- *     hardware::capability
- *     accelerator::tensor
- *     a, b, c
- *     math::Vector, math::Matrix
- *     math::linear as linear
- *     quantum::operation as operation
+ *     - missing identifier;
+ *     - missing qualified-name segment;
+ *     - missing qualification separator;
+ *     - unexpected qualification separator;
+ *     - malformed alias;
+ *     - missing alias identifier;
+ *     - malformed comma-separated name list.
  *
- * Negative cases MUST include:
+ * Examples:
  *
  *     ::name
  *     name::
@@ -547,50 +1246,310 @@
  *     ::
  *     name as
  *     as name
+ *
+ * Semantic diagnostics are NOT emitted here.
+ *
+ * Examples of semantic errors:
+ *
+ *     unknown symbol;
+ *     unresolved module;
+ *     inaccessible name;
+ *     unknown capability;
+ *     unavailable resource;
+ *     invalid quantum object;
+ *     invalid hardware reference.
+ *
+ *
+ * ============================================================================
+ * POSITIVE TESTS
+ * ============================================================================
+ *
+ * The conformance suite MUST accept:
+ *
+ *     value
+ *     state
+ *     quantum
+ *     quantum::ir
+ *     math::linear
+ *     math::linear::matrix
+ *     hardware::capability
+ *     accelerator::tensor
+ *     reasoning::model
+ *     knowledge::fact
+ *     learning::model
+ *     adaptation::policy
+ *     provenance::record
+ *     a, b, c
+ *     math::Vector, math::Matrix
+ *     math::linear as linear
+ *     quantum::operation as operation
+ *
+ *
+ * ============================================================================
+ * NEGATIVE TESTS
+ * ============================================================================
+ *
+ * The conformance suite MUST reject:
+ *
+ *     ::
+ *     ::name
+ *     name::
+ *     name::::other
+ *     name as
+ *     as name
  *     name as as
+ *     name , , other
+ *     name,,other
  *
- * Boundary cases MUST include:
  *
- *     one-character identifiers
- *     underscore identifiers where accepted by the lexer
- *     very long identifiers
- *     deeply qualified names
- *     large name lists
- *     large qualified-name lists
- *     repeated aliases
+ * ============================================================================
+ * BOUNDARY TESTS
+ * ============================================================================
  *
- * Scalability tests MUST verify that the grammar itself does not impose
- * finite language limits.
+ * The suite MUST test:
  *
- * Compatibility tests MUST verify that all domain consumers use the same
- * canonical qualified-name structure.
+ *     - one-character identifiers;
+ *     - long identifiers;
+ *     - Unicode identifiers accepted by the lexer;
+ *     - underscore-containing identifiers accepted by the lexer;
+ *     - deeply qualified names;
+ *     - large qualified-name lists;
+ *     - large alias lists;
+ *     - keyword/identifier boundaries;
+ *     - adjacent punctuation;
+ *     - names adjacent to expressions;
+ *     - names adjacent to generic type syntax;
+ *     - names adjacent to paths.
+ *
+ * The grammar itself must not add an arbitrary test-size ceiling.
+ *
+ *
+ * ============================================================================
+ * SCALABILITY TESTS
+ * ============================================================================
+ *
+ * Scalability tests MUST verify that:
+ *
+ *     identifier length
+ *     qualification depth
+ *     list cardinality
+ *
+ * are limited only by implementation/resource availability and not by
+ * language-defined constants.
+ *
+ * Tests should progressively exercise increasingly large symbolic structures
+ * while treating any parser-memory/time ceiling as an implementation
+ * measurement rather than a language rule.
+ *
+ *
+ * ============================================================================
+ * CROSS-DOMAIN TESTS
+ * ============================================================================
+ *
+ * Verify that exactly the same name syntax works for:
+ *
+ *     classical computation;
+ *     quantum computation;
+ *     hybrid computation;
+ *     HDL;
+ *     hardware;
+ *     distributed computation;
+ *     networking;
+ *     AI;
+ *     data;
+ *     security;
+ *     resources;
+ *     effects;
+ *     interoperability;
+ *     metaprogramming;
+ *     dialects.
+ *
+ * Examples:
+ *
+ *     classical::value
+ *     quantum::operation
+ *     quantum::ir
+ *     hdl::module
+ *     hardware::capability
+ *     distributed::service
+ *     network::endpoint
+ *     reasoning::model
+ *     data::schema
+ *     security::policy
+ *
+ *
+ * ============================================================================
+ * DETERMINISM TESTS
+ * ============================================================================
+ *
+ * The same:
+ *
+ *     source
+ *     +
+ *     language version
+ *     +
+ *     lexer configuration
+ *     +
+ *     parser configuration
+ *
+ * must produce equivalent name parse-tree structure.
+ *
+ * Parsing must not depend on:
+ *
+ *     time;
+ *     randomness;
+ *     filesystem state;
+ *     network state;
+ *     target hardware;
+ *     available QPUs;
+ *     available GPUs;
+ *     scheduler state;
+ *     runtime state.
+ *
+ *
+ * ============================================================================
+ * ROUND-TRIP TESTS
+ * ============================================================================
+ *
+ * For formatter/tooling integration:
+ *
+ *     source
+ *       ->
+ *     lexer
+ *       ->
+ *     parser
+ *       ->
+ *     AST
+ *       ->
+ *     formatter
+ *       ->
+ *     parser
+ *
+ * must preserve name semantics.
+ *
+ * Original source spelling should remain recoverable where the language's
+ * formatting/normalization policy permits.
+ *
  *
  * ============================================================================
  * COMPLETION CRITERIA
  * ============================================================================
  *
- * This file is complete when:
+ * This file is DONE when:
  *
- *     [x] canonical lexer vocabulary is used;
- *     [x] IDENTIFIER is not redefined;
- *     [x] K_AS is used for `as`;
- *     [x] DOUBLE_COLON is used for `::`;
- *     [x] simple names are defined;
- *     [x] qualified names are defined;
- *     [x] name lists are defined;
- *     [x] qualified-name lists are defined;
- *     [x] aliases are defined;
- *     [x] name-reference composition is defined;
- *     [x] no physical-resource limits exist;
- *     [x] no domain-specific identifier grammar exists;
- *     [x] semantic resolution remains downstream;
- *     [x] paths remain separate;
- *     [x] member access remains separate;
- *     [x] generic type syntax remains separate;
- *     [x] quantum::ir remains downstream;
- *     [x] Rust integration requires no unsafe;
- *     [x] source-span preservation is specified;
- *     [x] positive/negative/boundary/scalability contracts are defined.
+ *     [ ] It is the sole canonical owner of `identifier`.
+ *
+ *     [ ] It is the sole canonical owner of `qualifiedName`.
+ *
+ *     [ ] It is the sole canonical owner of `nameAlias`.
+ *
+ *     [ ] It is the canonical owner of reusable name lists.
+ *
+ *     [ ] `identifiers.g4` does not redefine `identifier`.
+ *
+ *     [ ] `qualified-names.g4` does not redefine `qualifiedName`.
+ *
+ *     [ ] Path syntax remains in `paths.g4`.
+ *
+ *     [ ] Member-access syntax remains outside this grammar.
+ *
+ *     [ ] Generic type syntax remains outside this grammar.
+ *
+ *     [ ] Lexer rules are not duplicated.
+ *
+ *     [ ] `ZamaniLexer` is the parser token vocabulary.
+ *
+ *     [ ] `AS` is used rather than the obsolete `K_AS`.
+ *
+ *     [ ] `DOUBLE_COLON` is used for `::`.
+ *
+ *     [ ] No artificial name-size limits exist.
+ *
+ *     [ ] No hardware-size limits exist.
+ *
+ *     [ ] No quantum-size limits exist.
+ *
+ *     [ ] No application-specific keyword/name catalog exists.
+ *
+ *     [ ] No semantic predicates exist.
+ *
+ *     [ ] No embedded actions exist.
+ *
+ *     [ ] No filesystem/network/runtime access exists.
+ *
+ *     [ ] No unsafe Rust is required.
+ *
+ *     [ ] Rust 1.97 / 1.97.1 compatibility is maintained.
+ *
+ *     [ ] AST source spans are preservable.
+ *
+ *     [ ] Semantic resolution remains downstream.
+ *
+ *     [ ] quantum::ir remains the canonical quantum IR boundary.
+ *
+ *     [ ] Positive tests exist.
+ *
+ *     [ ] Negative tests exist.
+ *
+ *     [ ] Boundary tests exist.
+ *
+ *     [ ] Scalability tests exist.
+ *
+ *     [ ] Cross-domain tests exist.
+ *
+ *     [ ] Determinism tests exist.
+ *
+ *     [ ] Round-trip tests exist.
+ *
+ *     [ ] ANTLR generation succeeds through the canonical parser composition.
+ *
+ * ============================================================================
+ * FINAL ARCHITECTURAL RULE
+ * ============================================================================
+ *
+ * Names are symbolic source-level data.
+ *
+ * A name does not become a:
+ *
+ *     machine;
+ *     CPU;
+ *     GPU;
+ *     FPGA;
+ *     ASIC;
+ *     QPU;
+ *     qubit;
+ *     memory region;
+ *     network endpoint;
+ *     process;
+ *     actor;
+ *     device;
+ *     backend;
+ *
+ * merely because of its spelling.
+ *
+ * Meaning is assigned downstream.
+ *
+ * Therefore:
+ *
+ *     name syntax
+ *         !=
+ *     resource identity
+ *
+ *     name syntax
+ *         !=
+ *     hardware topology
+ *
+ *     name syntax
+ *         !=
+ *     quantum physical mapping
+ *
+ *     name syntax
+ *         !=
+ *     backend realization
+ *
+ * This separation is essential to:
+ *
+ *     Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
  *
  * ============================================================================
  */
@@ -598,26 +1557,25 @@
 parser grammar Names;
 
 options {
-    tokenVocab = ZamaniTokens;
+    tokenVocab = ZamaniLexer;
 }
 
 
 /*
  * ============================================================================
- * CANONICAL SIMPLE IDENTIFIER
+ * IDENTIFIER
  * ============================================================================
  *
- * The lexer owns the lexical definition of IDENTIFIER.
+ * Canonical parser-level use of the lexer-owned IDENTIFIER token.
  *
- * This rule owns its parser-level use.
+ * The lexer owns:
  *
- * Examples:
+ *     spelling
+ *     Unicode rules
+ *     normalization policy
+ *     keyword classification
  *
- *     value
- *     state
- *     matrix
- *     q
- *     algorithm
+ * This parser rule owns only the syntactic occurrence.
  */
 identifier
     : IDENTIFIER
@@ -628,13 +1586,8 @@ identifier
  * ============================================================================
  * SIMPLE NAME
  * ============================================================================
- *
- * A simpleName is an identifier used as a complete source-level name.
- *
- * This wrapper is useful when consumers need to distinguish a complete
- * simple-name occurrence from the lexical identifier token without creating
- * a second lexical concept.
  */
+
 simpleName
     : identifier
     ;
@@ -642,15 +1595,10 @@ simpleName
 
 /*
  * ============================================================================
- * QUALIFIED NAME SEGMENT
+ * NAME SEGMENT
  * ============================================================================
- *
- * A segment is currently one canonical identifier.
- *
- * Keeping the segment as a named parser rule gives future language evolution
- * an explicit extension point without duplicating qualified-name syntax in
- * domain grammars.
  */
+
 nameSegment
     : identifier
     ;
@@ -665,13 +1613,10 @@ nameSegment
  *
  * Examples:
  *
- *     math
+ *     value
  *     math::linear
  *     math::linear::matrix
  *     quantum::ir
- *     hardware::capability
- *
- * There is deliberately no finite maximum number of segments.
  */
 qualifiedName
     : nameSegment (DOUBLE_COLON nameSegment)*
@@ -683,13 +1628,7 @@ qualifiedName
  * NAME LIST
  * ============================================================================
  *
- * One or more simple identifiers separated by commas.
- *
- * Example:
- *
- *     a, b, c
- *
- * The grammar does not impose a maximum list size.
+ * Non-empty list.
  */
 nameList
     : identifier (COMMA identifier)*
@@ -700,12 +1639,8 @@ nameList
  * ============================================================================
  * OPTIONAL NAME LIST
  * ============================================================================
- *
- * Explicit nullable wrapper.
- *
- * Keeping nameList non-empty makes it reusable in contexts where at least
- * one name is mandatory.
  */
+
 optionalNameList
     : nameList?
     ;
@@ -716,15 +1651,7 @@ optionalNameList
  * QUALIFIED NAME LIST
  * ============================================================================
  *
- * One or more qualified names separated by commas.
- *
- * Examples:
- *
- *     math::Vector, math::Matrix
- *
- *     classical::vector,
- *     quantum::state,
- *     hardware::capability
+ * Non-empty list.
  */
 qualifiedNameList
     : qualifiedName (COMMA qualifiedName)*
@@ -736,6 +1663,7 @@ qualifiedNameList
  * OPTIONAL QUALIFIED NAME LIST
  * ============================================================================
  */
+
 optionalQualifiedNameList
     : qualifiedNameList?
     ;
@@ -746,19 +1674,16 @@ optionalQualifiedNameList
  * NAME ALIAS
  * ============================================================================
  *
- * Generic source-level alias form:
- *
- *     qualified::name as alias
+ * Generic alias syntax:
  *
  *     name as alias
  *
- * The lexical token for `as` is K_AS.
+ *     namespace::name as alias
  *
- * This rule defines syntax only. Whether aliases are permitted in a
- * particular declaration/import/use context is decided by the consumer.
+ * The lexical spelling `as` is represented by the canonical AS token.
  */
 nameAlias
-    : qualifiedName K_AS identifier
+    : qualifiedName AS identifier
     ;
 
 
@@ -767,17 +1692,15 @@ nameAlias
  * NAME REFERENCE
  * ============================================================================
  *
- * A name reference may be:
+ * A generic symbolic reference is either:
  *
- *     name
+ *     nameAlias
  *
  * or:
  *
- *     name as alias
+ *     qualifiedName
  *
- * Alias is listed first intentionally because it is the more structured
- * alternative and avoids making consumers depend on alternative ordering
- * elsewhere.
+ * Alias is listed first because it is the more structured form.
  */
 nameReference
     : nameAlias
@@ -790,7 +1713,7 @@ nameReference
  * NAME REFERENCE LIST
  * ============================================================================
  *
- * Reusable comma-separated sequence of names and aliases.
+ * Non-empty comma-separated symbolic references.
  */
 nameReferenceList
     : nameReference (COMMA nameReference)*
@@ -802,6 +1725,7 @@ nameReferenceList
  * OPTIONAL NAME REFERENCE LIST
  * ============================================================================
  */
+
 optionalNameReferenceList
     : nameReferenceList?
     ;
