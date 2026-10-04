@@ -1,21 +1,25 @@
+
 /*
  * ============================================================================
  * Zamani Programming Language
+ *
+ * File: grammar/types/slice.g4
+ * Grammar: Slice
+ * Status: Canonical modular slice-type grammar
+ *
+ * Compiler compatibility:
+ *   Rust 1.97
+ *   Rust 1.97.1
+ *   Rust edition 2021
+ *   Safe Rust only; no unsafe
+ *
+ * ============================================================================
+ * 1. PURPOSE
  * ============================================================================
  *
- * File:
- *     grammar/types/slice.g4
+ * Defines the canonical, target-independent syntax for slice types.
  *
- * Grammar:
- *     Slice
- *
- * Status:
- *     CANONICAL slice-type grammar component.
- *
- * Purpose:
- *     Defines the source-level syntax for dynamically sized slice types.
- *
- * Canonical source form:
+ * Canonical syntax:
  *
  *     [T]
  *
@@ -24,290 +28,336 @@
  *     [int]
  *     [float]
  *     [User]
- *     [Qubit]
  *     [Tensor<float>]
  *     [[int]]
+ *     [[[float]]]
  *     [fn(int) -> int]
+ *     [Qubit]
+ *     [Resource<T>]
+ *
+ * A slice describes a dynamically sized sequence of elements.
+ *
+ * This grammar describes type syntax only.
+ *
+ * It does not allocate memory, determine capacity, evaluate expressions,
+ * select hardware, or establish physical resource availability.
  *
  * ============================================================================
- * FILE CONTRACT
+ * 2. OWNERSHIP CONTRACT
  * ============================================================================
  *
- * This file is independently complete as the grammar component responsible
- * for slice syntax.
+ * OWNS:
  *
- * It owns:
+ *     sliceType
  *
- *   - sliceType;
- *   - the slice delimiters;
- *   - the relationship between slice syntax and its element type;
- *   - acceptance of recursively nested slice types;
- *   - delegation to the canonical typeExpression rule;
- *   - source-level slice syntax diagnostics;
- *   - slice-specific conformance requirements.
+ * DOES NOT OWN:
  *
- * It does NOT own:
- *
- *   - typeExpression;
- *   - primitive types;
- *   - named types;
- *   - generic types;
- *   - arrays;
- *   - tuples;
- *   - function types;
- *   - references;
- *   - pointers;
- *   - optional types;
- *   - result types;
- *   - quantum types;
- *   - hardware types;
- *   - resource types;
- *   - capability types;
- *   - dependent-type semantics;
- *   - type inference;
- *   - name resolution;
- *   - ownership;
- *   - borrowing;
- *   - runtime representation;
- *   - allocation;
- *   - memory placement;
- *   - hardware selection;
- *   - scheduling;
- *   - routing;
- *   - QEC;
- *   - ZQN;
- *   - HAL;
- *   - optimization;
- *   - backend selection.
+ *     typeExpression
+ *     typeCore
+ *     typeValueExpression
+ *     identifiers
+ *     qualified names
+ *     generic arguments
+ *     primitive types
+ *     named types
+ *     array types
+ *     tuple types
+ *     function types
+ *     reference types
+ *     pointer types
+ *     optional types
+ *     result types
+ *     quantum types
+ *     hardware types
+ *     resource types
+ *     capability types
+ *     type inference
+ *     type resolution
+ *     ownership
+ *     borrowing
+ *     lifetimes
+ *     memory allocation
+ *     runtime representation
+ *     memory placement
+ *     ABI layout
+ *     target selection
+ *     scheduling
+ *     routing
+ *     optimization
+ *     quantum error correction
+ *     quantum IR
+ *     hardware abstraction
  *
  * ============================================================================
- * AUTHORITY
+ * 3. CANONICAL AUTHORITY
  * ============================================================================
  *
- * This file is the sole canonical owner of the `sliceType` parser rule.
+ * This grammar is the sole owner of the sliceType parser rule.
  *
- * The following files MUST NOT become competing implementations:
+ * The canonical type composition grammar owns typeExpression.
+ *
+ * The canonical type composition grammar MUST delegate slice parsing to
+ * this grammar rather than defining another sliceType.
+ *
+ * No competing slice grammar may be introduced in:
  *
  *     grammar/types/types.g4
- *     grammar/types/array-types.g4
  *     grammar/types/array.g4
+ *     grammar/types/array-types.g4
  *     grammar/types/slice-types.g4
  *     grammar/antlr/Types.g4
  *
- * `grammar/types/types.g4` remains the canonical composition owner of
- * `typeExpression`.
- *
- * It delegates slice syntax to this grammar component.
+ * Existing type grammar files must use the canonical sliceType rule.
  *
  * ============================================================================
- * DEPENDENCY DIRECTION
+ * 4. ARRAY DISTINCTION
  * ============================================================================
  *
- * The dependency direction is:
+ * Slice:
  *
- *     ZamaniTokens
- *          |
- *          v
- *     Slice
- *          |
- *          v
- *     canonical typeExpression
- *          |
- *          v
- *     Types composition
+ *     [T]
  *
- * This grammar MUST NOT introduce another `typeExpression`.
+ * Explicitly sized array:
  *
- * This grammar MUST NOT copy primitive/generic/function/etc. type rules merely
- * to make itself independently parseable.
+ *     [T; N]
  *
- * The composition layer is responsible for supplying the canonical
- * `typeExpression` rule.
+ * These are different source-level type constructors.
  *
- * There must be no competing recursive type system.
+ * The array grammar MUST require its explicit cardinality:
+ *
+ *     arrayType
+ *         : LBRACK typeExpression arrayLength RBRACK
+ *         ;
+ *
+ * The array grammar MUST NOT accept [T] as an alternative representation
+ * of a sized array or an unspecified-cardinality array.
+ *
+ * The type composition grammar MUST distinguish the two forms without
+ * relying on semantic guessing.
+ *
+ * This file does not define arrayType or arrayLength.
  *
  * ============================================================================
- * ANTLR INTEGRATION
+ * 5. LEXICAL CONTRACT
  * ============================================================================
  *
- * This is a parser grammar.
+ * Grammar kind:
  *
- * It consumes the canonical lexer vocabulary:
+ *     ANTLR parser grammar
  *
- *     tokenVocab = ZamaniTokens;
+ * Canonical lexer vocabulary:
  *
- * It MUST NOT define lexer rules.
+ *     ZamaniLexer
  *
- * Required canonical tokens:
+ * Required tokens:
  *
  *     LBRACK
  *     RBRACK
  *
- * The element is parsed through:
+ * These tokens are owned by the canonical punctuation vocabulary.
  *
- *     typeExpression
+ * This grammar MUST NOT define lexer rules or literal spellings.
  *
- * supplied by the canonical type-system composition boundary.
+ * No token is introduced merely to represent a slice.
  *
  * ============================================================================
- * PUBLIC RULE
+ * 6. COMPOSITION CONTRACT
  * ============================================================================
+ *
+ * Public rule:
  *
  *     sliceType
  *
- * Canonical source syntax:
+ * Required external rule:
  *
- *     [ typeExpression ]
+ *     typeExpression
+ *
+ * typeExpression is supplied by the canonical type grammar composition.
+ *
+ * The element type must be parsed exactly once through typeExpression.
+ *
+ * This grammar MUST NOT define a second type-expression language.
+ *
+ * This grammar MUST NOT copy primitive, generic, function, reference,
+ * quantum, hardware, or resource type productions.
+ *
+ * The importing/composition grammar is responsible for resolving the
+ * canonical typeExpression dependency.
  *
  * ============================================================================
- * SOURCE-LEVEL SEMANTICS
+ * 7. SOURCE-LEVEL SEMANTICS
  * ============================================================================
  *
- * A slice represents a dynamically sized sequence.
+ * A slice represents a dynamically sized sequence of values of one
+ * element type.
  *
- * The syntax specifies:
+ * Its source-level structure is:
  *
- *     element type
+ *     Slice(element_type)
  *
- * It does NOT specify:
+ * For example:
+ *
+ *     [int]
+ *
+ * represents a slice whose element type is int.
+ *
+ * It does not prescribe:
  *
  *     element count
  *     capacity
  *     allocation strategy
  *     memory address
  *     memory bank
- *     device
- *     node
  *     processor
  *     accelerator
  *     physical qubit
- *     runtime container layout
+ *     device
+ *     node
+ *     storage layout
  *
- * For example:
+ * A slice may be empty at runtime if permitted by the applicable semantic
+ * and runtime rules.
  *
- *     [int]
+ * Empty slice values are not empty slice types.
  *
- * means a dynamically sized sequence whose element type is `int`.
+ * Therefore:
  *
- * It does not mean:
+ *     []
  *
- *     "allocate a fixed number of integers."
- *
- * ============================================================================
- * POCO-REAF
- * ============================================================================
- *
- * Slice syntax MUST remain independent of available hardware resources.
- *
- * The grammar MUST NOT encode:
- *
- *     MAX_SLICE_LENGTH
- *     MAX_ELEMENTS
- *     MAX_CAPACITY
- *     MAX_NESTING
- *     MAX_MEMORY
- *     MAX_ADDRESS_WIDTH
- *     MAX_REGISTER_WIDTH
- *     MAX_QUBITS
- *     MAX_CPUS
- *     MAX_GPUS
- *     MAX_FPGAS
- *     MAX_NODES
- *     MAX_DEVICES
- *
- * A program may impose its own semantic requirements, for example through
- * ordinary program expressions or resource contracts.
- *
- * Those requirements are not parser-level slice limits.
+ * is not a valid type expression.
  *
  * ============================================================================
- * SCALABILITY
+ * 8. AST CONTRACT
  * ============================================================================
  *
- * The grammar permits arbitrary recursive nesting subject only to the
- * implementation's configurable parsing/resource-safety policy.
+ * Canonical frontend representation:
  *
- * Examples:
+ *     TypeExpr::Slice(Box<TypeExpr>)
+ *
+ * Mapping:
  *
  *     [T]
+ *         |
+ *         v
+ *     sliceType
+ *         |
+ *         v
+ *     TypeExpr::Slice(Box::new(T))
  *
- *     [[T]]
+ * No additional AST variant is introduced.
  *
- *     [[[T]]]
+ * In particular, this grammar MUST NOT introduce:
  *
- *     [[[[T]]]]
+ *     SliceTypeExpr
+ *     DynamicArrayType
+ *     RuntimeSliceType
+ *     QuantumSliceType
  *
- * and so on.
+ * The existing frontend typed façade, where present, must delegate to
+ * the canonical TypeExpr representation.
  *
- * There is deliberately no grammar constant limiting nesting depth.
+ * The AST must preserve:
  *
- * Likewise:
+ *     complete slice source span
+ *     opening delimiter span
+ *     element type span
+ *     closing delimiter span
  *
- *     [T]
- *
- * does not encode the eventual number of elements.
- *
- * The runtime representation may scale from:
- *
- *     tiny
- *     ->
- *     large
- *     ->
- *     distributed
- *     ->
- *     heterogeneous
- *     ->
- *     future execution substrates
- *
- * without changing this grammar.
+ * Nested element types must retain their individual source spans.
  *
  * ============================================================================
- * TYPE COMPOSITION
+ * 9. SEMANTIC CONTRACT
  * ============================================================================
  *
- * The element position accepts the canonical `typeExpression`.
+ * Parsing establishes syntax and structure only.
  *
- * Therefore slices compose with all types already supported by the canonical
- * type system.
+ * Semantic analysis is responsible for:
+ *
+ *     element-type validity
+ *     generic substitution
+ *     name resolution
+ *     lifetime validation
+ *     ownership validation
+ *     borrowing validation
+ *     mutability validation
+ *     unsized-type restrictions
+ *     storage compatibility
+ *     type compatibility
+ *     resource feasibility
+ *
+ * The grammar MUST NOT:
+ *
+ *     evaluate expressions
+ *     infer element types
+ *     resolve identifiers
+ *     allocate elements
+ *     calculate capacity
+ *     convert symbolic values to machine integers
+ *     select memory locations
+ *     select hardware
+ *     impose implementation-specific type limits
+ *
+ * ============================================================================
+ * 10. TYPE COMPOSITION
+ * ============================================================================
+ *
+ * The element position delegates to typeExpression.
+ *
+ * This allows slices to compose with every type supported by the
+ * canonical type system.
  *
  * Examples:
  *
  *     [int]
  *     [User]
- *     [Vec<float>]
- *     [fn(int) -> int]
- *     [Qubit]
- *     [QRegister<N>]
+ *     [Vec<int>]
+ *     [Map<string, float>]
+ *     [fn(int) -> bool]
+ *     [&T]
+ *     [Result<T, E>]
+ *     [Tensor<float>]
  *     [Resource<T>]
+ *     [Capability<T>]
  *
- * Nested slices are naturally represented:
+ * Nested slices:
  *
  *     [[int]]
- *
  *     [[[float]]]
+ *     [[Vec<T>]]
  *
- * This grammar does not need separate productions for each domain.
+ * The grammar does not enumerate nesting levels.
  *
  * ============================================================================
- * GENERICS
+ * 11. CLASSICAL INTEGRATION
  * ============================================================================
  *
- * Generic syntax remains owned by the generic type grammar and canonical
- * `typeExpression` composition.
+ * Classical types are accepted through typeExpression.
  *
  * Examples:
  *
- *     [Vec<int>]
- *     [Map<str, float>]
- *     [Tensor<float, N, M>]
+ *     [int]
+ *     [float]
+ *     [bool]
+ *     [string]
+ *     [Tensor<float>]
  *
- * `slice.g4` does not duplicate generic argument parsing.
+ * This grammar does not prescribe:
+ *
+ *     numeric representation
+ *     integer width
+ *     floating-point format
+ *     vectorization
+ *     memory layout
+ *     CPU instruction selection
+ *
+ * These belong to the semantic and backend layers.
  *
  * ============================================================================
- * QUANTUM INTEGRATION
+ * 12. QUANTUM INTEGRATION
  * ============================================================================
  *
- * Quantum types are consumed through the canonical type-expression boundary.
+ * Quantum types may be slice element types when valid in the canonical
+ * type system.
  *
  * Examples:
  *
@@ -316,297 +366,230 @@
  *     [QuantumState]
  *     [QRegister<N>]
  *
- * These are source-level types.
+ * These are source-level type expressions.
+ *
+ * A slice of Qubit does not allocate physical qubits.
  *
  * This grammar MUST NOT:
  *
- *     - allocate physical qubits;
- *     - identify physical qubits;
- *     - define coupling maps;
- *     - select a QPU;
- *     - perform routing;
- *     - perform scheduling;
- *     - define calibration;
- *     - implement QEC;
- *     - define ZQN semantics;
- *     - access HAL state.
+ *     allocate physical qubits
+ *     identify physical qubits
+ *     define coupling maps
+ *     choose a quantum processor
+ *     route quantum operations
+ *     schedule quantum circuits
+ *     define calibration
+ *     implement error correction
+ *     create another quantum IR
  *
- * Quantum semantic lowering remains downstream and `quantum::ir` remains the
- * canonical quantum semantic boundary.
+ * Canonical quantum integration:
+ *
+ *     source
+ *       |
+ *       v
+ *     frontend TypeExpr
+ *       |
+ *       v
+ *     semantic quantum type
+ *       |
+ *       v
+ *     quantum::ir
+ *       |
+ *       v
+ *     optimization
+ *       |
+ *       v
+ *     decomposition
+ *       |
+ *       v
+ *     routing
+ *       |
+ *       v
+ *     scheduling
+ *       |
+ *       v
+ *     QEC / resilience
+ *       |
+ *       v
+ *     ZQN
+ *       |
+ *       v
+ *     HAL
+ *       |
+ *       v
+ *     target
  *
  * ============================================================================
- * CLASSICAL INTEGRATION
+ * 13. HDL AND HARDWARE INTEGRATION
  * ============================================================================
  *
- * Classical types are consumed through `typeExpression`.
- *
- * Examples:
- *
- *     [int]
- *     [float]
- *     [bool]
- *     [String]
- *     [Tensor<float>]
- *
- * No classical runtime representation is prescribed here.
- *
- * ============================================================================
- * HDL / HARDWARE INTEGRATION
- * ============================================================================
- *
- * Hardware-related source types may appear as element types if they are valid
- * canonical Zamani types.
+ * Hardware-related types may be element types if supported by the
+ * canonical type system.
  *
  * Examples:
  *
  *     [Signal]
+ *     [Signal<T>]
  *     [HardwareValue]
  *     [Resource<T>]
  *
- * This grammar does not select physical hardware.
+ * This grammar does not prescribe:
  *
- * Hardware capabilities, placement, topology, memory resources, accelerator
- * mapping and deployment remain owned by:
+ *     register width
+ *     signal width
+ *     physical wiring
+ *     placement
+ *     timing
+ *     memory banks
+ *     device topology
+ *     synthesis
+ *     physical implementation
  *
- *     grammar/hardware/
- *     grammar/resources/
- *     grammar/compile/
- *     grammar/execution/
+ * Hardware realization belongs to the HDL, hardware, compiler, and
+ * backend subsystems.
  *
  * ============================================================================
- * RESOURCE INTEGRATION
+ * 14. RESOURCE AND CAPABILITY INTEGRATION
  * ============================================================================
  *
  * A slice type describes a type-level sequence abstraction.
  *
- * It is NOT a resource declaration.
+ * It is not a resource declaration.
  *
- * Therefore:
- *
- *     [T]
- *
- * does not mean:
- *
- *     allocate N elements
- *
- * and does not reserve:
+ * The grammar does not reserve:
  *
  *     memory
+ *     storage
  *     devices
- *     nodes
+ *     processors
  *     accelerators
+ *     nodes
+ *     qubits
  *
- * Resource feasibility is established downstream.
+ * Resource requirements are handled by the canonical resource system.
+ *
+ * Capability negotiation and target feasibility remain downstream.
  *
  * ============================================================================
- * ARRAY DISTINCTION
+ * 15. UNIVERSAL COMPUTATION INTEGRATION
  * ============================================================================
  *
- * Slice and array types MUST remain semantically distinct.
+ * Slices are domain-neutral.
  *
- * Slice:
+ * They may be used by:
+ *
+ *     classical computation
+ *     quantum computation
+ *     hybrid computation
+ *     HDL
+ *     numerical computation
+ *     tensor computation
+ *     data processing
+ *     reasoning
+ *     learning
+ *     adaptation
+ *     knowledge systems
+ *     agents
+ *     distributed computation
+ *     neural-symbolic computation
+ *
+ * These domains MUST NOT introduce separate slice-type grammars.
+ *
+ * Domain-specific constraints, effects, capabilities, contracts,
+ * policies, evidence, and provenance are owned by their respective
+ * semantic systems.
+ *
+ * ============================================================================
+ * 16. POCO-REAF AND PORTABILITY
+ * ============================================================================
+ *
+ * Slice syntax MUST remain independent of available hardware.
+ *
+ * A source-level slice must not encode:
+ *
+ *     a particular processor
+ *     a particular accelerator
+ *     a particular device
+ *     a particular node
+ *     a particular memory capacity
+ *     a particular physical address width
+ *
+ * The same source-level type must remain meaningful across supported
+ * execution environments.
+ *
+ * A target that cannot realize a required operation or resource must
+ * report a feasibility or capability diagnostic.
+ *
+ * It must not silently change the source program's meaning.
+ *
+ * ============================================================================
+ * 17. SCALABILITY
+ * ============================================================================
+ *
+ * There is no grammar-level maximum for:
+ *
+ *     slice element count
+ *     slice capacity
+ *     slice nesting
+ *     element-type complexity
+ *     generic composition
+ *     target resource count
+ *
+ * Examples:
  *
  *     [T]
+ *     [[T]]
+ *     [[[T]]]
+ *     [[[[T]]]]
  *
- * represents a dynamically sized sequence.
+ * and further recursive compositions.
  *
- * An array type, where supported, represents a sequence with a source-level
- * size expression.
+ * Grammar recursion does not establish an unlimited implementation
+ * resource guarantee.
  *
- * For example, an array form may eventually be represented by a separate
- * canonical grammar such as:
+ * Parser and compiler resource-safety controls must be explicit,
+ * configurable implementation policies.
  *
- *     [T; N]
+ * Such controls must not silently become language-level capacity limits.
  *
- * if that syntax is part of the normative Zamani type specification.
- *
- * This file MUST NOT silently reinterpret array syntax as slice syntax.
- *
- * Therefore this rule accepts exactly:
- *
- *     [ typeExpression ]
- *
- * with no size expression inside the brackets.
+ * Runtime capacity and physical feasibility are determined downstream.
  *
  * ============================================================================
- * AST CONTRACT
+ * 18. DETERMINISM
  * ============================================================================
  *
- * The canonical frontend representation is:
+ * For a fixed token sequence and fixed canonical vocabulary, slice parsing
+ * must produce a deterministic structural result.
  *
- *     TypeExpr::Slice(Box<TypeExpr>)
+ * The parser must preserve:
  *
- * as already established by the repository's frontend AST.
- *
- * The parser-to-AST mapping is:
- *
- *     sliceType
- *         |
- *         v
  *     element type
- *         |
- *         v
- *     TypeExpr::Slice(Box::new(element))
+ *     nested type structure
+ *     source ordering
+ *     source locations
  *
- * No new AST enum is introduced.
+ * This grammar contains no:
  *
- * No:
- *
- *     SliceTypeExpr
- *     DynamicArrayType
- *     RuntimeSliceType
- *     QuantumSliceType
- *
- * variants are introduced merely for this grammar.
- *
- * The existing typed façade:
- *
- *     src/frontend/ast/node/types/slice.rs
- *
- * remains a façade over the canonical `TypeExpr`.
+ *     semantic predicates
+ *     embedded actions
+ *     I/O
+ *     source execution
+ *     target queries
+ *     runtime allocation
  *
  * ============================================================================
- * SOURCE SPANS
+ * 19. DIAGNOSTICS
  * ============================================================================
  *
- * The frontend AST must preserve the complete source span of the slice,
- * including:
+ * Required syntax diagnostics include:
  *
- *     [
- *     element type
- *     ]
- *
- * The element type must retain its own nested source span.
- *
- * This permits diagnostics such as:
- *
- *     invalid element type
- *
- * to point at the element rather than merely at the surrounding brackets.
- *
- * ============================================================================
- * SEMANTIC CONTRACT
- * ============================================================================
- *
- * Parsing establishes only that:
- *
- *     [T]
- *
- * is syntactically a slice type.
- *
- * Semantic analysis determines:
- *
- *     - whether T is a valid type;
- *     - whether T is resolved;
- *     - whether T is generic;
- *     - whether T is dependent;
- *     - whether T satisfies ownership constraints;
- *     - whether T is compatible with the surrounding context;
- *     - whether the program's resource requirements can be satisfied.
- *
- * This grammar performs none of those checks.
- *
- * ============================================================================
- * IR CONTRACT
- * ============================================================================
- *
- * Slice syntax does not introduce an independent IR.
- *
- * The canonical flow is:
- *
- *     sliceType
- *          |
- *          v
- *     TypeExpr::Slice
- *          |
- *          v
- *     semantic type model
- *          |
- *          v
- *     canonical IR
- *          |
- *          v
- *     target-specific lowering
- *
- * If the element type belongs to the quantum domain, quantum semantics remain
- * represented through the established semantic pipeline and ultimately
- * `quantum::ir` where applicable.
- *
- * `slice.g4` must never import:
- *
- *     quantum::ir
- *     QEC
- *     ZQN
- *     HAL
- *     scheduler
- *     router
- *     backend
- *
- * ============================================================================
- * COMPILER CONTRACT
- * ============================================================================
- *
- * The compiler may determine:
- *
- *     - representation;
- *     - allocation strategy;
- *     - ownership strategy;
- *     - storage location;
- *     - memory layout;
- *     - vectorization;
- *     - accelerator mapping;
- *     - distributed representation;
- *     - garbage/reclamation strategy;
- *     - ABI representation.
- *
- * None of these decisions are encoded in this grammar.
- *
- * ============================================================================
- * RUNTIME CONTRACT
- * ============================================================================
- *
- * Runtime behavior is outside grammar ownership.
- *
- * A slice may be implemented using any valid runtime representation that
- * preserves the language semantics.
- *
- * Possible implementations include:
- *
- *     contiguous storage
- *     segmented storage
- *     distributed storage
- *     accelerator-backed storage
- *     managed storage
- *     another future representation
- *
- * The grammar does not choose among them.
- *
- * ============================================================================
- * DETERMINISM
- * ============================================================================
- *
- * Slice syntax is deterministic:
- *
- *     '[' typeExpression ']'
- *
- * The element type occurs exactly once.
- *
- * The parser must preserve source ordering and must not infer target-specific
- * properties.
- *
- * ============================================================================
- * DIAGNOSTICS
- * ============================================================================
- *
- * Syntax diagnostics should distinguish:
- *
- *     missing '['
+ *     missing opening bracket
  *     missing element type
- *     missing ']'
+ *     missing closing bracket
  *     malformed nested type
- *     array syntax appearing where slice syntax is required
+ *     sized array syntax used where a slice is required
  *
- * Examples of malformed syntax:
+ * Invalid examples:
  *
  *     []
  *     [;]
@@ -614,55 +597,60 @@
  *     int]
  *     [int; N]
  *
- * The last form is deliberately not accepted by this grammar because it is
- * an array form, not a slice form.
+ * The final example belongs to arrayType, not sliceType.
  *
- * Semantic diagnostics belong outside this grammar.
+ * Parser recovery must not silently reinterpret malformed sized-array
+ * syntax as a valid slice.
+ *
+ * Semantic errors must be reported by semantic analysis.
  *
  * ============================================================================
- * SECURITY
+ * 20. SECURITY AND IMPLEMENTATION REQUIREMENTS
  * ============================================================================
  *
- * This grammar:
+ * This file contains grammar definitions only.
  *
- *     - performs no I/O;
- *     - performs no filesystem access;
- *     - performs no network access;
- *     - executes no source program;
- *     - allocates no runtime slice;
- *     - accesses no hardware;
- *     - performs no backend invocation;
- *     - contains no Rust;
- *     - contains no `unsafe`.
+ * It:
  *
- * Generated Rust integration must remain compatible with:
+ *     performs no I/O
+ *     executes no source program
+ *     evaluates no expression
+ *     accesses no filesystem
+ *     accesses no network
+ *     accesses no hardware
+ *     allocates no runtime slice
+ *     contains no embedded Rust
+ *     requires no unsafe Rust
+ *
+ * Generated Rust integration must use:
  *
  *     Rust 1.97
  *     Rust 1.97.1
  *     edition 2021
  *
- * and must use safe Rust only.
+ * No unsafe Rust is required or permitted by this grammar contract.
  *
  * ============================================================================
- * TEST CONTRACT
+ * 21. TEST CONTRACT
  * ============================================================================
  *
- * Positive cases:
+ * Positive:
  *
  *     [int]
  *     [float]
  *     [bool]
- *     [String]
+ *     [string]
  *     [User]
  *     [Vec<int>]
+ *     [Map<string, float>]
  *     [Qubit]
  *     [QuantumState]
  *     [Resource<T>]
  *     [[int]]
- *     [[[int]]]
+ *     [[[float]]]
  *     [fn(int) -> int]
  *
- * Negative cases:
+ * Negative:
  *
  *     []
  *     [;]
@@ -671,90 +659,127 @@
  *     [int; N]
  *     [int,,]
  *
- * Boundary cases:
+ * Boundary:
  *
  *     [T]
  *     [[T]]
  *     deeply nested slices
- *     slice of a generic type
- *     slice of a function type
- *     slice of a quantum type
- *     slice of a resource type
+ *     generic element types
+ *     function element types
+ *     reference element types
+ *     quantum element types
+ *     resource element types
  *
- * Scalability cases:
+ * Scalability:
  *
- *     no maximum element count;
- *     no maximum type nesting encoded in grammar;
- *     no maximum resource count;
- *     no maximum qubit count;
- *     no maximum hardware size;
- *     no maximum slice capacity.
+ *     no grammar-level maximum element count
+ *     no grammar-level maximum capacity
+ *     no enumerated nesting levels
+ *     no fixed target count
+ *     no physical resource limits
  *
- * Compatibility cases:
+ * Determinism:
  *
- *     native Rust parser `[T]`
- *     canonical ANTLR parser `[T]`
- *     canonical TypeExpr::Slice
- *     semantic Slice type
+ *     equivalent type structures produce equivalent AST structures
+ *     nested slice ordering is preserved
+ *     element source spans are preserved
  *
- * Determinism cases:
+ * Compatibility:
  *
- *     equivalent source must produce the same structural slice representation;
- *     element ordering must be preserved;
- *     nested slice structure must be preserved.
- *
- * ============================================================================
- * HARD-CODING AUDIT
- * ============================================================================
- *
- * Forbidden in this grammar:
- *
- *     MAX_SLICE_LENGTH
- *     MAX_ELEMENTS
- *     MAX_CAPACITY
- *     MAX_DEPTH
- *     MAX_QUBITS
- *     MAX_CPUS
- *     MAX_GPUS
- *     MAX_FPGAS
- *     MAX_NODES
- *     MAX_MEMORY
- *
- * No physical identifier or target-specific resource identifier may occur.
+ *     canonical lexer vocabulary
+ *     canonical type composition
+ *     existing TypeExpr::Slice
+ *     native parser type handling
+ *     ANTLR parser type handling
  *
  * ============================================================================
- * INTEGRATION CHECKLIST
+ * 22. INTEGRATION CONTRACT
  * ============================================================================
  *
- * `slice.g4` is complete only when:
+ * DEPENDS_ON:
  *
- *     [ ] `sliceType` is the sole canonical slice grammar rule;
- *     [ ] `typeExpression` remains owned by `types.g4`;
- *     [ ] canonical `ZamaniTokens` is consumed;
- *     [ ] `LBRACK` and `RBRACK` are canonical tokens;
- *     [ ] `[T]` is accepted;
- *     [ ] `[]` is rejected;
- *     [ ] `[T; N]` is not silently interpreted as a slice;
- *     [ ] nested slices are accepted;
- *     [ ] generic element types are accepted;
- *     [ ] function element types are accepted;
- *     [ ] quantum element types are accepted;
- *     [ ] resource element types are accepted;
- *     [ ] no hardware limits are encoded;
- *     [ ] no runtime representation is encoded;
- *     [ ] AST maps to `TypeExpr::Slice`;
- *     [ ] source spans are preserved;
- *     [ ] semantic validation remains downstream;
- *     [ ] IR lowering remains downstream;
- *     [ ] compiler decisions remain downstream;
- *     [ ] runtime decisions remain downstream;
- *     [ ] positive tests exist;
- *     [ ] negative tests exist;
- *     [ ] boundary tests exist;
- *     [ ] scalability tests exist;
- *     [ ] compatibility tests exist;
- *     [ ] determinism tests exist;
- *     [ ] hard-coding audit passes.
+ *     grammar/types/types.g4
+ *     grammar/types/array.g4
+ *     grammar/lexer/punctuation.g4
+ *     canonical ZamaniLexer vocabulary
+ *
+ * EXPORTS:
+ *
+ *     sliceType
+ *
+ * CONSUMED_BY:
+ *
+ *     grammar/types/types.g4
+ *
+ * AST_OWNER:
+ *
+ *     Existing frontend TypeExpr
+ *
+ * AST_VARIANT:
+ *
+ *     TypeExpr::Slice(Box<TypeExpr>)
+ *
+ * SEMANTIC_OWNER:
+ *
+ *     Canonical type semantic analysis
+ *
+ * IR_OWNER:
+ *
+ *     Existing canonical semantic IR
+ *
+ * QUANTUM_IR_OWNER:
+ *
+ *     quantum::ir
+ *
+ * SPEC_OWNER:
+ *
+ *     grammar/specification/types.md
+ *
+ * TEST_OWNER:
+ *
+ *     grammar/tests/types/slice/
+ *
+ * RUST_BASELINE:
+ *
+ *     Rust 1.97
+ *     Rust 1.97.1
+ *     Rust 2021
+ *
+ * SAFETY:
+ *
+ *     Safe Rust only
+ *
+ * ============================================================================
+ * 23. COMPLETION CRITERIA
+ * ============================================================================
+ *
+ * [ ] sliceType is the sole canonical slice rule.
+ * [ ] ZamaniLexer is the canonical token vocabulary.
+ * [ ] LBRACK and RBRACK are canonical lexer tokens.
+ * [ ] typeExpression is owned by the type composition grammar.
+ * [ ] [T] parses as a slice.
+ * [ ] [T; N] parses as an explicitly sized array.
+ * [ ] [] is rejected as a type.
+ * [ ] Nested slices parse correctly.
+ * [ ] Generic element types parse correctly.
+ * [ ] Function element types parse correctly.
+ * [ ] Quantum element types compose correctly.
+ * [ ] Resource element types compose correctly.
+ * [ ] AST maps to the existing TypeExpr::Slice.
+ * [ ] Source spans are preserved.
+ * [ ] Semantic analysis remains downstream.
+ * [ ] No physical resource is allocated by parsing.
+ * [ ] No hardware capacity is encoded.
+ * [ ] No artificial grammar nesting limit exists.
+ * [ ] No competing slice grammar exists.
+ * [ ] Positive tests pass.
+ * [ ] Negative tests pass.
+ * [ ] Boundary tests pass.
+ * [ ] Scalability tests pass.
+ * [ ] Determinism tests pass.
+ * [ ] Rust 1.97 compatibility is verified.
+ * [ ] Rust 1.97.1 compatibility is verified.
+ * [ ] No unsafe Rust is introduced.
  *
  * ============================================================================
  */
@@ -762,26 +787,21 @@
 parser grammar Slice;
 
 options {
-    tokenVocab = ZamaniTokens;
+    tokenVocab = ZamaniLexer;
 }
 
-
 /*
- * ============================================================================
- * PUBLIC SLICE-TYPE RULE
- * ============================================================================
- *
- * Canonical source syntax:
+ * Canonical slice syntax:
  *
  *     [T]
  *
- * where `T` is supplied by the canonical type-expression composition layer.
+ * The element type is parsed using the canonical typeExpression rule
+ * supplied by the type-system composition boundary.
  *
- * `typeExpression` is intentionally NOT defined here.
+ * Do not add array cardinality syntax here.
+ *
+ * Do not define typeExpression here.
  */
-
 sliceType
-    : LBRACK
-      typeExpression
-      RBRACK
+    : LBRACK typeExpression RBRACK
     ;
