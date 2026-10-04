@@ -6,407 +6,556 @@
  * File:
  *     grammar/core/capabilities.g4
  *
- * Purpose:
- *     Canonical parser grammar for source-level capability declarations and
- *     capability references.
+ * Grammar:
+ *     Capabilities
  *
- * Language:
- *     Zamani
+ * Status:
+ *     Canonical / production capability syntax
  *
- * Grammar technology:
- *     ANTLR4 parser grammar
- *
- * Rust implementation baseline:
+ * Implementation baseline:
  *     Rust 1.97 / Rust 1.97.1
+ *     Rust 2021
+ *     safe Rust only
  *
  * Safety:
- *     This grammar contains no embedded Rust actions and requires no `unsafe`.
- *     The Zamani compiler implementation MUST use safe Rust only.
+ *     Pure ANTLR4 parser grammar.
+ *     No embedded Rust.
+ *     No semantic predicates.
+ *     No runtime execution.
+ *     No filesystem access.
+ *     No network access.
+ *     No hardware discovery.
+ *     No unsafe implementation requirement.
  *
  * ============================================================================
- * ARCHITECTURAL ROLE
+ * FEATURE CONTRACT
  * ============================================================================
  *
- * This file owns ONLY the SOURCE SYNTAX of capabilities.
+ * PURPOSE
+ * -------
  *
- * A capability expresses a named computational property, ability, facility,
- * semantic feature, execution feature, language feature, or extension
- * contract.
+ * This file is the canonical source-level syntax authority for Zamani
+ * capabilities.
+ *
+ * A capability identifies an open-ended computational ability, property,
+ * facility, semantic feature, execution facility, language feature, or
+ * extension contract.
  *
  * Examples:
  *
- *     capability zamani::quantum::dynamic_control;
- *     capability zamani::quantum::dynamic_control version 1.2.0;
- *     capability zamani::compute::parallel;
- *     capability future::example;
+ *     capability quantum::dynamic_control;
+ *     capability quantum::dynamic_control version >= 1.2.0;
+ *     capability compute::parallel;
+ *     capability tensor::compute;
+ *     capability security::trusted_execution;
+ *     capability future::computing::new_capability;
  *
- * A capability is SOURCE INTENT.
+ * A capability describes WHAT an environment or semantic system can provide.
  *
- * It is NOT:
+ * It does NOT select a particular implementation.
  *
- *     - a physical device;
- *     - a hardware identifier;
- *     - a CPU;
- *     - a GPU;
- *     - an FPGA;
- *     - an ASIC;
- *     - a QPU;
- *     - a physical qubit;
- *     - a machine topology;
- *     - a resource allocation;
- *     - a scheduler decision;
- *     - a routing decision;
- *     - a calibration record;
- *     - a backend selection;
- *     - a runtime authorization token.
+ *
+ * OWNS
+ * ----
+ *
+ * This file owns:
+ *
+ *     capabilityDeclaration
+ *     capabilityReference
+ *     capabilityName
+ *     capabilityExpression
+ *     capabilityVersionClause
+ *     capabilityVersionExpression
+ *     capabilityNameList
+ *     capabilityReferenceList
+ *     capabilityExpressionList
+ *     capabilityAlias
+ *     capabilityAliasList
+ *     capabilityRequirementReference
+ *     capabilityProvisionReference
+ *     capabilityPreferenceReference
+ *     capabilityConstraintReference
+ *     capabilityEffectReference
+ *     capabilityTargetReference
+ *
+ *
+ * DOES NOT OWN
+ * -------------
+ *
+ * This file does NOT own:
+ *
+ *     identifiers
+ *     qualified names
+ *     lexical tokens
+ *     keyword spelling
+ *     attributes
+ *     version semantics
+ *     version compatibility
+ *     requirements
+ *     resources
+ *     resource quantities
+ *     constraints
+ *     preferences
+ *     policies
+ *     effects
+ *     targets
+ *     hardware discovery
+ *     device selection
+ *     topology
+ *     quantum operations
+ *     physical qubits
+ *     quantum::ir
+ *     HDL implementation
+ *     routing
+ *     scheduling
+ *     calibration
+ *     QEC
+ *     ZQN
+ *     runtime authorization
+ *     backend selection
+ *     execution
+ *
+ *
+ * DEPENDS_ON
+ * ----------
+ *
+ *     grammar/antlr/ZamaniLexer.g4
+ *     grammar/core/names.g4
+ *     grammar/core/attributes.g4
+ *     grammar/core/versioning.g4
+ *
+ *
+ * EXPORTS
+ * -------
+ *
+ * Primary:
+ *
+ *     capabilityDeclaration
+ *     capabilityReference
+ *     capabilityName
+ *     capabilityExpression
+ *     capabilityVersionClause
+ *     capabilityVersionExpression
+ *
+ * Secondary reusable:
+ *
+ *     capabilityNameList
+ *     capabilityReferenceList
+ *     capabilityExpressionList
+ *     capabilityAlias
+ *     capabilityAliasList
+ *     capabilityRequirementReference
+ *     capabilityProvisionReference
+ *     capabilityPreferenceReference
+ *     capabilityConstraintReference
+ *     capabilityEffectReference
+ *     capabilityTargetReference
+ *
+ *
+ * CONSUMED_BY
+ * -----------
+ *
+ *     grammar/declarations/capabilities.g4
+ *     grammar/core/requirements.g4
+ *     grammar/resources/
+ *     grammar/effects/
+ *     grammar/security/
+ *     grammar/policies/
+ *     grammar/execution/
+ *     grammar/compile/
+ *     grammar/classical/
+ *     grammar/quantum/
+ *     grammar/hybrid/
+ *     grammar/hdl/
+ *     grammar/hardware/
+ *     grammar/distributed/
+ *     grammar/networking/
+ *     grammar/ai/
+ *     grammar/interoperability/
+ *     grammar/dialects/
+ *     grammar/metaprogramming/
+ *
+ *
+ * AST_OWNER
+ * ---------
+ *
+ * Domain-neutral frontend AST.
+ *
+ * This grammar produces parser contexts only.
+ *
+ * The AST should preserve:
+ *
+ *     capability identity
+ *     version requirement
+ *     alias information
+ *     source span
+ *     source ordering
+ *
+ * It MUST NOT contain physical device identity or target allocation.
+ *
+ *
+ * SEMANTIC_OWNER
+ * --------------
+ *
+ * Capability semantic-resolution subsystem.
+ *
+ * Semantic analysis determines:
+ *
+ *     whether a capability exists;
+ *     what namespace owns it;
+ *     what capability kind it represents;
+ *     whether its version requirement is valid;
+ *     whether it is available;
+ *     whether it conflicts with another capability;
+ *     whether it satisfies a requirement;
+ *     whether it is authorized;
+ *     whether it is realizable by an execution context.
+ *
+ * None of these decisions occur in this grammar.
+ *
+ *
+ * IR_OWNER
+ * --------
+ *
+ * No direct IR is owned here.
+ *
+ * Capability information may become semantic metadata consumed by:
+ *
+ *     canonical semantic representation
+ *     classical IR
+ *     quantum::ir
+ *     HDL/hardware representation
+ *     distributed representation
+ *     execution planning
+ *
+ * Capability syntax MUST NOT directly create target instructions.
+ *
+ *
+ * TEST_OWNER
+ * ----------
+ *
+ *     grammar/tests/core/capabilities/
+ *     grammar/tests/parser/
+ *     grammar/tests/semantic/
+ *     grammar/tests/resources/
+ *     grammar/tests/quantum/
+ *     grammar/tests/hardware/
+ *     grammar/tests/scalability/
+ *     grammar/tests/portability/
+ *
+ *
+ * SPEC_OWNER
+ * ----------
+ *
+ *     grammar/spec/resources.md
+ *     grammar/specification/poco-reaf.md
+ *     grammar/specification/grammar-authority.md
+ *
  *
  * ============================================================================
- * OWNERSHIP
- * ============================================================================
- *
- * THIS FILE OWNS:
- *
- *     - capability declaration syntax;
- *     - capability reference syntax;
- *     - capability identity structure;
- *     - optional capability version requirement;
- *     - capability lists;
- *     - optional capability aliases where explicitly supported;
- *     - capability annotations at the capability syntax boundary;
- *     - syntactic composition of capability predicates;
- *     - syntactic capability attributes.
- *
- * THIS FILE DOES NOT OWN:
- *
- *     - lexical identifiers;
- *     - keywords;
- *     - Unicode identifier rules;
- *     - identifier normalization;
- *     - version semantics;
- *     - semantic version compatibility;
- *     - capability registry;
- *     - capability discovery;
- *     - target capability discovery;
- *     - resource allocation;
- *     - hardware discovery;
- *     - backend selection;
- *     - scheduling;
- *     - routing;
- *     - optimization;
- *     - calibration;
- *     - QEC;
- *     - ZQN;
- *     - resilience;
- *     - runtime execution;
- *     - security authorization;
- *     - quantum::ir;
- *     - classical IR;
- *     - HDL IR.
- *
- * ============================================================================
- * POCO-REAF
- * ============================================================================
- *
- * Capability syntax MUST remain independent of machine scale.
- *
- * It MUST NOT contain:
- *
- *     MAX_QUBITS
- *     MAX_CORES
- *     MAX_THREADS
- *     MAX_GPUS
- *     MAX_FPGAS
- *     MAX_DEVICES
- *     MAX_NODES
- *     MAX_MEMORY
- *     MAX_REGISTERS
- *     MAX_TENSOR_DIMENSIONS
- *     MAX_CAPABILITIES
- *
- * A capability may describe a property that is available on:
- *
- *     one machine
- *     many machines
- *     one accelerator
- *     many accelerators
- *     one quantum processor
- *     many quantum processors
- *     a simulator
- *     a distributed system
- *     an embedded system
- *     a future architecture
- *
- * without changing this grammar.
- *
- * ============================================================================
- * FUNDAMENTAL SEPARATION
+ * CAPABILITY / REQUIREMENT / RESOURCE SEPARATION
  * ============================================================================
  *
  * Capability:
  *
- *     "What can an execution environment do?"
+ *     What can an environment provide?
  *
  * Requirement:
  *
- *     "What capability does this program require?"
+ *     What does the program require?
  *
  * Resource:
  *
- *     "What resource is available or requested?"
+ *     What quantity/facility participates in realization?
  *
  * Constraint:
  *
- *     "What conditions must a realization satisfy?"
+ *     What condition must hold?
  *
  * Preference:
  *
- *     "Which valid realization is preferred?"
+ *     Which otherwise-valid realization is preferred?
+ *
+ * Policy:
+ *
+ *     What is permitted, prohibited, required, or preferred by governing
+ *     rules?
  *
  * Target:
  *
- *     "What execution target/context is being described?"
+ *     Which abstract execution/compilation context is being considered?
  *
- * These concepts MUST NOT be collapsed.
+ * These concepts MUST remain separate.
  *
- * In particular:
- *
- *     capability quantum
- *
- * MUST NOT imply:
- *
- *     use device X
- *
- *     use N qubits
- *
- *     use topology Y
- *
- *     use backend Z
  *
  * ============================================================================
- * DEPENDENCY DIRECTION
+ * OPEN-WORLD CONTRACT
  * ============================================================================
  *
- *     ZamaniLexer
- *          |
- *          v
- *     capabilities.g4
- *          |
- *          v
- *     frontend AST
- *          |
- *          v
- *     structural validation
- *          |
- *          v
- *     semantic capability resolution
- *          |
- *          +--> capability registry
- *          +--> version compatibility
- *          +--> requirement analysis
- *          +--> resource analysis
- *          +--> effect analysis
- *          |
- *          v
- *     canonical semantic representation
- *          |
- *          +--> classical IR
- *          +--> quantum::ir
- *          +--> HDL/hardware representation
- *          |
- *          v
- *     compilation / optimization / routing / scheduling
- *          |
- *          v
- *     hardware / runtime / deployment
+ * Capability identities are OPEN-WORLD.
  *
- * This dependency direction MUST NOT be reversed.
+ * This grammar deliberately does NOT enumerate:
+ *
+ *     CPU capabilities
+ *     GPU capabilities
+ *     FPGA capabilities
+ *     ASIC capabilities
+ *     accelerator capabilities
+ *     QPU capabilities
+ *     simulator capabilities
+ *     AI capabilities
+ *     networking capabilities
+ *     future-domain capabilities
+ *     vendor capabilities
+ *
+ * Therefore:
+ *
+ *     quantum::dynamic_control
+ *     tensor::compute
+ *     accelerator::matrix
+ *     distributed::collectives
+ *     security::trusted_execution
+ *     future::architecture::new_feature
+ *
+ * are all representable without changing this grammar.
+ *
+ * A new capability normally requires:
+ *
+ *     registry/specification/semantic changes
+ *
+ * rather than:
+ *
+ *     grammar changes.
+ *
+ *
+ * ============================================================================
+ * POCO-REAF CONTRACT
+ * ============================================================================
+ *
+ * Capability syntax MUST remain independent of machine scale.
+ *
+ * This file contains NO universal hardware capacities.
+ *
+ * It MUST NOT encode:
+ *
+ *     maximum qubits
+ *     maximum CPUs
+ *     maximum GPUs
+ *     maximum FPGAs
+ *     maximum ASICs
+ *     maximum nodes
+ *     maximum memory
+ *     maximum threads
+ *     maximum tensor rank
+ *     maximum register width
+ *     maximum network size
+ *     maximum device count
+ *     maximum capability count
+ *     maximum namespace depth
+ *
+ * Capability collections use unbounded grammar repetition.
+ *
+ * Practical implementation limits are determined by:
+ *
+ *     available memory
+ *     parser resources
+ *     compiler resources
+ *     operating-system resources
+ *     deployment resources
+ *
+ * Those limits are NOT language semantics.
+ *
  *
  * ============================================================================
  * QUANTUM BOUNDARY
  * ============================================================================
  *
- * Quantum capabilities are source-level names.
+ * Quantum capability names remain ordinary open-world capability identities.
  *
- * For example:
+ * Examples:
  *
- *     zamani::quantum::dynamic_control
- *     zamani::quantum::mid_circuit_measurement
- *     zamani::quantum::logical_qubits
+ *     quantum::measurement
+ *     quantum::dynamic_control
+ *     quantum::mid_circuit_measurement
+ *     quantum::fault_tolerant_execution
  *
- * are capability identities.
+ * This file does NOT define:
  *
- * This grammar does NOT import:
- *
- *     quantum::ir
- *     QubitId
- *     PhysicalQubitId
- *     GateKind
- *     topology
+ *     H
+ *     X
+ *     Y
+ *     Z
+ *     CNOT
+ *     physical qubits
+ *     coupling maps
  *     calibration
+ *     routing
+ *     scheduling
  *
- * Semantic analysis may later resolve a capability to the appropriate
- * quantum semantic representation.
+ * Quantum semantics eventually cross:
  *
- * The canonical quantum semantic boundary remains:
- *
+ *     source
+ *       ->
+ *     domain-neutral AST
+ *       ->
+ *     semantic quantum model
+ *       ->
  *     quantum::ir
+ *       ->
+ *     optimization
+ *       ->
+ *     decomposition
+ *       ->
+ *     routing
+ *       ->
+ *     scheduling
+ *       ->
+ *     resilience / QEC / ZQN
+ *       ->
+ *     HAL
+ *       ->
+ *     target
+ *
+ * Capability syntax remains completely outside physical quantum realization.
+ *
  *
  * ============================================================================
- * OPEN-WORLD DESIGN
+ * HDL / HARDWARE BOUNDARY
  * ============================================================================
  *
- * Capability names MUST be open-ended.
+ * Hardware capabilities may be expressed using ordinary names:
  *
- * This grammar therefore MUST NOT define:
+ *     hardware::reconfigurable_logic
+ *     hardware::parallel_compute
+ *     accelerator::tensor_compute
+ *     hdl::synthesis
  *
- *     quantumCapability
- *     gpuCapability
- *     cpuCapability
- *     fpgaCapability
- *     vendorCapability
+ * This grammar does not select:
  *
- * as closed enumerations.
+ *     FPGA
+ *     ASIC
+ *     CPU
+ *     GPU
+ *     QPU
+ *     vendor
+ *     board
+ *     device
+ *     pin
+ *     topology
  *
- * New computational domains and capabilities are represented using ordinary
- * qualified names.
+ * Hardware realization remains downstream.
  *
- * This permits future capabilities without changing this file.
  *
  * ============================================================================
- * VERSION BOUNDARY
+ * EFFECT CONTRACT
  * ============================================================================
  *
- * Capability version syntax is source syntax.
- *
- * Version compatibility is semantic.
- *
- * This grammar MAY parse:
- *
- *     1
- *     1.2
- *     1.2.3
- *     1.2.3-alpha
- *     1.2.3+build
- *
- * and comparison/range operators.
- *
- * It MUST NOT decide whether a version is semantically compatible.
+ * Mentioning a capability has no effect by itself.
  *
  * For example:
  *
- *     capability foo version >= 1.2;
+ *     capability network::communication;
  *
- * is syntactically valid.
+ * does not authorize network access.
  *
- * Whether implementation version 2.0 satisfies that requirement belongs to
- * semantic compatibility analysis.
+ * Effects are determined by the effect subsystem.
  *
- * ============================================================================
- * VERSION SCALABILITY
- * ============================================================================
- *
- * Numeric components are consumed from the canonical numeric token.
- *
- * No grammar rule imposes a fixed number of capabilities or declarations.
- *
- * Repetition uses:
- *
- *     *
- *     +
- *
- * rather than finite bounds.
  *
  * ============================================================================
- * IDENTIFIER BOUNDARY
+ * RESOURCE CONTRACT
  * ============================================================================
  *
- * The canonical `Names` grammar owns:
+ * Capability syntax can identify a resource-related ability, but it does not
+ * allocate resources.
  *
- *     identifier
- *     qualifiedName
+ * For example:
  *
- * This file MUST NOT recreate identifier syntax.
+ *     tensor::compute
  *
- * Therefore:
+ * can identify a computational capability.
  *
- *     identifier
- *     qualifiedName
+ * It does not imply:
  *
- * are imported/shared through the canonical parser grammar composition
- * mechanism.
+ *     a particular GPU;
+ *     a particular accelerator;
+ *     a particular tensor size;
+ *     a particular memory capacity;
+ *     a particular device.
  *
- * ============================================================================
- * ANNOTATION BOUNDARY
- * ============================================================================
+ * Resource analysis resolves those questions.
  *
- * Capability annotations belong to the general annotation system.
- *
- * This file MUST NOT redefine:
- *
- *     @identifier(...)
- *
- * syntax.
- *
- * Where annotations are accepted, this grammar consumes the canonical
- * `attributes` / `attribute` rule supplied by the core grammar.
  *
  * ============================================================================
- * AST CONTRACT
+ * CONTRACT CONTRACT
  * ============================================================================
  *
- * The parser should produce a source-level capability representation
- * containing, conceptually:
+ * Capability references may occur inside:
  *
- *     identity
- *     version constraint
- *     annotations
- *     source span
+ *     requires
+ *     ensures
+ *     invariant
+ *     assume
+ *     guarantee
+ *     property
+ *     assert
  *
- * Identity is preserved exactly enough for source diagnostics and later
- * semantic resolution.
+ * constructs.
  *
- * The AST MUST NOT contain:
+ * This file does not own those contract constructs.
  *
- *     device identity
- *     hardware state
- *     resource allocation
- *     runtime capability token
- *     scheduler state
- *     target selection
  *
  * ============================================================================
- * SEMANTIC CONTRACT
+ * POLICY CONTRACT
  * ============================================================================
  *
- * Semantic analysis determines:
+ * Capability references may participate in policies:
  *
- *     - whether the capability exists;
- *     - whether it is declared by an extension;
- *     - what namespace it belongs to;
- *     - what its semantic kind is;
- *     - what version means;
- *     - whether the version constraint is satisfiable;
- *     - whether it is applicable to a computation;
- *     - whether it conflicts with another capability;
- *     - whether it is provided by an execution context.
+ *     permission
+ *     prohibition
+ *     requirement
+ *     preference
+ *     fallback
+ *     adaptation
+ *     execution
  *
- * None of those decisions belong in this grammar.
+ * Policy interpretation is downstream.
+ *
  *
  * ============================================================================
- * DETERMINISM
+ * PROVENANCE CONTRACT
  * ============================================================================
  *
- * This grammar:
+ * Capability references must remain source-traceable.
  *
- *     - contains no semantic predicates;
- *     - contains no actions;
- *     - performs no I/O;
- *     - performs no network access;
- *     - performs no hardware discovery;
- *     - performs no runtime calls;
- *     - contains no random behavior.
+ * Downstream provenance may record:
  *
- * Parsing is therefore deterministic for a deterministic token stream.
+ *     source capability
+ *     resolved capability
+ *     provider
+ *     version
+ *     evidence
+ *     decision
+ *     target realization
+ *
+ * This grammar does not create provenance records.
+ *
+ *
+ * ============================================================================
+ * DETERMINISM CONTRACT
+ * ============================================================================
+ *
+ * This grammar contains:
+ *
+ *     no actions;
+ *     no semantic predicates;
+ *     no I/O;
+ *     no runtime execution;
+ *     no environment inspection;
+ *     no hardware inspection;
+ *     no random behavior.
+ *
+ * Parsing therefore depends only on the token stream.
+ *
  *
  * ============================================================================
  */
@@ -417,48 +566,66 @@ options {
     tokenVocab = ZamaniLexer;
 }
 
+/*
+ * Parser dependencies:
+ *
+ * Names:
+ *     identifier
+ *     qualifiedName
+ *
+ * Attributes:
+ *     attributes
+ *
+ * Versioning:
+ *     versionExpression
+ *
+ * The capability grammar deliberately reuses these authorities rather than
+ * duplicating their syntax.
+ */
+import Names, Attributes, Versioning;
+
 
 /* ============================================================================
  * CAPABILITY DECLARATION
- * ============================================================================
- *
- * Canonical declaration:
- *
- *     capability foo;
- *
- *     capability foo::bar;
- *
- *     capability foo::bar version 1.2.3;
- *
- *     capability foo::bar version >= 1.2;
- *
- *     capability foo::bar version [1.2, 2.0];
- *
- * The keyword `capability` MUST be supplied by the canonical lexer.
- *
- * It is deliberately not accepted as an arbitrary identifier because a
- * capability declaration is a language-level declaration.
- */
+ * ========================================================================== */
 
+/*
+ * Declares a capability identity.
+ *
+ * Examples:
+ *
+ *     capability compute::parallel;
+ *
+ *     capability quantum::dynamic_control version >= 1.2.0;
+ *
+ *     capability future::feature version stable;
+ *
+ * Declaration semantics are handled downstream.
+ */
 capabilityDeclaration
     : CAPABILITY
       capabilityName
       capabilityVersionClause?
       capabilityAttributeList?
-      SEMI
+      SEMICOLON
     ;
 
 
 /* ============================================================================
  * CAPABILITY REFERENCE
- * ============================================================================
- *
- * A reference is used by requirements, preferences, effects, constraints,
- * targets, execution declarations, extensions, and other semantic consumers.
- *
- * A reference does not declare the capability.
- */
+ * ========================================================================== */
 
+/*
+ * References an existing or externally provided capability.
+ *
+ * Examples:
+ *
+ *     compute::parallel
+ *     quantum::measurement
+ *     future::architecture::feature
+ *
+ * A reference does not declare, provide, authorize, or allocate anything.
+ */
 capabilityReference
     : capabilityName
       capabilityVersionClause?
@@ -467,30 +634,69 @@ capabilityReference
 
 /* ============================================================================
  * CAPABILITY NAME
- * ============================================================================
- *
- * Capability names use the canonical qualified-name model.
- *
- * Examples:
- *
- *     quantum
- *     quantum::dynamic_control
- *     zamani::quantum::dynamic_control
- *     future::compute::new_architecture
- *
- * The grammar does not assign meaning to any namespace.
- */
+ * ========================================================================== */
 
+/*
+ * Capability names are canonical qualified names.
+ *
+ * The meaning of each namespace is semantic, not grammatical.
+ */
 capabilityName
     : qualifiedName
     ;
 
 
 /* ============================================================================
- * CAPABILITY NAME LIST
- * ============================================================================
- */
+ * CAPABILITY VERSION CLAUSE
+ * ========================================================================== */
 
+/*
+ * The VERSION keyword and version-expression semantics are owned by the
+ * canonical versioning subsystem.
+ *
+ * This wrapper exists to preserve the stable capability API:
+ *
+ *     capabilityVersionClause
+ *
+ * without duplicating version grammar.
+ */
+capabilityVersionClause
+    : VERSION capabilityVersionExpression
+    ;
+
+
+/*
+ * Compatibility bridge for consumers that need the capability-specific
+ * exported rule name.
+ *
+ * The actual version syntax remains owned by Versioning.
+ */
+capabilityVersionExpression
+    : versionExpression
+    ;
+
+
+/* ============================================================================
+ * CAPABILITY ATTRIBUTES
+ * ========================================================================== */
+
+/*
+ * Attributes remain owned by core/attributes.g4.
+ */
+capabilityAttributeList
+    : attributes
+    ;
+
+
+/* ============================================================================
+ * CAPABILITY NAME LIST
+ * ========================================================================== */
+
+/*
+ * Non-empty list.
+ *
+ * There is deliberately no finite cardinality limit.
+ */
 capabilityNameList
     : capabilityName
       (COMMA capabilityName)*
@@ -499,8 +705,7 @@ capabilityNameList
 
 /* ============================================================================
  * CAPABILITY REFERENCE LIST
- * ============================================================================
- */
+ * ========================================================================== */
 
 capabilityReferenceList
     : capabilityReference
@@ -509,322 +714,29 @@ capabilityReferenceList
 
 
 /* ============================================================================
- * OPTIONAL CAPABILITY REFERENCE LIST
- * ============================================================================
- */
-
-optionalCapabilityReferenceList
-    : capabilityReferenceList?
-    ;
-
-
-/* ============================================================================
- * CAPABILITY DECLARATION LIST
- * ============================================================================
- *
- * There is deliberately no fixed maximum.
- */
-
-capabilityDeclarationList
-    : capabilityDeclaration+
-    ;
-
-
-/* ============================================================================
- * CAPABILITY VERSION CLAUSE
- * ============================================================================
- *
- * Version syntax is deliberately separated from capability identity.
- *
- * Examples:
- *
- *     version 1
- *     version 1.2
- *     version 1.2.3
- *     version >= 1.2
- *     version <= 2.0
- *     version > 1.0
- *     version < 3.0
- *     version 1.2 .. 2.0
- *
- * The semantic interpretation is downstream.
- */
-
-capabilityVersionClause
-    : VERSION capabilityVersionExpression
-    ;
-
-
-/* ============================================================================
- * CAPABILITY VERSION EXPRESSION
- * ============================================================================
- *
- * The grammar supports composable constraints without imposing a semantic
- * policy such as "major version compatibility".
- */
-
-capabilityVersionExpression
-    : capabilityVersionConstraint
-    | capabilityVersionRange
-    | capabilityVersionSet
-    | capabilityVersionReference
-    ;
-
-
-/* ============================================================================
- * SINGLE VERSION CONSTRAINT
- * ============================================================================
- */
-
-capabilityVersionConstraint
-    : capabilityVersionComparator?
-      capabilityVersion
-    ;
-
-
-/* ============================================================================
- * VERSION COMPARATORS
- * ============================================================================
- *
- * Operators are interpreted semantically.
- */
-
-capabilityVersionComparator
-    : LT
-    | LE
-    | GT
-    | GE
-    | EQ
-    | NE
-    ;
-
-
-/* ============================================================================
- * VERSION RANGE
- * ============================================================================
- *
- * Inclusive range:
- *
- *     [1.0, 2.0]
- *
- * Exclusive range:
- *
- *     (1.0, 2.0)
- *
- * Mixed:
- *
- *     [1.0, 2.0)
- *
- * The endpoints are syntactic values.
- *
- * Range satisfiability is semantic analysis.
- */
-
-capabilityVersionRange
-    : LEFT_BRACKET
-      capabilityVersion
-      COMMA
-      capabilityVersion
-      RIGHT_BRACKET
-
-    | LEFT_PAREN
-      capabilityVersion
-      COMMA
-      capabilityVersion
-      RIGHT_PAREN
-
-    | LEFT_BRACKET
-      capabilityVersion
-      COMMA
-      capabilityVersion
-      RIGHT_PAREN
-
-    | LEFT_PAREN
-      capabilityVersion
-      COMMA
-      capabilityVersion
-      RIGHT_BRACKET
-    ;
-
-
-/* ============================================================================
- * VERSION SET
- * ============================================================================
- *
- * A set permits multiple constraints.
- *
- * Examples:
- *
- *     version >= 1.0 and < 3.0
- *
- *     version >= 1.0 and < 3.0 or == 5.0
- *
- * The parser captures structure.
- *
- * Semantic precedence and satisfiability belong to semantic analysis.
- */
-
-capabilityVersionSet
-    : capabilityVersionDisjunction
-    ;
-
-
-capabilityVersionDisjunction
-    : capabilityVersionConjunction
-      (OR capabilityVersionConjunction)*
-    ;
-
-
-capabilityVersionConjunction
-    : capabilityVersionPrimary
-      (AND capabilityVersionPrimary)*
-    ;
-
-
-capabilityVersionPrimary
-    : capabilityVersionConstraint
-    | capabilityVersionRange
-    | LEFT_PAREN capabilityVersionDisjunction RIGHT_PAREN
-    ;
-
-
-/* ============================================================================
- * VERSION REFERENCE
- * ============================================================================
- *
- * Allows a version requirement to refer to a named version contract.
- *
- * Example:
- *
- *     version standard::stable
- *
- * The referenced object is resolved semantically.
- */
-
-capabilityVersionReference
-    : qualifiedName
-    ;
-
-
-/* ============================================================================
- * CAPABILITY VERSION
- * ============================================================================
- *
- * The version grammar is intentionally unbounded in semantic scale.
- *
- * Numeric components are represented by the canonical INTEGER token.
- *
- * Supported structural forms:
- *
- *     1
- *     1.2
- *     1.2.3
- *     1.2.3-alpha
- *     1.2.3+build
- *     1.2.3-alpha+build
- *
- * The exact semantic-versioning policy belongs to the versioning subsystem.
- */
-
-capabilityVersion
-    : versionCore versionSuffix?
-    ;
-
-
-versionCore
-    : INTEGER
-    | INTEGER DOT INTEGER
-    | INTEGER DOT INTEGER DOT INTEGER
-    ;
-
-
-versionSuffix
-    : versionPreRelease versionBuildMetadata?
-    | versionBuildMetadata
-    ;
-
-
-versionPreRelease
-    : MINUS versionIdentifierList
-    ;
-
-
-versionBuildMetadata
-    : PLUS versionIdentifierList
-    ;
-
-
-versionIdentifierList
-    : versionIdentifier
-      (DOT versionIdentifier)*
-    ;
-
-
-versionIdentifier
-    : IDENTIFIER
-    | INTEGER
-    ;
-
-
-/* ============================================================================
- * CAPABILITY ATTRIBUTES
- * ============================================================================
- *
- * Attribute syntax is delegated to the canonical attribute grammar.
- *
- * The rule is an integration boundary rather than a second attribute system.
- */
-
-capabilityAttributeList
-    : attributes
-    ;
-
-
-/* ============================================================================
- * CAPABILITY REFERENCE WITH ALIAS
- * ============================================================================
- *
- * Alias semantics belong to the consuming declaration.
- *
- * This rule only represents:
- *
- *     capability.name as local_name
- */
-
-capabilityAlias
-    : capabilityReference AS identifier
-    ;
-
-
-/* ============================================================================
- * CAPABILITY ALIAS LIST
- * ============================================================================
- */
-
-capabilityAliasList
-    : capabilityAlias
-      (COMMA capabilityAlias)*
-    ;
-
-
-/* ============================================================================
  * CAPABILITY EXPRESSION
- * ============================================================================
- *
- * This is the generic syntactic expression used where a source construct
- * accepts capability predicates.
- *
- * It deliberately does not evaluate them.
+ * ========================================================================== */
+
+/*
+ * Capability expressions describe logical relationships among capability
+ * references.
  *
  * Examples:
  *
- *     quantum
- *     quantum::dynamic_control
- *     quantum::dynamic_control and classical
- *     quantum or simulator
+ *     quantum::measurement
+ *
+ *     quantum::measurement and classical::control
+ *
+ *     quantum::measurement or simulation::quantum
+ *
  *     not legacy::feature
+ *
+ *     (quantum::measurement and classical::control)
+ *
+ * This grammar captures structure only.
+ *
+ * It does not evaluate capability availability.
  */
-
 capabilityExpression
     : capabilityOrExpression
     ;
@@ -856,8 +768,7 @@ capabilityPrimaryExpression
 
 /* ============================================================================
  * CAPABILITY EXPRESSION LIST
- * ============================================================================
- */
+ * ========================================================================== */
 
 capabilityExpressionList
     : capabilityExpression
@@ -866,103 +777,104 @@ capabilityExpressionList
 
 
 /* ============================================================================
- * CAPABILITY REQUIREMENT REFERENCE
- * ============================================================================
+ * CAPABILITY ALIAS
+ * ========================================================================== */
+
+/*
+ * Generic source-level alias.
  *
- * This rule intentionally provides syntax that requirements.g4 can consume.
+ * Example:
  *
- * It does not turn a capability into a requirement by itself.
+ *     quantum::dynamic_control as dynamic_control
+ *
+ * Alias resolution belongs to semantic analysis.
+ */
+capabilityAlias
+    : capabilityReference AS identifier
+    ;
+
+
+capabilityAliasList
+    : capabilityAlias
+      (COMMA capabilityAlias)*
+    ;
+
+
+/* ============================================================================
+ * CAPABILITY CONSUMER BRIDGES
+ * ========================================================================== */
+
+/*
+ * These rules intentionally remain very small.
+ *
+ * They provide stable semantic boundaries for consuming grammars without
+ * creating duplicate capability grammars.
  */
 
+
+/*
+ * Requirement consumer.
+ *
+ * This does NOT create a requirement.
+ */
 capabilityRequirementReference
     : capabilityReference
     ;
 
 
-/* ============================================================================
- * CAPABILITY PROVISION REFERENCE
- * ============================================================================
+/*
+ * Provider/provision consumer.
  *
- * A provider declaration may reuse the same capability identity.
+ * This does NOT prove that the capability is actually available.
  */
-
 capabilityProvisionReference
     : capabilityReference
     ;
 
 
-/* ============================================================================
- * CAPABILITY PREFERENCE REFERENCE
- * ============================================================================
+/*
+ * Preference consumer.
  *
- * A preference may refer to a capability without making it mandatory.
+ * This does NOT make the capability mandatory.
  */
-
 capabilityPreferenceReference
     : capabilityReference
     ;
 
 
-/* ============================================================================
- * CAPABILITY CONSTRAINT REFERENCE
- * ============================================================================
+/*
+ * Constraint consumer.
  *
- * Constraints may mention capabilities, but constraint semantics remain
- * outside this file.
+ * Constraint semantics belong to core/constraints.g4.
  */
-
 capabilityConstraintReference
     : capabilityReference
     ;
 
 
-/* ============================================================================
- * CAPABILITY EFFECT REFERENCE
- * ============================================================================
+/*
+ * Effect consumer.
  *
- * Effects may identify capabilities associated with an operation.
- *
- * This is only syntax.
+ * Effect semantics belong to effects/.
  */
-
 capabilityEffectReference
     : capabilityReference
     ;
 
 
-/* ============================================================================
- * CAPABILITY TARGET REFERENCE
- * ============================================================================
+/*
+ * Target consumer.
  *
- * A target may expose capability names.
- *
- * This rule does NOT bind a capability to a particular physical target.
+ * A target reference remains abstract.
  */
-
 capabilityTargetReference
     : capabilityReference
     ;
 
 
 /* ============================================================================
- * CAPABILITY FEATURE REFERENCE
- * ============================================================================
- *
- * Generic extension point for future domains.
- */
-
-capabilityFeatureReference
-    : capabilityReference
-    ;
-
-
-/* ============================================================================
- * CAPABILITY LIST WRAPPERS
- * ============================================================================
- *
- * These wrappers exist so higher-level grammars do not reproduce comma-list
- * syntax and accidentally create incompatible capability representations.
- */
+ * CONSUMER LISTS
+ * ========================================================================== */
 
 capabilityRequirementList
     : capabilityRequirementReference
@@ -1001,413 +913,290 @@ capabilityTargetList
 
 
 /* ============================================================================
- * CAPABILITY DECLARATION BODY
- * ============================================================================
- *
- * This optional body provides an extensibility boundary without requiring
- * capability syntax to know every future property.
- *
- * Example:
- *
- *     capability quantum::dynamic_control {
- *         ...
- *     }
- *
- * The contents are deliberately delegated to capability properties.
- *
- * IMPORTANT:
- *
- * The language specification must define the body property grammar before
- * enabling this production in the canonical root grammar. It is therefore
- * intentionally NOT included in capabilityDeclaration above.
- *
- * This rule is reserved as an integration extension point.
- */
+ * OPTIONAL CONSUMER LISTS
+ * ========================================================================== */
+
+optionalCapabilityReferenceList
+    : capabilityReferenceList?
+    ;
+
+
+optionalCapabilityExpressionList
+    : capabilityExpressionList?
+    ;
+
+
+optionalCapabilityNameList
+    : capabilityNameList?
+    ;
 
 
 /* ============================================================================
- * INTEGRATION CONTRACT
+ * COMPLETION / INTEGRATION CONTRACT
  * ============================================================================
  *
- * CORE:
+ * This file is complete when:
  *
- *     names.g4
- *         |
- *         +--> identifier
- *         +--> qualifiedName
+ * [ ] `Capabilities` is the single generic capability syntax authority.
  *
- *     attributes.g4
- *         |
- *         +--> attributes
+ * [ ] `tokenVocab = ZamaniLexer` remains the parser vocabulary boundary.
  *
- *     versioning.g4
- *         |
- *         +--> shared version policy
+ * [ ] `Names` owns identifier and qualified-name syntax.
  *
- * CAPABILITIES:
+ * [ ] `Attributes` owns attribute syntax.
  *
- *     capabilities.g4
- *         |
- *         +--> capabilityDeclaration
- *         +--> capabilityReference
- *         +--> capabilityExpression
+ * [ ] `Versioning` owns version-expression syntax.
  *
- * REQUIREMENTS:
+ * [ ] No capability version grammar is duplicated here.
  *
- *     requirements.g4
- *         |
- *         +--> consumes capabilityReference
+ * [ ] No identifier grammar is duplicated here.
  *
- * CONSTRAINTS:
+ * [ ] No qualified-name grammar is duplicated here.
  *
- *     constraints.g4
- *         |
- *         +--> may consume capabilityReference
+ * [ ] No lexer rules exist here.
  *
- * PREFERENCES:
+ * [ ] Capability identities are open-world.
  *
- *     preferences / hints
- *         |
- *         +--> may consume capabilityReference
+ * [ ] No domain capability catalogue exists.
  *
- * EFFECTS:
+ * [ ] No CPU/GPU/FPGA/ASIC/QPU enumeration exists.
  *
- *     effects.g4
- *         |
- *         +--> capabilityEffectReference
+ * [ ] No physical device identity is encoded.
  *
- * HARDWARE:
+ * [ ] No resource quantity is encoded.
  *
- *     hardware/capabilities.g4
- *         |
- *         +--> may wrap capabilityReference
+ * [ ] No resource capacity limit is encoded.
  *
- * QUANTUM:
+ * [ ] No topology limit is encoded.
  *
- *     quantum/quantum-capabilities.g4
- *         |
- *         +--> may wrap capabilityReference
+ * [ ] No tensor-rank limit is encoded.
  *
- * DISTRIBUTED:
+ * [ ] No quantum-operation catalogue is encoded.
  *
- *     distributed/*
- *         |
- *         +--> may consume capabilityReference
+ * [ ] No backend selection is encoded.
  *
- * AI:
+ * [ ] No scheduling/routing/calibration is encoded.
  *
- *     ai/*
- *         |
- *         +--> may consume capabilityReference
+ * [ ] No quantum::ir dependency exists.
  *
- * HDL:
+ * [ ] No HDL backend dependency exists.
  *
- *     hdl/*
- *         |
- *         +--> may consume capabilityReference
+ * [ ] No semantic actions exist.
  *
- * ============================================================================
- * NON-DEPENDENCIES
- * ============================================================================
+ * [ ] No unsafe Rust is required.
  *
- * This file MUST NOT depend on:
+ * [ ] Rust 1.97 compatibility is verified by the repository build.
  *
- *     src/quantum/ir
- *     src/quantum/qec
- *     src/quantum/zqn
- *     src/quantum/scheduling
- *     src/quantum/routing
- *     src/quantum/optimization
- *     src/quantum/hardware
- *     runtime
- *     calibration
- *     backend SDKs
- *     vendor APIs
+ * [ ] Rust 1.97.1 compatibility is verified by the repository build.
  *
- * Those systems consume semantic capability information after parsing.
+ * [ ] ANTLR generation succeeds.
+ *
+ * [ ] Declaration integration succeeds.
+ *
+ * [ ] Requirement integration succeeds.
+ *
+ * [ ] Resource integration succeeds.
+ *
+ * [ ] Effect integration succeeds.
+ *
+ * [ ] Policy integration succeeds.
+ *
+ * [ ] Security integration succeeds.
+ *
+ * [ ] Quantum integration succeeds.
+ *
+ * [ ] Hardware integration succeeds.
+ *
+ * [ ] HDL integration succeeds.
+ *
+ * [ ] AI/reasoning integration succeeds.
+ *
+ * [ ] Distributed/networking integration succeeds.
+ *
+ * [ ] Interoperability integration succeeds.
+ *
+ * [ ] Positive tests pass.
+ *
+ * [ ] Negative tests pass.
+ *
+ * [ ] Boundary tests pass.
+ *
+ * [ ] Scalability tests pass.
+ *
+ * [ ] Determinism tests pass.
+ *
+ * [ ] Compatibility tests pass.
+ *
  *
  * ============================================================================
- * AST INTEGRATION
+ * REQUIRED POSITIVE TESTS
  * ============================================================================
  *
- * The parser must lower capability syntax into the existing native AST
- * capability representation rather than creating a second capability model.
+ *     capability compute::parallel;
  *
- * The repository already contains:
+ *     capability quantum::measurement;
  *
- *     src/frontend/ast/node/capabilities/capability.rs
+ *     capability quantum::dynamic_control;
  *
- * which represents a source-level capability identity and version
- * requirement. That AST explicitly keeps capability meaning separate from
- * hardware/backend realization.
+ *     capability tensor::compute;
  *
- * The AST should therefore receive:
+ *     capability future::architecture::new_feature;
  *
- *     capability namespace/name
- *     capability version constraint
- *     annotations
- *     source span
+ *     capability quantum::measurement version >= 1.2.0;
  *
- * without receiving:
+ *     capability quantum::measurement version < 3.0.0;
  *
- *     physical resource
- *     device ID
- *     backend ID
- *     topology
- *     calibration
- *     runtime token
+ *     capability security::trusted_execution version 2.0.0;
  *
- * ============================================================================
- * QUANTUM IR INTEGRATION
- * ============================================================================
+ *     compute::parallel
  *
- * This file MUST NOT import or reference `quantum::ir` directly.
+ *     quantum::measurement
  *
- * Correct pipeline:
+ *     quantum::measurement and classical::control
  *
- *     capability syntax
- *          |
- *          v
- *     native AST Capability
- *          |
- *          v
- *     semantic capability resolution
- *          |
- *          v
- *     semantic capability representation
- *          |
- *          v
- *     quantum::ir where applicable
+ *     quantum::measurement or simulation::quantum
  *
- * This prevents the grammar from becoming a second quantum IR.
+ *     not legacy::feature
+ *
+ *     (quantum::measurement and classical::control)
+ *
+ *     quantum::measurement as measurement
+ *
  *
  * ============================================================================
- * RESOURCE INTEGRATION
+ * REQUIRED NEGATIVE TESTS
  * ============================================================================
  *
- * Capability syntax describes ability.
+ * The parser must reject malformed structures such as:
  *
- * Resource syntax describes availability/consumption.
+ *     capability;
  *
- * Example conceptual separation:
+ *     capability :: feature;
  *
- *     requires quantum::dynamic_control
+ *     capability quantum::;
  *
- * versus:
+ *     capability ::quantum;
  *
- *     resource quantum_execution
+ *     capability quantum::feature as;
  *
- * The first is a capability requirement.
+ *     capability quantum::feature,;
  *
- * The second concerns resource semantics.
+ *     capability quantum::feature and;
  *
- * Neither one should be silently transformed into the other.
+ *     capability and quantum::feature;
+ *
+ *     capability (quantum::feature;
+ *
+ *     capability quantum::feature);
+ *
+ * Exact semantic errors such as unknown capabilities are NOT parser errors.
+ *
  *
  * ============================================================================
- * HARDWARE INTEGRATION
+ * REQUIRED BOUNDARY TESTS
  * ============================================================================
  *
- * Hardware capability information is discovered by hardware/runtime layers.
+ * Test:
  *
- * The grammar only represents portable source-level capability contracts.
+ *     deeply qualified capability names;
+ *     deeply nested capability expressions;
+ *     large capability lists;
+ *     many independent capability declarations;
+ *     capability references across domains;
+ *     future-domain names;
+ *     Unicode identifiers accepted by the canonical lexer;
+ *     capability aliases;
+ *     version constraints;
+ *     version ranges;
+ *     capability expressions combined with requirements;
+ *     capability expressions combined with policies;
+ *     capability expressions combined with contracts.
+ *
+ * No chosen test size becomes a language-level maximum.
+ *
+ *
+ * ============================================================================
+ * REQUIRED CROSS-DOMAIN TESTS
+ * ============================================================================
+ *
+ * At minimum:
+ *
+ *     classical capability
+ *     numerical capability
+ *     tensor capability
+ *     quantum capability
+ *     hybrid capability
+ *     HDL capability
+ *     hardware capability
+ *     accelerator capability
+ *     AI capability
+ *     reasoning capability
+ *     learning capability
+ *     adaptation capability
+ *     provenance capability
+ *     distributed capability
+ *     networking capability
+ *     security capability
+ *     interoperability capability
+ *     simulation capability
+ *     future-domain capability
+ *
+ * All must use the same generic capability grammar.
+ *
+ *
+ * ============================================================================
+ * FINAL ARCHITECTURAL RULE
+ * ============================================================================
+ *
+ * This grammar answers only:
+ *
+ *     "What capability syntax did the programmer write?"
+ *
+ * It does NOT answer:
+ *
+ *     "Where will this run?"
+ *
+ *     "Which device will execute it?"
+ *
+ *     "How many resources are available?"
+ *
+ *     "Which backend should be selected?"
+ *
+ *     "How will quantum operations be routed?"
+ *
+ *     "How will HDL be synthesized?"
+ *
+ *     "Which accelerator should be used?"
+ *
+ * Those questions belong downstream.
  *
  * Therefore:
  *
- *     capability quantum::dynamic_control
+ *     source capability
+ *         ->
+ *     domain-neutral AST
+ *         ->
+ *     semantic capability model
+ *         ->
+ *     capability/resource/requirement/policy analysis
+ *         ->
+ *     canonical semantic representation
+ *         ->
+ *     target-independent optimization
+ *         ->
+ *     lowering
+ *         ->
+ *     routing/scheduling where applicable
+ *         ->
+ *     resilience where applicable
+ *         ->
+ *     ZQN/HAL where applicable
+ *         ->
+ *     target realization
  *
- * MUST NOT encode:
+ * This separation is required for:
  *
- *     device = qpu42
- *     qubits = 127
- *     topology = ...
- *     calibration = ...
- *
- * Such information belongs to target/resource/capability resolution.
- *
- * ============================================================================
- * RUNTIME INTEGRATION
- * ============================================================================
- *
- * Runtime capability tokens and authorization credentials are NOT source
- * capability identities.
- *
- * A runtime MAY resolve:
- *
- *     zamani::quantum::dynamic_control
- *
- * into a runtime capability token.
- *
- * That conversion is outside the grammar.
- *
- * ============================================================================
- * SECURITY
- * ============================================================================
- *
- * Capability names are untrusted source input.
- *
- * Parsing MUST:
- *
- *     - perform no filesystem access;
- *     - perform no network access;
- *     - execute no capability;
- *     - load no backend;
- *     - contact no provider;
- *     - resolve no credentials;
- *     - authorize no operation.
- *
- * Capability names are data.
- *
- * ============================================================================
- * ERROR HANDLING
- * ============================================================================
- *
- * Syntax errors MUST be reported by the parser.
- *
- * Semantic errors belong downstream.
- *
- * Examples:
- *
- * SYNTAX ERROR:
- *
- *     capability foo::;
- *
- * SEMANTIC ERROR:
- *
- *     capability foo::unknown_feature;
- *
- * CAPABILITY AVAILABILITY ERROR:
- *
- *     requires foo::feature
- *
- * when the selected execution environment does not provide it.
- *
- * These error classes MUST remain distinguishable.
- *
- * ============================================================================
- * COMPATIBILITY
- * ============================================================================
- *
- * Capability identity syntax is intentionally stable:
- *
- *     qualifiedName
- *
- * Capability version requirements are independently extensible.
- *
- * A future capability MUST NOT require changing this file merely because it
- * belongs to a new computational domain.
- *
- * ============================================================================
- * SCALABILITY
- * ============================================================================
- *
- * This grammar contains no finite limits on:
- *
- *     capability declarations
- *     capability references
- *     qualified-name depth
- *     capability-list length
- *     version identifier count
- *     source program size
- *
- * All repeated structures are represented using unbounded grammar repetition.
- *
- * Practical parser/compiler limits remain implementation/resource concerns.
- *
- * ============================================================================
- * TEST CONTRACT
- * ============================================================================
- *
- * Positive:
- *
- *     capability quantum::dynamic_control;
- *     capability quantum::dynamic_control version 1;
- *     capability quantum::dynamic_control version 1.2;
- *     capability quantum::dynamic_control version 1.2.3;
- *     capability quantum::dynamic_control version >= 1.2;
- *     capability quantum::dynamic_control version <= 2.0;
- *     capability quantum::dynamic_control version [1.0, 2.0];
- *     capability future::domain::feature;
- *
- * Negative:
- *
- *     capability;
- *     capability foo::;
- *     capability ::foo;
- *     capability foo version;
- *     capability foo version 1..;
- *     capability foo version [2.0, 1.0];
- *
- * Boundary:
- *
- *     one capability
- *     many capabilities
- *     deeply qualified capability names
- *     large version components
- *     long version metadata
- *
- * Cross-domain:
- *
- *     classical capability
- *     quantum capability
- *     HDL capability
- *     hardware capability
- *     distributed capability
- *     AI capability
- *     networking capability
- *     security capability
- *     hybrid capability
- *
- * POCO-REAF:
- *
- *     capability names remain unchanged when target resources change.
- *
- * Determinism:
- *
- *     identical token streams produce identical parse trees.
- *
- * Round trip:
- *
- *     source
- *       -> lexer
- *       -> parser
- *       -> AST
- *       -> printer
- *       -> parser
- *
- * preserves capability identity and version structure.
- *
- * ============================================================================
- * COMPLETION CRITERIA
- * ============================================================================
- *
- * This file is COMPLETE only when:
- *
- * [ ] canonical lexer exposes the required capability declaration token;
- * [ ] Names-qualifiedName is the sole name syntax authority;
- * [ ] attribute syntax comes from the canonical attribute grammar;
- * [ ] version semantics remain outside this grammar;
- * [ ] capability AST lowering targets the existing native Capability model;
- * [ ] no second capability IR exists;
- * [ ] no hardware capability is hard-coded;
- * [ ] no quantum resource count is hard-coded;
- * [ ] no backend is selected by this grammar;
- * [ ] no physical resource is selected by this grammar;
- * [ ] no runtime capability token is represented here;
- * [ ] requirements.g4 consumes capabilityReference;
- * [ ] constraints.g4 can consume capabilityReference;
- * [ ] effects.g4 can consume capabilityReference;
- * [ ] resource semantics remain separate;
- * [ ] target semantics remain separate;
- * [ ] parser tests pass;
- * [ ] negative tests pass;
- * [ ] boundary tests pass;
- * [ ] cross-domain tests pass;
- * [ ] deterministic parsing tests pass;
- * [ ] round-trip tests pass;
- * [ ] generated ANTLR parser compiles;
- * [ ] Rust 1.97 / 1.97.1 compilation succeeds;
- * [ ] `unsafe` is not required anywhere in the integration;
- * [ ] hard-coding audit passes.
+ *     Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
  *
  * ============================================================================
  */
