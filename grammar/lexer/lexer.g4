@@ -1,966 +1,760 @@
 /**
  * ============================================================================
- * ZAMANI UNIVERSAL COMPUTING LANGUAGE
+ * ZAMANI PROGRAMMING LANGUAGE
  * ============================================================================
  *
- * FILE:
- *   grammar/lexer/lexer.g4
+ * File:
+ *     grammar/lexer/lexer.g4
  *
- * GRAMMAR:
- *   lexer
+ * Grammar:
+ *     lexer
  *
- * STATUS:
- *   Canonical lexical implementation candidate.
+ * Status:
+ *     CANONICAL LEXER ORCHESTRATOR
  *
- * LANGUAGE:
- *   Zamani
+ * Language:
+ *     Zamani
  *
- * ANTLR:
- *   ANTLR4
+ * Grammar technology:
+ *     ANTLR4
  *
- * RUST COMPILER BASELINE:
- *   Rust 1.97 / 1.97.1
+ * Rust implementation baseline:
+ *     Rust 1.97 / Rust 1.97.1
  *
- * RUST EDITION:
- *   2021
+ * Rust edition:
+ *     2021
  *
- * SAFETY:
- *   The Rust implementation must use safe Rust.
- *   No unsafe Rust is required.
- *
- * ============================================================================
- * 1. PURPOSE
- * ============================================================================
- *
- * This file defines the lexical vocabulary consumed through:
- *
- *   grammar/antlr/ZamaniLexer.g4
- *
- * It recognizes:
- *
- *   - identifiers and keywords;
- *   - literals;
- *   - operators;
- *   - punctuation;
- *   - delimiters;
- *   - annotations;
- *   - comments;
- *   - whitespace;
- *   - Unicode identifiers;
- *   - domain-neutral source constructs.
- *
- * It does not perform parsing, type checking, semantic analysis,
- * hardware discovery, resource allocation, or target selection.
+ * Safety:
+ *     The Zamani implementation uses safe Rust.
+ *     No unsafe Rust is required by this grammar or its lexical architecture.
  *
  * ============================================================================
- * 2. OWNERSHIP
+ * PURPOSE
  * ============================================================================
  *
- * OWNS:
+ * This file is the TOP-LEVEL ORCHESTRATOR for Zamani's lexical subsystem.
  *
- *   - lexical token recognition;
- *   - canonical token spellings;
- *   - keyword recognition;
- *   - operator recognition;
- *   - punctuation recognition;
- *   - lexical precedence;
- *   - literal boundaries;
- *   - comments and whitespace;
- *   - lexical error-token recognition where supported.
+ * It is deliberately NOT a second implementation of the lexer.
  *
- * DOES NOT OWN:
+ * Its responsibility is to assemble the canonical lexical vocabulary from
+ * the independently owned lexical components under:
  *
- *   - AST construction;
- *   - expression precedence;
- *   - statement semantics;
- *   - type semantics;
- *   - resource feasibility;
- *   - capability negotiation;
- *   - execution policies;
- *   - effects;
- *   - contracts;
- *   - provenance semantics;
- *   - quantum IR;
- *   - physical quantum gates;
- *   - hardware topology;
- *   - HDL synthesis;
- *   - backend scheduling;
- *   - runtime execution.
+ *     grammar/lexer/
+ *
+ * The complete lexical dependency chain is:
+ *
+ *     source
+ *       |
+ *       v
+ *     grammar/antlr/ZamaniLexer.g4
+ *       |
+ *       v
+ *     grammar/lexer/lexer.g4
+ *       |
+ *       v
+ *     grammar/lexer/tokens.g4
+ *       |
+ *       +---------------------------------------------------------+
+ *       |            |             |            |                 |
+ *       v            v             v            v                 v
+ *   keywords     operators    punctuation   identifiers      annotations
+ *       |            |             |            |                 |
+ *       +------------+-------------+------------+-----------------+
+ *       |
+ *       +---------------------------------------------------------+
+ *       |            |             |            |                 |
+ *       v            v             v            v                 v
+ *   comments     whitespace     literals     diagnostics       Unicode
+ *                                |
+ *              +-----------------+------------------------------+
+ *              |        |          |          |        |         |
+ *              v        v          v          v        v         v
+ *           numeric   string     char      boolean  quantum   hardware
+ *                                                    |         |
+ *                                                    +----+----+
+ *                                                         |
+ *                                                   duration / size
+ *
+ * The resulting vocabulary is consumed by the canonical ANTLR lexer:
+ *
+ *     grammar/antlr/ZamaniLexer.g4
+ *
+ * Parser grammars consume ZamaniLexer rather than this orchestrator directly.
  *
  * ============================================================================
- * 3. INTEGRATION CONTRACT
+ * SINGLE LEXER AUTHORITY
+ * ============================================================================
+ *
+ * There MUST be exactly one production lexical entry point:
+ *
+ *     grammar/antlr/ZamaniLexer.g4
+ *
+ * This file is its internal lexical orchestration layer.
+ *
+ * The architecture deliberately separates:
+ *
+ *     lexer orchestration
+ *         from
+ *     token-family ownership
+ *         from
+ *     parser ownership
+ *         from
+ *     semantic ownership.
+ *
+ * This prevents the lexer from becoming a monolithic grammar again.
+ *
+ * ============================================================================
+ * OWNERSHIP
+ * ============================================================================
+ *
+ * THIS FILE OWNS:
+ *
+ *     - top-level lexical composition;
+ *     - lexical component dependency structure;
+ *     - the canonical relationship between lexical families;
+ *     - the integration boundary between the lexer subsystem and
+ *       ZamaniLexer.g4;
+ *     - the rule that every lexical token has exactly one owner;
+ *     - the rule that lexical components cannot become competing lexers.
+ *
+ * THIS FILE DOES NOT OWN:
+ *
+ *     - keyword spellings;
+ *     - operator spellings;
+ *     - punctuation spellings;
+ *     - identifier syntax;
+ *     - literal syntax;
+ *     - string syntax;
+ *     - character syntax;
+ *     - numeric syntax;
+ *     - quantum literal syntax;
+ *     - hardware literal syntax;
+ *     - duration syntax;
+ *     - size syntax;
+ *     - comments;
+ *     - whitespace;
+ *     - annotations;
+ *     - lexical diagnostics;
+ *     - parser productions;
+ *     - AST construction;
+ *     - semantic analysis;
+ *     - type checking;
+ *     - effect checking;
+ *     - capability negotiation;
+ *     - resource negotiation;
+ *     - contracts;
+ *     - policies;
+ *     - provenance semantics;
+ *     - classical IR;
+ *     - quantum::ir;
+ *     - HDL semantics;
+ *     - hardware discovery;
+ *     - routing;
+ *     - scheduling;
+ *     - QEC;
+ *     - ZQN;
+ *     - HAL;
+ *     - runtime execution.
+ *
+ * ============================================================================
+ * DEPENDENCY CONTRACT
  * ============================================================================
  *
  * DEPENDS_ON:
- *   ANTLR4 lexer runtime.
+ *
+ *     grammar/lexer/tokens.g4
+ *
+ * tokens.g4 owns the composition of the individual lexical families.
  *
  * EXPORTS:
- *   Canonical lexer token vocabulary.
+ *
+ *     The complete assembled lexical vocabulary inherited from ZamaniTokens.
  *
  * CONSUMED_BY:
- *   grammar/antlr/ZamaniLexer.g4
  *
- *   through:
- *
- *     lexer grammar ZamaniLexer;
- *     import lexer;
+ *     grammar/antlr/ZamaniLexer.g4
  *
  * AST_OWNER:
- *   Existing Rust frontend AST.
+ *
+ *     Existing Zamani AST/frontend implementation.
  *
  * SEMANTIC_OWNER:
- *   Semantic analysis.
+ *
+ *     Semantic analysis.
  *
  * IR_OWNER:
- *   Canonical compiler IR.
- *   Quantum operations lower through quantum::ir.
+ *
+ *     Canonical compiler IR.
+ *
+ *     Quantum constructs ultimately cross the canonical:
+ *
+ *         quantum::ir
+ *
+ *     boundary.
  *
  * TEST_OWNER:
- *   grammar/tests/lexical/
+ *
+ *     grammar/tests/lexical/
  *
  * SPEC_OWNER:
- *   grammar/specification/
- *   grammar/lexer/
+ *
+ *     grammar/lexer/*.md
+ *     grammar/specification/
+ *     grammar/spec/
  *
  * COMPATIBILITY_OWNER:
- *   grammar/compatibility/
+ *
+ *     grammar/compatibility/
  *
  * ============================================================================
- * 4. TOKEN NAMING
+ * IMPORT ARCHITECTURE
  * ============================================================================
  *
- * Token names use UPPER_SNAKE_CASE.
+ * This file imports exactly ONE lexical composition grammar:
  *
- * Parser grammars consume these tokens through ZamaniLexer.
+ *     ZamaniTokens
  *
- * Existing Rust TokenType variants require an explicit mapping.
+ * Do NOT import every lexical component here individually.
  *
- * No token name is assumed to be a Rust enum variant automatically.
+ * The reason is architectural:
  *
- * ============================================================================
- * 5. SCALABILITY
- * ============================================================================
+ *     lexer.g4
+ *         |
+ *         +--> tokens.g4
+ *                 |
+ *                 +--> keywords.g4
+ *                 +--> operators.g4
+ *                 +--> punctuation.g4
+ *                 +--> identifiers.g4
+ *                 +--> comments.g4
+ *                 +--> whitespace.g4
+ *                 +--> annotations.g4
+ *                 +--> literals.g4
+ *                 +--> lexer-errors.g4
  *
- * This grammar defines no universal maximum for:
+ * and literals.g4 itself composes:
  *
- *   source size
- *   identifier length
- *   numeric precision
- *   number of declarations
- *   number of modules
- *   number of qubits
- *   number of devices
- *   number of processors
- *   memory capacity
- *   tensor rank
- *   register width
- *   hardware topology
- *   network size
+ *     numeric-literals.g4
+ *     string-literals.g4
+ *     character-literals.g4
+ *     boolean-literals.g4
+ *     quantum-literals.g4
+ *     hardware-literals.g4
+ *     duration-literals.g4
+ *     size-literals.g4
  *
- * Implementation resource exhaustion must be reported explicitly by
- * the compiler infrastructure.
- *
- * It must never silently truncate source or alter token meaning.
- *
- * ============================================================================
- * 6. DOMAIN NEUTRALITY
- * ============================================================================
- *
- * Quantum operation names, vendor names, device names, model names,
- * algorithms, and application concepts are identifiers unless the
- * normative language specification explicitly reserves them.
- *
- * New quantum operations must not require editing this lexer.
+ * This creates one directed lexical composition graph rather than several
+ * competing import paths.
  *
  * ============================================================================
- * 7. DETERMINISM
+ * TOKEN OWNERSHIP INVARIANT
  * ============================================================================
  *
- * Lexical results depend only on:
+ * Every emitted token MUST have exactly one lexical owner.
  *
- *   source text;
- *   lexical rules;
- *   language version;
- *   explicitly selected lexical configuration.
+ * For example:
  *
- * They must not depend on:
+ *     FN
+ *         -> keywords.g4
  *
- *   hardware;
- *   filesystem state;
- *   network state;
- *   wall-clock time;
- *   randomness;
- *   runtime state;
- *   target availability.
+ *     PLUS
+ *         -> operators.g4
+ *
+ *     LEFT_PAREN
+ *         -> punctuation.g4
+ *
+ *     IDENTIFIER
+ *         -> identifiers.g4
+ *
+ *     INTEGER_LITERAL
+ *         -> numeric-literals.g4
+ *
+ *     STRING_LITERAL
+ *         -> string-literals.g4
+ *
+ *     QUANTUM_LITERAL
+ *         -> quantum-literals.g4
+ *
+ *     AT
+ *         -> annotations.g4
+ *
+ *     LINE_COMMENT
+ *         -> comments.g4
+ *
+ *     ERROR_CHAR
+ *         -> lexer-errors.g4
+ *
+ * No token may be redefined in this file.
  *
  * ============================================================================
- * 8. COMPATIBILITY
+ * NO LOCAL TOKEN RULES
  * ============================================================================
  *
- * Existing source spellings must not silently change meaning.
+ * This grammar intentionally contains NO lexer token rules.
  *
- * New reserved words require:
+ * In particular, this file MUST NOT contain duplicate definitions of:
  *
- *   specification;
- *   compatibility review;
- *   Rust lexer mapping;
- *   parser integration;
- *   AST integration where applicable;
- *   positive and negative tests.
+ *     IDENTIFIER
+ *     INTEGER_LITERAL
+ *     FLOAT_LITERAL
+ *     STRING_LITERAL
+ *     CHAR_LITERAL
+ *     TRUE
+ *     FALSE
+ *     QUANTUM_LITERAL
+ *     HARDWARE_*
+ *     DURATION_LITERAL
+ *     SIZE_LITERAL
+ *     FN
+ *     LET
+ *     QUANTUM
+ *     LEARN
+ *     INFER
+ *     REQUIRES
+ *     PLUS
+ *     MINUS
+ *     ASSIGN
+ *     LEFT_PAREN
+ *     RIGHT_PAREN
+ *     ...
+ *
+ * Such definitions belong to their dedicated lexical component.
+ *
+ * ============================================================================
+ * KEYWORD POLICY
+ * ============================================================================
+ *
+ * Language-wide reserved words are owned by:
+ *
+ *     grammar/lexer/keywords.g4
+ *
+ * A concept must NOT automatically become a keyword merely because a
+ * subsystem exists.
+ *
+ * Therefore:
+ *
+ *     neural_model
+ *     robot
+ *     image
+ *     sentiment
+ *     vendor_name
+ *     device_name
+ *     quantum_gate_name
+ *     algorithm_name
+ *     accelerator_name
+ *
+ * remain identifiers unless Zamani syntax genuinely requires them to be
+ * reserved words.
+ *
+ * This is essential for language extensibility.
+ *
+ * ============================================================================
+ * QUANTUM SCALABILITY
+ * ============================================================================
+ *
+ * This orchestrator MUST NOT enumerate physical quantum operations.
+ *
+ * It therefore does not define:
+ *
+ *     H
+ *     X
+ *     Y
+ *     Z
+ *     CNOT
+ *     ...
+ *
+ * as a universal finite gate vocabulary.
+ *
+ * Quantum operation names are handled by the quantum/domain syntax and
+ * semantic layers.
+ *
+ * Lexical support must therefore remain valid for:
+ *
+ *     built-in operations;
+ *     parameterized operations;
+ *     custom operations;
+ *     vendor operations;
+ *     future operations;
+ *     decomposed operations;
+ *     simulator operations.
+ *
+ * The lexical layer does not know the physical gate set.
+ *
+ * ============================================================================
+ * HARDWARE SCALABILITY
+ * ============================================================================
+ *
+ * This file introduces NO universal hardware limits.
+ *
+ * It must never encode limits for:
+ *
+ *     qubits
+ *     CPUs
+ *     GPUs
+ *     FPGAs
+ *     ASICs
+ *     accelerators
+ *     nodes
+ *     threads
+ *     memory
+ *     tensor rank
+ *     tensor dimensions
+ *     register width
+ *     address width
+ *     network size
+ *     device count
+ *     topology size
+ *
+ * No:
+ *
+ *     MAX_*
+ *
+ * constants belong in this lexical layer.
+ *
+ * Source quantities are lexically represented without determining whether
+ * a target can realize them.
+ *
+ * Target feasibility belongs to:
+ *
+ *     semantic analysis
+ *         ->
+ *     resource analysis
+ *         ->
+ *     capability negotiation
+ *         ->
+ *     execution planning
+ *         ->
+ *     target realization.
+ *
+ * ============================================================================
+ * POCO-REAF
+ * ============================================================================
+ *
+ * Lexical syntax is target-independent.
+ *
+ * The same source spelling must be lexically meaningful independently of
+ * whether the eventual realization is:
+ *
+ *     tiny embedded hardware
+ *     CPU
+ *     multicore CPU
+ *     GPU
+ *     FPGA
+ *     ASIC
+ *     accelerator
+ *     QPU
+ *     simulator
+ *     HPC system
+ *     cluster
+ *     distributed system
+ *     cloud environment
+ *     future execution architecture
+ *
+ * The lexer describes source representation.
+ *
+ * It does not describe machine realization.
+ *
+ * ============================================================================
+ * RESOURCE EXHAUSTION
+ * ============================================================================
+ *
+ * "Scalable to infinity given available resources" is implemented here by
+ * avoiding artificial language-level ceilings.
+ *
+ * The grammar deliberately uses unbounded repetition where the language
+ * specification permits arbitrary source size.
+ *
+ * Actual limits may still arise from:
+ *
+ *     input storage;
+ *     compiler memory;
+ *     parser implementation;
+ *     operating-system resources;
+ *     build configuration;
+ *     execution environment.
+ *
+ * Such exhaustion is an implementation/resource condition, not a lexical
+ * language ceiling.
+ *
+ * The implementation MUST NOT silently truncate source.
+ *
+ * ============================================================================
+ * DETERMINISM
+ * ============================================================================
+ *
+ * Lexical classification must depend only on:
+ *
+ *     source characters;
+ *     lexical grammar;
+ *     selected language/compatibility version where applicable.
+ *
+ * It must NOT depend on:
+ *
+ *     hardware;
+ *     filesystem state;
+ *     network state;
+ *     wall-clock time;
+ *     randomness;
+ *     runtime execution;
+ *     target availability;
+ *     resource availability.
+ *
+ * ============================================================================
+ * ERROR HANDLING
+ * ============================================================================
+ *
+ * Lexical errors are owned by:
+ *
+ *     grammar/lexer/lexer-errors.g4
+ *
+ * This orchestrator MUST NOT add a second catch-all rule such as:
+ *
+ *     ERROR_CHAR : . ;
+ *
+ * because doing so would create a competing error-token owner.
+ *
+ * Unterminated strings, malformed literals, invalid characters and other
+ * lexical failures must therefore be handled by the canonical diagnostics
+ * architecture.
+ *
+ * ============================================================================
+ * RUST INTEGRATION
+ * ============================================================================
+ *
+ * This file contains no embedded Rust actions or predicates.
+ *
+ * Generated lexer/parser code is consumed by the Zamani Rust frontend using:
+ *
+ *     Rust 1.97
+ *     Rust 1.97.1
+ *     Rust 2021
+ *
+ * The Rust implementation must remain safe Rust.
+ *
+ * This grammar does not require:
+ *
+ *     unsafe
+ *     target-specific FFI
+ *     filesystem access
+ *     network access
+ *     hardware access
+ *     environment inspection
+ *     runtime callbacks
+ *
+ * ============================================================================
+ * ANTLR INTEGRATION
+ * ============================================================================
+ *
+ * Canonical relationship:
+ *
+ *     grammar/antlr/ZamaniLexer.g4
+ *         |
+ *         | import lexer
+ *         v
+ *     grammar/lexer/lexer.g4
+ *         |
+ *         | import ZamaniTokens
+ *         v
+ *     grammar/lexer/tokens.g4
+ *         |
+ *         v
+ *     lexical component grammars
+ *
+ * The ANTLR library path MUST contain:
+ *
+ *     grammar/lexer
+ *
+ * when generating ZamaniLexer.
+ *
+ * Conceptually:
+ *
+ *     antlr4 ... -lib grammar/lexer grammar/antlr/ZamaniLexer.g4
+ *
+ * The exact repository build command remains owned by the project's build
+ * tooling; this file only defines the grammar dependency relationship.
+ *
+ * ============================================================================
+ * PARSER INTEGRATION
+ * ============================================================================
+ *
+ * Parser grammars MUST consume:
+ *
+ *     ZamaniLexer
+ *
+ * rather than:
+ *
+ *     lexer
+ *     ZamaniTokens
+ *     ZamaniKeywords
+ *     ZamaniOperators
+ *     ZamaniLiterals
+ *     or another lexical component directly.
+ *
+ * This preserves one public lexical boundary.
+ *
+ * ============================================================================
+ * AST INTEGRATION
+ * ============================================================================
+ *
+ * This file creates no AST nodes.
+ *
+ * Token spans and source text are preserved by the lexer/frontend.
+ *
+ * Parser/AST layers interpret tokens into domain-neutral source structure.
+ *
+ * The AST must remain independent of:
+ *
+ *     CPU architecture;
+ *     GPU architecture;
+ *     FPGA topology;
+ *     ASIC implementation;
+ *     physical QPU topology;
+ *     vendor instruction sets;
+ *     QEC layout;
+ *     backend scheduling.
+ *
+ * ============================================================================
+ * SEMANTIC INTEGRATION
+ * ============================================================================
+ *
+ * The lexical layer may recognize words such as:
+ *
+ *     infer
+ *     deduce
+ *     reason
+ *     learn
+ *     adapt
+ *     assert
+ *     retract
+ *     query
+ *     requires
+ *     ensures
+ *     invariant
+ *     evidence
+ *     provenance
+ *     policy
+ *     sandbox
+ *     simulate
+ *
+ * but lexical recognition does NOT define their semantics.
+ *
+ * Their meaning belongs to:
+ *
+ *     parser
+ *         ->
+ *     AST
+ *         ->
+ *     structural validation
+ *         ->
+ *     semantic model
+ *         ->
+ *     effects/capabilities/resources/contracts/policies
+ *         ->
+ *     canonical IR.
+ *
+ * ============================================================================
+ * DOMAIN INTEGRATION
+ * ============================================================================
+ *
+ * The same lexical subsystem serves:
+ *
+ *     classical
+ *     quantum
+ *     hybrid
+ *     HDL
+ *     hardware
+ *     AI
+ *     data
+ *     concurrency
+ *     distributed
+ *     networking
+ *     security
+ *     metaprogramming
+ *     interoperability
+ *     future domains
+ *
+ * Domain grammars MUST NOT create parallel lexical authorities.
+ *
+ * ============================================================================
+ * COMPLETION CRITERIA
+ * ============================================================================
+ *
+ * This file is DONE when ALL of the following are true:
+ *
+ * [ ] It contains exactly one lexer grammar declaration.
+ *
+ * [ ] It imports exactly the canonical lexical composition root:
+ *
+ *         ZamaniTokens
+ *
+ * [ ] It contains no duplicate token rules.
+ *
+ * [ ] It contains no duplicate fragments.
+ *
+ * [ ] It contains no embedded Rust code.
+ *
+ * [ ] It contains no semantic predicates.
+ *
+ * [ ] It contains no hardware-specific limits.
+ *
+ * [ ] It contains no finite quantum gate catalogue.
+ *
+ * [ ] It contains no target-selection logic.
+ *
+ * [ ] It contains no AST rules.
+ *
+ * [ ] It contains no parser rules.
+ *
+ * [ ] ZamaniLexer.g4 imports this grammar.
+ *
+ * [ ] ZamaniTokens remains the sole lexical component-composition layer.
+ *
+ * [ ] Every lexical family has exactly one owner.
+ *
+ * [ ] Parser grammars consume ZamaniLexer.
+ *
+ * [ ] The ANTLR generation path resolves the transitive imports.
+ *
+ * [ ] Generated Rust integration is compatible with Rust 1.97/1.97.1.
+ *
+ * [ ] No unsafe Rust is required.
+ *
+ * [ ] Lexical conformance tests cover every exported token family.
+ *
+ * [ ] Duplicate-token validation reports no competing lexical owner.
+ *
+ * [ ] Positive, negative and boundary lexical tests pass.
+ *
+ * [ ] Classical, quantum, hybrid, HDL, AI, data and hardware examples
+ *     can all traverse the same lexical entry point.
+ *
+ * ============================================================================
+ * FINAL ARCHITECTURAL RULE
+ * ============================================================================
+ *
+ * This file is an ORCHESTRATOR, not a second lexer implementation.
+ *
+ * The canonical relationship is:
+ *
+ *     lexer.g4
+ *         orchestrates
+ *             tokens.g4
+ *                 orchestrates
+ *                     lexical component grammars
+ *
+ * while:
+ *
+ *     ZamaniLexer.g4
+ *
+ * remains the public ANTLR lexer boundary.
+ *
+ * Therefore there is one lexical system, one token authority, and one parser
+ * boundary while still allowing the lexer subsystem to scale through
+ * independently maintainable components.
  *
  * ============================================================================
  */
 
 lexer grammar lexer;
 
-// ============================================================================
-// A. WHITESPACE
-// ============================================================================
-
-WHITESPACE
-    : [ \t\r\n\f]+ -> channel(HIDDEN)
-    ;
-
-// ============================================================================
-// B. COMMENTS
-//
-// Documentation comments are distinct from ordinary comments.
-// Block comments are non-nesting.
-// ============================================================================
-
-DOC_LINE_COMMENT
-    : '///' ~[\r\n]* -> channel(HIDDEN)
-    ;
-
-DOC_BLOCK_COMMENT
-    : '/**' .*? '*/' -> channel(HIDDEN)
-    ;
-
-LINE_COMMENT
-    : '//' ~[\r\n]* -> channel(HIDDEN)
-    ;
-
-BLOCK_COMMENT
-    : '/*' .*? '*/' -> channel(HIDDEN)
-    ;
-
-// ============================================================================
-// C. KEYWORDS — CORE PROGRAM STRUCTURE
-// ============================================================================
-
-MODULE          : 'module';
-IMPORT          : 'import';
-EXPORT          : 'export';
-FROM            : 'from';
-AS              : 'as';
-USE             : 'use';
-INCLUDE         : 'include';
-NAMESPACE       : 'namespace';
-PACKAGE         : 'package';
-
-PUB             : 'pub';
-PUBLIC          : 'public';
-PRIVATE         : 'private';
-PROTECTED       : 'protected';
-INTERNAL        : 'internal';
-
-CONST           : 'const';
-LET             : 'let';
-VAR             : 'var';
-MUT             : 'mut';
-STATIC          : 'static';
-
-FN              : 'fn';
-FUNCTION        : 'function';
-RETURN          : 'return';
-YIELD           : 'yield';
-BREAK           : 'break';
-CONTINUE        : 'continue';
-
-IF              : 'if';
-ELSE            : 'else';
-THEN            : 'then';
-FOR             : 'for';
-WHILE           : 'while';
-LOOP            : 'loop';
-IN              : 'in';
-MATCH           : 'match';
-CASE            : 'case';
-WHEN            : 'when';
-IS              : 'is';
-WHERE           : 'where';
-
-ASYNC           : 'async';
-AWAIT           : 'await';
-SPAWN           : 'spawn';
-TASK            : 'task';
-GENERATOR       : 'generator';
-
-TRY             : 'try';
-CATCH           : 'catch';
-FINALLY         : 'finally';
-THROW           : 'throw';
-RAISE           : 'raise';
-DEFER           : 'defer';
-
-TRUE             : 'true';
-FALSE            : 'false';
-NULL_LITERAL     : 'null';
-NIL              : 'nil';
-
-// ============================================================================
-// D. DECLARATIONS AND TYPES
-// ============================================================================
-
-TYPE             : 'type';
-TYPEOF           : 'typeof';
-
-STRUCT           : 'struct';
-RECORD           : 'record';
-ENUM             : 'enum';
-UNION            : 'union';
-
-CLASS            : 'class';
-INTERFACE        : 'interface';
-TRAIT            : 'trait';
-IMPL             : 'impl';
-
-EXTENDS          : 'extends';
-IMPLEMENTS       : 'implements';
-OVERRIDE         : 'override';
-VIRTUAL          : 'virtual';
-ABSTRACT         : 'abstract';
-
-NEW              : 'new';
-SELF             : 'self';
-SUPER            : 'super';
-THIS             : 'this';
-
-INIT             : 'init';
-DROP             : 'drop';
-
-OPAQUE           : 'opaque';
-ASSOCIATED       : 'associated';
-LINEAR           : 'linear';
-AFFINE           : 'affine';
-MOVE             : 'move';
-REF              : 'ref';
-
-DYN              : 'dyn';
-STATIC_DISPATCH  : 'static_dispatch';
-
-// ============================================================================
-// E. UNIVERSAL SEMANTIC CONSTRUCTS
-//
-// These tokens express source-level intent.
-// Their interpretation belongs to semantic analysis.
-// ============================================================================
-
-REQUIRES         : 'requires';
-ENSURES          : 'ensures';
-INVARIANT        : 'invariant';
-ASSUME           : 'assume';
-GUARANTEE        : 'guarantee';
-PROPERTY         : 'property';
-ASSERT           : 'assert';
-ASSERTION        : 'assertion';
-
-EFFECT           : 'effect';
-HANDLE           : 'handle';
-PERFORM          : 'perform';
-
-CAPABILITY       : 'capability';
-RESOURCE         : 'resource';
-CONSTRAINT       : 'constraint';
-PREFERENCE       : 'prefer';
-BUDGET           : 'budget';
-HINT             : 'hint';
-NEGOTIATE        : 'negotiate';
-
-POLICY           : 'policy';
-ALLOW            : 'allow';
-FORBID           : 'forbid';
-PERMIT           : 'permit';
-DENY             : 'deny';
-
-EVIDENCE         : 'evidence';
-PROVENANCE       : 'provenance';
-EXPLAIN          : 'explain';
-DECISION         : 'decision';
-
-SANDBOX          : 'sandbox';
-SIMULATE         : 'simulate';
-
-REASON           : 'reason';
-INFER            : 'infer';
-DEDUCE           : 'deduce';
-
-LEARN            : 'learn';
-ADAPT            : 'adapt';
-
-KNOWLEDGE        : 'knowledge';
-RETRACT          : 'retract';
-QUERY            : 'query';
-
-UNCERTAIN        : 'uncertain';
-PROBABILITY      : 'probability';
-DISTRIBUTION     : 'distribution';
-CONFIDENCE       : 'confidence';
-BELIEF           : 'belief';
-
-CAUSE            : 'cause';
-INTERVENTION     : 'intervention';
-COUNTERFACTUAL   : 'counterfactual';
-
-OBSERVE          : 'observe';
-VERIFY           : 'verify';
-VALIDATE         : 'validate';
-
-POLICY_SCOPE     : 'scope';
-
-// ============================================================================
-// F. CLASSICAL COMPUTATION
-// ============================================================================
-
-PURE             : 'pure';
-IMPURE           : 'impure';
-
-PRINT            : 'print';
-PRINTLN          : 'println';
-
-PANIC            : 'panic';
-UNREACHABLE      : 'unreachable';
-
-SIZEOF           : 'sizeof';
-LEN              : 'len';
-
-// ============================================================================
-// G. CONCURRENCY AND DISTRIBUTION
-// ============================================================================
-
-ACTOR            : 'actor';
-MESSAGE          : 'message';
-CHANNEL          : 'channel';
-SELECT           : 'select';
-SEND             : 'send';
-RECEIVE          : 'receive';
-
-CONCURRENT       : 'concurrent';
-PARALLEL         : 'parallel';
-SEQUENTIAL       : 'sequential';
-
-DISTRIBUTED      : 'distributed';
-COLLECTIVE       : 'collective';
-CONSENSUS        : 'consensus';
-
-RETRY            : 'retry';
-RECOVER          : 'recover';
-FALLBACK         : 'fallback';
-ESCALATE         : 'escalate';
-
-// ============================================================================
-// H. QUANTUM AND HYBRID COMPUTATION
-//
-// Individual operation names are deliberately not reserved.
-// ============================================================================
-
-QUANTUM          : 'quantum';
-QUBIT            : 'qubit';
-QUBITS           : 'qubits';
-CIRCUIT          : 'circuit';
-
-MEASURE          : 'measure';
-MEASUREMENT      : 'measurement';
-ENTANGLE         : 'entangle';
-
-CLASSICAL        : 'classical';
-HYBRID           : 'hybrid';
-
-QUANTUM_STATE    : 'quantum_state';
-QUANTUM_CHANNEL  : 'quantum_channel';
-
-NOISE            : 'noise';
-QEC              : 'qec';
-
-// ============================================================================
-// I. HARDWARE DESCRIPTION AND COMPUTATIONAL RESOURCES
-// ============================================================================
-
-HDL              : 'hdl';
-HARDWARE         : 'hardware';
-DEVICE           : 'device';
-ACCELERATOR      : 'accelerator';
-
-SIGNAL           : 'signal';
-WIRE             : 'wire';
-PORT             : 'port';
-CLOCK            : 'clock';
-RESET            : 'reset';
-
-INPUT            : 'input';
-OUTPUT           : 'output';
-INOUT            : 'inout';
-
-REGISTER         : 'register';
-MEMORY           : 'memory';
-PIPELINE         : 'pipeline';
-
-TIMING           : 'timing';
-SYNTHESIZE       : 'synthesize';
-SIMULATION       : 'simulation';
-
-TOPOLOGY         : 'topology';
-PLACEMENT        : 'placement';
-SCHEDULE         : 'schedule';
-
-// ============================================================================
-// J. DATA AND INTEROPERABILITY
-// ============================================================================
-
-DATA             : 'data';
-DATASET          : 'dataset';
-SCHEMA           : 'schema';
-
-GRAPH            : 'graph';
-NODE             : 'node';
-EDGE             : 'edge';
-
-STREAM           : 'stream';
-PIPE             : 'pipe';
-
-FOREIGN          : 'foreign';
-EXTERN           : 'extern';
-FFI              : 'ffi';
-ABI              : 'abi';
-
-LINK             : 'link';
-CALLING_CONVENTION : 'calling_convention';
-
-// ============================================================================
-// K. METAPROGRAMMING
-// ============================================================================
-
-MACRO            : 'macro';
-QUOTE            : 'quote';
-UNQUOTE          : 'unquote';
-
-REFLECT          : 'reflect';
-REFLECTION       : 'reflection';
-
-COMPTIME         : 'comptime';
-GENERATE         : 'generate';
-
-SYNTAX           : 'syntax';
-AST              : 'ast';
-
-// ============================================================================
-// L. EFFECTIVE BOOLEAN AND LOGICAL WORDS
-// ============================================================================
-
-AND              : 'and';
-OR               : 'or';
-NOT              : 'not';
-XOR              : 'xor';
-
-// ============================================================================
-// M. SYMBOLIC LITERALS
-//
-// Multi-character forms must precede shorter overlapping forms.
-// ============================================================================
-
-QUANTUM_BASIS_ZERO
-    : '|0⟩'
-    ;
-
-QUANTUM_BASIS_ONE
-    : '|1⟩'
-    ;
-
-QUANTUM_PLUS
-    : '|+⟩'
-    ;
-
-QUANTUM_MINUS
-    : '|-⟩'
-    ;
-
-SIGMA_SYMBOL
-    : 'Σ'
-    ;
-
-PI_SYMBOL
-    : 'Π'
-    ;
-
-// ============================================================================
-// N. NUMERIC LITERALS
-//
-// Lexical recognition does not determine machine width or target precision.
-// Semantic analysis determines numeric interpretation.
-// ============================================================================
-
-// Decimal integer with optional digit separators.
-INTEGER_LITERAL
-    : DIGIT (DIGIT | '_')*
-    ;
-
-// Decimal floating-point forms:
-//   1.0
-//   1.
-//   .5
-//   1e10
-//   1.5e-10
-
-FLOAT_LITERAL
-    : DIGIT (DIGIT | '_')* '.' DIGIT (DIGIT | '_')* EXPONENT?
-    | DIGIT (DIGIT | '_')* '.' EXPONENT?
-    | '.' DIGIT (DIGIT | '_')* EXPONENT?
-    | DIGIT (DIGIT | '_')* EXPONENT
-    ;
-
-// Binary integer.
-BINARY_INTEGER_LITERAL
-    : '0' [bB] [01] ( [01] | '_' [01] )*
-    ;
-
-// Octal integer.
-OCTAL_INTEGER_LITERAL
-    : '0' [oO] [0-7] ( [0-7] | '_' [0-7] )*
-    ;
-
-// Hexadecimal integer.
-HEX_INTEGER_LITERAL
-    : '0' [xX] HEX_DIGIT ( HEX_DIGIT | '_' HEX_DIGIT )*
-    ;
-
-// ============================================================================
-// O. STRING LITERALS
-// ============================================================================
-
-// Standard escaped string.
-STRING_LITERAL
-    : '"' (ESCAPE_SEQUENCE | ~["\\\r\n])* '"'
-    ;
-
-// Raw string with arbitrary hash delimiters is intentionally handled by
-// a bounded lexical form here. Additional raw-string delimiter variants
-// require explicit grammar support and conformance tests.
-RAW_STRING_LITERAL
-    : 'r"' .*? '"'
-    ;
-
-// Multiline string.
-MULTILINE_STRING_LITERAL
-    : '"""' .*? '"""'
-    ;
-
-// ============================================================================
-// P. CHARACTER LITERALS
-// ============================================================================
-
-CHAR_LITERAL
-    : '\'' (ESCAPE_SEQUENCE | ~['\\\r\n]) '\''
-    ;
-
-// ============================================================================
-// Q. ANNOTATIONS AND ATTRIBUTES
-// ============================================================================
-
-AT
-    : '@'
-    ;
-
-HASH
-    : '#'
-    ;
-
-// ============================================================================
-// R. MULTI-CHARACTER OPERATORS
-//
-// Longest-match behavior is intentional.
-// ============================================================================
-
-ELLIPSIS
-    : '...'
-    ;
-
-RANGE_INCLUSIVE
-    : '..='
-    ;
-
-RANGE
-    : '..'
-    ;
-
-FAT_ARROW
-    : '=>'
-    ;
-
-THIN_ARROW
-    : '->'
-    ;
-
-DOUBLE_COLON
-    : '::'
-    ;
-
-SAFE_MEMBER
-    : '?.'
-    ;
-
-NULL_COALESCE
-    : '??'
-    ;
-
-NULL_COALESCE_ASSIGN
-    : '??='
-    ;
-
-POWER
-    : '**'
-    ;
-
-POWER_ASSIGN
-    : '**='
-    ;
-
-SHIFT_LEFT_ASSIGN
-    : '<<='
-    ;
-
-SHIFT_RIGHT_ASSIGN
-    : '>>='
-    ;
-
-SHIFT_LEFT
-    : '<<'
-    ;
-
-SHIFT_RIGHT
-    : '>>'
-    ;
-
-LESS_EQUAL
-    : '<='
-    ;
-
-GREATER_EQUAL
-    : '>='
-    ;
-
-EQUAL
-    : '=='
-    ;
-
-NOT_EQUAL
-    : '!='
-    ;
-
-LOGICAL_AND
-    : '&&'
-    ;
-
-LOGICAL_OR
-    : '||'
-    ;
-
-PLUS_ASSIGN
-    : '+='
-    ;
-
-MINUS_ASSIGN
-    : '-='
-    ;
-
-MULTIPLY_ASSIGN
-    : '*='
-    ;
-
-DIVIDE_ASSIGN
-    : '/='
-    ;
-
-MODULO_ASSIGN
-    : '%='
-    ;
-
-BIT_AND_ASSIGN
-    : '&='
-    ;
-
-BIT_OR_ASSIGN
-    : '|='
-    ;
-
-BIT_XOR_ASSIGN
-    : '^='
-    ;
-
-// ============================================================================
-// S. SINGLE-CHARACTER OPERATORS
-// ============================================================================
-
-PLUS
-    : '+'
-    ;
-
-MINUS
-    : '-'
-    ;
-
-MULTIPLY
-    : '*'
-    ;
-
-DIVIDE
-    : '/'
-    ;
-
-MODULO
-    : '%'
-    ;
-
-ASSIGN
-    : '='
-    ;
-
-LESS_THAN
-    : '<'
-    ;
-
-GREATER_THAN
-    : '>'
-    ;
-
-LOGICAL_NOT
-    : '!'
-    ;
-
-BIT_AND
-    : '&'
-    ;
-
-BIT_OR
-    : '|'
-    ;
-
-BIT_XOR
-    : '^'
-    ;
-
-BIT_NOT
-    : '~'
-    ;
-
-QUESTION
-    : '?'
-    ;
-
-// ============================================================================
-// T. DELIMITERS AND PUNCTUATION
-// ============================================================================
-
-LEFT_PAREN
-    : '('
-    ;
-
-RIGHT_PAREN
-    : ')'
-    ;
-
-LEFT_BRACE
-    : '{'
-    ;
-
-RIGHT_BRACE
-    : '}'
-    ;
-
-LEFT_BRACKET
-    : '['
-    ;
-
-RIGHT_BRACKET
-    : ']'
-    ;
-
-COMMA
-    : ','
-    ;
-
-DOT
-    : '.'
-    ;
-
-SEMICOLON
-    : ';'
-    ;
-
-COLON
-    : ':'
-    ;
-
-// ============================================================================
-// U. IDENTIFIERS
-//
-// Unicode identifiers are permitted.
-// Identifier normalization and confusable-character security checks belong
-// to the frontend's identifier-validation stage.
-//
-// Keywords appear before IDENTIFIER, so exact reserved spellings receive
-// their dedicated tokens.
-// ============================================================================
-
-IDENTIFIER
-    : ID_START ID_CONTINUE*
-    ;
-
-// ============================================================================
-// V. INVALID INPUT
-//
-// This token provides a deterministic catch-all for unsupported characters.
-// The Rust frontend must produce a source-spanned lexical diagnostic.
-// ============================================================================
-
-ERROR_CHAR
-    : .
-    ;
-
-// ============================================================================
-// W. FRAGMENTS
-// ============================================================================
-
-fragment DIGIT
-    : [0-9]
-    ;
-
-fragment HEX_DIGIT
-    : [0-9a-fA-F]
-    ;
-
-fragment EXPONENT
-    : [eE] [+-]? DIGIT (DIGIT | '_')*
-    ;
-
-fragment ESCAPE_SEQUENCE
-    : '\\' (
-          [btnfr"'\\0]
-        | 'u' HEX_DIGIT HEX_DIGIT HEX_DIGIT HEX_DIGIT
-        | 'x' HEX_DIGIT HEX_DIGIT
-      )
-    ;
-
-fragment ID_START
-    : [a-zA-Z_]
-    | [\p{L}]
-    | [\p{Nl}]
-    ;
-
-fragment ID_CONTINUE
-    : ID_START
-    | [0-9]
-    | [\p{Mn}]
-    | [\p{Mc}]
-    | [\p{Nd}]
-    | [\p{Pc}]
-    ;
+import ZamaniTokens;
