@@ -1,980 +1,532 @@
 /*
  * ============================================================================
- * Zamani Programming Language
+ * Zamani — Dependent Type Grammar
  * ============================================================================
  *
  * File:
- *     grammar/types/dependent.g4
- *
- * Status:
- *     Canonical modular SOURCE-TYPE grammar for dependent/value-indexed types.
+ *   grammar/types/dependent.g4
  *
  * Purpose:
- *     Owns the syntax required to express types whose meaning is parameterized
- *     by source-level values, symbolic dimensions, indices, lengths, shapes,
- *     capacities, predicates, or other type-level information.
- *
- * This file is intentionally syntax-only.
- *
- * It does NOT evaluate type-level expressions, prove propositions, resolve
- * names, infer types, allocate resources, select hardware, or construct IR.
- *
- * ============================================================================
- * ARCHITECTURAL AUTHORITY
- * ============================================================================
- *
- *     grammar/lexer/tokens.g4
- *                 |
- *                 v
- *     grammar/types/dependent.g4
- *                 |
- *                 v
- *     grammar/types/types.g4
- *                 |
- *                 v
- *     frontend AST / TypeExpr
- *                 |
- *                 v
- *     structural validation
- *                 |
- *                 v
- *     semantic type system
- *                 |
- *                 v
- *     canonical semantic model / IR
- *                 |
- *                 +----------------------+----------------------+
- *                 |                      |                      |
- *                 v                      v                      v
- *             classical              quantum::ir              HDL
- *                 |                      |                      |
- *                 +----------------------+----------------------+
- *                                        |
- *                                        v
- *                              optimization / lowering
- *                                        |
- *                              routing / scheduling
- *                                        |
- *                              QEC / resilience / ZQN
- *                                        |
- *                                        v
- *                                       HAL
- *                                        |
- *                                        v
- *                                target realization
- *
- * ============================================================================
- * OWNERSHIP
- * ============================================================================
- *
- * This file OWNS:
- *
- *   - dependent/value-indexed type syntax;
- *   - dependent argument lists;
- *   - symbolic type-level value references;
- *   - type-level value expressions when they are consumed by dependent types;
- *   - dependent function syntax;
- *   - dependent pair syntax;
- *   - identity/equality type syntax;
- *   - source-level binders used by dependent types;
- *   - syntax-level composition of dependent type constructs.
- *
- * This file DOES NOT OWN:
- *
- *   - lexer definitions;
- *   - token spelling;
- *   - identifier lexical rules;
- *   - ordinary generic type syntax;
- *   - ordinary arrays;
- *   - ordinary slices;
- *   - ordinary tuples;
- *   - ordinary functions;
- *   - type inference;
- *   - type unification;
- *   - dependent-type normalization;
- *   - compile-time evaluation;
- *   - proof checking;
- *   - theorem proving;
- *   - name resolution;
- *   - constant evaluation;
- *   - ownership;
- *   - borrowing;
- *   - resource allocation;
- *   - hardware discovery;
- *   - target selection;
- *   - topology;
- *   - routing;
- *   - scheduling;
- *   - calibration;
- *   - QEC;
- *   - ZQN;
- *   - HAL;
- *   - runtime representation;
- *   - ABI layout.
- *
- * ============================================================================
- * POCO-REAF CONTRACT
- * ============================================================================
- *
- * Dependent types MUST describe program semantics rather than today's
- * implementation limits.
- *
- * The grammar MUST NOT contain:
- *
- *     MAX_TYPE_PARAMETERS
- *     MAX_TYPE_DEPTH
- *     MAX_DEPENDENT_ARGUMENTS
- *     MAX_ARRAY_LENGTH
- *     MAX_TENSOR_RANK
- *     MAX_TENSOR_DIMENSION
- *     MAX_QUANTUM_REGISTER_SIZE
- *     MAX_QUANTUM_DIMENSION
- *     MAX_MEMORY_SIZE
- *     MAX_RESOURCE_COUNT
+ *   Define the reusable surface-syntax fragment for dependent type
+ *   annotations/constructs without owning the surrounding type-expression
+ *   composition.
+ *
+ * Architectural principle:
+ *
+ *   source
+ *     -> lexer
+ *     -> ANTLR grammar
+ *     -> domain-neutral AST
+ *     -> structural validation
+ *     -> semantic type model
+ *     -> constraint/proof analysis
+ *     -> canonical IR
+ *     -> target-specific lowering
+ *
+ * This grammar file owns ONLY dependent-type syntax.
+ *
+ * It MUST NOT:
+ *   - encode hardware capacities;
+ *   - encode physical memory limits;
+ *   - encode register widths;
+ *   - encode processor counts;
+ *   - encode GPU/FPGA/QPU counts;
+ *   - encode physical qubit counts;
+ *   - encode tensor-rank limits;
+ *   - encode topology limits;
+ *   - perform type checking;
+ *   - perform dependent-value evaluation;
+ *   - perform proof checking;
+ *   - solve constraints;
+ *   - select hardware;
+ *   - perform routing;
+ *   - perform scheduling;
+ *   - lower to LLVM/QIR/MLIR/vendor IR;
+ *   - define quantum physical-resource semantics;
+ *   - define HDL physical implementation semantics.
+ *
+ * ---------------------------------------------------------------------------
+ * FEATURE CONTRACT
+ * ---------------------------------------------------------------------------
+ *
+ * Owns:
+ *   - dependentTypeQualifier
+ *   - dependentTypeBinder
+ *   - dependentTypeParameter
+ *   - dependentTypeConstraint
+ *   - dependentTypeValueBinding
+ *   - dependentTypeRelation
+ *
+ * Does Not Own:
+ *   - complete type expressions;
+ *   - generic type composition;
+ *   - function types;
+ *   - reference types;
+ *   - tuple/record/sum types;
+ *   - type aliases;
+ *   - ordinary value expressions;
+ *   - universal constraints;
+ *   - hardware/resource requirements;
+ *   - capability requirements;
+ *   - contracts;
+ *   - proof systems;
+ *   - semantic type inference.
+ *
+ * Public Rules:
+ *   dependentTypeQualifier
+ *   dependentTypeBinder
+ *   dependentTypeParameter
+ *   dependentTypeConstraint
+ *   dependentTypeValueBinding
+ *   dependentTypeRelation
  *
- * Examples such as:
+ * Private Rules:
+ *   None intentionally. Reusable semantic fragments are exposed explicitly
+ *   so the composition grammar can integrate them without duplicating syntax.
  *
- *     Vector<int, N>
- *     Matrix<float, Rows, Cols>
- *     Tensor<T, N, M, K>
- *     QReg[N]
- *
- * remain source-level descriptions.
- *
- * Whether a particular target can realize those requirements is decided
- * downstream by semantic/resource/capability analysis and target realization.
- *
- * ============================================================================
- * DOMAIN-NEUTRALITY
- * ============================================================================
- *
- * Dependent types are deliberately not tied to:
+ * Lexer Dependencies:
+ *   The exact keyword tokens must be supplied by the canonical Zamani lexer.
  *
- *     CPU
- *     GPU
- *     FPGA
- *     QPU
- *     ASIC
- *     memory bank
- *     network node
- *     vendor backend
+ *   Expected canonical spellings:
+ *     dependent
+ *     where
+ *
+ *   If the current lexer does not reserve these spellings, integration MUST
+ *   first establish the canonical token names in the lexer/token registry.
+ *
+ *   IDENTIFIER is the canonical identifier token where an identifier token
+ *   is required.
+ *
+ * Grammar Dependencies:
+ *   None.
  *
- * The same dependent syntax can therefore describe:
+ * IMPORTANT:
+ *   This file MUST remain a leaf grammar.
  *
- *     classical arrays
- *     matrices
- *     tensors
- *     quantum registers
- *     HDL buses
- *     packet widths
- *     distributed collections
- *     accelerator tiles
- *     scientific dimensions
- *     AI tensor shapes
- *     symbolic resource quantities
+ *   It MUST NOT import grammar/types.g4 and MUST NOT invoke typeExpression,
+ *   because typeExpression is owned by the composition grammar.
  *
- * without embedding physical implementation decisions in the grammar.
+ * AST Contract:
+ *   Parsing produces structural information sufficient for the AST builder
+ *   to represent:
  *
- * ============================================================================
- * LEXER CONTRACT
- * ============================================================================
+ *     dependent qualifier
+ *     binder
+ *     value/type parameter
+ *     relation
+ *     constraint
  *
- * This is a PARSER grammar.
+ *   The exact AST node names are owned by the existing Zamani AST and must
+ *   be mapped there rather than invented by this grammar.
  *
- * It consumes the canonical:
+ * Semantic Contract:
  *
- *     ZamaniTokens
+ *   A dependent type may express that part of its type identity or validity
+ *   depends on a value, type-level expression, or constraint.
  *
- * from:
+ *   Examples of semantic relationships include:
  *
- *     grammar/lexer/tokens.g4
+ *     Vector<T, n>
+ *     Matrix<T, rows, columns>
+ *     Array<T, length>
+ *     Packet<Payload, size>
+ *     Tensor<T, shape>
  *
- * It MUST NOT introduce lexer rules.
+ *   The grammar does not define the meaning of those examples. Their meaning
+ *   is supplied by the semantic type system.
  *
- * Existing canonical lexical concepts used here include:
+ * Type Contract:
  *
- *     IDENTIFIER
- *     INTEGER_LITERAL
- *     FLOAT_LITERAL
- *     LPAREN
- *     RPAREN
- *     LBRACKET
- *     RBRACKET
- *     COMMA
- *     COLON
- *     DOUBLE_COLON
- *     ARROW
- *     PLUS
- *     MINUS
- *     STAR
- *     SLASH
- *     MODULO
- *     LEFT_SHIFT
- *     RIGHT_SHIFT
- *     BIT_AND
- *     BIT_OR
- *     CARET
+ *   Dependent parameters are symbolic and must not be confused with runtime
+ *   resource limits.
  *
- * The exact spelling of those tokens remains owned by tokens.g4.
+ *   A value such as `n` is a program-level parameter/value.
  *
- * ============================================================================
- * IMPORTANT COMPOSITION RULE
- * ============================================================================
+ *   It is NOT a universal compiler constant.
  *
- * `grammar/types/types.g4` is the public type-expression composition grammar.
+ *   A dependent type may therefore describe arbitrarily large values subject
+ *   only to the actual language, compiler, runtime, and target resources.
  *
- * It MUST delegate:
+ * Constraint Contract:
  *
- *     dependentType
+ *   Constraints are represented structurally.
  *
- * to this grammar.
+ *   Constraint solving belongs to the semantic/type-constraint subsystem.
  *
- * It MUST NOT retain a second implementation of:
+ *   Examples of semantic intent include:
  *
- *     dependentType
- *     dependentArgumentList
- *     dependentArgument
- *     dependentBinder
- *     dependentFunctionType
- *     dependentPairType
- *     identityType
+ *     length >= 0
+ *     rows == columns
+ *     size <= capacity
+ *     index < length
  *
- * after this file becomes canonical.
+ *   The grammar must not assign implementation-specific meanings to these
+ *   relations.
  *
- * This prevents grammar competition and prevents two subtly different
- * definitions of dependent types from entering the parser.
+ * Effect Contract:
  *
- * ============================================================================
- * AST CONTRACT
- * ============================================================================
+ *   Parsing a dependent type has no runtime effect.
  *
- * The grammar does not define a new AST.
+ *   Evaluation of a dependent value expression, if required by the semantic
+ *   model, is handled by the appropriate compile-time/semantic subsystem.
  *
- * Dependent syntax must lower into the repository's existing domain-neutral
- * frontend type representation.
+ * Capability Contract:
  *
- * At minimum the frontend semantic mapping must preserve:
+ *   This grammar does not require target capabilities.
  *
- *     base type
- *     dependent arguments
- *     symbolic values
- *     binder names
- *     binder types
- *     body/result type
- *     source spans
+ *   A dependent type may later participate in capability/resource checking,
+ *   but capability negotiation is not performed here.
  *
- * If the existing TypeExpr representation does not yet expose dedicated
- * dependent-type variants, that is an AST/semantic-model implementation task;
- * this grammar must not invent a second AST to compensate.
+ * Resource Contract:
  *
- * ============================================================================
- * SEMANTIC CONTRACT
- * ============================================================================
+ *   No resource quantity is hard-coded in this file.
  *
- * Parsing answers:
+ *   In particular, do not add fixed limits for:
  *
- *     "What dependent type syntax was written?"
+ *     memory
+ *     dimensions
+ *     tensor rank
+ *     array length
+ *     qubits
+ *     nodes
+ *     devices
+ *     threads
+ *     register width
  *
- * Semantic analysis answers:
+ * Contract Contract:
  *
- *     "What does the dependency mean?"
+ *   Dependent-type validity may generate semantic proof obligations.
  *
- * Examples:
+ *   Those obligations are consumed by the existing contract/validation
+ *   subsystem.
  *
- *     Vector<int, N>
+ * Policy Contract:
  *
- * does NOT mean that the parser must determine N.
+ *   Policy does not belong to the dependent-type parser.
  *
- *     QReg[N]
+ *   Security, execution, resource, deployment, and adaptation policies are
+ *   evaluated by their respective semantic subsystems.
  *
- * does NOT mean that the parser allocates N qubits.
+ * Provenance Contract:
  *
- *     Matrix<T, Rows, Cols>
+ *   Source locations and syntactic structure must be preserved by the parser
+ *   so semantic diagnostics can identify the original dependent declaration,
+ *   binder, value, and constraint.
  *
- * does NOT mean that the parser checks whether Rows * Cols fits in memory.
+ * IR Contract:
  *
- * Those are downstream semantic/resource questions.
+ *   This grammar emits no IR.
  *
- * ============================================================================
- * DEPENDENT ARGUMENT MODEL
- * ============================================================================
+ *   The semantic type representation is lowered by the canonical type/IR
+ *   subsystem.
  *
- * A dependent argument can be:
+ * Quantum Boundary:
  *
- *     - a type;
- *     - a symbolic value;
- *     - a literal value;
- *     - a qualified symbolic value;
- *     - a structured type-level expression.
+ *   Dependent types may describe logical quantum-domain quantities such as
+ *   symbolic dimensions, logical register shapes, circuit parameters, or
+ *   resource requirements.
  *
- * The grammar deliberately does not force every domain to use the same
- * interpretation.
+ *   They MUST NOT encode a universal physical-QPU capacity.
  *
- * For example:
+ *   Physical realization belongs to quantum::ir, resource analysis, routing,
+ *   scheduling, resilience, ZQN, HAL, and target-specific layers.
  *
- *     Vector<T, N>
+ * HDL Boundary:
  *
- * may be interpreted as a length-indexed vector.
+ *   Dependent types may describe symbolic hardware intent, dimensions,
+ *   parameterized structures, and verified relationships.
  *
- *     Tensor<T, Rows, Cols>
+ *   Physical realization, synthesis constraints, timing, placement, and
+ *   implementation technology belong to HDL/hardware semantic layers.
  *
- * may be interpreted as a shape-indexed tensor.
+ * Backend Boundary:
  *
- *     QReg[N]
+ *   Backend selection MUST NOT alter the source-level meaning of a dependent
+ *   type.
  *
- * may be interpreted as a quantum register abstraction.
+ *   Specialization may resolve symbolic parameters when the compilation
+ *   context supplies sufficient information.
  *
- *     Bus[Width]
+ * Diagnostics:
  *
- * may be interpreted as an HDL width parameter.
+ *   Structural diagnostics are produced by ANTLR.
  *
- * ============================================================================
- * DEPENDENT TYPE SYNTAX
- * ============================================================================
+ *   Semantic diagnostics are produced later for:
  *
- * Canonical value-indexed form:
+ *     - unknown dependent parameter;
+ *     - invalid dependency;
+ *     - unsatisfied constraint;
+ *     - inconsistent constraints;
+ *     - invalid value/type dependency;
+ *     - unsupported compile-time evaluation;
+ *     - illegal recursive dependency;
+ *     - invalid use in a type position.
  *
- *     Type[arguments]
+ * Positive Tests:
  *
- * Examples:
+ *   dependent<T>
+ *   dependent<T, n>
+ *   dependent<T> where ...
  *
- *     Vector[int]
- *     Vector[int, N]
- *     Matrix[float, Rows, Cols]
- *     Tensor[T, N, M, K]
- *     QReg[N]
+ *   Exact accepted forms are composed by grammar/types.g4.
  *
- * Generic constructors remain distinct:
+ * Negative Tests:
  *
- *     Vector<int, N>
- *     Matrix<float, Rows, Cols>
+ *   dependent
+ *   dependent where
+ *   dependent <>
+ *   malformed dependent binder
+ *   malformed constraint
  *
- * The semantic layer may recognize both representations where the language
- * specification declares them equivalent, but the parser does not silently
- * rewrite one form into another.
+ * Boundary Tests:
  *
- * ============================================================================
- * DEPENDENT FUNCTION / PI TYPE
- * ============================================================================
+ *   dependent generic types
+ *   dependent function types
+ *   dependent references
+ *   dependent tuples
+ *   dependent records
+ *   dependent arrays
+ *   dependent tensors
+ *   dependent quantum abstractions
+ *   dependent HDL abstractions
  *
- * A dependent function expresses a result type whose meaning depends on a
- * bound value/type.
+ * Scalability Tests:
  *
- * Canonical syntax:
+ *   - arbitrarily long symbolic dependency chains within compiler resources;
+ *   - arbitrarily nested dependent types;
+ *   - arbitrarily large symbolic values;
+ *   - no grammar-level capacity ceiling;
+ *   - no fixed type-parameter count;
+ *   - no fixed dependency count.
  *
- *     (x: T) -> U
+ * Compatibility:
  *
- * where U may refer to x.
+ *   The spelling of the dependent-type marker is controlled by the canonical
+ *   language compatibility/versioning system.
  *
- * Examples:
+ *   This file must not independently introduce language-version semantics.
  *
- *     (n: Nat) -> Vector[int, n]
- *     (n: Nat) -> Matrix[float, n, n]
+ * Integration:
  *
- * The grammar records the binder.
+ *   grammar/types.g4
+ *       imports/consumes this grammar
+ *       and owns complete type-expression composition.
  *
- * It does not prove that U legally depends on x.
+ *   lexer/token registry
+ *       owns canonical keyword/token definitions.
  *
- * ============================================================================
- * DEPENDENT PAIR / SIGMA TYPE
- * ============================================================================
+ *   AST
+ *       owns the durable representation of dependent types.
  *
- * A dependent pair binds a value/type and carries a body whose type depends
- * on that binding.
+ *   semantic/type subsystem
+ *       owns dependency validation and constraint solving.
  *
- * Canonical source form:
+ *   validation/contracts
+ *       owns proof obligations and contract checking.
  *
- *     Sigma(x: T, U)
+ *   compile/metaprogramming
+ *       may evaluate permitted compile-time value expressions.
  *
- * or an equivalent dedicated syntax established by the language specification.
+ *   canonical IR
+ *       consumes validated semantic types.
  *
- * The grammar accepts the structured form without attempting semantic
- * interpretation.
+ *   quantum::ir
+ *       consumes quantum-domain semantics only after validation/lowering.
  *
- * ============================================================================
- * IDENTITY / EQUALITY TYPE
- * ============================================================================
+ *   tests
+ *       own lexical, parser, AST, semantic, negative, boundary, and
+ *       scalability conformance.
  *
- * The language type-system document defines:
+ * Completion Criteria:
  *
- *     Id(T, a, b)
+ *   - grammar compiles with the canonical Zamani lexer;
+ *   - no upward grammar dependency exists;
+ *   - no duplicate type-expression ownership exists;
+ *   - dependent syntax is composed exclusively by types.g4;
+ *   - AST mapping is defined;
+ *   - semantic ownership is defined;
+ *   - constraint ownership is defined;
+ *   - diagnostics are defined;
+ *   - positive/negative/boundary/scalability tests exist;
+ *   - no hard-coded capacity exists;
+ *   - no backend-specific syntax exists;
+ *   - Rust implementation remains compatible with Rust 1.97/1.97.1;
+ *   - generated/runtime Rust contains no unsafe code.
  *
- * as an identity/equality type.
+ * ---------------------------------------------------------------------------
+ * DEPENDENCY CONTRACT
+ * ---------------------------------------------------------------------------
  *
- * The parser may represent this as a named dependent type constructor:
+ * DEPENDS_ON:
+ *   canonical Zamani lexer tokens only.
  *
- *     Id[T, a, b]
+ * EXPORTS:
+ *   dependentTypeQualifier
+ *   dependentTypeBinder
+ *   dependentTypeParameter
+ *   dependentTypeConstraint
+ *   dependentTypeValueBinding
+ *   dependentTypeRelation
  *
- * where:
+ * CONSUMED_BY:
+ *   grammar/types.g4
+ *   future type-system delegate grammars that need dependent syntax
  *
- *     T = carrier type
- *     a = first term/value
- *     b = second term/value
+ * AST_OWNER:
+ *   existing Zamani domain-neutral AST type subsystem
  *
- * Proof/equality checking remains semantic.
+ * SEMANTIC_OWNER:
+ *   existing Zamani type/semantic analysis subsystem
  *
- * ============================================================================
- * TYPE-LEVEL VALUES
- * ============================================================================
+ * IR_OWNER:
+ *   canonical Zamani IR/type lowering subsystem
  *
- * The grammar permits symbolic expressions such as:
+ * TEST_OWNER:
+ *   grammar/tests/type/dependent/
  *
- *     N
- *     Rows
- *     Cols
- *     N + 1
- *     2 * N
- *     Rows * Cols
- *     Size / ElementSize
+ * SPEC_OWNER:
+ *   grammar/specification/ and grammar/spec/types.md
  *
- * No compile-time evaluator is embedded here.
- *
- * A compiler may later normalize or evaluate such expressions according to
- * the semantic/type-level evaluation rules.
- *
- * ============================================================================
- * SOURCE SPANS / DIAGNOSTICS
- * ============================================================================
- *
- * Every dependent construct must retain sufficient parser context for the
- * frontend to produce diagnostics identifying:
- *
- *     - the complete dependent type;
- *     - the dependent argument;
- *     - the binder;
- *     - the referenced symbolic value;
- *     - the source location.
- *
- * This grammar must not use target-dependent parser actions to diagnose
- * semantic validity.
- *
- * ============================================================================
- * RECURSION / SCALABILITY
- * ============================================================================
- *
- * Nested dependent types are legal:
- *
- *     Matrix<Vector<int, N>, Rows, Cols>
- *
- *     Vector<Tensor<float, N, M>, K>
- *
- *     QReg[Rows * Cols]
- *
- *     Outer[Inner[T, N], M]
- *
- * There is no language-defined nesting ceiling.
- *
- * Operational parser/resource limits, if required for denial-of-service
- * protection, must be configurable implementation policy outside the language
- * semantics.
- *
- * ============================================================================
- * CROSS-DOMAIN CONTRACT
- * ============================================================================
- *
- * Classical:
- *
- *     Vector<T, N>
- *     Matrix<T, R, C>
- *     Tensor<T, ...>
- *
- * Quantum:
- *
- *     QReg[N]
- *     State[N]
- *     LogicalQubitArray[N]
- *
- * HDL:
- *
- *     Bus[Width]
- *     Memory[Depth]
- *
- * AI/data:
- *
- *     Tensor<T, Batch, Sequence, Features>
- *
- * Distributed:
- *
- *     Shard<T, Nodes>
- *
- * None of these forms hard-code the eventual number of resources available on
- * a target.
- *
- * ============================================================================
- * HARDWARE BOUNDARY
- * ============================================================================
- *
- * A dependent type may express:
- *
- *     required logical width
- *     symbolic memory extent
- *     tensor shape
- *     quantum register cardinality
- *     protocol payload size
- *
- * It MUST NOT encode physical placement such as:
- *
- *     GPU 0
- *     QPU 3
- *     physical_qubit 17
- *     NUMA node 2
- *     memory_bank 4
- *
- * Physical realization remains downstream.
- *
- * ============================================================================
- * QUANTUM BOUNDARY
- * ============================================================================
- *
- * `QReg[N]` is a source-level abstraction.
- *
- * The grammar does not:
- *
- *     allocate qubits;
- *     choose physical qubits;
- *     route operations;
- *     schedule operations;
- *     select a QPU;
- *     perform QEC;
- *     model calibration;
- *     implement ZQN.
- *
- * After semantic analysis, quantum constructs continue toward:
- *
- *     quantum::ir
- *         |
- *         v
- *     optimization
- *         |
- *         v
- *     routing / scheduling
- *         |
- *         v
- *     QEC / resilience / ZQN
- *         |
- *         v
- *     HAL
- *
- * `quantum::ir` remains the canonical quantum semantic boundary.
- *
- * ============================================================================
- * SECURITY / SAFETY
- * ============================================================================
- *
- * This grammar contains no Rust actions and no `unsafe` code.
- *
- * Generated Rust integration must remain compatible with:
- *
- *     Rust 1.97
- *     Rust 1.97.1
- *
- * and must not require `unsafe`.
- *
- * ============================================================================
- * PUBLIC RULES
  * ============================================================================
  */
-
-parser grammar Dependent;
-
-options {
-    tokenVocab = ZamaniTokens;
-}
 
 
 /*
- * ============================================================================
- * 1. PUBLIC DEPENDENT TYPE ENTRY
- * ============================================================================
+ * ---------------------------------------------------------------------------
+ * Dependent qualifier
+ * ---------------------------------------------------------------------------
  *
- * A dependent type has a named/type-path constructor followed by a value/type
- * argument list enclosed in square brackets.
+ * This is intentionally only the marker.
  *
- * Examples:
+ * The surrounding type expression is owned by grammar/types.g4.
  *
- *     Vector[int, N]
- *     Matrix[float, Rows, Cols]
- *     Tensor[T, N, M, K]
- *     QReg[N]
+ * Example composition:
  *
- * The base path is intentionally open.
+ *   dependent T
+ *
+ * MUST NOT be implemented here as:
+ *
+ *   dependentType
+ *       : DEPENDENT typeExpression
+ *       ;
+ *
+ * because that would make this leaf grammar depend upward on its delegator.
  */
-dependentType
-    : dependentTypeConstructor
-      LBRACKET
-      dependentArgumentList
-      RBRACKET
+dependentTypeQualifier
+    : DEPENDENT
     ;
 
 
 /*
- * ============================================================================
- * 2. DEPENDENT TYPE CONSTRUCTOR
- * ============================================================================
+ * ---------------------------------------------------------------------------
+ * Dependent binder
+ * ---------------------------------------------------------------------------
  *
- * The constructor is a source-level type path.
+ * A binder introduces a symbolic name whose value/type participates in the
+ * dependent type.
  *
- * Semantic analysis decides what the constructor denotes.
+ * The binder itself does not decide whether the bound entity is:
+ *
+ *   - a compile-time constant;
+ *   - a runtime value;
+ *   - a type-level value;
+ *   - a generic parameter;
+ *   - a symbolic dimension.
+ *
+ * That distinction belongs to semantic analysis.
  */
-dependentTypeConstructor
-    : dependentTypePath
+dependentTypeBinder
+    : dependentTypeParameter
     ;
 
 
-dependentTypePath
-    : dependentTypePathSegment
-      (
-          DOUBLE_COLON
-          dependentTypePathSegment
-      )*
-    ;
-
-
-dependentTypePathSegment
+/*
+ * ---------------------------------------------------------------------------
+ * Dependent parameter
+ * ---------------------------------------------------------------------------
+ *
+ * Keep the grammar identifier-based rather than enumerating parameter names.
+ *
+ * This permits:
+ *
+ *   n
+ *   length
+ *   rows
+ *   columns
+ *   rank
+ *   shape
+ *   capacity
+ *   dimension
+ *
+ * and arbitrary user-defined symbolic names.
+ *
+ * No fixed parameter count is imposed.
+ */
+dependentTypeParameter
     : IDENTIFIER
     ;
 
 
 /*
- * ============================================================================
- * 3. DEPENDENT ARGUMENT LIST
- * ============================================================================
+ * ---------------------------------------------------------------------------
+ * Dependent value binding
+ * ---------------------------------------------------------------------------
  *
- * No language-level arity limit is imposed.
+ * This rule intentionally describes the syntactic relationship only.
  *
- * A trailing comma is accepted for consistency with the repository's generic
- * type argument conventions.
+ * The semantic subsystem determines the legal value expression and whether
+ * it is permitted in a dependent-type context.
+ *
+ * The `=` token is therefore used only as a binding delimiter here.
+ *
+ * IMPORTANT:
+ *
+ * If the canonical Zamani lexer uses another token for assignment/binding,
+ * this token must be replaced by the existing canonical token rather than
+ * creating a second spelling.
  */
-dependentArgumentList
-    : dependentArgument
-      (
-          COMMA
-          dependentArgument
-      )*
-      COMMA?
+dependentTypeValueBinding
+    : dependentTypeParameter ASSIGN dependentTypeParameter
     ;
 
 
 /*
- * ============================================================================
- * 4. DEPENDENT ARGUMENT
- * ============================================================================
+ * ---------------------------------------------------------------------------
+ * Dependent constraint
+ * ---------------------------------------------------------------------------
  *
- * The first alternative allows a dependent type to be parameterized by a
- * normal type.
+ * A dependent constraint connects a symbolic parameter with another symbolic
+ * parameter.
  *
- * The second alternative allows symbolic/type-level values.
+ * More general expressions and literals are deliberately not duplicated here.
  *
- * Semantic analysis determines whether the constructor accepts that category.
+ * The complete expression/constraint grammar should own those constructs.
+ *
+ * The type composition layer can therefore extend this structural rule when
+ * integrating the canonical expression/constraint delegates.
  */
-dependentArgument
-    : typeExpression
-    | dependentValueExpression
+dependentTypeConstraint
+    : dependentTypeParameter dependentTypeRelation dependentTypeParameter
     ;
 
 
 /*
- * ============================================================================
- * 5. DEPENDENT VALUE EXPRESSION
- * ============================================================================
+ * ---------------------------------------------------------------------------
+ * Dependent relation
+ * ---------------------------------------------------------------------------
  *
- * This is deliberately restricted to source-level symbolic/value syntax.
+ * These are relationships between symbolic dependent parameters.
  *
- * It is NOT a general runtime expression grammar.
+ * The semantic system gives each relation its language-defined meaning.
  *
- * Examples:
- *
- *     N
- *     Rows
- *     N + 1
- *     Rows * Cols
- *     2 * N
+ * If these tokens already have canonical names in the lexer, those names
+ * must be used. This grammar must never create duplicate operator tokens.
  */
-dependentValueExpression
-    : dependentValueUnary*
-      dependentValuePrimary
-      dependentValueBinaryPart*
+dependentTypeRelation
+    : EQUAL
+    | NOT_EQUAL
+    | LESS
+    | LESS_EQUAL
+    | GREATER
+    | GREATER_EQUAL
     ;
-
-
-dependentValueUnary
-    : PLUS
-    | MINUS
-    ;
-
-
-dependentValueBinaryPart
-    : dependentValueOperator
-      dependentValueUnary*
-      dependentValuePrimary
-    ;
-
-
-dependentValueOperator
-    : PLUS
-    | MINUS
-    | STAR
-    | SLASH
-    | MODULO
-    | LEFT_SHIFT
-    | RIGHT_SHIFT
-    | BIT_AND
-    | BIT_OR
-    | CARET
-    ;
-
-
-dependentValuePrimary
-    : INTEGER_LITERAL
-    | FLOAT_LITERAL
-    | IDENTIFIER
-    | dependentQualifiedValue
-    | dependentParenthesizedValue
-    ;
-
-
-dependentQualifiedValue
-    : IDENTIFIER
-      (
-          DOUBLE_COLON
-          IDENTIFIER
-      )+
-    ;
-
-
-dependentParenthesizedValue
-    : LPAREN
-      dependentValueExpression
-      RPAREN
-    ;
-
-
-/*
- * ============================================================================
- * 6. DEPENDENT BINDER
- * ============================================================================
- *
- * Binder syntax is intentionally independent of any particular semantic
- * representation.
- *
- * Examples:
- *
- *     x: Nat
- *     n: usize
- *     rows: Nat
- *
- * Name resolution and kind checking happen later.
- */
-dependentBinder
-    : IDENTIFIER
-      COLON
-      typeExpression
-    ;
-
-
-/*
- * ============================================================================
- * 7. DEPENDENT FUNCTION / PI TYPE
- * ============================================================================
- *
- * Canonical dependent-function syntax:
- *
- *     (x: T) -> U
- *
- * U may contain x in a dependent argument.
- *
- * Example:
- *
- *     (n: Nat) -> Vector[int, n]
- */
-dependentFunctionType
-    : LPAREN
-      dependentBinder
-      RPAREN
-      ARROW
-      typeExpression
-    ;
-
-
-/*
- * ============================================================================
- * 8. DEPENDENT PAIR / SIGMA TYPE
- * ============================================================================
- *
- * Canonical explicit constructor:
- *
- *     Sigma(x: T, U)
- *
- * The semantic layer determines whether Sigma is a dependent pair and whether
- * U is well-formed under the binder x.
- *
- * The constructor remains syntactic; this rule performs no proof checking.
- */
-dependentPairType
-    : IDENTIFIER
-      LPAREN
-      dependentBinder
-      COMMA
-      typeExpression
-      RPAREN
-    ;
-
-
-/*
- * ============================================================================
- * 9. IDENTITY / EQUALITY TYPE
- * ============================================================================
- *
- * Canonical structural form:
- *
- *     Id[T, a, b]
- *
- * It is deliberately parsed through the dependent-type constructor rather than
- * hard-coding a finite list of identity domains.
- *
- * Semantic analysis determines:
- *
- *     T
- *     a
- *     b
- *
- * and establishes whether a valid identity/equality proposition exists.
- */
-identityType
-    : IDENTIFIER
-      LBRACKET
-      dependentIdentityArgumentList
-      RBRACKET
-    ;
-
-
-dependentIdentityArgumentList
-    : dependentArgument
-      COMMA
-      dependentValueExpression
-      COMMA
-      dependentValueExpression
-      COMMA?
-    ;
-
-
-/*
- * ============================================================================
- * 10. DEPENDENT TYPE GROUPING
- * ============================================================================
- *
- * Grouping is kept local so dependent constructs can be nested without
- * introducing a second type grammar.
- */
-dependentParenthesizedType
-    : LPAREN
-      typeExpression
-      RPAREN
-    ;
-
-
-/*
- * ============================================================================
- * INTEGRATION CONTRACT
- * ============================================================================
- *
- * REQUIRED ONE-TIME INTEGRATION:
- *
- * 1. `grammar/types/types.g4`
- *
- *    Remove its existing local implementation of:
- *
- *        dependentType
- *        dependentArgumentList
- *        dependentArgument
- *
- *    and delegate the `dependentType` alternative to this grammar.
- *
- * 2. Root composition
- *
- *    The canonical root grammar must import/compose this parser grammar
- *    through the repository's existing modular ANTLR architecture.
- *
- * 3. `grammar/lexer/tokens.g4`
- *
- *    No lexer rules are added by this file.
- *
- *    All lexical symbols used above must continue to originate from
- *    ZamaniTokens.
- *
- * 4. Frontend AST
- *
- *    Existing `TypeExpr` remains authoritative.
- *
- *    If dedicated dependent variants are required by semantic implementation,
- *    they must be added to the existing AST type hierarchy rather than creating
- *    a grammar-specific AST.
- *
- * 5. Semantic type system
- *
- *    Dependent arguments must remain symbolic until the appropriate semantic
- *    phase.
- *
- * 6. Quantum
- *
- *    QReg[N] and equivalent quantum abstractions must eventually lower through
- *    the canonical quantum semantic boundary:
- *
- *        quantum::ir
- *
- *    No second quantum IR is introduced here.
- *
- * 7. Compiler/runtime
- *
- *    This grammar does not make compiler or runtime decisions about whether a
- *    target has enough resources.
- *
- * ============================================================================
- * NEGATIVE CONSTRAINTS
- * ============================================================================
- *
- * This grammar must reject nothing merely because a value is "too large".
- *
- * It must NOT reject:
- *
- *     Vector[int, 1_000_000_000]
- *     QReg[N]
- *     Tensor[T, A, B, C, D, E, ...]
- *
- * because of machine-specific assumptions.
- *
- * Semantic/resource validation may reject a program later when its declared
- * requirements cannot be satisfied under a selected execution context.
- *
- * ============================================================================
- * COMPLETION CRITERIA
- * ============================================================================
- *
- * This file is COMPLETE when:
- *
- * [ ] It is the sole owner of dependentType syntax.
- * [ ] types.g4 no longer duplicates dependentType.
- * [ ] It consumes ZamaniTokens only.
- * [ ] It defines no lexer rules.
- * [ ] It has no hardware-specific limits.
- * [ ] It permits symbolic dimensions.
- * [ ] It permits arbitrary nesting subject only to implementation budgets.
- * [ ] It permits type and value dependent arguments.
- * [ ] It supports dependent binders.
- * [ ] It supports dependent function syntax.
- * [ ] It provides a path for dependent pair/Sigma semantics.
- * [ ] It provides identity/equality-type syntax.
- * [ ] It preserves domain neutrality.
- * [ ] It maps to the existing frontend AST contract.
- * [ ] It does not introduce another IR.
- * [ ] It preserves quantum::ir as the quantum semantic boundary.
- * [ ] It has positive tests.
- * [ ] It has negative tests.
- * [ ] It has boundary tests.
- * [ ] It has scalability tests.
- * [ ] It has compatibility tests.
- * [ ] It contains no unsafe code.
- * [ ] It is compatible with Rust 1.97/1.97.1 through the generated frontend.
- *
- * ============================================================================
- */
