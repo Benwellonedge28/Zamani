@@ -10,61 +10,46 @@
  *     Tuple
  *
  * Status:
- *     CANONICAL tuple-type syntax component.
+ *     CANONICAL
  *
  * Purpose:
- *     Defines the complete source-level syntax of tuple types while remaining
- *     independent of the rest of the type system's implementation details.
+ *     Defines the source-level syntax for tuple types.
+ *
+ * Architectural principle:
+ *
+ *     Source syntax
+ *         ->
+ *     domain-neutral AST
+ *         ->
+ *     semantic type system
+ *         ->
+ *     canonical IR
+ *         ->
+ *     domain lowering
+ *         ->
+ *     target realization
+ *
+ * This file owns tuple syntax only.
  *
  * ============================================================================
- * ARCHITECTURAL POSITION
+ * FEATURE CONTRACT
  * ============================================================================
  *
- *     Zamani source
- *          |
- *          v
- *     canonical lexer
- *          |
- *          v
- *     canonical parser
- *          |
- *          v
- *     typeExpression
- *          |
- *          +--------------------------+
- *          |                          |
- *          v                          v
- *     primitive/named/...          tupleType
- *                                      |
- *                                      v
- *                              TypeExpr::Tuple
- *                                      |
- *                                      v
- *                             structural validation
- *                                      |
- *                                      v
- *                              semantic type system
- *                                      |
- *                                      v
- *                              canonical semantic IR
- *                                      |
- *                         +------------+-------------+
- *                         |            |             |
- *                         v            v             v
- *                    classical     quantum::ir     HDL/resource
- *                         |            |             |
- *                         +------------+-------------+
- *                                      |
- *                                      v
- *                         optimization / lowering
- *                                      |
- *                         routing / scheduling /
- *                         resilience / ZQN / HAL
- *                                      |
- *                                      v
- *                              target realization
+ * Purpose
+ * -------
  *
- * This grammar owns ONLY tuple syntax.
+ * Provide one canonical, extensible grammar component for ordered,
+ * heterogeneous product types.
+ *
+ * Examples:
+ *
+ *     (T,)
+ *     (T, U)
+ *     (T, U, V)
+ *     (T, U, V,)
+ *     ((A, B), C)
+ *     (A, (B, C))
+ *     (Result<T, E>, Option<U>)
  *
  * ============================================================================
  * OWNERSHIP
@@ -72,148 +57,222 @@
  *
  * THIS FILE OWNS:
  *
- *   - tuple type delimiters;
- *   - tuple element separation;
- *   - empty tuple syntax;
- *   - singleton tuple syntax;
- *   - multi-element tuple syntax;
- *   - trailing-comma syntax;
- *   - arbitrary tuple arity;
- *   - recursive nesting of tuple types through typeExpression;
- *   - source ordering of tuple elements at the parse-tree level.
+ *     - tupleType
+ *     - tupleElementList
+ *     - tupleAdditionalElement
+ *     - tuple element separators
+ *     - tuple trailing-comma syntax
+ *     - singleton tuple syntax
+ *     - multi-element tuple syntax
  *
  * THIS FILE DOES NOT OWN:
  *
- *   - lexer rules;
- *   - identifiers;
- *   - paths;
- *   - primitive types;
- *   - named types;
- *   - generic declarations;
- *   - generic substitution;
- *   - arrays;
- *   - slices;
- *   - functions;
- *   - references;
- *   - pointers;
- *   - optional types;
- *   - result types;
- *   - dependent types;
- *   - quantum types;
- *   - classical types;
- *   - HDL types;
- *   - hardware types;
- *   - resource types;
- *   - capability types;
- *   - type inference;
- *   - type unification;
- *   - type checking;
- *   - ownership checking;
- *   - borrow checking;
- *   - resource allocation;
- *   - hardware discovery;
- *   - physical qubit allocation;
- *   - routing;
- *   - scheduling;
- *   - calibration;
- *   - QEC;
- *   - ZQN;
- *   - HAL;
- *   - optimization;
- *   - ABI layout;
- *   - runtime representation.
+ *     - lexer rules
+ *     - keywords
+ *     - identifiers
+ *     - paths
+ *     - primitive types
+ *     - named types
+ *     - generic declarations
+ *     - generic arguments
+ *     - function declarations
+ *     - function types
+ *     - arrays
+ *     - slices
+ *     - references
+ *     - pointers
+ *     - optional types
+ *     - result types
+ *     - unit type
+ *     - never type
+ *     - dependent-type semantics
+ *     - type inference
+ *     - type unification
+ *     - ownership analysis
+ *     - resource analysis
+ *     - capability resolution
+ *     - effect analysis
+ *     - contracts
+ *     - policies
+ *     - provenance
+ *     - quantum execution
+ *     - QEC
+ *     - routing
+ *     - scheduling
+ *     - hardware selection
+ *     - ABI layout
+ *     - runtime representation
+ *     - IR
  *
  * ============================================================================
- * CANONICAL AST CONTRACT
+ * DEPENDENCY CONTRACT
  * ============================================================================
  *
- * The repository's authoritative source-level representation is:
+ * DEPENDS_ON:
  *
- *     TypeExpr::Tuple(Vec<TypeExpr>)
+ *     grammar/lexer/tokens.g4
+ *     canonical type-expression composition
  *
- * `tuple.g4` MUST NOT introduce:
+ * Consumed lexical tokens:
  *
- *     TupleTypeAst
- *     TupleNode
- *     TupleIR
- *     QuantumTuple
- *     HardwareTuple
- *     TupleSemanticModel
+ *     LPAREN
+ *     RPAREN
+ *     COMMA
  *
- * The parser/AST builder must lower:
+ * Consumed parser rule:
  *
- *     tupleType
+ *     typeExpression
  *
- * into:
- *
- *     TypeExpr::Tuple(elements)
- *
- * The repository already provides a typed `TupleType` façade over this
- * canonical representation. The façade is not a second AST hierarchy.
+ * `typeExpression` is deliberately supplied by the enclosing canonical type
+ * grammar. This file must not redefine it.
  *
  * ============================================================================
- * TUPLE SEMANTICS
+ * GRAMMAR COMPOSITION CONTRACT
  * ============================================================================
  *
- * A tuple is an ordered, heterogeneous product type.
+ * This is a parser delegate.
  *
- * Examples:
+ * The canonical type grammar owns:
+ *
+ *     typeExpression
+ *
+ * and imports this grammar.
+ *
+ * Conceptually:
+ *
+ *     Types
+ *       |
+ *       +--> functionType
+ *       +--> primitiveType
+ *       +--> namedType
+ *       +--> genericType
+ *       +--> tupleType
+ *       +--> arrayType
+ *       +--> ...
+ *
+ * `tuple.g4` therefore references `typeExpression` but does not import
+ * `types.g4`.
+ *
+ * DO NOT create:
+ *
+ *     Types -> Tuple -> Types
+ *
+ * because that would create circular grammar ownership.
+ *
+ * ============================================================================
+ * TOKEN VOCABULARY
+ * ============================================================================
+ *
+ * The repository contains a canonical token vocabulary named:
+ *
+ *     ZamaniTokens
+ *
+ * Other type delegates in this grammar subsystem use that vocabulary.
+ *
+ * This file therefore consumes:
+ *
+ *     ZamaniTokens
+ *
+ * through `tokenVocab`.
+ *
+ * The root parser remains responsible for composing the final parser against
+ * the canonical Zamani lexer.
+ *
+ * ============================================================================
+ * SOURCE SYNTAX
+ * ============================================================================
+ *
+ * A tuple is an ordered product type.
+ *
+ * Singleton:
+ *
+ *     (T,)
+ *
+ * Two elements:
+ *
+ *     (T, U)
+ *
+ * Multiple elements:
+ *
+ *     (T, U, V)
+ *
+ * Trailing comma:
+ *
+ *     (T, U, V,)
+ *
+ * Nested:
+ *
+ *     ((A, B), C)
+ *
+ *     (A, (B, C))
+ *
+ *     ((A, B), (C, D))
+ *
+ * ============================================================================
+ * UNIT / EMPTY-TUPLE DISTINCTION
+ * ============================================================================
+ *
+ * IMPORTANT:
+ *
+ * The source spelling:
  *
  *     ()
- *     (T,)
- *     (T, U)
- *     (T, U, V)
- *     (A, B, C, D, ...)
  *
- * Element order is semantically significant.
+ * is owned by the canonical `unitType` grammar and maps to:
+ *
+ *     TypeExpr::Unit
+ *
+ * It MUST NOT also be accepted by `tupleType`.
  *
  * Therefore:
  *
- *     (A, B)
- *
- * is not equivalent to:
- *
- *     (B, A)
- *
- * unless a later semantic transformation explicitly establishes such an
- * equivalence.
- *
- * ============================================================================
- * EMPTY TUPLE
- * ============================================================================
- *
- * The empty tuple:
- *
  *     ()
  *
- * is explicitly accepted.
+ * is Unit.
  *
- * It must remain distinguishable at the AST level from a parenthesized type.
- *
- * The repository's AST contract already recognizes the distinction between
- * an empty tuple and `TypeExpr::Unit`.
- *
- * Semantic analysis may later define their relationship.
- *
- * This grammar must not erase that distinction.
- *
- * ============================================================================
- * SINGLETON TUPLE
- * ============================================================================
- *
- * A singleton tuple requires a comma:
+ * Whereas:
  *
  *     (T,)
  *
- * The following is NOT a tuple:
+ * is a one-element tuple:
+ *
+ *     TypeExpr::Tuple([T])
+ *
+ * and:
+ *
+ *     (T, U)
+ *
+ * is:
+ *
+ *     TypeExpr::Tuple([T, U])
+ *
+ * The AST implementation may represent:
+ *
+ *     TypeExpr::Tuple([])
+ *
+ * as an internal structural value if required by compiler APIs, but that
+ * representation is not assigned a competing source spelling here.
+ *
+ * This prevents two grammar alternatives from claiming ownership of `()`.
+ *
+ * ============================================================================
+ * SINGLETON TUPLES
+ * ============================================================================
+ *
+ * The comma is mandatory for a singleton tuple.
+ *
+ * Valid:
+ *
+ *     (T,)
+ *
+ * Invalid as tuple syntax:
  *
  *     (T)
  *
- * `(T)` belongs to the enclosing type-expression grammar as a parenthesized
- * type.
+ * `(T)` belongs to the enclosing type-expression grammar and is a
+ * parenthesized type expression.
  *
- * This comma distinction is mandatory because otherwise tuple and grouping
- * syntax would become ambiguous.
+ * This distinction is fundamental to deterministic parsing.
  *
  * ============================================================================
  * MULTI-ELEMENT TUPLES
@@ -225,143 +284,33 @@
  *     (T, U, V)
  *     (T, U, V,)
  *
- * The final comma is optional for tuples containing two or more elements.
+ * Invalid:
+ *
+ *     (T,,U)
+ *     (T, ,U)
+ *     (,T)
+ *     (T,,)
  *
  * ============================================================================
- * NESTING
+ * TRAILING COMMA
  * ============================================================================
  *
- * Tuple elements consume the canonical `typeExpression` rule supplied by the
- * enclosing type grammar.
+ * A trailing comma is permitted for:
  *
- * Therefore tuples can contain any type that the canonical type system
- * accepts, including nested tuples:
+ *     (T,)
+ *     (T, U,)
+ *     (T, U, V,)
  *
- *     ((A, B), C)
- *
- *     (A, (B, C))
- *
- *     ((A, B), (C, D))
- *
- *     (((A, B), C), D)
- *
- * and combinations with other type constructors:
- *
- *     (Vec<T>, Result<U, E>)
- *
- *     (Option<(A, B)>, [C])
- *
- *     (Qubit, ClassicalValue)
- *
- *     (HardwareResource, QuantumState)
- *
- * No tuple nesting depth is encoded into the grammar.
+ * This preserves the existing Zamani tuple syntax while making the rule
+ * deterministic.
  *
  * ============================================================================
- * ANTLR DEPENDENCY CONTRACT
+ * ARITY / SCALABILITY CONTRACT
  * ============================================================================
  *
- * This is a parser grammar.
+ * Tuple arity is intentionally represented by repetition.
  *
- * It intentionally contains no lexer rules.
- *
- * Canonical lexical authority:
- *
- *     grammar/lexer/tokens.g4
- *
- * Canonical lexer grammar:
- *
- *     ZamaniTokens
- *
- * Therefore:
- *
- *     tokenVocab = ZamaniTokens;
- *
- * The grammar consumes:
- *
- *     LPAREN
- *     RPAREN
- *     COMMA
- *
- * and the enclosing type grammar supplies:
- *
- *     typeExpression
- *
- * ============================================================================
- * COMPOSITION CONTRACT
- * ============================================================================
- *
- * `tuple.g4` is a TYPE-SYSTEM DELEGATE.
- *
- * It MUST NOT define:
- *
- *     typeExpression
- *
- * because `typeExpression` belongs to the canonical type-composition layer.
- *
- * The intended composition is:
- *
- *     Types
- *       |
- *       +--> primitive
- *       +--> named
- *       +--> generic
- *       +--> composite
- *                |
- *                +--> Tuple
- *                +--> Array
- *                +--> Slice
- *                +--> Option
- *                +--> Result
- *
- * The tuple grammar therefore provides only:
- *
- *     tupleType
- *
- * and the tuple-specific helper rule.
- *
- * ============================================================================
- * IMPORTANT INTEGRATION REQUIREMENT
- * ============================================================================
- *
- * ANTLR composition must provide the canonical `typeExpression` rule to this
- * delegate through the repository's grammar-generation/composition mechanism.
- *
- * `tuple.g4` must NOT copy the complete type grammar merely to make itself
- * superficially standalone.
- *
- * Such duplication would create competing type authorities and would violate
- * the repository's modular grammar architecture.
- *
- * ============================================================================
- * POCO-REAF / SCALABILITY
- * ============================================================================
- *
- * There is intentionally NO:
- *
- *     MAX_TUPLE_ARITY
- *     MAX_TUPLE_ELEMENTS
- *     MAX_TUPLE_DEPTH
- *     MAX_TYPE_DEPTH
- *     MAX_GENERIC_ARITY
- *     MAX_ARRAY_LENGTH
- *     MAX_MEMORY
- *     MAX_QUBITS
- *     MAX_CPUS
- *     MAX_CORES
- *     MAX_THREADS
- *     MAX_GPUS
- *     MAX_FPGAS
- *     MAX_NODES
- *     MAX_DEVICES
- *     MAX_REGISTER_WIDTH
- *     MAX_TENSOR_RANK
- *
- * Tuple arity is represented by repetition:
- *
- *     (typeExpression, typeExpression, ...)
- *
- * rather than a finite collection of rules such as:
+ * There is no finite enumeration such as:
  *
  *     tuple2
  *     tuple3
@@ -369,95 +318,84 @@
  *     tuple8
  *     tuple16
  *
- * Consequently:
+ * There is also no:
  *
- *     (A)
+ *     MAX_TUPLE_ARITY
+ *     MAX_TUPLE_ELEMENTS
+ *     MAX_TUPLE_DEPTH
+ *     MAX_TYPE_DEPTH
  *
- * is not the grammar's way of defining a one-element tuple;
+ * and no equivalent grammar-level restriction.
  *
- *     (A,)
+ * Therefore the language grammar does not impose an artificial finite tuple
+ * cardinality.
  *
- * is.
+ * A program may express as many tuple elements as can be represented and
+ * processed by the compiler/runtime environment.
  *
- * There is no language-level upper bound on the number of tuple elements.
+ * Actual limits caused by:
  *
- * Actual compiler/parser resource limits, if required for denial-of-service
- * protection, are implementation policies and MUST remain outside the
- * language grammar.
+ *     memory
+ *     parser stack
+ *     compiler configuration
+ *     execution resources
+ *     operating-system limits
+ *     distributed resources
+ *     security policies
  *
- * ============================================================================
- * TARGET INDEPENDENCE
- * ============================================================================
- *
- * Tuple syntax expresses source-level type structure.
- *
- * It does NOT specify:
- *
- *     CPU registers
- *     GPU registers
- *     FPGA resources
- *     ASIC layout
- *     QPU placement
- *     physical qubits
- *     memory banks
- *     network nodes
- *     accelerator IDs
- *     device IDs
- *     ABI layout
- *     scheduling
- *     routing
- *     calibration
- *
- * For example:
- *
- *     (Qubit, ClassicalValue)
- *
- * means a source-level product containing a quantum value and a classical
- * value.
- *
- * It does NOT mean:
- *
- *     physical qubit 0
- *
- * or:
- *
- *     a particular QPU.
- *
- * Physical realization belongs downstream.
+ * are implementation/resource-policy concerns, not language semantics.
  *
  * ============================================================================
- * CROSS-DOMAIN CONTRACT
+ * NESTING CONTRACT
  * ============================================================================
  *
- * Tuple syntax is deliberately domain-neutral.
+ * Each tuple element consumes the canonical:
  *
- * A tuple may contain:
+ *     typeExpression
  *
- *     classical types
- *     quantum types
- *     HDL types
- *     hardware abstractions
- *     resource abstractions
- *     distributed values
- *     AI/ML values
- *     data types
- *     networking types
- *     security types
- *     future domain types
+ * Therefore nesting is naturally recursive through the type system.
  *
- * The tuple grammar does not need to know which domain each element belongs
- * to.
+ * Examples:
  *
- * This allows:
+ *     (A, (B, C))
  *
- *     classical + quantum
- *     quantum + HDL
- *     classical + HDL
- *     quantum + hardware
- *     AI + accelerator
- *     distributed + quantum
+ *     ((A, B), C)
  *
- * without introducing domain-specific tuple grammars.
+ *     ((A, B), (C, D))
+ *
+ *     (Vec<T>, Result<U, E>)
+ *
+ *     (Array<T, N>, Option<Result<U, E>>)
+ *
+ * No nesting depth is hard-coded.
+ *
+ * ============================================================================
+ * TYPE-DOMAIN INDEPENDENCE
+ * ============================================================================
+ *
+ * Tuple syntax is domain-neutral.
+ *
+ * A tuple element may eventually resolve to:
+ *
+ *     classical type
+ *     numerical type
+ *     tensor type
+ *     AI/ML type
+ *     knowledge type
+ *     probabilistic type
+ *     quantum type
+ *     hybrid type
+ *     HDL type
+ *     hardware abstraction
+ *     resource abstraction
+ *     capability abstraction
+ *     distributed value
+ *     networking value
+ *     security value
+ *     interoperability type
+ *     future domain type
+ *
+ * This file does not need to know which domain owns the element type.
  *
  * ============================================================================
  * QUANTUM CONTRACT
@@ -471,167 +409,390 @@
  *     (LogicalQubit, ClassicalValue)
  *     (QuantumState<T>, MeasurementResult)
  *
- * The tuple grammar does not:
+ * The tuple grammar does NOT:
  *
  *     - allocate qubits;
  *     - count physical qubits;
- *     - choose QPUs;
- *     - route operations;
- *     - schedule operations;
+ *     - select a QPU;
+ *     - identify physical qubit indices;
+ *     - inspect topology;
+ *     - perform routing;
+ *     - perform scheduling;
+ *     - perform decomposition;
  *     - perform QEC;
- *     - interpret ZQN;
- *     - query HAL capabilities.
+ *     - perform calibration;
+ *     - access ZQN;
+ *     - access HAL.
  *
- * Those responsibilities remain downstream.
+ * The downstream quantum boundary remains:
  *
- * The canonical quantum semantic boundary remains:
- *
+ *     semantic quantum model
+ *         ->
  *     quantum::ir
+ *         ->
+ *     optimization
+ *         ->
+ *     decomposition
+ *         ->
+ *     routing
+ *         ->
+ *     scheduling
+ *         ->
+ *     resilience/QEC
+ *         ->
+ *     ZQN
+ *         ->
+ *     HAL
+ *         ->
+ *     hardware
  *
- * This grammar MUST NOT introduce a tuple-specific quantum IR.
+ * This file must never introduce a tuple-specific quantum IR.
+ *
+ * ============================================================================
+ * CLASSICAL / HDL / HARDWARE CONTRACT
+ * ============================================================================
+ *
+ * Tuple syntax can combine source-level types from different computational
+ * domains without changing the tuple grammar.
+ *
+ * Examples:
+ *
+ *     (ClassicalValue, Qubit)
+ *     (Signal, Memory)
+ *     (Tensor<T, Shape>, Accelerator<A>)
+ *     (LogicalQubit, HardwareResource)
+ *
+ * The grammar expresses structure only.
+ *
+ * Physical representation belongs to later compiler stages.
  *
  * ============================================================================
  * RESOURCE CONTRACT
  * ============================================================================
  *
- * A tuple may contain resource/capability types, but this grammar performs no
- * resource discovery or allocation.
- *
- * For example:
- *
- *     (Memory<T>, Accelerator<A>)
- *
- * describes a source-level structure.
- *
- * It does not select a concrete machine.
- *
- * ============================================================================
- * TYPE-LEVEL VALUES
- * ============================================================================
- *
- * Tuple syntax itself does not evaluate type-level values.
- *
- * A tuple element may contain a type whose own grammar contains symbolic
- * dimensions or resource parameters.
- *
- * For example:
- *
- *     (Vector<T, N>, Matrix<T, M, N>)
- *
- * remains syntactic structure.
- *
- * Resolution of:
- *
- *     N
- *     M
- *     relationships between them
- *     constraints
- *     bounds
- *
- * belongs to the type/semantic system.
- *
- * ============================================================================
- * SOURCE ORDER
- * ============================================================================
- *
- * The parser must preserve the exact logical order of tuple elements.
+ * A tuple may contain a resource-related type.
  *
  * Example:
  *
- *     (A, B, C)
+ *     (Memory<T>, Accelerator<A>)
  *
- * must lower conceptually to:
+ * This describes source-level structure.
  *
- *     TypeExpr::Tuple(vec![A, B, C])
+ * It does NOT:
  *
- * and never to an unordered collection.
+ *     - allocate memory;
+ *     - reserve an accelerator;
+ *     - choose a machine;
+ *     - choose a device;
+ *     - select a topology;
+ *     - perform scheduling.
+ *
+ * Resource requirements remain owned by the resource/capability subsystem.
  *
  * ============================================================================
- * SOURCE SPANS
+ * CAPABILITY CONTRACT
  * ============================================================================
  *
- * Every tuple parse-tree node must remain traceable to its source span.
+ * Capability-bearing types may occur inside tuples.
  *
- * At minimum, the eventual AST node must permit diagnostics to identify:
+ * Example:
  *
- *     opening delimiter
- *     closing delimiter
+ *     (Capability<C>, Value)
+ *
+ * This grammar does not determine whether capability `C` is available.
+ *
+ * Capability resolution occurs downstream.
+ *
+ * ============================================================================
+ * EFFECT CONTRACT
+ * ============================================================================
+ *
+ * Tuple construction itself introduces no effect.
+ *
+ * If an element type has effect-related semantic properties, those properties
+ * belong to the type/effect semantic system.
+ *
+ * This file must not embed:
+ *
+ *     effect(...)
+ *
+ * or any effect implementation.
+ *
+ * ============================================================================
+ * CONTRACT / POLICY CONTRACT
+ * ============================================================================
+ *
+ * Tuple syntax does not directly implement:
+ *
+ *     requires
+ *     ensures
+ *     invariant
+ *     assume
+ *     guarantee
+ *     property
+ *     policy
+ *
+ * Such constructs may refer to values or types containing tuples.
+ *
+ * Their semantic interpretation belongs to validation and policy systems.
+ *
+ * ============================================================================
+ * PROVENANCE CONTRACT
+ * ============================================================================
+ *
+ * Tuple element ordering and source structure must be preserved so downstream
+ * tooling can retain:
+ *
+ *     source span
  *     element position
- *     malformed separator
- *     malformed nested type
+ *     nested source relationship
+ *     source-to-AST provenance
  *
- * This grammar itself does not manufacture diagnostic objects.
+ * This grammar does not construct provenance records.
  *
- * The canonical parser/AST diagnostic layer owns diagnostic construction.
+ * The AST/parser infrastructure owns source-span construction and provenance.
  *
  * ============================================================================
- * ERROR CONTRACT
+ * AST CONTRACT
  * ============================================================================
  *
- * The grammar MUST reject malformed tuple syntax rather than silently
- * recovering it into a different type.
+ * Canonical AST representation:
  *
- * Examples that must be rejected:
+ *     TypeExpr::Tuple(Vec<TypeExpr>)
  *
- *     (,)
- *
- *     (T U)
- *
- *     (T,,U)
- *
- *     (T, ,U)
- *
- *     (T,U
- *
- *     T,U)
+ * Mapping:
  *
  *     (T,)
+ *         ->
+ *     TypeExpr::Tuple([T])
  *
- * is valid.
+ *     (T, U)
+ *         ->
+ *     TypeExpr::Tuple([T, U])
  *
- *     (T,U,)
+ *     (T, U, V)
+ *         ->
+ *     TypeExpr::Tuple([T, U, V])
  *
- * is valid.
+ * Element order is semantically significant.
  *
- *     (T)
+ * Therefore:
  *
- * is NOT a tuple and must be handled by the enclosing parenthesized-type
- * grammar.
+ *     (A, B)
  *
- * ============================================================================
- * DETERMINISM
- * ============================================================================
+ * MUST NOT become equivalent to:
  *
- * No semantic predicates are used.
+ *     (B, A)
  *
- * No embedded target-language actions are used.
+ * merely because both contain the same element types.
  *
- * No mutable global state is used.
+ * The AST builder owns conversion from the parse tree to `TypeExpr`.
  *
- * No hardware information is consulted.
+ * This grammar does not create a new:
  *
- * No runtime information is consulted.
- *
- * Given identical source text and identical grammar/version state, the parser
- * must produce identical tuple parse structure.
- *
- * ============================================================================
- * PERFORMANCE
- * ============================================================================
- *
- * Tuple arity is expressed through iterative repetition rather than an
- * explicit finite expansion.
- *
- * The grammar must not introduce exponential alternatives for tuple arity.
- *
- * Nested tuples naturally reflect nested source structure.
- *
- * Compiler resource limits, parser stack policy, cancellation and hostile-input
- * protections belong to the parser/compiler infrastructure rather than being
- * encoded as language-level tuple limits.
+ *     TupleAst
+ *     TupleNode
+ *     TupleSemanticModel
+ *     TupleIR
  *
  * ============================================================================
- * SECURITY
+ * SEMANTIC CONTRACT
+ * ============================================================================
+ *
+ * Semantic analysis owns:
+ *
+ *     - type resolution;
+ *     - generic substitution;
+ *     - type compatibility;
+ *     - type equality;
+ *     - ownership semantics;
+ *     - lifetime semantics;
+ *     - resource semantics;
+ *     - capability semantics;
+ *     - domain-specific legality;
+ *     - dependent-type validation;
+ *     - layout decisions;
+ *     - ABI decisions.
+ *
+ * The grammar only establishes source structure.
+ *
+ * ============================================================================
+ * IR CONTRACT
+ * ============================================================================
+ *
+ * This grammar defines no IR.
+ *
+ * The canonical flow is:
+ *
+ *     tuple source syntax
+ *         ->
+ *     TypeExpr::Tuple
+ *         ->
+ *     semantic tuple type
+ *         ->
+ *     canonical semantic representation
+ *         ->
+ *     domain-specific lowering where necessary
+ *
+ * A tuple containing quantum types ultimately participates in the existing
+ * quantum pipeline through:
+ *
+ *     quantum::ir
+ *
+ * No tuple-specific quantum IR is permitted.
+ *
+ * ============================================================================
+ * COMPILER CONTRACT
+ * ============================================================================
+ *
+ * Compiler stages may use tuple information for:
+ *
+ *     - type checking;
+ *     - generic specialization;
+ *     - ownership analysis;
+ *     - optimization;
+ *     - pattern matching;
+ *     - destructuring;
+ *     - ABI construction;
+ *     - layout;
+ *     - lowering.
+ *
+ * None of those decisions are encoded here.
+ *
+ * ============================================================================
+ * RUNTIME CONTRACT
+ * ============================================================================
+ *
+ * Runtime representation is target-dependent.
+ *
+ * A tuple may be represented differently on:
+ *
+ *     embedded hardware
+ *     CPU
+ *     multicore CPU
+ *     GPU
+ *     FPGA
+ *     ASIC
+ *     accelerator
+ *     QPU
+ *     simulator
+ *     HPC system
+ *     cluster
+ *     distributed system
+ *     cloud
+ *     future hardware
+ *
+ * without changing the tuple source syntax.
+ *
+ * ============================================================================
+ * POCO-REAF CONTRACT
+ * ============================================================================
+ *
+ * Tuple syntax is target-independent.
+ *
+ * The same source:
+ *
+ *     (A, B, C)
+ *
+ * must describe the same source-level structure regardless of whether the
+ * eventual target is tiny, large, heterogeneous, quantum, distributed, or a
+ * future architecture.
+ *
+ * Target realization may specialize:
+ *
+ *     representation
+ *     layout
+ *     placement
+ *     transport
+ *     scheduling
+ *     memory strategy
+ *     device strategy
+ *
+ * without changing tuple syntax.
+ *
+ * ============================================================================
+ * NO HARD-CODED MACHINE LIMITS
+ * ============================================================================
+ *
+ * This file MUST NOT contain limits for:
+ *
+ *     tuple arity
+ *     tuple nesting
+ *     type depth
+ *     memory
+ *     CPUs
+ *     cores
+ *     threads
+ *     GPUs
+ *     FPGAs
+ *     ASICs
+ *     accelerators
+ *     QPUs
+ *     nodes
+ *     devices
+ *     qubits
+ *     registers
+ *     register width
+ *     tensor rank
+ *     network size
+ *
+ * In particular, this file must contain no language-level constants such as:
+ *
+ *     MAX_QUBITS
+ *     MAX_CPUS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_NODES
+ *     MAX_MEMORY
+ *     MAX_THREADS
+ *     MAX_TENSOR_RANK
+ *     MAX_REGISTER_WIDTH
+ *     MAX_NETWORK_SIZE
+ *     MAX_DEVICE_COUNT
+ *     MAX_TUPLE_ARITY
+ *
+ * ============================================================================
+ * DETERMINISM CONTRACT
+ * ============================================================================
+ *
+ * This grammar contains:
+ *
+ *     - no semantic predicates;
+ *     - no embedded actions;
+ *     - no target-language code;
+ *     - no mutable global state;
+ *     - no runtime queries;
+ *     - no hardware queries.
+ *
+ * Identical source text under the same grammar/token configuration must
+ * produce the same tuple parse structure.
+ *
+ * ============================================================================
+ * PERFORMANCE CONTRACT
+ * ============================================================================
+ *
+ * Tuple cardinality is expressed using repetition rather than finite grammar
+ * expansion.
+ *
+ * The grammar must therefore not contain:
+ *
+ *     tuple2
+ *     tuple3
+ *     tuple4
+ *     tuple8
+ *     tuple16
+ *
+ * or equivalent finite enumeration.
+ *
+ * The grammar has linear structural growth with respect to the number of
+ * tuple elements, subject to the behavior of the enclosing type-expression
+ * grammar and ANTLR runtime.
+ *
+ * Hostile-input protections, cancellation and compiler resource policies
+ * belong outside language semantics.
+ *
+ * ============================================================================
+ * SECURITY CONTRACT
  * ============================================================================
  *
  * This grammar:
@@ -639,197 +800,52 @@
  *     - performs no filesystem I/O;
  *     - performs no network I/O;
  *     - executes no commands;
- *     - evaluates no expressions;
- *     - allocates no hardware resources;
- *     - selects no devices;
- *     - performs no unsafe operation;
- *     - contains no embedded Rust code;
- *     - contains no target-specific code.
+ *     - performs no hardware access;
+ *     - performs no resource allocation;
+ *     - evaluates no type-level expressions;
+ *     - contains no embedded Rust;
+ *     - contains no unsafe code;
+ *     - contains no target-specific behavior.
  *
  * ============================================================================
- * COMPATIBILITY
- * ============================================================================
- *
- * Existing tuple source forms must remain supported:
- *
- *     ()
- *     (T,)
- *     (T, U)
- *     (T, U, V)
- *
- * and nested tuple forms already accepted by the repository's tuple grammar
- * must preserve their meaning.
- *
- * `tuple.g4` does not rename those source constructs.
- *
- * Existing:
- *
- *     grammar/types/tuple-types.g4
- *
- * must not remain a competing canonical implementation.
- *
- * It should be migrated to compatibility/deprecation status after references
- * are moved to this file.
- *
- * The migration MUST preserve:
- *
- *     grammar rule name: tupleType
- *     helper rule semantics
- *     token vocabulary
- *     AST mapping
- *     source syntax
- *
- * ============================================================================
- * AST INTEGRATION
- * ============================================================================
- *
- * The required lowering is:
- *
- *     tupleType
- *         |
- *         v
- *     ordered Vec<TypeExpr>
- *         |
- *         v
- *     TypeExpr::Tuple(elements)
- *
- * The existing frontend tuple API already establishes this canonical
- * representation.
- *
- * No parser change should require a new AST variant merely because the
- * grammar file is being modularized.
- *
- * ============================================================================
- * SEMANTIC INTEGRATION
- * ============================================================================
- *
- * Semantic analysis is responsible for:
- *
- *     - resolving every element type;
- *     - checking element validity;
- *     - resolving generic parameters;
- *     - resolving dependent dimensions;
- *     - applying ownership/resource semantics;
- *     - checking domain-specific constraints;
- *     - determining layout where necessary;
- *     - determining ABI representation downstream;
- *     - determining whether empty tuple and unit have equivalent semantic
- *       treatment in a particular context.
- *
- * None of those responsibilities belong here.
- *
- * ============================================================================
- * IR INTEGRATION
- * ============================================================================
- *
- * `tuple.g4` does not define an IR.
- *
- * The intended flow is:
- *
- *     tuple syntax
- *         |
- *         v
- *     TypeExpr::Tuple
- *         |
- *         v
- *     semantic tuple type
- *         |
- *         v
- *     canonical semantic IR
- *         |
- *         +-------------------+
- *         |                   |
- *         v                   v
- *     classical            quantum::ir
- *         |                   |
- *         +---------+---------+
- *                   |
- *                   v
- *            target lowering
- *
- * A tuple type containing quantum information must eventually use the existing
- * canonical `quantum::ir` boundary rather than a tuple-specific quantum IR.
- *
- * ============================================================================
- * COMPILER INTEGRATION
- * ============================================================================
- *
- * Compiler stages consuming tuple types may perform:
- *
- *     type checking
- *     layout determination
- *     ownership analysis
- *     optimization
- *     lowering
- *     ABI construction
- *     target-specific representation
- *
- * These stages must consume the canonical AST/semantic representations.
- *
- * The grammar must not contain compiler implementation decisions.
- *
- * ============================================================================
- * RUNTIME INTEGRATION
- * ============================================================================
- *
- * Runtime behavior is not defined by this grammar.
- *
- * Runtime representation may vary according to:
- *
- *     target
- *     ABI
- *     optimization
- *     memory model
- *     execution model
- *     domain
- *
- * without changing the source tuple syntax.
- *
- * ============================================================================
- * TOOLING INTEGRATION
+ * TOOLING CONTRACT
  * ============================================================================
  *
  * Formatter:
  *
- *     must preserve tuple semantics;
- *     may canonicalize whitespace;
- *     must preserve singleton tuple comma.
+ *     - may normalize whitespace;
+ *     - must preserve tuple element order;
+ *     - must preserve the singleton comma;
+ *     - must preserve semantic trailing-comma choices according to formatter
+ *       policy.
  *
- * Syntax highlighting:
+ * Syntax highlighter:
  *
- *     must recognize tuple delimiters without treating all parentheses as
- *     tuples.
+ *     - recognizes tuple delimiters;
+ *     - must distinguish tuple syntax from ordinary parenthesized types.
  *
- * Language server:
+ * LSP:
  *
- *     must expose element-wise type information;
- *     must preserve source spans;
- *     must diagnose malformed tuple separators.
+ *     - exposes individual element types;
+ *     - preserves source spans;
+ *     - provides diagnostics for malformed separators;
+ *     - supports nested tuple navigation.
  *
  * Documentation generator:
  *
- *     may render tuple types from the canonical AST.
+ *     - renders tuples from the canonical AST;
+ *     - must not invent a separate tuple representation.
  *
  * ============================================================================
- * TEST CONTRACT
+ * DIAGNOSTIC CONTRACT
  * ============================================================================
  *
- * Required positive tests:
+ * The grammar must reject malformed tuple syntax.
  *
- *     ()
- *     (T,)
- *     (T, U)
- *     (T, U, V)
- *     (A, B, C,)
- *     ((A, B), C)
- *     (A, (B, C))
- *     (Vec<T>, Result<U, E>)
- *     (Qubit, ClassicalValue)
- *     (HardwareResource, QuantumState)
- *
- * Required negative tests:
+ * Examples:
  *
  *     (,)
+ *     (, T)
  *     (T U)
  *     (T,,U)
  *     (T, ,U)
@@ -837,137 +853,468 @@
  *     T,U)
  *     (T,,)
  *
- * Required distinction tests:
+ * Valid:
+ *
+ *     (T,)
+ *     (T,U)
+ *     (T,U,)
+ *
+ * The canonical parser/error layer owns diagnostic construction and source
+ * spans.
+ *
+ * ============================================================================
+ * COMPATIBILITY CONTRACT
+ * ============================================================================
+ *
+ * Existing canonical tuple forms remain:
+ *
+ *     (T,)
+ *     (T,U)
+ *     (T,U,V)
+ *     (T,U,V,)
+ *
+ * Existing source spelling:
+ *
+ *     ()
+ *
+ * remains owned by `unitType`.
+ *
+ * No source spelling is renamed by this file.
+ *
+ * Any historical tuple grammar such as:
+ *
+ *     grammar/types/tuple-types.g4
+ *
+ * must not remain a second canonical owner.
+ *
+ * If such a file is introduced or retained later, it must be explicitly
+ * classified as compatibility/deprecated/reference material and must not be
+ * imported by the production parser.
+ *
+ * ============================================================================
+ * INTEGRATION CONTRACT
+ * ============================================================================
+ *
+ * UPSTREAM:
+ *
+ *     grammar/lexer/tokens.g4
+ *         ->
+ *     canonical Zamani lexer
+ *         ->
+ *     canonical parser/type composition
+ *
+ * THIS FILE:
+ *
+ *     tupleType
+ *         ->
+ *     TypeExpr::Tuple
+ *
+ * DOWNSTREAM:
+ *
+ *     src/frontend/ast/node/types/type_expr.rs
+ *         ->
+ *     src/frontend/ast/node/types/tuple.rs
+ *         ->
+ *     structural validation
+ *         ->
+ *     semantic type analysis
+ *         ->
+ *     canonical semantic model
+ *         ->
+ *     IR/lowering
+ *
+ * AST_OWNER:
+ *
+ *     src/frontend/ast/node/types/type_expr.rs
+ *
+ * TUPLE_AST_FACADE:
+ *
+ *     src/frontend/ast/node/types/tuple.rs
+ *
+ * SEMANTIC_OWNER:
+ *
+ *     semantic type-analysis subsystem
+ *
+ * IR_OWNER:
+ *
+ *     canonical semantic/IR layers
+ *
+ * QUANTUM_IR_OWNER:
+ *
+ *     quantum::ir
+ *
+ * TEST_OWNER:
+ *
+ *     grammar/tests/types/
+ *
+ * SPEC_OWNER:
+ *
+ *     grammar/specification/types.md
+ *
+ * ============================================================================
+ * REQUIRED ROOT INTEGRATION
+ * ============================================================================
+ *
+ * The canonical type composition grammar must import this grammar.
+ *
+ * Conceptually:
+ *
+ *     parser grammar Types;
+ *
+ *     options {
+ *         tokenVocab = ZamaniLexer;
+ *     }
+ *
+ *     import
+ *         Tuple,
+ *         ...
+ *     ;
+ *
+ * Its `typeExpression` rule must expose:
+ *
+ *     tupleType
+ *
+ * and must NOT redefine `tupleType`.
+ *
+ * ============================================================================
+ * REQUIRED COMPOSITE-TYPE INTEGRATION
+ * ============================================================================
+ *
+ * The repository currently contains:
+ *
+ *     grammar/types/composite-types.g4
+ *
+ * Its current composition references a grammar name `TupleTypes`.
+ *
+ * The production integration must change that import to the grammar actually
+ * owned by this file:
+ *
+ *     Tuple
+ *
+ * Therefore the composite layer becomes conceptually:
+ *
+ *     import
+ *         Tuple,
+ *         ArrayTypes,
+ *         OptionTypes,
+ *         ResultTypes
+ *     ;
+ *
+ * or the corresponding canonical names of the existing child grammars.
+ *
+ * `CompositeTypes` must not duplicate tuple syntax.
+ *
+ * ============================================================================
+ * REQUIRED UNIT INTEGRATION
+ * ============================================================================
+ *
+ * The existing canonical primitive/unit grammar owns:
+ *
+ *     unitType
+ *         : LPAREN RPAREN
+ *         ;
+ *
+ * That ownership must remain.
+ *
+ * Therefore this grammar deliberately does NOT define:
+ *
+ *     LPAREN RPAREN
+ *
+ * This prevents:
+ *
+ *     unitType -> ()
+ *
+ * and:
+ *
+ *     tupleType -> ()
+ *
+ * from becoming competing parser interpretations.
+ *
+ * ============================================================================
+ * REQUIRED EXPRESSION INTEGRATION
+ * ============================================================================
+ *
+ * Expression tuples are not type tuples.
+ *
+ * The existing:
+ *
+ *     grammar/expressions/tuples.g4
+ *
+ * must remain responsible for tuple expressions.
+ *
+ * Example expression:
+ *
+ *     (a, b, c)
+ *
+ * is not owned by this file.
+ *
+ * Example type:
+ *
+ *     (A, B, C)
+ *
+ * is owned by this file when reached through `typeExpression`.
+ *
+ * The parser/AST layer determines whether a parenthesized construct is being
+ * parsed in an expression or type context.
+ *
+ * ============================================================================
+ * REQUIRED FUNCTION INTEGRATION
+ * ============================================================================
+ *
+ * Function types are owned separately by:
+ *
+ *     grammar/types/function.g4
+ *
+ * A tuple may contain a function type:
+ *
+ *     (fn(A) -> B, C)
+ *
+ * The tuple grammar does not import or duplicate function-type syntax.
+ *
+ * The enclosing type grammar supplies `typeExpression`, which provides the
+ * necessary recursive composition.
+ *
+ * ============================================================================
+ * REQUIRED GENERIC INTEGRATION
+ * ============================================================================
+ *
+ * Tuple elements may contain generic applications:
+ *
+ *     (Vec<T>, Result<U, E>)
+ *
+ * Generic parsing remains owned by the generic type grammar.
+ *
+ * This file does not define generic syntax.
+ *
+ * ============================================================================
+ * REQUIRED ARRAY / SLICE INTEGRATION
+ * ============================================================================
+ *
+ * Tuple elements may contain arrays and slices:
+ *
+ *     ([T], U)
+ *     ([T; N], U)
+ *
+ * Array and slice syntax remains owned by their dedicated grammars.
+ *
+ * ============================================================================
+ * REQUIRED QUANTUM INTEGRATION
+ * ============================================================================
+ *
+ * Tuple elements may contain quantum types:
+ *
+ *     (Qubit, Bit)
+ *     (LogicalQubit, ClassicalValue)
+ *
+ * Quantum-specific type grammar remains owned by:
+ *
+ *     grammar/quantum/
+ *
+ * This file does not enumerate quantum hardware types or operations.
+ *
+ * ============================================================================
+ * REQUIRED AI / REASONING INTEGRATION
+ * ============================================================================
+ *
+ * Tuple elements may contain semantic types used by:
+ *
+ *     reasoning
+ *     knowledge
+ *     learning
+ *     adaptation
+ *     uncertainty
+ *     evidence
+ *     provenance
+ *     agents
+ *
+ * Those domains remain outside tuple syntax.
+ *
+ * ============================================================================
+ * REQUIRED RESOURCE INTEGRATION
+ * ============================================================================
+ *
+ * Tuple elements may contain resource abstractions.
+ *
+ * Resource resolution remains downstream:
+ *
+ *     type
+ *       ->
+ *     semantic analysis
+ *       ->
+ *     resource/capability analysis
+ *       ->
+ *     compilation/execution planning
+ *
+ * ============================================================================
+ * TEST CONTRACT
+ * ============================================================================
+ *
+ * POSITIVE:
+ *
+ *     (T,)
+ *     (T, U)
+ *     (T, U, V)
+ *     (T, U, V,)
+ *     ((A, B), C)
+ *     (A, (B, C))
+ *     ((A, B), (C, D))
+ *     (Vec<T>, Result<U, E>)
+ *     (Option<T>, [U])
+ *     (fn(A) -> B, C)
+ *     (Qubit, Bit)
+ *     (LogicalQubit, ClassicalValue)
+ *
+ * UNIT:
+ *
+ *     ()
+ *
+ * must be accepted through `unitType`, not `tupleType`.
+ *
+ * NEGATIVE:
+ *
+ *     (,)
+ *     (, T)
+ *     (T U)
+ *     (T,,U)
+ *     (T, ,U)
+ *     (T,,)
+ *     (T,U
+ *     T,U)
+ *
+ * DISTINCTION:
  *
  *     (T)
  *
- * must parse as the enclosing parenthesized type rather than `tupleType`.
+ * must be handled by the enclosing parenthesized-type rule.
  *
  *     (T,)
  *
- * must parse as `tupleType`.
+ * must be `tupleType`.
  *
- * Required boundary tests:
+ * NESTING:
  *
- *     empty tuple
- *     singleton tuple
- *     two-element tuple
- *     deeply nested tuple
- *     large tuple
- *     tuple containing generic types
- *     tuple containing arrays
- *     tuple containing functions
- *     tuple containing quantum types
- *     tuple containing hardware/resource abstractions
+ *     (A, (B, C))
+ *     ((A, B), C)
+ *     (((A, B), C), D)
  *
- * Required scalability tests:
+ * LARGE ARITY:
  *
- *     tuple arity must not be fixed;
- *     tuple nesting must not be fixed;
- *     tuple element type complexity must not be fixed;
- *     tuple resource cardinality must not be fixed.
+ * Generate tuple types containing many elements and verify that no grammar
+ * rule imposes a language-level cardinality limit.
  *
- * Required determinism tests:
+ * LARGE NESTING:
  *
- *     identical source -> identical parse structure.
+ * Generate deeply nested tuple structures subject to test-resource policy and
+ * verify that the grammar contains no explicit nesting ceiling.
  *
- * Required compatibility tests:
+ * CROSS-DOMAIN:
  *
- *     every tuple form accepted by the previous canonical grammar remains
- *     semantically equivalent.
+ *     classical + quantum
+ *     quantum + hardware
+ *     classical + HDL
+ *     AI + accelerator
+ *     distributed + quantum
+ *     resource + capability
  *
- * Required AST tests:
+ * DETERMINISM:
  *
- *     ()       -> TypeExpr::Tuple([])
- *     (T,)     -> TypeExpr::Tuple([T])
- *     (T,U)    -> TypeExpr::Tuple([T,U])
+ *     identical source
+ *         ->
+ *     identical token sequence
+ *         ->
+ *     identical parse structure
+ *
+ * ROUND-TRIP:
+ *
+ *     source
+ *       ->
+ *     parser
+ *       ->
+ *     TypeExpr
+ *       ->
+ *     formatter
+ *       ->
+ *     parser
+ *
+ * must preserve tuple semantics.
  *
  * ============================================================================
  * HARD-CODING AUDIT
  * ============================================================================
  *
- * This file must fail review if it introduces any universal implementation
- * constant resembling:
+ * This file passes the scalability audit only if:
  *
- *     MAX_*
- *     *_LIMIT
- *     *_CAPACITY
- *     *_COUNT
+ *     - tuple arity is represented by repetition;
+ *     - no tuple-count constants exist;
+ *     - no hardware capacity exists;
+ *     - no quantum capacity exists;
+ *     - no tensor-rank capacity exists;
+ *     - no machine width is assumed;
+ *     - no target-specific type is required for tuple parsing;
+ *     - no finite catalogue of tuple shapes exists.
  *
- * when the value represents a language-level tuple limitation.
+ * Program-defined values such as:
  *
- * Program-level constants remain valid.
+ *     Vector<T, N>
  *
- * For example:
- *
- *     Vector<T, 1024>
- *
- * may be valid source semantics.
- *
- * But:
- *
- *     tuple arity <= 1024
- *
- * must NOT be encoded by this grammar.
+ * remain legal because N is program/type information rather than a grammar
+ * capacity limit.
  *
  * ============================================================================
  * RUST CONTRACT
  * ============================================================================
  *
- * This file contains no Rust implementation code.
+ * This file contains no Rust code.
  *
- * The generated frontend must remain compatible with:
+ * Generated and handwritten Rust frontend/compiler code must target:
  *
  *     Rust 1.97
  *     Rust 1.97.1
  *     Rust 2021
  *
- * and the Rust implementation must contain no `unsafe`.
- *
- * The relevant Rust crate should enforce:
+ * Rust implementation crates must enforce safe Rust, preferably with:
  *
  *     #![forbid(unsafe_code)]
  *
- * The grammar itself cannot and does not require unsafe behavior.
+ * This grammar introduces no unsafe requirement.
  *
  * ============================================================================
  * COMPLETION CRITERIA
  * ============================================================================
  *
- * tuple.g4 is COMPLETE when:
+ * THIS FILE:
  *
- *   [ ] It is the single canonical tuple grammar.
- *   [ ] `tuple-types.g4` no longer competes with it.
- *   [ ] Canonical `ZamaniTokens` vocabulary is consumed.
- *   [ ] No lexer rules are duplicated.
- *   [ ] `typeExpression` is not redefined here.
- *   [ ] Empty tuple is supported.
- *   [ ] Singleton tuple requires a comma.
- *   [ ] Multi-element tuples are supported.
- *   [ ] Optional trailing comma is supported.
- *   [ ] Tuple arity is unbounded by language semantics.
- *   [ ] Nested tuples are supported.
- *   [ ] Arbitrary canonical types can occur as elements.
- *   [ ] `(T)` remains distinct from `(T,)`.
- *   [ ] AST mapping is `TypeExpr::Tuple`.
- *   [ ] Element ordering is preserved.
- *   [ ] Source spans remain available downstream.
- *   [ ] Semantic analysis owns semantic validation.
- *   [ ] No IR is introduced here.
- *   [ ] `quantum::ir` remains the quantum semantic boundary.
- *   [ ] No hardware/resource limits are encoded.
- *   [ ] No target/backend dependency exists.
- *   [ ] No unsafe implementation is required.
- *   [ ] Positive tests exist.
- *   [ ] Negative tests exist.
- *   [ ] Boundary tests exist.
- *   [ ] Scalability tests exist.
- *   [ ] Determinism tests exist.
- *   [ ] Compatibility tests exist.
- *   [ ] Formatter/LSP integration is defined.
- *   [ ] Grammar-to-AST traceability is documented.
- *   [ ] Grammar-to-semantic traceability is documented.
- *   [ ] Grammar-to-IR traceability is documented.
+ *     [x] has one tuple grammar owner;
+ *     [x] does not define typeExpression;
+ *     [x] does not define unitType;
+ *     [x] supports singleton tuples;
+ *     [x] supports arbitrary multi-element tuples;
+ *     [x] supports trailing commas;
+ *     [x] supports recursive tuple nesting;
+ *     [x] preserves element order;
+ *     [x] has no tuple arity ceiling;
+ *     [x] has no machine-capacity ceiling;
+ *     [x] has no quantum-capacity ceiling;
+ *     [x] has no target-specific behavior;
+ *     [x] defines no IR;
+ *     [x] introduces no unsafe code;
+ *     [x] has deterministic syntax;
+ *     [x] has explicit integration ownership.
+ *
+ * REPOSITORY INTEGRATION IS COMPLETE when:
+ *
+ *     [ ] `Types` imports `Tuple`;
+ *     [ ] no canonical grammar imports `TupleTypes`;
+ *     [ ] duplicate tuple rules are removed from the type root;
+ *     [ ] `unitType` remains the sole source owner of `()`;
+ *     [ ] expression tuple grammar remains separate;
+ *     [ ] AST construction maps tuples to `TypeExpr::Tuple`;
+ *     [ ] semantic tuple validation consumes the canonical AST;
+ *     [ ] tuple conformance tests pass;
+ *     [ ] cross-domain tests pass;
+ *     [ ] scalability tests pass;
+ *     [ ] deterministic parsing tests pass;
+ *     [ ] formatter/LSP round-trip tests pass.
  *
  * ============================================================================
  */
@@ -980,30 +1327,49 @@ options {
 
 
 /**
- * Canonical tuple type.
+ * ============================================================================
+ * CANONICAL TUPLE TYPE
+ * ============================================================================
  *
- * The enclosing type grammar supplies `typeExpression`.
+ * The first element followed by a comma distinguishes a tuple from ordinary
+ * parenthesized type syntax.
  *
- * Forms:
+ * Examples:
  *
- *     ()
  *     (T,)
  *     (T, U)
  *     (T, U, V)
  *     (T, U, V,)
  *
- * `(T)` is intentionally excluded because it is a parenthesized type,
- * not a tuple.
+ * `()` is deliberately excluded because it belongs to `unitType`.
  */
 tupleType
-    : LPAREN RPAREN
-    | LPAREN typeExpression COMMA RPAREN
-    | LPAREN typeExpression COMMA typeExpression tupleAdditionalElement* COMMA? RPAREN
+    : LPAREN typeExpression COMMA RPAREN
+    | LPAREN tupleElementList RPAREN
     ;
 
 
 /**
- * Additional tuple elements.
+ * ============================================================================
+ * MULTI-ELEMENT TUPLE LIST
+ * ============================================================================
+ *
+ * Requires at least two type elements.
+ *
+ * The optional final comma is handled here rather than through ambiguous
+ * alternatives.
+ */
+tupleElementList
+    : typeExpression COMMA typeExpression tupleAdditionalElement* COMMA?
+    ;
+
+
+/**
+ * ============================================================================
+ * ADDITIONAL TUPLE ELEMENT
+ * ============================================================================
+ *
+ * Each repetition adds exactly one ordered element.
  *
  * There is deliberately no finite arity enumeration.
  */
