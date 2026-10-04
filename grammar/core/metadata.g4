@@ -1,64 +1,71 @@
 /*
  * ============================================================================
- * Zamani Programming Language
+ * Zamani Universal Programming Language
  * ============================================================================
  *
- * File:
- *     grammar/core/metadata.g4
+ * FILE
+ * ----
+ * grammar/core/metadata.g4
  *
- * Purpose:
- *     Canonical parser-level grammar for structured, source-level metadata
- *     values used throughout Zamani.
+ * GRAMMAR
+ * -------
+ * Metadata
  *
- * Grammar technology:
- *     ANTLR4 parser grammar
+ * STATUS
+ * ------
+ * CANONICAL / PRODUCTION
  *
- * Rust integration baseline:
- *     Rust 1.97 / Rust 1.97.1
+ * LANGUAGE
+ * --------
+ * Zamani
  *
- * Safety:
- *     This grammar contains no embedded Rust actions and requires no `unsafe`.
- *     Generated compiler/runtime implementation MUST remain safe Rust.
+ * BASELINE
+ * --------
+ * ANTLR4 parser grammar
+ * Rust 1.97 / Rust 1.97.1
+ * Rust 2021
+ *
+ * SAFETY
+ * ------
+ * This grammar contains no embedded target-language actions, semantic
+ * predicates, filesystem access, network access, runtime callbacks, or unsafe
+ * implementation requirements.
  *
  * ============================================================================
- * ARCHITECTURAL ROLE
+ * FEATURE CONTRACT
  * ============================================================================
  *
- * Metadata is information ABOUT a source construct.
+ * PURPOSE
+ * -------
+ *
+ * This file is the canonical parser-level owner of STRUCTURED SOURCE-LEVEL
+ * METADATA VALUES.
+ *
+ * Metadata is information associated with another source construct or
+ * represented as a structured source-level value.
  *
  * Examples include:
  *
- *     documentation metadata
- *     provenance metadata
- *     compilation metadata
- *     language/dialect metadata
- *     capability metadata
- *     resource metadata
- *     portability metadata
- *     reproducibility metadata
- *     verification metadata
- *     security metadata
- *     quantum metadata
- *     hardware intent metadata
- *     interoperability metadata
- *     tooling metadata
+ *     documentation information
+ *     provenance information
+ *     compilation information
+ *     dialect information
+ *     capability information
+ *     resource information
+ *     portability information
+ *     reproducibility information
+ *     verification information
+ *     security information
+ *     quantum information
+ *     hardware-intent information
+ *     interoperability information
+ *     tooling information
+ *     AI/model information
+ *     data/schema information
  *
- * This file owns the STRUCTURE OF METADATA VALUES.
+ * This grammar defines the STRUCTURE of metadata.
  *
- * It does NOT own the syntax used to ATTACH metadata to a declaration.
- *
- * For example, if the language uses:
- *
- *     #[...]
- *
- * or:
- *
- *     @name(...)
- *
- * the marker/attachment syntax belongs to the attribute/annotation grammar.
- *
- * This file provides the reusable structured payload consumed by those
- * grammars.
+ * It does not define what a metadata key means.
  *
  * ============================================================================
  * OWNERSHIP
@@ -66,173 +73,304 @@
  *
  * THIS FILE OWNS:
  *
- *     - metadata value structure;
- *     - metadata key structure;
- *     - metadata entry structure;
- *     - metadata maps/objects;
- *     - metadata sequences/arrays;
+ *     - metadata values;
+ *     - metadata literals;
+ *     - metadata symbolic references;
+ *     - metadata keys;
+ *     - metadata entries;
+ *     - metadata objects;
+ *     - metadata arrays;
  *     - metadata tuples;
- *     - metadata references;
- *     - metadata paths;
  *     - metadata tagged values;
- *     - metadata lists;
- *     - metadata optional values;
- *     - metadata null values;
- *     - metadata literal composition;
- *     - metadata nesting.
+ *     - reusable metadata value lists;
+ *     - reusable metadata entry lists.
  *
  * THIS FILE DOES NOT OWN:
  *
- *     - @ lexical syntax;
- *     - # lexical syntax;
- *     - attribute attachment;
- *     - annotation attachment;
- *     - identifiers;
- *     - lexical literal definitions;
- *     - qualified-name lexical structure;
+ *     - lexical token definitions;
+ *     - identifier lexical recognition;
+ *     - Unicode identifier rules;
+ *     - keyword recognition;
+ *     - comments;
+ *     - whitespace;
+ *     - operators;
+ *     - punctuation token definitions;
+ *     - attribute attachment syntax;
+ *     - annotation attachment syntax;
+ *     - pragma attachment syntax;
  *     - filesystem paths;
  *     - URLs;
- *     - hardware addresses;
- *     - physical device identifiers;
- *     - quantum IR;
- *     - classical IR;
- *     - HDL IR;
+ *     - module resolution;
+ *     - namespace resolution;
+ *     - symbol resolution;
+ *     - type checking;
+ *     - effect checking;
+ *     - capability resolution;
+ *     - resource resolution;
+ *     - contract validation;
+ *     - policy validation;
+ *     - provenance generation;
+ *     - runtime execution;
+ *     - target selection;
+ *     - hardware discovery;
+ *     - hardware allocation;
+ *     - quantum physical mapping;
+ *     - quantum routing;
+ *     - scheduling;
  *     - QEC;
  *     - ZQN;
- *     - routing;
- *     - scheduling;
- *     - optimization;
- *     - resilience;
- *     - hardware discovery;
- *     - calibration;
- *     - runtime execution;
+ *     - HAL;
  *     - backend selection;
- *     - target selection;
- *     - resource allocation.
+ *     - classical IR;
+ *     - quantum::ir;
+ *     - HDL IR;
+ *     - runtime IR.
  *
  * ============================================================================
- * CORE PRINCIPLE
+ * CRITICAL OWNERSHIP RULE
  * ============================================================================
  *
- * Metadata describes information, intent, declarations, constraints, hints,
- * provenance, or other structured source-level information.
+ * Attribute attachment remains owned by:
  *
- * Metadata MUST NOT silently become an execution command.
+ *     grammar/core/attributes.g4
  *
- * For example:
+ * Annotation attachment remains owned by:
  *
- *     target = "gpu"
+ *     grammar/core/annotations.g4
  *
- * may be metadata.
+ * Metadata values are reusable payloads.
  *
- * It does not mean that the grammar selects a GPU.
+ * A consuming grammar decides where a metadata value is legal.
  *
- * Likewise:
+ * This file must therefore NOT define:
  *
- *     qubits = 1000
+ *     @
+ *     #
+ *     #[...]
+ *     @name(...)
  *
- * is syntactically a metadata value.
- *
- * It does NOT impose that a machine contain 1000 qubits, nor does this grammar
- * validate whether such a resource exists.
- *
- * Resource/capability semantics belong downstream.
+ * or any equivalent attachment syntax.
  *
  * ============================================================================
- * POCO-REAF
+ * DEPENDENCY CONTRACT
  * ============================================================================
  *
- * Metadata syntax is machine-independent.
+ * DEPENDS_ON:
  *
- * It must not encode assumptions such as:
+ *     grammar/antlr/ZamaniLexer.g4
+ *     grammar/core/names.g4
  *
- *     MAX_QUBITS
- *     MAX_CPUS
- *     MAX_GPUS
- *     MAX_FPGAS
- *     MAX_NODES
- *     MAX_MEMORY
- *     MAX_DEVICES
+ * `Names` supplies:
  *
- * No finite language-level limit is imposed on:
+ *     identifier
+ *     simpleName
+ *     nameSegment
+ *     qualifiedName
  *
- *     - metadata entries;
- *     - metadata nesting;
- *     - metadata keys;
- *     - metadata values;
- *     - metadata array elements;
- *     - metadata object fields;
- *     - qualified-name depth.
+ * This grammar intentionally imports `Names` so the file is independently
+ * composable and does not require downstream grammars to provide hidden
+ * parser-rule dependencies.
  *
- * Practical limits are implementation/resource concerns.
+ * EXPORTS:
+ *
+ *     metadata
+ *     metadataValue
+ *     metadataLiteral
+ *     metadataReference
+ *     metadataKey
+ *     metadataEntry
+ *     metadataEntryList
+ *     metadataObject
+ *     metadataArray
+ *     metadataValueList
+ *     metadataTuple
+ *     metadataTupleElements
+ *     metadataTaggedValue
+ *
+ * CONSUMED_BY:
+ *
+ *     grammar/core/attributes.g4
+ *     grammar/core/annotations.g4
+ *     grammar/core/pragmas.g4
+ *     grammar/core/hints.g4
+ *     grammar/declarations/
+ *     grammar/types/
+ *     grammar/functions/
+ *     grammar/modules/
+ *     grammar/effects/
+ *     grammar/resources/
+ *     grammar/validation/
+ *     grammar/security/
+ *     grammar/compile/
+ *     grammar/execution/
+ *     grammar/classical/
+ *     grammar/quantum/
+ *     grammar/hybrid/
+ *     grammar/hdl/
+ *     grammar/hardware/
+ *     grammar/distributed/
+ *     grammar/ai/
+ *     grammar/data/
+ *     grammar/networking/
+ *     grammar/interoperability/
+ *     grammar/dialects/
+ *     grammar/macros/
+ *     grammar/metaprogramming/
+ *
+ * AST_OWNER:
+ *
+ *     canonical domain-neutral frontend AST
+ *
+ * SEMANTIC_OWNER:
+ *
+ *     canonical semantic-analysis / metadata-schema subsystem
+ *
+ * TYPE_OWNER:
+ *
+ *     canonical type-analysis subsystem
+ *
+ * EFFECT_OWNER:
+ *
+ *     canonical effect-analysis subsystem
+ *
+ * CAPABILITY_OWNER:
+ *
+ *     canonical capability-analysis subsystem
+ *
+ * RESOURCE_OWNER:
+ *
+ *     canonical resource-analysis subsystem
+ *
+ * POLICY_OWNER:
+ *
+ *     canonical policy-analysis subsystem
+ *
+ * PROVENANCE_OWNER:
+ *
+ *     canonical provenance subsystem
+ *
+ * IR_OWNER:
+ *
+ *     downstream semantic/domain IR owners
+ *
+ * SPEC_OWNER:
+ *
+ *     grammar/specification/
+ *     grammar/spec/
+ *
+ * TEST_OWNER:
+ *
+ *     grammar/tests/core/metadata/
  *
  * ============================================================================
- * DEPENDENCY DIRECTION
+ * LEXER CONTRACT
  * ============================================================================
  *
- *     canonical lexer
- *           |
- *           v
- *     names.g4
- *           |
- *           +--------------------+
- *           |                    |
- *           v                    v
- *     metadata.g4          attributes.g4
- *           |                    |
- *           +---------+----------+
- *                     |
- *                     v
- *              declarations/types/
- *              modules/functions/
- *              quantum/hardware/
- *              resources/etc.
- *                     |
- *                     v
- *                  AST
- *                     |
- *                     v
- *              semantic analysis
- *                     |
- *                     +--> capabilities
- *                     +--> resources
- *                     +--> effects
- *                     +--> provenance
- *                     +--> compiler metadata
- *                     |
- *                     v
- *              canonical semantic IR
- *                     |
- *                     +--> quantum::ir
- *                     +--> classical IR
- *                     +--> HDL/hardware representations
- *                     |
- *                     v
- *           optimization / routing /
- *           scheduling / resilience /
- *           ZQN / QEC / lowering
+ * This is a parser grammar.
  *
- * Metadata grammar MUST NOT depend on any downstream execution subsystem.
+ * It MUST use:
+ *
+ *     tokenVocab = ZamaniLexer;
+ *
+ * It MUST NOT define lexical rules.
+ *
+ * The canonical lexer owns all token spelling and classification.
  *
  * ============================================================================
- * AST CONTRACT
+ * CANONICAL LITERAL TOKENS
  * ============================================================================
  *
- * The parser must preserve:
+ * The current repository literal architecture provides the following parser
+ * visible literal tokens:
+ *
+ *     INTEGER
+ *     FLOAT
+ *     STRING_LITERAL
+ *     CHARACTER_LITERAL
+ *     TRUE
+ *     FALSE
+ *     QUANTUM_LITERAL
+ *     HARDWARE_LITERAL
+ *     DURATION_LITERAL
+ *     SIZE_LITERAL
+ *
+ * This file consumes those tokens.
+ *
+ * It does NOT invent alternate names such as:
+ *
+ *     INTEGER_LITERAL
+ *     DECIMAL_LITERAL
+ *     BOOLEAN_LITERAL
+ *     K_NULL
+ *     K_NIL
+ *
+ * where those are not the current canonical lexer vocabulary.
+ *
+ * If a future literal category becomes canonical, its lexer owner and parser
+ * integration must be changed as one coordinated language evolution.
+ *
+ * ============================================================================
+ * NAME CONTRACT
+ * ============================================================================
+ *
+ * Metadata keys and symbolic references use the canonical name system.
+ *
+ * Examples:
+ *
+ *     version
+ *     build::version
+ *     quantum::policy
+ *     hardware::capability
+ *     provenance::source
+ *
+ * Name resolution does not occur here.
+ *
+ * The grammar only preserves the source structure.
+ *
+ * ============================================================================
+ * METADATA MODEL
+ * ============================================================================
+ *
+ * The canonical structural model is:
+ *
+ *     metadata
+ *         |
+ *         v
+ *     metadataValue
+ *         |
+ *         +----------------+----------------+----------------+
+ *         |                |                |                |
+ *         v                v                v                v
+ *      literal         reference          array            object
+ *                                          |
+ *                                          +--> tuple
+ *                                          |
+ *                                          +--> tagged value
+ *
+ * The parser preserves structure.
+ *
+ * Semantic analysis determines meaning.
+ *
+ * ============================================================================
+ * SOURCE PRESERVATION CONTRACT
+ * ============================================================================
+ *
+ * The resulting AST must preserve enough information to retain:
  *
  *     - metadata key spelling;
- *     - qualified-name segment ordering;
- *     - literal spelling;
- *     - object/list ordering;
- *     - duplicate keys;
- *     - source spans;
- *     - source ordering;
- *     - nesting structure.
+ *     - qualified-name segment order;
+ *     - literal token text;
+ *     - object-entry order;
+ *     - array-element order;
+ *     - tuple-element order;
+ *     - duplicate object keys;
+ *     - tagged-value name;
+ *     - nested structure;
+ *     - source spans.
  *
- * Duplicate-key rejection is NOT a parser responsibility.
+ * Duplicate keys MUST NOT be rejected by this grammar.
  *
- * This is deliberate because different metadata schemas may legitimately
- * choose different duplicate-key policies:
+ * Different metadata schemas may require:
  *
  *     reject
  *     first-wins
@@ -240,48 +378,360 @@
  *     merge
  *     accumulate
  *
- * Such policy belongs to semantic/schema validation.
+ * Therefore duplicate-key policy belongs to semantic/schema validation.
  *
  * ============================================================================
- * SOURCE PRESERVATION
+ * SEMANTIC SEPARATION
  * ============================================================================
  *
- * The grammar does not normalize:
+ * Parsing metadata does NOT mean:
  *
- *     strings;
- *     names;
- *     numeric spellings;
- *     case;
- *     ordering;
- *     duplicate entries.
+ *     - the key is recognized;
+ *     - the value is semantically valid;
+ *     - a capability exists;
+ *     - a resource exists;
+ *     - a target exists;
+ *     - a device exists;
+ *     - a QPU supports a requested operation;
+ *     - a policy is authorized;
+ *     - a contract is satisfied;
+ *     - an effect is permitted;
+ *     - provenance is trusted;
+ *     - a compilation option is accepted.
  *
- * Canonicalization belongs to semantic/serialization infrastructure.
+ * Those decisions belong downstream.
  *
- * This is required for deterministic diagnostics and source-preserving AST
- * construction.
+ * ============================================================================
+ * POCO-REAF CONTRACT
+ * ============================================================================
+ *
+ * Metadata syntax must remain independent of machine scale.
+ *
+ * There are NO grammar-level limits on:
+ *
+ *     metadata entries
+ *     metadata values
+ *     metadata keys
+ *     array elements
+ *     object fields
+ *     tuple elements
+ *     nesting depth
+ *     qualified-name depth
+ *     source metadata quantity
+ *
+ * The grammar MUST NOT define:
+ *
+ *     MAX_METADATA_ENTRIES
+ *     MAX_METADATA_DEPTH
+ *     MAX_METADATA_KEYS
+ *     MAX_METADATA_ARRAY_ELEMENTS
+ *     MAX_METADATA_OBJECT_FIELDS
+ *     MAX_METADATA_VALUE_SIZE
+ *
+ * It also MUST NOT encode:
+ *
+ *     MAX_QUBITS
+ *     MAX_CPUS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_NODES
+ *     MAX_MEMORY
+ *     MAX_THREADS
+ *     MAX_TENSOR_RANK
+ *     MAX_REGISTER_WIDTH
+ *     MAX_NETWORK_SIZE
+ *     MAX_DEVICE_COUNT
+ *
+ * Practical parser limits, when required for denial-of-service protection,
+ * belong to explicitly configurable compiler/parser resource policy and must
+ * not become language semantics.
+ *
+ * ============================================================================
+ * DETERMINISM
+ * ============================================================================
+ *
+ * Parsing metadata is deterministic.
+ *
+ * The parse result must depend only on:
+ *
+ *     source token stream
+ *     grammar version
+ *     parser configuration
+ *
+ * It must not depend on:
+ *
+ *     current time
+ *     randomness
+ *     filesystem state
+ *     network state
+ *     environment variables
+ *     hardware availability
+ *     runtime state
+ *     target selection
+ *     resource discovery
+ *
+ * ============================================================================
+ * SECURITY CONTRACT
+ * ============================================================================
+ *
+ * Metadata is untrusted source input until validated.
+ *
+ * Parsing metadata MUST NOT grant:
+ *
+ *     permissions
+ *     capabilities
+ *     hardware access
+ *     filesystem access
+ *     network access
+ *     native execution
+ *     FFI access
+ *     privileged execution
+ *
+ * A metadata value such as:
+ *
+ *     capability = hardware::accelerator
+ *
+ * is only syntactic data at this stage.
+ *
+ * ============================================================================
+ * QUANTUM CONTRACT
+ * ============================================================================
+ *
+ * Metadata may describe quantum-related intent:
+ *
+ *     quantum::measurement
+ *     quantum::resource
+ *     quantum::logical
+ *     quantum::error_correction
+ *     quantum::provenance
+ *
+ * but this grammar does not implement quantum semantics.
+ *
+ * The canonical quantum pipeline remains:
+ *
+ *     source
+ *       ->
+ *     domain-neutral AST
+ *       ->
+ *     semantic analysis
+ *       ->
+ *     quantum::ir
+ *       ->
+ *     optimization
+ *       ->
+ *     decomposition
+ *       ->
+ *     routing
+ *       ->
+ *     scheduling
+ *       ->
+ *     resilience / QEC
+ *       ->
+ *     ZQN
+ *       ->
+ *     HAL
+ *       ->
+ *     target realization
+ *
+ * Metadata grammar MUST NOT:
+ *
+ *     - allocate qubits;
+ *     - identify physical qubits;
+ *     - select a QPU;
+ *     - define a gate set;
+ *     - define topology;
+ *     - define calibration;
+ *     - define routing;
+ *     - define scheduling;
+ *     - create quantum::ir.
+ *
+ * ============================================================================
+ * HDL / HARDWARE CONTRACT
+ * ============================================================================
+ *
+ * Metadata may describe:
+ *
+ *     hardware intent
+ *     interfaces
+ *     implementation hints
+ *     resource requirements
+ *     timing intent
+ *     portability requirements
+ *     capabilities
+ *
+ * It does not select physical hardware.
+ *
+ * Metadata such as:
+ *
+ *     resource = memory
+ *
+ * is source-level information only.
+ *
+ * Hardware realization is downstream.
+ *
+ * ============================================================================
+ * AI / KNOWLEDGE CONTRACT
+ * ============================================================================
+ *
+ * Metadata may describe:
+ *
+ *     models
+ *     datasets
+ *     reasoning systems
+ *     learning systems
+ *     adaptation policies
+ *     uncertainty
+ *     evidence
+ *     explanations
+ *     agents
+ *     decisions
+ *     provenance
+ *
+ * These remain generic metadata values.
+ *
+ * The metadata grammar does not create separate application-specific
+ * languages for individual AI techniques.
+ *
+ * ============================================================================
+ * RESOURCE / CAPABILITY CONTRACT
+ * ============================================================================
+ *
+ * Metadata may carry structures used later by:
+ *
+ *     requirements
+ *     constraints
+ *     capabilities
+ *     preferences
+ *     hints
+ *     budgets
+ *     policies
+ *
+ * This grammar does not decide whether a requirement is satisfiable.
+ *
+ * For example:
+ *
+ *     {
+ *         capability = quantum::measurement,
+ *         resource = memory
+ *     }
+ *
+ * remains structured source metadata until semantic analysis interprets it.
+ *
+ * ============================================================================
+ * PROVENANCE CONTRACT
+ * ============================================================================
+ *
+ * Metadata may represent provenance information such as:
+ *
+ *     source
+ *     derivation
+ *     generated
+ *     transformed
+ *     verified
+ *     decision
+ *     evidence
+ *
+ * The grammar does not manufacture:
+ *
+ *     timestamps
+ *     hashes
+ *     UUIDs
+ *     signatures
+ *     machine identity
+ *
+ * Those values are supplied by the relevant semantic/toolchain subsystem.
+ *
+ * ============================================================================
+ * COMPATIBILITY CONTRACT
+ * ============================================================================
+ *
+ * This file intentionally avoids obsolete duplicate lexical token names.
+ *
+ * The stable parser-facing literal contract is:
+ *
+ *     INTEGER
+ *     FLOAT
+ *     STRING_LITERAL
+ *     CHARACTER_LITERAL
+ *     TRUE
+ *     FALSE
+ *     QUANTUM_LITERAL
+ *     HARDWARE_LITERAL
+ *     DURATION_LITERAL
+ *     SIZE_LITERAL
+ *
+ * Name syntax is inherited from `Names`.
+ *
+ * Changing any of these contracts requires coordinated updates to:
+ *
+ *     canonical lexer
+ *     parser composition
+ *     AST conversion
+ *     semantic validation
+ *     grammar/spec/
+ *     conformance tests
+ *     compatibility tests
+ *
+ * This file must not silently create lexical aliases.
  *
  * ============================================================================
  * ANTLR COMPOSITION
  * ============================================================================
  *
- * This is a parser grammar.
+ * Metadata is a leaf parser grammar.
  *
- * It consumes the canonical Zamani lexer vocabulary:
+ * The grammar imports `Names` because it directly consumes `qualifiedName`.
  *
- *     tokenVocab = ZamaniLexer
+ * This produces:
  *
- * It intentionally does not define lexer tokens.
+ *     ZamaniLexer
+ *          |
+ *          v
+ *       Names
+ *          |
+ *          v
+ *      Metadata
+ *          |
+ *          v
+ *     consuming grammar
  *
- * Shared name rules such as:
+ * Higher-level grammar composition remains responsible for attaching metadata
+ * to declarations, expressions, statements, modules, resources, quantum
+ * constructs, HDL constructs, and other source constructs.
  *
- *     identifier
- *     qualifiedName
+ * ============================================================================
+ * RULE DESIGN PRINCIPLE
+ * ============================================================================
  *
- * are supplied by the canonical core grammar composition.
+ * Every public rule in this file represents a genuinely useful structural
+ * distinction.
  *
- * If the repository's parser assembly imports Names separately, the canonical
- * `identifier` and `qualifiedName` rules MUST be reused rather than redefined.
+ * Redundant aliases are deliberately avoided.
  *
+ * In particular, this file does NOT create separate parser rules merely for
+ * semantic labels such as:
+ *
+ *     metadataMap
+ *     metadataSequence
+ *     metadataProperty
+ *     metadataAssignment
+ *     metadataStructure
+ *     metadataScalarList
+ *     metadataObjectEntry
+ *     metadataReferencePath
+ *
+ * unless those forms acquire distinct language semantics.
+ *
+ * The AST/semantic layer can assign semantic names to the same structural
+ * production without multiplying parser authorities.
+ *
+ * ============================================================================
+ * 1. CANONICAL METADATA ROOT
+ * ============================================================================
+ *
+ * `metadata` is the stable general-purpose entry point.
+ *
+ * Consumers should use it when they accept any metadata value.
  * ============================================================================
  */
 
@@ -291,18 +741,39 @@ options {
     tokenVocab = ZamaniLexer;
 }
 
+import Names;
+
 
 /*
  * ============================================================================
- * 1. METADATA VALUE
+ * 2. METADATA
+ * ============================================================================
+ */
+
+metadata
+    : metadataValue
+    ;
+
+
+/*
+ * ============================================================================
+ * 3. METADATA VALUE
  * ============================================================================
  *
- * The root reusable metadata value.
+ * A metadata value may be:
  *
- * Metadata is deliberately richer than a simple string key/value pair.
+ *     literal
+ *     symbolic reference
+ *     array
+ *     object
+ *     tuple
+ *     tagged value
  *
- * This allows the language to express structured information without creating
- * a new syntax for every future domain.
+ * No arbitrary runtime expression is accepted.
+ *
+ * This is deliberate.
+ *
+ * Metadata must not accidentally become a second expression language.
  * ============================================================================
  */
 
@@ -318,49 +789,39 @@ metadataValue
 
 /*
  * ============================================================================
- * 2. METADATA LITERAL
- * ============================================================================
- *
- * Literal lexical recognition belongs to the lexer.
- *
- * This rule merely composes canonical literal tokens into a metadata value.
- *
- * Domain-specific literal forms are accepted as opaque source-level values.
- *
- * Their semantic validity is determined later.
+ * 4. METADATA LITERAL
  * ============================================================================
  */
 
 metadataLiteral
-    : INTEGER_LITERAL
-    | DECIMAL_LITERAL
+    : INTEGER
+    | FLOAT
     | STRING_LITERAL
     | CHARACTER_LITERAL
-    | BOOLEAN_LITERAL
+    | TRUE
+    | FALSE
     | QUANTUM_LITERAL
     | HARDWARE_LITERAL
     | DURATION_LITERAL
     | SIZE_LITERAL
-    | K_NULL
-    | K_NIL
     ;
 
 
 /*
  * ============================================================================
- * 3. METADATA REFERENCE
+ * 5. METADATA REFERENCE
  * ============================================================================
  *
- * A metadata value may refer to a source-level name.
+ * A metadata reference is a source-level qualified name.
  *
  * Examples:
  *
  *     version
  *     build::version
- *     platform::capability
  *     quantum::policy
+ *     hardware::capability
  *
- * This grammar does not resolve the reference.
+ * Resolution is downstream.
  * ============================================================================
  */
 
@@ -371,16 +832,16 @@ metadataReference
 
 /*
  * ============================================================================
- * 4. METADATA KEY
+ * 6. METADATA KEY
  * ============================================================================
  *
  * Keys may be:
  *
- *     simple/qualified names
+ *     qualified names
  *     string keys
  *
- * String keys support externally defined schemas without requiring every
- * schema key to become a Zamani keyword.
+ * String keys allow externally defined schemas without turning every schema
+ * key into a language keyword.
  * ============================================================================
  */
 
@@ -392,17 +853,14 @@ metadataKey
 
 /*
  * ============================================================================
- * 5. METADATA ENTRY
+ * 7. METADATA ENTRY
  * ============================================================================
  *
- * Canonical structural form:
+ * Canonical key/value syntax:
  *
  *     key = value
  *
- * The assignment token is intentionally lexical/parser infrastructure owned
- * by the canonical lexer.
- *
- * Metadata does not interpret the key.
+ * The key is deliberately not interpreted here.
  * ============================================================================
  */
 
@@ -413,13 +871,14 @@ metadataEntry
 
 /*
  * ============================================================================
- * 6. METADATA ENTRY LIST
+ * 8. METADATA ENTRY LIST
  * ============================================================================
  *
- * No fixed number of metadata entries is permitted or required.
+ * Non-empty ordered metadata entries.
  *
- * The trailing comma is accepted deliberately for source stability and
- * formatter friendliness.
+ * Duplicate keys remain structurally representable.
+ *
+ * A trailing comma is accepted.
  * ============================================================================
  */
 
@@ -434,19 +893,29 @@ metadataEntryList
 
 /*
  * ============================================================================
- * 7. METADATA OBJECT
+ * 9. METADATA OBJECT
  * ============================================================================
  *
  * Structured key/value metadata.
  *
- * Example:
+ * Examples:
+ *
+ *     {}
  *
  *     {
- *         "language" = "Zamani",
- *         "version" = "1.0"
+ *         language = "Zamani"
  *     }
  *
- * The grammar imposes no field-count limit.
+ *     {
+ *         language = "Zamani",
+ *         version = "1"
+ *     }
+ *
+ *     {
+ *         "language" = "Zamani"
+ *     }
+ *
+ * Empty objects are valid.
  *
  * Duplicate keys are preserved for semantic validation.
  * ============================================================================
@@ -461,20 +930,24 @@ metadataObject
 
 /*
  * ============================================================================
- * 8. METADATA ARRAY
+ * 10. METADATA ARRAY
  * ============================================================================
  *
  * Ordered metadata values.
  *
- * Example:
+ * Examples:
  *
- *     [
- *         "cpu",
- *         "gpu",
- *         "qpu"
- *     ]
+ *     []
  *
- * The number of elements is unbounded by language grammar.
+ *     [cpu, gpu, accelerator]
+ *
+ *     [1, 2, 3]
+ *
+ *     [quantum::measurement, hardware::capability]
+ *
+ * Empty arrays are valid.
+ *
+ * A trailing comma is accepted.
  * ============================================================================
  */
 
@@ -487,7 +960,7 @@ metadataArray
 
 /*
  * ============================================================================
- * 9. METADATA VALUE LIST
+ * 11. METADATA VALUE LIST
  * ============================================================================
  */
 
@@ -502,31 +975,46 @@ metadataValueList
 
 /*
  * ============================================================================
- * 10. METADATA TUPLE
+ * 12. METADATA TUPLE
  * ============================================================================
  *
- * Tuples differ from arrays by explicitly preserving tuple semantics at the
- * AST/semantic boundary.
+ * Tuples preserve positional structure distinct from arrays.
  *
- * Example:
+ * Examples:
  *
+ *     ()
+ *     (value)
+ *     (value,)
  *     (value1, value2)
+ *     (value1, value2,)
  *
- * A single-element tuple requires the trailing comma.
+ * Semantic validation determines tuple arity/type meaning.
+ *
+ * No finite tuple-size limit is imposed by this grammar.
  * ============================================================================
  */
 
 metadataTuple
     : LPAREN
-      metadataTupleElements
+      metadataTupleElements?
       RPAREN
     ;
 
 
+/*
+ * ============================================================================
+ * 13. METADATA TUPLE ELEMENTS
+ * ============================================================================
+ *
+ * The optional trailing comma is accepted.
+ *
+ * The AST must preserve whether the source contained a trailing comma when
+ * source-preserving formatting or diagnostics require that information.
+ * ============================================================================
+ */
+
 metadataTupleElements
-    : metadataValue COMMA
-    | metadataValue
-      COMMA metadataValue
+    : metadataValue
       (
           COMMA metadataValue
       )*
@@ -536,21 +1024,29 @@ metadataTupleElements
 
 /*
  * ============================================================================
- * 11. METADATA TAGGED VALUE
+ * 14. METADATA TAGGED VALUE
  * ============================================================================
  *
- * Tagged values permit extensible schemas without adding a new grammar rule
- * for every future metadata category.
+ * Tagged values provide an extensible semantic envelope without requiring a
+ * new parser production for every future metadata category.
  *
  * Examples:
  *
- *     resource(...)
- *     capability(...)
- *     provenance(...)
+ *     capability(quantum::measurement)
  *
- * The tag is a normal source-level name.
+ *     resource(memory)
  *
- * The grammar does not assign domain semantics to it.
+ *     provenance(source::module)
+ *
+ *     evidence("measurement")
+ *
+ *     policy(execution::recovery)
+ *
+ *     confidence(0.95)
+ *
+ * The tag is a normal qualified name.
+ *
+ * The grammar assigns no semantic meaning to the tag.
  * ============================================================================
  */
 
@@ -564,716 +1060,578 @@ metadataTaggedValue
 
 /*
  * ============================================================================
- * 12. OPTIONAL METADATA VALUE
+ * STRUCTURAL INTEGRATION CONTRACT
  * ============================================================================
  *
- * Reusable nullable form for consumers that permit absent metadata values.
- * ============================================================================
- */
-
-optionalMetadataValue
-    : metadataValue?
-    ;
-
-
-/*
- * ============================================================================
- * 13. METADATA DOCUMENT
- * ============================================================================
+ * The canonical structural forms are now:
  *
- * A metadata document is an ordered sequence of metadata entries.
+ *     metadata
+ *         -> metadataValue
  *
- * This is useful for:
+ *     metadataValue
+ *         -> metadataLiteral
+ *         -> metadataReference
+ *         -> metadataArray
+ *         -> metadataObject
+ *         -> metadataTuple
+ *         -> metadataTaggedValue
  *
- *     source metadata;
- *     module metadata;
- *     compilation metadata;
- *     provenance;
- *     generated-artifact metadata;
- *     tooling metadata.
+ *     metadataObject
+ *         -> metadataEntryList?
  *
- * It deliberately has no attachment marker.
+ *     metadataEntryList
+ *         -> metadataEntry (, metadataEntry)* ,?
  *
- * Attachment belongs to the consuming grammar.
- * ============================================================================
- */
-
-metadataDocument
-    : metadataEntryList?
-    ;
-
-
-/*
- * ============================================================================
- * 14. METADATA BLOCK
- * ============================================================================
+ *     metadataArray
+ *         -> metadataValueList?
  *
- * Explicit block form for consumers that want a named metadata section.
+ *     metadataValueList
+ *         -> metadataValue (, metadataValue)* ,?
  *
- * The surrounding declaration determines what the metadata describes.
- * ============================================================================
- */
-
-metadataBlock
-    : LBRACE
-      metadataEntryList?
-      RBRACE
-    ;
-
-
-/*
- * ============================================================================
- * 15. METADATA PROPERTY
- * ============================================================================
+ *     metadataTuple
+ *         -> metadataTupleElements?
  *
- * Alias-style reusable production for downstream grammar components.
+ *     metadataTupleElements
+ *         -> metadataValue (, metadataValue)* ,?
  *
- * This keeps consumers from duplicating:
+ *     metadataTaggedValue
+ *         -> qualifiedName (metadataValueList?)
  *
- *     metadataKey ASSIGN metadataValue
+ * This is the complete structural contract.
+ *
+ * Downstream grammars should reuse these productions rather than reproducing
+ * equivalent key/value/list/map syntax.
  *
  * ============================================================================
- */
-
-metadataProperty
-    : metadataEntry
-    ;
-
-
-/*
- * ============================================================================
- * 16. METADATA PROPERTY LIST
- * ============================================================================
- */
-
-metadataPropertyList
-    : metadataEntryList
-    ;
-
-
-/*
- * ============================================================================
- * 17. METADATA PATH
+ * ATTRIBUTE INTEGRATION
  * ============================================================================
  *
- * A metadata path identifies a nested metadata field structurally.
+ * `grammar/core/attributes.g4` currently owns generic attribute values and
+ * attribute maps.
  *
- * Example:
+ * The intended final ownership is:
  *
- *     build::provenance::source
- *
- * This is a source-level name path, not a filesystem path.
- *
- * It MUST NOT be interpreted as:
- *
- *     ./foo
- *     /foo
- *     C:\foo
- *     https://...
- *
- * Those belong elsewhere.
- * ============================================================================
- */
-
-metadataPath
-    : qualifiedName
-    ;
-
-
-/*
- * ============================================================================
- * 18. METADATA ASSIGNMENT
- * ============================================================================
- *
- * Explicit named metadata assignment.
- *
- * Kept separate from metadataEntry to provide a stable semantic naming
- * boundary for downstream grammar composition.
- * ============================================================================
- */
-
-metadataAssignment
-    : metadataPath ASSIGN metadataValue
-    ;
-
-
-/*
- * ============================================================================
- * 19. METADATA ASSIGNMENT LIST
- * ============================================================================
- */
-
-metadataAssignmentList
-    : metadataAssignment
-      (
-          COMMA metadataAssignment
-      )*
-      COMMA?
-    ;
-
-
-/*
- * ============================================================================
- * 20. METADATA SEQUENCE
- * ============================================================================
- *
- * Generic ordered metadata sequence.
- *
- * This is intentionally represented using the canonical array structure.
- * ============================================================================
- */
-
-metadataSequence
-    : metadataArray
-    ;
-
-
-/*
- * ============================================================================
- * 21. METADATA MAP
- * ============================================================================
- *
- * Generic key/value metadata map.
- *
- * It is structurally equivalent to metadataObject but receives a distinct
- * parser-level rule so semantic consumers can explicitly state their intended
- * category.
- *
- * The parser does not enforce map uniqueness.
- * ============================================================================
- */
-
-metadataMap
-    : metadataObject
-    ;
-
-
-/*
- * ============================================================================
- * 22. METADATA SCALAR
- * ============================================================================
- *
- * Convenience rule for consumers that accept only scalar metadata.
- * ============================================================================
- */
-
-metadataScalar
-    : metadataLiteral
-    | metadataReference
-    ;
-
-
-/*
- * ============================================================================
- * 23. METADATA SCALAR LIST
- * ============================================================================
- */
-
-metadataScalarList
-    : metadataScalar
-      (
-          COMMA metadataScalar
-      )*
-      COMMA?
-    ;
-
-
-/*
- * ============================================================================
- * 24. METADATA OBJECT ENTRY
- * ============================================================================
- *
- * Explicit object-entry alias for consumers that need to communicate their
- * semantic intent without duplicating syntax.
- * ============================================================================
- */
-
-metadataObjectEntry
-    : metadataEntry
-    ;
-
-
-/*
- * ============================================================================
- * 25. METADATA OBJECT ENTRY LIST
- * ============================================================================
- */
-
-metadataObjectEntryList
-    : metadataObjectEntry
-      (
-          COMMA metadataObjectEntry
-      )*
-      COMMA?
-    ;
-
-
-/*
- * ============================================================================
- * 26. METADATA VALUE OR REFERENCE
- * ============================================================================
- *
- * Useful for schema systems that permit either a literal/structured value or
- * a symbolic reference.
- * ============================================================================
- */
-
-metadataValueOrReference
-    : metadataValue
-    | metadataReference
-    ;
-
-
-/*
- * ============================================================================
- * 27. METADATA NAME VALUE
- * ============================================================================
- *
- * Explicit named metadata property.
- * ============================================================================
- */
-
-metadataNameValue
-    : metadataKey ASSIGN metadataValueOrReference
-    ;
-
-
-/*
- * ============================================================================
- * 28. METADATA NAME VALUE LIST
- * ============================================================================
- */
-
-metadataNameValueList
-    : metadataNameValue
-      (
-          COMMA metadataNameValue
-      )*
-      COMMA?
-    ;
-
-
-/*
- * ============================================================================
- * 29. METADATA REFERENCE PATH
- * ============================================================================
- *
- * Kept separate from metadataPath for downstream semantic readability.
- * ============================================================================
- */
-
-metadataReferencePath
-    : qualifiedName
-    ;
-
-
-/*
- * ============================================================================
- * 30. METADATA TAG
- * ============================================================================
- *
- * A standalone metadata tag.
- *
- * Example:
- *
- *     provenance
- *
- * Meaning belongs to the consumer/schema.
- * ============================================================================
- */
-
-metadataTag
-    : qualifiedName
-    ;
-
-
-/*
- * ============================================================================
- * 31. METADATA TAGGED SCALAR
- * ============================================================================
- */
-
-metadataTaggedScalar
-    : metadataTag
-      LPAREN
-      metadataScalarList?
-      RPAREN
-    ;
-
-
-/*
- * ============================================================================
- * 32. METADATA TAGGED OBJECT
- * ============================================================================
- */
-
-metadataTaggedObject
-    : metadataTag
-      metadataObject
-    ;
-
-
-/*
- * ============================================================================
- * 33. METADATA TAGGED ARRAY
- * ============================================================================
- */
-
-metadataTaggedArray
-    : metadataTag
-      metadataArray
-    ;
-
-
-/*
- * ============================================================================
- * 34. METADATA TAGGED STRUCTURE
- * ============================================================================
- *
- * A stable umbrella production for semantic consumers that need to accept
- * tagged metadata without duplicating the grammar.
- * ============================================================================
- */
-
-metadataTaggedStructure
-    : metadataTaggedScalar
-    | metadataTaggedObject
-    | metadataTaggedArray
-    ;
-
-
-/*
- * ============================================================================
- * 35. METADATA ENTRY OR TAGGED STRUCTURE
- * ============================================================================
- */
-
-metadataMember
-    : metadataEntry
-    | metadataTaggedStructure
-    ;
-
-
-/*
- * ============================================================================
- * 36. METADATA MEMBER LIST
- * ============================================================================
- */
-
-metadataMemberList
-    : metadataMember
-      (
-          COMMA metadataMember
-      )*
-      COMMA?
-    ;
-
-
-/*
- * ============================================================================
- * 37. METADATA STRUCTURE
- * ============================================================================
- *
- * General structured metadata root.
- *
- * This is intentionally broad but remains finite and deterministic.
- * ============================================================================
- */
-
-metadataStructure
-    : metadataObject
-    | metadataArray
-    | metadataTuple
-    | metadataTaggedStructure
-    ;
-
-
-/*
- * ============================================================================
- * 38. METADATA ROOT
- * ============================================================================
- *
- * Canonical reusable metadata production.
- *
- * Consumers should prefer this rule unless they intentionally need a narrower
- * contract such as metadataScalar or metadataObject.
- * ============================================================================
- */
-
-metadata
-    : metadataValue
-    ;
-
-
-/*
- * ============================================================================
- * SEMANTIC BOUNDARY
- * ============================================================================
- *
- * The following decisions MUST NOT be made by this grammar:
- *
- *     - whether a key is recognized;
- *     - whether a key is deprecated;
- *     - whether a key is duplicated;
- *     - whether a value has the expected type;
- *     - whether a value is within a valid range;
- *     - whether a resource exists;
- *     - whether a capability exists;
- *     - whether a target exists;
- *     - whether a device exists;
- *     - whether a QPU supports an operation;
- *     - whether a hardware resource is available;
- *     - whether a metadata request is satisfiable;
- *     - whether metadata changes compilation;
- *     - whether metadata changes optimization;
- *     - whether metadata changes scheduling;
- *     - whether metadata changes routing;
- *     - whether metadata is propagated into IR.
- *
- * Those decisions belong to semantic analysis and the owning subsystem.
- *
- * ============================================================================
- * IR INTEGRATION
- * ============================================================================
- *
- * Metadata may eventually be lowered into:
- *
- *     frontend AST metadata
+ *     metadata.g4
+ *         |
+ *         +--> generic reusable metadata-value structure
  *         |
  *         v
- *     semantic metadata model
+ *     attributes.g4
  *         |
- *         +--> canonical semantic IR
- *         |
- *         +--> quantum::ir metadata where applicable
- *         +--> classical IR metadata
- *         +--> hardware/HDL metadata
- *         +--> compilation provenance
+ *         +--> attribute attachment and attribute-specific argument structure
  *
- * The grammar MUST NOT construct any IR.
+ * The attribute grammar must not create a competing metadata authority.
  *
- * In particular:
+ * During the composition migration, attribute consumers should use the
+ * canonical metadata value productions wherever the semantic contract says
+ * that an attribute argument is metadata rather than an expression.
  *
- *     grammar -> quantum::ir
- *
- * is forbidden.
- *
- * The correct direction is:
- *
- *     grammar
- *       -> AST
- *       -> semantic metadata
- *       -> canonical IR
- *       -> domain IR
+ * Attribute attachment remains exclusively owned by attributes.g4.
  *
  * ============================================================================
- * QUANTUM INTEGRATION
+ * ANNOTATION INTEGRATION
  * ============================================================================
  *
- * Quantum metadata can express source-level information such as:
+ * `grammar/core/annotations.g4` remains responsible for annotation syntax and
+ * attachment policy.
  *
- *     logical
- *     error_correction
- *     observable
- *     capability
- *     resource
- *     provenance
- *     measurement
+ * Annotation payloads may consume:
  *
- * without this grammar defining the semantics of those concepts.
+ *     metadata
+ *     metadataValue
+ *     metadataObject
+ *     metadataArray
  *
- * No metadata production contains:
+ * according to the annotation specification.
  *
- *     qubit_count
- *     physical_qubit_count
- *     topology_count
- *     gate-set count
- *     device count
- *     backend count
- *
- * as fixed language restrictions.
- *
- * Values containing such names are ordinary metadata until semantic analysis
- * gives them meaning.
- *
- * `quantum::ir` remains the canonical quantum semantic boundary.
+ * This file must not add annotation markers.
  *
  * ============================================================================
- * HARDWARE / HDL INTEGRATION
+ * PRAGMA INTEGRATION
  * ============================================================================
  *
- * Hardware metadata may describe:
+ * `grammar/core/pragmas.g4` owns pragma syntax.
  *
- *     capabilities
- *     interfaces
- *     timing intent
- *     resource requirements
- *     implementation hints
- *     portability requirements
+ * Pragma payloads may use metadata values where specified.
  *
- * without selecting a physical device.
- *
- * Physical mapping belongs to:
- *
- *     hardware abstraction
- *     target selection
- *     placement
- *     routing
- *     scheduling
- *     runtime
+ * Metadata must remain a payload grammar and must not become a second pragma
+ * grammar.
  *
  * ============================================================================
  * RESOURCE / CAPABILITY INTEGRATION
  * ============================================================================
  *
- * Metadata may carry structured descriptions of:
+ * Resource and capability grammars may consume metadata to represent
+ * extensible source descriptions.
  *
- *     requirement
- *     constraint
- *     preference
- *     hint
- *     capability
- *     resource
+ * Example structural intent:
  *
- * These concepts MUST remain semantically distinct.
+ *     {
+ *         capability = quantum::measurement,
+ *         resource = memory
+ *     }
  *
- * The grammar only represents their structure.
+ * The metadata parser does not determine:
  *
- * ============================================================================
- * PROVENANCE INTEGRATION
- * ============================================================================
+ *     whether memory exists;
+ *     how much memory exists;
+ *     which device provides it;
+ *     whether quantum measurement is available;
+ *     whether a target satisfies the request.
  *
- * Metadata is suitable for source-level provenance such as:
- *
- *     source identity
- *     language version
- *     dialect identity
- *     generator identity
- *     transformation information
- *     reproducibility information
- *
- * The grammar does not generate timestamps, hashes, UUIDs, or machine state.
- *
- * Such values are supplied by the appropriate semantic/toolchain layer.
+ * Those decisions belong to semantic/resource/capability analysis.
  *
  * ============================================================================
- * DETERMINISM
+ * CONTRACT / POLICY INTEGRATION
  * ============================================================================
  *
- * This grammar contains:
+ * Contract and policy systems may store structured metadata containing:
  *
- *     - no semantic predicates;
- *     - no embedded actions;
- *     - no filesystem access;
- *     - no network access;
- *     - no runtime discovery;
- *     - no target discovery;
- *     - no random behavior;
- *     - no hardware-dependent branches.
+ *     requirements
+ *     assumptions
+ *     guarantees
+ *     constraints
+ *     preferences
+ *     prohibitions
+ *     fallbacks
+ *     evidence
+ *     provenance
  *
- * Given the same token stream, parsing is deterministic.
+ * The metadata grammar only represents their structural values.
  *
- * ============================================================================
- * SCALABILITY
- * ============================================================================
- *
- * There are intentionally no grammar-level constants such as:
- *
- *     MAX_METADATA_ENTRIES
- *     MAX_METADATA_DEPTH
- *     MAX_METADATA_KEYS
- *     MAX_METADATA_ARRAY_ELEMENTS
- *     MAX_METADATA_VALUE_SIZE
- *     MAX_METADATA_OBJECT_FIELDS
- *
- * Repetition uses ANTLR repetition operators.
- *
- * Actual implementation limits may be imposed by:
- *
- *     memory availability
- *     compiler resource policy
- *     parser resource policy
- *     operating-system limits
- *
- * Such limits must remain configurable and must not become language semantics.
+ * Contract and policy semantics remain outside this file.
  *
  * ============================================================================
- * ERROR HANDLING
+ * AI / REASONING / LEARNING INTEGRATION
  * ============================================================================
  *
- * Parser diagnostics should distinguish:
+ * The same metadata structure may describe:
  *
- *     missing metadata key
- *     missing assignment
- *     missing metadata value
- *     malformed object
- *     malformed array
- *     malformed tuple
- *     malformed tagged value
- *     unexpected trailing comma where the surrounding construct forbids it
+ *     reasoning metadata
+ *     knowledge metadata
+ *     learning metadata
+ *     adaptation metadata
+ *     uncertainty metadata
+ *     evidence metadata
+ *     explanation metadata
+ *     decision metadata
+ *     agent metadata
+ *     model metadata
+ *     dataset metadata
+ *     provenance metadata
  *
- * Semantic diagnostics should separately handle:
+ * No application-specific keyword is necessary.
  *
- *     unknown metadata key
- *     invalid metadata schema
- *     duplicate metadata key
- *     incompatible value type
- *     unsupported metadata feature
- *     invalid resource/capability request
- *
- * ============================================================================
- * COMPATIBILITY
- * ============================================================================
- *
- * This grammar deliberately uses canonical token names from ZamaniLexer rather
- * than inventing metadata-specific lexical tokens.
- *
- * Existing lexer ownership remains authoritative.
- *
- * Existing annotation/attribute syntax can consume this metadata model without
- * changing the lexical architecture.
- *
- * The older `grammar/antlr/Meta.g4` remains a separate metaprogramming grammar
- * and must not become the owner of generic metadata values.
+ * New models, algorithms, domains, frameworks, or techniques should generally
+ * be represented as ordinary names, qualified names, metadata tags, or
+ * semantic registrations rather than new core grammar rules.
  *
  * ============================================================================
- * TEST CONTRACT
+ * QUANTUM INTEGRATION
  * ============================================================================
  *
- * The metadata test suite must cover:
+ * Quantum metadata can use:
  *
- * POSITIVE:
+ *     quantum::...
+ *     capability(...)
+ *     resource(...)
+ *     provenance(...)
+ *     evidence(...)
  *
- *     key = 1
- *     key = "value"
- *     key = true
- *     key = null
- *     key = namespace::value
- *     key = [1, 2, 3]
- *     key = {a = 1, b = 2}
- *     key = (1, 2)
- *     key = capability(cpu)
- *     key = capability("quantum")
- *     key = resource({kind = "quantum"})
+ * without changing this grammar.
  *
- * CROSS-DOMAIN:
+ * New quantum operations do not require new metadata rules.
  *
- *     classical metadata
- *     quantum metadata
- *     hybrid metadata
- *     HDL metadata
- *     hardware metadata
- *     distributed metadata
- *     AI/data metadata
+ * The grammar remains independent of:
  *
- * SCALABILITY:
+ *     physical qubit count
+ *     logical qubit count
+ *     QPU count
+ *     topology
+ *     calibration
+ *     routing
+ *     scheduling
+ *     error-correction implementation
+ *     backend identity
  *
- *     many entries
- *     many nested structures
- *     many qualified-name segments
- *     many array elements
+ * ============================================================================
+ * HDL / HARDWARE INTEGRATION
+ * ============================================================================
  *
- * NEGATIVE:
+ * Hardware and HDL grammars may attach metadata describing:
+ *
+ *     interfaces
+ *     timing intent
+ *     implementation intent
+ *     capabilities
+ *     resource requirements
+ *     portability constraints
+ *     verification information
+ *
+ * The metadata grammar does not define:
+ *
+ *     wire width
+ *     register width
+ *     device count
+ *     memory capacity
+ *     topology dimensions
+ *     physical placement
+ *     synthesis implementation.
+ *
+ * ============================================================================
+ * DISTRIBUTED / NETWORK INTEGRATION
+ * ============================================================================
+ *
+ * Metadata may describe:
+ *
+ *     nodes
+ *     services
+ *     endpoints
+ *     channels
+ *     topology intent
+ *     consistency requirements
+ *     provenance
+ *     security policy
+ *
+ * The parser imposes no finite node, endpoint, channel, or topology limit.
+ *
+ * ============================================================================
+ * INTEROPERABILITY INTEGRATION
+ * ============================================================================
+ *
+ * Metadata may describe external language or data boundaries:
+ *
+ *     language
+ *     dialect
+ *     ABI
+ *     calling convention
+ *     schema
+ *     format
+ *     version
+ *     provenance
+ *
+ * SQL, JSON, XML, C, C++, Rust, WASM, OpenQASM and other external formats
+ * retain their own grammar or interoperability owners.
+ *
+ * Metadata does not become those formats.
+ *
+ * ============================================================================
+ * METAPROGRAMMING INTEGRATION
+ * ============================================================================
+ *
+ * Metadata may describe compile-time or reflective intent.
+ *
+ * It does not itself perform:
+ *
+ *     reflection
+ *     code generation
+ *     execution
+ *     evaluation
+ *     macro expansion
+ *
+ * Those operations remain owned by metaprogramming/compiler subsystems.
+ *
+ * ============================================================================
+ * AST CONTRACT
+ * ============================================================================
+ *
+ * The frontend AST should map these parser contexts into domain-neutral
+ * metadata nodes.
+ *
+ * Conceptually:
+ *
+ *     Metadata
+ *         value
+ *         source_span
+ *
+ *     MetadataLiteral
+ *         token_kind
+ *         source_text
+ *         source_span
+ *
+ *     MetadataReference
+ *         qualified_name
+ *         source_span
+ *
+ *     MetadataKey
+ *         name | string
+ *         source_span
+ *
+ *     MetadataEntry
+ *         key
+ *         value
+ *         source_span
+ *
+ *     MetadataObject
+ *         entries[]
+ *         source_span
+ *
+ *     MetadataArray
+ *         values[]
+ *         source_span
+ *
+ *     MetadataTuple
+ *         values[]
+ *         source_span
+ *
+ *     MetadataTaggedValue
+ *         tag
+ *         values[]
+ *         source_span
+ *
+ * The concrete Rust names may differ.
+ *
+ * The important invariants are:
+ *
+ *     - source order is retained;
+ *     - duplicate entries are retained;
+ *     - nested structure is retained;
+ *     - literal source text is available;
+ *     - qualified-name order is retained;
+ *     - source spans are retained.
+ *
+ * This grammar creates no Rust AST types.
+ *
+ * ============================================================================
+ * SEMANTIC CONTRACT
+ * ============================================================================
+ *
+ * Semantic analysis is responsible for:
+ *
+ *     - metadata schema selection;
+ *     - metadata key resolution;
+ *     - duplicate-key policy;
+ *     - type validation;
+ *     - reference resolution;
+ *     - tag interpretation;
+ *     - capability interpretation;
+ *     - resource interpretation;
+ *     - policy interpretation;
+ *     - contract interpretation;
+ *     - provenance validation;
+ *     - portability validation;
+ *     - target-specific validation.
+ *
+ * A syntactically valid metadata value may therefore still be semantically
+ * invalid.
+ *
+ * ============================================================================
+ * TYPE CONTRACT
+ * ============================================================================
+ *
+ * The parser does not assign machine representation to literals.
+ *
+ * For example:
+ *
+ *     42
+ *
+ * does not imply:
+ *
+ *     32-bit
+ *     64-bit
+ *     native machine integer
+ *
+ * Likewise:
+ *
+ *     1.0
+ *
+ * does not imply a particular floating-point representation.
+ *
+ * Numeric meaning is established by semantic/type analysis.
+ *
+ * ============================================================================
+ * EFFECT CONTRACT
+ * ============================================================================
+ *
+ * Metadata parsing itself introduces no runtime effect.
+ *
+ * Metadata may later describe a construct that has effects such as:
+ *
+ *     IO
+ *     network
+ *     mutation
+ *     randomness
+ *     measurement
+ *     foreign
+ *     native
+ *     learning
+ *     adaptation
+ *     reflection
+ *     code generation
+ *     simulation
+ *
+ * Those effects belong to the semantic construct being described, not to
+ * generic metadata parsing.
+ *
+ * ============================================================================
+ * CAPABILITY CONTRACT
+ * ============================================================================
+ *
+ * A metadata value containing a capability name does not grant that
+ * capability.
+ *
+ * Example:
+ *
+ *     capability = quantum::measurement
+ *
+ * remains source data.
+ *
+ * Capability resolution and authorization occur downstream.
+ *
+ * ============================================================================
+ * RESOURCE CONTRACT
+ * ============================================================================
+ *
+ * A numeric metadata value does not reserve or consume a resource.
+ *
+ * Example:
+ *
+ *     memory = 1024
+ *
+ * remains metadata until a semantic schema assigns meaning to it.
+ *
+ * Resource feasibility belongs to resource analysis and target realization.
+ *
+ * ============================================================================
+ * PROVENANCE CONTRACT
+ * ============================================================================
+ *
+ * Metadata may carry provenance values.
+ *
+ * The parser preserves them.
+ *
+ * It does not assert their truthfulness.
+ *
+ * Trust, verification, signatures, hashes, timestamps and provenance chains
+ * are downstream concerns.
+ *
+ * ============================================================================
+ * IR CONTRACT
+ * ============================================================================
+ *
+ * This grammar creates NO IR.
+ *
+ * The permitted pipeline is:
+ *
+ *     metadata syntax
+ *          ->
+ *     domain-neutral AST
+ *          ->
+ *     semantic metadata
+ *          ->
+ *     canonical semantic model
+ *          ->
+ *     domain representation
+ *
+ * Depending on meaning, metadata may eventually contribute to:
+ *
+ *     classical representation
+ *     quantum::ir
+ *     HDL/hardware representation
+ *     distributed representation
+ *     execution metadata
+ *     compilation metadata
+ *     provenance
+ *
+ * There is no:
+ *
+ *     metadata -> quantum::ir
+ *
+ * shortcut.
+ *
+ * ============================================================================
+ * SOURCE / TARGET SEPARATION
+ * ============================================================================
+ *
+ * Metadata may describe target intent without selecting a target.
+ *
+ * Example:
+ *
+ *     target = hardware::accelerator
+ *
+ * is structurally valid metadata.
+ *
+ * It does not mean that:
+ *
+ *     a specific accelerator exists;
+ *     the accelerator is selected;
+ *     the accelerator is available;
+ *     the program must be rewritten for that accelerator.
+ *
+ * Target realization remains downstream.
+ *
+ * ============================================================================
+ * SCALABILITY CONTRACT
+ * ============================================================================
+ *
+ * All structural repetition is expressed with ANTLR repetition operators.
+ *
+ * There are no artificial finite limits on:
+ *
+ *     entry count
+ *     array count
+ *     tuple count
+ *     nesting
+ *     name qualification
+ *     metadata values
+ *
+ * Therefore the language structure remains open-ended with respect to:
+ *
+ *     tiny programs
+ *     large programs
+ *     embedded systems
+ *     multicore systems
+ *     accelerators
+ *     GPUs
+ *     FPGAs
+ *     ASICs
+ *     QPUs
+ *     simulators
+ *     HPC systems
+ *     clusters
+ *     distributed systems
+ *     cloud systems
+ *     future computational targets
+ *
+ * Actual limits are implementation/resource limits, not grammar semantics.
+ *
+ * ============================================================================
+ * ERROR CONTRACT
+ * ============================================================================
+ *
+ * Parser-level errors include:
+ *
+ *     - missing metadata key;
+ *     - missing assignment;
+ *     - missing metadata value;
+ *     - malformed object;
+ *     - malformed array;
+ *     - malformed tuple;
+ *     - malformed tagged value;
+ *     - missing closing delimiter;
+ *     - invalid separator placement.
+ *
+ * Semantic errors include:
+ *
+ *     - unknown metadata key;
+ *     - invalid schema;
+ *     - duplicate key where prohibited;
+ *     - invalid value type;
+ *     - unresolved reference;
+ *     - invalid tag;
+ *     - unsupported metadata version;
+ *     - invalid capability;
+ *     - invalid resource request;
+ *     - invalid policy;
+ *     - invalid provenance.
+ *
+ * Parser and semantic diagnostics must remain distinct.
+ *
+ * ============================================================================
+ * NEGATIVE EXAMPLES
+ * ============================================================================
+ *
+ * These must fail structurally where used as metadata values:
  *
  *     = value
  *     key =
@@ -1282,60 +1640,434 @@ metadata
  *     key = capability(
  *     { key = 1
  *     [1, 2
+ *     (1, 2
  *
- * SOURCE-PRESERVATION:
+ * These are semantic concerns rather than parser concerns:
  *
- *     preserve key spelling
- *     preserve qualified-name order
- *     preserve literal spelling
- *     preserve list/object order
- *     preserve duplicate entries
- *     preserve source spans
+ *     unknown_key = value
+ *     duplicate_key = ...
+ *     unavailable_capability = ...
+ *     impossible_resource = ...
  *
- * DETERMINISM:
+ * ============================================================================
+ * POSITIVE EXAMPLES
+ * ============================================================================
  *
- *     identical source -> identical token sequence
- *     identical token sequence -> identical parse structure
+ * Scalars:
+ *
+ *     42
+ *     1.25
+ *     "Zamani"
+ *     'x'
+ *     true
+ *     false
+ *
+ * Domain literals:
+ *
+ *     |0⟩
+ *     10GiB
+ *     10ms
+ *
+ * References:
+ *
+ *     version
+ *     build::version
+ *     quantum::measurement
+ *
+ * Arrays:
+ *
+ *     []
+ *     [cpu, gpu, accelerator]
+ *     [1, 2, 3,]
+ *
+ * Objects:
+ *
+ *     {}
+ *     {language = "Zamani"}
+ *     {language = "Zamani", version = "1",}
+ *
+ * String keys:
+ *
+ *     {"language" = "Zamani"}
+ *
+ * Tuples:
+ *
+ *     ()
+ *     (value)
+ *     (value,)
+ *     (value1, value2)
+ *
+ * Tagged values:
+ *
+ *     capability(quantum::measurement)
+ *     resource(memory)
+ *     provenance(source::module)
+ *     confidence(0.95)
+ *
+ * Nested structures:
+ *
+ *     {
+ *         capability = quantum::measurement,
+ *         resources = [
+ *             memory,
+ *             accelerator
+ *         ],
+ *         provenance = provenance(source::module)
+ *     }
+ *
+ * ============================================================================
+ * BOUNDARY TEST CONTRACT
+ * ============================================================================
+ *
+ * The test suite must verify:
+ *
+ *     scalar
+ *     reference
+ *     array
+ *     object
+ *     tuple
+ *     tagged value
+ *     nested values
+ *     empty collections
+ *     trailing commas
+ *     qualified names
+ *     string keys
+ *     duplicate keys
+ *     large symbolic values
+ *     cross-domain metadata
+ *
+ * The test suite must also verify that metadata parsing does not accidentally
+ * consume surrounding syntax belonging to:
+ *
+ *     attributes
+ *     annotations
+ *     pragmas
+ *     declarations
+ *     statements
+ *     expressions
+ *     modules
+ *     quantum constructs
+ *     HDL constructs
+ *     resource constructs
+ *     policy constructs
+ *     metaprogramming constructs.
+ *
+ * ============================================================================
+ * SCALABILITY TEST CONTRACT
+ * ============================================================================
+ *
+ * Tests should generate metadata structures with increasing:
+ *
+ *     entry counts
+ *     array sizes
+ *     tuple sizes
+ *     nesting
+ *     qualified-name segments
+ *     tagged-value nesting
+ *
+ * Test sizes are test parameters.
+ *
+ * They MUST NOT be converted into language-level constants.
+ *
+ * The purpose is to demonstrate that increasing resource requirements do not
+ * require grammar redesign.
+ *
+ * ============================================================================
+ * DETERMINISM TEST CONTRACT
+ * ============================================================================
+ *
+ * Verify:
+ *
+ *     identical source
+ *         ->
+ *     identical lexical token sequence
+ *         ->
+ *     equivalent metadata parse structure
+ *
+ * No metadata rule may use:
+ *
+ *     semantic predicates
+ *     randomness
+ *     external state
+ *     mutable global parser state
+ *     runtime callbacks.
+ *
+ * ============================================================================
+ * ROUND-TRIP CONTRACT
+ * ============================================================================
+ *
+ * Where a source printer/formatter exists:
+ *
+ *     source
+ *       ->
+ *     lexer
+ *       ->
+ *     parser
+ *       ->
+ *     AST
+ *       ->
+ *     printer
+ *       ->
+ *     parser
+ *
+ * must preserve metadata semantics.
+ *
+ * In particular:
+ *
+ *     - object entry order;
+ *     - array order;
+ *     - tuple order;
+ *     - duplicate entries;
+ *     - qualified names;
+ *     - tagged values;
+ *     - literal values
+ *
+ * must not be silently discarded.
+ *
+ * ============================================================================
+ * HARD-CODING AUDIT
+ * ============================================================================
+ *
+ * This grammar contains:
+ *
+ *     NO machine-capacity constants.
+ *     NO hardware-size constants.
+ *     NO quantum-resource constants.
+ *     NO metadata cardinality constants.
+ *     NO nesting-depth constants.
+ *     NO identifier-length constants.
+ *     NO numeric-width assumptions.
+ *     NO floating-point-width assumptions.
+ *     NO tensor-rank assumptions.
+ *     NO topology assumptions.
+ *     NO device-count assumptions.
+ *     NO backend assumptions.
+ *     NO vendor assumptions.
+ *
+ * The finite literal token alternatives are lexical categories, not resource
+ * limits.
+ *
+ * ============================================================================
+ * RUST CONTRACT
+ * ============================================================================
+ *
+ * This grammar itself contains no Rust.
+ *
+ * Generated frontend/compiler integration must remain compatible with:
+ *
+ *     Rust 1.97
+ *     Rust 1.97.1
+ *     Rust 2021
+ *
+ * The implementation must use safe Rust.
+ *
+ * No `unsafe` implementation is required or permitted for this feature.
+ *
+ * The grammar must not depend on Rust-specific type widths or memory layout.
+ *
+ * ============================================================================
+ * REPOSITORY INTEGRATION
+ * ============================================================================
+ *
+ * The intended integration chain is:
+ *
+ *     grammar/antlr/ZamaniLexer.g4
+ *                     |
+ *                     v
+ *             canonical token stream
+ *                     |
+ *                     v
+ *              grammar/core/names.g4
+ *                     |
+ *                     v
+ *              grammar/core/metadata.g4
+ *                     |
+ *          +----------+----------+
+ *          |          |          |
+ *          v          v          v
+ *      attributes annotations pragmas
+ *          |          |          |
+ *          +----------+----------+
+ *                     |
+ *                     v
+ *             domain-neutral AST
+ *                     |
+ *                     v
+ *             semantic validation
+ *                     |
+ *       +-------------+-------------+
+ *       |             |             |
+ *       v             v             v
+ *   capabilities   resources    provenance
+ *       |             |             |
+ *       +-------------+-------------+
+ *                     |
+ *                     v
+ *             canonical semantics
+ *                     |
+ *          +----------+----------+
+ *          |          |          |
+ *          v          v          v
+ *      classical  quantum::ir  HDL/hardware
+ *                     |
+ *                     v
+ *              target realization
+ *
+ * The grammar has no dependency on the bottom half of this pipeline.
  *
  * ============================================================================
  * COMPLETION CRITERIA
  * ============================================================================
  *
- * metadata.g4 is complete when:
+ * `metadata.g4` is COMPLETE when:
  *
- *     1. It compiles as an ANTLR parser grammar against the canonical
- *        ZamaniLexer vocabulary.
+ * [x] It is a parser grammar.
  *
- *     2. It introduces no lexer rules.
+ * [x] It uses tokenVocab = ZamaniLexer.
  *
- *     3. It introduces no Rust actions.
+ * [x] It imports Names.
  *
- *     4. It requires no unsafe Rust.
+ * [x] It does not define lexer rules.
  *
- *     5. It owns structured metadata values without owning annotation
- *        attachment syntax.
+ * [x] It does not duplicate identifier syntax.
  *
- *     6. It reuses canonical identifier/qualified-name rules in the final
- *        parser composition.
+ * [x] It does not duplicate qualified-name syntax.
  *
- *     7. It introduces no machine-size or hardware-size limits.
+ * [x] It uses the current canonical numeric token names.
  *
- *     8. It creates no quantum IR.
+ * [x] It uses the current canonical boolean token names.
  *
- *     9. It creates no classical IR.
+ * [x] It uses canonical domain literal tokens.
  *
- *    10. It does not select a hardware backend.
+ * [x] It provides one canonical metadata-value model.
  *
- *    11. It preserves source structure required by the AST.
+ * [x] It represents objects.
  *
- *    12. It supports arbitrarily nested metadata subject only to actual
- *        implementation resources.
+ * [x] It represents arrays.
  *
- *    13. It has positive, negative, boundary, cross-domain, determinism,
- *        and round-trip tests.
+ * [x] It represents tuples.
  *
- *    14. Its integration contract is stable enough that downstream grammar
- *        files do not need to redefine metadata syntax.
+ * [x] It represents symbolic references.
+ *
+ * [x] It represents tagged values.
+ *
+ * [x] It supports string keys.
+ *
+ * [x] It supports arbitrary structural repetition.
+ *
+ * [x] It permits duplicate keys structurally.
+ *
+ * [x] It permits trailing commas in collection forms.
+ *
+ * [x] It does not create an expression language.
+ *
+ * [x] It does not interpret metadata semantics.
+ *
+ * [x] It does not grant capabilities.
+ *
+ * [x] It does not allocate resources.
+ *
+ * [x] It does not select targets.
+ *
+ * [x] It does not create IR.
+ *
+ * [x] It does not create quantum::ir.
+ *
+ * [x] It does not implement QEC.
+ *
+ * [x] It does not implement ZQN.
+ *
+ * [x] It does not implement HAL.
+ *
+ * [x] It contains no machine-size limits.
+ *
+ * [x] It contains no metadata-size limits.
+ *
+ * [x] It contains no Rust actions.
+ *
+ * [x] It requires no unsafe Rust.
+ *
+ * [x] It is independent of target hardware.
+ *
+ * [x] It has a defined AST contract.
+ *
+ * [x] It has a defined semantic contract.
+ *
+ * [x] It has a defined IR boundary.
+ *
+ * [x] It has a defined testing contract.
+ *
+ * [x] It has a defined compatibility contract.
+ *
+ * [x] It has a defined scalability contract.
+ *
+ * [x] It has a defined repository integration contract.
+ *
+ * Remaining repository verification:
+ *
+ * [ ] ANTLR generation succeeds.
+ *
+ * [ ] The `Names` import resolves in the configured grammar source path.
+ *
+ * [ ] `ZamaniParser.g4` receives the metadata rules through the canonical
+ *     Core composition grammar.
+ *
+ * [ ] Attribute integration uses the canonical metadata-value structure where
+ *     appropriate.
+ *
+ * [ ] AST conversion preserves all required source structure.
+ *
+ * [ ] Positive metadata tests pass.
+ *
+ * [ ] Negative metadata tests pass.
+ *
+ * [ ] Boundary tests pass.
+ *
+ * [ ] Cross-domain tests pass.
+ *
+ * [ ] Scalability tests pass within available implementation resources.
+ *
+ * [ ] Determinism tests pass.
+ *
+ * [ ] Round-trip tests pass where formatter infrastructure exists.
+ *
+ * ============================================================================
+ * FINAL INVARIANT
+ * ============================================================================
+ *
+ * Metadata is a universal STRUCTURAL DATA mechanism.
+ *
+ * It is not:
+ *
+ *     a runtime;
+ *     a policy engine;
+ *     a capability allocator;
+ *     a resource allocator;
+ *     an AI language;
+ *     a quantum language;
+ *     an HDL language;
+ *     a hardware backend;
+ *     an IR;
+ *     a target selector.
+ *
+ * Its purpose is to provide one extensible, source-preserving structure that
+ * can carry information across the complete Zamani architecture without
+ * encoding the accidental limitations of a particular implementation or
+ * machine.
+ *
+ * Therefore:
+ *
+ *     source metadata
+ *          ->
+ *     domain-neutral AST
+ *          ->
+ *     semantic interpretation
+ *          ->
+ *     target-independent semantic representation
+ *          ->
+ *     target realization
+ *
+ * remains the invariant.
  *
  * ============================================================================
  */
