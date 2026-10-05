@@ -7,9 +7,13 @@
  * ----
  * grammar/statements/reason.g4
  *
+ * GRAMMAR
+ * -------
+ * ReasonStatements
+ *
  * STATUS
  * ------
- * PRODUCTION-READY STATEMENT GRAMMAR
+ * PRODUCTION-READY UNIVERSAL REASONING STATEMENT COMPOSITION
  *
  * IMPLEMENTATION BASELINE
  * -----------------------
@@ -25,101 +29,106 @@
  * PURPOSE
  * ============================================================================
  *
- * This file owns the statement-level syntax for generic reasoning intent.
+ * This file owns the statement-level syntax for Zamani's generic reasoning
+ * family:
  *
- * The canonical source forms are:
+ *     infer
+ *     deduce
+ *     reason
  *
- *     infer TARGET;
- *     deduce TARGET;
- *     reason TARGET;
+ * These constructs express PORTABLE COMPUTATIONAL INTENT.
  *
- * and:
+ * They do not select:
  *
- *     infer TARGET from SOURCE;
- *     deduce TARGET from SOURCE;
- *     reason TARGET from SOURCE;
+ *     reasoning algorithms
+ *     theorem provers
+ *     rule engines
+ *     knowledge stores
+ *     machine-learning implementations
+ *     probabilistic engines
+ *     causal engines
+ *     hardware
+ *     CPU
+ *     GPU
+ *     FPGA
+ *     ASIC
+ *     QPU
+ *     simulator
+ *     accelerator
+ *     distributed topology
+ *     scheduler
+ *     runtime
+ *     backend
  *
- * and:
- *
- *     infer TARGET with (OPTION, OPTION);
- *     deduce TARGET with (OPTION, OPTION);
- *     reason TARGET with (OPTION, OPTION);
- *
- * and the combined form:
- *
- *     infer TARGET from SOURCE with (OPTION, OPTION);
- *     deduce TARGET from SOURCE with (OPTION, OPTION);
- *     reason TARGET from SOURCE with (OPTION, OPTION);
- *
- * This grammar expresses reasoning INTENT only.
- *
- * It does not define:
- *
- *     - a reasoning algorithm;
- *     - a theorem prover;
- *     - a knowledge database;
- *     - a machine-learning framework;
- *     - a probabilistic engine;
- *     - a causal engine;
- *     - a symbolic engine;
- *     - a model implementation;
- *     - a hardware accelerator;
- *     - a CPU/GPU/FPGA/QPU implementation;
- *     - a target device;
- *     - a physical resource;
- *     - a runtime;
- *     - an IR.
- *
- * Those concerns belong to semantic analysis, capabilities, resources,
- * policies, execution planning, libraries, dialects and downstream IR.
+ * Those decisions belong to semantic analysis, capability analysis,
+ * resource negotiation, policy evaluation, execution planning and
+ * downstream IR/lowering.
  *
  * ============================================================================
  * ARCHITECTURAL POSITION
  * ============================================================================
  *
- *                         Zamani source
- *                              |
- *                              v
- *                         ZamaniLexer
- *                              |
- *                              v
- *                         ZamaniParser
- *                              |
- *                              v
- *                    Statements composition
- *                              |
- *                              v
- *                         reason.g4
- *                              |
- *                              v
- *                    domain-neutral frontend AST
- *                              |
- *                              v
- *                    structural validation
- *                              |
- *                              v
- *                      semantic analysis
- *                              |
- *             +----------------+----------------+
- *             |                |                |
- *             v                v                v
- *          classical       quantum::ir       other domains
- *             |                |                |
- *             +----------------+----------------+
- *                              |
- *                              v
- *                         optimization
- *                              |
- *                              v
- *                     lowering / scheduling
- *                              |
- *                              v
- *                       target realization
- *
- * Reasoning therefore remains above physical realization.
+ *     source
+ *       |
+ *       v
+ *     ZamaniLexer
+ *       |
+ *       v
+ *     ZamaniParser
+ *       |
+ *       v
+ *     statement composition
+ *       |
+ *       v
+ *     reasonStatement
+ *       |
+ *       v
+ *     domain-neutral AST
+ *       |
+ *       +--> structural validation
+ *       +--> name/type analysis
+ *       +--> effect analysis
+ *       +--> capability analysis
+ *       +--> resource analysis
+ *       +--> contract analysis
+ *       +--> policy analysis
+ *       +--> provenance
+ *       |
+ *       v
+ *     semantic reasoning operation
+ *       |
+ *       +--> classical realization
+ *       +--> quantum semantic realization
+ *       +--> hybrid realization
+ *       +--> AI/model realization
+ *       +--> distributed realization
+ *       +--> accelerator realization
+ *       +--> future realization
+ *       |
+ *       v
+ *     canonical IR
+ *       |
+ *       +--> classical IR
+ *       +--> quantum::ir
+ *       +--> other canonical domain IR
+ *       |
+ *       v
+ *     optimization
+ *       |
+ *       v
+ *     lowering / specialization
+ *       |
+ *       v
+ *     routing / scheduling
+ *       |
+ *       v
+ *     resilience / recovery
+ *       |
+ *       v
+ *     ZQN / HAL / target realization
  *
  * ============================================================================
- * OWNERSHIP CONTRACT
+ * FEATURE CONTRACT
  * ============================================================================
  *
  * THIS FILE OWNS
@@ -133,158 +142,76 @@
  *     reasoningOptionList
  *     reasoningOption
  *
- * It owns the statement-level composition of:
- *
- *     infer
- *     deduce
- *     reason
- *
  * THIS FILE DOES NOT OWN
  * ----------------------
  *
- *     lexer rules
- *     keyword definitions
- *     punctuation definitions
+ *     statement
+ *     expressions
+ *     expression precedence
  *     identifiers
  *     names
- *     paths
- *     expression precedence
- *     expressions
+ *     literals
  *     types
+ *     patterns
+ *     guards
  *     knowledge storage
- *     knowledge assertions
- *     knowledge retraction
- *     queries
+ *     assertions
+ *     retraction
+ *     query implementation
  *     learning
  *     adaptation
- *     uncertainty semantics
- *     probability semantics
+ *     uncertainty implementation
+ *     probability implementation
  *     evidence storage
- *     provenance implementation
+ *     provenance storage
  *     policy implementation
  *     effect implementation
  *     capability implementation
  *     resource allocation
- *     AST implementation
- *     semantic implementation
- *     IR implementation
- *     runtime execution
+ *     quantum operations
+ *     quantum routing
+ *     quantum error correction
+ *     HDL
  *     hardware realization
+ *     distributed execution
+ *     networking
+ *     FFI
+ *     ABI
+ *     runtime execution
+ *     IR generation
  *
  * ============================================================================
- * SINGLE OWNER RULE
+ * PUBLIC API
  * ============================================================================
  *
- * This file owns the statement-level rule:
+ * Public parser entry:
  *
  *     reasonStatement
  *
- * It MUST NOT define the universal:
+ * Public supporting rules:
  *
- *     statement
+ *     reasoningOperator
+ *     reasoningTarget
+ *     reasoningSourceClause
+ *     reasoningContextClause
+ *     reasoningOptionList
+ *     reasoningOption
  *
- * rule.
- *
- * The universal statement rule remains owned exclusively by:
- *
- *     grammar/statements/statements.g4
- *
- * Integration is:
- *
- *     statement
- *         |
- *         +--> reasonStatement
- *                 |
- *                 +--> reasoningOperator
- *                 +--> reasoningTarget
- *                 +--> reasoningSourceClause?
- *                 +--> reasoningContextClause?
- *
- * ============================================================================
- * EXPRESSION OWNERSHIP
- * ============================================================================
- *
- * Reasoning operands are ordinary Zamani expressions.
- *
- * This file deliberately imports:
- *
- *     Expressions
- *
- * and consumes:
- *
- *     expression
- *
- * directly.
- *
- * This is intentional.
- *
- * It prevents this grammar from creating a second expression hierarchy.
- *
- * DO NOT add:
- *
- *     primaryExpression
- *     postfixExpression
- *     unaryExpression
- *     binaryExpression
- *     logicalExpression
- *     arithmeticExpression
- *     assignmentExpression
- *
- * here.
- *
- * Those belong to:
- *
- *     grammar/expressions/
- *
- * ============================================================================
- * CRITICAL DEPENDENCY RULE
- * ============================================================================
- *
- * Dependency direction:
- *
- *     Expressions
- *          ^
- *          |
- *     reason.g4
- *          |
- *          v
- *     Statements
- *
- * More precisely, the canonical statement composition grammar imports this
- * grammar, while this grammar imports the canonical expression composition
- * grammar.
- *
- * Therefore:
- *
- *     reason.g4 -> Expressions
- *
- * is valid.
- *
- * This grammar MUST NOT import:
- *
- *     Statements
- *
- * because Statements imports this file.
- *
- * It MUST NOT import:
- *
- *     grammar/statements/statements.g4
- *
- * or any universal statement composition grammar.
+ * No universal `statement` rule is defined here.
  *
  * ============================================================================
  * LEXER CONTRACT
  * ============================================================================
  *
- * The canonical lexical vocabulary remains:
+ * Lexer authority:
  *
  *     grammar/antlr/ZamaniLexer.g4
  *
- * which composes:
+ * which consumes the canonical lexer composition under:
  *
  *     grammar/lexer/
  *
- * The following tokens are consumed from that vocabulary:
+ * Required tokens:
  *
  *     INFER
  *     DEDUCE
@@ -296,53 +223,73 @@
  *     COMMA
  *     SEMICOLON
  *
- * This file MUST NOT define lexer rules.
- *
- * It MUST NOT introduce alternative spellings such as:
- *
- *     inference
- *     deduction
- *     think
- *     analyze
- *
- * merely to enlarge the keyword vocabulary.
+ * This parser grammar defines NO lexer rules.
  *
  * ============================================================================
- * REASONING MODEL
+ * GRAMMAR DEPENDENCIES
  * ============================================================================
  *
- * The three source operators:
+ * DEPENDS_ON:
  *
- *     infer
- *     deduce
- *     reason
+ *     grammar/antlr/ZamaniLexer.g4
+ *     grammar/expressions/expressions.g4
  *
- * intentionally converge on one semantic concept:
+ * IMPORTS:
  *
- *     reasoning operation
+ *     Expressions
  *
- * Their lexical distinction is preserved in the parse tree so semantic
- * analysis can distinguish the requested operation kind.
+ * EXPORTS:
  *
- * The semantic layer may represent:
+ *     reasonStatement
+ *     reasoningOperator
+ *     reasoningTarget
+ *     reasoningSourceClause
+ *     reasoningContextClause
+ *     reasoningOptionList
+ *     reasoningOption
  *
- *     Infer
- *     Deduce
- *     Reason
+ * CONSUMED_BY:
  *
- * without creating three unrelated semantic systems.
+ *     grammar/statements/statements.g4
  *
  * ============================================================================
- * REASONING TARGET
+ * DEPENDENCY DIRECTION
  * ============================================================================
  *
- * The target is a normal Zamani expression.
+ * The dependency graph MUST remain:
+ *
+ *     ReasonStatements
+ *          |
+ *          v
+ *     Expressions
+ *
+ * while:
+ *
+ *     Statements
+ *          |
+ *          v
+ *     ReasonStatements
+ *
+ * Therefore this file MUST NOT import:
+ *
+ *     Statements
+ *
+ * or any grammar that imports the universal statement composition.
+ *
+ * This prevents circular grammar dependencies.
+ *
+ * ============================================================================
+ * EXPRESSION CONTRACT
+ * ============================================================================
+ *
+ * Reasoning operands are ordinary Zamani expressions.
+ *
+ * This means the reasoning grammar automatically supports whatever the
+ * canonical expression grammar supports, including future expressions.
  *
  * Examples:
  *
  *     infer hypothesis;
- *
- *     infer hypothesis + evidence;
  *
  *     infer model(input);
  *
@@ -352,59 +299,183 @@
  *
  *     infer tensor[index];
  *
- *     infer distributed_value;
- *
- *     infer hardware_observation;
- *
  *     infer quantum_result;
  *
- * The parser does not determine what the target means.
+ *     infer distributed_value;
  *
- * Semantic analysis determines:
+ *     deduce conclusion from premises;
  *
- *     - target type;
- *     - target domain;
- *     - target provenance;
- *     - target capabilities;
- *     - target effects;
- *     - target resource requirements.
+ *     reason decision from observations;
+ *
+ * The reasoning grammar MUST NOT recreate:
+ *
+ *     primaryExpression
+ *     postfixExpression
+ *     unaryExpression
+ *     binaryExpression
+ *     logicalExpression
+ *     arithmeticExpression
+ *     callExpression
+ *     indexingExpression
+ *     memberExpression
+ *
+ * Those belong exclusively to:
+ *
+ *     grammar/expressions/
  *
  * ============================================================================
- * SOURCE / EVIDENCE CLAUSE
+ * CANONICAL SOURCE FORMS
  * ============================================================================
  *
- * The optional `from` clause identifies an expression that supplies source
- * information, evidence, premises or observations.
+ * Minimal:
+ *
+ *     infer TARGET;
+ *     deduce TARGET;
+ *     reason TARGET;
+ *
+ * With source:
+ *
+ *     infer TARGET from SOURCE;
+ *     deduce TARGET from SOURCE;
+ *     reason TARGET from SOURCE;
+ *
+ * With context:
+ *
+ *     infer TARGET with (OPTION);
+ *     deduce TARGET with (OPTION);
+ *     reason TARGET with (OPTION);
+ *
+ * Combined:
+ *
+ *     infer TARGET from SOURCE with (OPTION);
+ *     deduce TARGET from SOURCE with (OPTION);
+ *     reason TARGET from SOURCE with (OPTION);
+ *
+ * ============================================================================
+ * CLAUSE ORDER
+ * ============================================================================
+ *
+ * Canonical order is:
+ *
+ *     OPERATOR
+ *     TARGET
+ *     SOURCE?
+ *     CONTEXT?
+ *     TERMINATOR
+ *
+ * Therefore:
+ *
+ *     reason target from source with (context);
+ *
+ * is valid.
+ *
+ * The following is intentionally invalid:
+ *
+ *     reason target with (context) from source;
+ *
+ * There is exactly one canonical ordering.
+ *
+ * This reduces syntactic ambiguity and simplifies:
+ *
+ *     AST generation
+ *     formatting
+ *     tooling
+ *     diagnostics
+ *     compatibility
+ *     source-to-source transformation
+ *
+ * ============================================================================
+ * OPERATOR SEMANTICS
+ * ============================================================================
+ *
+ * The three operators:
+ *
+ *     infer
+ *     deduce
+ *     reason
+ *
+ * belong to one semantic reasoning family.
+ *
+ * They MUST NOT create three unrelated reasoning implementations.
+ *
+ * The parser preserves the source operator so semantic analysis can distinguish
+ * the requested reasoning intent.
+ *
+ * The semantic layer may represent the operation kind as:
+ *
+ *     Infer
+ *     Deduce
+ *     Reason
+ *
+ * while sharing the common reasoning representation.
+ *
+ * ============================================================================
+ * TARGET CONTRACT
+ * ============================================================================
+ *
+ * A reasoning target is mandatory.
+ *
+ * Valid:
+ *
+ *     infer conclusion;
+ *
+ *     deduce result;
+ *
+ *     reason decision;
+ *
+ * Invalid:
+ *
+ *     infer;
+ *
+ *     deduce;
+ *
+ *     reason;
+ *
+ * The grammar checks only syntactic presence.
+ *
+ * Semantic analysis determines whether the expression is actually valid as a
+ * reasoning target.
+ *
+ * ============================================================================
+ * SOURCE CONTRACT
+ * ============================================================================
+ *
+ * `from` introduces one complete expression.
  *
  * Examples:
  *
  *     infer conclusion from evidence;
  *
- *     deduce result from knowledge.query(pattern);
+ *     deduce result from premises;
  *
  *     reason decision from measurement;
  *
- *     infer result from model(input);
+ *     infer answer from knowledge.query(pattern);
  *
- * The grammar does not require the source to be:
+ *     deduce state_property from quantum_result;
  *
- *     a file;
- *     a database;
- *     a knowledge graph;
- *     a model;
- *     a network;
- *     a quantum measurement;
- *     a classical value;
- *     a hardware observation.
+ * The source may represent:
  *
- * All such interpretation belongs downstream.
+ *     premises
+ *     facts
+ *     evidence
+ *     observations
+ *     measurements
+ *     model output
+ *     knowledge
+ *     simulation results
+ *     hardware observations
+ *     distributed results
+ *     computed values
+ *     quantum-derived values
+ *
+ * No source category is hard-coded into this grammar.
  *
  * ============================================================================
- * CONTEXT CLAUSE
+ * CONTEXT CONTRACT
  * ============================================================================
  *
- * The optional `with (...)` clause supplies an ordered list of ordinary
- * expressions that provide reasoning context.
+ * `with (...)` supplies ordered reasoning context.
  *
  * Examples:
  *
@@ -416,104 +487,51 @@
  *
  *     reason conclusion with (strategy, evidence, policy);
  *
- * No closed vocabulary is created for context options.
- *
- * Therefore future concepts such as:
+ * Context expressions may semantically represent:
  *
  *     strategy
  *     evidence
  *     confidence
- *     provenance
  *     model
- *     knowledge
  *     policy
+ *     provenance
  *     constraints
+ *     assumptions
  *     resource preferences
- *     deterministic mode
+ *     deterministic execution requirements
+ *     domain-specific context
  *
- * can be represented without adding another core keyword, provided their
- * semantic expressions are otherwise valid.
- *
- * ============================================================================
- * OPTION LIST
- * ============================================================================
- *
- * The option list is deliberately open-ended:
- *
- *     reasoningOption (',' reasoningOption)*
- *
- * There is no fixed option-count ceiling.
- *
- * A trailing comma is deliberately NOT accepted.
- *
- * Therefore:
- *
- *     with (a, b)
- *
- * is valid.
- *
- * while:
- *
- *     with (a, b,)
- *
- * is rejected.
- *
- * This avoids accepting accidental incomplete option entries and gives a
- * deterministic grammar boundary.
- *
- * ============================================================================
- * CLAUSE ORDER
- * ============================================================================
- *
- * The canonical clause order is:
- *
- *     TARGET
- *     SOURCE?
- *     CONTEXT?
- *
- * Therefore:
- *
- *     infer target;
- *
- *     infer target from source;
- *
- *     infer target with (context);
- *
- *     infer target from source with (context);
- *
- * are valid.
- *
- * Reversed ordering is not silently accepted:
- *
- *     infer target with (context) from source;
- *
- * is invalid.
- *
- * This gives one canonical source representation and avoids unnecessary
- * syntactic permutations.
+ * This grammar intentionally does not create a closed context vocabulary.
  *
  * ============================================================================
  * EMPTY CONTEXT
  * ============================================================================
  *
- * The following is intentionally invalid:
+ * This is invalid:
  *
  *     reason target with ();
  *
- * An empty context has no semantic payload and is better represented by
- * omitting the clause entirely.
+ * The context must contain at least one expression.
  *
- * Therefore:
+ * ============================================================================
+ * TRAILING COMMA
+ * ============================================================================
  *
- *     reason target;
+ * This is valid:
  *
- * is canonical.
+ *     reason target with (a, b);
+ *
+ * This is invalid:
+ *
+ *     reason target with (a, b,);
+ *
+ * A trailing comma is not part of the canonical syntax.
  *
  * ============================================================================
  * KNOWLEDGE INTEGRATION
  * ============================================================================
  *
- * Reasoning can consume knowledge operations without owning knowledge syntax.
+ * Reasoning may consume knowledge expressions.
  *
  * Examples:
  *
@@ -521,59 +539,59 @@
  *
  *     reason conclusion from query(source);
  *
- *     deduce fact from evidence;
+ *     deduce fact from observation;
  *
- * Knowledge constructs such as:
+ * Knowledge operations such as:
  *
  *     assert
  *     retract
  *     query
  *
- * remain owned by their appropriate grammar/domain.
+ * remain owned by their respective grammar/semantic subsystems.
  *
- * This file MUST NOT duplicate them.
+ * This file does not duplicate knowledge syntax.
  *
  * ============================================================================
  * LEARNING INTEGRATION
  * ============================================================================
  *
- * Reasoning can consume learned-model results:
+ * Reasoning may consume learned-model results:
  *
  *     infer result from model(input);
  *
  *     reason classification from predictor(value);
  *
- * Learning syntax remains owned by the AI/learning subsystem.
+ * Learning syntax remains owned by the learning subsystem.
  *
- * This file does not define:
- *
- *     train
- *     fit
- *     fine_tune
- *     reinforce
- *     transfer_learning
- *
- * as reasoning statements.
+ * This grammar does not define training algorithms or model architectures.
  *
  * ============================================================================
  * ADAPTATION INTEGRATION
  * ============================================================================
  *
- * Reasoning may produce a value later consumed by adaptation:
+ * Reasoning may produce information subsequently consumed by adaptation:
  *
  *     infer strategy from evidence;
  *
- *     adapt(...);
+ * followed by an adaptation construct elsewhere.
  *
- * Adaptation remains separately governed by:
+ * Reasoning itself does not authorize:
  *
- *     effects
- *     policies
- *     capabilities
- *     resources
+ *     state mutation
+ *     model mutation
+ *     strategy replacement
+ *     self-modification
+ *     resource reallocation
+ *
+ * Those actions require their own:
+ *
+ *     effect
+ *     capability
+ *     resource
+ *     policy
  *     provenance
  *
- * Reasoning does not grant permission to modify program state or models.
+ * validation.
  *
  * ============================================================================
  * UNCERTAINTY INTEGRATION
@@ -582,19 +600,20 @@
  * Reasoning expressions may operate over:
  *
  *     probability
- *     distributions
+ *     distribution
  *     confidence
- *     intervals
+ *     belief
  *     uncertain values
+ *     intervals
  *     symbolic uncertainty
  *
- * This grammar does not impose:
+ * This grammar imposes no:
  *
- *     precision;
- *     probability representation;
- *     number of outcomes;
- *     distribution type;
- *     numerical implementation.
+ *     probability precision
+ *     confidence scale
+ *     distribution size
+ *     numerical representation
+ *     implementation algorithm
  *
  * Those belong to the type and semantic systems.
  *
@@ -609,49 +628,86 @@
  *     simulation
  *     hardware observation
  *     data processing
- *     model inference
+ *     learned models
  *     distributed computation
  *     network services
  *     scientific computation
  *
- * The grammar represents evidence through ordinary expressions.
+ * Evidence is represented through ordinary expressions.
  *
- * Evidence validation and provenance are semantic responsibilities.
+ * Evidence verification and provenance remain semantic responsibilities.
+ *
+ * ============================================================================
+ * EXPLANATION INTEGRATION
+ * ============================================================================
+ *
+ * A reasoning result may later be consumed by an explanation construct.
+ *
+ * The grammar does not require a specific explanation representation.
+ *
+ * Explanation, evidence and decision records belong to their respective
+ * semantic systems.
+ *
+ * ============================================================================
+ * CONTRACT INTEGRATION
+ * ============================================================================
+ *
+ * Reasoning may occur under:
+ *
+ *     requires
+ *     ensures
+ *     invariant
+ *     assume
+ *     guarantee
+ *     property
+ *
+ * contracts.
+ *
+ * This file does not duplicate contract grammar.
+ *
+ * Contract ownership remains under:
+ *
+ *     grammar/validation/
+ *
+ * Semantic validation determines whether the reasoning operation satisfies
+ * applicable contracts.
  *
  * ============================================================================
  * POLICY INTEGRATION
  * ============================================================================
  *
- * Reasoning may be constrained by:
+ * Reasoning may be governed by:
  *
  *     security policy
  *     privacy policy
- *     resource policy
- *     execution policy
  *     evidence policy
+ *     execution policy
+ *     resource policy
  *     model policy
  *     determinism policy
  *     adaptation policy
  *
- * This grammar does not evaluate policies.
+ * Policies are not evaluated by the parser.
  *
- * Valid syntax does not imply permission to execute the reasoning operation.
+ * Valid syntax does NOT imply authorization.
  *
  * ============================================================================
  * EFFECT INTEGRATION
  * ============================================================================
  *
- * Reasoning may have effects such as:
+ * Reasoning may acquire effects during semantic analysis, including:
  *
- *     reasoning
+ *     computation
  *     knowledge.read
  *     model.inference
  *     randomness
  *     network
  *     external.io
  *     measurement
- *
- * depending on semantic resolution.
+ *     distributed
+ *     simulation
+ *     foreign
+ *     native
  *
  * The grammar does not declare or infer effects.
  *
@@ -662,18 +718,23 @@
  * Semantic analysis may derive requirements such as:
  *
  *     capability("reasoning")
+ *     capability("reasoning.inference")
+ *     capability("reasoning.deduction")
  *     capability("knowledge.query")
  *     capability("model.inference")
  *     capability("probabilistic.compute")
  *     capability("quantum.measurement")
+ *     capability("distributed.compute")
  *
- * The grammar does not resolve capability availability.
+ * Capability names remain open-ended semantic data.
+ *
+ * This grammar does not enumerate hardware capabilities.
  *
  * ============================================================================
  * RESOURCE INTEGRATION
  * ============================================================================
  *
- * Reasoning may require resources such as:
+ * Reasoning may require arbitrary resources:
  *
  *     compute
  *     memory
@@ -681,571 +742,655 @@
  *     communication
  *     accelerator resources
  *     quantum resources
+ *     distributed resources
  *     model resources
  *
- * Those requirements belong to the canonical resource system.
+ * Resource feasibility belongs downstream.
  *
- * This grammar MUST NOT introduce:
+ * This file MUST NOT define language-level limits such as:
  *
- *     MAX_REASONING_DEPTH
- *     MAX_REASONING_STEPS
- *     MAX_FACTS
- *     MAX_EVIDENCE
- *     MAX_CONTEXT
- *     MAX_MODELS
- *     MAX_MEMORY
- *     MAX_CPUS
- *     MAX_GPUS
- *     MAX_QUBITS
- *     MAX_NODES
- *
- * or any equivalent language-level ceiling.
+ *     maximum reasoning depth
+ *     maximum premise count
+ *     maximum evidence count
+ *     maximum context count
+ *     maximum model count
+ *     maximum memory
+ *     maximum CPU count
+ *     maximum GPU count
+ *     maximum QPU count
+ *     maximum node count
  *
  * ============================================================================
- * DETERMINISM
+ * QUANTUM INTEGRATION
  * ============================================================================
  *
- * Parsing is deterministic.
+ * Reasoning may consume values produced by quantum computation:
  *
- * Identical:
+ *     infer result from measurement_result;
  *
- *     source token stream
- *     grammar version
- *     parser configuration
+ *     reason decision from quantum_result;
  *
- * MUST produce equivalent parse-tree structure.
+ *     deduce property from measured_state;
  *
- * Parsing MUST NOT depend on:
+ * This file does not define quantum operations.
  *
- *     wall-clock time
- *     randomness
- *     filesystem state
- *     network state
- *     hardware state
- *     device discovery
- *     target availability
- *     runtime state
- *     scheduler state
+ * Quantum syntax remains owned by:
  *
- * Runtime reasoning may be nondeterministic.
+ *     grammar/quantum/
  *
- * Such nondeterminism is a semantic/effect/runtime property, not a parser
- * property.
+ * and the canonical quantum semantic boundary remains:
+ *
+ *     AST
+ *       ->
+ *     quantum semantic model
+ *       ->
+ *     quantum::ir
+ *       ->
+ *     optimization
+ *       ->
+ *     decomposition
+ *       ->
+ *     routing
+ *       ->
+ *     scheduling
+ *       ->
+ *     QEC / resilience
+ *       ->
+ *     ZQN
+ *       ->
+ *     HAL
+ *       ->
+ *     target
+ *
+ * No reasoning-specific quantum IR is introduced here.
  *
  * ============================================================================
- * SECURITY
+ * CLASSICAL INTEGRATION
+ * ============================================================================
+ *
+ * Reasoning may operate entirely over classical values.
+ *
+ * Examples:
+ *
+ *     infer result from calculation;
+ *
+ *     deduce conclusion from premises;
+ *
+ *     reason decision from observation;
+ *
+ * The classical semantic layer remains responsible for type and execution
+ * resolution.
+ *
+ * ============================================================================
+ * HYBRID INTEGRATION
+ * ============================================================================
+ *
+ * Reasoning may bridge classical and quantum information.
+ *
+ * Conceptually:
+ *
+ *     quantum computation
+ *          |
+ *          v
+ *     measurement
+ *          |
+ *          v
+ *     reasoning
+ *          |
+ *          v
+ *     classical decision
+ *
+ * or:
+ *
+ *     classical evidence
+ *          |
+ *          v
+ *     reasoning
+ *          |
+ *          v
+ *     quantum operation selection
+ *
+ * The grammar does not encode the physical mapping.
+ *
+ * ============================================================================
+ * AI / MODEL INTEGRATION
+ * ============================================================================
+ *
+ * A reasoning target or source may contain:
+ *
+ *     model(...)
+ *     predictor(...)
+ *     classifier(...)
+ *     learned_result
+ *
+ * provided those are valid ordinary Zamani expressions.
+ *
+ * No model architecture is encoded here.
+ *
+ * ============================================================================
+ * HDL / HARDWARE INTEGRATION
+ * ============================================================================
+ *
+ * Reasoning may consume:
+ *
+ *     simulation results
+ *     verification results
+ *     hardware observations
+ *     synthesis information
+ *     timing information
+ *     resource information
+ *
+ * Hardware representation remains owned by the HDL/hardware subsystems.
+ *
+ * This grammar MUST NOT encode:
+ *
+ *     register width
+ *     bus width
+ *     fixed device count
+ *     fixed FPGA capacity
+ *     physical address
+ *     vendor topology
+ *
+ * ============================================================================
+ * DISTRIBUTED INTEGRATION
+ * ============================================================================
+ *
+ * Reasoning may consume distributed results:
+ *
+ *     deduce result from distributed_value;
+ *
+ * or reason over expressions representing:
+ *
+ *     actor results
+ *     service responses
+ *     collective results
+ *     replicated observations
+ *
+ * Distribution semantics belong to:
+ *
+ *     grammar/concurrency/
+ *     grammar/distributed/
+ *     execution/runtime
+ *
+ * ============================================================================
+ * NETWORKING INTEGRATION
+ * ============================================================================
+ *
+ * Network-derived evidence may be supplied as an ordinary expression.
+ *
+ * Example:
+ *
+ *     infer state from service_result;
+ *
+ * Network effects, security, authorization and resource requirements are
+ * checked downstream.
+ *
+ * ============================================================================
+ * FFI / ABI INTEGRATION
+ * ============================================================================
+ *
+ * Reasoning may consume results returned from foreign interfaces.
+ *
+ * Example:
+ *
+ *     deduce result from foreign_result;
+ *
+ * FFI and ABI remain owned by:
+ *
+ *     grammar/interoperability/
+ *
+ * Foreign operations must participate in effect and capability checking.
+ *
+ * ============================================================================
+ * METAPROGRAMMING INTEGRATION
+ * ============================================================================
+ *
+ * Reasoning may be used over compile-time or reflective values when those
+ * values are valid Zamani expressions.
+ *
+ * Compile-time execution and reflection remain owned by:
+ *
+ *     grammar/metaprogramming/
+ *
+ * This grammar never executes them.
+ *
+ * ============================================================================
+ * PROVENANCE CONTRACT
+ * ============================================================================
+ *
+ * A reasoning operation must be capable of preserving source provenance.
+ *
+ * Downstream semantic representation should be able to associate:
+ *
+ *     operator
+ *     target
+ *     source
+ *     context
+ *     source span
+ *     evidence
+ *     derivation
+ *     decision
+ *     resulting value
+ *
+ * with provenance records where required by the program's policy or
+ * compilation configuration.
+ *
+ * This grammar does not implement provenance.
+ *
+ * ============================================================================
+ * AST CONTRACT
+ * ============================================================================
+ *
+ * Parser contexts produced here map to the domain-neutral frontend AST.
+ *
+ * The semantic AST representation should preserve at minimum:
+ *
+ *     reasoning kind
+ *     target
+ *     optional source
+ *     ordered context
+ *     source span
+ *
+ * The AST MUST remain independent of:
+ *
+ *     LLVM
+ *     QIR
+ *     MLIR
+ *     vendor IR
+ *     physical qubit mapping
+ *     routing
+ *     calibration
+ *     QEC implementation
+ *     physical topology
+ *     backend selection
+ *
+ * ============================================================================
+ * SEMANTIC CONTRACT
+ * ============================================================================
+ *
+ * Semantic analysis is responsible for determining:
+ *
+ *     whether the target is valid;
+ *     whether the source is valid;
+ *     whether context values are valid;
+ *     type compatibility;
+ *     name resolution;
+ *     ownership;
+ *     effects;
+ *     capabilities;
+ *     resources;
+ *     contracts;
+ *     policies;
+ *     provenance;
+ *     domain compatibility;
+ *     determinism requirements;
+ *     execution feasibility.
+ *
+ * Parser acceptance alone does not imply semantic validity.
+ *
+ * ============================================================================
+ * TYPE CONTRACT
+ * ============================================================================
+ *
+ * The grammar accepts expressions without imposing a closed type set.
+ *
+ * Semantic analysis may allow reasoning over:
+ *
+ *     scalar values
+ *     collections
+ *     records
+ *     functions
+ *     tensors
+ *     graphs
+ *     probabilistic values
+ *     quantum-derived values
+ *     distributed values
+ *     hardware observations
+ *     model values
+ *     symbolic values
+ *     future types
+ *
+ * Type validity remains downstream.
+ *
+ * ============================================================================
+ * IR CONTRACT
+ * ============================================================================
+ *
+ * This file generates NO IR.
+ *
+ * The pipeline remains:
+ *
+ *     parser
+ *       ->
+ *     AST
+ *       ->
+ *     semantic reasoning operation
+ *       ->
+ *     canonical semantic representation
+ *       ->
+ *     domain IR
+ *       ->
+ *     optimization
+ *       ->
+ *     lowering
+ *       ->
+ *     target realization
+ *
+ * Quantum operations continue to use:
+ *
+ *     quantum::ir
+ *
+ * as the canonical quantum IR boundary.
+ *
+ * ============================================================================
+ * DIAGNOSTIC CONTRACT
+ * ============================================================================
+ *
+ * Parser diagnostics include only structural problems such as:
+ *
+ *     missing reasoning operator
+ *     missing target
+ *     missing source expression
+ *     malformed context
+ *     empty context
+ *     missing closing parenthesis
+ *     trailing comma
+ *     invalid clause order
+ *     missing semicolon
+ *
+ * Semantic diagnostics include:
+ *
+ *     unknown name
+ *     invalid type
+ *     invalid reasoning target
+ *     invalid reasoning source
+ *     unavailable capability
+ *     unsatisfied resource requirement
+ *     forbidden effect
+ *     policy violation
+ *     contract violation
+ *     invalid provenance requirement
+ *     invalid domain composition
+ *
+ * Parser and semantic diagnostics MUST remain separate.
+ *
+ * ============================================================================
+ * SECURITY CONTRACT
  * ============================================================================
  *
  * Parsing is non-executing.
  *
  * This grammar MUST NOT:
  *
- *     query a database;
+ *     invoke a reasoning engine;
+ *     access a knowledge store;
  *     invoke a model;
- *     execute a reasoning engine;
- *     contact a network;
- *     inspect hardware;
+ *     access a network;
+ *     access filesystem state;
  *     access secrets;
- *     load plugins;
+ *     inspect hardware;
+ *     discover devices;
  *     invoke a QPU;
- *     execute a simulator;
- *     execute external processes.
- *
- * Source syntax is not permission to execute its semantic meaning.
- *
- * ============================================================================
- * QUANTUM INTEGRATION
- * ============================================================================
- *
- * A reasoning source or target may contain a quantum-derived expression:
- *
- *     infer result from measurement;
- *
- *     reason state_property from quantum_result;
- *
- *     deduce decision from measurement_result;
- *
- * This grammar does not define quantum operations.
- *
- * Quantum semantics remain downstream:
- *
- *     frontend AST
- *          |
- *          v
- *     quantum semantic analysis
- *          |
- *          v
- *     quantum::ir
- *          |
- *          v
- *     optimization
- *          |
- *          v
- *     decomposition
- *          |
- *          v
- *     routing
- *          |
- *          v
- *     scheduling
- *          |
- *          v
- *     QEC / resilience
- *          |
- *          v
- *     ZQN
- *          |
- *          v
- *     HAL
- *          |
- *          v
- *     target realization
- *
- * No quantum-specific reasoning IR is created.
+ *     invoke a simulator;
+ *     invoke foreign code;
+ *     execute generated code.
  *
  * ============================================================================
- * HYBRID INTEGRATION
+ * DETERMINISM CONTRACT
  * ============================================================================
  *
- * Reasoning may participate in:
+ * Parsing must depend only on:
  *
- *     classical -> reasoning
- *     quantum -> reasoning
- *     reasoning -> classical
- *     reasoning -> quantum control
- *     AI -> reasoning
- *     reasoning -> AI
- *     HDL/hardware -> reasoning
+ *     token stream
+ *     grammar version
+ *     parser configuration
  *
- * These relationships are semantic.
+ * It MUST NOT depend on:
  *
- * The grammar remains domain-neutral.
+ *     current time
+ *     randomness
+ *     filesystem state
+ *     network state
+ *     hardware state
+ *     device availability
+ *     scheduler state
+ *     runtime state
  *
- * ============================================================================
- * HDL / HARDWARE INTEGRATION
- * ============================================================================
- *
- * Reasoning can consume:
- *
- *     hardware observations;
- *     simulation results;
- *     verification results;
- *     synthesized-artifact metadata;
- *     sensor values;
- *     timing information.
- *
- * No hardware topology or physical resource identifier is encoded.
+ * Identical source under identical parser configuration must produce
+ * equivalent parse-tree structure.
  *
  * ============================================================================
- * DISTRIBUTED INTEGRATION
+ * SCALABILITY CONTRACT
  * ============================================================================
  *
- * Reasoning can consume distributed values and can produce values later used
- * by:
+ * This grammar contains no language-level finite limit for:
  *
- *     actors
- *     tasks
- *     services
- *     workflows
+ *     reasoning statements
+ *     source size
+ *     context count
+ *     expression size
+ *     expression nesting
+ *     knowledge size
+ *     evidence size
+ *     model count
+ *     quantum resources
+ *     CPU resources
+ *     GPU resources
+ *     FPGA resources
+ *     accelerator resources
+ *     node count
+ *     memory
+ *     tensor dimensions
+ *     topology size
  *
- * This grammar does not create another actor/message model.
+ * Repetition is represented by grammar structure rather than fixed slots.
  *
- * ============================================================================
- * AST CONTRACT
- * ============================================================================
- *
- * The frontend AST MUST preserve at least:
- *
- *     operation kind
- *     target expression
- *     optional source expression
- *     ordered context expressions
- *     source span
- *     source ordering
- *
- * Conceptually:
- *
- *     ReasoningStatement {
- *         kind,
- *         target,
- *         source,
- *         context,
- *         span
- *     }
- *
- * The exact Rust representation belongs to the existing domain-neutral AST.
- *
- * This grammar MUST NOT require AST nodes such as:
- *
- *     QuantumReasoning
- *     GPUReasoning
- *     FPGAReasoning
- *     AIReasoning
- *     HardwareReasoning
- *
- * as universal categories.
- *
- * ============================================================================
- * SEMANTIC CONTRACT
- * ============================================================================
- *
- * Parsing determines only:
- *
- *     "Is this syntactically a reasoning statement?"
- *
- * Semantic analysis determines:
- *
- *     - what the operator means;
- *     - whether the target is valid;
- *     - whether the source is valid;
- *     - whether context values are valid;
- *     - which reasoning strategy applies;
- *     - which knowledge sources are used;
- *     - which evidence is accepted;
- *     - which model is selected;
- *     - which uncertainty semantics apply;
- *     - which effects occur;
- *     - which capabilities are required;
- *     - which resources are required;
- *     - which policies apply;
- *     - which provenance must be recorded;
- *     - whether the computation is deterministic;
- *     - whether execution is permitted.
- *
- * No semantic lookup occurs in this grammar.
- *
- * ============================================================================
- * IR CONTRACT
- * ============================================================================
- *
- * This grammar creates NO IR.
- *
- * The downstream path is:
- *
- *     reasonStatement
- *          |
- *          v
- *     domain-neutral AST
- *          |
- *          v
- *     reasoning semantic model
- *          |
- *          v
- *     canonical semantic representation
- *          |
- *          +---------------------+
- *          |                     |
- *          v                     v
- *      classical             quantum::ir
- *          |                     |
- *          +----------+----------+
- *                     |
- *                     v
- *                 optimization
- *                     |
- *                     v
- *              lowering/scheduling
- *                     |
- *                     v
- *              target realization
- *
- * No reasoning-specific machine IR is introduced by this file.
- *
- * ============================================================================
- * EFFECT / CAPABILITY / RESOURCE CHECKING
- * ============================================================================
- *
- * All such checking occurs after parsing.
- *
- * A syntactically valid:
- *
- *     reason ...
- *
- * does NOT imply:
- *
- *     capability available;
- *     resource available;
- *     policy satisfied;
- *     model available;
- *     knowledge source available;
- *     network available;
- *     QPU available;
- *     accelerator available.
- *
- * These are semantic/execution decisions.
+ * Actual parser/compiler exhaustion is an implementation/resource concern,
+ * not a semantic language ceiling.
  *
  * ============================================================================
  * POCO-REAF CONTRACT
  * ============================================================================
  *
- * The grammar contains no target-size assumptions.
+ * Reasoning syntax describes computational intent rather than physical
+ * realization.
  *
- * There is no language-level limit on:
+ * Therefore the same source can participate in compilation for:
  *
- *     reasoning statements
- *     reasoning target size
- *     source expression size
- *     context option count
- *     reasoning nesting
- *     program size
- *     machine size
- *     CPU count
- *     GPU count
- *     FPGA count
- *     accelerator count
- *     QPU count
- *     qubit count
- *     node count
- *     memory capacity
- *     storage capacity
- *     tensor rank
- *     network scale
+ *     tiny systems
+ *     embedded systems
+ *     CPUs
+ *     multicore CPUs
+ *     GPUs
+ *     FPGAs
+ *     ASICs
+ *     accelerators
+ *     QPUs
+ *     simulators
+ *     HPC systems
+ *     clusters
+ *     distributed systems
+ *     cloud systems
+ *     heterogeneous systems
+ *     future computational systems
  *
- * Practical limits are determined by:
+ * provided the selected realization can satisfy the program's semantic
+ * requirements.
  *
- *     compiler resources
- *     runtime resources
- *     target capabilities
- *     deployment configuration
- *     resource policy
+ * The language does NOT claim that every target is capable of executing every
+ * reasoning operation.
  *
- * "Infinity" means the grammar imposes no artificial finite ceiling.
+ * Instead:
  *
- * It does NOT claim that physical hardware has infinite resources.
+ *     source intent
+ *       ->
+ *     semantic requirements
+ *       ->
+ *     capability negotiation
+ *       ->
+ *     resource negotiation
+ *       ->
+ *     execution planning
+ *       ->
+ *     target realization
  *
  * ============================================================================
  * HARD-CODING AUDIT
  * ============================================================================
  *
- * This file contains no:
+ * Forbidden:
  *
- *     MAX_QUBITS
- *     MAX_CPUS
- *     MAX_GPUS
- *     MAX_FPGAS
- *     MAX_NODES
- *     MAX_MEMORY
- *     MAX_THREADS
- *     MAX_TENSOR_RANK
- *     MAX_REGISTER_WIDTH
- *     MAX_NETWORK_SIZE
- *     MAX_DEVICE_COUNT
  *     MAX_REASONING_DEPTH
  *     MAX_REASONING_STEPS
- *     MAX_FACTS
+ *     MAX_PREMISES
  *     MAX_EVIDENCE
  *     MAX_CONTEXT
+ *     MAX_MODELS
+ *     MAX_FACTS
+ *     MAX_CPU
+ *     MAX_CPUS
+ *     MAX_GPU
+ *     MAX_GPUS
+ *     MAX_FPGA
+ *     MAX_FPGAS
+ *     MAX_QUBIT
+ *     MAX_QUBITS
+ *     MAX_QPU
+ *     MAX_QPUS
+ *     MAX_NODES
+ *     MAX_DEVICES
+ *     MAX_MEMORY
+ *     MAX_TENSOR_RANK
+ *     MAX_REGISTER_WIDTH
  *
- * It contains no:
+ * Also forbidden:
  *
- *     physical device IDs
- *     physical qubit IDs
- *     vendor-specific hardware
- *     topology
- *     calibration
- *     routing
- *     scheduling
- *     QEC implementation
- *     ZQN implementation
- *     HAL implementation
+ *     fixed hardware identifiers
+ *     vendor-specific device assumptions
+ *     physical topology
+ *     physical addresses
+ *     fixed accelerator counts
+ *     fixed thread counts
  *
- * Numeric literals inside expressions remain ordinary program data.
+ * Allowed:
  *
- * ============================================================================
- * COMPATIBILITY
- * ============================================================================
- *
- * Existing source-level reasoning forms are preserved:
- *
- *     infer TARGET;
- *     infer TARGET from SOURCE;
- *     infer TARGET with (OPTION);
- *     infer TARGET from SOURCE with (OPTION);
- *
- * The same structure applies to:
- *
- *     deduce
- *     reason
- *
- * No historical application-specific reasoning syntax is automatically
- * promoted into the core language.
- *
- * Annotation forms such as:
- *
- *     @infer(...)
- *     @reason(...)
- *
- * remain annotation/directive syntax and are not redefined here.
+ *     finite language keywords
+ *     finite punctuation
+ *     finite syntactic operators
+ *     program-provided numeric values
+ *     symbolic resource quantities
  *
  * ============================================================================
- * RELATIONSHIP TO grammar/expressions/reasoning.g4
+ * COMPATIBILITY CONTRACT
  * ============================================================================
  *
- * The repository currently contains:
+ * The canonical surface syntax is:
  *
- *     grammar/expressions/reasoning.g4
+ *     infer TARGET [from SOURCE] [with (OPTIONS)] ;
+ *     deduce TARGET [from SOURCE] [with (OPTIONS)] ;
+ *     reason TARGET [from SOURCE] [with (OPTIONS)] ;
  *
- * That file describes reasoning-expression syntax and currently uses an
- * `expressionCore` integration boundary.
+ * New reasoning mechanisms MUST NOT require changes to this grammar merely
+ * because a new algorithm, model, hardware target, or backend is introduced.
  *
- * This file deliberately does NOT import that grammar because the current
- * canonical `Expressions` composition does not import the reasoning grammar
- * and the existing expression grammar would otherwise introduce a circular
- * dependency or an unresolved expression-core dependency.
+ * New semantic reasoning capabilities should be represented through:
  *
- * The production dependency is therefore:
+ *     libraries
+ *     semantic metadata
+ *     capabilities
+ *     policies
+ *     dialects
+ *     execution strategies
  *
- *     reason.g4
+ * rather than keyword proliferation.
+ *
+ * ============================================================================
+ * INFER / DEDUCE ADAPTER CONTRACT
+ * ============================================================================
+ *
+ * Existing:
+ *
+ *     grammar/statements/infer.g4
+ *     grammar/statements/deduce.g4
+ *
+ * are compatibility adapters for the shared reasoning model.
+ *
+ * They MUST NOT be composed alongside this grammar in a way that creates
+ * multiple competing parser paths for the same source form.
+ *
+ * Recommended production composition:
+ *
+ *     statements.g4
  *          |
- *          +--> Expressions
+ *          +--> ReasonStatements
  *
- * rather than:
+ * and NOT:
  *
- *     reason.g4
+ *     statements.g4
  *          |
- *          +--> reasoning.g4
- *          |
- *          +--> Expressions
+ *          +--> ReasonStatements
+ *          +--> Infer
+ *          +--> Deduce
  *
- * Once the repository performs the planned expression-core extraction, the
- * expression-level reasoning grammar can be normalized against this statement
- * owner without changing this file's public statement contract.
+ * at the same time.
  *
- * This file therefore remains independently complete.
+ * If the individual adapter grammars are retained, they should delegate to
+ * the shared reasoning rules and remain available only where an isolated
+ * grammar entry is required.
  *
  * ============================================================================
- * REQUIRED STATEMENTS COMPOSITION INTEGRATION
+ * STATEMENT COMPOSITION CONTRACT
  * ============================================================================
  *
- * grammar/statements/statements.g4 MUST import this grammar:
+ * The universal statement composition grammar:
+ *
+ *     grammar/statements/statements.g4
+ *
+ * must import:
  *
  *     ReasonStatements
  *
- * and add:
+ * and its `statement` production must admit:
  *
  *     reasonStatement
  *
- * to the universal statement alternatives.
+ * exactly once.
  *
- * The required composition is:
- *
- *     statement
- *         : declarationStatement
- *         | assignmentStatement
- *         | assertionStatement
- *         | controlFlowStatement
- *         | concurrencyStatementAdapter
- *         | effectStatement
- *         | resourceStatement
- *         | reasonStatement
- *         | domainStatement
- *         | blockExpression
- *         | emptyStatement
- *         | expressionStatement
- *         ;
- *
- * `reasonStatement` MUST appear before the generic `expressionStatement`
- * fallback.
- *
- * ============================================================================
- * AI INTEGRATION
- * ============================================================================
- *
- * AI syntax may consume the semantic result of reasoning.
- *
- * AI-specific constructs remain owned by:
- *
- *     grammar/ai/
- *
- * The AI subsystem must not create another:
- *
- *     infer
- *     deduce
- *     reason
- *
- * statement family.
- *
- * It may consume the semantic reasoning model produced by this statement.
- *
- * ============================================================================
- * KNOWLEDGE INTEGRATION
- * ============================================================================
- *
- * Knowledge syntax remains owned by the knowledge subsystem.
- *
- * It may provide expressions used by:
- *
- *     reasoningTarget
- *     reasoningSourceClause
- *     reasoningOption
- *
- * No knowledge grammar is duplicated here.
- *
- * ============================================================================
- * PROVENANCE INTEGRATION
- * ============================================================================
- *
- * Reasoning is a natural provenance-producing semantic operation.
- *
- * Provenance may record:
- *
- *     operation kind
- *     target
- *     source
- *     context
- *     evidence
- *     model
- *     strategy
- *     policy
- *     compiler transformation
- *     execution result
- *
- * Provenance syntax/representation is not owned by this file.
+ * This file does NOT modify the universal statement rule.
  *
  * ============================================================================
  * TEST CONTRACT
  * ============================================================================
  *
- * POSITIVE
- * --------
+ * POSITIVE TESTS
+ * -------------
  *
- *     infer hypothesis;
+ *     infer conclusion;
  *
  *     deduce conclusion;
  *
- *     reason decision;
+ *     reason conclusion;
  *
- *     infer result from evidence;
+ *     infer conclusion from evidence;
  *
  *     deduce result from premises;
  *
- *     reason result from measurement;
+ *     reason decision from observation;
  *
- *     infer result with (context);
+ *     infer result with (model);
  *
- *     deduce result with (model);
+ *     deduce result with (confidence);
  *
- *     reason result with (policy, confidence);
+ *     reason result with (policy, provenance);
  *
- *     infer result from evidence with (policy);
+ *     infer result from evidence with (confidence, policy);
  *
- *     deduce result from knowledge.query(pattern)
- *         with (strategy, evidence);
+ *     deduce result from knowledge.query(pattern) with (policy);
  *
- *     reason measurement_result from quantum_result
- *         with (policy);
+ *     reason decision from quantum_result with (evidence, confidence);
  *
- *     infer tensor[index] from observation
- *         with (context);
- *
- *     reason distributed_result from service_result
- *         with (policy, provenance);
- *
- *     infer hardware_state from simulation_result
- *         with (verification);
- *
- * NEGATIVE
- * --------
+ * NEGATIVE TESTS
+ * -------------
  *
  *     infer;
  *
@@ -1253,164 +1398,128 @@
  *
  *     reason;
  *
- *     infer;
  *     infer ;
  *
- *     infer from evidence;
+ *     deduce from source;
  *
- *     infer target from;
+ *     reason from source;
  *
- *     infer target with;
+ *     reason target with ();
  *
- *     infer target with ();
+ *     reason target with (a,);
  *
- *     infer target with (a,);
+ *     reason target with (a) from source;
  *
- *     infer target with (, a);
+ *     reason target from;
  *
- *     infer target with (a,,b);
+ *     reason target with;
  *
- *     infer target from source from other;
+ *     reason target (;
  *
- *     infer target with (a) from source;
+ *     reason target with (a;
  *
- *     infer target from source with;
- *
- *     infer target from source with ();
- *
- *     infer target;
- *     trailing;
- *
- * The last example is valid only as two separate statements if the first
- * statement is terminated and the second is otherwise valid. The parser must
- * not accidentally absorb unrelated trailing syntax into a reasoning clause.
+ *     reason target from source
  *
  * SEMANTIC NEGATIVES
  * ------------------
  *
- * These are not parser errors merely because they may be semantically invalid:
+ * These are NOT parser failures:
  *
- *     infer unknown_name;
+ *     unknown target name
+ *     unknown source name
+ *     incompatible target/source types
+ *     unavailable reasoning capability
+ *     unsatisfied resource requirement
+ *     forbidden effect
+ *     policy violation
+ *     contract violation
+ *     invalid quantum-derived value
  *
- *     infer non_reasonable_value;
- *
- *     reason value_of_wrong_type;
- *
- *     infer result from unavailable_source;
- *
- *     deduce result with unavailable_policy;
- *
- * Capability/resource/policy errors belong downstream.
+ * Those must be rejected downstream.
  *
  * ============================================================================
  * BOUNDARY TESTS
  * ============================================================================
  *
- * Test reasoning against:
- *
- *     classical values
- *     symbolic expressions
- *     tensor expressions
- *     data queries
- *     knowledge expressions
- *     model expressions
- *     uncertainty expressions
- *     distributed values
- *     network results
- *     hardware observations
- *     simulation results
- *     quantum-derived values
- *     hybrid results
- *
  * Test:
  *
- *     nested calls
- *     member access
- *     indexing
+ *     deeply nested target expressions
+ *     deeply nested source expressions
+ *     large context lists
+ *     large expressions
+ *     Unicode identifiers
  *     qualified names
- *     arithmetic expressions
- *     logical expressions
- *     conditional expressions
- *     generic calls
- *     parenthesized expressions
- *
- * ============================================================================
- * SCALABILITY TESTS
- * ============================================================================
- *
- * Generated conformance tests should vary:
- *
- *     target expression size
- *     source expression size
- *     context option count
- *     expression nesting
- *     statement count
- *     program size
- *
- * without changing this grammar.
- *
- * There must be no grammar-level finite maximum.
- *
- * ============================================================================
- * DETERMINISM TESTS
- * ============================================================================
- *
- * Parse identical source repeatedly under identical:
- *
- *     lexer configuration
- *     parser configuration
- *     grammar version
- *
- * and verify equivalent parse trees.
- *
- * ============================================================================
- * PORTABILITY TESTS
- * ============================================================================
- *
- * The same reasoning source must remain syntactically identical when target
- * descriptions differ.
- *
- * Examples:
- *
- *     embedded
- *     CPU
- *     multicore
- *     GPU
- *     FPGA
- *     accelerator
- *     QPU
- *     simulator
- *     HPC
- *     cluster
- *     distributed
- *     cloud
- *
- * Resource availability must not alter parsing.
+ *     calls
+ *     indexing
+ *     tensor expressions
+ *     graph expressions
+ *     uncertainty expressions
+ *     knowledge queries
+ *     model expressions
+ *     quantum-derived expressions
+ *     distributed values
+ *     hardware observations
  *
  * ============================================================================
  * CROSS-DOMAIN TESTS
  * ============================================================================
  *
- * Required combinations include:
+ * The reasoning statement must compose with:
  *
- *     reasoning + classical
- *     reasoning + quantum
- *     reasoning + hybrid
- *     reasoning + HDL
- *     reasoning + hardware
- *     reasoning + AI
- *     reasoning + data
- *     reasoning + distributed
- *     reasoning + networking
- *     reasoning + security
- *     reasoning + resources
- *     reasoning + execution
+ *     classical
+ *     quantum
+ *     hybrid
+ *     HDL
+ *     hardware
+ *     AI/model
+ *     data
+ *     concurrency
+ *     distributed
+ *     networking
+ *     security
+ *     FFI
+ *     metaprogramming
+ *     simulation
+ *
+ * without modifying the reasoning grammar for each target domain.
  *
  * ============================================================================
- * ROUND-TRIP CONTRACT
+ * SCALABILITY TESTS
  * ============================================================================
  *
- * The supported source must survive:
+ * Test progressively larger source programs and expressions while ensuring
+ * no language-level resource ceiling is introduced.
+ *
+ * Test symbolic resource expressions rather than only concrete hardware
+ * quantities.
+ *
+ * Example semantic inputs may contain:
+ *
+ *     required_memory
+ *     required_qubits
+ *     required_compute
+ *     required_topology
+ *
+ * without embedding machine capacity into this grammar.
+ *
+ * ============================================================================
+ * DETERMINISM TESTS
+ * ============================================================================
+ *
+ * Identical:
+ *
+ *     source
+ *     token stream
+ *     grammar version
+ *     parser configuration
+ *
+ * must produce equivalent parse-tree structure.
+ *
+ * ============================================================================
+ * ROUND-TRIP TESTS
+ * ============================================================================
+ *
+ * Where formatter support exists:
  *
  *     source
  *       ->
@@ -1420,167 +1529,119 @@
  *       ->
  *     AST
  *       ->
- *     formatter/printer
+ *     formatter
  *       ->
  *     parser
  *
- * while preserving:
- *
- *     operator kind
- *     target
- *     source
- *     ordered context
- *     statement boundary
+ * must preserve reasoning semantics.
  *
  * ============================================================================
- * SAFE-RUST CONTRACT
+ * RUST CONTRACT
  * ============================================================================
  *
- * This grammar contains:
+ * This file contains no Rust implementation.
  *
- *     no embedded Rust;
- *     no semantic predicates;
- *     no executable actions;
- *     no I/O;
- *     no filesystem access;
- *     no networking;
- *     no hardware access;
- *     no runtime calls;
- *     no unsafe Rust.
- *
- * The consuming implementation must remain compatible with:
+ * Generated and consuming implementation code must remain compatible with:
  *
  *     Rust 1.97
  *     Rust 1.97.1
  *     Rust 2021
  *
- * and must not require unsafe Rust.
+ * and safe Rust only.
  *
- * ============================================================================
- * ANTLR COMPOSITION CONTRACT
- * ============================================================================
- *
- * This grammar is a parser grammar.
- *
- * Its canonical name is:
- *
- *     ReasonStatements
- *
- * Therefore the file name:
- *
- *     reason.g4
- *
- * intentionally differs from the parser grammar name.
- *
- * The canonical statement dispatcher imports:
- *
- *     ReasonStatements
- *
- * exactly once.
- *
- * No other statement grammar should import ReasonStatements.
+ * No `unsafe` implementation is required by this grammar.
  *
  * ============================================================================
  * COMPLETION CRITERIA
  * ============================================================================
  *
- * This file is complete when:
+ * This file is DONE when:
  *
- *     [ ] The file is named grammar/statements/reason.g4.
+ * [ ] ReasonStatements is the sole shared reasoning statement composition.
  *
- *     [ ] The parser grammar name is ReasonStatements.
+ * [ ] `reasonStatement` is the stable public entry rule.
  *
- *     [ ] tokenVocab is ZamaniLexer.
+ * [ ] infer/deduce/reason share one structural model.
  *
- *     [ ] Expressions is the sole expression dependency.
+ * [ ] target is mandatory.
  *
- *     [ ] No second expression hierarchy exists here.
+ * [ ] source is optional.
  *
- *     [ ] reasonStatement is the sole public statement entry point.
+ * [ ] context is optional.
  *
- *     [ ] infer is supported.
+ * [ ] canonical clause order is enforced.
  *
- *     [ ] deduce is supported.
+ * [ ] empty contexts are rejected.
  *
- *     [ ] reason is supported.
+ * [ ] trailing commas are rejected.
  *
- *     [ ] target expression is mandatory.
+ * [ ] expressions are delegated to Expressions.
  *
- *     [ ] source clause is optional.
+ * [ ] no expression hierarchy is duplicated.
  *
- *     [ ] context clause is optional.
+ * [ ] no lexer rules are defined here.
  *
- *     [ ] source precedes context.
+ * [ ] no semantic actions exist.
  *
- *     [ ] context cannot be empty.
+ * [ ] no semantic predicates exist.
  *
- *     [ ] context does not permit a trailing comma.
+ * [ ] no runtime behavior exists.
  *
- *     [ ] semicolon is mandatory.
+ * [ ] no hardware discovery exists.
  *
- *     [ ] no universal statement rule is defined here.
+ * [ ] no backend selection exists.
  *
- *     [ ] no expression precedence is defined here.
+ * [ ] no physical topology exists.
  *
- *     [ ] no reasoning algorithm is defined here.
+ * [ ] no quantum gate catalog exists.
  *
- *     [ ] no knowledge implementation is defined here.
+ * [ ] no hardware capacity limit exists.
  *
- *     [ ] no learning implementation is defined here.
+ * [ ] no machine-size constant exists.
  *
- *     [ ] no adaptation implementation is defined here.
+ * [ ] AST mapping exists.
  *
- *     [ ] no probability implementation is defined here.
+ * [ ] semantic mapping exists.
  *
- *     [ ] no provenance implementation is defined here.
+ * [ ] effect integration exists.
  *
- *     [ ] no policy implementation is defined here.
+ * [ ] capability integration exists.
  *
- *     [ ] no resource allocation is defined here.
+ * [ ] resource integration exists.
  *
- *     [ ] no hardware target is defined here.
+ * [ ] contract integration exists.
  *
- *     [ ] no quantum gate is enumerated.
+ * [ ] policy integration exists.
  *
- *     [ ] quantum::ir remains the canonical quantum boundary.
+ * [ ] provenance integration exists.
  *
- *     [ ] no machine-size limit is encoded.
+ * [ ] quantum integration uses quantum::ir downstream.
  *
- *     [ ] no hard-coded hardware identifier exists.
+ * [ ] infer.g4 does not create a competing universal parser path.
  *
- *     [ ] no embedded actions exist.
+ * [ ] deduce.g4 does not create a competing universal parser path.
  *
- *     [ ] no semantic predicates exist.
+ * [ ] statements.g4 imports ReasonStatements.
  *
- *     [ ] no unsafe Rust is required.
+ * [ ] statements.g4 admits reasonStatement exactly once.
  *
- *     [ ] statements.g4 imports ReasonStatements.
+ * [ ] positive tests pass.
  *
- *     [ ] statements.g4 admits reasonStatement exactly once.
+ * [ ] negative tests pass.
  *
- *     [ ] AST mapping exists.
+ * [ ] semantic-negative tests pass.
  *
- *     [ ] semantic mapping exists.
+ * [ ] boundary tests pass.
  *
- *     [ ] provenance integration exists downstream.
+ * [ ] scalability tests pass.
  *
- *     [ ] positive tests exist.
+ * [ ] cross-domain tests pass.
  *
- *     [ ] negative tests exist.
+ * [ ] determinism tests pass.
  *
- *     [ ] semantic-negative tests exist.
+ * [ ] portability tests pass.
  *
- *     [ ] boundary tests exist.
- *
- *     [ ] scalability tests exist.
- *
- *     [ ] determinism tests exist.
- *
- *     [ ] portability tests exist.
- *
- *     [ ] cross-domain tests exist.
- *
- *     [ ] round-trip tests exist.
+ * [ ] round-trip tests pass.
  *
  * ============================================================================
  * PRODUCTION GRAMMAR
@@ -1594,37 +1655,53 @@ options {
 }
 
 /*
- * The canonical expression composition is the only expression dependency.
+ * ============================================================================
+ * IMPORTS
+ * ============================================================================
  *
- * Do not import Statements here.
+ * Expressions is the ONLY grammar dependency required here.
  *
- * Do not import the existing expression-level reasoning grammar here.
+ * Do not import Statements.
  *
- * This keeps the dependency graph acyclic:
+ * Do not import Infer.
  *
- *     reason.g4
- *          |
- *          v
- *     Expressions
+ * Do not import Deduce.
  *
- * while:
- *
- *     Statements
- *          |
- *          v
- *     ReasonStatements
+ * This prevents duplicate reasoning ownership and circular dependencies.
+ * ============================================================================
  */
+
 import
     Expressions
     ;
 
 /*
  * ============================================================================
- * PUBLIC STATEMENT ENTRY
+ * PUBLIC ENTRY
  * ============================================================================
  *
- * Exactly one statement-level entry point is owned here.
+ * Canonical forms:
+ *
+ *     infer TARGET;
+ *     deduce TARGET;
+ *     reason TARGET;
+ *
+ *     infer TARGET from SOURCE;
+ *     deduce TARGET from SOURCE;
+ *     reason TARGET from SOURCE;
+ *
+ *     infer TARGET with (OPTION);
+ *     deduce TARGET with (OPTION);
+ *     reason TARGET with (OPTION);
+ *
+ *     infer TARGET from SOURCE with (OPTION);
+ *     deduce TARGET from SOURCE with (OPTION);
+ *     reason TARGET from SOURCE with (OPTION);
+ *
+ * The semicolon is mandatory at this statement boundary.
+ * ============================================================================
  */
+
 reasonStatement
     : reasoningOperator
       reasoningTarget
@@ -1635,13 +1712,13 @@ reasonStatement
 
 /*
  * ============================================================================
- * OPERATOR
+ * REASONING OPERATOR
  * ============================================================================
  *
- * These are source-level operation kinds.
- *
- * Their semantic implementation is downstream.
+ * One lexical family, one semantic family.
+ * ============================================================================
  */
+
 reasoningOperator
     : INFER
     | DEDUCE
@@ -1653,22 +1730,20 @@ reasoningOperator
  * TARGET
  * ============================================================================
  *
- * The target is one complete canonical Zamani expression.
- *
- * Semantic analysis determines whether the target is meaningful as a
- * reasoning target.
+ * Delegated completely to the canonical expression grammar.
+ * ============================================================================
  */
+
 reasoningTarget
     : expression
     ;
 
 /*
  * ============================================================================
- * SOURCE / EVIDENCE
+ * SOURCE
  * ============================================================================
- *
- * `from` introduces one complete expression.
  */
+
 reasoningSourceClause
     : FROM
       expression
@@ -1679,12 +1754,11 @@ reasoningSourceClause
  * CONTEXT
  * ============================================================================
  *
- * `with (...)` introduces one or more ordered expressions.
- *
- * Empty contexts are rejected.
- *
- * Trailing commas are rejected.
+ * At least one option is required.
+ * Empty parentheses are therefore rejected.
+ * ============================================================================
  */
+
 reasoningContextClause
     : WITH
       LPAREN
@@ -1696,7 +1770,13 @@ reasoningContextClause
  * ============================================================================
  * CONTEXT OPTION LIST
  * ============================================================================
+ *
+ * One or more expressions.
+ *
+ * No trailing comma.
+ * ============================================================================
  */
+
 reasoningOptionList
     : reasoningOption
       (
@@ -1710,21 +1790,12 @@ reasoningOptionList
  * CONTEXT OPTION
  * ============================================================================
  *
- * Every option is a normal Zamani expression.
+ * Any canonical Zamani expression may supply context.
  *
- * The semantic layer determines whether the expression represents:
- *
- *     strategy
- *     model
- *     evidence
- *     confidence
- *     policy
- *     provenance
- *     resource preference
- *     constraint
- *     configuration
- *     or another valid semantic value.
+ * Semantic analysis determines its role.
+ * ============================================================================
  */
+
 reasoningOption
     : expression
     ;
