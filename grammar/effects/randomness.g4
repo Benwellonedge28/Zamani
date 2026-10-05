@@ -10,27 +10,28 @@
  *     RandomnessEffects
  *
  * Status:
- *     CANONICAL MODULAR RANDOMNESS-EFFECT INTEGRATION GRAMMAR
+ *     CANONICAL MODULAR RANDOMNESS-EFFECT DOMAIN ADAPTER
  *
- * Grammar technology:
+ * Technology:
  *     ANTLR4 parser grammar
  *
- * Compiler/runtime baseline:
+ * Rust baseline:
  *     Rust 1.97 / Rust 1.97.1
- *     Rust edition 2021
+ *     Rust 2021
  *
  * Safety:
- *     - no embedded Rust actions;
- *     - no semantic predicates;
- *     - no unsafe Rust;
- *     - no filesystem access;
- *     - no network access;
- *     - no runtime execution;
- *     - no environment inspection;
- *     - no hardware discovery;
- *     - no entropy acquisition;
- *     - no random-number generation;
- *     - no target selection.
+ *     This grammar contains:
+ *       - no embedded Rust;
+ *       - no semantic predicates;
+ *       - no executable actions;
+ *       - no filesystem access;
+ *       - no network access;
+ *       - no hardware discovery;
+ *       - no runtime execution;
+ *       - no entropy acquisition;
+ *       - no random-value generation;
+ *       - no target selection;
+ *       - no unsafe Rust requirement.
  *
  * ============================================================================
  * FEATURE CONTRACT
@@ -39,43 +40,22 @@
  * PURPOSE
  * -------
  *
- * This file is the canonical parser-level integration boundary for the
- * RANDOMNESS EFFECT DOMAIN.
+ * This file provides the parser-level boundary for the randomness effect
+ * domain.
  *
- * It provides thin, reusable wrappers around Zamani's generic effect
- * machinery so that semantic tooling can identify constructs that are intended
- * to participate in randomness-related effect analysis.
+ * It is deliberately a THIN DOMAIN ADAPTER over Zamani's generic effect
+ * machinery.
  *
- * This file does NOT implement randomness.
+ * It does not create a second randomness language.
  *
- * It does NOT generate random values.
+ * It does not enumerate randomness algorithms, providers, distributions,
+ * entropy sources, generators, devices, or implementation strategies.
  *
- * It does NOT select an RNG.
  *
- * It does NOT select an entropy source.
- *
- * It does NOT select a hardware device.
- *
- * It does NOT define a cryptographic algorithm.
- *
- * It does NOT define a pseudorandom algorithm.
- *
- * It does NOT define a probability distribution.
- *
- * It does NOT define a seed width.
- *
- * It does NOT define an entropy-pool size.
- *
- * It does NOT define a random-state representation.
- *
- * Those concerns belong to semantic analysis, libraries, security policy,
- * execution, resources, capabilities, and target realization.
- *
- * ============================================================================
  * OWNS
- * ============================================================================
+ * ----
  *
- * This file owns ONLY randomness-domain parser integration wrappers:
+ * This file owns only the following domain-labelled parser boundaries:
  *
  *     randomnessOperationReference
  *     randomnessOperationInvocation
@@ -84,29 +64,19 @@
  *     randomnessEffectReferenceList
  *     randomnessEffectSet
  *
- * These wrappers provide stable domain boundaries for:
+ * These rules are aliases/adapters over canonical generic effect syntax.
  *
- *     - parser listeners;
- *     - AST conversion;
- *     - semantic classification;
- *     - conformance tooling;
- *     - effect analysis;
- *     - documentation;
- *     - future domain-specific extensions.
  *
- * ============================================================================
  * DOES NOT OWN
- * ============================================================================
+ * -------------
  *
- * This file does NOT own:
+ * This file does not own:
  *
- *     effectDeclaration
- *     effectOperationDeclaration
- *     effectReference
- *     effectReferenceList
- *     effectSet
- *     effectInvocation
- *     effectOperationUse
+ *     effect declarations
+ *     effect operation declarations
+ *     generic effect references
+ *     generic effect sets
+ *     generic effect invocation
  *     perform syntax
  *     effect handlers
  *     expressions
@@ -114,84 +84,86 @@
  *     identifiers
  *     qualified names
  *     types
- *     probabilities
- *     distributions
- *     AI semantics
- *     quantum operations
- *     quantum measurement
- *     cryptographic algorithms
+ *     probability semantics
+ *     distribution semantics
+ *     RNG algorithms
+ *     pseudorandom algorithms
  *     entropy collection
- *     operating-system randomness APIs
- *     hardware RNGs
- *     QPU randomness
- *     physical noise
- *     scheduling
- *     resource allocation
- *     capability discovery
+ *     cryptographic algorithms
  *     security enforcement
- *     policy enforcement
- *     runtime execution
+ *     policies
+ *     capabilities
+ *     resources
+ *     deterministic replay
+ *     scheduler semantics
+ *     quantum measurement
+ *     quantum IR
+ *     HDL semantics
+ *     hardware discovery
+ *     runtime dispatch
  *     target selection
  *     backend selection
- *     canonical IR implementation
+ *     physical realization.
  *
  * ============================================================================
  * ARCHITECTURAL POSITION
  * ============================================================================
  *
- * The production pipeline is:
+ * The language pipeline is:
  *
- *     Zamani source
- *          |
- *          v
- *     ZamaniLexer
- *          |
- *          v
- *     ZamaniParser
- *          |
- *          v
- *     domain-neutral frontend AST
- *          |
- *          v
+ *     source
+ *       |
+ *       v
+ *     canonical lexer
+ *       |
+ *       v
+ *     canonical parser
+ *       |
+ *       v
+ *     domain-neutral AST
+ *       |
+ *       v
  *     structural validation
- *          |
- *          v
+ *       |
+ *       v
  *     semantic analysis
- *          |
- *          +--> effect classification
- *          +--> randomness analysis
- *          +--> determinism analysis
- *          +--> capability analysis
- *          +--> resource analysis
- *          +--> security analysis
- *          +--> policy analysis
- *          +--> provenance
- *          |
- *          v
+ *       |
+ *       +--> effect classification
+ *       +--> randomness classification
+ *       +--> type analysis
+ *       +--> determinism analysis
+ *       +--> reproducibility analysis
+ *       +--> capability analysis
+ *       +--> resource analysis
+ *       +--> security analysis
+ *       +--> policy analysis
+ *       +--> provenance
+ *       |
+ *       v
  *     canonical semantic representation
- *          |
- *          +--> classical IR
- *          +--> quantum::ir
- *          +--> HDL/hardware representation
- *          +--> distributed representation
- *          +--> other domain representations
- *          |
- *          v
+ *       |
+ *       +--> classical IR
+ *       +--> quantum::ir
+ *       +--> HDL/hardware representation
+ *       +--> distributed representation
+ *       +--> other domain representation
+ *       |
+ *       v
  *     optimization / lowering
- *          |
- *          v
+ *       |
+ *       v
  *     execution planning
- *          |
- *          v
+ *       |
+ *       v
  *     target realization
  *
- * This grammar remains entirely above semantic realization.
+ * This grammar participates only above semantic realization.
  *
  * ============================================================================
  * SINGLE-AUTHORITY RULE
  * ============================================================================
  *
- * Generic effect syntax is owned by:
+ * Generic effect syntax is owned by the existing effect subsystem:
  *
  *     grammar/effects/effect-operations.g4
  *     grammar/effects/effect-sets.g4
@@ -199,9 +171,9 @@
  *     grammar/effects/effect-handling.g4
  *     grammar/effects/effects.g4
  *
- * Therefore this file MUST NOT redefine generic effect rules.
+ * Therefore this file MUST NOT redefine any generic effect rule.
  *
- * In particular, this file MUST NOT redefine:
+ * In particular, it MUST NOT redefine:
  *
  *     effectOperationReference
  *     effectInvocation
@@ -215,773 +187,119 @@
  *     effectDeclaration
  *     effectHandler
  *
+ * This file only adds domain-labelled aliases.
+ *
  * ============================================================================
- * IMPORT CONTRACT
+ * DEPENDENCY CONTRACT
  * ============================================================================
  *
- * This grammar imports only generic grammar boundaries that it actually
- * reuses.
+ * DEPENDS_ON:
  *
- * Dependency direction:
+ *     EffectOperations
+ *     EffectSets
  *
- *     RandomnessEffects
+ * DIRECT DEPENDENCIES ONLY.
+ *
+ * Core and Expressions are intentionally NOT imported directly here because
+ * they are already dependencies of the generic grammars consumed above.
+ *
+ * This keeps the dependency surface minimal and prevents unnecessary
+ * coupling between domain adapters and universal syntax.
+ *
+ *
+ * EXPORTS:
+ *
+ *     randomnessOperationReference
+ *     randomnessOperationInvocation
+ *     randomnessOperationUse
+ *     randomnessEffectReference
+ *     randomnessEffectReferenceList
+ *     randomnessEffectSet
+ *
+ *
+ * CONSUMED_BY:
+ *
+ *     randomness-domain semantic classification
+ *     AST conversion tooling
+ *     grammar conformance tooling
+ *     randomness-specific parser tests
+ *     semantic effect tests
+ *     determinism/reproducibility tests
+ *
+ *
+ * AST_OWNER:
+ *
+ *     domain-neutral frontend AST
+ *
+ *
+ * SEMANTIC_OWNER:
+ *
+ *     semantic effect analysis
+ *     randomness classification
+ *     determinism analysis
+ *     reproducibility analysis
+ *
+ *
+ * SPEC_OWNER:
+ *
+ *     grammar/spec/effects.md
+ *     grammar/spec/determinism.md
+ *     grammar/spec/resources.md
+ *     grammar/spec/policies.md
+ *     relevant specification/effects documentation
+ *
+ *
+ * IR_OWNER:
+ *
+ *     canonical semantic representation
+ *     classical IR where applicable
+ *     quantum::ir where quantum semantics are involved
+ *
+ *
+ * TEST_OWNER:
+ *
+ *     grammar/tests/effects/
+ *     grammar/tests/semantic/
+ *     grammar/tests/determinism/
+ *     grammar/tests/scalability/
+ *     grammar/tests/quantum/
+ *     grammar/tests/hybrid/
+ *
+ * ============================================================================
+ * ANTLR CONFIGURATION
+ * ============================================================================
+ *
+ * The canonical lexical vocabulary for parser grammars is:
+ *
+ *     ZamaniTokens
+ *
+ * This matches the existing generic effect-operation grammar and avoids
+ * introducing a second token-vocabulary identity.
+ *
+ * The canonical chain is:
+ *
+ *     ZamaniLexer
  *          |
- *          +--> Core
- *          +--> Expressions
- *          +--> EffectOperations
- *          +--> EffectSets
+ *          v
+ *     ZamaniTokens
+ *          |
+ *          v
+ *     parser grammars
  *
- * No generic effect grammar may import this grammar.
+ * `ZamaniLexer` remains the public lexer grammar.
  *
- * The dependency graph therefore remains acyclic.
+ * `ZamaniTokens` remains the canonical token vocabulary.
  *
- * Canonical architecture:
- *
- *     Effects
- *        |
- *        +--> generic effect grammars
- *
- *     RandomnessEffects
- *        |
- *        +--> generic effect grammars
- *
- * There MUST NOT be:
- *
- *     Effects -> RandomnessEffects -> Effects
- *
- * ============================================================================
- * OPEN-WORLD RANDOMNESS MODEL
- * ============================================================================
- *
- * Randomness-related operations MUST NOT be enumerated here.
- *
- * The grammar therefore MUST NOT contain a finite catalogue such as:
- *
- *     random
- *     rand
- *     randomInt
- *     randomFloat
- *     randomBytes
- *     seed
- *     entropy
- *     secureRandom
- *     nondeterministic
- *     pseudoRandom
- *
- * Those concepts may exist as:
- *
- *     library operations
- *     effect declarations
- *     capabilities
- *     policies
- *     dialects
- *     semantic operations
- *     vendor extensions
- *     future domain extensions
- *
- * They are not a closed universal grammar vocabulary.
- *
- * Examples of open-world operation identities include:
- *
- *     randomness::sample
- *     randomness::draw
- *     randomness::entropy
- *     randomness::seed
- *     randomness::stream::next
- *     randomness::source::acquire
- *     cryptography::entropy
- *     simulation::random
- *     quantum::measurement
- *     vendor::randomness::operation
- *     future::randomness::operation
- *
- * The parser accepts qualified identities.
- *
- * Semantic analysis determines what those identities actually mean.
- *
- * ============================================================================
- * RANDOMNESS IS NOT ONE THING
- * ============================================================================
- *
- * Semantic analysis MUST distinguish at least the relevant categories required
- * by the language specification and implementation:
- *
- *     pseudorandom generation
- *     externally sourced entropy
- *     physical randomness
- *     cryptographic randomness
- *     deterministic seeded generation
- *     nondeterministic execution
- *     stochastic simulation
- *     probabilistic computation
- *     quantum measurement outcomes
- *     scheduler nondeterminism
- *     environmental nondeterminism
- *
- * These concepts MUST NOT be collapsed merely because they all involve the
- * word "randomness".
- *
- * In particular:
- *
- *     randomness
- *
- * MUST NOT automatically mean:
- *
- *     nondeterminism
- *
- * and:
- *
- *     nondeterminism
- *
- * MUST NOT automatically mean:
- *
- *     cryptographic randomness.
- *
- * Their semantic relationships are established downstream.
- *
- * ============================================================================
- * DETERMINISM BOUNDARY
- * ============================================================================
- *
- * Randomness has a direct relationship with reproducibility.
- *
- * The grammar itself MUST remain deterministic.
- *
- * Parsing MUST NOT:
- *
- *     generate random values;
- *     inspect an entropy source;
- *     inspect the operating system;
- *     inspect hardware;
- *     query a random device;
- *     inspect scheduler state;
- *     inspect wall-clock time;
- *     choose a seed;
- *     mutate global random state.
- *
- * A source program containing a randomness effect is still parsed entirely
- * from source text.
- *
- * Whether its execution is:
- *
- *     deterministic
- *     reproducible
- *     stochastic
- *     nondeterministic
- *     cryptographically unpredictable
- *
- * is a semantic/execution property.
- *
- * ============================================================================
- * SEEDING MODEL
- * ============================================================================
- *
- * Seed syntax is NOT defined as a special universal grammar construct here.
- *
- * A seed may be represented by:
- *
- *     an ordinary value;
- *     an operation argument;
- *     a configuration value;
- *     a capability;
- *     a policy;
- *     a resource;
- *     an execution parameter;
- *     a library abstraction.
- *
- * This prevents the language from imposing a fixed seed representation or
- * width.
- *
- * For example, the semantic system may support a reproducible operation such
- * as:
- *
- *     randomness::sample(seed, distribution)
- *
- * without this grammar having to know:
- *
- *     seed width;
- *     RNG algorithm;
- *     internal state size;
- *     number of generated values;
- *     hardware implementation.
- *
- * ============================================================================
- * CRYPTOGRAPHIC RANDOMNESS BOUNDARY
- * ============================================================================
- *
- * Cryptographic randomness is NOT equivalent to ordinary stochastic
- * computation.
- *
- * If an operation requires cryptographic entropy, semantic analysis and
- * security policy MUST be able to distinguish it from ordinary pseudorandom
- * generation.
- *
- * This grammar does NOT define:
- *
- *     a cryptographic RNG;
- *     a cryptographic algorithm;
- *     an entropy quality threshold;
- *     a security level;
- *     a hardware entropy device;
- *     an operating-system API.
- *
- * Such requirements belong to:
- *
- *     security
- *     capabilities
- *     policies
- *     resources
- *     semantic validation
- *     execution
- *
- * ============================================================================
- * QUANTUM RANDOMNESS BOUNDARY
- * ============================================================================
- *
- * Quantum measurement can produce probabilistic outcomes, but this grammar
- * does NOT redefine quantum measurement.
- *
- * Quantum syntax remains owned by the quantum grammar subsystem.
- *
- * If semantic analysis determines that:
- *
- *     quantum::measurement
- *
- * produces an outcome whose distribution is physically stochastic, the
- * resulting semantic model may interact with randomness analysis.
- *
- * The canonical quantum boundary remains:
- *
- *     quantum::ir
- *
- * This file MUST NOT create:
- *
- *     RandomQuantumIR
- *     QuantumRandomIR
- *     RandomnessIR
- *     RandomQubitIR
- *
- * or any competing quantum representation.
- *
- * The pipeline remains:
- *
- *     source
- *       |
- *       v
- *     AST
- *       |
- *       v
- *     semantic model
- *       |
- *       v
- *     quantum::ir
- *       |
- *       v
- *     optimization
- *       |
- *       v
- *     routing
- *       |
- *       v
- *     scheduling
- *       |
- *       v
- *     resilience / QEC / ZQN
- *       |
- *       v
- *     HAL
- *
- * ============================================================================
- * SIMULATION BOUNDARY
- * ============================================================================
- *
- * Randomness used by simulation is not automatically equivalent to physical
- * randomness.
- *
- * A simulator may use:
- *
- *     deterministic seeded generation;
- *     reproducible streams;
- *     stochastic models;
- *     controlled perturbations;
- *     probabilistic sampling;
- *     externally supplied entropy.
- *
- * Those choices belong to execution semantics.
- *
- * The grammar only identifies the relevant effect-domain boundary.
- *
- * ============================================================================
- * EFFECT / CAPABILITY / RESOURCE SEPARATION
- * ============================================================================
- *
- * EFFECT
- * ------
- *
- * Describes that a computation may consume, produce, depend upon, or expose
- * randomness-related behavior.
- *
- * CAPABILITY
- * ----------
- *
- * Describes what the realization is capable of providing.
- *
- * Possible semantic capabilities include, without being a closed list:
- *
- *     randomness
- *     reproducible-randomness
- *     entropy
- *     cryptographic-entropy
- *     quantum-randomness
- *     stochastic-simulation
- *
- * Capability names remain open-world.
- *
- * RESOURCE
- * --------
- *
- * Describes computational or environmental resources involved in realization.
- *
- * Examples may include:
- *
- *     entropy availability
- *     randomness throughput
- *     execution state
- *     memory
- *     storage
- *     accelerator capability
- *
- * No fixed numeric limits belong in this grammar.
- *
- * REQUIREMENT
- * -----------
- *
- * Specifies what must be available for realization.
- *
- * CONSTRAINT
- * ----------
- *
- * Specifies what a valid realization must obey.
- *
- * PREFERENCE
- * ----------
- *
- * Specifies which valid realization is preferred.
- *
- * POLICY
- * ------
- *
- * Governs permitted randomness sources and execution behavior.
- *
- * The grammar does not define these constructs.
- *
- * ============================================================================
- * POCO-REAF CONTRACT
- * ============================================================================
- *
- * A randomness effect expresses computational intent.
- *
- * It MUST NOT encode a physical implementation.
- *
- * The same source-level semantic request may be realized through:
- *
- *     deterministic simulation;
- *     pseudorandom generation;
- *     hardware entropy;
- *     operating-system entropy;
- *     distributed entropy;
- *     accelerator facilities;
- *     quantum measurement;
- *     future computational mechanisms.
- *
- * The realization is selected only after:
- *
- *     semantic analysis
- *     capability negotiation
- *     resource analysis
- *     security analysis
- *     policy analysis
- *     execution planning
- *
- * Therefore adding a new:
- *
- *     CPU
- *     GPU
- *     FPGA
- *     ASIC
- *     accelerator
- *     QPU
- *     simulator
- *     entropy source
- *     operating system
- *     runtime
- *     cloud platform
- *     distributed platform
- *
- * MUST NOT require this grammar to change merely because the realization
- * mechanism changed.
- *
- * ============================================================================
- * SCALABILITY CONTRACT
- * ============================================================================
- *
- * This grammar imposes NO artificial capacity limits.
- *
- * It MUST NOT define:
- *
- *     MAX_RANDOM_VALUES
- *     MAX_RANDOM_OPERATIONS
- *     MAX_RANDOM_STREAMS
- *     MAX_ENTROPY
- *     MAX_RANDOMNESS_SOURCES
- *     MAX_SEED_SIZE
- *     MAX_RNG_STATE
- *     MAX_DISTRIBUTIONS
- *     MAX_SAMPLES
- *     MAX_PROBABILITY_STATES
- *     MAX_QUBITS
- *     MAX_CPUS
- *     MAX_GPUS
- *     MAX_FPGAS
- *     MAX_QPUS
- *     MAX_NODES
- *     MAX_MEMORY
- *     MAX_THREADS
- *     MAX_DEVICES
- *
- * or equivalent artificial limits.
- *
- * There is no language-level fixed limit on:
- *
- *     number of randomness operations;
- *     number of randomness domains;
- *     number of effect references;
- *     number of effect-set entries;
- *     number of operation arguments;
- *     qualified-name depth;
- *     number of stochastic computations;
- *     number of samples;
- *     number of random streams;
- *     program size;
- *     machine size;
- *     distributed scale.
- *
- * "Infinity" means that the language grammar introduces no artificial ceiling.
- *
- * It does NOT claim that physical hardware, memory, storage, compiler
- * resources, or execution time are physically infinite.
- *
- * ============================================================================
- * DOMAIN EXTENSIBILITY
- * ============================================================================
- *
- * New randomness mechanisms MUST normally integrate through:
- *
- *     qualified names;
- *     effect declarations;
- *     capabilities;
- *     resources;
- *     requirements;
- *     constraints;
- *     policies;
- *     dialects;
- *     libraries;
- *     semantic registrations.
- *
- * Examples:
- *
- *     randomness::sample
- *     randomness::stream::next
- *     cryptography::entropy
- *     simulation::stochastic_step
- *     quantum::measurement
- *     vendor::entropy::acquire
- *     future::randomness::operation
- *
- * No modification to this grammar is required merely because a new semantic
- * randomness mechanism is introduced.
- *
- * ============================================================================
- * AST CONTRACT
- * ============================================================================
- *
- * This grammar produces parser structure only.
- *
- * The domain-neutral AST MUST preserve enough information for downstream
- * semantic analysis, including as applicable:
- *
- *     source span;
- *     source ordering;
- *     qualified operation identity;
- *     operation arguments;
- *     effect identity;
- *     effect-set membership;
- *     source metadata.
- *
- * The AST MUST NOT require:
- *
- *     RNG implementation objects;
- *     entropy handles;
- *     operating-system handles;
- *     hardware RNG IDs;
- *     device IDs;
- *     CPU IDs;
- *     GPU IDs;
- *     FPGA IDs;
- *     QPU IDs;
- *     backend IDs;
- *     machine IDs.
- *
- * ============================================================================
- * SEMANTIC CONTRACT
- * ============================================================================
- *
- * After parsing, semantic analysis is responsible for:
- *
- *     1. name resolution;
- *     2. operation resolution;
- *     3. randomness-effect classification;
- *     4. argument/type checking;
- *     5. effect checking;
- *     6. determinism analysis;
- *     7. reproducibility analysis;
- *     8. capability checking;
- *     9. resource analysis;
- *    10. requirement checking;
- *    11. constraint checking;
- *    12. security analysis;
- *    13. policy checking;
- *    14. provenance construction;
- *    15. target-independent validation;
- *    16. canonical semantic lowering.
- *
- * The parser MUST NOT perform these operations.
- *
- * ============================================================================
- * DETERMINISM AND REPRODUCIBILITY
- * ============================================================================
- *
- * Randomness-aware semantic analysis MUST be able to distinguish:
- *
- *     reproducible randomness
- *
- * from:
- *
- *     externally sourced randomness
- *
- * and:
- *
- *     nondeterministic execution.
- *
- * A reproducible stochastic computation may depend on explicit source-level
- * inputs or execution parameters while remaining reproducible under an
- * appropriate execution contract.
- *
- * This distinction belongs downstream.
- *
- * The grammar MUST NOT secretly introduce:
- *
- *     implicit global seed;
- *     hidden RNG;
- *     hidden entropy source;
- *     hidden timestamp;
- *     hidden scheduler state.
- *
- * ============================================================================
- * PROVENANCE CONTRACT
- * ============================================================================
- *
- * When randomness participates in a semantic computation, downstream
- * provenance may need to preserve information such as:
- *
- *     randomness source;
- *     declared operation;
- *     execution mode;
- *     reproducibility contract;
- *     seed provenance where applicable;
- *     policy;
- *     capability;
- *     semantic transformation;
- *     verification information.
- *
- * The grammar does not construct provenance objects.
- *
- * It only preserves the syntax required for downstream analysis.
- *
- * ============================================================================
- * SECURITY CONTRACT
- * ============================================================================
- *
- * Parsing a randomness construct MUST NEVER acquire entropy or execute a
- * randomness operation.
- *
- * In particular, parsing:
- *
- *     randomness::sample(value)
- *
- * MUST NOT:
- *
- *     access an operating-system entropy device;
- *     invoke a hardware RNG;
- *     invoke a cryptographic provider;
- *     access a QPU;
- *     inspect system state;
- *     generate a random number;
- *     modify random state.
- *
- * Security-sensitive randomness requirements are validated downstream.
- *
- * ============================================================================
- * ERROR MODEL
- * ============================================================================
- *
- * An invalid randomness operation is not represented by a fixed parser
- * catalogue.
- *
- * Semantic analysis may report:
- *
- *     unresolved operation;
- *     invalid operation declaration;
- *     incompatible argument type;
- *     missing capability;
- *     unavailable entropy source;
- *     prohibited randomness source;
- *     insufficient resource;
- *     incompatible reproducibility contract;
- *     incompatible security policy;
- *     unsupported target realization.
- *
- * These are semantic or execution errors, not keyword-enumeration errors.
- *
- * ============================================================================
- * CAPABILITY INTEGRATION
- * ============================================================================
- *
- * Randomness operations may require capabilities.
- *
- * Capability syntax remains owned by:
- *
- *     grammar/core/capabilities.g4
- *
- * Requirement syntax remains owned by:
- *
- *     grammar/core/requirements.g4
- *
- * Resource-specific semantics remain owned by:
- *
- *     grammar/resources/
- *
- * This grammar does not redefine any of them.
- *
- * ============================================================================
- * RESOURCE INTEGRATION
- * ============================================================================
- *
- * Randomness may have resource implications.
- *
- * Examples include:
- *
- *     entropy availability;
- *     computation;
- *     memory;
- *     storage;
- *     throughput;
- *     latency;
- *     energy;
- *     accelerator availability.
- *
- * These are semantic resource properties.
- *
- * This grammar MUST NOT encode fixed resource quantities.
- *
- * It MUST NOT prescribe universal values for:
- *
- *     seed size;
- *     entropy size;
- *     state size;
- *     sample count;
- *     throughput;
- *     memory;
- *     storage.
- *
- * ============================================================================
- * POLICY INTEGRATION
- * ============================================================================
- *
- * Policies may govern randomness behavior, including:
- *
- *     permitted source classes;
- *     cryptographic requirements;
- *     reproducibility requirements;
- *     simulation restrictions;
- *     provenance requirements;
- *     external-entropy restrictions;
- *     execution restrictions.
- *
- * Policy syntax is owned elsewhere.
- *
- * This file provides only the randomness effect boundary.
- *
- * ============================================================================
- * CROSS-DOMAIN INTEGRATION
- * ============================================================================
- *
- * Randomness may participate in:
- *
- *     classical computation;
- *     probabilistic computation;
- *     AI/ML;
- *     simulation;
- *     quantum computation;
- *     hybrid computation;
- *     distributed computation;
- *     cryptography;
- *     security;
- *     hardware/software co-design;
- *     HDL simulation;
- *     accelerator computation;
- *     future computational domains.
- *
- * The generic effect model allows those domains to coexist.
- *
- * Example semantic composition:
- *
- *     randomness
- *         +
- *     classical
- *
- * or:
- *
- *     randomness
- *         +
- *     quantum::measurement
- *         +
- *     classical control
- *
- * or:
- *
- *     randomness
- *         +
- *     simulation
- *         +
- *     reproducibility policy
- *
- * No domain-specific second effect language is introduced.
- *
- * ============================================================================
- * ANTLR GRAMMAR DECLARATION
  * ============================================================================
  */
 
 parser grammar RandomnessEffects;
 
 options {
-    tokenVocab = ZamaniLexer;
+    tokenVocab = ZamaniTokens;
 }
 
 import
-    Core,
-    Expressions,
     EffectOperations,
     EffectSets
 ;
@@ -992,23 +310,36 @@ import
  * RANDOMNESS OPERATION REFERENCE
  * ============================================================================
  *
- * Reuses the canonical generic effect-operation reference.
+ * PURPOSE
+ * -------
  *
- * Examples:
+ * Provides a stable parser-tree boundary for an operation that will be
+ * classified semantically as randomness-related.
  *
- *     randomness::sample
- *     randomness::draw
- *     randomness::entropy
- *     randomness::stream::next
- *     cryptography::entropy
- *     simulation::random
- *     vendor::randomness::operation
- *     future::randomness::operation
+ * The operation identity itself remains a normal Zamani qualified name through
+ * the canonical EffectOperations grammar.
  *
- * The parser does not determine whether a resolved operation is actually a
- * randomness operation.
  *
- * Semantic analysis performs domain classification.
+ * IMPORTANT
+ * ---------
+ *
+ * This rule does NOT restrict the operation to a literal `randomness`
+ * namespace.
+ *
+ * That is intentional.
+ *
+ * Randomness semantics may arise from:
+ *
+ *     randomness::...
+ *     cryptography::...
+ *     simulation::...
+ *     quantum::...
+ *     vendor::...
+ *     future::...
+ *
+ * or another declared namespace.
+ *
+ * Domain classification is semantic, not lexical.
  */
 
 randomnessOperationReference
@@ -1021,16 +352,18 @@ randomnessOperationReference
  * RANDOMNESS OPERATION INVOCATION
  * ============================================================================
  *
- * Reuses canonical effect invocation syntax.
+ * Reuses the canonical effect invocation grammar.
  *
- * Examples:
+ * Examples of source-level identities that MAY subsequently be classified
+ * semantically as randomness-related include:
  *
  *     randomness::sample(value)
- *     randomness::draw(distribution)
  *     randomness::stream::next(stream)
  *     cryptography::entropy(request)
+ *     simulation::stochastic_step(state)
+ *     vendor::randomness::operation(value)
  *
- * Argument syntax remains owned by the expression subsystem.
+ * These are examples of semantic identities, not a closed grammar catalogue.
  */
 
 randomnessOperationInvocation
@@ -1043,10 +376,8 @@ randomnessOperationInvocation
  * RANDOMNESS OPERATION USE
  * ============================================================================
  *
- * Stable domain wrapper around the canonical effect-operation-use construct.
- *
- * The wrapper exists for semantic tooling and AST conversion without creating
- * a competing operation language.
+ * Stable adapter boundary for tools that need to identify a randomness-domain
+ * operation use without creating a new operation-use language.
  */
 
 randomnessOperationUse
@@ -1061,14 +392,10 @@ randomnessOperationUse
  *
  * Reuses the canonical effect-reference syntax.
  *
- * Examples:
+ * Semantic analysis determines whether the resolved effect belongs to the
+ * randomness domain.
  *
- *     randomness
- *     randomness::stochastic
- *     randomness::reproducible
- *     cryptography::entropy
- *
- * Semantic analysis determines the actual effect classification.
+ * This permits open-world effect namespaces and future extensions.
  */
 
 randomnessEffectReference
@@ -1081,19 +408,16 @@ randomnessEffectReference
  * RANDOMNESS EFFECT REFERENCE LIST
  * ============================================================================
  *
- * Reuses the canonical unbounded effect-reference list.
+ * Reuses the canonical effect-reference list.
  *
- * Examples:
+ * No fixed cardinality is encoded.
  *
- *     randomness
+ * The generic EffectSets grammar owns:
  *
- *     randomness, simulation
- *
- *     randomness::reproducible, data::transform
- *
- *     quantum::measurement, randomness::stochastic
- *
- * No fixed number of entries exists.
+ *     list structure
+ *     comma handling
+ *     trailing comma behavior
+ *     qualified-name syntax.
  */
 
 randomnessEffectReferenceList
@@ -1106,17 +430,12 @@ randomnessEffectReferenceList
  * RANDOMNESS EFFECT SET
  * ============================================================================
  *
- * Reuses the canonical effect-set representation.
+ * Reuses the canonical effect-set grammar.
  *
- * Example:
+ * The contents are classified semantically.
  *
- *     {
- *         randomness::sample,
- *         simulation::stochastic_step
- *     }
- *
- * The entries receive their semantic meaning only during downstream
- * analysis.
+ * This prevents the randomness domain from creating a second effect-set
+ * language.
  */
 
 randomnessEffectSet
@@ -1126,175 +445,445 @@ randomnessEffectSet
 
 /*
  * ============================================================================
- * INTEGRATION CONTRACT
+ * SEMANTIC BOUNDARY
  * ============================================================================
  *
- * 1. The canonical lexer is ZamaniLexer.
+ * The parser recognizes structure only.
  *
- * 2. Core owns:
+ * Semantic analysis MUST determine:
  *
- *        identifier
- *        qualifiedName
- *        paths
- *        punctuation
- *        common source constructs
+ *     - whether the referenced operation resolves;
+ *     - whether the resolved operation is randomness-related;
+ *     - whether it is pseudorandom or externally sourced;
+ *     - whether it is cryptographically security-sensitive;
+ *     - whether it is deterministic/reproducible;
+ *     - whether it introduces execution nondeterminism;
+ *     - whether it is simulation-related;
+ *     - whether it is associated with quantum measurement;
+ *     - whether required capabilities exist;
+ *     - whether required resources exist;
+ *     - whether policy permits the requested behavior;
+ *     - whether provenance must be recorded;
+ *     - whether the operation is legal in its effect context;
+ *     - how the operation lowers into the canonical semantic representation.
  *
- * 3. Expressions owns:
- *
- *        expression
- *        argument syntax
- *
- * 4. EffectOperations owns:
- *
- *        effectOperationReference
- *        effectInvocation
- *        effectOperationUse
- *
- * 5. EffectSets owns:
- *
- *        effectReference
- *        effectReferenceList
- *        effectSet
- *
- * 6. This file owns only randomness-prefixed integration wrappers.
- *
- * 7. The generic effect composition root remains:
- *
- *        grammar/effects/effects.g4
- *
- * 8. The generic effect composition root MUST remain domain-neutral.
- *
- * 9. This grammar MUST NOT be imported by the generic effect composition root
- *    if doing so would create a dependency cycle.
- *
- * 10. Statement-level effect syntax remains owned by:
- *
- *        grammar/statements/effects.g4
- *
- * 11. Expression-level effect syntax remains owned by:
- *
- *        grammar/expressions/effects.g4
- *
- * 12. Randomness classification occurs in semantic analysis.
- *
- * 13. Capability/resource/policy/security analysis occurs downstream.
- *
- * 14. Canonical IR lowering occurs downstream.
+ * None of those decisions belong in this grammar.
  *
  * ============================================================================
- * DEPENDENCY CONTRACT
+ * RANDOMNESS SEMANTIC CLASSES
  * ============================================================================
  *
- * DEPENDS_ON:
+ * The semantic model SHOULD be capable of distinguishing, where applicable:
  *
- *     Core
- *     Expressions
- *     EffectOperations
- *     EffectSets
+ *     deterministic pseudorandom generation
+ *     reproducible stochastic computation
+ *     externally sourced entropy
+ *     physical entropy
+ *     cryptographic randomness
+ *     stochastic simulation
+ *     probabilistic computation
+ *     quantum measurement outcomes
+ *     environmental nondeterminism
+ *     scheduler nondeterminism
  *
- * EXPORTS:
+ * These are semantic properties.
  *
- *     randomnessOperationReference
- *     randomnessOperationInvocation
- *     randomnessOperationUse
- *     randomnessEffectReference
- *     randomnessEffectReferenceList
- *     randomnessEffectSet
+ * They are NOT grammar alternatives.
  *
- * AST_OWNER:
+ * In particular:
  *
- *     domain-neutral frontend AST
+ *     randomness != automatically nondeterminism
  *
- * SEMANTIC_OWNER:
+ *     nondeterminism != automatically cryptographic randomness
  *
- *     semantic effect analysis
- *     randomness/determinism analysis
+ *     stochastic simulation != automatically physical randomness
  *
- * SPEC_OWNER:
- *
- *     grammar/spec/effects.md
- *     grammar/spec/determinism.md
- *
- * IR_OWNER:
- *
- *     canonical semantic IR
- *     classical IR where applicable
- *     quantum::ir where quantum semantics are involved
- *
- * TEST_OWNER:
- *
- *     grammar/tests/effects/
- *     grammar/tests/semantic/
- *     grammar/tests/scalability/
- *     grammar/tests/determinism/
- *
- * CONSUMED_BY:
- *
- *     semantic analysis
- *     conformance tooling
- *     AST conversion
- *     effect analysis
- *     determinism analysis
+ *     quantum measurement != automatically a generic RNG operation
  *
  * ============================================================================
- * COMPLETION CRITERIA
+ * DETERMINISM / REPRODUCIBILITY
  * ============================================================================
  *
- * This file is DONE when:
+ * This grammar itself is deterministic.
  *
- * [x] It is an ANTLR4 parser grammar.
+ * Parsing MUST NOT:
  *
- * [x] It uses ZamaniLexer.
+ *     generate random values;
+ *     obtain entropy;
+ *     select a seed;
+ *     inspect hardware;
+ *     inspect operating-system randomness;
+ *     inspect scheduler state;
+ *     inspect wall-clock time;
+ *     access environment state;
+ *     access network state.
  *
- * [x] It contains no lexer rules.
+ * Reproducibility is established by downstream execution semantics and
+ * contracts.
  *
- * [x] It contains no embedded Rust.
+ * A seed, when applicable, remains an ordinary semantic value or execution
+ * parameter. This grammar does not define:
  *
- * [x] It contains no unsafe implementation requirement.
- *
- * [x] It does not execute randomness.
- *
- * [x] It does not acquire entropy.
- *
- * [x] It does not inspect hardware.
- *
- * [x] It does not inspect the operating system.
- *
- * [x] It does not select a runtime.
- *
- * [x] It does not select a target.
- *
- * [x] It does not redefine generic effect syntax.
- *
- * [x] It does not enumerate random operations.
- *
- * [x] It does not impose a fixed RNG model.
- *
- * [x] It does not impose a fixed entropy model.
- *
- * [x] It does not impose a fixed seed representation.
- *
- * [x] It does not impose fixed probability/distribution limits.
- *
- * [x] It distinguishes grammar from semantic randomness behavior.
- *
- * [x] It preserves the determinism boundary.
- *
- * [x] It preserves the quantum::ir boundary.
- *
- * [x] It remains open-world.
- *
- * [x] It introduces no machine-capacity constants.
- *
- * [x] It can participate in classical, quantum, hybrid, HDL, AI, distributed,
- *     networking, cryptographic, accelerator, embedded, and future-domain
- *     programs without requiring a new randomness grammar for every target.
+ *     seed width;
+ *     seed encoding;
+ *     generator state size;
+ *     algorithm;
+ *     stream representation.
  *
  * ============================================================================
- * REQUIRED POSITIVE CONFORMANCE TESTS
+ * CRYPTOGRAPHIC BOUNDARY
  * ============================================================================
  *
- * Operation references:
+ * Cryptographically suitable randomness is a semantic/security requirement.
+ *
+ * This grammar does not define:
+ *
+ *     cryptographic algorithms;
+ *     security levels;
+ *     entropy thresholds;
+ *     entropy devices;
+ *     operating-system APIs;
+ *     hardware RNG implementations.
+ *
+ * Security policy, capabilities, resources, semantic validation, and execution
+ * infrastructure determine whether a requested cryptographic randomness
+ * operation can be realized.
+ *
+ * ============================================================================
+ * QUANTUM BOUNDARY
+ * ============================================================================
+ *
+ * Quantum measurement remains owned by the quantum subsystem.
+ *
+ * This grammar MUST NOT define quantum measurement syntax merely because
+ * measurement outcomes can be probabilistic.
+ *
+ * The semantic relationship is:
+ *
+ *     quantum source
+ *          |
+ *          v
+ *     domain-neutral semantic model
+ *          |
+ *          v
+ *     quantum::ir
+ *
+ * If a quantum operation has stochastic semantics, randomness analysis may
+ * consume that semantic information.
+ *
+ * It MUST NOT create:
+ *
+ *     RandomnessIR
+ *     QuantumRandomIR
+ *     RandomQuantumIR
+ *     RandomQubitIR
+ *
+ * or another quantum representation.
+ *
+ * The canonical quantum boundary remains:
+ *
+ *     quantum::ir
+ *
+ * ============================================================================
+ * SIMULATION BOUNDARY
+ * ============================================================================
+ *
+ * Simulation may require stochastic behavior without requiring physical
+ * entropy.
+ *
+ * The execution subsystem may therefore choose an implementation such as:
+ *
+ *     deterministic seeded simulation
+ *     reproducible stochastic simulation
+ *     externally seeded simulation
+ *     physical-entropy-backed simulation
+ *
+ * according to the semantic contract, capabilities, resources and policy.
+ *
+ * This grammar does not select the implementation.
+ *
+ * ============================================================================
+ * EFFECT / CAPABILITY / RESOURCE SEPARATION
+ * ============================================================================
+ *
+ * EFFECT
+ * ------
+ *
+ * Describes observable or semantically relevant computational behavior.
+ *
+ * CAPABILITY
+ * ----------
+ *
+ * Describes what a realization environment can provide.
+ *
+ * RESOURCE
+ * --------
+ *
+ * Describes resources involved in realizing the computation.
+ *
+ * REQUIREMENT
+ * -----------
+ *
+ * Describes what a realization must satisfy.
+ *
+ * CONSTRAINT
+ * ----------
+ *
+ * Describes what a valid realization must obey.
+ *
+ * POLICY
+ * ------
+ *
+ * Describes permitted/restricted behavior.
+ *
+ * PROVENANCE
+ * ----------
+ *
+ * Describes traceability of relevant semantic decisions and derived artifacts.
+ *
+ * This grammar defines none of these semantic systems.
+ *
+ * It only supplies parser boundaries that downstream systems can consume.
+ *
+ * ============================================================================
+ * OPEN-WORLD EXTENSIBILITY
+ * ============================================================================
+ *
+ * New randomness algorithms, distributions, entropy sources, generators,
+ * accelerators, simulators, quantum technologies, or vendor facilities MUST
+ * NOT require a modification to this grammar merely because a new semantic
+ * entity has been introduced.
+ *
+ * New semantic entities should normally be introduced through:
+ *
+ *     libraries
+ *     effect declarations
+ *     semantic registrations
+ *     capabilities
+ *     resource descriptions
+ *     policies
+ *     dialects
+ *     interoperability contracts
+ *
+ * The grammar remains stable because operation identity is name-based.
+ *
+ * ============================================================================
+ * POCO-REAF / SCALABILITY CONTRACT
+ * ============================================================================
+ *
+ * This grammar introduces no artificial limits on:
+ *
+ *     operation count;
+ *     effect count;
+ *     effect-set size;
+ *     effect-reference count;
+ *     argument count;
+ *     qualified-name depth;
+ *     stochastic computation count;
+ *     random streams;
+ *     samples;
+ *     distributions;
+ *     source-program size;
+ *     machine size;
+ *     execution scale.
+ *
+ * It MUST NOT encode implementation ceilings for:
+ *
+ *     random values;
+ *     entropy;
+ *     streams;
+ *     generator state;
+ *     samples;
+ *     distributions;
+ *     memory;
+ *     processors;
+ *     accelerators;
+ *     devices;
+ *     nodes;
+ *     quantum resources;
+ *     network resources.
+ *
+ * Practical parser/compiler/runtime limits remain implementation resource
+ * policies. They are not language semantics.
+ *
+ * The same semantic program can therefore be considered for a wide range of
+ * realizations, subject to capability/resource/policy feasibility.
+ *
+ * ============================================================================
+ * AST CONTRACT
+ * ============================================================================
+ *
+ * This grammar creates no semantic AST object.
+ *
+ * The frontend AST must preserve the source information needed to represent:
+ *
+ *     operation identity;
+ *     effect identity;
+ *     argument expressions;
+ *     source ordering;
+ *     source spans;
+ *     enclosing effect context.
+ *
+ * The AST MUST remain domain-neutral.
+ *
+ * It MUST NOT require:
+ *
+ *     RNG objects;
+ *     entropy handles;
+ *     hardware RNG IDs;
+ *     CPU IDs;
+ *     GPU IDs;
+ *     FPGA IDs;
+ *     QPU IDs;
+ *     physical-device IDs;
+ *     backend IDs.
+ *
+ * ============================================================================
+ * IR CONTRACT
+ * ============================================================================
+ *
+ * This grammar creates no IR.
+ *
+ * The downstream path is:
+ *
+ *     parser structure
+ *          |
+ *          v
+ *     domain-neutral AST
+ *          |
+ *          v
+ *     semantic effect model
+ *          |
+ *          v
+ *     canonical semantic representation
+ *          |
+ *          +--> classical IR
+ *          +--> quantum::ir
+ *          +--> HDL/hardware representation
+ *          +--> distributed representation
+ *          +--> future domain representation
+ *
+ * When quantum semantics are involved, the canonical quantum destination
+ * remains:
+ *
+ *     quantum::ir
+ *
+ * ============================================================================
+ * RESOURCE / CAPABILITY INTEGRATION
+ * ============================================================================
+ *
+ * Resource and capability syntax is owned elsewhere.
+ *
+ * Conceptually, semantic analysis may derive requirements such as:
+ *
+ *     required capability: randomness
+ *
+ *     required capability: cryptographic entropy
+ *
+ *     required capability: reproducible stochastic execution
+ *
+ *     required capability: quantum measurement
+ *
+ * or arbitrary future capabilities.
+ *
+ * It may also derive resource requirements based on the operation and its
+ * semantic contract.
+ *
+ * This file does not encode those requirements as grammar-level constants.
+ *
+ * ============================================================================
+ * POLICY INTEGRATION
+ * ============================================================================
+ *
+ * Security and execution policies may constrain:
+ *
+ *     permitted randomness sources;
+ *     reproducibility;
+ *     cryptographic suitability;
+ *     external entropy;
+ *     simulation;
+ *     provenance;
+ *     replay;
+ *     execution environments.
+ *
+ * Policies are resolved downstream.
+ *
+ * A policy failure is therefore not a parser failure.
+ *
+ * ============================================================================
+ * PROVENANCE INTEGRATION
+ * ============================================================================
+ *
+ * Depending on semantic requirements, downstream provenance may preserve:
+ *
+ *     declared operation;
+ *     resolved operation;
+ *     source location;
+ *     semantic classification;
+ *     execution mode;
+ *     reproducibility contract;
+ *     source of entropy;
+ *     seed provenance where applicable;
+ *     policy decisions;
+ *     capability decisions;
+ *     transformations;
+ *     verification information.
+ *
+ * This grammar preserves only the source structure required to construct that
+ * information.
+ *
+ * ============================================================================
+ * DIAGNOSTIC CONTRACT
+ * ============================================================================
+ *
+ * Parser diagnostics are restricted to malformed source structure.
+ *
+ * Examples:
+ *
+ *     malformed qualified operation;
+ *     malformed invocation;
+ *     malformed effect reference;
+ *     malformed effect set.
+ *
+ * Semantic diagnostics belong downstream:
+ *
+ *     unknown operation;
+ *     invalid operation signature;
+ *     operation not classified as randomness;
+ *     unavailable capability;
+ *     unavailable resource;
+ *     prohibited source;
+ *     incompatible reproducibility contract;
+ *     invalid security requirement;
+ *     unsupported realization.
+ *
+ * Resource/capability/security/policy failures MUST NOT be converted into
+ * artificial parser restrictions.
+ *
+ * ============================================================================
+ * COMPATIBILITY CONTRACT
+ * ============================================================================
+ *
+ * Existing generic effect syntax remains authoritative.
+ *
+ * This adapter introduces no new reserved words.
+ *
+ * Therefore existing operation names and effect names remain compatible with
+ * the open-world effect model.
+ *
+ * Historical or vendor-specific names are handled through the repository's
+ * compatibility/dialect architecture rather than through an ever-growing
+ * randomness keyword catalogue.
+ *
+ * ============================================================================
+ * TEST CONTRACT
+ * ============================================================================
+ *
+ * The following tests belong to the integration suite.
+ *
+ *
+ * POSITIVE OPERATION REFERENCES
+ * ------------------------------
  *
  *     randomness::sample
  *     randomness::draw
@@ -1305,7 +894,9 @@ randomnessEffectSet
  *     vendor::randomness::operation
  *     future::randomness::operation
  *
- * Operation invocations:
+ *
+ * POSITIVE INVOCATIONS
+ * --------------------
  *
  *     randomness::sample(value)
  *     randomness::draw(distribution)
@@ -1313,24 +904,26 @@ randomnessEffectSet
  *     randomness::stream::next(stream)
  *     cryptography::entropy(request)
  *
- * Effect references:
+ *
+ * POSITIVE EFFECT REFERENCES
+ * --------------------------
  *
  *     randomness
  *     randomness::stochastic
  *     randomness::reproducible
  *
- * Effect sets:
+ *
+ * POSITIVE EFFECT SETS
+ * --------------------
  *
  *     {
  *         randomness::sample,
  *         simulation::stochastic_step
  *     }
  *
- * Cross-domain references:
- *
  *     {
- *         randomness::sample,
- *         quantum::measurement
+ *         quantum::measurement,
+ *         randomness::stochastic
  *     }
  *
  *     {
@@ -1339,151 +932,410 @@ randomnessEffectSet
  *         data::transform
  *     }
  *
- * ============================================================================
- * REQUIRED NEGATIVE / SEMANTIC TESTS
- * ============================================================================
  *
- * The following MUST be tested semantically rather than by adding parser
- * keyword alternatives:
+ * CROSS-DOMAIN TESTS
+ * ------------------
  *
- *     unresolved randomness operation;
- *     invalid effect identity;
- *     incompatible argument type;
- *     missing randomness capability;
- *     unavailable entropy capability;
- *     prohibited randomness policy;
- *     cryptographic-randomness requirement not satisfied;
- *     reproducibility requirement not satisfied;
- *     invalid effect context;
- *     invalid operation declaration.
+ * Verify composition with:
  *
- * The parser MUST remain open-world.
+ *     classical
+ *     quantum
+ *     hybrid
+ *     HDL
+ *     hardware
+ *     AI/ML
+ *     distributed
+ *     networking
+ *     cryptography/security
+ *     simulation
+ *     accelerators
  *
- * ============================================================================
- * REQUIRED DETERMINISM TESTS
- * ============================================================================
  *
- * Verify that parsing is independent of:
+ * SEMANTIC NEGATIVE TESTS
+ * -----------------------
  *
- *     operating-system entropy;
+ * The parser remains open-world.
+ *
+ * Therefore the following are semantic tests rather than hard-coded parser
+ * exclusions:
+ *
+ *     unresolved operation;
+ *     operation with invalid signature;
+ *     operation requiring unavailable capability;
+ *     operation requiring unavailable resource;
+ *     operation prohibited by policy;
+ *     operation incompatible with reproducibility requirements;
+ *     operation incompatible with security requirements.
+ *
+ *
+ * DETERMINISM TESTS
+ * -----------------
+ *
+ * Parsing must produce equivalent parser structure for identical source under
+ * identical grammar/toolchain configuration regardless of:
+ *
+ *     operating-system entropy state;
  *     hardware RNG state;
- *     system time;
  *     scheduler state;
+ *     system time;
  *     process identity;
  *     thread identity;
- *     environment state;
- *     network state.
+ *     network state;
+ *     environment state.
  *
- * Repeated parsing of identical source MUST produce equivalent parser
- * structure under the same grammar/toolchain version.
  *
- * ============================================================================
- * REQUIRED SCALABILITY TESTS
- * ============================================================================
+ * SCALABILITY TESTS
+ * -----------------
  *
- * Tests MUST cover generated inputs containing:
+ * Tests should generate increasingly large valid programs and verify:
  *
  *     deeply qualified operation names;
  *     large effect sets;
- *     large argument lists;
- *     many randomness operations;
- *     many independent stochastic computations;
- *     nested effect constructs;
- *     mixed randomness and classical computation;
- *     mixed randomness and quantum computation;
- *     mixed randomness and simulation;
+ *     large invocation argument lists;
+ *     many independent randomness operations;
+ *     mixed stochastic and deterministic computation;
+ *     mixed classical/quantum computation;
  *     distributed stochastic execution;
- *     large source programs.
+ *     simulation workloads;
+ *     large source units.
  *
- * Tests MUST scale input size through generated data.
- *
- * They MUST NOT introduce grammar constants that establish a universal limit.
+ * Test scaling is determined by the test harness and available resources,
+ * not by grammar-level constants.
  *
  * ============================================================================
  * HARD-CODING AUDIT
  * ============================================================================
  *
- * Forbidden:
+ * This grammar contains:
  *
- *     fixed random-operation catalogues;
- *     fixed RNG algorithms;
- *     fixed entropy providers;
- *     fixed seed widths;
- *     fixed RNG state widths;
- *     fixed distribution counts;
- *     fixed sample counts;
- *     fixed entropy-pool sizes;
- *     fixed hardware RNG counts;
- *     fixed QPU counts;
- *     fixed device counts;
- *     fixed machine capacities.
+ *     no fixed randomness operation catalogue;
+ *     no fixed RNG algorithm list;
+ *     no fixed entropy provider list;
+ *     no fixed seed representation;
+ *     no fixed generator-state representation;
+ *     no fixed distribution catalogue;
+ *     no fixed sample limit;
+ *     no fixed stream limit;
+ *     no hardware-capacity assumption;
+ *     no target-selection rule.
  *
- * Also forbidden:
- *
- *     MAX_QUBITS
- *     MAX_CPUS
- *     MAX_GPUS
- *     MAX_FPGAS
- *     MAX_NODES
- *     MAX_MEMORY
- *     MAX_THREADS
- *     MAX_TENSOR_RANK
- *     MAX_REGISTER_WIDTH
- *     MAX_NETWORK_SIZE
- *     MAX_DEVICE_COUNT
- *
- * No equivalent artificial capacity constant may be introduced under another
- * name.
+ * It also introduces no artificial universal resource ceilings.
  *
  * ============================================================================
- * FINAL ARCHITECTURAL GUARANTEE
+ * INTEGRATION WITH EXISTING EFFECT ROOT
  * ============================================================================
  *
- * This file establishes randomness as an OPEN semantic effect domain.
+ * IMPORTANT:
  *
- * The resulting architecture is:
+ * `grammar/effects/effects.g4` remains the generic effect composition root.
  *
- *     source
- *       |
- *       v
+ * It MUST NOT import RandomnessEffects merely to expose this adapter.
+ *
+ * The correct dependency direction is:
+ *
+ *     RandomnessEffects
+ *          |
+ *          +--> EffectOperations
+ *          +--> EffectSets
+ *
+ * while:
+ *
+ *     Effects
+ *          |
+ *          +--> generic effect declarations
+ *          +--> generic effect sets
+ *          +--> generic effect operations
+ *          +--> generic handlers
+ *
+ * The generic effect system therefore remains domain-neutral.
+ *
+ * Randomness classification happens through semantic/domain integration.
+ *
+ * ============================================================================
+ * INTEGRATION WITH EFFECT OPERATIONS
+ * ============================================================================
+ *
+ * `grammar/effects/effect-operations.g4` remains the sole owner of:
+ *
+ *     effectOperationReference
+ *     effectInvocation
+ *     effectOperationUse
+ *
+ * This file delegates to those rules.
+ *
+ * Therefore any future correction to generic invocation syntax automatically
+ * propagates through this adapter without requiring a second implementation.
+ *
+ * ============================================================================
+ * INTEGRATION WITH EFFECT SETS
+ * ============================================================================
+ *
+ * `grammar/effects/effect-sets.g4` remains the sole owner of:
+ *
+ *     effectReference
+ *     effectReferenceList
+ *     effectSet
+ *
+ * This file delegates to those rules.
+ *
+ * Therefore changes to generic effect-set syntax remain centralized.
+ *
+ * ============================================================================
+ * INTEGRATION WITH AI / LEARNING / ADAPTATION
+ * ============================================================================
+ *
+ * Randomness may participate in:
+ *
+ *     learning;
+ *     adaptation;
+ *     inference;
+ *     probabilistic computation;
+ *     stochastic optimization;
+ *     simulation;
+ *     agent behavior.
+ *
+ * These domains remain owners of their own syntax.
+ *
+ * The randomness adapter does not introduce AI-specific randomness constructs.
+ *
+ * Example semantic relationship:
+ *
+ *     AI operation
+ *          |
+ *          +--> randomness effect
+ *          |
+ *          v
+ *     effect analysis
+ *
+ * ============================================================================
+ * INTEGRATION WITH DETERMINISTIC EXECUTION
+ * ============================================================================
+ *
+ * Reproducibility is a cross-cutting execution property.
+ *
+ * It should integrate with:
+ *
+ *     execution/
+ *     validation/
+ *     provenance/
+ *     policies/
+ *
+ * rather than being implemented as randomness-specific parser keywords.
+ *
+ * A deterministic execution contract can therefore govern a randomness
+ * operation without changing this grammar.
+ *
+ * ============================================================================
+ * INTEGRATION WITH SECURITY
+ * ============================================================================
+ *
+ * Security-sensitive randomness belongs at the intersection of:
+ *
+ *     effects
+ *     capabilities
+ *     resources
+ *     security
+ *     policies
+ *     provenance
+ *
+ * This file does not authorize or deny such operations.
+ *
+ * ============================================================================
+ * INTEGRATION WITH QUANTUM
+ * ============================================================================
+ *
+ * Quantum measurement remains owned by:
+ *
+ *     grammar/quantum/
+ *
+ * Its semantic consequences may be consumed by randomness/determinism
+ * analysis.
+ *
+ * No separate quantum-randomness grammar or IR is introduced.
+ *
+ * ============================================================================
+ * INTEGRATION WITH HDL / HARDWARE
+ * ============================================================================
+ *
+ * Hardware entropy sources, physical noise sources, accelerators and hardware
+ * randomness facilities are represented by target capabilities and semantic
+ * operation declarations.
+ *
+ * This grammar does not encode:
+ *
+ *     device IDs;
+ *     physical addresses;
+ *     hardware resource counts;
+ *     register widths;
+ *     bus widths;
+ *     topology;
+ *     placement;
+ *     routing;
+ *     clock implementation.
+ *
+ * ============================================================================
+ * INTEGRATION WITH DISTRIBUTED COMPUTATION
+ * ============================================================================
+ *
+ * Distributed stochastic computation is represented through composition of:
+ *
+ *     randomness effects
+ *     concurrency semantics
+ *     distributed semantics
+ *     networking semantics
+ *     resource/capability constraints
+ *     reproducibility policy.
+ *
+ * This file does not encode process, node, worker, stream, or device counts.
+ *
+ * ============================================================================
+ * BUILD CONTRACT
+ * ============================================================================
+ *
+ * ANTLR generation MUST resolve:
+ *
+ *     RandomnessEffects
+ *          |
+ *          +--> EffectOperations
+ *          +--> EffectSets
+ *
+ * and their transitive dependencies.
+ *
+ * The build system is responsible for supplying the canonical grammar library
+ * path.
+ *
+ * No embedded build commands or target-specific actions belong here.
+ *
+ * ============================================================================
+ * COMPLETION CRITERIA
+ * ============================================================================
+ *
+ * This file is DONE when:
+ *
+ * [x] It is a parser grammar.
+ *
+ * [x] Its grammar identity is RandomnessEffects.
+ *
+ * [x] It uses the canonical ZamaniTokens vocabulary.
+ *
+ * [x] It imports only the generic effect grammars it directly consumes.
+ *
+ * [x] It does not directly import Core or Expressions unnecessarily.
+ *
+ * [x] It does not define lexer rules.
+ *
+ * [x] It does not define semantic predicates.
+ *
+ * [x] It does not embed Rust.
+ *
+ * [x] It does not require unsafe Rust.
+ *
+ * [x] It does not execute randomness.
+ *
+ * [x] It does not acquire entropy.
+ *
+ * [x] It does not inspect hardware.
+ *
+ * [x] It does not inspect runtime state.
+ *
+ * [x] It does not select a target.
+ *
+ * [x] It does not enumerate randomness operations.
+ *
+ * [x] It does not enumerate RNG algorithms.
+ *
+ * [x] It does not enumerate distributions.
+ *
+ * [x] It does not define a seed width.
+ *
+ * [x] It does not define generator-state size.
+ *
+ * [x] It does not define entropy-pool size.
+ *
+ * [x] It does not define machine-capacity limits.
+ *
+ * [x] It preserves the generic effect ownership model.
+ *
+ * [x] It preserves the open-world effect model.
+ *
+ * [x] It preserves the canonical quantum::ir boundary.
+ *
+ * [x] It preserves the deterministic parser boundary.
+ *
+ * [x] It preserves source-level portability.
+ *
+ * [x] It remains suitable for future randomness mechanisms without grammar
+ *     modification.
+ *
+ * Repository-level verification still required:
+ *
+ * [ ] ANTLR generation succeeds.
+ *
+ * [ ] All transitive imports resolve.
+ *
+ * [ ] No imported-rule collisions occur.
+ *
+ * [ ] Parser integration succeeds.
+ *
+ * [ ] Rust frontend integration succeeds on Rust 1.97 / 1.97.1.
+ *
+ * [ ] Positive conformance tests pass.
+ *
+ * [ ] Negative semantic tests pass.
+ *
+ * [ ] Cross-domain tests pass.
+ *
+ * [ ] Determinism tests pass.
+ *
+ * [ ] Scalability tests pass within available implementation resources.
+ *
+ * ============================================================================
+ * FINAL INVARIANT
+ * ============================================================================
+ *
+ * Randomness is a semantic effect domain, not a closed grammar catalogue.
+ *
+ * The stable architecture is:
+ *
  *     generic effect syntax
- *       |
- *       v
- *     randomness-domain classification
- *       |
- *       +--> determinism analysis
- *       +--> reproducibility analysis
- *       +--> capability analysis
- *       +--> resource analysis
- *       +--> security analysis
- *       +--> policy analysis
- *       +--> provenance
- *       |
- *       v
- *     target-independent semantic representation
- *       |
- *       +----------------------+----------------------+
- *       |                      |                      |
- *       v                      v                      v
- *   classical             quantum::ir           HDL/hardware
- *       |                      |                      |
- *       +----------------------+----------------------+
- *                              |
- *                              v
- *                     optimization/lowering
- *                              |
- *                              v
- *                         execution plan
- *                              |
- *                              v
- *                         target realization
+ *          |
+ *          v
+ *     randomness adapter
+ *          |
+ *          v
+ *     domain-neutral AST
+ *          |
+ *          v
+ *     semantic classification
+ *          |
+ *          +--> determinism
+ *          +--> reproducibility
+ *          +--> security
+ *          +--> capabilities
+ *          +--> resources
+ *          +--> policies
+ *          +--> provenance
+ *          |
+ *          v
+ *     canonical semantic representation
+ *          |
+ *          +--> classical IR
+ *          +--> quantum::ir
+ *          +--> HDL/hardware representation
+ *          +--> distributed representation
+ *          |
+ *          v
+ *     optimization / lowering
+ *          |
+ *          v
+ *     target realization
  *
- * A new randomness algorithm, entropy source, simulator, accelerator, QPU,
- * classical processor, distributed platform, or future computational
+ * A new randomness algorithm, distribution, entropy source, simulator,
+ * accelerator, processor, QPU, distributed platform, or future computational
  * mechanism therefore does not require changing this grammar merely because
- * the realization has changed.
+ * the implementation has changed.
  *
- * That is the required POCO-REAF property.
+ * This is the required scalable, target-independent effect boundary.
  *
  * ============================================================================
  */
