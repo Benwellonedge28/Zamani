@@ -1,5 +1,5 @@
 [toolchain]
-channel = "1.97" or later
+channel = "1.97" 
 profile = "default"
 components = [
 "rustfmt",
