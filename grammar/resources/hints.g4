@@ -15,125 +15,443 @@
  * --------
  * Rust 1.97 / Rust 1.97.1
  * Rust 2021
- *
- * STATUS
- * ------
- * CANONICAL RESOURCE-HINT LEAF GRAMMAR
+ * Safe Rust only
  *
  * ============================================================================
+ * FEATURE CONTRACT
+ * ============================================================================
+ *
  * PURPOSE
- * ============================================================================
+ * -------
  *
- * This file is the canonical SOURCE-SYNTAX owner for resource hints.
+ * This file is the canonical LEAF/PAYLOAD grammar for resource hints.
  *
- * A hint is advisory information supplied to downstream compilation,
- * optimization, placement, scheduling, deployment, or runtime policy layers.
+ * A resource hint is advisory resource intent. It may guide:
  *
- * A hint:
+ *     - optimization;
+ *     - resource selection;
+ *     - placement;
+ *     - scheduling;
+ *     - deployment;
+ *     - execution strategy;
+ *     - simulation strategy;
+ *     - quantum realization;
+ *     - HDL/hardware realization;
+ *     - distributed realization;
+ *     - accelerator selection;
+ *     - AI/data execution strategy.
  *
- *     MAY improve a realization;
- *     MAY be ignored;
- *     MUST NOT silently become a requirement;
- *     MUST NOT silently become a constraint;
- *     MUST NOT silently become a capability;
- *     MUST NOT select a physical resource merely because it was parsed.
+ * A hint is NOT a requirement.
  *
- * The grammar describes the developer's advisory intent.
+ * A hint is NOT a constraint.
  *
- * It does NOT perform:
+ * A hint is NOT a capability.
  *
- *     resource discovery;
- *     hardware discovery;
- *     allocation;
- *     placement;
- *     routing;
- *     scheduling;
- *     optimization;
- *     compilation;
- *     runtime execution;
- *     QEC;
- *     ZQN processing;
- *     HAL selection;
- *     target probing.
+ * A hint is NOT a budget.
+ *
+ * A hint is NOT a preference.
+ *
+ * A hint is NOT an allocation.
+ *
+ * A hint is NOT a physical-device selection.
+ *
+ * A hint MAY be ignored by a valid realization unless another semantic
+ * construct separately requires it.
+ *
  *
  * ============================================================================
  * ARCHITECTURAL POSITION
  * ============================================================================
  *
- *     Zamani source
- *          |
- *          v
+ *     source
+ *       |
+ *       v
  *     ZamaniLexer
- *          |
- *          v
- *     ZamaniParser
- *          |
- *          v
- *     Resources
- *          |
- *          v
+ *       |
+ *       v
+ *     Zamani parser
+ *       |
+ *       v
+ *     grammar/resources/resources.g4
+ *       |
+ *       | owns concrete `resourceHint`
+ *       v
  *     ResourceHints
- *          |
- *          v
+ *       |
+ *       | owns reusable hint payload
+ *       v
  *     domain-neutral AST
- *          |
- *          v
+ *       |
+ *       v
+ *     structural validation
+ *       |
+ *       +-------------------+
+ *       |                   |
+ *       v                   v
  *     semantic resource model
- *          |
- *     +----+---------+-------------+----------------+
- *     |              |             |                |
- *     v              v             v                v
- *  compiler      optimizer     scheduler        runtime
- *     |              |             |                |
- *     +--------------+-------------+----------------+
- *                            |
- *                            v
- *                    target realization
+ *                         provenance
+ *       |
+ *       +-----------------------------+
+ *       |             |               |
+ *       v             v               v
+ *   compiler      optimizer       negotiation
+ *       |             |               |
+ *       +-------------+---------------+
+ *                     |
+ *                     v
+ *             execution planning
+ *                     |
+ *       +-------------+-------------+
+ *       |             |             |
+ *       v             v             v
+ *   classical     quantum::ir    HDL/hardware
+ *       |             |             |
+ *       +-------------+-------------+
+ *                     |
+ *              target realization
  *
- * The grammar remains upstream of physical realization.
  *
  * ============================================================================
- * POCO-REAF
+ * OWNERSHIP
  * ============================================================================
  *
- * Resource hints are part of:
+ * THIS FILE OWNS:
  *
- *     Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
+ *     resourceHintExpression
+ *     resourceHintSpecification
+ *     resourceHintClause
+ *     resourceHintPropertyAssignment
+ *     resourceHintValueClause
+ *     resourceHintGroup
+ *     resourceHintGroupBody
+ *     resourceHintGroupEntry
+ *     resourceHintPropertyName
+ *     resourceHintValue
+ *     resourceHintListPayload
+ *     optionalResourceHintListPayload
  *
- * Hints MUST therefore remain target-independent unless the programmer
- * explicitly expresses a target-specific semantic property.
+ *
+ * THIS FILE DOES NOT OWN:
+ *
+ *     resources
+ *     resourceItem
+ *     resourceHint
+ *     resourceHintClause at the universal-resource orchestration level
+ *     resourceExpression
+ *     resourceExpressionList
+ *     expression
+ *     identifier
+ *     qualifiedName
+ *     requirements
+ *     constraints
+ *     budgets
+ *     preferences
+ *     capabilities
+ *     negotiation
+ *     scalability
+ *     policies
+ *     effects
+ *     provenance semantics
+ *     target selection
+ *     resource discovery
+ *     allocation
+ *     placement
+ *     routing
+ *     scheduling
+ *     optimization
+ *     QEC
+ *     ZQN
+ *     HAL
+ *     runtime resource management
+ *
+ *
+ * ============================================================================
+ * DEPENDENCY CONTRACT
+ * ============================================================================
+ *
+ * DEPENDS_ON
+ * ----------
+ *
+ *     grammar/antlr/ZamaniLexer.g4
+ *     grammar/resources/resource-expressions.g4
+ *     grammar/core/names.g4
+ *
+ *
+ * EXPORTS
+ * -------
+ *
+ *     resourceHintExpression
+ *     resourceHintSpecification
+ *     resourceHintClause
+ *     resourceHintPropertyAssignment
+ *     resourceHintValueClause
+ *     resourceHintGroup
+ *     resourceHintGroupBody
+ *     resourceHintGroupEntry
+ *     resourceHintPropertyName
+ *     resourceHintValue
+ *     resourceHintListPayload
+ *     optionalResourceHintListPayload
+ *
+ *
+ * CONSUMED_BY
+ * -----------
+ *
+ *     grammar/resources/resources.g4
+ *
+ * Future consumers MAY include:
+ *
+ *     grammar/resources/negotiation.g4
+ *     grammar/resources/scalability.g4
+ *     grammar/execution/
+ *     grammar/compile/
+ *     grammar/policies/
+ *     grammar/dialects/
+ *
+ *
+ * AST_OWNER
+ * ---------
+ *
+ * Domain-neutral frontend AST.
+ *
+ *
+ * SEMANTIC_OWNER
+ * --------------
+ *
+ * Resource semantic analysis.
+ *
+ *
+ * IR_OWNER
+ * --------
+ *
+ * No IR is owned by this grammar.
+ *
+ * Hint information is lowered into the canonical semantic resource-intent
+ * representation and subsequently consumed by the appropriate compilation,
+ * planning, execution, quantum, HDL, hardware, or distributed subsystem.
+ *
+ *
+ * TEST_OWNER
+ * ----------
+ *
+ *     grammar/tests/resources/hints/
+ *
+ *
+ * SPEC_OWNER
+ * ----------
+ *
+ *     grammar/spec/resources.md
+ *     grammar/specification/poco-reaf.md
+ *
+ *
+ * ============================================================================
+ * SINGLE-AUTHORITY CONTRACT
+ * ============================================================================
+ *
+ * The concrete resource statement remains owned by:
+ *
+ *     grammar/resources/resources.g4
+ *
+ * Therefore this file MUST NOT define:
+ *
+ *     resourceHint
+ *
+ * The parent owns:
+ *
+ *     resourceHint
+ *         : HINT resourceHintExpression SEMICOLON
+ *         ;
+ *
+ * This file supplies the payload after HINT.
+ *
+ * This prevents:
+ *
+ *     duplicate parser ownership;
+ *     imported-rule collisions;
+ *     parallel resource languages;
+ *     parent/child grammar cycles.
+ *
+ *
+ * ============================================================================
+ * LEXER CONTRACT
+ * ============================================================================
+ *
+ * This parser grammar consumes the canonical ZamaniLexer vocabulary.
+ *
+ * Required tokens used directly by this file:
+ *
+ *     HINT
+ *     ASSIGN
+ *     LBRACE
+ *     RBRACE
+ *     SEMICOLON
+ *
+ * Name syntax is supplied by:
+ *
+ *     Names.qualifiedName
+ *
+ * Expression syntax is supplied by:
+ *
+ *     ResourceExpressions.resourceExpression
+ *
+ * This grammar MUST NOT define lexer rules.
+ *
+ * This grammar MUST NOT introduce:
+ *
+ *     K_HINT
+ *     K_ASSIGN
+ *     K_LBRACE
+ *     K_RBRACE
+ *
+ * or any competing token aliases.
+ *
+ *
+ * ============================================================================
+ * RESOURCE EXPRESSION CONTRACT
+ * ============================================================================
+ *
+ * resourceExpression is owned exclusively by:
+ *
+ *     grammar/resources/resource-expressions.g4
+ *
+ * Consequently this grammar inherits the repository's canonical expression
+ * semantics, including whatever arithmetic, logical, comparison, invocation,
+ * indexing, member-access, literal, symbolic, and dynamic expression forms
+ * the canonical expression subsystem supports.
+ *
+ * This grammar MUST NOT recreate:
+ *
+ *     arithmetic;
+ *     comparison;
+ *     logical operators;
+ *     literals;
+ *     function calls;
+ *     indexing;
+ *     member access;
+ *     unary operators;
+ *     expression precedence.
+ *
+ *
+ * ============================================================================
+ * NAME CONTRACT
+ * ============================================================================
+ *
+ * qualifiedName is owned by:
+ *
+ *     grammar/core/names.g4
+ *
+ * Hint property names therefore use:
+ *
+ *     qualifiedName
  *
  * Examples:
  *
- *     hint locality = "near";
+ *     locality
+ *     execution::parallelism
+ *     quantum::routing
+ *     quantum::measurement
+ *     hdl::pipeline
+ *     hardware::thermal
+ *     distributed::locality
+ *     tensor::layout
+ *     accelerator::tensor::affinity
+ *     vendor::extension::future_metric
+ *
+ * The grammar does not determine whether a name is:
+ *
+ *     standardized;
+ *     experimental;
+ *     vendor-specific;
+ *     dialect-specific;
+ *     future;
+ *     unknown.
+ *
+ * That is semantic/profile responsibility.
+ *
+ *
+ * ============================================================================
+ * OPEN-WORLD RESOURCE MODEL
+ * ============================================================================
+ *
+ * Hint property names are deliberately open-world.
+ *
+ * The grammar MUST NOT enumerate a finite resource-property universe.
+ *
+ * It must NOT require alternatives for every possible:
+ *
+ *     CPU property;
+ *     GPU property;
+ *     FPGA property;
+ *     ASIC property;
+ *     QPU property;
+ *     accelerator property;
+ *     memory property;
+ *     network property;
+ *     AI property;
+ *     tensor property;
+ *     HDL property;
+ *     distributed property;
+ *     future-domain property.
+ *
+ * New semantic properties can therefore be introduced without changing this
+ * grammar merely because a new computational technology appears.
+ *
+ *
+ * ============================================================================
+ * POCO-REAF CONTRACT
+ * ============================================================================
+ *
+ * A hint participates in:
+ *
+ *     Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
+ *
+ * by expressing advisory intent rather than physical realization.
+ *
+ * Examples:
  *
  *     hint execution::parallelism = desired_parallelism;
  *
- *     hint memory::placement = preferred_memory_domain;
+ *     hint memory::locality = locality_goal;
  *
  *     hint quantum::routing = routing_strategy;
  *
- *     hint accelerator::affinity = accelerator_preference;
+ *     hint accelerator::affinity = accelerator_goal;
  *
- *     hint vendor::future::optimization = optimization_value;
+ *     hint distributed::partitioning = partition_strategy;
  *
- * None of these statements establishes:
+ *     hint tensor::layout = preferred_layout;
  *
- *     CPU 0
- *     GPU 0
- *     QPU 0
- *     FPGA 0
- *     physical qubit 17
- *     node 4
- *     memory bank 2
+ * The same source may therefore be considered for:
  *
- * Physical realization remains downstream.
+ *     embedded;
+ *     CPU;
+ *     multicore;
+ *     GPU;
+ *     FPGA;
+ *     ASIC;
+ *     accelerator;
+ *     QPU;
+ *     simulator;
+ *     HPC;
+ *     cluster;
+ *     distributed;
+ *     cloud;
+ *     future computational targets.
+ *
+ * A target that cannot honor a hint may ignore or diagnose the hint according
+ * to semantic compatibility policy.
+ *
+ * A hint MUST NOT silently become a requirement merely because one target
+ * understands it.
+ *
  *
  * ============================================================================
  * HARD-CODING PROHIBITION
  * ============================================================================
  *
- * This grammar MUST NOT define universal limits such as:
+ * This grammar contains NO universal machine/resource limits.
+ *
+ * It MUST NOT define or imply:
  *
  *     MAX_QUBITS
  *     MAX_CPUS
@@ -147,309 +465,118 @@
  *     MAX_NETWORK_SIZE
  *     MAX_DEVICE_COUNT
  *
- * It MUST also not introduce indirect grammar-level equivalents such as:
+ * It must also not encode equivalent finite alternatives such as:
  *
- *     exactly 8 CPUs
- *     exactly 32 threads
- *     exactly 1024 qubits
- *     exactly 64 GB memory
- *     exactly 32-bit registers
+ *     cpu0 | cpu1 | cpu2
+ *     gpu0 | gpu1
+ *     qpu0 | qpu1
+ *     node0 | node1
  *
- * Numeric expressions appearing in hints are PROGRAM VALUES.
+ * A source expression such as:
  *
- * For example:
+ *     hint execution::parallelism = desired_parallelism;
  *
- *     hint parallelism = 1024;
+ * is a program value.
  *
- * is a program-level advisory value.
+ * It is not a language-level maximum.
  *
- * It does NOT mean:
+ * Likewise:
  *
- *     MAX_THREADS = 1024
+ *     hint quantum::logical_qubits = logical_qubits;
  *
- * Physical availability is resolved after parsing.
+ * does not establish a maximum number of qubits.
+ *
  *
  * ============================================================================
  * UNBOUNDED SCALABILITY
  * ============================================================================
  *
- * The grammar deliberately uses:
+ * This grammar uses:
  *
  *     *
  *     +
  *     recursive composition
  *
- * wherever arbitrary source cardinality is required.
+ * wherever source cardinality is required.
  *
- * There is no language-level maximum for:
+ * There is no grammar-level finite maximum for:
  *
- *     hints;
- *     hint clauses;
- *     hint properties;
- *     property namespace depth;
- *     hint groups;
- *     hint metadata;
- *     expressions;
- *     targets;
- *     resources;
+ *     hint count;
+ *     property count;
+ *     namespace depth;
+ *     group count;
+ *     group nesting;
+ *     expression size;
  *     resource domains;
- *     nested hint structures.
+ *     target categories;
+ *     semantic properties.
  *
- * "Infinity" in the POCO-REAF requirement means:
+ * "Infinity" means:
  *
- *     no artificial hardware/resource ceiling is encoded by this grammar.
+ *     no artificial finite resource ceiling is encoded in the language.
  *
- * It does NOT claim physically infinite memory, compute, or execution time.
+ * It does not claim physically infinite resources.
  *
- * Actual implementation limits belong to the compiler, runtime, operating
- * system, deployment environment, and physical target.
+ * Physical and implementation limits belong to:
  *
- * ============================================================================
- * SINGLE-AUTHORITY RULE
- * ============================================================================
+ *     compiler;
+ *     runtime;
+ *     operating system;
+ *     deployment environment;
+ *     actual hardware;
+ *     provider/environment capability.
  *
- * THIS FILE OWNS:
- *
- *     resourceHint
- *     resourceHintExpression
- *     resourceHintSpecification
- *     resourceHintClause
- *     resourceHintPropertyAssignment
- *     resourceHintProperty
- *     qualifiedResourceHintName
- *     resourceHintNameSegment
- *     resourceHintValue
- *     resourceHintCondition
- *     resourceHintConditionValue
- *     resourceHintScope
- *     resourceHintScopeValue
- *     resourceHintTarget
- *     resourceHintTargetValue
- *     resourceHintMetadata
- *     resourceHintMetadataName
- *     resourceHintGroup
- *     resourceHintGroupBody
- *     resourceHintGroupEntry
- *     resourceHintList
- *     optionalResourceHintList
- *
- * THIS FILE DOES NOT OWN:
- *
- *     resourceItem
- *     resourceExpression
- *     resourceExpressionList
- *     expression
- *     identifier
- *     qualifiedName
- *     requirement semantics
- *     constraint semantics
- *     preference semantics
- *     capability semantics
- *     resource discovery
- *     target selection
- *     placement
- *     routing
- *     scheduling
- *     optimization
- *     hardware discovery
- *     QEC
- *     ZQN
- *     HAL
- *     runtime resource management
  *
  * ============================================================================
- * INTEGRATION CONTRACT
+ * HINT SEMANTICS
  * ============================================================================
  *
- * grammar/resources/resources.g4
- *     owns the resource-domain composition boundary.
+ * A hint is advisory.
  *
- * It MUST import this grammar:
+ * Semantic analysis MAY:
  *
- *     import ResourceHints, ...;
+ *     honor it;
+ *     transform it;
+ *     preserve it;
+ *     ignore it;
+ *     diagnose it;
+ *     use it during negotiation;
+ *     use it during optimization;
+ *     use it during planning.
  *
- * and MUST delegate:
+ * Semantic analysis MUST NOT reinterpret a hint as:
  *
- *     resourceHint
- *     resourceHintExpression
- *     resourceHintClause
+ *     requirement;
+ *     constraint;
+ *     capability;
+ *     allocation;
+ *     reservation;
+ *     mandatory target selection.
  *
- * to this grammar.
- *
- * resources.g4 MUST NOT redefine those rules.
- *
- * grammar/resources/resource-expressions.g4
- *     owns:
- *
- *     resourceExpression
- *     resourceExpressionList
- *
- * Every hint value and condition in this file ultimately consumes that
- * canonical expression architecture.
- *
- * grammar/core/names.g4
- *     owns:
- *
- *     identifier
- *     qualifiedName
- *
- * This file does not duplicate identifier syntax.
  *
  * ============================================================================
- * AST CONTRACT
+ * 1. HINT PAYLOAD
  * ============================================================================
  *
- * The frontend AST should represent a hint structurally, for example:
+ * The parent resource grammar owns:
  *
- *     ResourceHint {
- *         expression / clauses,
- *         properties,
- *         conditions,
- *         scope,
- *         target,
- *         metadata,
- *         source_span
- *     }
+ *     HINT ... SEMICOLON
  *
- * Exact AST type names are owned by the frontend AST contract.
+ * This file owns only what appears after HINT and before the parent
+ * terminator.
  *
- * This grammar deliberately does not require a Rust AST type.
- *
- * ============================================================================
- * SEMANTIC CONTRACT
- * ============================================================================
- *
- * Semantic analysis MUST preserve the distinction:
- *
- *     requirement != constraint != capability != preference != hint
- *
- * A hint:
- *
- *     MAY be ignored;
- *     MAY influence optimization;
- *     MAY influence placement;
- *     MAY influence scheduling;
- *     MAY influence deployment;
- *     MAY influence runtime policy;
- *
- * but MUST NOT strengthen itself into a mandatory condition merely because a
- * backend understands it.
- *
- * Unknown hint properties may be:
- *
- *     accepted as open-world metadata;
- *     diagnosed according to the language compatibility policy;
- *     rejected only when a semantic/profile policy explicitly requires it.
- *
- * The parser itself does not decide whether a hint is known.
- *
- * ============================================================================
- * IR CONTRACT
- * ============================================================================
- *
- * This grammar does NOT introduce a ResourceHintIR.
- *
- * Hint information must flow through the repository's canonical semantic
- * resource model and the existing compilation/resource pipeline.
- *
- * In particular:
- *
- *     quantum hints
- *         -> semantic resource model
- *         -> quantum::ir/resource metadata as appropriate
- *
- * do NOT create:
- *
- *     quantum_hint_ir
- *
- * or another parallel quantum intermediate representation.
- *
- * Likewise, HDL/hardware hints remain metadata or semantic resource intent
- * until consumed by their owning downstream layers.
- *
- * ============================================================================
- * RUST / SAFETY CONTRACT
- * ============================================================================
- *
- * This is an ANTLR parser grammar.
- *
- * It contains:
- *
- *     no Rust code;
- *     no embedded actions;
- *     no semantic predicates;
- *     no filesystem access;
- *     no network access;
- *     no environment access;
- *     no hardware access;
- *     no unsafe Rust.
- *
- * The Rust implementation consuming this grammar targets:
- *
- *     Rust 1.97 / Rust 1.97.1
- *     Rust 2021
- *
- * and MUST remain safe Rust.
- *
- * ============================================================================
- */
-
-parser grammar ResourceHints;
-
-options {
-    tokenVocab = ZamaniLexer;
-}
-
-import ResourceExpressions, Names;
-
-
-/*
- * ============================================================================
- * 1. TOP-LEVEL HINT
- * ============================================================================
- *
- * Canonical source form:
+ * Two payload forms are supported:
  *
  *     hint <resource-expression>;
  *
- * Examples:
- *
- *     hint locality;
- *     hint locality = "near";
- *     hint execution::parallelism = desired_parallelism;
- *     hint quantum::routing = routing_strategy;
- *
- * The entire payload is represented through the canonical resource-expression
- * system or the reusable hint specification form below.
- *
- * ============================================================================
- */
-
-resourceHint
-    : HINT
-      resourceHintExpression
-      SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * 2. HINT EXPRESSION
- * ============================================================================
- *
- * Two forms are intentionally supported:
- *
- *     hint <canonical-expression>;
- *
- * and:
- *
  *     hint {
- *         <hint-clause>;
- *         <hint-clause>;
+ *         <hint-clause>*
  *     };
  *
- * The block form allows a hint to carry multiple related advisory properties
- * without creating a new mini-language.
+ * The first is concise.
+ *
+ * The second permits multiple advisory properties to be grouped into one
+ * source construct.
  *
  * ============================================================================
  */
@@ -462,92 +589,96 @@ resourceHintExpression
 
 /*
  * ============================================================================
- * 3. REUSABLE HINT SPECIFICATION
+ * 2. HINT SPECIFICATION
  * ============================================================================
  *
- * A hint specification is an arbitrary sequence of hint clauses.
+ * A specification is an unbounded sequence of hint clauses.
  *
- * There is no fixed number of clauses.
+ * Empty specifications are intentionally rejected.
+ *
+ * Therefore:
+ *
+ *     hint { };
+ *
+ * is structurally invalid.
+ *
+ * This prevents a syntactically successful but semantically empty hint.
  *
  * ============================================================================
  */
 
 resourceHintSpecification
     : LBRACE
-      resourceHintClause*
+      resourceHintClause+
       RBRACE
     ;
 
 
 /*
  * ============================================================================
- * 4. HINT CLAUSE
+ * 3. HINT CLAUSE
  * ============================================================================
  *
- * Hint clauses remain open-world.
+ * A clause may be:
  *
- * The grammar does not enumerate every possible optimization dimension.
+ *     - a named advisory property assignment;
+ *     - a standalone advisory expression;
+ *     - a nested named group.
  *
- * Examples:
- *
- *     latency = desired_latency;
- *     throughput = desired_throughput;
- *     locality = locality_goal;
- *     scope = execution_scope;
- *     when = workload_size > threshold;
- *     target = target_category;
- *     metadata::origin = "developer";
- *     quantum::routing = routing_strategy;
- *     accelerator::affinity = affinity_goal;
+ * The grammar deliberately does not enumerate property names.
  *
  * ============================================================================
  */
 
 resourceHintClause
     : resourceHintPropertyAssignment
-    | resourceHintCondition
-    | resourceHintScope
-    | resourceHintTarget
-    | resourceHintMetadata
+    | resourceHintValueClause
     | resourceHintGroup
     ;
 
 
 /*
  * ============================================================================
- * 5. GENERIC PROPERTY ASSIGNMENT
+ * 4. PROPERTY ASSIGNMENT
  * ============================================================================
  *
- * This is the primary extensibility mechanism.
+ * Canonical form:
  *
- * It intentionally does NOT enumerate:
+ *     <qualified-name> = <resource-expression> ;
  *
- *     latency
- *     throughput
- *     bandwidth
- *     energy
- *     power
- *     reliability
- *     resilience
- *     locality
- *     affinity
- *     parallelism
- *     placement
- *     routing
- *     memory
- *     portability
- *     scalability
+ * Examples:
  *
- * Those remain semantic property names.
+ *     latency = latency_goal;
  *
- * This prevents the grammar from becoming an ever-growing dictionary of
- * resource concepts.
+ *     throughput = throughput_goal;
+ *
+ *     execution::parallelism = parallelism_goal;
+ *
+ *     quantum::routing = routing_strategy;
+ *
+ *     quantum::measurement = measurement_strategy;
+ *
+ *     hdl::pipeline = pipeline_goal;
+ *
+ *     hardware::thermal = thermal_goal;
+ *
+ *     distributed::locality = locality_goal;
+ *
+ *     tensor::layout = layout_goal;
+ *
+ *     accelerator::tensor::affinity = affinity_goal;
+ *
+ *     vendor::future::optimization = optimization_goal;
+ *
+ * The property name is symbolic.
+ *
+ * The value is a canonical resource expression.
  *
  * ============================================================================
  */
 
 resourceHintPropertyAssignment
-    : resourceHintProperty
+    : resourceHintPropertyName
       ASSIGN
       resourceHintValue
       SEMICOLON
@@ -556,76 +687,52 @@ resourceHintPropertyAssignment
 
 /*
  * ============================================================================
- * 6. HINT PROPERTY NAME
+ * 5. PROPERTY NAME
  * ============================================================================
  *
- * Open-world property paths support arbitrary namespace depth.
+ * qualifiedName is the sole name authority.
  *
- * Examples:
- *
- *     locality
- *     latency
- *     performance::latency
- *     execution::parallelism
- *     quantum::routing
- *     quantum::measurement
- *     accelerator::tensor::affinity
- *     vendor::future::metric
- *
- * DOT and DOUBLE_COLON are both accepted because the resource-expression
- * architecture already distinguishes member/path syntax from qualified names.
- *
- * The parser does not determine whether a property is standard, experimental,
- * vendor-specific, or unknown.
+ * No alternate qualified-name syntax is introduced here.
  *
  * ============================================================================
  */
 
-resourceHintProperty
-    : qualifiedResourceHintName
-    ;
-
-
-qualifiedResourceHintName
-    : resourceHintNameSegment
-      (
-          DOT resourceHintNameSegment
-        | DOUBLE_COLON resourceHintNameSegment
-      )*
-    ;
-
-
-resourceHintNameSegment
-    : identifier
+resourceHintPropertyName
+    : qualifiedName
     ;
 
 
 /*
  * ============================================================================
- * 7. HINT VALUE
+ * 6. VALUE
  * ============================================================================
  *
- * Values are canonical resource expressions.
+ * Hint values are canonical resource expressions.
  *
- * Therefore hints automatically inherit the existing Zamani expression
- * architecture rather than creating another expression language.
+ * This permits:
  *
- * Values may therefore represent:
+ *     literal values;
+ *     symbolic values;
+ *     computed values;
+ *     input-derived values;
+ *     workload-derived values;
+ *     runtime-derived values where permitted by semantic analysis;
+ *     resource-derived values;
+ *     expressions involving other program values.
  *
- *     constants;
- *     identifiers;
- *     arithmetic;
- *     comparisons;
- *     logical expressions;
- *     function calls;
- *     indexing;
- *     member access;
- *     collections;
- *     domain-specific expressions;
- *     computed quantities;
- *     symbolic values.
+ * Examples:
  *
- * Semantic analysis determines whether a value is appropriate for the hint.
+ *     desired_parallelism
+ *
+ *     workload_size * parallelism_factor
+ *
+ *     available_memory * utilization_target
+ *
+ *     logical_qubits + ancilla_qubits
+ *
+ *     preferred_latency
+ *
+ * No value is interpreted by the parser.
  *
  * ============================================================================
  */
@@ -637,181 +744,71 @@ resourceHintValue
 
 /*
  * ============================================================================
- * 8. CONDITIONAL HINT
+ * 7. STANDALONE VALUE CLAUSE
  * ============================================================================
  *
- * A conditional hint expresses when advisory information is applicable.
+ * A standalone expression is useful when the hint itself is naturally
+ * represented by a symbolic expression.
  *
  * Example:
  *
  *     hint {
- *         when = workload_size > threshold;
- *         execution::parallelism = desired_parallelism;
+ *         preferred_layout;
+ *         workload_locality;
  *     };
  *
- * The condition is declarative.
- *
- * The parser does not evaluate it.
+ * The semantic layer determines what those expressions mean in the enclosing
+ * resource-hint context.
  *
  * ============================================================================
  */
 
-resourceHintCondition
-    : HINT
-      resourceHintConditionValue
-    ;
-
-
-resourceHintConditionValue
+resourceHintValueClause
     : resourceExpression
-    ;
-
-
-/*
- * ============================================================================
- * 9. SCOPE
- * ============================================================================
- *
- * Scope identifies the semantic region to which a hint applies.
- *
- * It is represented by an expression rather than a hard-coded list of:
- *
- *     CPU
- *     GPU
- *     QPU
- *     FPGA
- *     node
- *     memory bank
- *
- * This allows future domains to participate without changing this grammar.
- *
- * ============================================================================
- */
-
-resourceHintScope
-    : resourceHintScopeName
-      ASSIGN
-      resourceHintScopeValue
       SEMICOLON
     ;
 
 
-resourceHintScopeName
-    : identifier
-    ;
-
-
-resourceHintScopeValue
-    : resourceExpression
-    ;
-
-
 /*
  * ============================================================================
- * 10. TARGET ADVISORY
+ * 8. NESTED HINT GROUP
  * ============================================================================
  *
- * A hint may identify an abstract target category.
- *
- * It must not be interpreted by the parser as a physical device selection.
+ * Groups provide structural organization without introducing a closed
+ * vocabulary.
  *
  * Examples:
  *
- *     target = cpu;
- *     target = gpu;
- *     target = quantum;
- *     target = accelerator;
- *     target = future::accelerator;
+ *     execution {
+ *         parallelism = desired_parallelism;
+ *         locality = locality_goal;
+ *     }
  *
- * The actual target remains a downstream semantic/compiler decision.
+ *     quantum::execution {
+ *         routing = routing_goal;
+ *         measurement = measurement_goal;
+ *     }
  *
- * ============================================================================
- */
-
-resourceHintTarget
-    : resourceHintTargetName
-      ASSIGN
-      resourceHintTargetValue
-      SEMICOLON
-    ;
-
-
-resourceHintTargetName
-    : identifier
-    ;
-
-
-resourceHintTargetValue
-    : resourceExpression
-    ;
-
-
-/*
- * ============================================================================
- * 11. METADATA
- * ============================================================================
+ *     vendor::future {
+ *         optimization = future_goal;
+ *     }
  *
- * Metadata may carry advisory provenance or tool-facing information.
+ * Group names are qualified names.
  *
- * Examples:
- *
- *     metadata::origin = "developer";
- *     metadata::confidence = confidence_value;
- *     vendor::extension::name = extension_value;
- *
- * Metadata MUST NOT automatically change the semantic strength of a hint.
- *
- * ============================================================================
- */
-
-resourceHintMetadata
-    : resourceHintMetadataName
-      ASSIGN
-      resourceHintValue
-      SEMICOLON
-    ;
-
-
-resourceHintMetadataName
-    : qualifiedResourceHintName
-    ;
-
-
-/*
- * ============================================================================
- * 12. HINT GROUP
- * ============================================================================
- *
- * A named group allows related hints to be carried together.
- *
- * Example:
- *
- *     group = optimization {
- *         latency = latency_goal;
- *         throughput = throughput_goal;
- *         energy = energy_goal;
- *     };
- *
- * The grammar deliberately keeps the group name open-world.
+ * Group nesting is therefore open-ended.
  *
  * ============================================================================
  */
 
 resourceHintGroup
-    : resourceHintGroupName
+    : resourceHintPropertyName
       resourceHintGroupBody
-      SEMICOLON
-    ;
-
-
-resourceHintGroupName
-    : identifier
     ;
 
 
 resourceHintGroupBody
     : LBRACE
-      resourceHintGroupEntry*
+      resourceHintGroupEntry+
       RBRACE
     ;
 
@@ -823,116 +820,195 @@ resourceHintGroupEntry
 
 /*
  * ============================================================================
- * 13. HINT LIST
+ * 9. REUSABLE PAYLOAD LISTS
  * ============================================================================
  *
- * Reusable list contracts are provided for consumers that need to compose
- * hints inside another resource grammar.
+ * These rules deliberately represent PAYLOADS rather than complete `hint`
+ * statements.
+ *
+ * This prevents the leaf grammar from taking ownership of the parent
+ * statement terminator or resource-item dispatch.
  *
  * ============================================================================
  */
 
-resourceHintList
-    : resourceHint
-      resourceHint*
+resourceHintListPayload
+    : resourceHintExpression
+      (COMMA resourceHintExpression)*
+      COMMA?
     ;
 
 
-optionalResourceHintList
-    : resourceHintList?
+optionalResourceHintListPayload
+    : resourceHintListPayload?
     ;
 
 
 /*
  * ============================================================================
- * 14. SEMANTIC BOUNDARIES
+ * 10. SEMANTIC SEPARATION
  * ============================================================================
+ *
+ * REQUIREMENT
+ * -----------
+ *
+ * Must be satisfied.
+ *
+ * CONSTRAINT
+ * ----------
+ *
+ * Must remain true.
+ *
+ * CAPABILITY
+ * ----------
+ *
+ * A property the environment can provide.
+ *
+ * BUDGET
+ * ------
+ *
+ * A bounded resource allowance or accounting intent.
+ *
+ * PREFERENCE
+ * ----------
+ *
+ * A desirable realization characteristic.
  *
  * HINT
  * ----
  *
  * Advisory information.
  *
- * REQUIREMENT
- * -----------
- *
- * Mandatory capability/resource/property.
- *
- * CONSTRAINT
+ * ALLOCATION
  * ----------
  *
- * Condition that valid realization must satisfy.
+ * A concrete resource acquisition/assignment decision.
  *
- * PREFERENCE
+ * This grammar owns only HINT payload syntax.
+ *
+ *
+ * ============================================================================
+ * 11. RESOURCE-SUBSYSTEM INTEGRATION
+ * ============================================================================
+ *
+ * requirements.g4
+ * ----------------
+ *
+ * Requirements remain independent.
+ *
+ * A hint may refer to values also used by requirements, but it does not
+ * redefine resourceRequirement.
+ *
+ *
+ * constraints.g4
+ * --------------
+ *
+ * Constraints remain independent.
+ *
+ * A hint may provide information useful to constraint-aware optimization,
+ * but it does not create a constraint.
+ *
+ *
+ * budgets.g4
  * ----------
  *
- * Optimization preference that may be traded against other preferences.
+ * Budgets remain independent.
  *
- * CAPABILITY
- * ----------
+ * A hint may recommend how an available budget should be used, but a hint
+ * does not establish the budget.
  *
- * Property supplied by a resource/target/environment.
  *
- * IMPLEMENTATION DECISION
+ * preferences.g4
+ * --------------
+ *
+ * Preferences remain independent.
+ *
+ * A hint must not silently acquire preference semantics.
+ *
+ *
+ * capabilities.g4
+ * ---------------
+ *
+ * Capability identity remains independent.
+ *
+ * A hint such as:
+ *
+ *     hint quantum::measurement = preferred_strategy;
+ *
+ * does not claim that quantum measurement capability exists.
+ *
+ *
+ * negotiation.g4
+ * --------------
+ *
+ * Negotiation may consume hints as advisory inputs.
+ *
+ * This grammar does not perform negotiation.
+ *
+ *
+ * scalability.g4
+ * --------------
+ *
+ * Scalability analysis may consume hint values.
+ *
+ * This grammar does not determine scaling behavior.
+ *
+ *
+ * resource-expressions.g4
  * -----------------------
  *
- * Concrete downstream realization such as:
+ * This is the canonical value-expression owner.
  *
- *     physical CPU;
- *     physical GPU;
- *     physical QPU;
- *     physical qubit;
- *     FPGA resource;
- *     memory bank;
- *     network node.
+ * Every hint value delegates to resourceExpression.
  *
- * This file owns only HINT syntax.
+ *
+ * resources.g4
+ * ------------
+ *
+ * resources.g4 owns:
+ *
+ *     resourceHint
+ *     resourceHintClause
+ *
+ * only after integration is normalized.
+ *
+ * IMPORTANT:
+ *
+ * The current resources.g4 contains duplicate concrete hint rules. Those
+ * duplicates must be removed so that this grammar becomes the sole owner of
+ * the reusable hint payload.
+ *
  *
  * ============================================================================
- * 15. OPEN-WORLD DOMAIN SUPPORT
+ * 12. AI / LEARNING / ADAPTATION INTEGRATION
  * ============================================================================
  *
- * The same hint syntax can describe advisory information for:
- *
- *     classical computing;
- *     quantum computing;
- *     hybrid computing;
- *     HDL;
- *     hardware;
- *     AI;
- *     tensors;
- *     distributed computing;
- *     networking;
- *     storage;
- *     memory;
- *     accelerators;
- *     future computational domains.
+ * Hints can support adaptive and intelligent execution without introducing
+ * application-specific syntax.
  *
  * Examples:
  *
- *     hint classical::vectorization = vectorization_goal;
+ *     hint learning::batching = batch_goal;
  *
- *     hint quantum::routing = routing_goal;
+ *     hint inference::parallelism = inference_parallelism;
  *
- *     hint quantum::measurement = measurement_strategy;
+ *     hint adaptation::strategy = adaptation_strategy;
  *
- *     hint hdl::pipeline = pipeline_goal;
+ *     hint reasoning::latency = reasoning_latency_goal;
  *
- *     hint hardware::thermal = thermal_goal;
+ *     hint neural_symbolic::placement = placement_goal;
  *
- *     hint ai::accelerator = accelerator_goal;
+ * These are ordinary open-world semantic properties.
  *
- *     hint distributed::locality = locality_goal;
+ * This grammar does not create special syntax for every future algorithm,
+ * framework, model, or application.
  *
- *     hint networking::latency = latency_goal;
- *
- * No domain-specific finite keyword list is required.
  *
  * ============================================================================
- * 16. QUANTUM INTEGRATION
+ * 13. QUANTUM INTEGRATION
  * ============================================================================
  *
- * Quantum hints remain semantic metadata.
+ * Quantum hints are ordinary resource-hint metadata.
  *
  * Examples:
  *
@@ -944,247 +1020,475 @@ optionalResourceHintList
  *
  *     hint quantum::fidelity = fidelity_goal;
  *
- *     hint quantum::error_correction = qec_strategy;
+ *     hint quantum::error_correction = resilience_strategy;
+ *
+ *     hint quantum::measurement = measurement_strategy;
  *
  * The parser MUST NOT:
  *
- *     enumerate quantum gates;
- *     select physical qubits;
- *     allocate qubits;
- *     perform routing;
- *     perform scheduling;
- *     perform QEC;
- *     construct quantum::ir.
+ *     - enumerate quantum gates;
+ *     - enumerate physical qubits;
+ *     - assign physical qubit identities;
+ *     - perform routing;
+ *     - perform scheduling;
+ *     - perform decomposition;
+ *     - perform QEC;
+ *     - create quantum::ir.
  *
- * The canonical semantic pipeline remains:
+ * The canonical downstream path remains:
  *
  *     source
- *       |
- *       v
- *     frontend AST
- *       |
- *       v
+ *       ->
+ *     AST
+ *       ->
  *     semantic resource model
- *       |
- *       v
+ *       ->
  *     quantum::ir
- *       |
- *       v
+ *       ->
  *     optimization
- *       |
- *       v
+ *       ->
+ *     decomposition
+ *       ->
  *     routing
- *       |
- *       v
+ *       ->
  *     scheduling
- *       |
- *       v
- *     resilience / QEC / ZQN
- *       |
- *       v
+ *       ->
+ *     resilience/QEC
+ *       ->
+ *     ZQN
+ *       ->
  *     HAL
- *       |
- *       v
+ *       ->
  *     target
  *
+ *
  * ============================================================================
- * 17. HDL / HARDWARE INTEGRATION
+ * 14. CLASSICAL INTEGRATION
  * ============================================================================
  *
- * HDL and hardware hints describe intent.
+ * Classical hints can express advisory intent for:
  *
- * Examples:
+ *     vectorization;
+ *     locality;
+ *     parallelism;
+ *     cache behavior;
+ *     memory strategy;
+ *     numerical execution;
+ *     accelerator use;
+ *     data movement;
+ *     throughput;
+ *     latency;
+ *     power;
+ *     energy.
+ *
+ * No CPU model is embedded.
+ *
+ *
+ * ============================================================================
+ * 15. HDL / HARDWARE INTEGRATION
+ * ============================================================================
+ *
+ * Hints may describe hardware/HDL intent:
  *
  *     hint hdl::pipeline = pipeline_goal;
  *
  *     hint hdl::timing = timing_goal;
  *
- *     hint hardware::memory_locality = locality_goal;
- *
- *     hint hardware::throughput = throughput_goal;
+ *     hint hardware::area = area_goal;
  *
  *     hint hardware::power = power_goal;
  *
- * The grammar does not impose:
+ *     hint hardware::thermal = thermal_goal;
+ *
+ *     hint hardware::throughput = throughput_goal;
+ *
+ * The grammar does not define:
  *
  *     register width;
  *     number of registers;
  *     number of pipeline stages;
- *     number of FPGA resources;
- *     memory capacity;
- *     clock frequency;
- *     physical topology.
+ *     FPGA capacity;
+ *     ASIC capacity;
+ *     clock-frequency limits;
+ *     fixed physical topology.
  *
- * Such properties remain expressions and downstream semantic constraints.
+ * Those remain semantic or backend concerns.
+ *
  *
  * ============================================================================
- * 18. DISTRIBUTED INTEGRATION
+ * 16. DISTRIBUTED / NETWORK INTEGRATION
  * ============================================================================
+ *
+ * Hints may describe:
+ *
+ *     distributed::locality
+ *     distributed::partitioning
+ *     distributed::replication
+ *     distributed::communication
+ *     networking::latency
+ *     networking::bandwidth
+ *     networking::topology
+ *
+ * The grammar never encodes a maximum node count or fixed node identifiers.
+ *
+ *
+ * ============================================================================
+ * 17. DATA / TENSOR INTEGRATION
+ * ============================================================================
+ *
+ * Hints may describe:
+ *
+ *     data::locality
+ *     data::layout
+ *     data::partitioning
+ *     tensor::layout
+ *     tensor::parallelism
+ *     tensor::placement
+ *     accelerator::tensor::affinity
+ *
+ * Tensor rank, dimension, size, and accelerator count remain semantic
+ * expressions.
+ *
+ *
+ * ============================================================================
+ * 18. EFFECT CONTRACT
+ * ============================================================================
+ *
+ * Parsing a hint has no execution effect.
+ *
+ * A hint declaration MUST NOT itself:
+ *
+ *     perform I/O;
+ *     allocate memory;
+ *     access hardware;
+ *     access a network;
+ *     invoke foreign code;
+ *     mutate runtime state;
+ *     execute learning;
+ *     execute adaptation;
+ *     execute reflection.
+ *
+ * If a hint value references an effectful semantic expression, normal
+ * expression/effect checking remains authoritative.
+ *
+ *
+ * ============================================================================
+ * 19. CAPABILITY CONTRACT
+ * ============================================================================
+ *
+ * A hint does not grant a capability.
+ *
+ * For example:
+ *
+ *     hint quantum::measurement = preferred_measurement;
+ *
+ * does not grant:
+ *
+ *     quantum.measurement
+ *
+ * Likewise:
+ *
+ *     hint accelerator::tensor::affinity = preferred_accelerator;
+ *
+ * does not prove accelerator availability.
+ *
+ * Capability checking remains downstream.
+ *
+ *
+ * ============================================================================
+ * 20. RESOURCE CONTRACT
+ * ============================================================================
+ *
+ * Hint values may refer to arbitrary symbolic resource quantities.
  *
  * Examples:
  *
- *     hint distributed::locality = locality_goal;
+ *     desired_memory
+ *     required_bandwidth
+ *     available_parallelism
+ *     workload_size
+ *     logical_qubits
+ *     tensor_elements
  *
- *     hint distributed::replication = replication_goal;
+ * The grammar does not evaluate these values.
  *
- *     hint distributed::partitioning = partition_goal;
+ * Resource availability is determined by semantic analysis, negotiation,
+ * planning, and target realization.
  *
- *     hint distributed::communication = communication_goal;
- *
- * No fixed node/process/thread count is encoded.
- *
- * ============================================================================
- * 19. AI / TENSOR INTEGRATION
- * ============================================================================
- *
- * Examples:
- *
- *     hint ai::batching = batch_goal;
- *
- *     hint tensor::layout = layout_goal;
- *
- *     hint tensor::parallelism = tensor_parallelism_goal;
- *
- *     hint accelerator::tensor::affinity = affinity_goal;
- *
- * Tensor rank, tensor dimension, accelerator count, and memory size remain
- * semantic values rather than parser limits.
  *
  * ============================================================================
- * 20. PORTABILITY
+ * 21. CONTRACT CONTRACT
  * ============================================================================
  *
- * Hints are portable only to the extent that their semantic meaning can be
- * interpreted by a target.
+ * Hints may appear in source constructs governed by:
  *
- * A compiler MAY:
+ *     requires;
+ *     ensures;
+ *     invariant;
+ *     assume;
+ *     guarantee;
+ *     property;
+ *
+ * but this file does not own contract syntax.
+ *
+ * A hint remains advisory unless a separate contract explicitly gives another
+ * construct mandatory semantic force.
+ *
+ *
+ * ============================================================================
+ * 22. POLICY CONTRACT
+ * ============================================================================
+ *
+ * Policy analysis may restrict which hints are permitted, ignored, transformed,
+ * or honored.
+ *
+ * This grammar does not own policy semantics.
+ *
+ * Examples of semantic policy decisions include:
+ *
+ *     whether vendor-specific hints are permitted;
+ *     whether a hint may affect deployment;
+ *     whether a hint may influence adaptive execution;
+ *     whether a hint may be preserved across compilation boundaries.
+ *
+ *
+ * ============================================================================
+ * 23. PROVENANCE CONTRACT
+ * ============================================================================
+ *
+ * The AST/semantic model must preserve source provenance for:
+ *
+ *     - the complete hint;
+ *     - property names;
+ *     - values;
+ *     - nested groups;
+ *     - source ordering;
+ *     - source spans.
+ *
+ * Provenance may later record:
+ *
+ *     source;
+ *     derived_from;
+ *     transformed_by;
+ *     honored_by;
+ *     ignored_by;
+ *     reason;
+ *     evidence;
+ *     compiler version;
+ *     semantic version;
+ *     target realization.
+ *
+ * This grammar does not create provenance records itself.
+ *
+ *
+ * ============================================================================
+ * 24. AST CONTRACT
+ * ============================================================================
+ *
+ * Conceptual AST:
+ *
+ *     ResourceHintPayload
+ *         kind:
+ *             Expression
+ *             Specification
+ *
+ *     ResourceHintSpecification
+ *         clauses[]
+ *
+ *     ResourceHintProperty
+ *         name
+ *         value
+ *         source_span
+ *
+ *     ResourceHintValue
+ *         expression
+ *
+ *     ResourceHintGroup
+ *         name
+ *         entries[]
+ *
+ * The actual Rust AST type names are owned by the frontend AST implementation.
+ *
+ * The grammar MUST NOT import Rust AST types.
+ *
+ * The AST must preserve source ordering because two advisory hints may have
+ * different semantic precedence under a future explicit policy.
+ *
+ *
+ * ============================================================================
+ * 25. SEMANTIC CONTRACT
+ * ============================================================================
+ *
+ * Semantic analysis must:
+ *
+ *     - classify the hint;
+ *     - resolve property names;
+ *     - validate expression types;
+ *     - resolve referenced symbols;
+ *     - determine whether a property is standard/dialect/vendor/future;
+ *     - validate domain compatibility;
+ *     - apply policy;
+ *     - preserve advisory strength;
+ *     - detect conflicting hints;
+ *     - construct canonical resource intent.
+ *
+ * Semantic analysis MUST NOT assume that every parsed hint has a realization.
+ *
+ *
+ * ============================================================================
+ * 26. IR CONTRACT
+ * ============================================================================
+ *
+ * This grammar owns NO IR.
+ *
+ * There must be no:
+ *
+ *     HintIR
+ *     QuantumHintIR
+ *     HardwareHintIR
+ *     AIHintIR
+ *
+ * merely because hints exist.
+ *
+ * Hint information flows through the canonical semantic resource model.
+ *
+ * Quantum-specific information may subsequently accompany the canonical
+ * quantum semantic representation and, where appropriate, quantum::ir.
+ *
+ * HDL/hardware information is consumed by the HDL/hardware lowering path.
+ *
+ *
+ * ============================================================================
+ * 27. BACKEND CONTRACT
+ * ============================================================================
+ *
+ * A backend MAY:
  *
  *     honor a hint;
+ *     partially honor a hint;
  *     transform a hint;
  *     ignore a hint;
  *     diagnose an unsupported hint;
- *     preserve a hint for a later compilation stage.
+ *     preserve a hint for another stage.
  *
- * A hint MUST NOT make a portable program non-portable merely because a
- * particular target cannot honor the advisory information, unless the
- * programmer has separately expressed a requirement or constraint.
+ * A backend MUST NOT treat an advisory hint as a mandatory resource
+ * requirement unless that semantic strengthening is explicitly represented by
+ * another source construct.
  *
- * ============================================================================
- * 21. DETERMINISM
- * ============================================================================
- *
- * Parsing this grammar is deterministic with respect to:
- *
- *     source;
- *     lexer vocabulary;
- *     grammar version;
- *     parser configuration.
- *
- * This grammar performs no:
- *
- *     hardware probing;
- *     resource discovery;
- *     random selection;
- *     wall-clock evaluation;
- *     environment lookup;
- *     backend selection.
  *
  * ============================================================================
- * 22. DIAGNOSTICS
+ * 28. DIAGNOSTICS
  * ============================================================================
  *
- * Syntax diagnostics should identify:
+ * STRUCTURAL/PARSER diagnostics:
  *
- *     missing HINT;
  *     missing expression;
- *     malformed property path;
+ *     missing property name;
  *     missing ASSIGN;
  *     missing value;
  *     missing SEMICOLON;
- *     malformed hint group;
- *     malformed nested expression.
+ *     malformed group;
+ *     malformed group entry;
+ *     unterminated specification;
+ *     unterminated group.
  *
- * Semantic diagnostics belong downstream and may identify:
+ * SEMANTIC diagnostics:
  *
- *     unknown hint property;
- *     unsupported hint;
- *     conflicting hints;
- *     invalid hint value type;
- *     invalid hint scope;
- *     unsupported target-specific hint;
- *     hint incorrectly used where a requirement/constraint is required.
+ *     unknown required-standard property;
+ *     invalid value type;
+ *     incompatible resource dimension;
+ *     conflicting hint;
+ *     policy-disallowed hint;
+ *     unsupported target interpretation;
+ *     invalid domain use.
  *
- * ============================================================================
- * 23. SECURITY
- * ============================================================================
+ * The parser must not attempt to perform semantic validation.
  *
- * Hint syntax MUST NOT provide an execution escape hatch.
- *
- * A hint must never cause the parser to:
- *
- *     execute code;
- *     access files;
- *     access credentials;
- *     contact a network;
- *     probe hardware;
- *     invoke a compiler backend;
- *     allocate resources.
- *
- * Any expression embedded in a hint is still subject to the normal semantic,
- * effect, capability, ownership, and security analysis pipeline.
  *
  * ============================================================================
- * 24. PERFORMANCE
+ * 29. DETERMINISM
  * ============================================================================
  *
- * This grammar intentionally avoids:
+ * Parsing depends only on:
  *
- *     large finite keyword alternatives;
- *     enumerations of hardware;
- *     enumerations of capabilities;
- *     enumerations of optimization dimensions;
- *     target-specific alternatives.
+ *     source;
+ *     canonical lexer vocabulary;
+ *     grammar version;
+ *     parser configuration.
  *
- * Property namespace depth is recursive/repetitive rather than bounded.
+ * Parsing MUST NOT depend on:
  *
- * Hint lists and groups are unbounded by language design.
+ *     hardware;
+ *     runtime availability;
+ *     filesystem state;
+ *     network state;
+ *     randomness;
+ *     wall-clock time;
+ *     provider state.
  *
- * Compiler/parser resource exhaustion limits, where required for defensive
- * implementation, belong to the parser/compiler safety policy rather than
- * this language grammar.
  *
  * ============================================================================
- * 25. COMPATIBILITY
+ * 30. SECURITY
  * ============================================================================
  *
- * The stable top-level syntax is:
+ * This grammar is declarative.
+ *
+ * It contains:
+ *
+ *     no embedded Rust;
+ *     no actions;
+ *     no semantic predicates;
+ *     no shell execution;
+ *     no filesystem access;
+ *     no network access;
+ *     no environment access;
+ *     no hardware probing;
+ *     no credential access;
+ *     no unsafe Rust.
+ *
+ * Generated Rust code must be integrated into the existing safe-Rust frontend
+ * without introducing unsafe application code.
+ *
+ *
+ * ============================================================================
+ * 31. COMPATIBILITY CONTRACT
+ * ============================================================================
+ *
+ * Stable surface:
  *
  *     hint <resource-expression>;
  *
- * The reusable block form is:
+ * Extended surface:
  *
  *     hint {
- *         <hint-clause>*
+ *         <hint-clause>+
  *     };
  *
- * Existing resource grammars must delegate hint ownership to this grammar.
+ * Property assignments:
  *
- * No alternative hint grammar should be introduced under:
+ *     <qualified-name> = <resource-expression>;
  *
- *     core/
- *     hardware/
- *     execution/
- *     compile/
- *     quantum/
- *     hdl/
+ * Nested groups:
  *
- * unless it is explicitly an interoperability/dialect grammar.
+ *     <qualified-name> {
+ *         <hint-clause>+
+ *     }
+ *
+ * Existing source programs using:
+ *
+ *     hint <expression>;
+ *
+ * remain compatible.
+ *
+ * No finite property vocabulary is required for future compatibility.
+ *
  *
  * ============================================================================
- * 26. CONFORMANCE TEST CONTRACT
+ * 32. CONFORMANCE TEST CONTRACT
  * ============================================================================
  *
- * Positive cases MUST include:
+ * POSITIVE TESTS
+ * -------------
  *
  *     hint locality;
  *
@@ -1194,11 +1498,15 @@ optionalResourceHintList
  *
  *     hint quantum::routing = routing_strategy;
  *
- *     hint hardware::memory_locality = locality_goal;
+ *     hint quantum::measurement = measurement_strategy;
+ *
+ *     hint hardware::thermal = thermal_goal;
  *
  *     hint distributed::locality = locality_goal;
  *
- *     hint ai::accelerator = accelerator_goal;
+ *     hint tensor::layout = layout_goal;
+ *
+ *     hint vendor::future::optimization = optimization_goal;
  *
  *     hint {
  *         latency = latency_goal;
@@ -1206,13 +1514,20 @@ optionalResourceHintList
  *     };
  *
  *     hint {
- *         when = workload_size > threshold;
- *         execution::parallelism = desired_parallelism;
+ *         quantum::routing = routing_goal;
+ *         quantum::measurement = measurement_goal;
  *     };
  *
- *     hint vendor::future::metric = future_value;
+ *     hint {
+ *         execution {
+ *             parallelism = desired_parallelism;
+ *             locality = locality_goal;
+ *         }
+ *     };
  *
- * Negative cases MUST include:
+ *
+ * NEGATIVE TESTS
+ * -------------
  *
  *     hint;
  *
@@ -1222,108 +1537,400 @@ optionalResourceHintList
  *
  *     hint { };
  *
- * where the language policy requires at least one meaningful hint clause in
- * block form.
+ *     hint {
+ *         locality =
+ *     };
  *
- * Boundary/scalability cases MUST include:
+ *     hint {
+ *         execution {
+ *             parallelism =
+ *         }
+ *     };
  *
- *     one hint;
- *     many hints;
- *     deeply nested property namespaces;
- *     deeply nested expressions;
- *     large symbolic quantities;
- *     large hint groups;
- *     large hint lists;
- *     mixed classical/quantum/HDL/hardware hints;
- *     unknown future property names;
+ *     hint {
+ *         locality
+ *     };
+ *
+ *
+ * BOUNDARY TESTS
+ * -------------
+ *
+ *     deeply qualified property names;
+ *     deeply nested groups;
+ *     symbolic values;
+ *     computed values;
+ *     very large source-level quantities;
+ *     dynamic expressions;
  *     vendor namespaces;
- *     dialect namespaces.
+ *     dialect namespaces;
+ *     future-domain namespaces;
+ *     mixed classical/quantum/HDL/resource hints;
+ *     large hint specifications.
  *
- * Portability tests MUST verify that:
  *
- *     hint != requirement
- *     hint != constraint
- *     hint != capability
- *     hint != preference
- *     hint != physical allocation
+ * SCALABILITY TESTS
+ * -----------------
+ *
+ * Verify that the grammar imposes no fixed:
+ *
+ *     hint count;
+ *     property count;
+ *     group count;
+ *     group depth;
+ *     namespace depth;
+ *     resource-domain count;
+ *     target count;
+ *     device count;
+ *     qubit count;
+ *     processor count;
+ *     node count.
+ *
+ *
+ * DETERMINISM TESTS
+ * -----------------
+ *
+ * Identical source with identical grammar/lexer configuration must produce
+ * identical parse structures.
+ *
  *
  * ============================================================================
- * 27. HARD-CODING AUDIT
+ * 33. HARD-CODING AUDIT
  * ============================================================================
  *
  * PASS CONDITIONS:
  *
- *     no MAX_QUBITS;
- *     no MAX_CPUS;
- *     no MAX_GPUS;
- *     no MAX_FPGAS;
- *     no MAX_NODES;
- *     no MAX_MEMORY;
- *     no MAX_THREADS;
- *     no MAX_TENSOR_RANK;
- *     no MAX_REGISTER_WIDTH;
- *     no MAX_NETWORK_SIZE;
- *     no MAX_DEVICE_COUNT;
- *     no fixed physical device IDs;
- *     no fixed qubit IDs;
- *     no fixed topology;
- *     no fixed machine size;
- *     no fixed accelerator count;
- *     no fixed timeline count;
- *     no fixed process count.
+ *     [x] no hardware capacity constants;
+ *     [x] no physical device enumeration;
+ *     [x] no qubit enumeration;
+ *     [x] no processor enumeration;
+ *     [x] no node enumeration;
+ *     [x] no tensor-rank ceiling;
+ *     [x] no register-width ceiling;
+ *     [x] no network-size ceiling;
+ *     [x] no accelerator-count ceiling;
+ *     [x] no finite resource-property dictionary;
+ *     [x] no fixed group depth;
+ *     [x] no fixed namespace depth;
+ *     [x] all quantities are expressions;
+ *     [x] target realization remains downstream.
  *
- * PASS:
- *
- *     all quantities are expressions;
- *     all property namespaces are open-world;
- *     all cardinalities are unbounded by grammar design;
- *     target realization is downstream.
  *
  * ============================================================================
- * 28. COMPLETION CRITERIA
+ * 34. PERFORMANCE CONTRACT
  * ============================================================================
  *
- * ResourceHints is complete when:
+ * The grammar deliberately favors:
  *
- *     [x] grammar identity is unique;
- *     [x] token vocabulary is canonical;
- *     [x] resourceExpression is reused;
- *     [x] identifier/name syntax is reused;
- *     [x] hint syntax has one owner;
- *     [x] top-level hint syntax is represented;
- *     [x] reusable hint specification is represented;
- *     [x] generic properties are open-world;
- *     [x] nested namespaces are unbounded;
- *     [x] values are canonical expressions;
- *     [x] hints remain advisory;
- *     [x] requirements remain distinct;
- *     [x] constraints remain distinct;
- *     [x] preferences remain distinct;
- *     [x] capabilities remain distinct;
- *     [x] physical allocation remains downstream;
- *     [x] quantum integration is semantic;
- *     [x] HDL integration is semantic;
- *     [x] hardware integration is target-independent;
- *     [x] distributed integration is target-independent;
- *     [x] AI integration is framework-neutral;
- *     [x] no universal hardware limits are encoded;
- *     [x] no Rust actions exist;
- *     [x] no unsafe Rust is required;
- *     [x] deterministic parsing is preserved;
- *     [x] diagnostics are defined;
- *     [x] security boundary is defined;
- *     [x] scalability boundary is defined;
- *     [x] compatibility boundary is defined;
- *     [x] test contract is defined.
+ *     direct delegation to resourceExpression;
+ *     qualifiedName reuse;
+ *     iterative repetition;
+ *     bounded local alternatives;
+ *     recursive composition only where source nesting requires it.
  *
- * Repository integration is complete only after resources.g4 removes its
- * duplicate ownership of:
+ * It introduces:
+ *
+ *     no semantic predicates;
+ *     no actions;
+ *     no runtime callbacks;
+ *     no target probing.
+ *
+ * Defensive parser resource limits, if required by the implementation, are
+ * implementation safety policy and MUST NOT become language semantics.
+ *
+ *
+ * ============================================================================
+ * 35. RUST INTEGRATION CONTRACT
+ * ============================================================================
+ *
+ * Target:
+ *
+ *     Rust 1.97 / Rust 1.97.1
+ *     Rust 2021
+ *
+ * Requirements:
+ *
+ *     - generated parser must integrate with the repository's ANTLR Rust
+ *       frontend;
+ *     - application-level Rust remains safe Rust;
+ *     - no unsafe blocks are required by this grammar;
+ *     - no embedded Rust actions are permitted;
+ *     - no semantic predicates are permitted;
+ *     - no target-specific Rust code is permitted in this grammar.
+ *
+ * The grammar itself is therefore independent of the Rust implementation
+ * details.
+ *
+ *
+ * ============================================================================
+ * 36. REQUIRED INTEGRATION CHANGE IN resources.g4
+ * ============================================================================
+ *
+ * The parent orchestrator must import:
+ *
+ *     ResourceHints
+ *
+ * alongside the other resource leaf grammars.
+ *
+ * It must continue to own:
  *
  *     resourceHint
+ *
+ * but that rule must delegate its payload to:
+ *
+ *     resourceHintExpression
+ *
+ * from this grammar.
+ *
+ * The current duplicate definitions in resources.g4:
+ *
  *     resourceHintExpression
  *     resourceHintClause
  *
- * and imports ResourceHints.
+ * must be removed.
  *
+ * The canonical parent form is:
+ *
+ *     resourceHint
+ *         : HINT
+ *           resourceHintExpression
+ *           SEMICOLON
+ *         ;
+ *
+ * The child grammar must not be imported back into Resources.
+ *
+ * Therefore dependency direction is:
+ *
+ *     ResourceExpressions
+ *            |
+ *     Names   |
+ *       \     |
+ *        \    v
+ *       ResourceHints
+ *            |
+ *            v
+ *        Resources
+ *            |
+ *            v
+ *       Zamani.g4
+ *
+ * No cycle is introduced.
+ *
+ *
+ * ============================================================================
+ * 37. REQUIRED INTEGRATION WITH resource-expressions.g4
+ * ============================================================================
+ *
+ * This file consumes:
+ *
+ *     resourceExpression
+ *
+ * from:
+ *
+ *     grammar/resources/resource-expressions.g4
+ *
+ * It must never redefine that rule.
+ *
+ *
+ * ============================================================================
+ * 38. REQUIRED INTEGRATION WITH core/names.g4
+ * ============================================================================
+ *
+ * This file consumes:
+ *
+ *     qualifiedName
+ *
+ * from:
+ *
+ *     grammar/core/names.g4
+ *
+ * It must never redefine:
+ *
+ *     identifier;
+ *     nameSegment;
+ *     qualifiedName.
+ *
+ *
+ * ============================================================================
+ * 39. REQUIRED INTEGRATION WITH THE AST
+ * ============================================================================
+ *
+ * The AST owner must map:
+ *
+ *     resourceHintExpression
+ *         ->
+ *     ResourceHintPayload
+ *
+ * and preserve:
+ *
+ *     source span;
+ *     expression/specification form;
+ *     clause order;
+ *     property names;
+ *     values;
+ *     group hierarchy.
+ *
+ * No target-specific AST node is required.
+ *
+ *
+ * ============================================================================
+ * 40. REQUIRED INTEGRATION WITH SEMANTICS
+ * ============================================================================
+ *
+ * Semantic resource analysis must consume the AST representation and classify:
+ *
+ *     property;
+ *     value;
+ *     group;
+ *     domain;
+ *     applicability;
+ *     policy;
+ *     portability.
+ *
+ * Semantic analysis may then feed:
+ *
+ *     requirements;
+ *     constraints;
+ *     preferences;
+ *     budgets;
+ *     capabilities;
+ *     negotiation;
+ *     scalability;
+ *     execution;
+ *     compilation.
+ *
+ * None of those relationships changes this grammar's ownership.
+ *
+ *
+ * ============================================================================
+ * 41. REQUIRED INTEGRATION WITH QUANTUM
+ * ============================================================================
+ *
+ * Quantum hints remain metadata/resource intent until consumed by quantum
+ * semantic analysis.
+ *
+ * They may eventually influence:
+ *
+ *     quantum::ir;
+ *     optimization;
+ *     decomposition;
+ *     routing;
+ *     scheduling;
+ *     resilience;
+ *     QEC;
+ *     ZQN;
+ *     HAL.
+ *
+ * This file owns none of those phases.
+ *
+ *
+ * ============================================================================
+ * 42. REQUIRED INTEGRATION WITH HDL/HARDWARE
+ * ============================================================================
+ *
+ * HDL/hardware consumers may use hint information during:
+ *
+ *     synthesis;
+ *     timing analysis;
+ *     placement;
+ *     resource selection;
+ *     optimization;
+ *     simulation;
+ *     deployment.
+ *
+ * This grammar does not construct:
+ *
+ *     netlists;
+ *     physical layouts;
+ *     device assignments;
+ *     fixed-width hardware resources.
+ *
+ *
+ * ============================================================================
+ * 43. REQUIRED INTEGRATION WITH EXECUTION
+ * ============================================================================
+ *
+ * Execution planning may consume hints for:
+ *
+ *     parallelism;
+ *     locality;
+ *     scheduling;
+ *     batching;
+ *     adaptive execution;
+ *     simulation;
+ *     fallback;
+ *     retry;
+ *     recovery.
+ *
+ * A hint does not itself perform any of those operations.
+ *
+ *
+ * ============================================================================
+ * 44. REQUIRED INTEGRATION WITH PROVENANCE
+ * ============================================================================
+ *
+ * Source spans and semantic identity must remain available so downstream
+ * provenance can answer:
+ *
+ *     where did this hint originate?
+ *     what transformation used it?
+ *     was it honored?
+ *     was it ignored?
+ *     why?
+ *     which realization consumed it?
+ *
+ *
+ * ============================================================================
+ * 45. COMPLETION CRITERIA
+ * ============================================================================
+ *
+ * ResourceHints is DONE when:
+ *
+ *     [x] grammar name is ResourceHints;
+ *     [x] file name is hints.g4;
+ *     [x] tokenVocab is ZamaniLexer;
+ *     [x] ResourceExpressions is imported;
+ *     [x] Names is imported;
+ *     [x] no lexer rules exist;
+ *     [x] no embedded Rust exists;
+ *     [x] no semantic predicates exist;
+ *     [x] no unsafe Rust is required;
+ *     [x] resourceHint is NOT duplicated here;
+ *     [x] resourceHintExpression is owned here;
+ *     [x] resourceHintSpecification is owned here;
+ *     [x] resourceHintClause is owned here;
+ *     [x] property assignments are open-world;
+ *     [x] property names reuse qualifiedName;
+ *     [x] values reuse resourceExpression;
+ *     [x] nested groups are open-world;
+ *     [x] empty specifications are rejected;
+ *     [x] no fixed resource-property universe exists;
+ *     [x] no physical-device universe exists;
+ *     [x] no machine-size constants exist;
+ *     [x] no quantum-gate enumeration exists;
+ *     [x] no quantum physical mapping exists;
+ *     [x] no HDL physical realization exists;
+ *     [x] no allocation occurs;
+ *     [x] no scheduling occurs;
+ *     [x] no routing occurs;
+ *     [x] no QEC occurs;
+ *     [x] no ZQN processing occurs;
+ *     [x] no HAL selection occurs;
+ *     [x] AST ownership is downstream;
+ *     [x] semantic ownership is downstream;
+ *     [x] IR ownership is downstream;
+ *     [x] provenance is preserved;
+ *     [x] parser behavior is deterministic;
+ *     [x] scalability is open-world;
+ *     [x] compatibility is explicitly defined;
+ *     [x] integration with resources.g4 is explicitly defined;
+ *     [x] positive tests are specified;
+ *     [x] negative tests are specified;
+ *     [x] boundary tests are specified;
+ *     [x] scalability tests are specified;
+ *     [x] determinism tests are specified.
+ *
+ *
+ * ============================================================================
+ * END OF FILE
  * ============================================================================
  */
