@@ -6,51 +6,71 @@
  * File:
  *     grammar/effects/network.g4
  *
- * Status:
- *     Canonical production parser grammar for source-level networking effects.
+ * Grammar:
+ *     NetworkEffects
  *
- * Grammar technology:
+ * Status:
+ *     Production network-effect domain adapter
+ *
+ * Technology:
  *     ANTLR4 parser grammar
  *
- * Runtime/compiler baseline:
+ * Rust baseline:
  *     Rust 1.97 / Rust 1.97.1
+ *     Rust 2021
  *
  * Safety:
- *     This grammar contains:
- *       - no embedded Rust actions;
- *       - no semantic predicates;
- *       - no unsafe code;
- *       - no filesystem access;
- *       - no network access;
- *       - no hardware discovery;
- *       - no runtime calls;
- *       - no machine-specific assumptions.
+ *     - No embedded Rust actions.
+ *     - No semantic predicates.
+ *     - No unsafe Rust requirement.
+ *     - No filesystem access.
+ *     - No network access.
+ *     - No hardware discovery.
+ *     - No runtime execution.
+ *     - No environment inspection.
+ *     - No randomness.
  *
  * ============================================================================
  * PURPOSE
  * ============================================================================
  *
- * This file owns SOURCE-LEVEL NETWORK EFFECT SYNTAX.
+ * This file is the canonical EFFECT-DOMAIN adapter for networking.
  *
- * It provides syntax for expressing:
+ * It does NOT define the networking language itself.
  *
- *     - network effects;
- *     - endpoint intent;
- *     - abstract channels;
- *     - communication intent;
- *     - message operations;
- *     - protocol requirements;
- *     - service interaction intent;
- *     - connection lifecycle intent;
- *     - communication policies;
- *     - network capabilities;
- *     - network requirements;
- *     - network constraints;
- *     - network preferences;
- *     - transport/security composition;
- *     - distributed/network effect composition.
+ * Source-level networking constructs such as:
  *
- * This file does NOT implement networking.
+ *     endpoint
+ *     channel
+ *     message
+ *     protocol
+ *     request
+ *     response
+ *     route
+ *     service
+ *     socket
+ *     stream
+ *     service discovery
+ *     distributed communication
+ *
+ * are owned by:
+ *
+ *     grammar/networking/
+ *
+ * This file instead connects networking semantics to Zamani's generic
+ * effect system.
+ *
+ * The central architectural distinction is:
+ *
+ *     grammar/networking/
+ *         =
+ *     networking source-domain syntax
+ *
+ *     grammar/effects/network.g4
+ *         =
+ *     networking effect syntax/integration
+ *
+ * This prevents two independent networking languages from developing.
  *
  * ============================================================================
  * OWNERSHIP
@@ -58,2024 +78,985 @@
  *
  * THIS FILE OWNS:
  *
- *     - network effect declarations;
- *     - network operation declarations;
- *     - endpoint declarations;
- *     - abstract endpoint references;
- *     - channel declarations;
- *     - communication declarations;
- *     - message declarations;
- *     - protocol declarations;
- *     - service declarations;
- *     - connection declarations;
- *     - network requirements;
- *     - network constraints;
- *     - network preferences;
- *     - network capability requirements;
- *     - network policy syntax;
- *     - network lifecycle intent;
- *     - network operation invocation syntax.
+ *     - networking effect references;
+ *     - networking effect-operation references;
+ *     - networking effect invocations;
+ *     - networking effect-operation uses;
+ *     - networking effect-reference lists;
+ *     - networking effect sets;
+ *     - stable parser integration points for networking effect analysis;
+ *     - syntax-level wrappers that identify networking as an effect domain.
  *
  * THIS FILE DOES NOT OWN:
  *
- *     - IP addresses;
- *     - MAC addresses;
+ *     - endpoint declarations;
+ *     - endpoint resolution;
+ *     - addresses;
+ *     - channels;
+ *     - messages;
+ *     - protocols;
+ *     - requests;
+ *     - responses;
+ *     - routes;
+ *     - service discovery;
+ *     - services;
  *     - sockets;
- *     - file descriptors;
- *     - operating-system network APIs;
- *     - DNS resolution;
+ *     - streams;
+ *     - distributed communication;
+ *     - network topology;
  *     - routing;
+ *     - scheduling;
  *     - packet transmission;
- *     - physical network topology;
- *     - network hardware discovery;
+ *     - transport implementation;
+ *     - DNS;
+ *     - operating-system networking;
  *     - NIC selection;
  *     - device selection;
- *     - port allocation;
- *     - fixed network sizes;
+ *     - physical addresses;
+ *     - ports;
  *     - bandwidth enforcement;
+ *     - latency enforcement;
  *     - QoS enforcement;
+ *     - authentication implementation;
+ *     - authorization implementation;
+ *     - encryption implementation;
  *     - cryptographic implementation;
- *     - authentication;
- *     - authorization;
- *     - TLS implementation;
- *     - encryption;
- *     - identity verification;
- *     - distributed consensus;
- *     - runtime scheduling;
- *     - hardware placement;
  *     - resource allocation;
- *     - network simulation;
+ *     - capability discovery;
+ *     - target selection;
+ *     - deployment;
+ *     - runtime execution;
  *     - classical IR;
  *     - quantum::ir;
  *     - QEC;
  *     - ZQN;
- *     - resilience.
+ *     - HAL.
  *
  * ============================================================================
  * ARCHITECTURAL POSITION
  * ============================================================================
  *
- *     Source
+ * The production dependency direction is:
+ *
+ *     source
  *       |
  *       v
  *     ZamaniLexer
  *       |
  *       v
- *     Core parser
+ *     ZamaniParser
  *       |
- *       +--> Types
- *       +--> Expressions
- *       +--> Effects
- *       +--> Security
- *       +--> THIS FILE
- *       |
- *       v
- *     Frontend AST
- *       |
- *       +--> name resolution
- *       +--> type analysis
- *       +--> effect analysis
- *       +--> capability analysis
- *       +--> network analysis
- *       +--> security analysis
- *       +--> resource analysis
- *       |
- *       v
- *     Canonical semantic representation
- *       |
- *       +--> classical IR
- *       +--> quantum::ir
- *       +--> distributed representation
- *       +--> hardware representation
- *       +--> network/effect metadata
- *       |
- *       v
- *     optimization
- *       |
- *       v
- *     routing / scheduling / resilience / ZQN
- *       |
- *       v
- *     target lowering
- *       |
- *       v
- *     runtime / hardware
+ *       +-----------------------------+
+ *       |                             |
+ *       v                             v
+ *     Effects                  Networking
+ *       |                             |
+ *       |                             |
+ *       +------------+----------------+
+ *                    |
+ *                    v
+ *             domain-neutral AST
+ *                    |
+ *                    v
+ *             structural validation
+ *                    |
+ *                    v
+ *             semantic analysis
+ *                    |
+ *          +---------+---------+
+ *          |         |         |
+ *          v         v         v
+ *       effects   capability  resource
+ *          |       analysis   analysis
+ *          |         |         |
+ *          +---------+---------+
+ *                    |
+ *                    v
+ *             policy/security
+ *                    |
+ *                    v
+ *          canonical semantic model
+ *                    |
+ *          +---------+----------------+
+ *          |                          |
+ *          v                          v
+ *    classical semantics        quantum semantics
+ *                                     |
+ *                                     v
+ *                                 quantum::ir
+ *                    |
+ *                    v
+ *          optimization/lowering
+ *                    |
+ *             routing/scheduling
+ *                    |
+ *             resilience/recovery
+ *                    |
+ *                    v
+ *             target realization
+ *
+ * This file exists above semantic realization.
  *
  * ============================================================================
- * POCO-REAF
+ * EFFECT / CAPABILITY / RESOURCE SEPARATION
  * ============================================================================
  *
- * Network syntax describes WHAT communication behavior is required or
- * requested.
+ * An EFFECT describes observable computational interaction.
  *
- * It must not permanently encode WHERE that behavior occurs.
+ * A CAPABILITY describes something an execution environment can provide.
+ *
+ * A RESOURCE describes something that may be consumed, required, available,
+ * negotiated, or constrained.
+ *
+ * A REQUIREMENT describes a condition that must be satisfied.
+ *
+ * A CONSTRAINT describes a condition that a valid realization must obey.
+ *
+ * A PREFERENCE describes a desirable realization without changing correctness.
+ *
+ * A POLICY describes permitted/prohibited execution behavior.
+ *
+ * These concepts MUST NOT be collapsed into networking effect syntax.
  *
  * For example:
  *
- *     requires network::communication;
+ *     networking::send
  *
- * does NOT imply:
+ * describes effect identity.
  *
- *     use NIC X
- *     use interface Y
- *     use address Z
- *     use exactly N nodes
- *     use exactly N connections
- *     use topology T
- *     use transport implementation P
+ * It does NOT mean:
  *
- * Those are downstream realization decisions.
+ *     use a particular NIC
+ *     use a particular interface
+ *     use a particular address
+ *     use a particular transport
+ *     use a particular route
+ *     use a fixed number of nodes
+ *     use a fixed number of connections
  *
- * ============================================================================
- * SCALABILITY
- * ============================================================================
- *
- * There are deliberately NO grammar-level limits on:
- *
- *     - endpoints;
- *     - channels;
- *     - messages;
- *     - services;
- *     - protocols;
- *     - connections;
- *     - network operations;
- *     - nodes;
- *     - peers;
- *     - routes;
- *     - policy rules;
- *     - capability requirements;
- *     - requirement expressions;
- *     - generic parameters;
- *     - nesting;
- *     - distributed participants.
- *
- * Repetition uses ANTLR repetition operators.
- *
- * Physical limits belong to:
- *
- *     - resource models;
- *     - target descriptions;
- *     - capability discovery;
- *     - deployment;
- *     - runtime policies;
- *     - hardware abstraction;
- *     - operating-system facilities.
+ * Those decisions belong downstream.
  *
  * ============================================================================
- * OPEN-WORLD NETWORK MODEL
+ * OPEN-WORLD NETWORK EFFECT MODEL
  * ============================================================================
  *
- * Network identities are names.
+ * Network effect identities are open-world qualified names.
  *
- * The grammar therefore does NOT enumerate:
+ * Examples:
  *
- *     TCP
- *     UDP
- *     QUIC
- *     HTTP
- *     HTTP2
- *     HTTP3
- *     MQTT
- *     gRPC
- *     IPv4
- *     IPv6
- *     Ethernet
- *     InfiniBand
- *     device_1
- *     node_1
- *     port_1
+ *     networking::send
+ *     networking::receive
+ *     networking::request
+ *     networking::response
+ *     networking::connect
+ *     networking::disconnect
+ *     networking::publish
+ *     networking::subscribe
+ *     networking::stream
+ *     networking::service
+ *     networking::discovery
+ *     networking::routing
+ *     networking::transport
+ *     networking::distributed
  *
- * as closed semantic categories.
+ * Future domains are equally valid:
  *
- * They may be represented as source-level names:
+ *     networking::future::operation
+ *     networking::vendor::operation
+ *     networking::custom::operation
+ *     networking::quantum::communication
  *
- *     protocol tcp;
- *     protocol custom::transport;
- *     endpoint service::worker;
+ * This grammar deliberately does NOT enumerate those operations.
  *
- * Their semantic meaning is determined downstream.
- *
- * This allows future protocols and communication substrates to be introduced
- * without modifying this grammar.
+ * The semantic system determines whether a resolved name actually represents
+ * a valid networking effect.
  *
  * ============================================================================
- * ADDRESSING BOUNDARY
+ * NO NETWORK KEYWORD EXPLOSION
  * ============================================================================
  *
- * Network source syntax may refer to an abstract endpoint.
+ * This file deliberately does NOT require new lexer keywords for:
  *
- * An endpoint identifier is NOT inherently a physical address.
+ *     send
+ *     receive
+ *     request
+ *     response
+ *     connect
+ *     disconnect
+ *     publish
+ *     subscribe
+ *     listen
+ *     accept
+ *     open
+ *     close
+ *     invoke
  *
- * Therefore:
+ * Those names are represented through the existing open-world qualified-name
+ * effect system.
  *
- *     endpoint worker;
+ * This prevents networking vocabulary from becoming a closed language
+ * catalogue.
  *
- * does not imply:
+ * New networking operations therefore do not require:
  *
- *     IP address;
- *     MAC address;
- *     socket;
- *     machine;
- *     physical node.
+ *     - a lexer modification;
+ *     - a new parser alternative;
+ *     - a new universal keyword;
+ *     - a new effect grammar rule.
  *
- * Explicit address-like values, when supported by the lexical/type system,
- * remain values. Their interpretation belongs downstream.
+ * A semantic registry/domain implementation may introduce new meanings
+ * independently of the core grammar.
+ *
+ * ============================================================================
+ * NETWORKING DOMAIN BOUNDARY
+ * ============================================================================
+ *
+ * The relationship between this file and grammar/networking/ is:
+ *
+ *     networking source syntax
+ *              |
+ *              v
+ *     grammar/networking/
+ *              |
+ *              +--> endpoint
+ *              +--> channel
+ *              +--> message
+ *              +--> protocol
+ *              +--> request
+ *              +--> response
+ *              +--> route
+ *              +--> service
+ *              +--> socket
+ *              +--> stream
+ *              +--> distributed communication
+ *              |
+ *              v
+ *     networking semantic model
+ *
+ * while:
+ *
+ *     networking effect syntax
+ *              |
+ *              v
+ *     grammar/effects/network.g4
+ *              |
+ *              v
+ *     generic effect semantic model
+ *
+ * The two models are related semantically but are not competing grammar
+ * authorities.
+ *
+ * ============================================================================
+ * EFFECT OPERATION BOUNDARY
+ * ============================================================================
+ *
+ * Generic effect operation syntax is owned by:
+ *
+ *     grammar/effects/effect-operations.g4
+ *
+ * Therefore this file MUST NOT redefine:
+ *
+ *     effectOperationReference
+ *     effectInvocation
+ *     effectInvocationArguments
+ *     effectOperationCall
+ *     effectOperationUse
+ *
+ * Instead, this file wraps those canonical rules.
+ *
+ * ============================================================================
+ * EFFECT SET BOUNDARY
+ * ============================================================================
+ *
+ * Generic effect collection syntax is owned by:
+ *
+ *     grammar/effects/effect-sets.g4
+ *
+ * Therefore this file MUST NOT redefine:
+ *
+ *     effectReference
+ *     effectReferenceList
+ *     effectSet
+ *     effectSetBody
+ *     effectSetComposition
+ *
+ * Instead, this file exposes networking-specific wrappers around those rules.
+ *
+ * ============================================================================
+ * HANDLER BOUNDARY
+ * ============================================================================
+ *
+ * Effect handling is owned by:
+ *
+ *     grammar/effects/effect-handling.g4
+ *
+ * This file does NOT define:
+ *
+ *     handleExpression
+ *     handleStatement
+ *     effectHandler
+ *     effectHandlerArm
+ *     effectHandlerBody
+ *
+ * Network effects participate in generic handlers through the canonical effect
+ * system.
+ *
+ * ============================================================================
+ * DECLARATION BOUNDARY
+ * ============================================================================
+ *
+ * Generic effect declarations are owned by:
+ *
+ *     grammar/effects/effect-declarations.g4
+ *
+ * This file therefore does NOT create a second declaration syntax such as:
+ *
+ *     network effect ...
+ *
+ * A networking effect may be declared through the generic effect declaration
+ * system and semantically classified under the networking domain.
+ *
+ * ============================================================================
+ * CAPABILITY BOUNDARY
+ * ============================================================================
+ *
+ * This grammar does not declare or discover capabilities.
+ *
+ * Networking capabilities are semantic names.
+ *
+ * Examples:
+ *
+ *     networking::communication
+ *     networking::streaming
+ *     networking::multicast
+ *     networking::reliable_delivery
+ *     networking::service_discovery
+ *     networking::secure_transport
+ *
+ * The capability system determines:
+ *
+ *     - whether the capability exists;
+ *     - whether a target provides it;
+ *     - whether it is authorized;
+ *     - whether it can satisfy a program requirement.
+ *
+ * This file merely preserves source structure.
+ *
+ * ============================================================================
+ * RESOURCE BOUNDARY
+ * ============================================================================
+ *
+ * This file does not encode physical network resources.
+ *
+ * It MUST NOT define:
+ *
+ *     maximum bandwidth;
+ *     maximum latency;
+ *     maximum connections;
+ *     maximum nodes;
+ *     maximum endpoints;
+ *     maximum messages;
+ *     maximum streams;
+ *     maximum routes;
+ *     maximum devices;
+ *     maximum network size.
+ *
+ * Resource quantities remain ordinary source values or semantic requirements.
+ *
+ * Physical feasibility is evaluated downstream.
  *
  * ============================================================================
  * SECURITY BOUNDARY
  * ============================================================================
  *
- * Network security composes with:
+ * Network effects may compose with security effects.
  *
- *     grammar/effects/security.g4
+ * Examples:
  *
- * Security syntax remains responsible for:
+ *     networking::request
+ *     security::authenticate
+ *     security::authorize
+ *     security::confidentiality
+ *     security::integrity
  *
- *     - security requirements;
- *     - permissions;
- *     - trust;
- *     - authorization intent;
- *     - authentication intent;
- *     - classification;
- *     - cryptographic intent.
+ * This file does not import the security grammar.
  *
- * This file does not redefine those concepts.
+ * The relationship is intentionally semantic rather than a parser ownership
+ * relationship.
  *
- * Example:
+ * This prevents a cycle such as:
  *
- *     requires security::confidentiality;
+ *     NetworkEffects
+ *         -> Security
+ *         -> NetworkEffects
  *
- * Network transport realization remains downstream.
- *
- * ============================================================================
- * EFFECT BOUNDARY
- * ============================================================================
- *
- * Network operations are effects.
- *
- * This grammar therefore composes with:
- *
- *     grammar/effects/effects.g4
- *
- * It does not create a second effect system.
- *
- * Example:
- *
- *     fn fetch() -> Data
- *         with effects {
- *             network::request,
- *             network::receive
- *         }
+ * Security analysis may inspect the resulting AST/effect model after parsing.
  *
  * ============================================================================
  * DISTRIBUTED COMPUTING BOUNDARY
  * ============================================================================
  *
- * Network communication may participate in distributed computation.
+ * Networking effects may participate in distributed computation.
  *
- * This file expresses communication intent.
+ * Examples:
  *
- * It does not own:
+ *     networking::send
+ *     networking::receive
+ *     distributed::consensus
+ *     distributed::replication
  *
+ * This file does not own:
+ *
+ *     - actor semantics;
+ *     - task scheduling;
  *     - node placement;
- *     - cluster membership;
  *     - replication;
- *     - consistency algorithms;
- *     - consensus algorithms;
- *     - distributed scheduling;
- *     - distributed fault recovery.
+ *     - consistency;
+ *     - consensus;
+ *     - fault recovery;
+ *     - distributed topology.
  *
- * Those belong to distributed and runtime subsystems.
+ * Those remain owned by the distributed/concurrency subsystems.
  *
  * ============================================================================
  * QUANTUM BOUNDARY
  * ============================================================================
  *
- * Network effects may surround quantum computation.
+ * Networking can surround or participate in quantum computation.
  *
- * Examples:
+ * Examples include:
  *
- *     network::quantum_transport
- *     network::remote_quantum_execution
- *     network::measurement_transport
+ *     networking::quantum::communication
+ *     networking::quantum::execution
+ *     networking::quantum::measurement_transport
+ *     networking::quantum::remote_execution
  *
- * This grammar does not define:
+ * This grammar does NOT define:
  *
  *     QubitId
  *     PhysicalQubitId
  *     GateKind
- *     topology
+ *     quantum topology
  *     calibration
- *     QEC codes
- *     ZQN faults
+ *     routing
+ *     scheduling
+ *     QEC
+ *     ZQN
  *
- * Quantum semantics remain downstream and the canonical quantum semantic
- * boundary remains:
+ * If networking semantics participate in a quantum computation, downstream
+ * semantic lowering may associate the resulting operation with:
  *
  *     quantum::ir
+ *
+ * `quantum::ir` remains the canonical quantum semantic boundary.
+ *
+ * This grammar never creates another quantum IR.
  *
  * ============================================================================
  * HDL / HARDWARE BOUNDARY
  * ============================================================================
  *
- * Network syntax may describe abstract communication interfaces for hardware
- * and hardware/software co-design.
+ * Networking effects may describe abstract communication involving hardware
+ * or HDL systems.
  *
- * It does not define:
+ * Examples:
  *
- *     - pins;
- *     - physical addresses;
- *     - FPGA routing;
- *     - ASIC wiring;
- *     - fixed bus widths;
- *     - fixed device counts.
+ *     networking::hardware_link
+ *     networking::accelerator_transport
+ *     networking::device_communication
  *
- * Those belong to HDL/hardware semantic layers.
+ * This file does not define:
+ *
+ *     pins;
+ *     buses;
+ *     physical links;
+ *     bus widths;
+ *     registers;
+ *     FPGA routing;
+ *     ASIC wiring;
+ *     physical interfaces;
+ *     device IDs.
+ *
+ * Those concepts belong to HDL/hardware semantic layers.
  *
  * ============================================================================
- * AST CONTRACT
+ * POCO-REAF
  * ============================================================================
  *
- * The parser must preserve:
+ * A source program expresses communication intent.
  *
- *     - source spelling;
- *     - declaration kind;
- *     - qualified-name structure;
- *     - expression structure;
- *     - parameter structure;
- *     - source ordering;
- *     - source spans;
- *     - attributes;
- *     - explicit modifiers;
- *     - explicit requirement/constraint/preference distinctions.
+ * The same source-level effect may be realized through:
  *
- * The parser MUST NOT construct semantic runtime objects.
+ *     embedded communication
+ *     local communication
+ *     inter-process communication
+ *     shared-memory communication
+ *     CPU communication
+ *     accelerator communication
+ *     device communication
+ *     cluster communication
+ *     HPC communication
+ *     cloud communication
+ *     edge communication
+ *     quantum-classical communication
+ *     future communication substrates
  *
- * Semantic analysis may construct:
+ * The grammar therefore describes:
  *
- *     NetworkEffect
- *     NetworkEndpoint
- *     NetworkChannel
- *     NetworkMessage
- *     NetworkProtocol
- *     NetworkService
- *     NetworkConnection
- *     NetworkRequirement
- *     NetworkConstraint
- *     NetworkPreference
- *     NetworkCapabilityRequirement
+ *     WHAT
+ *
+ * rather than:
+ *
+ *     WHERE
+ *     WHICH MACHINE
+ *     WHICH DEVICE
+ *     WHICH INTERFACE
+ *     WHICH ROUTE
+ *     WHICH PROVIDER
+ *
+ * This is required for Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever.
+ *
+ * ============================================================================
+ * SCALABILITY
+ * ============================================================================
+ *
+ * There are no language-level finite limits on:
+ *
+ *     - qualified-name depth;
+ *     - effect references;
+ *     - effect operations;
+ *     - effect-set entries;
+ *     - operation arguments;
+ *     - nested source constructs;
+ *     - network participants;
+ *     - endpoints;
+ *     - channels;
+ *     - messages;
+ *     - services;
+ *     - streams;
+ *     - connections;
+ *     - distributed participants;
+ *     - network domains.
+ *
+ * This file contains no:
+ *
+ *     MAX_*
+ *
+ * capacity constants.
+ *
+ * Repetition and cardinality are inherited from the generic effect grammar
+ * and ordinary parser structures.
+ *
+ * Practical compiler/parser resource exhaustion is an implementation/resource
+ * condition and MUST NOT be transformed into a language-level networking
+ * ceiling.
  *
  * ============================================================================
  * DETERMINISM
  * ============================================================================
  *
- * This grammar:
+ * Parsing depends only on:
  *
- *     - has no embedded actions;
- *     - has no semantic predicates;
- *     - has no I/O;
- *     - has no random behavior;
- *     - has no runtime-dependent decisions;
- *     - has no hardware discovery.
+ *     - source token stream;
+ *     - selected grammar version;
+ *     - explicitly selected dialect configuration.
  *
- * Given a deterministic token stream, parsing is deterministic.
+ * Parsing MUST NOT depend on:
+ *
+ *     - hardware;
+ *     - network availability;
+ *     - DNS;
+ *     - runtime state;
+ *     - environment variables;
+ *     - wall-clock time;
+ *     - randomness;
+ *     - target availability;
+ *     - resource availability.
+ *
+ * Identical token input under identical grammar configuration must produce
+ * equivalent parse structures.
+ *
+ * ============================================================================
+ * AST CONTRACT
+ * ============================================================================
+ *
+ * This file creates parser structure only.
+ *
+ * The frontend AST should preserve:
+ *
+ *     - source span;
+ *     - qualified-name segments;
+ *     - operation identity;
+ *     - invocation arguments;
+ *     - effect-reference ordering;
+ *     - effect-set structure.
+ *
+ * Suggested domain-neutral semantic classification:
+ *
+ *     NetworkEffectReference
+ *     NetworkEffectOperationReference
+ *     NetworkEffectInvocation
+ *     NetworkEffectOperationUse
+ *     NetworkEffectReferenceList
+ *     NetworkEffectSet
+ *
+ * These are semantic/frontend concepts, not runtime networking objects.
+ *
+ * The parser MUST NOT construct:
+ *
+ *     Socket
+ *     NetworkDevice
+ *     NetworkInterface
+ *     Router
+ *     Packet
+ *     PhysicalConnection
+ *     QPU
+ *     PhysicalQubit
+ *     HardwareDevice
+ *
+ * ============================================================================
+ * SEMANTIC CONTRACT
+ * ============================================================================
+ *
+ * Semantic analysis is responsible for determining:
+ *
+ *     - whether a reference resolves;
+ *     - whether it belongs to the networking domain;
+ *     - whether an operation is declared;
+ *     - whether its arguments are valid;
+ *     - whether required capabilities exist;
+ *     - whether resource requirements can be satisfied;
+ *     - whether policies permit the operation;
+ *     - whether security requirements are satisfied;
+ *     - whether distributed semantics are compatible;
+ *     - whether quantum participation is valid;
+ *     - whether the operation can be lowered to the canonical semantic model.
+ *
+ * The parser MUST NOT perform these checks.
+ *
+ * ============================================================================
+ * IR CONTRACT
+ * ============================================================================
+ *
+ * This grammar creates no IR.
+ *
+ * The semantic pipeline is:
+ *
+ *     network effect syntax
+ *             |
+ *             v
+ *     domain-neutral AST
+ *             |
+ *             v
+ *     effect semantic model
+ *             |
+ *             v
+ *     networking semantic model
+ *             |
+ *       +-----+-------------------+
+ *       |                         |
+ *       v                         v
+ * classical semantics       quantum semantics
+ *                                 |
+ *                                 v
+ *                              quantum::ir
+ *       |
+ *       v
+ * optimization
+ *       |
+ *       v
+ * routing
+ *       |
+ *       v
+ * scheduling
+ *       |
+ *       v
+ * resilience/recovery
+ *       |
+ *       v
+ * target realization
+ *
+ * The grammar does not choose the IR.
+ *
+ * ============================================================================
+ * DIAGNOSTIC CONTRACT
+ * ============================================================================
+ *
+ * Parser diagnostics are limited to malformed syntax.
+ *
+ * Examples:
+ *
+ *     malformed qualified name
+ *     malformed invocation
+ *     malformed effect set
+ *     malformed effect reference list
+ *
+ * Semantic diagnostics are downstream.
+ *
+ * Examples:
+ *
+ *     unknown networking effect;
+ *     unknown networking operation;
+ *     unavailable networking capability;
+ *     insufficient resources;
+ *     forbidden policy;
+ *     incompatible argument type;
+ *     unsupported realization;
+ *     invalid security combination.
+ *
+ * These MUST NOT be represented as parser-level keyword failures.
+ *
+ * ============================================================================
+ * COMPATIBILITY
+ * ============================================================================
+ *
+ * Existing generic effect syntax remains authoritative.
+ *
+ * Existing networking source syntax remains owned by:
+ *
+ *     grammar/networking/
+ *
+ * This file MUST NOT introduce alternate spellings for networking constructs
+ * that already have an owner elsewhere.
+ *
+ * Compatibility aliases belong to:
+ *
+ *     grammar/compatibility/
+ *
+ * Historical examples do not automatically become legal syntax.
+ *
+ * Promotion remains:
+ *
+ *     proposal
+ *         ->
+ *     specification
+ *         ->
+ *     AST contract
+ *         ->
+ *     canonical grammar
+ *         ->
+ *     semantic implementation
+ *         ->
+ *     IR integration
+ *         ->
+ *     conformance tests
+ *         ->
+ *     stable feature
+ *
+ * ============================================================================
+ * DEPENDENCY CONTRACT
+ * ============================================================================
+ *
+ * DEPENDS_ON:
+ *
+ *     grammar/effects/effect-operations.g4
+ *     grammar/effects/effect-sets.g4
+ *     grammar/core/
+ *     grammar/expressions/
+ *     grammar/antlr/ZamaniLexer.g4
+ *
+ * The generic effect-operation grammar already depends on the canonical core
+ * and expression grammar.
+ *
+ * This file therefore does not duplicate those dependencies unnecessarily.
+ *
+ * EXPORTS:
+ *
+ *     networkEffectReference
+ *     networkEffectReferenceList
+ *     networkEffectSet
+ *     networkEffectOperationReference
+ *     networkEffectInvocation
+ *     networkEffectOperationUse
+ *     networkEffectConstruct
+ *     networkEffectReferenceConstruct
+ *     networkEffectOperationConstruct
+ *
+ * CONSUMED_BY:
+ *
+ *     semantic networking/effect analysis
+ *     effect-domain tooling
+ *     effect conformance tests
+ *     future parser/domain adapters where explicitly required
+ *
+ * AST_OWNER:
+ *
+ *     Existing domain-neutral Zamani frontend AST.
+ *
+ * SEMANTIC_OWNER:
+ *
+ *     Effect analysis + networking semantic analysis.
+ *
+ * IR_OWNER:
+ *
+ *     Canonical compiler semantic/IR pipeline.
+ *
+ *     Quantum semantics ultimately use:
+ *
+ *         quantum::ir
+ *
+ * TEST_OWNER:
+ *
+ *     grammar/tests/effects/
+ *     grammar/tests/networking/
+ *     grammar/tests/cross-domain/
+ *
+ * SPEC_OWNER:
+ *
+ *     grammar/spec/effects.md
+ *     grammar/spec/networking.md
+ *     grammar/specification/
+ *
+ * COMPATIBILITY_OWNER:
+ *
+ *     grammar/compatibility/
  *
  * ============================================================================
  * IMPORT CONTRACT
  * ============================================================================
  *
- * Shared syntax is imported rather than duplicated.
+ * Only canonical generic effect components are imported.
  *
- * Core:
- *     identifier
- *     qualifiedName
- *     attributes
- *     visibility
- *     genericParameters
- *     parameterList
- *     returnType
- *     whereClause
+ * The dependency graph is:
  *
- * Types:
- *     typeExpression
+ *     NetworkEffects
+ *          |
+ *          +--> EffectOperations
+ *          |       |
+ *          |       +--> Core
+ *          |       +--> Expressions
+ *          |
+ *          +--> EffectSets
+ *                  |
+ *                  +--> canonical effect-set rules
  *
- * Expressions:
- *     expression
- *     argumentList
- *     blockExpression
+ * This file MUST NOT import:
  *
- * Effects:
- *     effect references and effect composition.
+ *     Networking
+ *     Security
+ *     Distributed
+ *     Quantum
+ *     Hardware
+ *     Resources
  *
- * Security is intentionally NOT imported directly here.
+ * directly.
  *
- * Security composition is represented through ordinary qualified names and
- * semantic integration with grammar/effects/security.g4.
+ * Those relationships are semantic/domain integration boundaries.
  *
- * This prevents a circular grammar dependency:
+ * This is intentional and prevents grammar cycles.
  *
- *     Network -> Security -> Network
+ * ============================================================================
+ * PUBLIC RULE CONTRACT
+ * ============================================================================
+ *
+ * The public rules below are deliberately small wrappers around canonical
+ * generic effect rules.
+ *
+ * They provide stable semantic ownership without creating duplicate syntax.
  *
  * ============================================================================
  */
 
-parser grammar Network;
+parser grammar NetworkEffects;
 
 options {
     tokenVocab = ZamaniLexer;
 }
 
-import Core, Types, Expressions, Effects;
+import
+    Core,
+    Expressions,
+    EffectOperations,
+    EffectSets
+;
 
 
 /*
  * ============================================================================
- * 1. NETWORK DECLARATION
+ * 1. NETWORK EFFECT REFERENCE
  * ============================================================================
  *
- * Introduces an abstract network effect/domain.
+ * Represents a source-level effect identity that semantic analysis may
+ * classify as belonging to the networking domain.
  *
  * Examples:
  *
- *     network;
+ *     networking
+ *     networking::send
+ *     networking::receive
+ *     networking::request
+ *     networking::response
+ *     networking::stream
+ *     networking::service
+ *     networking::discovery
+ *     networking::custom::operation
  *
- *     network fabric;
+ * No networking operation is enumerated here.
+ */
+
+networkEffectReference
+    : effectReference
+    ;
+
+
+/*
+ * ============================================================================
+ * 2. NETWORK EFFECT REFERENCE LIST
+ * ============================================================================
  *
- *     network fabric<T>;
+ * Reuses the canonical effect-reference-list syntax.
  *
- *     network fabric {
- *         endpoint worker;
+ * No fixed cardinality is imposed.
+ */
+
+networkEffectReferenceList
+    : effectReferenceList
+    ;
+
+
+/*
+ * ============================================================================
+ * 3. NETWORK EFFECT SET
+ * ============================================================================
+ *
+ * Reuses the canonical effect-set syntax.
+ *
+ * Example:
+ *
+ *     {
+ *         networking::send,
+ *         networking::receive
  *     }
  *
- * The declaration does not instantiate physical infrastructure.
- */
-
-networkDeclaration
-    : attributes?
-      visibility?
-      NETWORK
-      identifier
-      genericParameters?
-      networkDeclarationBody?
-      SEMI?
-    ;
-
-networkDeclarationBody
-    : LBRACE
-      networkMember*
-      RBRACE
-    ;
-
-networkMember
-    : networkEndpointDeclaration
-    | networkChannelDeclaration
-    | networkMessageDeclaration
-    | networkProtocolDeclaration
-    | networkServiceDeclaration
-    | networkConnectionDeclaration
-    | networkRequirementDeclaration
-    | networkConstraintDeclaration
-    | networkPreferenceDeclaration
-    | networkCapabilityDeclaration
-    ;
-
-
-/*
- * ============================================================================
- * 2. NETWORK EFFECT
- * ============================================================================
- *
- * Declares a named network effect.
- *
- * Example:
- *
- *     network effect communication;
- */
-
-networkEffectDeclaration
-    : attributes?
-      visibility?
-      NETWORK
-      EFFECT
-      identifier
-      genericParameters?
-      effectDeclarationSignature?
-      networkEffectBody?
-      SEMI?
-    ;
-
-networkEffectBody
-    : LBRACE
-      networkOperationDeclaration*
-      RBRACE
-    ;
-
-networkOperationDeclaration
-    : attributes?
-      visibility?
-      ASYNC?
-      FN
-      identifier
-      genericParameters?
-      LPAREN parameterList? RPAREN
-      returnType?
-      whereClause?
-      SEMI?
-    ;
-
-
-/*
- * ============================================================================
- * 3. ENDPOINT DECLARATIONS
- * ============================================================================
- *
- * Endpoints are logical communication participants.
- *
- * They are intentionally independent from:
- *
- *     IP;
- *     MAC;
- *     socket;
- *     machine;
- *     device;
- *     node.
- */
-
-networkEndpointDeclaration
-    : attributes?
-      visibility?
-      ENDPOINT
-      identifier
-      genericParameters?
-      networkEndpointTypeClause?
-      networkEndpointBody?
-      SEMI?
-    ;
-
-networkEndpointTypeClause
-    : COLON
-      qualifiedName
-    ;
-
-networkEndpointBody
-    : LBRACE
-      networkEndpointMember*
-      RBRACE
-    ;
-
-networkEndpointMember
-    : networkEndpointProperty
-    | networkCapabilityReference
-    | networkRequirement
-    | networkConstraint
-    | networkPreference
-    ;
-
-networkEndpointProperty
-    : identifier
-      (ASSIGN expression)?
-      SEMI
-    ;
-
-
-/*
- * ============================================================================
- * 4. ENDPOINT REFERENCES
- * ============================================================================
- */
-
-networkEndpointReference
-    : qualifiedName
-    ;
-
-
-/*
- * ============================================================================
- * 5. CHANNEL DECLARATIONS
- * ============================================================================
- *
- * Channels are abstract communication relationships.
- *
- * No physical transport is implied.
- */
-
-networkChannelDeclaration
-    : attributes?
-      visibility?
-      CHANNEL
-      identifier
-      genericParameters?
-      networkChannelTypeClause?
-      networkChannelBody?
-      SEMI?
-    ;
-
-networkChannelTypeClause
-    : COLON
-      qualifiedName
-    ;
-
-networkChannelBody
-    : LBRACE
-      networkChannelMember*
-      RBRACE
-    ;
-
-networkChannelMember
-    : networkEndpointBinding
-    | networkProtocolBinding
-    | networkChannelProperty
-    | networkRequirement
-    | networkConstraint
-    | networkPreference
-    ;
-
-networkEndpointBinding
-    : ENDPOINT
-      networkEndpointReference
-      SEMI
-    ;
-
-networkProtocolBinding
-    : PROTOCOL
-      qualifiedName
-      SEMI
-    ;
-
-networkChannelProperty
-    : identifier
-      (ASSIGN expression)?
-      SEMI
-    ;
-
-
-/*
- * ============================================================================
- * 6. MESSAGE DECLARATIONS
- * ============================================================================
- *
- * A message is a logical data item intended for communication.
- *
- * The type system remains responsible for the payload type.
- */
-
-networkMessageDeclaration
-    : attributes?
-      visibility?
-      MESSAGE
-      identifier
-      genericParameters?
-      networkMessageTypeClause?
-      networkMessageBody?
-      SEMI?
-    ;
-
-networkMessageTypeClause
-    : COLON
-      typeExpression
-    ;
-
-networkMessageBody
-    : LBRACE
-      networkMessageField*
-      RBRACE
-    ;
-
-networkMessageField
-    : identifier
-      COLON
-      typeExpression
-      SEMI
-    ;
-
-
-/*
- * ============================================================================
- * 7. PROTOCOL DECLARATIONS
- * ============================================================================
- *
- * Protocol identities are open-world names.
- *
- * Example:
- *
- *     protocol custom::reliable;
- *
- * The parser does not know whether a protocol is:
- *
- *     transport;
- *     application;
- *     link;
- *     quantum;
- *     future;
- *     proprietary;
- *     simulated.
- */
-
-networkProtocolDeclaration
-    : attributes?
-      visibility?
-      PROTOCOL
-      identifier
-      genericParameters?
-      networkProtocolBody?
-      SEMI?
-    ;
-
-networkProtocolBody
-    : LBRACE
-      networkProtocolMember*
-      RBRACE
-    ;
-
-networkProtocolMember
-    : networkProtocolProperty
-    | networkProtocolOperation
-    | networkRequirement
-    | networkConstraint
-    | networkPreference
-    ;
-
-networkProtocolProperty
-    : identifier
-      (ASSIGN expression)?
-      SEMI
-    ;
-
-networkProtocolOperation
-    : FN
-      identifier
-      genericParameters?
-      LPAREN parameterList? RPAREN
-      returnType?
-      SEMI?
-    ;
-
-
-/*
- * ============================================================================
- * 8. SERVICE DECLARATIONS
- * ============================================================================
- *
- * A service represents an abstract communication service.
- *
- * It is not tied to a machine, process, port, or address.
- */
-
-networkServiceDeclaration
-    : attributes?
-      visibility?
-      SERVICE
-      identifier
-      genericParameters?
-      networkServiceBody?
-      SEMI?
-    ;
-
-networkServiceBody
-    : LBRACE
-      networkServiceMember*
-      RBRACE
-    ;
-
-networkServiceMember
-    : networkServiceOperation
-    | networkServiceProperty
-    | networkEndpointBinding
-    | networkProtocolBinding
-    | networkRequirement
-    | networkConstraint
-    | networkPreference
-    ;
-
-networkServiceOperation
-    : ASYNC?
-      FN
-      identifier
-      genericParameters?
-      LPAREN parameterList? RPAREN
-      returnType?
-      whereClause?
-      SEMI?
-    ;
-
-networkServiceProperty
-    : identifier
-      (ASSIGN expression)?
-      SEMI
-    ;
-
-
-/*
- * ============================================================================
- * 9. CONNECTION DECLARATIONS
- * ============================================================================
- *
- * A connection expresses an abstract relationship.
- *
- * It does not allocate a runtime connection.
- */
-
-networkConnectionDeclaration
-    : attributes?
-      visibility?
-      CONNECTION
-      identifier
-      genericParameters?
-      networkConnectionBody?
-      SEMI?
-    ;
-
-networkConnectionBody
-    : LBRACE
-      networkConnectionMember*
-      RBRACE
-    ;
-
-networkConnectionMember
-    : networkEndpointBinding
-    | networkProtocolBinding
-    | networkConnectionProperty
-    | networkRequirement
-    | networkConstraint
-    | networkPreference
-    ;
-
-networkConnectionProperty
-    : identifier
-      (ASSIGN expression)?
-      SEMI
-    ;
-
-
-/*
- * ============================================================================
- * 10. NETWORK OPERATIONS
- * ============================================================================
- *
- * These are source-level operation names.
- *
- * The operation vocabulary remains open-world.
- */
-
-networkOperation
-    : networkConnectOperation
-    | networkDisconnectOperation
-    | networkSendOperation
-    | networkReceiveOperation
-    | networkRequestOperation
-    | networkRespondOperation
-    | networkPublishOperation
-    | networkSubscribeOperation
-    | networkAcceptOperation
-    | networkListenOperation
-    | networkCloseOperation
-    | networkOpenOperation
-    | networkInvokeOperation
-    ;
-
-
-/*
- * ============================================================================
- * 11. CONNECT
- * ============================================================================
- */
-
-networkConnectOperation
-    : CONNECT
-      networkEndpointReference
-      networkOperationOptions?
-    ;
-
-networkDisconnectOperation
-    : DISCONNECT
-      networkEndpointReference?
-      networkOperationOptions?
-    ;
-
-
-/*
- * ============================================================================
- * 12. SEND / RECEIVE
- * ============================================================================
- */
-
-networkSendOperation
-    : SEND
-      expression
-      networkToClause?
-      networkOperationOptions?
-    ;
-
-networkReceiveOperation
-    : RECEIVE
-      networkFromClause?
-      networkOperationOptions?
-    ;
-
-networkToClause
-    : TO
-      networkEndpointReference
-    ;
-
-networkFromClause
-    : FROM
-      networkEndpointReference
-    ;
-
-
-/*
- * ============================================================================
- * 13. REQUEST / RESPONSE
- * ============================================================================
- */
-
-networkRequestOperation
-    : REQUEST
-      expression
-      networkToClause?
-      networkOperationOptions?
-    ;
-
-networkRespondOperation
-    : RESPOND
-      expression?
-      networkOperationOptions?
-    ;
-
-
-/*
- * ============================================================================
- * 14. PUBLISH / SUBSCRIBE
- * ============================================================================
- */
-
-networkPublishOperation
-    : PUBLISH
-      expression
-      networkToClause?
-      networkOperationOptions?
-    ;
-
-networkSubscribeOperation
-    : SUBSCRIBE
-      expression
-      networkFromClause?
-      networkOperationOptions?
-    ;
-
-
-/*
- * ============================================================================
- * 15. LISTEN / ACCEPT / OPEN / CLOSE
- * ============================================================================
- */
-
-networkListenOperation
-    : LISTEN
-      networkEndpointReference?
-      networkOperationOptions?
-    ;
-
-networkAcceptOperation
-    : ACCEPT
-      networkEndpointReference?
-      networkOperationOptions?
-    ;
-
-networkOpenOperation
-    : OPEN
-      networkEndpointReference?
-      networkOperationOptions?
-    ;
-
-networkCloseOperation
-    : CLOSE
-      networkEndpointReference?
-      networkOperationOptions?
-    ;
-
-
-/*
- * ============================================================================
- * 16. SERVICE INVOCATION
- * ============================================================================
- *
- * The service name and operation remain semantic names.
- */
-
-networkInvokeOperation
-    : INVOKE
-      qualifiedName
-      LPAREN
-      argumentList?
-      RPAREN
-      networkOperationOptions?
-    ;
-
-
-/*
- * ============================================================================
- * 17. OPERATION OPTIONS
- * ============================================================================
- *
- * Options are intentionally generic.
- *
- * They do not define a closed transport configuration language.
- */
-
-networkOperationOptions
-    : WITH
-      networkOptionList
-    ;
-
-networkOptionList
-    : networkOption
-      (COMMA networkOption)*
-      COMMA?
-    ;
-
-networkOption
-    : qualifiedName
-    | qualifiedName
-      ASSIGN
-      expression
-    ;
-
-
-/*
- * ============================================================================
- * 18. NETWORK EFFECT INVOCATION
- * ============================================================================
- *
- * Integrates network operations with the canonical effect model.
- *
- * Example:
- *
- *     perform network::send(data);
- */
-
-networkPerformExpression
-    : PERFORM
-      networkOperation
-    ;
-
-networkPerformStatement
-    : networkPerformExpression
-      SEMI?
-    ;
-
-
-/*
- * ============================================================================
- * 19. NETWORK REQUIREMENTS
- * ============================================================================
- *
- * A requirement is mandatory semantic intent.
- *
- * It must not silently degrade into a preference.
- */
-
-networkRequirementDeclaration
-    : attributes?
-      visibility?
-      REQUIREMENT
-      NETWORK
-      identifier?
-      networkRequirement
-      SEMI?
-    ;
-
-networkRequirement
-    : REQUIRES
-      networkRequirementExpression
-    ;
-
-networkRequirementExpression
-    : networkReference
-    | networkRequirementCall
-    | networkRequirementSet
-    | expression
-    ;
-
-networkRequirementCall
-    : qualifiedName
-      LPAREN
-      argumentList?
-      RPAREN
-    ;
-
-networkRequirementSet
-    : LBRACE
-      networkRequirementItem*
-      RBRACE
-    ;
-
-networkRequirementItem
-    : networkRequirementExpression
-      COMMA?
-    ;
-
-
-/*
- * ============================================================================
- * 20. NETWORK CONSTRAINTS
- * ============================================================================
- *
- * A constraint describes a condition a valid realization must satisfy.
- */
-
-networkConstraintDeclaration
-    : attributes?
-      visibility?
-      CONSTRAINT
-      NETWORK
-      identifier?
-      networkConstraint
-      SEMI?
-    ;
-
-networkConstraint
-    : CONSTRAIN
-      networkConstraintExpression
-    ;
-
-networkConstraintExpression
-    : networkReference
-    | networkConstraintCall
-    | networkConstraintSet
-    | expression
-    ;
-
-networkConstraintCall
-    : qualifiedName
-      LPAREN
-      argumentList?
-      RPAREN
-    ;
-
-networkConstraintSet
-    : LBRACE
-      networkConstraintItem*
-      RBRACE
-    ;
-
-networkConstraintItem
-    : networkConstraintExpression
-      COMMA?
-    ;
-
-
-/*
- * ============================================================================
- * 21. NETWORK PREFERENCES
- * ============================================================================
- *
- * A preference expresses a desirable but non-mandatory realization.
- */
-
-networkPreferenceDeclaration
-    : attributes?
-      visibility?
-      PREFERENCE
-      NETWORK
-      identifier?
-      networkPreference
-      SEMI?
-    ;
-
-networkPreference
-    : PREFER
-      networkPreferenceExpression
-    ;
-
-networkPreferenceExpression
-    : networkReference
-    | networkPreferenceCall
-    | networkPreferenceSet
-    | expression
-    ;
-
-networkPreferenceCall
-    : qualifiedName
-      LPAREN
-      argumentList?
-      RPAREN
-    ;
-
-networkPreferenceSet
-    : LBRACE
-      networkPreferenceItem*
-      RBRACE
-    ;
-
-networkPreferenceItem
-    : networkPreferenceExpression
-      COMMA?
-    ;
-
-
-/*
- * ============================================================================
- * 22. NETWORK CAPABILITIES
- * ============================================================================
- *
- * Capability syntax describes required/provided abstract capability names.
- *
- * It does not perform capability discovery.
- */
-
-networkCapabilityDeclaration
-    : attributes?
-      visibility?
-      CAPABILITY
-      NETWORK
-      identifier
-      genericParameters?
-      networkCapabilityBody?
-      SEMI?
-    ;
-
-networkCapabilityBody
-    : LBRACE
-      networkCapabilityMember*
-      RBRACE
-    ;
-
-networkCapabilityMember
-    : networkCapabilityProperty
-    | networkRequirement
-    | networkConstraint
-    | networkPreference
-    ;
-
-networkCapabilityProperty
-    : identifier
-      (ASSIGN expression)?
-      SEMI
-    ;
-
-networkCapabilityReference
-    : CAPABILITY
-      networkReference
-    ;
-
-
-/*
- * ============================================================================
- * 23. NETWORK REFERENCES
- * ============================================================================
- *
- * All network identities remain open-world qualified names.
- */
-
-networkReference
-    : qualifiedName
-    ;
-
-
-/*
- * ============================================================================
- * 24. NETWORK REQUIREMENT EXPRESSION HELPERS
- * ============================================================================
- *
- * These named wrappers make semantic AST lowering explicit without duplicating
- * the general expression grammar.
- */
-
-networkSecurityRequirement
-    : REQUIRES
-      qualifiedName
-    ;
-
-networkCapabilityRequirement
-    : REQUIRES
-      CAPABILITY
-      qualifiedName
-    ;
-
-networkProtocolRequirement
-    : REQUIRES
-      PROTOCOL
-      qualifiedName
-    ;
-
-
-/*
- * ============================================================================
- * 25. NETWORK EFFECT SIGNATURE
- * ============================================================================
- *
- * Reusable signature syntax for tools and aggregate grammars.
- */
-
-networkEffectSignature
-    : NETWORK
-      EFFECT
-      identifier
-      genericParameters?
-      LPAREN
-      parameterList?
-      RPAREN
-      returnType?
-      whereClause?
-    ;
-
-
-/*
- * ============================================================================
- * 26. NETWORK COMMUNICATION DECLARATION
- * ============================================================================
- *
- * Declares abstract communication intent between logical endpoints.
- */
-
-networkCommunicationDeclaration
-    : attributes?
-      visibility?
-      COMMUNICATION
-      identifier?
-      networkCommunicationBody
-      SEMI?
-    ;
-
-networkCommunicationBody
-    : LBRACE
-      networkCommunicationMember*
-      RBRACE
-    ;
-
-networkCommunicationMember
-    : networkFromEndpoint
-    | networkToEndpoint
-    | networkMessageBinding
-    | networkProtocolBinding
-    | networkRequirement
-    | networkConstraint
-    | networkPreference
-    ;
-
-networkFromEndpoint
-    : FROM
-      networkEndpointReference
-      SEMI
-    ;
-
-networkToEndpoint
-    : TO
-      networkEndpointReference
-      SEMI
-    ;
-
-networkMessageBinding
-    : MESSAGE
-      qualifiedName
-      SEMI
-    ;
-
-
-/*
- * ============================================================================
- * 27. NETWORK POLICY
- * ============================================================================
- *
- * Policy syntax is deliberately lightweight.
- *
- * Actual authorization/policy evaluation belongs to security semantics.
- */
-
-networkPolicyDeclaration
-    : attributes?
-      visibility?
-      POLICY
-      NETWORK
-      identifier
-      networkPolicyBody?
-      SEMI?
-    ;
-
-networkPolicyBody
-    : LBRACE
-      networkPolicyRule*
-      RBRACE
-    ;
-
-networkPolicyRule
-    : networkPolicyCondition?
-      networkPolicyDecision
-      networkPolicyAction?
-      SEMI?
-    ;
-
-networkPolicyCondition
-    : WHEN
-      expression
-    ;
-
-networkPolicyDecision
-    : ALLOW
-    | DENY
-    | REQUIRE
-    | REJECT
-    ;
-
-networkPolicyAction
-    : ON
-      networkReference
-    ;
-
-
-/*
- * ============================================================================
- * 28. NETWORK LIFECYCLE
- * ============================================================================
- *
- * Lifecycle declarations express intent only.
- */
-
-networkLifecycleDeclaration
-    : attributes?
-      visibility?
-      LIFECYCLE
-      identifier
-      networkLifecycleBody?
-      SEMI?
-    ;
-
-networkLifecycleBody
-    : LBRACE
-      networkLifecycleStep*
-      RBRACE
-    ;
-
-networkLifecycleStep
-    : OPEN
-    | CONNECT
-    | LISTEN
-    | ACCEPT
-    | CLOSE
-    | DISCONNECT
-    | qualifiedName
-    ;
-
-
-/*
- * ============================================================================
- * 29. NETWORK BLOCK
- * ============================================================================
- *
- * Generic composition block for source-level network intent.
- */
-
-networkBlock
-    : NETWORK
-      LBRACE
-      networkBlockItem*
-      RBRACE
-    ;
-
-networkBlockItem
-    : networkOperation SEMI?
-    | networkRequirement
-    | networkConstraint
-    | networkPreference
-    | networkCommunicationDeclaration
-    | networkPolicyDeclaration
-    ;
-
-
-/*
- * ============================================================================
- * 30. NETWORK STATEMENT
- * ============================================================================
- *
- * Aggregate parsers may use this rule to embed networking operations into
- * ordinary statement contexts.
- */
-
-networkStatement
-    : networkPerformStatement
-    | networkOperation SEMI?
-    | networkBlock
-    ;
-
-
-/*
- * ============================================================================
- * 31. NETWORK EXPRESSION
- * ============================================================================
- *
- * Aggregate expression grammars may use this rule where effect expressions
- * are permitted.
- */
-
-networkExpression
-    : networkPerformExpression
-    | networkOperation
-    | networkInvokeOperation
-    ;
-
-
-/*
- * ============================================================================
- * 32. NETWORK ANNOTATION TARGET
- * ============================================================================
- *
- * Provides a stable grammar composition point for future attributes without
- * making annotations themselves network semantics.
- */
-
-networkAnnotationTarget
-    : networkReference
-    | networkEndpointReference
-    | networkChannelReference
-    | networkServiceReference
-    | networkProtocolReference
-    ;
-
-
-/*
- * ============================================================================
- * 33. CHANNEL / SERVICE / PROTOCOL REFERENCES
- * ============================================================================
- */
-
-networkChannelReference
-    : qualifiedName
-    ;
-
-networkServiceReference
-    : qualifiedName
-    ;
-
-networkProtocolReference
-    : qualifiedName
-    ;
-
-
-/*
- * ============================================================================
- * 34. SEMANTICALLY NAMED CONVENIENCE FORMS
- * ============================================================================
- *
- * These remain syntax aliases, not closed vocabularies.
- */
-
-networkSend
-    : SEND
-      expression
-      (TO networkEndpointReference)?
-    ;
-
-networkReceive
-    : RECEIVE
-      (FROM networkEndpointReference)?
-    ;
-
-networkRequest
-    : REQUEST
-      expression
-      (TO networkEndpointReference)?
-    ;
-
-networkPublish
-    : PUBLISH
-      expression
-      (TO networkEndpointReference)?
-    ;
-
-networkSubscribe
-    : SUBSCRIBE
-      expression
-      (FROM networkEndpointReference)?
-    ;
-
-
-/*
- * ============================================================================
- * 35. GENERIC NETWORK REQUIREMENT
- * ============================================================================
- *
- * Generic form permits future network properties without grammar modification.
- *
- * Examples:
- *
- *     requires network::reliability;
- *     requires network::latency(bound);
- *     requires network::availability(level);
- *
- * Semantic validation determines the meaning.
- */
-
-networkPropertyRequirement
-    : REQUIRES
-      qualifiedName
-      (
-          LPAREN
-          argumentList?
-          RPAREN
-      )?
-    ;
-
-
-/*
- * ============================================================================
- * 36. NETWORK PROPERTY CONSTRAINT
- * ============================================================================
- */
-
-networkPropertyConstraint
-    : CONSTRAIN
-      qualifiedName
-      (
-          LPAREN
-          argumentList?
-          RPAREN
-      )?
-    ;
-
-
-/*
- * ============================================================================
- * 37. NETWORK PROPERTY PREFERENCE
- * ============================================================================
- */
-
-networkPropertyPreference
-    : PREFER
-      qualifiedName
-      (
-          LPAREN
-          argumentList?
-          RPAREN
-      )?
-    ;
-
-
-/*
- * ============================================================================
- * 38. NETWORK EFFECT SET
- * ============================================================================
- *
- * Composes directly with the canonical Effects grammar.
+ * Semantic analysis determines whether the entries are valid networking
+ * effects.
  */
 
 networkEffectSet
-    : LBRACE
-      effectReferenceList?
-      RBRACE
+    : effectSet
     ;
 
 
 /*
  * ============================================================================
- * 39. NETWORK HANDLER
+ * 4. NETWORK EFFECT OPERATION REFERENCE
  * ============================================================================
  *
- * Network effects can be handled by the canonical effect-handler system.
+ * Reuses the canonical effect-operation reference.
  *
- * This rule deliberately does not redefine handler semantics.
+ * Examples:
+ *
+ *     networking::send
+ *     networking::receive
+ *     networking::request
+ *     networking::future::operation
+ *     vendor::networking::operation
  */
 
-networkHandler
-    : HANDLE
-      expression
-      effectHandlerBody
+networkEffectOperationReference
+    : effectOperationReference
     ;
 
 
 /*
  * ============================================================================
- * 40. NETWORK RESOURCE-NEUTRALITY
- * ============================================================================
- *
- * There is intentionally no grammar production for:
- *
- *     device_count
- *     node_count
- *     interface_count
- *     fixed_bandwidth
- *     fixed_latency
- *     fixed_topology
- *     fixed_port
- *     fixed_address
- *
- * Such values, when semantically meaningful, must be represented as:
- *
- *     expression values;
- *     requirements;
- *     constraints;
- *     preferences;
- *     capabilities;
- *     target descriptions;
- *     deployment configuration;
- *     runtime-discovered resources.
- *
- * ============================================================================
- * 41. INTEGRATION CONTRACT
- * ============================================================================
- *
- * Lexer:
- *
- *     ZamaniLexer / ZamaniTokens
- *
- * must provide the keyword tokens used above.
- *
- * Core:
- *
- *     identifier
- *     qualifiedName
- *     attributes
- *     visibility
- *     genericParameters
- *     parameterList
- *     returnType
- *     whereClause
- *
- * Types:
- *
- *     typeExpression
- *
- * Expressions:
- *
- *     expression
- *     argumentList
- *     blockExpression
- *
- * Effects:
- *
- *     effectReferenceList
- *     effectReference
- *     effectHandlerBody
- *
- * Security:
- *
- *     Semantic integration only.
- *
- * This parser MUST NOT import Security directly because the network/security
- * relationship is semantic composition, not a grammar ownership dependency.
- *
- * ============================================================================
- * 42. AST INTEGRATION
- * ============================================================================
- *
- * AST lowering must produce syntax-preserving nodes corresponding to:
- *
- *     NetworkDeclaration
- *     NetworkEffectDeclaration
- *     NetworkOperationDeclaration
- *     NetworkEndpointDeclaration
- *     NetworkChannelDeclaration
- *     NetworkMessageDeclaration
- *     NetworkProtocolDeclaration
- *     NetworkServiceDeclaration
- *     NetworkConnectionDeclaration
- *     NetworkOperation
- *     NetworkRequirement
- *     NetworkConstraint
- *     NetworkPreference
- *     NetworkCapability
- *     NetworkCommunication
- *     NetworkPolicy
- *     NetworkLifecycle
- *
- * The AST must retain:
- *
- *     source span;
- *     source name;
- *     qualified-name segments;
- *     arguments;
- *     type expressions;
- *     attributes;
- *     explicit requirement/constraint/preference classification.
- *
- * ============================================================================
- * 43. SEMANTIC INTEGRATION
- * ============================================================================
- *
- * Semantic analysis resolves:
- *
- *     endpoint identities;
- *     channel identities;
- *     service identities;
- *     protocol identities;
- *     effect identities;
- *     capability identities;
- *     security references;
- *     resource requirements;
- *     network constraints;
- *     preferences.
- *
- * Semantic analysis MUST reject invalid combinations.
- *
- * The parser itself MUST NOT perform those checks.
- *
- * ============================================================================
- * 44. CLASSICAL INTEGRATION
- * ============================================================================
- *
- * Network operations involving ordinary classical values lower through the
- * canonical classical semantic/IR path.
- *
- * This grammar must never define a second classical value representation.
- *
- * ============================================================================
- * 45. QUANTUM INTEGRATION
- * ============================================================================
- *
- * Network operations surrounding quantum programs lower through the existing
- * quantum semantic pipeline.
- *
- * The canonical quantum semantic boundary remains:
- *
- *     quantum::ir
- *
- * This grammar does not create:
- *
- *     QuantumGate
- *     QubitId
- *     PhysicalQubitId
- *     QuantumCircuit
- *
- * ============================================================================
- * 46. DISTRIBUTED INTEGRATION
- * ============================================================================
- *
- * Network syntax may be consumed by the distributed subsystem for:
- *
- *     communication;
- *     service interaction;
- *     message exchange;
- *     endpoint relationships.
- *
- * Distributed placement, replication, consistency and fault tolerance remain
- * outside this grammar.
- *
- * ============================================================================
- * 47. HARDWARE INTEGRATION
- * ============================================================================
- *
- * Hardware analysis may map network requirements to available capabilities.
- *
- * This grammar does not select:
- *
- *     NIC;
- *     bus;
- *     interconnect;
- *     accelerator;
- *     physical interface;
- *     device.
- *
- * ============================================================================
- * 48. RESOURCE INTEGRATION
- * ============================================================================
- *
- * Resource analysis may interpret network requirements involving:
- *
- *     bandwidth;
- *     latency;
- *     energy;
- *     reliability;
- *     availability;
- *     throughput;
- *     scalability.
- *
- * The grammar imposes no finite numerical bounds.
- *
- * ============================================================================
- * 49. SECURITY INTEGRATION
- * ============================================================================
- *
- * Security analysis may combine network intent with:
- *
- *     authentication;
- *     authorization;
- *     confidentiality;
- *     integrity;
- *     privacy;
- *     trust;
- *     cryptographic requirements.
- *
- * The security grammar remains the owner of security declarations.
- *
- * ============================================================================
- * 50. SCHEDULING INTEGRATION
- * ============================================================================
- *
- * Network operations may become scheduling dependencies downstream.
- *
- * This grammar does not determine:
- *
- *     execution order;
- *     timing;
- *     retry timing;
- *     packet scheduling;
- *     resource scheduling.
- *
- * ============================================================================
- * 51. RESILIENCE INTEGRATION
- * ============================================================================
- *
- * Network failures may become resilience incidents downstream.
- *
- * This grammar does not implement:
- *
- *     retry;
- *     restart;
- *     rollback;
- *     reroute;
- *     backend switching;
- *     recovery.
- *
- * ============================================================================
- * 52. VALIDATION REQUIREMENTS
- * ============================================================================
- *
- * Production validation must verify:
- *
- *     - no network grammar rule defines a physical machine;
- *     - no finite resource maximum exists;
- *     - no provider-specific implementation is required;
- *     - requirements remain distinct from preferences;
- *     - constraints remain distinct from requirements;
- *     - capabilities remain distinct from resources;
- *     - network and security ownership remain separate;
- *     - network and distributed ownership remain separate;
- *     - network and hardware ownership remain separate;
- *     - network and runtime ownership remain separate.
- *
- * ============================================================================
- * 53. DETERMINISM REQUIREMENTS
- * ============================================================================
- *
- * Parsing must be deterministic for deterministic token streams.
- *
- * No semantic predicate or target-language action may be added to this file.
- *
- * ============================================================================
- * 54. COMPATIBILITY REQUIREMENTS
- * ============================================================================
- *
- * Adding a new network keyword requires:
- *
- *     1. lexical specification update;
- *     2. language-version assessment;
- *     3. compatibility assessment;
- *     4. parser tests;
- *     5. documentation update.
- *
- * New protocol/service/device names MUST NOT require grammar modification.
- *
- * ============================================================================
- * 55. NO-HARD-CODING REQUIREMENT
- * ============================================================================
- *
- * Forbidden in this file:
- *
- *     MAX_ENDPOINTS
- *     MAX_CHANNELS
- *     MAX_NODES
- *     MAX_CONNECTIONS
- *     MAX_MESSAGE_SIZE
- *     MAX_BANDWIDTH
- *     MAX_LATENCY
- *     MAX_NETWORKS
- *     MAX_SERVICES
- *     MAX_PROTOCOLS
- *
- * Also forbidden:
- *
- *     device-specific names;
- *     fixed addresses;
- *     fixed topology;
- *     fixed node counts;
- *     fixed interface counts.
- *
- * ============================================================================
- * 56. COMPLETION CRITERIA
- * ============================================================================
- *
- * This file is complete only when:
- *
- *     [ ] It parses all supported network syntax.
- *     [ ] It imports shared syntax rather than duplicating it.
- *     [ ] It integrates with Effects.
- *     [ ] It integrates semantically with Security.
- *     [ ] It integrates semantically with Distributed.
- *     [ ] It integrates semantically with Hardware.
- *     [ ] It integrates semantically with Resources.
- *     [ ] It integrates semantically with Runtime.
- *     [ ] It introduces no second IR.
- *     [ ] It introduces no physical-resource limits.
- *     [ ] It contains no embedded actions.
- *     [ ] It contains no semantic predicates.
- *     [ ] It contains no unsafe code.
- *     [ ] Positive tests exist.
- *     [ ] Negative tests exist.
- *     [ ] Boundary tests exist.
- *     [ ] Cross-domain tests exist.
- *     [ ] Determinism tests exist.
- *     [ ] Compatibility tests exist.
- *     [ ] Round-trip tests exist where printer support exists.
- *
- * ============================================================================
- */
