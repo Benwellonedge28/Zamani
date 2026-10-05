@@ -1,533 +1,615 @@
 /*
  * ============================================================================
- * Zamani Universal Programming Language
+ * Zamani Programming Language
  * ============================================================================
  *
  * File:
  *     grammar/effects/quantum.g4
  *
- * Status:
- *     Canonical modular parser grammar for QUANTUM EFFECT REFERENCES.
+ * Grammar:
+ *     QuantumEffects
  *
- * Grammar technology:
- *     ANTLR4 parser grammar
+ * Status:
+ *     CANONICAL MODULAR PRODUCTION PARSER GRAMMAR
  *
  * Runtime/compiler baseline:
  *     Rust 1.97 / Rust 1.97.1
  *     Rust 2021
  *
  * Safety:
- *     This grammar contains:
- *
- *       - no embedded Rust actions;
- *       - no semantic predicates;
- *       - no filesystem access;
- *       - no network access;
- *       - no runtime calls;
- *       - no hardware discovery;
- *       - no unsafe code.
+ *     - No embedded Rust.
+ *     - No semantic predicates.
+ *     - No parser actions.
+ *     - No filesystem access.
+ *     - No network access.
+ *     - No hardware discovery.
+ *     - No runtime execution.
+ *     - No unsafe Rust requirement.
  *
  * ============================================================================
  * PURPOSE
  * ============================================================================
  *
- * This file owns the SOURCE-LEVEL SYNTAX SPECIFIC TO QUANTUM EFFECT
- * NAMESPACING AND QUANTUM EFFECT QUALIFICATION.
+ * This file owns the SOURCE-LEVEL SYNTAX for explicitly qualified quantum
+ * effect references.
  *
- * It provides a stable grammar boundary for quantum effects while preserving
- * the OPEN-WORLD effect model of Zamani.
- *
- * Examples:
+ * Canonical examples:
  *
  *     quantum::measurement
  *     quantum::readout
  *     quantum::reset
- *     quantum::dynamic_control
  *     quantum::mid_circuit_measurement
+ *     quantum::dynamic_control
+ *     quantum::error_correction
  *     quantum::logical_state
- *     quantum::entanglement
- *     quantum::custom::future_operation
+ *     quantum::photonic::interaction
+ *     quantum::future::operation
+ *     quantum::vendor::extension
  *
- * The grammar deliberately does NOT enumerate a closed list of quantum
+ * The namespace after `quantum::` is OPEN-WORLD.
+ *
+ * This file therefore deliberately does NOT enumerate individual quantum
  * effects.
  *
- * A new quantum effect therefore does NOT require this grammar to change.
+ * Adding a new semantic quantum effect MUST NOT require modifying this file
+ * merely to add its name.
  *
  * ============================================================================
  * ARCHITECTURAL POSITION
  * ============================================================================
  *
- * Source
- *   |
- *   v
- * ZamaniTokens
- *   |
- *   v
- * Core names
- *   |
- *   v
- * QuantumEffects                    <-- THIS FILE
- *   |
- *   +--------------------+
- *   |                    |
- *   v                    v
- * EffectSets        EffectDeclarations
- *   |                    |
- *   +---------+----------+
- *             |
- *             v
- *      Effect semantic analysis
- *             |
- *       +-----+-----+----------------+
- *       |           |                |
- *       v           v                v
- *   capability   resource       type/effect
- *    analysis     analysis        analysis
- *       |           |                |
- *       +-----------+----------------+
- *                   |
- *                   v
- *       canonical semantic representation
- *                   |
- *        +----------+----------+
- *        |          |          |
- *        v          v          v
- *   classical    quantum::ir  HDL/hardware
- *      IR
- *                   |
- *                   v
- *       optimization / routing /
- *       scheduling / resilience /
- *       ZQN / runtime
+ *     Zamani source
+ *          |
+ *          v
+ *     ZamaniLexer
+ *          |
+ *          v
+ *     parser grammars
+ *          |
+ *          v
+ *     QuantumEffects                    <-- THIS FILE
+ *          |
+ *          v
+ *     domain-neutral AST
+ *          |
+ *          v
+ *     semantic effect model
+ *          |
+ *     +----+-------------+-------------+
+ *     |                  |             |
+ *     v                  v             v
+ *   effects          capabilities   resources
+ *     |                  |             |
+ *     +------------------+-------------+
+ *                        |
+ *                        v
+ *              canonical semantic model
+ *                        |
+ *                        v
+ *                    quantum::ir
+ *                        |
+ *          +-------------+-------------+
+ *          |             |             |
+ *          v             v             v
+ *      optimize       route        schedule
+ *          |             |             |
+ *          +-------------+-------------+
+ *                        |
+ *                        v
+ *                 resilience / QEC / ZQN
+ *                        |
+ *                        v
+ *                       HAL
+ *                        |
+ *                        v
+ *                  target/runtime
  *
- * This file therefore establishes syntax only.
+ * This grammar stops at SOURCE SYNTAX.
  *
  * ============================================================================
- * OWNERSHIP
+ * OWNS
  * ============================================================================
  *
- * THIS FILE OWNS:
+ * This file owns exactly these parser-level concepts:
  *
- *     - quantum effect namespace qualification;
- *     - quantum effect references;
- *     - quantum effect namespace paths;
- *     - quantum effect reference lists;
- *     - quantum effect grouping;
- *     - quantum effect source-level aliases/qualifiers where explicitly
- *       supported by this grammar;
- *     - syntactic distinction between the canonical `quantum` effect namespace
- *       and arbitrary effect namespaces.
+ *     quantumEffectReference
+ *     quantumEffectPath
+ *     quantumEffectPathSegment
+ *     quantumEffectReferenceList
  *
- * THIS FILE DOES NOT OWN:
+ * `quantumEffectReference` is the canonical public entry point.
+ *
+ * `quantumEffectPath` represents the open-world path following `quantum::`.
+ *
+ * `quantumEffectPathSegment` provides a stable named boundary for one path
+ * segment.
+ *
+ * `quantumEffectReferenceList` provides a reusable non-empty source list.
+ *
+ * ============================================================================
+ * DOES NOT OWN
+ * ============================================================================
+ *
+ * This file does NOT own:
  *
  *     - general effect references;
- *     - general effect declarations;
- *     - effect operation declarations;
- *     - generic effect declarations;
- *     - effect handlers;
+ *     - effect sets;
+ *     - effect declarations;
+ *     - effect operations;
  *     - effect invocation;
+ *     - effect handlers;
+ *     - effect polymorphism;
+ *     - effect composition;
  *     - capability declarations;
- *     - capability references;
- *     - resources;
+ *     - capability requirements;
+ *     - resource requirements;
  *     - resource quantities;
- *     - target selection;
- *     - hardware discovery;
- *     - hardware topology;
- *     - QubitId;
- *     - PhysicalQubitId;
- *     - quantum gates;
+ *     - requirements;
+ *     - constraints;
+ *     - preferences;
+ *     - policies;
  *     - quantum operations;
- *     - quantum circuits;
- *     - quantum states;
- *     - quantum measurement semantics;
+ *     - quantum gates;
+ *     - qubits;
+ *     - quantum registers;
+ *     - circuits;
+ *     - measurement syntax;
+ *     - reset syntax;
+ *     - observables;
+ *     - quantum channels;
+ *     - noise models;
  *     - QEC;
  *     - ZQN;
  *     - routing;
  *     - scheduling;
- *     - optimization;
  *     - calibration;
- *     - resilience;
- *     - runtime dispatch;
- *     - quantum::ir.
+ *     - physical qubits;
+ *     - QPU selection;
+ *     - hardware discovery;
+ *     - target selection;
+ *     - quantum::ir;
+ *     - runtime dispatch.
+ *
+ * Those responsibilities belong to their existing repository owners.
  *
  * ============================================================================
- * WHY THIS FILE EXISTS
+ * SINGLE-OWNER RULE
  * ============================================================================
  *
- * `effect-sets.g4` already provides the general open-world rule:
+ * General effect syntax remains owned by:
  *
- *     effectReference : qualifiedName ;
+ *     grammar/effects/effect-sets.g4
  *
- * That is correct for the general effect system.
+ * In particular, this file MUST NOT redefine:
  *
- * This file exists so the quantum namespace has a dedicated, reusable
- * syntactic boundary without changing the general effect model.
+ *     effectReference
+ *     effectReferenceList
+ *     effectSet
+ *     optionalEffectSet
  *
- * This is important because quantum effects are a semantic domain, while the
- * general effect system must remain open to:
+ * A general effect such as:
  *
- *     classical::
- *     quantum::
- *     hardware::
- *     distributed::
- *     networking::
- *     ai::
- *     future::
- *     vendor::
- *     custom::
+ *     effects {
+ *         quantum::measurement
+ *     }
  *
- * and arbitrary future domains.
+ * is already structurally representable through the generic qualified-name
+ * effect-reference grammar.
  *
- * The quantum namespace therefore becomes a specialization of the general
- * naming system, not a replacement for it.
+ * This file exists only when a grammar consumer explicitly needs the
+ * additional invariant:
+ *
+ *     the reference begins with the `quantum` namespace.
  *
  * ============================================================================
- * OPEN-WORLD QUANTUM EFFECT MODEL
+ * LEXER CONTRACT
  * ============================================================================
  *
- * VALID:
+ * The canonical public lexer boundary is:
+ *
+ *     grammar/antlr/ZamaniLexer.g4
+ *
+ * Parser grammars consume that vocabulary.
+ *
+ * Therefore this file MUST use:
+ *
+ *     tokenVocab = ZamaniLexer;
+ *
+ * It MUST NOT use:
+ *
+ *     tokenVocab = ZamaniTokens;
+ *
+ * ZamaniTokens is an internal lexical composition layer, not the public
+ * parser-facing lexer vocabulary.
+ *
+ * ============================================================================
+ * REQUIRED TOKENS
+ * ============================================================================
+ *
+ * This grammar consumes only lexical tokens owned elsewhere:
+ *
+ *     K_QUANTUM
+ *     DOUBLE_COLON
+ *     COMMA
+ *
+ * The lexical ownership remains in grammar/lexer/.
+ *
+ * This file MUST NOT define any lexer rule.
+ *
+ * ============================================================================
+ * NAME CONTRACT
+ * ============================================================================
+ *
+ * Canonical identifier syntax is owned by:
+ *
+ *     grammar/core/names.g4
+ *
+ * This grammar imports Names and reuses:
+ *
+ *     identifier
+ *
+ * It therefore does not create a second identifier grammar.
+ *
+ * ============================================================================
+ * IMPORT CONTRACT
+ * ============================================================================
+ *
+ * This file imports:
+ *
+ *     Names
+ *
+ * only.
+ *
+ * It intentionally does NOT import:
+ *
+ *     Effects
+ *     EffectSets
+ *     EffectDeclarations
+ *     EffectOperations
+ *     EffectHandling
+ *     Capabilities
+ *     Resources
+ *     Quantum
+ *     QuantumTypes
+ *     Hardware
+ *     QEC
+ *     ZQN
+ *
+ * This keeps the grammar leaf independent and prevents cyclic dependencies.
+ *
+ * Dependency direction:
+ *
+ *     ZamaniLexer
+ *          |
+ *          v
+ *        Names
+ *          |
+ *          v
+ *     QuantumEffects
+ *          |
+ *          v
+ *     higher-level grammar consumers
+ *
+ * ============================================================================
+ * OPEN-WORLD SEMANTICS
+ * ============================================================================
+ *
+ * The grammar intentionally accepts:
  *
  *     quantum::measurement
- *     quantum::reset
  *     quantum::readout
+ *     quantum::reset
  *     quantum::dynamic_control
  *     quantum::mid_circuit_measurement
- *     quantum::logical_qubit
  *     quantum::error_correction
- *     quantum::future::operation
+ *     quantum::logical_qubit
+ *     quantum::logical_state
  *     quantum::photonic::interaction
- *     quantum::custom::domain::effect
+ *     quantum::ion::interaction
+ *     quantum::future::operation
+ *     quantum::custom::effect
  *
- * The grammar MUST NOT contain:
+ * It also accepts future names that do not exist today.
+ *
+ * For example:
+ *
+ *     quantum::future::new_architecture::operation
+ *
+ * is syntactically valid.
+ *
+ * Whether such an effect exists, is imported, is authorized, is supported,
+ * or can be realized is a semantic/capability question.
+ *
+ * ============================================================================
+ * NO CLOSED QUANTUM EFFECT CATALOGUE
+ * ============================================================================
+ *
+ * This file MUST NOT contain a grammar such as:
  *
  *     quantumEffect
  *         : MEASUREMENT
  *         | RESET
  *         | READOUT
  *         | ...
+ *         ;
  *
- * because that would create a closed quantum-effect catalogue.
+ * That architecture would require grammar changes whenever the quantum
+ * semantic vocabulary grows.
  *
- * Semantic registries determine whether a particular effect exists and what
- * it means.
+ * Instead:
+ *
+ *     quantumEffectReference
+ *         : K_QUANTUM DOUBLE_COLON quantumEffectPath
+ *         ;
+ *
+ * makes the language extensible without making the grammar infinite or
+ * requiring continual modification.
  *
  * ============================================================================
- * POCO-REAF
+ * NAMESPACE SEMANTICS
  * ============================================================================
  *
- * Quantum effects describe SOURCE-LEVEL COMPUTATIONAL BEHAVIOR.
+ * The first namespace component is syntactically fixed to:
  *
- * They MUST NOT encode:
+ *     quantum
  *
- *     - a particular QPU;
- *     - a vendor;
- *     - a backend;
- *     - a device ID;
- *     - a physical qubit;
- *     - a qubit count;
- *     - a topology;
- *     - a coupling map;
- *     - a calibration;
- *     - a pulse schedule;
- *     - a gate duration;
- *     - a noise model;
- *     - a QEC decoder;
- *     - a routing strategy;
- *     - a scheduling strategy.
+ * represented by:
  *
- * Therefore:
+ *     K_QUANTUM
+ *
+ * Everything after:
+ *
+ *     quantum::
+ *
+ * is an open-world identifier path.
+ *
+ * The grammar does not decide whether:
  *
  *     quantum::measurement
  *
- * does NOT mean:
+ * means a built-in operation, declared effect, imported effect, dialect
+ * effect, library effect, vendor extension, or future semantic construct.
  *
- *     use QPU X
- *
- * or:
- *
- *     allocate N physical qubits.
- *
- * It means only that the source computation has the named quantum effect.
- *
- * Realization is determined downstream.
+ * Semantic name resolution decides that.
  *
  * ============================================================================
- * SCALABILITY
+ * EFFECT VS OPERATION
  * ============================================================================
  *
- * This file imposes no language-level maximum on:
- *
- *     - effect namespace depth;
- *     - effect name length;
- *     - number of quantum effect references;
- *     - number of quantum effects in a set;
- *     - number of effect clauses;
- *     - number of source declarations;
- *     - number of quantum operations;
- *     - number of qubits;
- *     - number of devices;
- *     - number of processors;
- *     - number of nodes;
- *     - number of accelerators.
- *
- * Repetition is represented with ANTLR repetition operators.
- *
- * There are deliberately no:
- *
- *     MAX_QUANTUM_EFFECTS
- *     MAX_EFFECT_DEPTH
- *     MAX_QUBITS
- *     MAX_DEVICES
- *     MAX_QPU_COUNT
- *
- * or equivalent constants.
- *
- * Practical parser limits belong to compiler resource policies and are not
- * language semantics.
- *
- * ============================================================================
- * HARDWARE INDEPENDENCE
- * ============================================================================
- *
- * NEVER encode hardware-specific concepts here.
- *
- * Forbidden examples:
- *
- *     quantum::qpu0
- *     quantum::ibm_backend
- *     quantum::physical_qubit_0
- *     quantum::topology_ring
- *     quantum::coupling_map
- *     quantum::pulse_channel
- *
- * Such information belongs to target, hardware, scheduling, routing,
- * calibration, deployment, or runtime subsystems.
- *
- * ============================================================================
- * QUANTUM IR BOUNDARY
- * ============================================================================
- *
- * The canonical quantum semantic boundary remains:
- *
- *     quantum::ir
- *
- * This grammar MUST NOT construct or define quantum IR.
- *
- * Source:
- *
- *     quantum::measurement
- *
- * may eventually become semantic metadata associated with operations in
- * `quantum::ir`, but that conversion occurs AFTER parsing and semantic
- * analysis.
- *
- * The dependency is therefore:
- *
- *     grammar
- *        |
- *        v
- *     frontend AST
- *        |
- *        v
- *     semantic effect model
- *        |
- *        v
- *     quantum::ir
- *
- * and NEVER:
- *
- *     grammar
- *        |
- *        v
- *     quantum::ir
- *        |
- *        v
- *     grammar
- *
- * ============================================================================
- * QEC BOUNDARY
- * ============================================================================
- *
- * Quantum error correction is NOT implemented here.
- *
- * A source-level effect reference such as:
- *
- *     quantum::error_correction
- *
- * may be syntactically represented.
- *
- * The grammar does not determine:
- *
- *     - code family;
- *     - distance;
- *     - decoder;
- *     - syndrome extraction;
- *     - logical-qubit implementation;
- *     - physical-qubit mapping;
- *     - correction strategy.
- *
- * QEC remains the responsibility of the QEC subsystem.
- *
- * ============================================================================
- * ZQN BOUNDARY
- * ============================================================================
- *
- * ZQN describes quantum noise/fault semantics.
- *
- * This grammar does not define:
- *
- *     - noise channels;
- *     - fault distributions;
- *     - correlated faults;
- *     - leakage;
- *     - loss;
- *     - erasure;
- *     - calibration data;
- *     - fault locations.
- *
- * A future or existing effect name such as:
- *
- *     zqn::observation
- *
- * remains a normal effect reference outside this file.
- *
- * Quantum effects may coexist with ZQN metadata downstream without making
- * this grammar responsible for ZQN.
- *
- * ============================================================================
- * CAPABILITY BOUNDARY
- * ============================================================================
- *
- * Capabilities are owned by:
- *
- *     grammar/core/capabilities.g4
- *     grammar/effects/capabilities.g4
- *
- * This file MUST NOT redefine:
- *
- *     capabilityReference
- *     capabilityVersionClause
- *     capabilityDeclaration
+ * A quantum effect is NOT a quantum operation.
  *
  * For example:
  *
  *     quantum::measurement
  *
- * is an EFFECT identity.
+ * is an effect reference.
  *
- * A capability such as:
+ * A source operation such as:
+ *
+ *     measure q
+ *
+ * belongs to the quantum computational grammar.
+ *
+ * Likewise:
+ *
+ *     H
+ *     X
+ *     CNOT
+ *
+ * are operation identifiers or semantic operation descriptions, not effect
+ * names owned by this grammar.
+ *
+ * This separation is essential:
+ *
+ *     effect
+ *         describes computational interaction/behavior
+ *
+ *     operation
+ *         describes a computation
+ *
+ *     capability
+ *         describes what a realization can provide
+ *
+ *     resource
+ *         describes required/provided quantities
+ *
+ *     target
+ *         identifies a realization context
+ *
+ * ============================================================================
+ * EFFECT VS CAPABILITY
+ * ============================================================================
+ *
+ * These are intentionally independent concepts.
+ *
+ * Example:
  *
  *     quantum::measurement
  *
- * may independently exist in the capability namespace.
+ * may semantically require a capability such as:
  *
- * Semantic analysis determines the relationship.
+ *     quantum.measurement
  *
- * The grammar MUST NOT assume:
+ * but the grammar MUST NOT equate the two.
  *
- *     effect == capability
+ * The capability subsystem determines:
+ *
+ *     effect
+ *         |
+ *         v
+ *     required capabilities
+ *
+ * This file only parses the effect identity.
  *
  * ============================================================================
- * RESOURCE BOUNDARY
+ * EFFECT VS RESOURCE
  * ============================================================================
  *
- * This file does not own resource requirements.
+ * This grammar MUST NOT parse resource requirements as part of the effect
+ * name.
  *
- * Therefore it MUST NOT introduce syntax such as:
+ * Do NOT create syntax such as:
  *
  *     quantum::measurement requires 8 qubits
  *
- * merely to describe a quantum effect.
+ * inside this grammar.
  *
- * Resource expressions belong to:
+ * Resource syntax belongs to the resource/requirement subsystem.
  *
- *     grammar/resources/
+ * A semantic model may associate:
  *
- * and are attached through the appropriate general requirement/resource
- * mechanisms.
+ *     quantum::measurement
+ *         |
+ *         +--> resource requirements
  *
- * This keeps:
- *
- *     effect
- *     capability
- *     resource
- *     requirement
- *     constraint
- *     preference
- *
- * as distinct concepts.
+ * but that association occurs after parsing.
  *
  * ============================================================================
- * TARGET INDEPENDENCE
+ * HARDWARE INDEPENDENCE
  * ============================================================================
  *
- * This grammar does not know whether an effect is realized by:
+ * The following are NOT grammar concerns:
  *
+ *     QPU identity
+ *     physical qubit identity
+ *     topology
+ *     coupling graph
+ *     calibration
+ *     pulse channel
+ *     gate duration
+ *     hardware generation
+ *     vendor backend
+ *     device count
+ *
+ * Therefore source such as:
+ *
+ *     quantum::measurement
+ *
+ * does not select:
+ *
+ *     a particular QPU;
+ *     a particular simulator;
+ *     a particular processor;
+ *     a physical qubit;
+ *     a physical topology.
+ *
+ * ============================================================================
+ * POCO-REAF CONTRACT
+ * ============================================================================
+ *
+ * The same source-level quantum effect reference must remain valid independent
+ * of whether the semantic operation is eventually realized by:
+ *
+ *     - a tiny system;
+ *     - an embedded system;
+ *     - a CPU;
+ *     - a multicore CPU;
+ *     - a GPU;
+ *     - an FPGA;
+ *     - an ASIC;
+ *     - an accelerator;
  *     - a quantum processor;
  *     - a quantum simulator;
- *     - a CPU simulation;
- *     - a GPU simulator;
- *     - a distributed simulator;
- *     - a future quantum architecture;
- *     - another computational substrate.
+ *     - an HPC system;
+ *     - a cluster;
+ *     - a distributed system;
+ *     - a cloud environment;
+ *     - a future computational substrate.
  *
- * Semantic lowering and target selection determine realization.
+ * Source portability does not imply that every target can satisfy every
+ * semantic requirement.
  *
- * ============================================================================
- * DETERMINISM
- * ============================================================================
- *
- * This grammar contains:
- *
- *     - no embedded actions;
- *     - no semantic predicates;
- *     - no runtime calls;
- *     - no filesystem access;
- *     - no network access;
- *     - no hardware discovery;
- *     - no randomness;
- *     - no target-dependent branches.
- *
- * Therefore parsing is determined exclusively by the token stream.
+ * A target that cannot satisfy the requirements must fail capability/resource
+ * analysis explicitly rather than requiring source-level rewriting.
  *
  * ============================================================================
- * SOURCE PRESERVATION
+ * SCALABILITY CONTRACT
  * ============================================================================
  *
- * The frontend AST should preserve:
+ * No finite language-level limit is encoded for:
  *
- *     - source ordering;
- *     - namespace path;
- *     - effect segments;
- *     - source span;
- *     - original source spelling where diagnostics require it.
+ *     - effect path depth;
+ *     - number of path segments;
+ *     - number of effect references in a list;
+ *     - number of effects in a program;
+ *     - number of quantum operations;
+ *     - number of qubits;
+ *     - number of quantum registers;
+ *     - number of QPUs;
+ *     - number of devices;
+ *     - number of processors;
+ *     - number of nodes;
+ *     - memory;
+ *     - tensor rank;
+ *     - network size.
  *
- * Semantic analysis may canonicalize the namespace path after parsing.
+ * Repetition is expressed through ANTLR repetition operators.
+ *
+ * No constants such as:
+ *
+ *     MAX_QUANTUM_EFFECTS
+ *     MAX_EFFECT_DEPTH
+ *     MAX_QUBITS
+ *     MAX_QPU_COUNT
+ *     MAX_DEVICES
+ *
+ * may be introduced here.
+ *
+ * Practical implementation limits remain implementation/resource-policy
+ * concerns rather than language semantics.
+ *
+ * ============================================================================
+ * SYNTAX / SEMANTICS BOUNDARY
+ * ============================================================================
+ *
+ * The parser establishes only:
+ *
+ *     1. the namespace is `quantum`;
+ *     2. `::` follows the namespace;
+ *     3. at least one identifier follows;
+ *     4. additional namespace/path segments are structurally valid.
+ *
+ * Semantic analysis determines:
+ *
+ *     - whether the effect exists;
+ *     - whether the effect is imported;
+ *     - whether the effect is visible;
+ *     - whether the effect is declared;
+ *     - whether the effect is deprecated;
+ *     - whether the effect is compatible;
+ *     - whether the effect is permitted;
+ *     - which capabilities it requires;
+ *     - which resources it requires;
+ *     - which effects it induces;
+ *     - which quantum semantics it contributes;
+ *     - whether it can cross into quantum::ir;
+ *     - whether a target can realize it.
  *
  * ============================================================================
  * AST CONTRACT
  * ============================================================================
  *
- * This grammar conceptually produces:
+ * This grammar creates parser contexts only.
  *
- *     QuantumEffectReferenceAst
+ * The frontend AST should preserve at least:
+ *
+ *     namespace = quantum
+ *     path segments
+ *     source span
+ *     original source spelling where required
+ *     source ordering
+ *
+ * Conceptually:
+ *
+ *     QuantumEffectReference
  *     {
- *         namespace
- *         path
+ *         namespace,
+ *         path,
  *         source_span
  *     }
  *
- * and:
- *
- *     QuantumEffectReferenceListAst
- *     {
- *         references
- *         source_span
- *     }
- *
- * The actual Rust AST types remain owned by:
- *
- *     src/frontend/ast/
+ * The exact Rust AST representation remains owned by the frontend AST
+ * subsystem.
  *
  * This grammar MUST NOT define Rust structures.
  *
@@ -535,419 +617,654 @@
  * SEMANTIC CONTRACT
  * ============================================================================
  *
- * The parser establishes:
+ * A successful parse MUST NOT be interpreted as proof that the effect exists
+ * or is executable.
  *
- *     1. The reference begins in the canonical `quantum` namespace.
- *     2. The reference contains one or more effect path segments.
- *     3. The syntax is structurally valid.
+ * For example:
  *
- * Semantic analysis determines:
+ *     quantum::future::unknown_effect
  *
- *     - whether the effect exists;
- *     - whether it is imported;
- *     - whether it is visible;
- *     - whether it is deprecated;
- *     - whether its version is compatible;
- *     - whether its use is legal in the enclosing context;
- *     - what capabilities it requires;
- *     - what resources it may require;
- *     - what quantum semantic operations it induces;
- *     - whether it can be lowered to quantum::ir;
- *     - whether the selected target can realize it.
+ * is syntactically valid.
+ *
+ * Semantic analysis may reject it because no semantic declaration,
+ * registration, import, dialect, library, or intrinsic resolves the name.
+ *
+ * This separation permits future extension without grammar modification.
  *
  * ============================================================================
- * INTEGRATION WITH EFFECT SETS
+ * EFFECT ANALYSIS CONTRACT
  * ============================================================================
  *
- * `grammar/effects/effect-sets.g4` remains the canonical owner of GENERAL
- * effect references:
+ * After AST construction:
+ *
+ *     QuantumEffectReference
+ *              |
+ *              v
+ *        name resolution
+ *              |
+ *              v
+ *       effect definition
+ *              |
+ *       +------+------+
+ *       |             |
+ *       v             v
+ *   capabilities   resources
+ *       |             |
+ *       +------+------+
+ *              |
+ *              v
+ *      effect checking
+ *              |
+ *              v
+ *    canonical semantic model
+ *
+ * Effect checking must remain independent of parser success.
+ *
+ * ============================================================================
+ * QUANTUM IR CONTRACT
+ * ============================================================================
+ *
+ * This file MUST NOT construct quantum::ir.
+ *
+ * The canonical quantum pipeline remains:
+ *
+ *     source
+ *       |
+ *       v
+ *     AST
+ *       |
+ *       v
+ *     semantic quantum model
+ *       |
+ *       v
+ *     quantum::ir
+ *       |
+ *       v
+ *     optimization
+ *       |
+ *       v
+ *     decomposition
+ *       |
+ *       v
+ *     routing
+ *       |
+ *       v
+ *     scheduling
+ *       |
+ *       v
+ *     resilience / QEC / ZQN
+ *       |
+ *       v
+ *     HAL
+ *       |
+ *       v
+ *     target realization
+ *
+ * A quantum effect may contribute metadata to the semantic model and
+ * subsequently to quantum::ir, but this grammar has no direct dependency on
+ * the IR implementation.
+ *
+ * ============================================================================
+ * QEC CONTRACT
+ * ============================================================================
+ *
+ * QEC is downstream.
+ *
+ * A source effect such as:
+ *
+ *     quantum::error_correction
+ *
+ * does not specify:
+ *
+ *     - a code family;
+ *     - a code distance;
+ *     - a decoder;
+ *     - syndrome extraction;
+ *     - physical qubit placement;
+ *     - correction schedule;
+ *     - logical-qubit encoding.
+ *
+ * Those decisions belong to semantic lowering and the QEC subsystem.
+ *
+ * ============================================================================
+ * ZQN CONTRACT
+ * ============================================================================
+ *
+ * ZQN is downstream.
+ *
+ * This grammar does not define:
+ *
+ *     noise;
+ *     faults;
+ *     leakage;
+ *     loss;
+ *     erasure;
+ *     fault probabilities;
+ *     calibration;
+ *     fault locations.
+ *
+ * A semantic effect may interact with ZQN, but this file does not parse ZQN
+ * semantics.
+ *
+ * ============================================================================
+ * DETERMINISM
+ * ============================================================================
+ *
+ * This grammar contains no:
+ *
+ *     - actions;
+ *     - predicates;
+ *     - runtime calls;
+ *     - I/O;
+ *     - randomness;
+ *     - environment inspection;
+ *     - hardware inspection;
+ *     - target selection.
+ *
+ * Given the same token stream and grammar configuration, parsing is
+ * deterministic.
+ *
+ * ============================================================================
+ * SOURCE PRESERVATION
+ * ============================================================================
+ *
+ * The parser context provides the structural information necessary for the
+ * frontend to preserve:
+ *
+ *     - segment order;
+ *     - source spans;
+ *     - namespace spelling;
+ *     - original source positions.
+ *
+ * Semantic normalization must not destroy source information required by
+ * diagnostics, formatting, IDE tooling, provenance, or compatibility
+ * reporting.
+ *
+ * ============================================================================
+ * DIAGNOSTICS CONTRACT
+ * ============================================================================
+ *
+ * Structural parser errors include:
+ *
+ *     quantum
+ *     quantum::
+ *     quantum:::
+ *     quantum::
+ *     quantum::.
+ *
+ * depending on the lexical interpretation of the input.
+ *
+ * The following are syntactically valid and therefore MUST NOT be rejected
+ * merely by this grammar:
+ *
+ *     quantum::unknown
+ *     quantum::future::operation
+ *     quantum::vendor::extension
+ *
+ * Unknown names are semantic diagnostics.
+ *
+ * Capability failures are semantic/capability diagnostics.
+ *
+ * Resource failures are resource diagnostics.
+ *
+ * Target realization failures are backend/runtime diagnostics.
+ *
+ * These categories MUST remain distinguishable.
+ *
+ * ============================================================================
+ * COMPATIBILITY CONTRACT
+ * ============================================================================
+ *
+ * Canonical source spelling:
+ *
+ *     quantum::name
+ *
+ * Existing source forms such as:
+ *
+ *     quantum::measurement
+ *     quantum::readout
+ *     quantum::reset
+ *
+ * remain structurally compatible.
+ *
+ * Adding a new final or nested identifier segment does not require a grammar
+ * revision.
+ *
+ * Compatibility migrations for historical spellings belong to:
+ *
+ *     grammar/compatibility/
+ *
+ * and MUST NOT be encoded as duplicate grammar alternatives here unless the
+ * language specification explicitly requires them.
+ *
+ * ============================================================================
+ * DIALECT CONTRACT
+ * ============================================================================
+ *
+ * Quantum dialects may define additional semantic effect names beneath the
+ * quantum namespace.
+ *
+ * For example:
+ *
+ *     quantum::dialect_name::effect
+ *
+ * The dialect registry/semantic subsystem determines whether the name is
+ * valid.
+ *
+ * This grammar does not dynamically load dialects and does not inspect a
+ * dialect registry.
+ *
+ * ============================================================================
+ * TEST CONTRACT
+ * ============================================================================
+ *
+ * Test ownership:
+ *
+ *     grammar/tests/effects/quantum/
+ *
+ * Required positive tests:
+ *
+ *     quantum::measurement
+ *     quantum::readout
+ *     quantum::reset
+ *     quantum::dynamic_control
+ *     quantum::mid_circuit_measurement
+ *     quantum::error_correction
+ *     quantum::logical_state
+ *     quantum::future::operation
+ *     quantum::vendor::extension
+ *     quantum::a::b::c
+ *
+ * Required list tests:
+ *
+ *     quantum::measurement, quantum::readout
+ *     quantum::measurement, quantum::readout,
+ *
+ * Required negative structural tests:
+ *
+ *     quantum
+ *     quantum::
+ *     quantum::
+ *     quantum:::
+ *
+ * Required semantic-negative tests:
+ *
+ *     quantum::unknown_effect
+ *     quantum::future::unknown
+ *
+ * These must be rejected by semantic resolution where no corresponding
+ * definition exists, not by the parser solely because the name is unfamiliar.
+ *
+ * Required scalability tests:
+ *
+ *     increasing path depth;
+ *     increasing reference-list cardinality;
+ *     large generated source units;
+ *     long but valid semantic names;
+ *     large cross-domain programs.
+ *
+ * No test may establish a universal maximum.
+ *
+ * Required determinism tests:
+ *
+ *     identical source parsed repeatedly;
+ *     equivalent source under permitted formatting changes;
+ *     identical source under identical language configuration.
+ *
+ * Required compatibility tests:
+ *
+ *     current canonical namespace spelling;
+ *     supported historical aliases, if any;
+ *     rejection of unsupported legacy forms.
+ *
+ * ============================================================================
+ * INTEGRATION CONTRACT
+ * ============================================================================
+ *
+ * DEPENDS_ON:
+ *
+ *     grammar/antlr/ZamaniLexer.g4
+ *     grammar/core/names.g4
+ *
+ * EXPORTS:
+ *
+ *     quantumEffectReference
+ *     quantumEffectPath
+ *     quantumEffectPathSegment
+ *     quantumEffectReferenceList
+ *
+ * CONSUMED_BY:
+ *
+ *     quantum-specific effect-aware grammar contexts;
+ *     quantum effect semantic analysis;
+ *     grammar/effects/effects.g4 integration when explicitly required;
+ *     quantum/effect-aware composition grammars.
+ *
+ * AST_OWNER:
+ *
+ *     src/frontend/ast/
+ *
+ * SEMANTIC_OWNER:
+ *
+ *     effect semantic analysis +
+ *     quantum semantic analysis
+ *
+ * IR_OWNER:
+ *
+ *     canonical semantic model;
+ *     quantum::ir
+ *
+ * TEST_OWNER:
+ *
+ *     grammar/tests/effects/quantum/
+ *
+ * SPEC_OWNER:
+ *
+ *     grammar/spec/effects.md
+ *     grammar/spec/quantum.md
+ *     grammar/specification/
+ *
+ * COMPATIBILITY_OWNER:
+ *
+ *     grammar/compatibility/
+ *
+ * ============================================================================
+ * INTEGRATION WITH GENERAL EFFECTS
+ * ============================================================================
+ *
+ * `grammar/effects/effect-sets.g4` remains the owner of generic effect
+ * references.
+ *
+ * Therefore this grammar does not replace:
  *
  *     effectReference
  *
- * Therefore this file MUST NOT replace that rule.
+ * and does not redefine:
  *
- * Instead, effect sets may use:
+ *     effectSet
  *
- *     quantumEffectReference
- *
- * when a grammar context specifically needs to preserve the fact that the
- * referenced effect belongs to the quantum namespace.
- *
- * Example:
+ * A general effect collection can continue to parse:
  *
  *     effects {
  *         quantum::measurement,
  *         quantum::readout,
  *     }
  *
- * The general effect parser may parse those names through `qualifiedName`.
+ * through the generic qualified-name mechanism.
  *
- * This specialized grammar provides a reusable, explicitly named boundary
- * for components that need quantum-domain awareness.
+ * If a higher-level grammar needs to distinguish a quantum effect
+ * syntactically, it should consume:
+ *
+ *     quantumEffectReference
+ *
+ * from this grammar.
  *
  * ============================================================================
  * INTEGRATION WITH EFFECT DECLARATIONS
  * ============================================================================
  *
- * `grammar/effects/effect-declarations.g4` owns:
+ * Effect declarations remain owned by:
  *
- *     effectDeclaration
- *     effectOperationDeclaration
+ *     grammar/effects/effect-declarations.g4
  *
- * It MUST NOT be redefined here.
+ * This file does not declare effects.
  *
- * A quantum effect declaration remains an ordinary effect declaration whose
- * identity may be in the quantum namespace at semantic/module level.
- *
- * This file supplies only quantum effect references.
+ * A declaration whose semantic identity belongs to the quantum namespace is
+ * resolved by semantic/name-resolution machinery.
  *
  * ============================================================================
- * INTEGRATION WITH EFFECT HANDLERS
+ * INTEGRATION WITH EFFECT HANDLING
  * ============================================================================
  *
- * `grammar/effects/effect-handling.g4` owns handler syntax.
+ * Handler syntax remains owned by:
  *
- * This file MUST NOT define:
+ *     grammar/effects/effect-handling.g4
  *
- *     handle
- *     resume
- *     abort
- *     handler
- *     continuation
- *
- * A quantum effect may be handled by the general effect system.
- *
- * Example:
- *
- *     handle computation {
- *         case quantum::measurement(q) => resume(result);
- *     }
- *
- * Handler semantics remain outside this grammar.
+ * A handler may semantically handle a quantum effect, but handler syntax is
+ * not duplicated here.
  *
  * ============================================================================
- * INTEGRATION WITH CAPABILITIES
+ * INTEGRATION WITH EFFECT OPERATIONS
  * ============================================================================
  *
- * `grammar/effects/capabilities.g4` remains responsible for the syntax that
- * attaches capability requirements to effects.
+ * Operation invocation remains owned by:
  *
- * Example semantic relationship:
+ *     grammar/effects/effect-operations.g4
  *
- *     quantum::measurement
- *         |
- *         +--> requires quantum::readout capability
- *
- * The grammar does not determine that relationship.
+ * This grammar contributes only the effect identity where a consumer needs
+ * it.
  *
  * ============================================================================
  * INTEGRATION WITH QUANTUM GRAMMAR
  * ============================================================================
  *
- * `grammar/quantum/` owns quantum computational source syntax, including:
+ * Quantum computational syntax remains owned by:
  *
- *     - qubits;
- *     - quantum operations;
- *     - measurements;
- *     - reset;
- *     - circuits;
- *     - dynamic circuits;
- *     - quantum/classical interaction.
+ *     grammar/quantum/
  *
- * This file MUST NOT duplicate any of those rules.
+ * That subsystem owns concepts such as:
  *
- * The existing quantum parser architecture already establishes the flow:
+ *     qubits;
+ *     operations;
+ *     measurements;
+ *     circuits;
+ *     states;
+ *     observables;
+ *     channels;
+ *     dynamic control.
  *
- *     quantum source
+ * This file MUST NOT import the quantum computational grammar.
+ *
+ * The relationship is:
+ *
+ *     QuantumEffects
  *          |
  *          v
- *     frontend AST
+ *     semantic model
  *          |
  *          v
- *     semantic analysis
+ *     quantum semantic domain
+ *
+ * not:
+ *
+ *     QuantumEffects
  *          |
  *          v
- *     quantum::ir
- *
- * This file only contributes effect metadata at the effect-system boundary.
- *
- * ============================================================================
- * INTEGRATION WITH HARDWARE
- * ============================================================================
- *
- * Hardware grammar owns:
- *
- *     - hardware descriptions;
- *     - targets;
- *     - capabilities;
- *     - topology;
- *     - placement;
- *     - accelerators.
- *
- * This file must not import hardware implementation grammar merely to parse
- * a quantum effect.
- *
- * Quantum effect syntax remains hardware-independent.
+ *     Quantum
+ *          |
+ *          v
+ *     QuantumEffects
  *
  * ============================================================================
  * INTEGRATION WITH RESOURCES
  * ============================================================================
  *
- * Resource grammar owns:
+ * Resource requirements remain owned by:
  *
- *     - requirements;
- *     - constraints;
- *     - preferences;
- *     - resource expressions;
- *     - scalability;
- *     - latency;
- *     - energy;
- *     - reliability;
- *     - portability.
+ *     grammar/resources/
  *
- * This file references none of those concrete resource structures.
+ * A quantum effect may produce semantic resource requirements, but this
+ * grammar does not parse those requirements.
  *
- * Semantic analysis connects a quantum effect to resource requirements.
- *
- * ============================================================================
- * INTEGRATION WITH SCHEDULING
- * ============================================================================
- *
- * Scheduling MUST NOT depend directly on this grammar.
- *
- * Scheduling consumes semantic/IR information after parsing and analysis.
- *
- * Quantum effects may influence scheduling indirectly through semantic
- * operation/effect metadata.
- *
- * ============================================================================
- * INTEGRATION WITH ROUTING
- * ============================================================================
- *
- * Routing MUST NOT depend directly on this grammar.
- *
- * Routing consumes canonical quantum semantics and target capabilities.
- *
- * A quantum effect does not select a physical topology.
- *
- * ============================================================================
- * INTEGRATION WITH OPTIMIZATION
- * ============================================================================
- *
- * Optimization MUST NOT interpret this grammar directly.
- *
- * Optimization consumes canonical semantic/IR representations.
- *
- * Effect metadata may constrain transformations when semantic preservation
- * requires it.
- *
- * ============================================================================
- * INTEGRATION WITH RESILIENCE
- * ============================================================================
- *
- * Resilience may consume the semantic representation of quantum effects when
- * deciding whether an adaptation or recovery strategy preserves program
- * semantics.
- *
- * This grammar does NOT implement:
- *
- *     retry
- *     restart
- *     rollback
- *     remap
- *     reroute
- *     reschedule
- *     recompile
- *     backend switching
- *     quarantine
- *     abort policy.
- *
- * ============================================================================
- * INTEROPERABILITY
- * ============================================================================
- *
- * Quantum effects may eventually be lowered to:
- *
- *     - Zamani quantum::ir;
- *     - OpenQASM;
- *     - QIR;
- *     - simulator representations;
- *     - vendor-independent target representations;
- *     - other future quantum representations.
- *
- * Those conversions belong to interoperability/lowering layers.
- *
- * This grammar does not encode external representation syntax.
- *
- * ============================================================================
- * VERSIONING
- * ============================================================================
- *
- * Adding:
+ * Example semantic relationship:
  *
  *     quantum::measurement
- *     quantum::reset
- *     quantum::new_future_effect
- *
- * does NOT require a grammar version change.
- *
- * A grammar version change is required only if the SYNTAX of quantum effect
- * references changes.
- *
- * This preserves POCO-REAF and future extensibility.
+ *          |
+ *          +--> capability requirement
+ *          |
+ *          +--> resource requirement
+ *          |
+ *          +--> effect semantics
  *
  * ============================================================================
- * COMPATIBILITY
+ * INTEGRATION WITH CAPABILITIES
  * ============================================================================
  *
- * The canonical namespace spelling is:
+ * Capability syntax remains owned by the capability/resource/security
+ * subsystem.
  *
- *     quantum
- *
- * followed by:
- *
- *     ::
- *
- * followed by one or more identifier segments.
- *
- * Examples:
- *
- *     quantum::measurement
- *     quantum::readout
- *     quantum::dynamic::control
- *
- * Existing general effect syntax:
- *
- *     effects { quantum::Measurement }
- *
- * remains compatible because `quantum::Measurement` is also a qualified name.
- *
- * ============================================================================
- * NEGATIVE SEMANTIC EXAMPLES
- * ============================================================================
- *
- * These are NOT parser errors necessarily; they are intentionally outside the
- * responsibility of this grammar:
- *
- *     quantum::unknown_effect
- *
- * The parser accepts it.
- *
- * Semantic analysis may reject it if no definition exists.
- *
- * Likewise:
+ * This grammar does not assume that:
  *
  *     quantum::measurement
  *
- * does not imply a particular machine.
+ * is itself a capability.
+ *
+ * The semantic model determines the required capability set.
+ *
+ * ============================================================================
+ * INTEGRATION WITH POLICIES
+ * ============================================================================
+ *
+ * Policies remain owned by the policy subsystem.
+ *
+ * A policy may:
+ *
+ *     permit
+ *     forbid
+ *     constrain
+ *     prefer
+ *     require
+ *     audit
+ *
+ * a quantum effect.
+ *
+ * This grammar does not encode policy semantics.
+ *
+ * ============================================================================
+ * INTEGRATION WITH PROVENANCE
+ * ============================================================================
+ *
+ * The parsed reference must remain source-locatable so provenance can record:
+ *
+ *     source occurrence
+ *     resolved effect
+ *     semantic transformation
+ *     verification
+ *     lowering
+ *
+ * This grammar does not create provenance records.
  *
  * ============================================================================
  * HARD-CODING AUDIT
  * ============================================================================
  *
- * This file MUST NOT contain:
+ * Forbidden in this file:
  *
  *     MAX_QUBITS
- *     MAX_QUANTUM_EFFECTS
- *     MAX_QPU
- *     MAX_DEVICES
- *     MAX_EFFECTS
- *     IBM
- *     NVIDIA
- *     Rigetti
- *     IonQ
- *     physical qubit identifiers
- *     fixed topology names
- *     fixed gate inventories
- *     fixed calibration identifiers
+ *     MAX_CPUS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_NODES
+ *     MAX_MEMORY
+ *     MAX_THREADS
+ *     MAX_TENSOR_RANK
+ *     MAX_REGISTER_WIDTH
+ *     MAX_NETWORK_SIZE
+ *     MAX_DEVICE_COUNT
  *
- * The only domain-specific lexical reservation used here is:
+ * Also forbidden:
  *
- *     K_QUANTUM
- *
- * because `quantum` is an established language namespace keyword.
- *
- * ============================================================================
- * ANTLR COMPOSITION CONTRACT
- * ============================================================================
- *
- * Canonical lexer:
- *
- *     grammar/lexer/tokens.g4
- *
- * Lexer grammar:
- *
- *     ZamaniTokens
- *
- * Therefore:
- *
- *     tokenVocab = ZamaniTokens
- *
- * is mandatory.
- *
- * Canonical parser dependencies:
- *
- *     Core
- *
- * Core provides:
- *
- *     identifier
- *
- * This file MUST NOT redefine identifier syntax.
+ *     fixed physical qubit identifiers;
+ *     vendor backend names;
+ *     fixed topology names;
+ *     fixed calibration identifiers;
+ *     finite quantum-effect catalogues;
+ *     target-specific parser branches.
  *
  * ============================================================================
- * IMPORT RULE
+ * PRODUCTION QUALITY RULE
  * ============================================================================
  *
- * This grammar intentionally imports only Core.
+ * This file intentionally has a SMALL public rule surface.
  *
- * It does NOT import:
+ * The following anti-pattern is prohibited:
  *
- *     Quantum
- *     QuantumTypes
- *     Effects
- *     EffectSets
- *     Capabilities
- *     Resources
- *     Hardware
+ *     one alias rule per semantic context.
  *
- * because the namespace/reference grammar must remain independent of those
- * higher-level grammars.
+ * For example, the following must NOT be recreated:
  *
- * This makes this file independently completable and prevents cycles such as:
+ *     quantumEffectDeclarationReference
+ *     quantumEffectHandlerReference
+ *     quantumEffectInvocationTarget
+ *     quantumEffectMetadataTarget
+ *     quantumEffectSymbol
+ *     quantumEffectReferenceAlias
  *
- *     quantum effects
- *          -> quantum grammar
- *          -> effect grammar
- *          -> quantum effects
+ * when they all consume exactly the same syntax.
+ *
+ * Their distinctions belong to the consuming grammar or semantic model.
+ *
+ * Keeping one canonical reference rule prevents parse-tree fragmentation and
+ * reduces downstream AST maintenance.
  *
  * ============================================================================
- * DEPENDENCY DIRECTION
+ * COMPLETION CRITERIA
  * ============================================================================
  *
- *     ZamaniTokens
- *          |
- *          v
- *        Core
- *          |
- *          v
- *    QuantumEffects
- *          |
- *          +--> EffectSets
- *          +--> EffectDeclarations
- *          +--> EffectHandling
- *          |
- *          v
- *    semantic analysis
- *          |
- *          +--> capability analysis
- *          +--> resource analysis
- *          +--> quantum semantic analysis
- *          |
- *          v
- *      quantum::ir
+ * This file is complete when:
  *
- * The reverse direction is forbidden.
+ * [x] The grammar identity is QuantumEffects.
+ *
+ * [x] The public lexer vocabulary is ZamaniLexer.
+ *
+ * [x] Identifier syntax comes from Names.
+ *
+ * [x] `quantum::` is the canonical namespace boundary.
+ *
+ * [x] The quantum effect path is open-world.
+ *
+ * [x] There is no finite quantum-effect catalogue.
+ *
+ * [x] There are no machine-capacity constants.
+ *
+ * [x] There is no physical-hardware selection.
+ *
+ * [x] There is no QEC implementation.
+ *
+ * [x] There is no ZQN implementation.
+ *
+ * [x] There is no routing.
+ *
+ * [x] There is no scheduling.
+ *
+ * [x] There is no quantum::ir dependency.
+ *
+ * [x] There is no Rust action.
+ *
+ * [x] There is no unsafe Rust requirement.
+ *
+ * [x] General effect references remain owned by EffectSets.
+ *
+ * [x] Effect declarations remain owned by EffectDeclarations.
+ *
+ * [x] Effect operations remain owned by EffectOperations.
+ *
+ * [x] Effect handlers remain owned by EffectHandling.
+ *
+ * [x] Resource semantics remain downstream.
+ *
+ * [x] Capability semantics remain downstream.
+ *
+ * [x] Target realization remains downstream.
+ *
+ * [x] Source structure can be preserved for AST construction.
+ *
+ * [x] The grammar can accept future quantum effect names without modification.
+ *
+ * [x] The grammar has explicit integration and dependency contracts.
+ *
+ * [ ] Generated parser conformance tests pass.
+ *
+ * [ ] Rust frontend AST lowering tests pass.
+ *
+ * [ ] Semantic effect-resolution tests pass.
+ *
+ * [ ] Cross-domain quantum/effect tests pass.
+ *
+ * [ ] Compatibility tests pass.
+ *
+ * The final unchecked items are repository/build verification gates, not
+ * additional syntax that belongs in this file.
  *
  * ============================================================================
  * GRAMMAR
@@ -957,30 +1274,27 @@
 parser grammar QuantumEffects;
 
 options {
-    tokenVocab = ZamaniTokens;
+    tokenVocab = ZamaniLexer;
 }
 
-import Core;
+import Names;
 
 
 /*
  * ============================================================================
- * 1. QUANTUM EFFECT REFERENCE
+ * 1. CANONICAL QUANTUM EFFECT REFERENCE
  * ============================================================================
  *
- * Canonical forms:
+ * Canonical syntax:
  *
  *     quantum::measurement
  *     quantum::readout
  *     quantum::reset
  *     quantum::dynamic_control
- *     quantum::mid_circuit_measurement
  *
- * The first segment is the reserved `quantum` namespace.
+ * The first component is always the reserved quantum namespace.
  *
- * Remaining segments are open-world identifiers.
- *
- * There is intentionally no closed enumeration of effect names.
+ * The remainder is an open-world qualified effect path.
  */
 quantumEffectReference
     : K_QUANTUM
@@ -991,296 +1305,44 @@ quantumEffectReference
 
 /*
  * ============================================================================
- * 2. QUANTUM EFFECT PATH
+ * 2. OPEN-WORLD QUANTUM EFFECT PATH
  * ============================================================================
- *
- * One or more identifier segments.
  *
  * Examples:
  *
  *     measurement
  *     readout
- *     dynamic_control
- *     dynamic::control
+ *     future::operation
  *     photonic::interaction
- *     future::measurement
+ *     vendor::extension::operation
  *
- * No maximum path depth is encoded.
+ * There is deliberately no fixed maximum path depth.
  */
 quantumEffectPath
-    : identifier
+    : quantumEffectPathSegment
       (
           DOUBLE_COLON
-          identifier
+          quantumEffectPathSegment
       )*
     ;
 
 
 /*
  * ============================================================================
- * 3. QUANTUM EFFECT REFERENCE LIST
+ * 3. PATH SEGMENT
  * ============================================================================
  *
- * Examples:
+ * A path segment is an ordinary Zamani identifier.
  *
- *     quantum::measurement
+ * Semantic analysis determines whether the resulting path identifies:
  *
- *     quantum::measurement,
- *     quantum::readout
- *
- *     quantum::measurement,
- *     quantum::readout,
- *     quantum::reset,
- *
- * A trailing comma is intentionally accepted.
- */
-quantumEffectReferenceList
-    : quantumEffectReference
-      (
-          COMMA
-          quantumEffectReference
-      )*
-      COMMA?
-    ;
-
-
-/*
- * ============================================================================
- * 4. QUANTUM EFFECT GROUP
- * ============================================================================
- *
- * This rule provides a reusable grouping boundary for grammar consumers that
- * need a collection containing only quantum effects.
- *
- * Example:
- *
- *     {
- *         quantum::measurement,
- *         quantum::readout,
- *     }
- *
- * Empty groups are syntactically valid.
- *
- * Whether an empty group has special semantic meaning is decided downstream.
- */
-quantumEffectGroup
-    : LBRACE
-      quantumEffectReferenceList?
-      RBRACE
-    ;
-
-
-/*
- * ============================================================================
- * 5. NON-EMPTY QUANTUM EFFECT GROUP
- * ============================================================================
- *
- * Useful for grammar contexts where at least one quantum effect must be
- * explicitly present.
- *
- * This is a syntactic distinction only.
- */
-nonEmptyQuantumEffectGroup
-    : LBRACE
-      quantumEffectReferenceList
-      RBRACE
-    ;
-
-
-/*
- * ============================================================================
- * 6. SINGLE QUANTUM EFFECT
- * ============================================================================
- *
- * Explicitly named alias for grammar consumers that need one quantum effect
- * without reaching into the reference structure.
- */
-singleQuantumEffect
-    : quantumEffectReference
-    ;
-
-
-/*
- * ============================================================================
- * 7. QUANTUM EFFECT ENTRY
- * ============================================================================
- *
- * Alias for collection-oriented grammar consumers.
- */
-quantumEffectEntry
-    : quantumEffectReference
-    ;
-
-
-/*
- * ============================================================================
- * 8. QUANTUM EFFECT ENTRIES
- * ============================================================================
- *
- * Non-empty source collection.
- */
-quantumEffectEntries
-    : quantumEffectEntry
-      (
-          COMMA
-          quantumEffectEntry
-      )*
-      COMMA?
-    ;
-
-
-/*
- * ============================================================================
- * 9. QUANTUM EFFECT QUALIFIER
- * ============================================================================
- *
- * Provides a reusable syntactic marker for contexts where a grammar needs to
- * state that the following reference belongs to the quantum effect namespace.
- *
- * Example:
- *
- *     quantum::measurement
- *
- * This rule deliberately carries no semantic interpretation.
- */
-quantumEffectQualifier
-    : K_QUANTUM
-      DOUBLE_COLON
-    ;
-
-
-/*
- * ============================================================================
- * 10. QUANTUM EFFECT NAME
- * ============================================================================
- *
- * Represents the terminal semantic name after the quantum namespace.
- *
- * Example:
- *
- *     quantum::measurement
- *                    ^^^^^^^^^^^
- *
- * Nested namespace paths are represented by quantumEffectPath.
- *
- * This rule is useful only for grammar consumers that intentionally need the
- * final segment.
- */
-quantumEffectName
-    : identifier
-    ;
-
-
-/*
- * ============================================================================
- * 11. QUANTUM EFFECT REFERENCE WITH FINAL NAME
- * ============================================================================
- *
- * Explicit decomposition:
- *
- *     namespace qualifier + path
- *
- * This rule is equivalent in accepted syntax to quantumEffectReference but
- * provides a stable parse-tree boundary for tooling.
- */
-quantumEffectQualifiedReference
-    : quantumEffectQualifier
-      quantumEffectPath
-    ;
-
-
-/*
- * ============================================================================
- * 12. QUANTUM EFFECT COLLECTION
- * ============================================================================
- *
- * General collection boundary.
- *
- * The collection may be empty.
- */
-quantumEffectCollection
-    : quantumEffectGroup
-    ;
-
-
-/*
- * ============================================================================
- * 13. QUANTUM EFFECT DECLARATION REFERENCE
- * ============================================================================
- *
- * This rule represents a reference to an already-declared quantum effect.
- *
- * IMPORTANT:
- *
- * It does not declare an effect.
- *
- * Declaration ownership remains with:
- *
- *     grammar/effects/effect-declarations.g4
- */
-quantumEffectDeclarationReference
-    : quantumEffectReference
-    ;
-
-
-/*
- * ============================================================================
- * 14. QUANTUM EFFECT REQUIREMENT REFERENCE
- * ============================================================================
- *
- * This is a syntactic boundary for requirement-bearing consumers.
- *
- * It does NOT define resource requirements or capabilities.
- *
- * Example:
- *
- *     quantum::measurement
- *
- * Semantic analysis determines what is required to realize it.
- */
-quantumEffectRequirementReference
-    : quantumEffectReference
-    ;
-
-
-/*
- * ============================================================================
- * 15. QUANTUM EFFECT HANDLER REFERENCE
- * ============================================================================
- *
- * Handler grammars may use this rule when they need an explicitly quantum
- * effect reference.
- *
- * Handler implementation remains outside this file.
- */
-quantumEffectHandlerReference
-    : quantumEffectReference
-    ;
-
-
-/*
- * ============================================================================
- * 16. QUANTUM EFFECT INVOCATION TARGET
- * ============================================================================
- *
- * This rule intentionally stops at the effect identity.
- *
- * Arguments, expressions and invocation semantics belong to the general
- * effect-handling/effect-invocation grammar.
- *
- * This prevents the quantum effect grammar from creating a second call syntax.
- */
-quantumEffectInvocationTarget
-    : quantumEffectReference
-    ;
-
-
-/*
- * ============================================================================
- * 17. QUANTUM EFFECT PATH SEGMENT
- * ============================================================================
- *
- * Explicit single-segment boundary for tooling and diagnostics.
+ *     - a built-in effect;
+ *     - a declared effect;
+ *     - an imported effect;
+ *     - a dialect extension;
+ *     - a library-provided effect;
+ *     - a future effect;
+ *     - an unresolved name.
  */
 quantumEffectPathSegment
     : identifier
@@ -1289,191 +1351,26 @@ quantumEffectPathSegment
 
 /*
  * ============================================================================
- * 18. QUANTUM EFFECT NAMESPACE
+ * 4. QUANTUM EFFECT REFERENCE LIST
  * ============================================================================
  *
- * Canonical namespace token.
+ * This is a reusable non-empty list.
  *
- * This rule exists as an explicit named boundary so semantic tooling can
- * identify the quantum namespace without depending on token-level details.
+ * Example:
+ *
+ *     quantum::measurement,
+ *     quantum::readout,
+ *     quantum::reset,
+ *
+ * A trailing comma is intentionally accepted.
+ *
+ * This rule does not replace the general effect-set grammar.
  */
-quantumEffectNamespace
-    : K_QUANTUM
-    ;
-
-
-/*
- * ============================================================================
- * 19. QUANTUM EFFECT QUALIFIED PATH
- * ============================================================================
- *
- * Equivalent structural representation of:
- *
- *     quantum::foo::bar::baz
- *
- * The namespace is fixed to `quantum`; the remainder remains open-world.
- */
-quantumEffectQualifiedPath
-    : quantumEffectNamespace
-      DOUBLE_COLON
-      quantumEffectPath
-    ;
-
-
-/*
- * ============================================================================
- * 20. QUANTUM EFFECT LIST ENTRY
- * ============================================================================
- *
- * Explicit list-entry boundary.
- */
-quantumEffectListEntry
-    : quantumEffectQualifiedPath
-    ;
-
-
-/*
- * ============================================================================
- * 21. QUANTUM EFFECT LIST
- * ============================================================================
- *
- * Arbitrarily many entries.
- */
-quantumEffectList
-    : quantumEffectListEntry
+quantumEffectReferenceList
+    : quantumEffectReference
       (
           COMMA
-          quantumEffectListEntry
+          quantumEffectReference
       )*
       COMMA?
-    ;
-
-
-/*
- * ============================================================================
- * 22. QUANTUM EFFECT SET
- * ============================================================================
- *
- * Source-level quantum effect collection.
- *
- * This does not decide whether the collection is semantically a set, sequence,
- * multiset, or normalized collection.
- */
-quantumEffectSet
-    : LBRACE
-      quantumEffectList?
-      RBRACE
-    ;
-
-
-/*
- * ============================================================================
- * 23. NON-EMPTY QUANTUM EFFECT SET
- * ============================================================================
- */
-nonEmptyQuantumEffectSet
-    : LBRACE
-      quantumEffectList
-      RBRACE
-    ;
-
-
-/*
- * ============================================================================
- * 24. QUANTUM EFFECT REFERENCE ALIAS
- * ============================================================================
- *
- * Structural alias for parser consumers.
- *
- * This does not introduce an alias declaration syntax.
- */
-quantumEffectReferenceAlias
-    : quantumEffectReference
-    ;
-
-
-/*
- * ============================================================================
- * 25. QUANTUM EFFECT DOMAIN PATH
- * ============================================================================
- *
- * Allows future namespaces below `quantum` without modifying this grammar.
- *
- * Examples:
- *
- *     quantum::error_correction
- *     quantum::error_correction::syndrome
- *     quantum::photonic::interaction
- *     quantum::future::operation
- */
-quantumEffectDomainPath
-    : quantumEffectPath
-    ;
-
-
-/*
- * ============================================================================
- * 26. QUANTUM EFFECT DOMAIN REFERENCE
- * ============================================================================
- *
- * Explicit domain-level boundary.
- */
-quantumEffectDomainReference
-    : quantumEffectNamespace
-      DOUBLE_COLON
-      quantumEffectDomainPath
-    ;
-
-
-/*
- * ============================================================================
- * 27. QUANTUM EFFECT SOURCE REFERENCE
- * ============================================================================
- *
- * Canonical source reference boundary for downstream grammar composition.
- */
-quantumEffectSourceReference
-    : quantumEffectDomainReference
-    ;
-
-
-/*
- * ============================================================================
- * 28. QUANTUM EFFECT METADATA TARGET
- * ============================================================================
- *
- * Represents an effect identity to which semantic metadata may later be
- * attached.
- *
- * This grammar does not define the metadata itself.
- */
-quantumEffectMetadataTarget
-    : quantumEffectReference
-    ;
-
-
-/*
- * ============================================================================
- * 29. QUANTUM EFFECT SYMBOL
- * ============================================================================
- *
- * Named symbol boundary for diagnostics and tooling.
- */
-quantumEffectSymbol
-    : quantumEffectReference
-    ;
-
-
-/*
- * ============================================================================
- * 30. QUANTUM EFFECT REFERENCE ROOT
- * ============================================================================
- *
- * Stable aggregate entry rule.
- *
- * Grammar clients that need exactly one quantum effect should depend on this
- * rule instead of depending on internal decomposition.
- */
-quantumEffectReferenceRoot
-    : quantumEffectReference
     ;
