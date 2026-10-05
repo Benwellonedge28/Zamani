@@ -1,395 +1,780 @@
 /*
  * ============================================================================
- * Zamani Universal Programming Language
+ * ZAMANI PROGRAMMING LANGUAGE
  * ============================================================================
  *
  * File:
  *     grammar/effects/io.g4
  *
+ * Grammar:
+ *     IO
+ *
  * Status:
- *     Production modular grammar for the IO effect domain.
+ *     CANONICAL IO-DOMAIN INTEGRATION GRAMMAR
+ *
+ * Language:
+ *     Zamani
  *
  * Grammar technology:
  *     ANTLR4 parser grammar
  *
- * Runtime/compiler baseline:
+ * Compiler/runtime baseline:
  *     Rust 1.97 / Rust 1.97.1
+ *     Rust 2021
  *
  * Safety:
- *     This grammar contains:
- *
- *       - no embedded Rust actions;
- *       - no semantic predicates;
- *       - no filesystem access;
- *       - no network access;
- *       - no runtime calls;
- *       - no hardware discovery;
- *       - no unsafe code.
+ *     - No embedded Rust actions.
+ *     - No semantic predicates.
+ *     - No unsafe Rust.
+ *     - No filesystem access.
+ *     - No network access.
+ *     - No runtime execution.
+ *     - No environment inspection.
+ *     - No hardware discovery.
+ *     - No target selection.
+ *     - No resource discovery.
+ *     - No randomness.
  *
  * ============================================================================
+ * FEATURE CONTRACT
+ * ============================================================================
+ *
  * PURPOSE
+ * -------
+ *
+ * This file is the canonical parser-level integration boundary for the
+ * input/output (IO) semantic domain.
+ *
+ * IO is treated as an EFFECT DOMAIN, not as a second language.
+ *
+ * This grammar therefore provides reusable IO-domain parser boundaries while
+ * delegating generic effect syntax to the canonical effect subsystem.
+ *
+ *
+ * OWNS
+ * -----
+ *
+ * This file owns only IO-domain integration wrappers:
+ *
+ *     ioOperationReference
+ *     ioOperationInvocation
+ *     ioOperationUse
+ *     ioEffectReference
+ *     ioEffectReferenceList
+ *     ioEffectSet
+ *
+ * These rules identify syntax that semantic analysis may subsequently classify
+ * as belonging to the IO domain.
+ *
+ *
+ * DOES NOT OWN
+ * -------------
+ *
+ * This file does NOT own:
+ *
+ *     effect declarations
+ *     effect operation declarations
+ *     effect references in general
+ *     effect sets in general
+ *     effect invocation in general
+ *     perform syntax
+ *     effect handlers
+ *     handler arms
+ *     expressions
+ *     argument lists
+ *     identifiers
+ *     qualified names
+ *     types
+ *     capabilities
+ *     resources
+ *     requirements
+ *     constraints
+ *     policies
+ *     contracts
+ *     provenance
+ *     security
+ *     filesystem semantics
+ *     network semantics
+ *     device semantics
+ *     operating-system semantics
+ *     file descriptors
+ *     sockets
+ *     pipes
+ *     streams
+ *     buffering
+ *     encoding
+ *     storage layout
+ *     memory layout
+ *     scheduling
+ *     target selection
+ *     backend selection
+ *     hardware discovery
+ *     CPU selection
+ *     GPU selection
+ *     FPGA selection
+ *     ASIC selection
+ *     accelerator selection
+ *     QPU selection
+ *     quantum operations
+ *     quantum topology
+ *     quantum::ir
+ *     HDL representation
+ *     runtime implementation
+ *
+ * ============================================================================
+ * ARCHITECTURAL POSITION
  * ============================================================================
  *
- * This file provides the IO-specific syntactic composition layer of Zamani's
- * general effect system.
+ * The production pipeline is:
  *
- * IMPORTANT:
+ *     Zamani source
+ *          |
+ *          v
+ *     ZamaniLexer
+ *          |
+ *          v
+ *     ZamaniParser
+ *          |
+ *          v
+ *     domain-neutral AST
+ *          |
+ *          v
+ *     structural validation
+ *          |
+ *          +-----------------------------+
+ *          |                             |
+ *          v                             v
+ *     effect analysis              IO-domain analysis
+ *          |                             |
+ *          +-------------+---------------+
+ *                        |
+ *                        v
+ *                 semantic model
+ *                        |
+ *          +-------------+-------------+
+ *          |             |             |
+ *          v             v             v
+ *      classical     quantum::ir   HDL/hardware
+ *          |             |             |
+ *          +-------------+-------------+
+ *                        |
+ *                        v
+ *                  canonical IR
+ *                        |
+ *                        v
+ *             optimization/lowering
+ *                        |
+ *                        v
+ *                routing/scheduling
+ *                        |
+ *                        v
+ *                 resilience/recovery
+ *                        |
+ *                        v
+ *                       HAL
+ *                        |
+ *                        v
+ *                 target realization
  *
- * This file does NOT define a closed list of IO operations.
  *
- * It deliberately does NOT make any of these grammar keywords:
+ * IO syntax MUST remain above target realization.
  *
- *     io
+ * ============================================================================
+ * SINGLE-AUTHORITY RULE
+ * ============================================================================
+ *
+ * Generic effect syntax is already owned by:
+ *
+ *     grammar/effects/effect-operations.g4
+ *     grammar/effects/effect-sets.g4
+ *     grammar/effects/effects.g4
+ *
+ * Therefore this file MUST NOT redefine:
+ *
+ *     effectOperationReference
+ *     effectInvocation
+ *     effectInvocationArguments
+ *     effectOperationCall
+ *     effectOperationUse
+ *     performEffectOperation
+ *     effectReference
+ *     effectReferenceList
+ *     effectSet
+ *
+ * Doing so would create competing grammar authorities.
+ *
+ *
+ * Generic effect declarations are owned by:
+ *
+ *     grammar/effects/effect-declarations.g4
+ *
+ * Generic handlers are owned by:
+ *
+ *     grammar/effects/effect-handling.g4
+ *
+ * Statement-level effect integration is owned by:
+ *
+ *     grammar/statements/effects.g4
+ *
+ * Expression-level effect integration is owned by:
+ *
+ *     grammar/expressions/effects.g4
+ *
+ *
+ * ============================================================================
+ * IMPORT CONTRACT
+ * ============================================================================
+ *
+ * This file imports only the canonical generic effect boundaries that it
+ * actually reuses.
+ *
+ * Dependency direction:
+ *
+ *     IO
+ *      |
+ *      +--> Core
+ *      +--> Type
+ *      +--> Expressions
+ *      +--> EffectOperations
+ *      +--> EffectSets
+ *
+ * The generic effect aggregate MUST NOT import IO.
+ *
+ * Therefore the dependency remains acyclic:
+ *
+ *     Effects
+ *        |
+ *        +--> generic effect grammars
+ *
+ *     IO
+ *        |
+ *        +--> generic effect grammars
+ *
+ * There is deliberately no:
+ *
+ *     Effects -> IO -> Effects
+ *
+ * cycle.
+ *
+ * ============================================================================
+ * OPEN-WORLD IO MODEL
+ * ============================================================================
+ *
+ * IO operations are NOT enumerated.
+ *
+ * The grammar MUST NOT contain a closed list such as:
+ *
  *     read
  *     write
  *     open
  *     close
+ *     seek
+ *     flush
+ *     send
+ *     receive
  *     stdin
  *     stdout
  *     stderr
  *     file
  *     socket
  *     pipe
- *     stream
  *     console
- *     device
  *     serial
+ *     device
  *
- * Those are domain names and/or effect operation names, not fundamental
- * language syntax.
+ * Those are semantic vocabulary, library vocabulary, dialect vocabulary,
+ * capability vocabulary, or implementation vocabulary.
  *
- * For example, all of the following remain possible without modifying this
- * grammar:
+ * They are not universal grammar primitives.
  *
- *     effect IO;
  *
- *     effect io::File;
- *
- *     effect io::Stream;
- *
- *     effect io::Console;
- *
- *     effect io::Device;
- *
- *     effect io::Database;
- *
- *     effect io::CustomTransport;
- *
- *     effect application::custom_io;
- *
- * The meaning of those names belongs to semantic analysis, capability
- * analysis, resource analysis, and the appropriate runtime/backend.
- *
- * ============================================================================
- * ARCHITECTURAL POSITION
- * ============================================================================
- *
- * Source
- *   |
- *   v
- * ZamaniTokens
- *   |
- *   v
- * Core / Types / Expressions
- *   |
- *   v
- * Effect grammar
- *   |
- *   +--> effects.g4
- *   +--> effect-declarations.g4
- *   +--> effect-sets.g4
- *   +--> effect-handling.g4
- *   +--> capabilities.g4
- *   |
- *   v
- * Frontend AST
- *   |
- *   +--> name resolution
- *   +--> type checking
- *   +--> effect checking
- *   +--> capability checking
- *   +--> resource checking
- *   |
- *   v
- * Canonical semantic representation
- *   |
- *   +--> classical IR
- *   +--> quantum::ir
- *   +--> HDL/hardware representation
- *   +--> distributed representation
- *   |
- *   v
- * optimization / routing / scheduling / resilience
- *   |
- *   v
- * target lowering
- *   |
- *   v
- * runtime / hardware
- *
- * ============================================================================
- * OWNERSHIP
- * ============================================================================
- *
- * THIS FILE OWNS:
- *
- *   - IO-domain syntax composition;
- *   - syntax for explicitly classifying an operation as IO;
- *   - IO operation references;
- *   - IO operation invocation composition;
- *   - IO effect-set composition;
- *   - IO handler composition;
- *   - IO operation declaration composition;
- *   - source-level IO mode/specifier syntax;
- *   - syntactic IO effect aliases/compositions where supported by the
- *     aggregate grammar.
- *
- * THIS FILE DOES NOT OWN:
- *
- *   - the generic effect system;
- *   - effect declaration fundamentals;
- *   - generic effect sets;
- *   - generic effect handlers;
- *   - identifier spelling;
- *   - qualified-name spelling;
- *   - expressions;
- *   - argument lists;
- *   - types;
- *   - functions;
- *   - modules;
- *   - filesystem semantics;
- *   - networking semantics;
- *   - device semantics;
- *   - file descriptors;
- *   - sockets;
- *   - paths;
- *   - OS handles;
- *   - memory allocation;
- *   - buffering;
- *   - encoding;
- *   - permissions;
- *   - authentication;
- *   - capabilities;
- *   - resource allocation;
- *   - scheduling;
- *   - execution;
- *   - runtime dispatch;
- *   - backend selection;
- *   - hardware discovery;
- *   - CPU/GPU/QPU selection;
- *   - quantum IR;
- *   - QEC;
- *   - ZQN;
- *   - resilience.
- *
- * ============================================================================
- * OPEN-WORLD CONTRACT
- * ============================================================================
- *
- * IO is intentionally NOT a closed enumeration.
- *
- * The grammar therefore does not contain rules such as:
- *
- *     ioRead
- *     ioWrite
- *     ioOpen
- *     ioClose
- *
- * with fixed keywords.
- *
- * Instead, an IO operation is identified structurally by a normal qualified
- * source name.
- *
- * Examples:
+ * Examples of valid open-world operation names include:
  *
  *     io::read
  *     io::write
- *     io::file::open
  *     io::stream::receive
+ *     io::stream::send
+ *     io::file::open
+ *     io::file::close
  *     io::database::query
- *     custom::transport::send
+ *     io::device::transfer
+ *     application::custom_io
+ *     vendor::transport::send
+ *     future::io::operation
  *
- * This allows future IO domains without grammar modification.
- *
- * ============================================================================
- * POCO-REAF
- * ============================================================================
- *
- * IO syntax expresses COMPUTATIONAL INTENT.
- *
- * It does not select:
- *
- *     - an operating system;
- *     - a filesystem;
- *     - a device;
- *     - a file descriptor;
- *     - a socket implementation;
- *     - a network interface;
- *     - a CPU;
- *     - a GPU;
- *     - an FPGA;
- *     - a QPU;
- *     - a machine topology;
- *     - a memory capacity;
- *     - a buffer size;
- *     - a node count.
- *
- * Therefore:
- *
- *     perform io::read(source)
- *
- * expresses an IO operation but does not prescribe where or how that operation
- * must be realized.
+ * A new IO domain therefore does not require modifying this grammar.
  *
  * ============================================================================
- * SCALABILITY
+ * DOMAIN CLASSIFICATION
  * ============================================================================
  *
- * This grammar imposes no language-level limits on:
+ * IMPORTANT:
  *
- *     - number of IO effects;
- *     - number of IO operations;
- *     - number of operation arguments;
- *     - number of handlers;
- *     - number of effect references;
- *     - number of nested IO expressions;
- *     - number of IO domains;
- *     - program size;
- *     - data size;
- *     - device count;
- *     - node count;
- *     - machine count.
+ * `ioOperationReference` is a syntactic integration boundary.
  *
- * Repetition is represented using ANTLR repetition operators.
+ * It does NOT prove that the referenced operation belongs to the IO domain.
  *
- * Resource limits, parser limits, memory limits, execution limits, and backend
- * limits belong to explicit compiler/runtime resource policies.
+ * Semantic analysis MUST determine whether the resolved operation:
+ *
+ *     - is declared;
+ *     - is an effect operation;
+ *     - belongs to the IO effect domain;
+ *     - is available;
+ *     - is compatible with its arguments;
+ *     - satisfies required capabilities;
+ *     - satisfies resource requirements;
+ *     - satisfies applicable policies;
+ *     - is permitted by security rules.
+ *
+ * This distinction is essential for an open-world language.
+ *
  *
  * ============================================================================
  * EFFECT / CAPABILITY / RESOURCE SEPARATION
  * ============================================================================
  *
- * Effect:
+ * IO EFFECT
+ * ---------
  *
- *     Describes what kind of computational interaction may occur.
+ * Describes observable interaction with an external computational boundary.
  *
- * Capability:
  *
- *     Describes what an execution environment is able or authorized to provide.
+ * CAPABILITY
+ * ----------
  *
- * Resource:
+ * Describes what the execution environment can provide or authorize.
  *
- *     Describes computational resources available to or requested by an
- *     execution.
+ * Examples of semantic capabilities may include:
  *
- * Constraint:
+ *     io.read
+ *     io.write
+ *     io.stream
+ *     io.storage
+ *     io.device
  *
- *     Describes conditions that must be satisfied.
+ * Capability names remain open-world.
  *
- * Preference:
  *
- *     Describes a preferred but not necessarily mandatory realization.
+ * RESOURCE
+ * --------
  *
- * This file only describes IO syntax.
+ * Describes resources consumed, required, available, or negotiated by the
+ * execution.
  *
- * It must never silently convert:
+ * Examples include semantic requirements for:
  *
- *     IO effect
+ *     bandwidth
+ *     storage
+ *     memory
+ *     latency
+ *     throughput
+ *     energy
+ *     availability
  *
- * into:
+ * These are NOT represented as fixed constants in this grammar.
  *
- *     specific resource
  *
- * or:
+ * REQUIREMENT
+ * -----------
  *
- *     specific device.
+ * Describes what a realization must provide.
+ *
+ *
+ * CONSTRAINT
+ * ----------
+ *
+ * Describes what a valid realization must obey.
+ *
+ *
+ * PREFERENCE
+ * ----------
+ *
+ * Describes a preferred realization without changing program meaning.
+ *
+ *
+ * POLICY
+ * ------
+ *
+ * Governs whether an IO action is permitted and under what conditions.
+ *
+ *
+ * The IO effect MUST NOT silently imply any particular resource, capability,
+ * operating system, device, network interface, filesystem, or backend.
+ *
+ * ============================================================================
+ * POCO-REAF CONTRACT
+ * ============================================================================
+ *
+ * The source program expresses IO intent.
+ *
+ * It MUST NOT encode a particular machine realization.
+ *
+ * For example:
+ *
+ *     perform io::read(source)
+ *
+ * means that an IO read operation is requested.
+ *
+ * It does NOT mean:
+ *
+ *     use Linux;
+ *     use POSIX;
+ *     use Windows;
+ *     use file descriptor 0;
+ *     use device 0;
+ *     use CPU 0;
+ *     use GPU 0;
+ *     use node 0;
+ *     use a particular filesystem;
+ *     use a particular network interface;
+ *     use a particular memory bank;
+ *     use a particular bus;
+ *     use a particular hardware topology.
+ *
+ * Those decisions belong downstream.
+ *
+ * The same semantic operation may be realized through:
+ *
+ *     local storage
+ *     distributed storage
+ *     network transport
+ *     memory-mapped IO
+ *     DMA
+ *     accelerator interfaces
+ *     embedded peripherals
+ *     cloud services
+ *     simulation
+ *     virtualized devices
+ *     future execution environments
+ *
+ * without changing the source-level meaning.
+ *
+ * ============================================================================
+ * SCALABILITY CONTRACT
+ * ============================================================================
+ *
+ * This grammar contains NO artificial machine ceilings.
+ *
+ * In particular, it MUST NOT define:
+ *
+ *     MAX_IO_OPERATIONS
+ *     MAX_IO_DOMAINS
+ *     MAX_IO_ARGUMENTS
+ *     MAX_IO_EFFECTS
+ *     MAX_IO_HANDLERS
+ *     MAX_IO_STREAMS
+ *     MAX_IO_DEVICES
+ *     MAX_IO_BUFFERS
+ *     MAX_IO_BYTES
+ *     MAX_DEVICES
+ *     MAX_NODES
+ *     MAX_MEMORY
+ *     MAX_THREADS
+ *     MAX_CPUS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_QPUS
+ *
+ * or equivalent constants.
+ *
+ * There is no language-level fixed limit on:
+ *
+ *     number of IO operations;
+ *     number of IO domains;
+ *     number of effect references;
+ *     number of effect-set entries;
+ *     number of operation arguments;
+ *     qualified-name depth;
+ *     program size;
+ *     number of devices;
+ *     number of nodes;
+ *     amount of data;
+ *     number of streams;
+ *     number of concurrent operations.
+ *
+ * Practical limits are implementation/resource constraints and are not encoded
+ * as language semantics.
+ *
+ * "Infinity" therefore means:
+ *
+ *     no artificial language-level ceiling.
+ *
+ * It does not claim that physical hardware or compiler resources are infinite.
+ *
+ * ============================================================================
+ * DETERMINISM
+ * ============================================================================
+ *
+ * This grammar is deterministic with respect to the parser's specified input
+ * and grammar version.
+ *
+ * It performs no:
+ *
+ *     IO;
+ *     filesystem access;
+ *     network access;
+ *     hardware inspection;
+ *     environment inspection;
+ *     runtime execution;
+ *     random selection;
+ *     target selection.
+ *
+ * The parser therefore cannot accidentally change program meaning according
+ * to the machine on which parsing occurs.
+ *
+ * ============================================================================
+ * SECURITY CONTRACT
+ * ============================================================================
+ *
+ * Parsing an IO construct MUST NOT execute the IO operation.
+ *
+ * In particular, parsing:
+ *
+ *     perform io::read(source)
+ *
+ * MUST NOT:
+ *
+ *     open `source`;
+ *     read a file;
+ *     contact a network;
+ *     access a device;
+ *     invoke a process;
+ *     access credentials;
+ *     inspect the host;
+ *     perform native calls.
+ *
+ * Authorization and execution occur only after semantic validation and
+ * downstream execution planning.
  *
  * ============================================================================
  * AST CONTRACT
  * ============================================================================
  *
- * The frontend AST should preserve:
+ * This grammar produces parser structure only.
  *
- *     - source span;
- *     - qualified IO operation name;
- *     - argument expressions;
- *     - optional IO mode;
- *     - optional operation metadata;
- *     - syntactic effect relationship.
+ * The domain-neutral frontend AST MUST preserve enough information to support:
  *
- * The grammar must not force the AST to contain:
+ *     source span;
+ *     qualified operation identity;
+ *     operation arguments;
+ *     effect classification;
+ *     effect-set membership;
+ *     source ordering;
+ *     source-level metadata where applicable.
  *
- *     - OS file descriptors;
- *     - physical device IDs;
- *     - memory addresses;
- *     - sockets;
- *     - backend IDs;
- *     - thread IDs;
- *     - machine IDs.
+ * The AST MUST NOT require:
+ *
+ *     file descriptors;
+ *     OS handles;
+ *     sockets;
+ *     physical addresses;
+ *     device IDs;
+ *     process IDs;
+ *     thread IDs;
+ *     CPU IDs;
+ *     GPU IDs;
+ *     FPGA IDs;
+ *     QPU IDs;
+ *     backend IDs;
+ *     machine IDs.
+ *
+ * Those are realization details.
  *
  * ============================================================================
- * IR CONTRACT
+ * SEMANTIC CONTRACT
  * ============================================================================
  *
- * This grammar does not create an IR.
+ * After parsing, semantic analysis is responsible for:
  *
- * After parsing:
+ *     1. name resolution;
+ *     2. effect-domain classification;
+ *     3. operation resolution;
+ *     4. declaration validation;
+ *     5. argument/type checking;
+ *     6. effect checking;
+ *     7. capability checking;
+ *     8. resource analysis;
+ *     9. requirement checking;
+ *    10. constraint checking;
+ *    11. policy checking;
+ *    12. security/authorization analysis;
+ *    13. determinism analysis where applicable;
+ *    14. provenance construction;
+ *    15. target-independent validation;
+ *    16. lowering preparation.
  *
- *     AST
- *       ->
- *     semantic analysis
- *       ->
- *     canonical effect representation
- *       ->
- *     appropriate domain IR
+ * The grammar MUST NOT perform these semantic decisions.
  *
- * IO may eventually lower into:
+ * ============================================================================
+ * EFFECT INFERENCE
+ * ============================================================================
  *
- *     classical IR
- *     distributed IR
- *     networking IR
- *     hardware IR
- *     accelerator IR
+ * An IO operation may participate in inferred effects.
  *
- * depending on semantic meaning.
+ * For example:
  *
- * The grammar must never create a second IR for IO.
+ *     io::read
+ *
+ * may semantically contribute an IO effect even when the surrounding source
+ * construct does not explicitly spell an effect set.
+ *
+ * The exact inference rules belong to semantic effect analysis.
+ *
+ * This file only supplies the syntactic IO-domain boundary.
+ *
+ * ============================================================================
+ * ERROR HANDLING
+ * ============================================================================
+ *
+ * IO failure is NOT represented by hard-coded grammar alternatives.
+ *
+ * A particular IO operation may semantically return:
+ *
+ *     Result<T, E>
+ *
+ * or another declared error representation.
+ *
+ * The grammar does not impose one universal failure model.
+ *
+ * Effect handlers remain owned by:
+ *
+ *     grammar/effects/effect-handling.g4
+ *
+ * and generic error/result syntax remains owned by the type/expression
+ * subsystem.
+ *
+ * ============================================================================
+ * CAPABILITY INTEGRATION
+ * ============================================================================
+ *
+ * IO operations may require capabilities.
+ *
+ * Example semantic intent:
+ *
+ *     requires capability("io.read");
+ *
+ * or:
+ *
+ *     requires capability("io.write");
+ *
+ * Capability syntax is NOT redefined here.
+ *
+ * The canonical capability/requirement owners remain:
+ *
+ *     grammar/core/capabilities.g4
+ *     grammar/core/requirements.g4
+ *     grammar/resources/
+ *
+ * Semantic analysis connects an IO operation to its declared capability
+ * requirements.
+ *
+ * ============================================================================
+ * RESOURCE INTEGRATION
+ * ============================================================================
+ *
+ * IO may have resource implications such as:
+ *
+ *     storage;
+ *     bandwidth;
+ *     memory;
+ *     latency;
+ *     throughput;
+ *     energy;
+ *     availability.
+ *
+ * The IO grammar MUST NOT encode fixed resource values.
+ *
+ * For example, this file must never prescribe:
+ *
+ *     buffer = 4096;
+ *     bandwidth = 1Gbps;
+ *     storage = 64GB;
+ *
+ * as universal language requirements.
+ *
+ * Symbolic or semantic resource requirements belong to the resource system.
+ *
+ * ============================================================================
+ * POLICY INTEGRATION
+ * ============================================================================
+ *
+ * IO may be controlled by policies including:
+ *
+ *     permission;
+ *     prohibition;
+ *     sandboxing;
+ *     trust;
+ *     authorization;
+ *     data-handling rules;
+ *     network restrictions;
+ *     provenance requirements.
+ *
+ * Policy syntax is not duplicated here.
+ *
+ * The policy subsystem remains authoritative.
+ *
+ * ============================================================================
+ * PROVENANCE INTEGRATION
+ * ============================================================================
+ *
+ * IO operations may participate in provenance.
+ *
+ * Semantic provenance may record:
+ *
+ *     operation identity;
+ *     source location;
+ *     data lineage;
+ *     producing transformation;
+ *     consuming transformation;
+ *     policy decision;
+ *     capability decision;
+ *     execution realization.
+ *
+ * This grammar does not create provenance records.
+ *
+ * It merely preserves the syntactic operation identity required downstream.
  *
  * ============================================================================
  * QUANTUM INTEGRATION
  * ============================================================================
  *
- * IO can occur in hybrid quantum-classical programs.
+ * IO may participate in hybrid quantum/classical programs.
  *
- * Examples include:
+ * Example:
  *
  *     perform io::read(input);
- *     perform quantum::measure(q);
+ *     perform quantum::measure(state);
  *     perform io::write(result);
  *
- * The IO grammar must remain independent of quantum semantics.
+ * The IO grammar MUST remain independent of quantum semantics.
  *
- * In particular, this file does NOT define:
+ * It MUST NOT define:
  *
- *     QubitId
- *     PhysicalQubitId
- *     GateKind
- *     quantum topology
- *     measurement semantics
- *     QEC
- *     ZQN
+ *     qubits;
+ *     gates;
+ *     physical qubits;
+ *     coupling maps;
+ *     calibration;
+ *     routing;
+ *     scheduling;
+ *     QEC;
+ *     ZQN;
+ *     quantum::ir.
  *
- * Quantum semantic lowering remains under the canonical:
+ * If an IO operation participates in a hybrid computation, semantic lowering
+ * may connect its result to quantum semantic operations, but the canonical
+ * quantum boundary remains:
  *
  *     quantum::ir
- *
- * boundary.
  *
  * ============================================================================
  * HDL / HARDWARE INTEGRATION
  * ============================================================================
  *
- * IO can also represent hardware/software interaction:
+ * IO may represent hardware/software interaction through semantic operation
+ * names.
+ *
+ * Example:
  *
  *     perform io::device::read(channel);
  *
@@ -397,626 +782,679 @@
  *
  *     perform hardware::interface::transfer(data);
  *
- * The grammar does not decide whether such an operation becomes:
+ * This grammar does not decide whether the realization becomes:
  *
- *     CPU code
- *     DMA
- *     FPGA logic
- *     ASIC logic
- *     bus transaction
- *     network transfer
- *     accelerator command
+ *     CPU code;
+ *     DMA;
+ *     FPGA logic;
+ *     ASIC logic;
+ *     accelerator command;
+ *     bus transaction;
+ *     memory operation;
+ *     peripheral access;
+ *     network transfer.
  *
- * Those decisions belong downstream.
- *
- * ============================================================================
- * DETERMINISM
- * ============================================================================
- *
- * This grammar:
- *
- *     - performs no IO itself;
- *     - contains no actions;
- *     - contains no semantic predicates;
- *     - contains no random behavior;
- *     - contains no target-dependent branches;
- *     - contains no runtime calls.
- *
- * Parsing is therefore independent of the machine on which the parser runs.
+ * Those decisions belong downstream semantic and target systems.
  *
  * ============================================================================
- * ANTLR COMPOSITION CONTRACT
+ * DISTRIBUTED INTEGRATION
  * ============================================================================
  *
- * Canonical lexer:
+ * IO may be local or distributed.
+ *
+ * The grammar does not distinguish these by hardware assumptions.
+ *
+ * For example:
+ *
+ *     io::read(source)
+ *
+ * could be realized locally or through a distributed service if the semantic
+ * contract permits it.
+ *
+ * Distributed execution must be selected through:
+ *
+ *     capabilities;
+ *     resources;
+ *     requirements;
+ *     policies;
+ *     target negotiation;
+ *
+ * rather than through a hard-coded source-level machine identity.
+ *
+ * ============================================================================
+ * SIMULATION INTEGRATION
+ * ============================================================================
+ *
+ * IO operations may be simulated.
+ *
+ * Simulation is an execution strategy, not a different source language.
+ *
+ * The semantic/execution layer may map:
+ *
+ *     IO operation
+ *
+ * to:
+ *
+ *     real IO;
+ *     virtual IO;
+ *     deterministic simulation;
+ *     test harness;
+ *     replay;
+ *     emulation.
+ *
+ * This grammar does not choose among them.
+ *
+ * ============================================================================
+ * REPRODUCIBILITY
+ * ============================================================================
+ *
+ * IO is inherently capable of introducing external state.
+ *
+ * Therefore reproducible execution is a semantic/runtime concern.
+ *
+ * The grammar does not falsely classify every IO operation as deterministic.
+ *
+ * Instead, semantic analysis may classify operations according to declared
+ * properties such as:
+ *
+ *     deterministic;
+ *     nondeterministic;
+ *     replayable;
+ *     observable;
+ *     externally dependent.
+ *
+ * These properties must not be encoded as a finite grammar enumeration.
+ *
+ * ============================================================================
+ * COMPATIBILITY
+ * ============================================================================
+ *
+ * Existing source code using generic effect operations remains valid through
+ * the generic effect subsystem.
+ *
+ * This file is an integration boundary and therefore must not require existing
+ * generic effect syntax to be rewritten.
+ *
+ * In particular:
+ *
+ *     perform io::read(source)
+ *
+ * remains structurally a normal effect operation.
+ *
+ * The semantic layer may additionally classify it as an IO operation.
+ *
+ * No historical operation spelling is reserved by this grammar.
+ *
+ * ============================================================================
+ * PUBLIC RULES
+ * ============================================================================
+ *
+ * Public rules exported by this grammar:
+ *
+ *     ioOperationReference
+ *     ioOperationInvocation
+ *     ioOperationUse
+ *     ioEffectReference
+ *     ioEffectReferenceList
+ *     ioEffectSet
+ *
+ * These names are intentionally prefixed with `io` so they cannot accidentally
+ * replace the canonical generic effect rules.
+ *
+ * ============================================================================
+ * DEPENDENCY CONTRACT
+ * ============================================================================
+ *
+ * DEPENDS_ON:
+ *
+ *     grammar/core/core.g4
+ *     grammar/types/types.g4
+ *     grammar/expressions/expressions.g4
+ *     grammar/effects/effect-operations.g4
+ *     grammar/effects/effect-sets.g4
+ *
+ * LEXER:
+ *
+ *     grammar/antlr/ZamaniLexer.g4
+ *
+ * LEXICAL COMPOSITION:
  *
  *     grammar/lexer/tokens.g4
  *
- * Lexer grammar:
+ * AST OWNER:
  *
- *     ZamaniTokens
+ *     domain-neutral frontend AST under src/ast/
  *
- * Canonical parser dependencies:
+ * SEMANTIC OWNER:
  *
- *     Core
- *     Types
- *     Expressions
+ *     effect/IO semantic analysis
  *
- * This file deliberately consumes those shared rules instead of redefining
- * them.
+ * EFFECT OWNER:
  *
+ *     grammar/effects/effects.g4
+ *
+ * RESOURCE OWNER:
+ *
+ *     grammar/resources/
+ *
+ * CAPABILITY OWNER:
+ *
+ *     grammar/core/capabilities.g4
+ *     grammar/resources/
+ *
+ * POLICY OWNER:
+ *
+ *     grammar/core/policies.g4
+ *     grammar/policies/ when present
+ *
+ * SECURITY OWNER:
+ *
+ *     grammar/security/
+ *
+ * PROVENANCE OWNER:
+ *
+ *     grammar/provenance/ or semantic provenance subsystem
+ *
+ * IR OWNER:
+ *
+ *     canonical semantic representation
+ *
+ * QUANTUM IR OWNER:
+ *
+ *     quantum::ir
+ *
+ * TEST OWNER:
+ *
+ *     grammar/tests/
+ *     grammar/tests/effects/
+ *     grammar/tests/effects/io/
+ *
+ * SPECIFICATION OWNER:
+ *
+ *     grammar/spec/effects.md
+ *     grammar/specification/
+ *
+ * ============================================================================
+ * INTEGRATION CONTRACT
+ * ============================================================================
+ *
+ * 1. The canonical lexer emits normal identifier/name/operator tokens.
+ *
+ * 2. Core provides:
+ *
+ *        identifier
+ *        qualifiedName
+ *        punctuation
+ *        common source constructs
+ *
+ * 3. Type provides:
+ *
+ *        typeExpression
+ *
+ *    when IO declarations or semantic extensions need type syntax.
+ *
+ * 4. Expressions provides:
+ *
+ *        expression
+ *        argumentList
+ *
+ *    through the canonical expression composition.
+ *
+ * 5. EffectOperations provides:
+ *
+ *        effectOperationReference
+ *        effectInvocation
+ *        effectOperationUse
+ *
+ * 6. EffectSets provides:
+ *
+ *        effectReference
+ *        effectReferenceList
+ *        effectSet
+ *
+ * 7. This file provides IO-prefixed wrappers only.
+ *
+ * 8. `grammar/effects/effects.g4` remains the generic effect composition root.
+ *
+ * 9. `grammar/statements/effects.g4` remains the universal statement-level
+ *    effect adapter.
+ *
+ * 10. `grammar/expressions/effects.g4` remains the expression-level effect
+ *     adapter.
+ *
+ * 11. Semantic analysis classifies resolved operation/effect identities as IO
+ *     where appropriate.
+ *
+ * 12. Capability/resource/policy analysis occurs after parsing.
+ *
+ * 13. Target realization occurs after semantic analysis.
+ *
+ * ============================================================================
+ * ANTLR IMPORT GRAPH
+ * ============================================================================
+ *
+ * The intended dependency graph is:
+ *
+ *     IO
+ *      |
+ *      +--> Core
+ *      |
+ *      +--> Type
+ *      |
+ *      +--> Expressions
+ *      |
+ *      +--> EffectOperations
+ *      |       |
+ *      |       +--> Core
+ *      |       +--> Expressions
+ *      |
+ *      +--> EffectSets
+ *              |
+ *              +--> Core
+ *
+ * No imported grammar may import IO.
+ *
+ * This keeps IO a leaf domain integration grammar.
+ *
+ * ============================================================================
+ * RULE DESIGN
+ * ============================================================================
+ *
+ * The rules below are deliberately thin.
+ *
+ * A thin domain adapter is preferable to duplicating generic effect syntax.
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * ANTLR GRAMMAR DECLARATION
  * ============================================================================
  */
 
 parser grammar IO;
 
 options {
-    tokenVocab = ZamaniTokens;
+    tokenVocab = ZamaniLexer;
 }
 
-import Core, Types, Expressions;
+import
+    Core,
+    Type,
+    Expressions,
+    EffectOperations,
+    EffectSets
+;
 
 
 /*
  * ============================================================================
- * 1. IO DOMAIN REFERENCE
+ * IO OPERATION REFERENCE
  * ============================================================================
  *
- * An IO domain is a qualified source-level name.
- *
- * Examples:
- *
- *     io
- *     io::file
- *     io::stream
- *     application::input
- *     device::serial
- *
- * No particular name is reserved by this grammar.
- */
-ioDomainReference
-    : qualifiedName
-    ;
-
-
-/*
- * ============================================================================
- * 2. IO OPERATION REFERENCE
- * ============================================================================
+ * An IO operation is represented by the canonical generic effect-operation
+ * reference.
  *
  * Examples:
  *
  *     io::read
  *     io::write
+ *     io::stream::receive
+ *     io::file::open
+ *     io::device::transfer
+ *
+ * No operation names are enumerated.
+ *
+ * Semantic analysis determines whether the resolved operation belongs to the
+ * IO domain.
+ */
+
+ioOperationReference
+    : effectOperationReference
+    ;
+
+
+/*
+ * ============================================================================
+ * IO OPERATION INVOCATION
+ * ============================================================================
+ *
+ * Reuses the canonical effect invocation syntax.
+ *
+ * Examples:
+ *
+ *     io::read(source)
+ *     io::write(value)
+ *     io::stream::receive(channel)
+ *
+ * Argument syntax remains owned by the expression subsystem.
+ */
+
+ioOperationInvocation
+    : effectInvocation
+    ;
+
+
+/*
+ * ============================================================================
+ * IO OPERATION USE
+ * ============================================================================
+ *
+ * Stable IO-domain wrapper around the canonical effect operation use.
+ *
+ * This rule exists for:
+ *
+ *     - domain-specific semantic tooling;
+ *     - parser listeners;
+ *     - AST conversion boundaries;
+ *     - conformance tooling;
+ *     - future IO-domain extensions.
+ *
+ * It does not create a second effect-operation language.
+ */
+
+ioOperationUse
+    : effectOperationUse
+    ;
+
+
+/*
+ * ============================================================================
+ * IO EFFECT REFERENCE
+ * ============================================================================
+ *
+ * Reuses the canonical effect reference syntax.
+ *
+ * Examples:
+ *
+ *     io
+ *     io::storage
+ *     io::stream
+ *     io::device
+ *
+ * Whether the referenced effect is actually declared as an IO effect is a
+ * semantic question.
+ */
+
+ioEffectReference
+    : effectReference
+    ;
+
+
+/*
+ * ============================================================================
+ * IO EFFECT REFERENCE LIST
+ * ============================================================================
+ *
+ * Reuses the canonical unbounded effect-reference list.
+ *
+ * Examples:
+ *
+ *     io
+ *
+ *     io, data
+ *
+ *     io::read, io::write, data::transform
+ *
+ * No fixed number of effects is imposed.
+ */
+
+ioEffectReferenceList
+    : effectReferenceList
+    ;
+
+
+/*
+ * ============================================================================
+ * IO EFFECT SET
+ * ============================================================================
+ *
+ * Reuses the canonical effect-set representation.
+ *
+ * Example:
+ *
+ *     {
+ *         io::read,
+ *         io::write
+ *     }
+ *
+ * This grammar does not assign special semantics to the entries.
+ *
+ * Semantic analysis performs IO-domain classification.
+ */
+
+ioEffectSet
+    : effectSet
+    ;
+
+
+/*
+ * ============================================================================
+ * COMPLETION CRITERIA
+ * ============================================================================
+ *
+ * This file is DONE when all of the following are true:
+ *
+ * [x] It is a parser grammar.
+ *
+ * [x] It uses ZamaniLexer as its token vocabulary.
+ *
+ * [x] It does not define lexer rules.
+ *
+ * [x] It does not duplicate generic effect-operation syntax.
+ *
+ * [x] It does not duplicate generic effect-set syntax.
+ *
+ * [x] It does not duplicate generic handler syntax.
+ *
+ * [x] It does not define a closed IO operation catalogue.
+ *
+ * [x] It does not reserve application-specific IO words.
+ *
+ * [x] It does not select hardware.
+ *
+ * [x] It does not select an operating system.
+ *
+ * [x] It does not impose buffer-size limits.
+ *
+ * [x] It does not impose device-count limits.
+ *
+ * [x] It does not impose machine-size limits.
+ *
+ * [x] It contains no MAX_* machine-capacity constants.
+ *
+ * [x] It contains no Rust actions.
+ *
+ * [x] It contains no unsafe implementation requirement.
+ *
+ * [x] It preserves the canonical effect-operation boundary.
+ *
+ * [x] It preserves the canonical effect-set boundary.
+ *
+ * [x] It remains open-world.
+ *
+ * [x] It can be integrated without modifying generic effect semantics.
+ *
+ * [x] It can participate in classical, quantum, HDL, distributed, AI,
+ *     accelerator, embedded, and future-domain programs without changing the
+ *     universal IO grammar.
+ *
+ * ============================================================================
+ * REQUIRED CONFORMANCE TESTS
+ * ============================================================================
+ *
+ * Positive parser cases:
+ *
+ *     io::read
+ *     io::write
  *     io::file::open
  *     io::stream::receive
- *     custom::transport::send
+ *     io::device::transfer
+ *     vendor::io::operation
+ *     future::io::operation
  *
- * The grammar does not enumerate operation names.
- */
-ioOperationReference
-    : qualifiedName
-    ;
-
-
-/*
- * ============================================================================
- * 3. IO OPERATION ARGUMENTS
- * ============================================================================
+ * Positive invocation cases:
  *
- * IO arguments are ordinary Zamani expressions.
- *
- * This is essential for composability:
- *
- *     perform io::write(buffer);
- *
- *     perform io::write(transform(data));
- *
- *     perform io::read(target[index]);
- *
- * The IO grammar does not create a second expression language.
- */
-ioOperationArguments
-    : LPAREN
-      argumentList?
-      RPAREN
-    ;
-
-
-/*
- * ============================================================================
- * 4. IO OPERATION INVOCATION
- * ============================================================================
- *
- * An IO invocation is a source-level operation reference followed by optional
- * arguments.
- *
- * Examples:
- *
- *     io::read(input)
- *     io::write(output)
- *     io::file::open(path)
- *
- * Whether the operation exists is a semantic question.
- */
-ioOperationInvocation
-    : ioOperationReference
-      ioOperationArguments?
-    ;
-
-
-/*
- * ============================================================================
- * 5. IO PERFORM EXPRESSION
- * ============================================================================
- *
- * Explicit effect execution:
- *
- *     perform io::read(input)
- *     perform io::write(output)
- *
- * `perform` is already a generic effect-system keyword.
- *
- * This rule only constrains the operand to the IO-domain operation form.
- */
-ioPerformExpression
-    : K_PERFORM
-      ioOperationInvocation
-    ;
-
-
-/*
- * ============================================================================
- * 6. IO PERFORM STATEMENT
- * ============================================================================
- */
-ioPerformStatement
-    : ioPerformExpression
-      SEMICOLON?
-    ;
-
-
-/*
- * ============================================================================
- * 7. IO EFFECT REFERENCE
- * ============================================================================
- *
- * Examples:
- *
- *     IO
- *     io
- *     io::File
- *     io::Network
- *     application::Input
- *
- * No built-in effect name is imposed.
- */
-ioEffectReference
-    : qualifiedName
-    ;
-
-
-/*
- * ============================================================================
- * 8. IO EFFECT LIST
- * ============================================================================
- *
- * Example:
- *
- *     with effects {
- *         io::read,
- *         io::write
- *     }
- *
- * The list has no fixed size.
- */
-ioEffectReferenceList
-    : ioEffectReference
-      (COMMA ioEffectReference)*
-      COMMA?
-    ;
-
-
-/*
- * ============================================================================
- * 9. IO EFFECT SET
- * ============================================================================
- */
-ioEffectSet
-    : LBRACE
-      ioEffectReferenceList?
-      RBRACE
-    ;
-
-
-/*
- * ============================================================================
- * 10. IO EFFECT CLAUSE
- * ============================================================================
- *
- * Example:
- *
- *     with effects {
- *         io::read,
- *         io::write
- *     }
- *
- * This remains syntactic information only.
- */
-ioEffectClause
-    : K_WITH
-      EFFECTS
-      ioEffectSet
-    ;
-
-
-/*
- * ============================================================================
- * 11. IO OPERATION DECLARATION
- * ============================================================================
- *
- * This permits domain-specific IO effect declarations while reusing the
- * canonical type/expression grammar.
- *
- * Example:
- *
- *     effect io::Stream {
- *         fn receive(buffer: Buffer) -> Result;
- *     }
- *
- * IMPORTANT:
- *
- * The surrounding generic effect declaration is owned by
- * effect-declarations.g4.
- *
- * This rule only defines the operation-signature composition used by an IO
- * domain.
- */
-ioOperationDeclaration
-    : ioOperationAttributes*
-      K_FN
-      identifier
-      ioGenericParameters?
-      LPAREN
-      ioParameterList?
-      RPAREN
-      ioReturnClause?
-      ioWhereClause?
-      SEMICOLON?
-    ;
-
-
-/*
- * ============================================================================
- * 12. IO OPERATION ATTRIBUTES
- * ============================================================================
- *
- * `async` is a source-level declaration modifier.
- *
- * It does not mean:
- *
- *     one thread
- *     one core
- *     one queue
- *     one CPU
- *     one device.
- */
-ioOperationAttributes
-    : K_ASYNC
-    | attribute
-    ;
-
-
-/*
- * ============================================================================
- * 13. IO PARAMETER LIST
- * ============================================================================
- */
-ioParameterList
-    : ioParameter
-      (COMMA ioParameter)*
-      COMMA?
-    ;
-
-
-/*
- * ============================================================================
- * 14. IO PARAMETER
- * ============================================================================
- *
- * Parameters use normal Zamani types.
- */
-ioParameter
-    : ioParameterModifier*
-      identifier
-      ioParameterType?
-      ioParameterDefault?
-    ;
-
-
-/*
- * ============================================================================
- * 15. IO PARAMETER MODIFIER
- * ============================================================================
- */
-ioParameterModifier
-    : K_MUT
-    ;
-
-
-/*
- * ============================================================================
- * 16. IO PARAMETER TYPE
- * ============================================================================
- */
-ioParameterType
-    : COLON
-      typeExpression
-    ;
-
-
-/*
- * ============================================================================
- * 17. IO PARAMETER DEFAULT
- * ============================================================================
- *
- * Default values are ordinary Zamani expressions.
- */
-ioParameterDefault
-    : EQUALS
-      expression
-    ;
-
-
-/*
- * ============================================================================
- * 18. IO RETURN CLAUSE
- * ============================================================================
- */
-ioReturnClause
-    : THIN_ARROW
-      typeExpression
-    ;
-
-
-/*
- * ============================================================================
- * 19. IO GENERIC PARAMETERS
- * ============================================================================
- *
- * There is deliberately no finite generic arity.
- */
-ioGenericParameters
-    : LESS_THAN
-      ioGenericParameter
-      (COMMA ioGenericParameter)*
-      COMMA?
-      GREATER_THAN
-    ;
-
-
-/*
- * ============================================================================
- * 20. IO GENERIC PARAMETER
- * ============================================================================
- */
-ioGenericParameter
-    : identifier
-      ioGenericBounds?
-    ;
-
-
-/*
- * ============================================================================
- * 21. IO GENERIC BOUNDS
- * ============================================================================
- */
-ioGenericBounds
-    : COLON
-      ioGenericBound
-      (PLUS ioGenericBound)*
-    ;
-
-
-/*
- * ============================================================================
- * 22. IO GENERIC BOUND
- * ============================================================================
- *
- * Bounds are type expressions.
- */
-ioGenericBound
-    : typeExpression
-    ;
-
-
-/*
- * ============================================================================
- * 23. IO WHERE CLAUSE
- * ============================================================================
- *
- * Delegates constraint syntax to the canonical shared grammar.
- */
-ioWhereClause
-    : whereClause
-    ;
-
-
-/*
- * ============================================================================
- * 24. IO HANDLER PATTERN
- * ============================================================================
- *
- * Examples:
- *
- *     io::read(value)
+ *     io::read(source)
  *     io::write(value)
- *     io::file::open(path)
+ *     io::stream::receive(channel)
+ *     io::device::transfer(data)
  *
- * The operation name remains open-world.
- */
-ioHandlerPattern
-    : ioOperationReference
-      ioOperationArguments?
-    ;
-
-
-/*
- * ============================================================================
- * 25. IO HANDLER ARM
- * ============================================================================
+ * Positive effect references:
  *
- * Example:
+ *     io
+ *     io::storage
+ *     io::stream
+ *     io::device
  *
- *     case io::read(source) => resume(value)
+ * Positive effect sets:
  *
- * Handler semantics are owned by effect-handling/semantic analysis.
- */
-ioHandlerArm
-    : CASE
-      ioHandlerPattern
-      FAT_ARROW
-      (
-          blockExpression
-        | expression
-      )
-      COMMA?
-    ;
-
-
-/*
- * ============================================================================
- * 26. IO HANDLER
- * ============================================================================
- */
-ioHandler
-    : LBRACE
-      ioHandlerArm*
-      RBRACE
-    ;
-
-
-/*
- * ============================================================================
- * 27. IO HANDLING EXPRESSION
- * ============================================================================
- *
- * Example:
- *
- *     handle computation {
- *         case io::read(source) => resume(value)
+ *     {
+ *         io::read,
+ *         io::write
  *     }
  *
- * `handle` itself belongs to the general effect language.
- */
-ioHandleExpression
-    : K_HANDLE
-      expression
-      ioHandler
-    ;
-
-
-/*
+ *     {
+ *         io::read,
+ *         data::transform,
+ *         networking::request
+ *     }
+ *
+ * Cross-domain cases:
+ *
+ *     perform io::read(input);
+ *     perform quantum::measure(state);
+ *     perform io::write(result);
+ *
+ *     perform io::read(data);
+ *     perform accelerator::compute(data);
+ *     perform io::write(result);
+ *
+ *     perform io::read(input);
+ *     perform distributed::send(input);
+ *
+ * Negative semantic cases:
+ *
+ *     unknown IO operation
+ *     unresolved IO effect
+ *     missing IO capability
+ *     prohibited IO policy
+ *     incompatible IO argument type
+ *     unavailable IO realization
+ *
+ * These semantic failures MUST NOT be encoded as parser keyword enumerations.
+ *
  * ============================================================================
- * 28. IO RESOURCE OPERATION
- * ============================================================================
- *
- * An IO resource operation may have a resource expression as its first
- * argument, but the grammar does not assume what that resource represents.
- *
- * Examples:
- *
- *     io::read(resource, buffer)
- *     io::write(resource, data)
- *
- * This rule intentionally remains structural.
- */
-ioResourceOperation
-    : ioOperationReference
-      ioOperationArguments
-    ;
-
-
-/*
- * ============================================================================
- * 29. IO ASYNCHRONOUS OPERATION
- * ============================================================================
- *
- * Async syntax is represented through the normal expression language.
- *
- * This rule does not prescribe a scheduling implementation.
- */
-ioAsyncOperation
-    : K_ASYNC
-      ioOperationInvocation
-    ;
-
-
-/*
- * ============================================================================
- * 30. IO COMPOSITION
+ * SCALABILITY TESTS
  * ============================================================================
  *
- * Allows an aggregate grammar to consume any IO-domain effect construct
- * without introducing a closed IO catalogue.
- */
-ioConstruct
-    : ioPerformStatement
-    | ioHandleExpression
-    | ioOperationDeclaration
-    | ioEffectClause
-    | ioAsyncOperation
-    ;
-
-
-/*
+ * Tests MUST cover:
+ *
+ *     deeply qualified IO names;
+ *     large effect sets;
+ *     large argument lists;
+ *     large source programs;
+ *     many independent IO operations;
+ *     many domains sharing the same effect machinery;
+ *     nested effect usage;
+ *     concurrent IO operations;
+ *     distributed IO operations;
+ *     hybrid classical/quantum IO;
+ *     hardware-facing IO;
+ *     simulated IO.
+ *
+ * The tests MUST use generated/scaled inputs rather than introducing grammar
+ * constants.
+ *
  * ============================================================================
- * ARCHITECTURAL INVARIANTS
+ * HARD-CODING AUDIT
  * ============================================================================
  *
- * The following invariants MUST remain true:
+ * Forbidden in this file:
  *
- * 1. No fixed IO operation catalogue.
+ *     MAX_QUBITS
+ *     MAX_CPUS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_NODES
+ *     MAX_MEMORY
+ *     MAX_THREADS
+ *     MAX_TENSOR_RANK
+ *     MAX_REGISTER_WIDTH
+ *     MAX_NETWORK_SIZE
+ *     MAX_DEVICE_COUNT
  *
- * 2. No K_IO token is required.
+ * Also forbidden:
  *
- * 3. No filesystem-specific syntax is required.
+ *     fixed IO operation catalogues;
+ *     fixed device catalogues;
+ *     fixed filesystem catalogues;
+ *     fixed operating-system catalogues;
+ *     fixed network-interface catalogues;
+ *     physical device IDs;
+ *     backend IDs;
+ *     machine IDs.
  *
- * 4. No operating-system-specific syntax is required.
+ * ============================================================================
+ * FINAL ARCHITECTURAL GUARANTEE
+ * ============================================================================
  *
- * 5. No device IDs are encoded.
+ * This grammar describes IO as an OPEN semantic domain over Zamani's universal
+ * effect system.
  *
- * 6. No resource counts are encoded.
+ * Therefore:
  *
- * 7. No memory capacities are encoded.
+ *     source program
+ *          |
+ *          v
+ *     generic effect syntax
+ *          |
+ *          v
+ *     IO semantic classification
+ *          |
+ *          v
+ *     capability/resource/policy analysis
+ *          |
+ *          v
+ *     target-independent semantic model
+ *          |
+ *          +-------------------+-------------------+
+ *          |                   |                   |
+ *          v                   v                   v
+ *      classical          quantum::ir        HDL/hardware
+ *          |                   |                   |
+ *          +-------------------+-------------------+
+ *                              |
+ *                              v
+ *                         optimization
+ *                              |
+ *                              v
+ *                     lowering/scheduling
+ *                              |
+ *                              v
+ *                         HAL/realization
  *
- * 8. No machine topology is encoded.
+ * No IO construct in this file requires rewriting when a new:
  *
- * 9. No runtime calls are made from grammar actions.
+ *     CPU
+ *     GPU
+ *     FPGA
+ *     ASIC
+ *     accelerator
+ *     QPU
+ *     simulator
+ *     embedded platform
+ *     cluster
+ *     cloud platform
+ *     network fabric
+ *     storage system
+ *     future computational substrate
  *
- * 10. No unsafe Rust is introduced.
+ * is introduced.
  *
- * 11. IO does not define a second expression language.
- *
- * 12. IO does not define an IR.
- *
- * 13. IO does not define capability semantics.
- *
- * 14. IO does not define resource semantics.
- *
- * 15. IO does not define hardware semantics.
- *
- * 16. IO does not define quantum semantics.
- *
- * 17. IO remains composable with classical, quantum, HDL, distributed,
- *     networking, AI, accelerator, and future domains.
- *
- * 18. The grammar remains valid regardless of the number of available
- *     machines/resources.
- *
- * 19. The grammar remains valid when new IO domains are introduced.
- *
- * 20. New IO operation names must not require grammar modification.
+ * That is the required POCO-REAF property of the IO grammar.
  *
  * ============================================================================
  */
