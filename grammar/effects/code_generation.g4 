@@ -1,0 +1,2191 @@
+/*
+ * ============================================================================
+ * Zamani Universal Programming Language
+ * ============================================================================
+ *
+ * File:
+ *     grammar/effects/code_generation.g4
+ *
+ * Grammar identity:
+ *     CodeGenerationEffects
+ *
+ * Status:
+ *     Production modular effect-domain adapter
+ *
+ * Grammar technology:
+ *     ANTLR4 parser grammar
+ *
+ * Language/compiler baseline:
+ *     Rust 1.97 / Rust 1.97.1
+ *     Rust Edition 2021
+ *
+ * Safety:
+ *     No embedded Rust.
+ *     No unsafe code.
+ *     No semantic predicates.
+ *     No parser actions.
+ *     No runtime execution.
+ *     No filesystem access.
+ *     No network access.
+ *     No environment inspection.
+ *     No hardware discovery.
+ *
+ * ============================================================================
+ * 1. PURPOSE
+ * ============================================================================
+ *
+ * This file defines the CODE-GENERATION EFFECT boundary of Zamani.
+ *
+ * It is deliberately an adapter rather than a second code-generation
+ * language.
+ *
+ * The distinction is:
+ *
+ *     grammar/metaprogramming/generation.g4
+ *         |
+ *         +--> owns generation SOURCE SYNTAX
+ *
+ *     grammar/effects/effect-operations.g4
+ *         |
+ *         +--> owns generic EFFECT OPERATION USE
+ *
+ *     grammar/effects/effect-sets.g4
+ *         |
+ *         +--> owns EFFECT REFERENCES / EFFECT SETS
+ *
+ *     this file
+ *         |
+ *         +--> owns the CODE-GENERATION EFFECT DOMAIN BOUNDARY
+ *
+ * Code generation is therefore treated as an effect-domain classification
+ * over canonical effect syntax.
+ *
+ * This file MUST NOT become a second implementation of:
+ *
+ *     generation
+ *     generationRequest
+ *     generationTargetedRequest
+ *     macro expansion
+ *     quotation
+ *     reflection
+ *     specialization
+ *     compile-time execution
+ *     syntax-tree construction
+ *     source emission
+ *
+ * Those facilities have their own authoritative owners.
+ *
+ * ============================================================================
+ * 2. ARCHITECTURAL AUTHORITY
+ * ============================================================================
+ *
+ * Repository architecture:
+ *
+ *     grammar/DESIGN.md
+ *
+ * Grammar entry point:
+ *
+ *     grammar/README.md
+ *
+ * Canonical parser composition:
+ *
+ *     grammar/Zamani.g4
+ *     grammar/antlr/ZamaniParser.g4
+ *
+ * Canonical lexer:
+ *
+ *     grammar/antlr/ZamaniLexer.g4
+ *
+ * Canonical effect composition:
+ *
+ *     grammar/effects/effects.g4
+ *
+ * Generic effect operation syntax:
+ *
+ *     grammar/effects/effect-operations.g4
+ *
+ * Generic effect-set syntax:
+ *
+ *     grammar/effects/effect-sets.g4
+ *
+ * Code-generation source syntax:
+ *
+ *     grammar/metaprogramming/generation.g4
+ *
+ * Metaprogramming composition:
+ *
+ *     grammar/metaprogramming/metaprogramming.g4
+ *
+ * Semantic/contract specifications:
+ *
+ *     grammar/spec/
+ *     grammar/specification/
+ *
+ * ============================================================================
+ * 3. OWNERSHIP
+ * ============================================================================
+ *
+ * THIS FILE OWNS:
+ *
+ *     codeGenerationEffect
+ *     codeGenerationEffectReference
+ *     codeGenerationEffectReferenceList
+ *     codeGenerationEffectSet
+ *     codeGenerationEffectOperationReference
+ *     codeGenerationEffectInvocation
+ *     codeGenerationEffectOperationUse
+ *
+ * These are domain adapters around canonical generic effect constructs.
+ *
+ * THIS FILE DOES NOT OWN:
+ *
+ *     identifier
+ *     qualifiedName
+ *     expression
+ *     typeExpression
+ *     argumentList
+ *     attributes
+ *     effectDeclaration
+ *     effectOperationDeclaration
+ *     effectReference
+ *     effectReferenceList
+ *     effectSet
+ *     effectOperationReference
+ *     effectInvocation
+ *     effectOperationUse
+ *     generation
+ *     generationRequest
+ *     generationTargetedRequest
+ *     macro syntax
+ *     reflection syntax
+ *     specialization syntax
+ *     quotation syntax
+ *     compile-time execution syntax
+ *     capabilities
+ *     resources
+ *     contracts
+ *     policies
+ *     provenance
+ *     security
+ *     canonical AST implementation
+ *     semantic analysis
+ *     canonical IR
+ *     quantum::ir
+ *     HDL representation
+ *     hardware realization
+ *     runtime dispatch
+ *
+ * ============================================================================
+ * 4. DEPENDENCY CONTRACT
+ * ============================================================================
+ *
+ * DEPENDS_ON:
+ *
+ *     Core
+ *     Expressions
+ *     EffectOperations
+ *     EffectSets
+ *
+ * EXPORTS:
+ *
+ *     codeGenerationEffect
+ *     codeGenerationEffectReference
+ *     codeGenerationEffectReferenceList
+ *     codeGenerationEffectSet
+ *     codeGenerationEffectOperationReference
+ *     codeGenerationEffectInvocation
+ *     codeGenerationEffectOperationUse
+ *
+ * CONSUMED_BY:
+ *
+ *     code-generation semantic analysis
+ *     effect analysis
+ *     metaprogramming semantic analysis
+ *     compiler conformance tooling
+ *     effect-domain validation
+ *     grammar/effects consumers that explicitly need code-generation
+ *         classification
+ *
+ * AST_OWNER:
+ *
+ *     domain-neutral frontend AST
+ *
+ * SEMANTIC_OWNER:
+ *
+ *     effect semantic analysis
+ *     metaprogramming/code-generation semantic analysis
+ *
+ * IR_OWNER:
+ *
+ *     canonical semantic representation
+ *     downstream classical / quantum / HDL / hardware / distributed /
+ *     accelerator representations as appropriate
+ *
+ * TEST_OWNER:
+ *
+ *     grammar/tests/effects/code_generation/
+ *
+ * SPEC_OWNER:
+ *
+ *     grammar/spec/effects.md
+ *     grammar/specification/
+ *
+ * ============================================================================
+ * 5. LEXER CONTRACT
+ * ============================================================================
+ *
+ * The canonical lexer vocabulary is consumed.
+ *
+ * This file MUST NOT define lexer rules.
+ *
+ * This file MUST NOT introduce:
+ *
+ *     CODEGEN
+ *     GENERATE
+ *     EMIT
+ *     TEMPLATE
+ *     SOURCE
+ *     TARGET
+ *     BACKEND
+ *     LANGUAGE
+ *
+ * as local tokens.
+ *
+ * Code-generation effect identity is open-world.
+ *
+ * Existing lexical spellings, including any legacy code-generation keyword
+ * already recognized by the generic effect grammar, remain governed by the
+ * canonical lexer.
+ *
+ * This adapter does not require a new keyword merely to classify an effect.
+ *
+ * ============================================================================
+ * 6. GRAMMAR DEPENDENCIES
+ * ============================================================================
+ *
+ * Core provides canonical:
+ *
+ *     qualifiedName
+ *     identifier
+ *     names
+ *     attributes
+ *     other language-wide syntax
+ *
+ * Expressions provides canonical:
+ *
+ *     expression
+ *     argumentList
+ *     other expression-level syntax
+ *
+ * EffectOperations provides:
+ *
+ *     effectOperationReference
+ *     effectInvocation
+ *     effectOperationUse
+ *
+ * EffectSets provides:
+ *
+ *     effectReference
+ *     effectReferenceList
+ *     effectSet
+ *
+ * This file MUST NOT redefine any of those constructs.
+ *
+ * ============================================================================
+ * 7. EFFECT / GENERATION SEPARATION
+ * ============================================================================
+ *
+ * Code generation has two distinct language concerns.
+ *
+ * SOURCE GENERATION SYNTAX:
+ *
+ *     generation
+ *     generationRequest
+ *     generationTargetedRequest
+ *     generationInput
+ *     generation options
+ *
+ * These belong to:
+ *
+ *     grammar/metaprogramming/generation.g4
+ *
+ * EFFECT REPRESENTATION:
+ *
+ *     an operation that semantically performs or requests code generation
+ *
+ * This file provides the second boundary.
+ *
+ * Therefore the following conceptual relationship is intentional:
+ *
+ *     generation source construct
+ *             |
+ *             v
+ *     semantic generation operation
+ *             |
+ *             v
+ *     code-generation effect
+ *
+ * and:
+ *
+ *     code-generation effect
+ *             |
+ *             v
+ *     generic effect system
+ *
+ * This avoids coupling the generic effect system to the complete
+ * metaprogramming grammar.
+ *
+ * ============================================================================
+ * 8. OPEN-WORLD CODE-GENERATION EFFECT MODEL
+ * ============================================================================
+ *
+ * Code-generation effect identities are OPEN-WORLD.
+ *
+ * The grammar MUST NOT enumerate:
+ *
+ *     source languages
+ *     target languages
+ *     output formats
+ *     compiler backends
+ *     generators
+ *     template engines
+ *     code emitters
+ *     architectures
+ *     processors
+ *     accelerators
+ *     vendors
+ *     operating systems
+ *     file formats
+ *     intermediate representations
+ *     device types
+ *
+ * Examples of possible semantic identities include:
+ *
+ *     code_generation::generate
+ *     code_generation::emit
+ *     code_generation::transform
+ *     code_generation::specialize
+ *     code_generation::derive
+ *     code_generation::materialize
+ *     generator::source
+ *     generator::artifact
+ *     compiler::generation
+ *     dialect::generation
+ *     vendor::extension::generation
+ *     future::code_generation::operation
+ *
+ * These are examples of possible semantic identities only.
+ *
+ * They are NOT a built-in vocabulary.
+ *
+ * Whether a name represents a code-generation effect is determined by
+ * semantic resolution and the registered semantic environment.
+ *
+ * ============================================================================
+ * 9. WHY OPERATION NAMES ARE NOT ENUMERATED
+ * ============================================================================
+ *
+ * Zamani must remain extensible.
+ *
+ * A future generator may generate:
+ *
+ *     Zamani source
+ *     another language
+ *     HDL
+ *     quantum source
+ *     accelerator source
+ *     configuration
+ *     data representation
+ *     deployment description
+ *     executable representation
+ *     hardware description
+ *     future computational representation
+ *
+ * The universal parser must not require a grammar modification for each new
+ * generation mechanism.
+ *
+ * Therefore:
+ *
+ *     operation identity = source-level name
+ *
+ * while:
+ *
+ *     operation meaning = semantic information
+ *
+ * ============================================================================
+ * 10. PUBLIC ENTRY POINT
+ * ============================================================================
+ *
+ * `codeGenerationEffect` is the principal public entry point owned by this
+ * grammar.
+ *
+ * It deliberately delegates all ordinary effect syntax.
+ *
+ * ============================================================================
+ */
+
+parser grammar CodeGenerationEffects;
+
+options {
+    tokenVocab = ZamaniLexer;
+}
+
+import Core,
+       Expressions,
+       EffectOperations,
+       EffectSets;
+
+
+/*
+ * ============================================================================
+ * 11. CODE-GENERATION EFFECT
+ * ============================================================================
+ *
+ * This is the principal domain adapter.
+ *
+ * It provides reusable parser boundaries for consumers that need to
+ * explicitly identify code-generation-related effect syntax.
+ *
+ * It does not prove semantic code-generation classification.
+ */
+
+codeGenerationEffect
+    : codeGenerationEffectReference
+    | codeGenerationEffectReferenceList
+    | codeGenerationEffectSet
+    | codeGenerationEffectInvocation
+    | codeGenerationEffectOperationUse
+    | codeGenerationEffectOperationReference
+    ;
+
+
+/*
+ * ============================================================================
+ * 12. CODE-GENERATION EFFECT REFERENCE
+ * ============================================================================
+ *
+ * Delegates effect identity to the canonical effect-reference grammar.
+ *
+ * Examples of possible semantic identities:
+ *
+ *     code_generation::generate
+ *     code_generation::emit
+ *     compiler::generation
+ *     future::generation::operation
+ *
+ * These examples do not establish built-in operations.
+ */
+
+codeGenerationEffectReference
+    : effectReference
+    ;
+
+
+/*
+ * ============================================================================
+ * 13. CODE-GENERATION EFFECT REFERENCE LIST
+ * ============================================================================
+ *
+ * Delegates collection syntax to the canonical effect-set subsystem.
+ *
+ * Source order is preserved by the parse structure.
+ *
+ * Semantic normalization occurs downstream.
+ */
+
+codeGenerationEffectReferenceList
+    : effectReferenceList
+    ;
+
+
+/*
+ * ============================================================================
+ * 14. CODE-GENERATION EFFECT SET
+ * ============================================================================
+ *
+ * Delegates effect-set syntax to the generic effect-set owner.
+ *
+ * A set may contain code-generation effects alongside any other effects.
+ *
+ * Conceptual example:
+ *
+ *     {
+ *         code_generation::generate,
+ *         io::read,
+ *         provenance::record
+ *     }
+ *
+ * This file does not classify every member.
+ *
+ * Semantic analysis performs domain classification.
+ */
+
+codeGenerationEffectSet
+    : effectSet
+    ;
+
+
+/*
+ * ============================================================================
+ * 15. CODE-GENERATION EFFECT OPERATION REFERENCE
+ * ============================================================================
+ *
+ * Delegates operation identity to EffectOperations.
+ *
+ * No generator catalogue is embedded here.
+ */
+
+codeGenerationEffectOperationReference
+    : effectOperationReference
+    ;
+
+
+/*
+ * ============================================================================
+ * 16. CODE-GENERATION EFFECT INVOCATION
+ * ============================================================================
+ *
+ * Delegates operation invocation to the generic effect-operation subsystem.
+ *
+ * Conceptual examples:
+ *
+ *     code_generation::generate(source)
+ *     code_generation::emit(ast)
+ *     code_generation::specialize(program, parameters)
+ *
+ * These examples describe source shape only.
+ *
+ * They do not establish built-in operations.
+ */
+
+codeGenerationEffectInvocation
+    : effectInvocation
+    ;
+
+
+/*
+ * ============================================================================
+ * 17. CODE-GENERATION EFFECT OPERATION USE
+ * ============================================================================
+ *
+ * Delegates effect-operation use to the canonical effect-operation grammar.
+ *
+ * This is the principal bridge for:
+ *
+ *     perform code_generation::generate(...)
+ *
+ * without redefining `perform`.
+ */
+
+codeGenerationEffectOperationUse
+    : effectOperationUse
+    ;
+
+
+/*
+ * ============================================================================
+ * 18. INTEGRATION ALIASES
+ * ============================================================================
+ *
+ * These aliases provide stable named boundaries for tooling and semantic
+ * consumers without introducing additional syntax.
+ */
+
+/*
+ * Reference-only integration boundary.
+ */
+codeGenerationEffectReferenceConstruct
+    : codeGenerationEffectReference
+    ;
+
+
+/*
+ * Operation-reference-only integration boundary.
+ */
+codeGenerationEffectOperationReferenceConstruct
+    : codeGenerationEffectOperationReference
+    ;
+
+
+/*
+ * Invocation-only integration boundary.
+ */
+codeGenerationEffectInvocationConstruct
+    : codeGenerationEffectInvocation
+    ;
+
+
+/*
+ * Operation-use integration boundary.
+ */
+codeGenerationEffectOperationUseConstruct
+    : codeGenerationEffectOperationUse
+    ;
+
+
+/*
+ * Effect-set integration boundary.
+ */
+codeGenerationEffectSetConstruct
+    : codeGenerationEffectSet
+    ;
+
+
+/*
+ * ============================================================================
+ * 19. GENERATION-SYNTAX BOUNDARY
+ * ============================================================================
+ *
+ * The generation grammar owns generation source syntax.
+ *
+ * This file MUST NOT import:
+ *
+ *     grammar/metaprogramming/generation.g4
+ *
+ * merely to classify generation effects.
+ *
+ * That would unnecessarily couple:
+ *
+ *     effect infrastructure
+ *
+ * to:
+ *
+ *     metaprogramming syntax
+ *
+ * and could create an import cycle.
+ *
+ * The semantic layer joins:
+ *
+ *     generation construct
+ *
+ * with:
+ *
+ *     code-generation effect
+ *
+ * after parsing.
+ *
+ * The intended architecture is:
+ *
+ *     source
+ *       |
+ *       +-----------------------------+
+ *       |                             |
+ *       v                             v
+ * generation syntax            effect syntax
+ *       |                             |
+ *       v                             v
+ * generation AST               effect AST
+ *       |                             |
+ *       +-------------+---------------+
+ *                     |
+ *                     v
+ *              semantic analysis
+ *                     |
+ *                     v
+ *              generation semantics
+ *
+ * ============================================================================
+ * 20. METAPROGRAMMING INTEGRATION
+ * ============================================================================
+ *
+ * `grammar/metaprogramming/generation.g4` owns:
+ *
+ *     generation
+ *     generationRequest
+ *     generationTargetedRequest
+ *     generationConstruct
+ *
+ * `grammar/metaprogramming/metaprogramming.g4` owns metaprogramming
+ * composition.
+ *
+ * This file must not redefine either subsystem.
+ *
+ * A generation construct may semantically imply or explicitly request a
+ * code-generation effect.
+ *
+ * That association belongs to semantic analysis.
+ *
+ * ============================================================================
+ * 21. MACRO INTEGRATION
+ * ============================================================================
+ *
+ * Macro expansion remains owned by:
+ *
+ *     grammar/macros/
+ *
+ * A macro may generate source, but:
+ *
+ *     macro expansion
+ *
+ * and:
+ *
+ *     code-generation effect
+ *
+ * are not automatically equivalent.
+ *
+ * Semantic analysis determines whether a particular macro operation produces
+ * or requires a code-generation effect.
+ *
+ * This grammar does not redefine macro syntax.
+ *
+ * ============================================================================
+ * 22. REFLECTION INTEGRATION
+ * ============================================================================
+ *
+ * Reflection remains owned by:
+ *
+ *     grammar/metaprogramming/reflection.g4
+ *
+ * Reflection may provide information consumed by code generation.
+ *
+ * Conversely, code generation may produce source that later undergoes
+ * reflection.
+ *
+ * These are semantic relationships, not a reason to merge grammars.
+ *
+ * This file does not import or redefine reflection syntax.
+ *
+ * ============================================================================
+ * 23. SPECIALIZATION INTEGRATION
+ * ============================================================================
+ *
+ * Specialization remains owned by:
+ *
+ *     grammar/metaprogramming/specialization.g4
+ *
+ * Specialization may cause code generation as an implementation consequence.
+ *
+ * The semantic layer determines whether a specialization:
+ *
+ *     requires;
+ *     produces;
+ *     propagates;
+ *     or discharges
+ *
+ * a code-generation effect.
+ *
+ * No specialization grammar is duplicated here.
+ *
+ * ============================================================================
+ * 24. COMPILE-TIME EXECUTION INTEGRATION
+ * ============================================================================
+ *
+ * Compile-time execution remains owned by the compile-time metaprogramming
+ * subsystem.
+ *
+ * Compile-time execution MUST NOT be assumed to have unrestricted code
+ * generation authority.
+ *
+ * A compile-time operation that generates source or artifacts may require
+ * explicit semantic authorization.
+ *
+ * Parsing this effect does not authorize execution.
+ *
+ * ============================================================================
+ * 25. QUOTATION / SYNTAX-TREE INTEGRATION
+ * ============================================================================
+ *
+ * Quotation and syntax-tree construction remain owned by their respective
+ * metaprogramming grammars.
+ *
+ * Generated syntax must preserve:
+ *
+ *     source span/origin information;
+ *     transformation provenance;
+ *     hygiene/scoping information where applicable;
+ *     semantic context;
+ *     compatibility information.
+ *
+ * Generated source must re-enter the normal Zamani frontend rather than
+ * bypassing:
+ *
+ *     lexer
+ *     parser
+ *     AST
+ *     validation
+ *     semantic analysis
+ *     effect analysis
+ *     capability analysis
+ *     resource analysis
+ *     policy analysis
+ *     provenance
+ *     canonical IR lowering
+ *
+ * ============================================================================
+ * 26. EFFECT / CAPABILITY SEPARATION
+ * ============================================================================
+ *
+ * A code-generation effect describes computational behavior.
+ *
+ * It does NOT automatically imply any capability.
+ *
+ * For example:
+ *
+ *     code_generation::generate
+ *
+ * does not itself imply:
+ *
+ *     filesystem.write
+ *     process.execute
+ *     native.execute
+ *     network.access
+ *     compiler.host.access
+ *     device.access
+ *
+ * Those capabilities must be established separately by semantic analysis and
+ * policy.
+ *
+ * ============================================================================
+ * 27. EFFECT / RESOURCE SEPARATION
+ * ============================================================================
+ *
+ * A code-generation effect does not encode:
+ *
+ *     memory capacity
+ *     storage capacity
+ *     processor count
+ *     accelerator count
+ *     execution width
+ *     compilation time
+ *     artifact count
+ *     source size
+ *     generated-code size
+ *
+ * Resource requirements are represented by the resource subsystem.
+ *
+ * This file does not allocate resources.
+ *
+ * ============================================================================
+ * 28. EFFECT / POLICY SEPARATION
+ * ============================================================================
+ *
+ * Code generation may be governed by policies concerning:
+ *
+ *     source transformation
+ *     generated artifacts
+ *     target specialization
+ *     native code
+ *     foreign code
+ *     filesystem access
+ *     network access
+ *     execution
+ *     reproducibility
+ *     provenance
+ *     security
+ *
+ * Policy syntax remains owned by the policy/security subsystems.
+ *
+ * A syntactically valid code-generation effect is NOT authorization.
+ *
+ * ============================================================================
+ * 29. EFFECT / CONTRACT SEPARATION
+ * ============================================================================
+ *
+ * Code-generation operations may participate in:
+ *
+ *     requires
+ *     ensures
+ *     invariant
+ *     assume
+ *     guarantee
+ *     property
+ *
+ * Contract syntax remains owned by validation.
+ *
+ * This file does not duplicate contract syntax.
+ *
+ * Semantic analysis may associate contracts with a code-generation effect.
+ *
+ * ============================================================================
+ * 30. PROVENANCE CONTRACT
+ * ============================================================================
+ *
+ * Code generation is transformation-heavy and therefore must integrate with
+ * the canonical provenance model.
+ *
+ * Semantic provenance may record:
+ *
+ *     source identity
+ *     source span
+ *     generator identity
+ *     transformation identity
+ *     input identities
+ *     generated artifact identity
+ *     semantic version
+ *     dialect/version
+ *     policy decision
+ *     capability decision
+ *     resource realization
+ *     verification result
+ *     parent transformation
+ *     generated-source origin
+ *
+ * This grammar does not create provenance records.
+ *
+ * It merely preserves the source structure required for semantic provenance.
+ *
+ * ============================================================================
+ * 31. DETERMINISM CONTRACT
+ * ============================================================================
+ *
+ * Parsing this grammar MUST be deterministic.
+ *
+ * The parse result may depend only on:
+ *
+ *     source token stream
+ *     grammar version
+ *     canonical lexical configuration
+ *     explicitly selected dialect configuration
+ *
+ * Parsing MUST NOT depend on:
+ *
+ *     compiler host
+ *     filesystem state
+ *     network state
+ *     hardware availability
+ *     device availability
+ *     resource availability
+ *     wall-clock time
+ *     randomness
+ *     runtime state
+ *     backend selection
+ *
+ * Generation itself may be deterministic or nondeterministic depending on its
+ * semantic contract.
+ *
+ * That distinction belongs downstream.
+ *
+ * ============================================================================
+ * 32. REPRODUCIBILITY CONTRACT
+ * ============================================================================
+ *
+ * When reproducibility is requested, semantic analysis may associate a
+ * code-generation effect with:
+ *
+ *     source identity
+ *     generator identity
+ *     generator version
+ *     dialect version
+ *     semantic configuration
+ *     input identity
+ *     transformation sequence
+ *     policy
+ *     deterministic execution requirements
+ *     provenance
+ *
+ * No fixed reproducibility implementation is mandated by this grammar.
+ *
+ * ============================================================================
+ * 33. SECURITY CONTRACT
+ * ============================================================================
+ *
+ * Parsing a code-generation effect MUST NOT:
+ *
+ *     generate source
+ *     write files
+ *     execute generated programs
+ *     invoke compilers
+ *     invoke interpreters
+ *     invoke shells
+ *     access credentials
+ *     access environment variables
+ *     access devices
+ *     access hardware
+ *     access the network
+ *     modify compiler state
+ *     modify persistent state
+ *
+ * Such operations belong to downstream, explicitly authorized phases.
+ *
+ * Sandboxing and authorization remain semantic/security concerns.
+ *
+ * ============================================================================
+ * 34. POCO-REAF CONTRACT
+ * ============================================================================
+ *
+ * Code-generation effects MUST preserve source portability.
+ *
+ * A source program must not become tied to the machine that compiled it merely
+ * because code generation occurs.
+ *
+ * In particular, this grammar does not encode:
+ *
+ *     CPU identity
+ *     GPU identity
+ *     FPGA identity
+ *     ASIC identity
+ *     QPU identity
+ *     physical qubit identity
+ *     node identity
+ *     device identity
+ *     memory-bank identity
+ *     physical address
+ *     vendor identity
+ *     topology
+ *     bus width
+ *     register width
+ *
+ * Target specialization belongs downstream.
+ *
+ * The semantic compiler may specialize generated representation for an
+ * available target while preserving source-level program meaning and declared
+ * constraints.
+ *
+ * ============================================================================
+ * 35. QUANTUM BOUNDARY
+ * ============================================================================
+ *
+ * Code generation may generate or transform quantum source.
+ *
+ * This does NOT create a code-generation quantum IR.
+ *
+ * The required semantic path remains:
+ *
+ *     generated quantum source
+ *          |
+ *          v
+ *     lexer
+ *          |
+ *          v
+ *     parser
+ *          |
+ *          v
+ *     domain-neutral AST
+ *          |
+ *          v
+ *     quantum semantic analysis
+ *          |
+ *          v
+ *     quantum::ir
+ *          |
+ *          v
+ *     optimization
+ *          |
+ *          v
+ *     decomposition
+ *          |
+ *          v
+ *     routing
+ *          |
+ *          v
+ *     scheduling
+ *          |
+ *          v
+ *     resilience / QEC
+ *          |
+ *          v
+ *     ZQN
+ *          |
+ *          v
+ *     HAL
+ *          |
+ *          v
+ *     target realization
+ *
+ * This file does not define:
+ *
+ *     qubits
+ *     physical qubits
+ *     quantum gates
+ *     coupling maps
+ *     calibration
+ *     pulse schedules
+ *     QEC codes
+ *     decoders
+ *     routing
+ *     scheduling
+ *     QPU identities
+ *
+ * ============================================================================
+ * 36. HDL / HARDWARE BOUNDARY
+ * ============================================================================
+ *
+ * Code generation may produce or transform:
+ *
+ *     HDL
+ *     hardware intent
+ *     accelerator descriptions
+ *     configuration
+ *     synthesis-related source
+ *
+ * Such syntax remains owned by:
+ *
+ *     grammar/hdl/
+ *     grammar/hardware/
+ *
+ * This effect grammar does not define HDL syntax or hardware topology.
+ *
+ * Physical realization remains downstream.
+ *
+ * ============================================================================
+ * 37. CLASSICAL / ACCELERATOR BOUNDARY
+ * ============================================================================
+ *
+ * Generated representations may eventually target:
+ *
+ *     classical computation
+ *     tensor computation
+ *     accelerator computation
+ *     distributed computation
+ *     networking
+ *     embedded systems
+ *     future computational substrates
+ *
+ * The effect grammar does not select any realization.
+ *
+ * Capability and resource analysis determine feasibility.
+ *
+ * ============================================================================
+ * 38. DISTRIBUTED BOUNDARY
+ * ============================================================================
+ *
+ * Generated source may participate in:
+ *
+ *     parallel execution
+ *     distributed execution
+ *     actor systems
+ *     service execution
+ *     accelerator execution
+ *     remote compilation
+ *
+ * This file does not define:
+ *
+ *     nodes
+ *     worker counts
+ *     cluster topology
+ *     network topology
+ *     deployment addresses
+ *
+ * Distributed realization remains downstream.
+ *
+ * ============================================================================
+ * 39. FFI / ABI BOUNDARY
+ * ============================================================================
+ *
+ * Generated code may eventually cross:
+ *
+ *     FFI
+ *     ABI
+ *     foreign language
+ *     native execution
+ *
+ * Those boundaries remain owned by:
+ *
+ *     grammar/interoperability/
+ *     grammar/effects/foreign.g4
+ *     grammar/effects/native.g4
+ *
+ * The semantic layer combines:
+ *
+ *     code-generation effect
+ *     FFI requirements
+ *     ABI requirements
+ *     capability requirements
+ *     security policy
+ *     provenance
+ *
+ * This file does not duplicate FFI or ABI syntax.
+ *
+ * ============================================================================
+ * 40. AI / KNOWLEDGE / REASONING INTEGRATION
+ * ============================================================================
+ *
+ * Code generation may consume semantic results from:
+ *
+ *     reasoning
+ *     inference
+ *     learning
+ *     adaptation
+ *     knowledge
+ *     uncertainty
+ *     evidence
+ *     provenance
+ *
+ * Such features remain owned by their respective grammar/semantic systems.
+ *
+ * For example, a compiler may semantically:
+ *
+ *     reason
+ *         ->
+ *     choose transformation
+ *         ->
+ *     generate representation
+ *
+ * This does not make reasoning syntax part of this effect grammar.
+ *
+ * ============================================================================
+ * 41. ADAPTIVE GENERATION
+ * ============================================================================
+ *
+ * Generated code may be specialized according to:
+ *
+ *     capabilities
+ *     resources
+ *     policies
+ *     contracts
+ *     semantic constraints
+ *     target-independent preferences
+ *
+ * However:
+ *
+ *     source intent
+ *
+ * must remain distinct from:
+ *
+ *     realization choice.
+ *
+ * The grammar does not inspect hardware to make this decision.
+ *
+ * ============================================================================
+ * 42. SEMANTIC ADAPTATION
+ * ============================================================================
+ *
+ * The code-generation effect must not be confused with unrestricted
+ * self-modifying execution.
+ *
+ * The semantic model should distinguish:
+ *
+ *     compile-time transformation
+ *
+ * from:
+ *
+ *     runtime self-modification
+ *
+ * and:
+ *
+ *     authorized adaptive execution
+ *
+ * Runtime adaptation remains subject to:
+ *
+ *     effects
+ *     capabilities
+ *     resources
+ *     contracts
+ *     policies
+ *     provenance
+ *     security
+ *
+ * This grammar does not authorize any of them.
+ *
+ * ============================================================================
+ * 43. AST CONTRACT
+ * ============================================================================
+ *
+ * This grammar creates parser contexts only.
+ *
+ * The domain-neutral AST should preserve, where applicable:
+ *
+ *     source span
+ *     source ordering
+ *     effect identity
+ *     qualified-name segments
+ *     operation identity
+ *     operation arguments
+ *     effect-set membership
+ *     surrounding effect context
+ *     transformation origin
+ *
+ * Conceptual semantic representation:
+ *
+ *     EffectReference
+ *         identity = qualified name
+ *
+ *     EffectOperationUse
+ *         operation = qualified name
+ *         arguments = expressions
+ *
+ * A code-generation classification may then be attached semantically.
+ *
+ * This grammar MUST NOT force AST types such as:
+ *
+ *     GeneratedProgram
+ *     GeneratedCPUCode
+ *     GeneratedGPUCode
+ *     GeneratedFPGA
+ *     GeneratedQPUProgram
+ *     GeneratedDeviceCode
+ *     VendorGeneratedArtifact
+ *
+ * into the universal AST.
+ *
+ * ============================================================================
+ * 44. SEMANTIC CONTRACT
+ * ============================================================================
+ *
+ * Semantic analysis determines:
+ *
+ *     effect identity
+ *     operation identity
+ *     declaration resolution
+ *     operation signature
+ *     type compatibility
+ *     effect compatibility
+ *     capability requirements
+ *     resource requirements
+ *     policy requirements
+ *     security implications
+ *     contract compatibility
+ *     provenance requirements
+ *     reproducibility requirements
+ *     determinism requirements
+ *     phase restrictions
+ *     compile-time/runtime boundaries
+ *     generated-source validity
+ *     domain crossings
+ *     target-independent feasibility
+ *
+ * Parser acceptance MUST NOT imply semantic validity.
+ *
+ * ============================================================================
+ * 45. GENERATED-SOURCE VALIDATION
+ * ============================================================================
+ *
+ * Any generated Zamani source must pass through the normal language pipeline.
+ *
+ * Required conceptual path:
+ *
+ *     generated source
+ *          |
+ *          v
+ *     canonical lexer
+ *          |
+ *          v
+ *     canonical parser
+ *          |
+ *          v
+ *     domain-neutral AST
+ *          |
+ *          v
+ *     structural validation
+ *          |
+ *          v
+ *     semantic analysis
+ *          |
+ *          v
+ *     effects/capabilities/resources/policies/contracts
+ *          |
+ *          v
+ *     canonical semantic representation
+ *
+ * Generated source MUST NOT bypass semantic validation merely because it was
+ * generated by a trusted compiler component.
+ *
+ * ============================================================================
+ * 46. IR CONTRACT
+ * ============================================================================
+ *
+ * This grammar creates NO IR.
+ *
+ * There is no:
+ *
+ *     CodeGenerationIR
+ *     GeneratorIR
+ *     TemplateIR
+ *     QuantumGenerationIR
+ *     HardwareGenerationIR
+ *
+ * introduced here.
+ *
+ * The semantic path is:
+ *
+ *     code-generation effect
+ *          |
+ *          v
+ *     domain-neutral AST
+ *          |
+ *          v
+ *     semantic effect model
+ *          |
+ *          v
+ *     canonical semantic representation
+ *          |
+ *          +--> classical representation
+ *          +--> quantum::ir
+ *          +--> HDL/hardware representation
+ *          +--> distributed representation
+ *          +--> accelerator representation
+ *          +--> future domain representation
+ *
+ * ============================================================================
+ * 47. RUNTIME CONTRACT
+ * ============================================================================
+ *
+ * This grammar is not a runtime execution facility.
+ *
+ * Runtime receives downstream compiled/semantic representations.
+ *
+ * Runtime must not invoke this grammar to determine:
+ *
+ *     target
+ *     device
+ *     resource allocation
+ *     code generation
+ *     compiler behavior
+ *
+ * unless a separately specified runtime metaprogramming facility explicitly
+ * permits such behavior.
+ *
+ * ============================================================================
+ * 48. HARD-CODING AUDIT
+ * ============================================================================
+ *
+ * This file contains no language-level machine capacity.
+ *
+ * It MUST remain free of:
+ *
+ *     MAX_EFFECTS
+ *     MAX_EFFECT_OPERATIONS
+ *     MAX_GENERATED_FILES
+ *     MAX_GENERATED_ARTIFACTS
+ *     MAX_GENERATED_LINES
+ *     MAX_SOURCE_SIZE
+ *     MAX_TARGETS
+ *     MAX_BACKENDS
+ *     MAX_CPUS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_ASICS
+ *     MAX_QPUS
+ *     MAX_QUBITS
+ *     MAX_NODES
+ *     MAX_DEVICES
+ *     MAX_MEMORY
+ *     MAX_THREADS
+ *     MAX_TENSOR_RANK
+ *     MAX_REGISTER_WIDTH
+ *     MAX_NETWORK_SIZE
+ *     MAX_DEVICE_COUNT
+ *
+ * It also contains no fixed:
+ *
+ *     device IDs
+ *     CPU IDs
+ *     GPU IDs
+ *     FPGA IDs
+ *     QPU IDs
+ *     node IDs
+ *     vendor IDs
+ *     backend IDs
+ *     physical addresses
+ *     physical topology
+ *
+ * ============================================================================
+ * 49. SCALABILITY CONTRACT
+ * ============================================================================
+ *
+ * The grammar imposes no language-level finite limit on:
+ *
+ *     effect references
+ *     effect operations
+ *     invocations
+ *     arguments
+ *     qualified-name depth
+ *     effect-set size
+ *     generation constructs
+ *     generated-source size
+ *     generated artifact count
+ *     domains
+ *     targets
+ *     devices
+ *     processors
+ *     accelerators
+ *     nodes
+ *     memory
+ *     storage
+ *     tensor dimensions
+ *     quantum resources
+ *
+ * Repetition is delegated to canonical grammar constructs.
+ *
+ * Practical parser/compiler limits are implementation resource policies and
+ * MUST NOT become semantic language ceilings.
+ *
+ * ============================================================================
+ * 50. "INFINITY" INTERPRETATION
+ * ============================================================================
+ *
+ * Zamani cannot promise physically infinite hardware or computation.
+ *
+ * Production scalability means that this grammar introduces no artificial
+ * finite language ceiling for code-generation effects.
+ *
+ * A program remains structurally representable until an actual implementation
+ * resource, execution environment, security policy, compilation budget, or
+ * semantic requirement prevents realization.
+ *
+ * Such failure belongs to:
+ *
+ *     resource analysis
+ *     capability analysis
+ *     policy analysis
+ *     compilation
+ *     execution planning
+ *     deployment
+ *
+ * rather than parser syntax.
+ *
+ * ============================================================================
+ * 51. SOURCE-ORDER CONTRACT
+ * ============================================================================
+ *
+ * The parser must preserve source structure and ordering.
+ *
+ * This file MUST NOT:
+ *
+ *     sort effects
+ *     deduplicate references
+ *     reorder arguments
+ *     evaluate expressions
+ *     normalize aliases
+ *     resolve generators
+ *     select targets
+ *
+ * Semantic normalization occurs downstream.
+ *
+ * ============================================================================
+ * 52. DIAGNOSTIC CONTRACT
+ * ============================================================================
+ *
+ * Parser diagnostics are restricted to malformed syntax inherited from the
+ * canonical delegated grammars.
+ *
+ * Examples:
+ *
+ *     malformed qualified effect reference
+ *     malformed effect invocation
+ *     malformed effect-set syntax
+ *     incomplete operation identity
+ *     malformed argument list
+ *
+ * Semantic diagnostics belong downstream.
+ *
+ * Examples:
+ *
+ *     unknown effect
+ *     unknown generation operation
+ *     invalid operation signature
+ *     forbidden generation phase
+ *     missing capability
+ *     insufficient resource
+ *     forbidden policy
+ *     invalid contract
+ *     invalid provenance requirement
+ *     nondeterministic generation where deterministic output is required
+ *     unauthorized generated-code execution
+ *     unsupported realization
+ *
+ * Resource/capability/security failures MUST NOT be turned into parser errors.
+ *
+ * ============================================================================
+ * 53. TEST CONTRACT
+ * ============================================================================
+ *
+ * Recommended test location:
+ *
+ *     grammar/tests/effects/code_generation/
+ *
+ * Recommended groups:
+ *
+ *     positive/
+ *     negative/
+ *     boundary/
+ *     scalability/
+ *     determinism/
+ *     cross-domain/
+ *     compatibility/
+ *     round-trip/
+ *
+ * ============================================================================
+ * 54. POSITIVE TESTS
+ * ============================================================================
+ *
+ * Structural positive cases MUST include:
+ *
+ *     code_generation::generate
+ *
+ *     code_generation::generate(source)
+ *
+ *     code_generation::emit(value)
+ *
+ *     code_generation::specialize(program, configuration)
+ *
+ *     future::code_generation::operation(value)
+ *
+ *     vendor::extension::generation(value)
+ *
+ *     deeply::qualified::code_generation::operation(value)
+ *
+ * Effect-set cases MUST include combinations such as:
+ *
+ *     {
+ *         code_generation::generate,
+ *         provenance::record
+ *     }
+ *
+ *     {
+ *         code_generation::generate,
+ *         io::read,
+ *         data::transform,
+ *         security::authorize
+ *     }
+ *
+ * Generic effect-operation use must remain valid through the canonical
+ * EffectOperations grammar.
+ *
+ * ============================================================================
+ * 55. NEGATIVE TESTS
+ * ============================================================================
+ *
+ * Malformed structures must be rejected by the canonical grammar.
+ *
+ * Examples:
+ *
+ *     code_generation::
+ *
+ *     code_generation::operation(
+ *
+ *     code_generation::operation(,)
+ *
+ *     ::code_generation::operation
+ *
+ *     code_generation::operation()
+ *
+ * The final example is syntactically valid if the canonical generic effect
+ * grammar permits zero arguments. Its semantic validity must NOT be assumed.
+ *
+ * Therefore tests must distinguish:
+ *
+ *     syntactically malformed
+ *
+ * from:
+ *
+ *     semantically invalid.
+ *
+ * Semantic negative cases belong downstream.
+ *
+ * ============================================================================
+ * 56. BOUNDARY TESTS
+ * ============================================================================
+ *
+ * Boundary tests MUST include:
+ *
+ *     one-segment operation identity
+ *     deeply qualified identity
+ *     zero arguments
+ *     one argument
+ *     many arguments
+ *     nested expressions
+ *     nested effect operations
+ *     large effect sets
+ *     generated-source transformations
+ *     quotation interaction
+ *     reflection interaction
+ *     specialization interaction
+ *     compile-time interaction
+ *     FFI interaction
+ *     native interaction
+ *     quantum interaction
+ *     HDL interaction
+ *     distributed interaction
+ *     AI interaction
+ *
+ * ============================================================================
+ * 57. SCALABILITY TESTS
+ * ============================================================================
+ *
+ * Tests should progressively increase:
+ *
+ *     qualified-name depth
+ *     argument count
+ *     effect-set membership
+ *     nested expression complexity
+ *     number of independent effect operations
+ *     number of generation constructs
+ *     generated source size
+ *
+ * No test may establish a language-defined maximum.
+ *
+ * Stress limits used by CI are test-harness/resource limits, not language
+ * semantics.
+ *
+ * ============================================================================
+ * 58. CROSS-DOMAIN TESTS
+ * ============================================================================
+ *
+ * Code-generation effects must compose structurally with:
+ *
+ *     classical computation
+ *     quantum computation
+ *     hybrid computation
+ *     HDL
+ *     hardware
+ *     accelerator computation
+ *     AI/ML
+ *     reasoning
+ *     learning
+ *     adaptation
+ *     knowledge
+ *     uncertainty
+ *     concurrency
+ *     distributed computation
+ *     networking
+ *     security
+ *     sandboxing
+ *     FFI
+ *     ABI
+ *     simulation
+ *     provenance
+ *     contracts
+ *     resources
+ *     capabilities
+ *     policies
+ *
+ * These tests verify composition, not target realization.
+ *
+ * ============================================================================
+ * 59. QUANTUM CROSS-DOMAIN TEST
+ * ============================================================================
+ *
+ * A code-generation effect that produces quantum source must eventually
+ * satisfy:
+ *
+ *     generated quantum source
+ *          ->
+ *     canonical AST
+ *          ->
+ *     quantum semantic model
+ *          ->
+ *     quantum::ir
+ *
+ * It must never become:
+ *
+ *     code-generation grammar
+ *          ->
+ *     private quantum generation IR
+ *
+ * ============================================================================
+ * 60. HDL CROSS-DOMAIN TEST
+ * ============================================================================
+ *
+ * A code-generation effect that produces HDL must eventually pass through the
+ * HDL semantic subsystem.
+ *
+ * The effect grammar must not encode:
+ *
+ *     wire width
+ *     register count
+ *     FPGA resource count
+ *     device identity
+ *     clock topology
+ *     physical placement
+ *
+ * ============================================================================
+ * 61. AI CROSS-DOMAIN TEST
+ * ============================================================================
+ *
+ * A code-generation operation may consume:
+ *
+ *     reasoning results
+ *     learned models
+ *     evidence
+ *     provenance
+ *     uncertainty
+ *     policies
+ *
+ * None of these requires a second generation grammar.
+ *
+ * ============================================================================
+ * 62. DETERMINISM TESTS
+ * ============================================================================
+ *
+ * Identical:
+ *
+ *     source
+ *     token vocabulary
+ *     grammar version
+ *     dialect configuration
+ *
+ * must produce equivalent parse structures.
+ *
+ * Code-generation runtime behavior is separately classified semantically.
+ *
+ * ============================================================================
+ * 63. COMPATIBILITY CONTRACT
+ * ============================================================================
+ *
+ * This file is additive and must not invalidate existing generic effect syntax.
+ *
+ * Existing generic forms remain owned by:
+ *
+ *     grammar/effects/effect-operations.g4
+ *     grammar/effects/effect-sets.g4
+ *     grammar/effects/effects.g4
+ *
+ * Any existing generic code-generation effect spelling recognized by the
+ * repository remains governed by those canonical grammars.
+ *
+ * This adapter does not replace legacy syntax.
+ *
+ * It supplies a stable semantic-domain integration boundary.
+ *
+ * ============================================================================
+ * 64. EFFECT ROOT INTEGRATION
+ * ============================================================================
+ *
+ * `grammar/effects/effects.g4` remains the generic composition root.
+ *
+ * It MUST NOT import this file merely to enumerate code-generation effects.
+ *
+ * The generic effect system is intentionally open-world.
+ *
+ * Existing generic code-generation classification, including any existing
+ * CODEGEN-oriented effect syntax, remains owned by the generic effect
+ * infrastructure.
+ *
+ * This file is consumed only by components that need explicit
+ * code-generation-effect classification.
+ *
+ * This prevents:
+ *
+ *     Effects -> CodeGenerationEffects -> Effects
+ *
+ * dependency cycles.
+ *
+ * ============================================================================
+ * 65. METAPROGRAMMING ROOT INTEGRATION
+ * ============================================================================
+ *
+ * `grammar/metaprogramming/metaprogramming.g4` remains the metaprogramming
+ * composition boundary.
+ *
+ * It must continue to delegate actual generation syntax to:
+ *
+ *     generation.g4
+ *
+ * It must not import this effect adapter simply to parse generation syntax.
+ *
+ * The semantic layer joins:
+ *
+ *     generation construct
+ *
+ * and:
+ *
+ *     code-generation effect
+ *
+ * after parsing.
+ *
+ * ============================================================================
+ * 66. EXPRESSION INTEGRATION
+ * ============================================================================
+ *
+ * Expression-level effect syntax remains owned by:
+ *
+ *     grammar/expressions/effects.g4
+ *
+ * That subsystem may delegate generic effect operation use to:
+ *
+ *     EffectOperations
+ *
+ * This file does not define a competing:
+ *
+ *     perform
+ *
+ * expression.
+ *
+ * ============================================================================
+ * 67. STATEMENT INTEGRATION
+ * ============================================================================
+ *
+ * Statement-level effect syntax remains owned by:
+ *
+ *     grammar/statements/effects.g4
+ *
+ * This file does not define:
+ *
+ *     statement
+ *     performStatement
+ *
+ * or any universal statement hierarchy.
+ *
+ * ============================================================================
+ * 68. EFFECT-HANDLING INTEGRATION
+ * ============================================================================
+ *
+ * Effect handlers remain owned by:
+ *
+ *     grammar/effects/effect-handling.g4
+ *
+ * A handler may semantically handle a code-generation effect.
+ *
+ * Handler syntax is not duplicated here.
+ *
+ * ============================================================================
+ * 69. EFFECT POLYMORPHISM INTEGRATION
+ * ============================================================================
+ *
+ * Code-generation effects may participate in effect polymorphism.
+ *
+ * Effect variables and effect bounds remain owned by:
+ *
+ *     grammar/effects/effect-polymorphism.g4
+ *
+ * This file introduces no second effect-polymorphism syntax.
+ *
+ * ============================================================================
+ * 70. EFFECT COMPOSITION INTEGRATION
+ * ============================================================================
+ *
+ * Code-generation effects may compose with arbitrary future effects.
+ *
+ * Examples:
+ *
+ *     code_generation
+ *     io
+ *     network
+ *     foreign
+ *     native
+ *     randomness
+ *     mutation
+ *     learning
+ *     adaptation
+ *     reflection
+ *     simulation
+ *     quantum
+ *     distributed
+ *     security
+ *
+ * The generic effect composition system remains authoritative.
+ *
+ * ============================================================================
+ * 71. RESOURCE / CAPABILITY NEGOTIATION
+ * ============================================================================
+ *
+ * Semantic analysis may determine that a code-generation operation requires:
+ *
+ *     capability("code.generate")
+ *     capability("source.transform")
+ *     capability("compiler.invoke")
+ *
+ * or any future capability.
+ *
+ * These are semantic examples, not a closed vocabulary.
+ *
+ * Resource requirements may include:
+ *
+ *     compute
+ *     memory
+ *     storage
+ *     accelerator resources
+ *     distributed resources
+ *     quantum resources
+ *
+ * The grammar does not encode capacities.
+ *
+ * ============================================================================
+ * 72. POLICY / SANDBOX INTEGRATION
+ * ============================================================================
+ *
+ * A code-generation effect may be restricted by sandbox or policy rules.
+ *
+ * Policies may prohibit:
+ *
+ *     filesystem access
+ *     network access
+ *     native execution
+ *     foreign execution
+ *     generated-code execution
+ *     external compiler invocation
+ *     dynamic loading
+ *
+ * The grammar does not enforce these policies.
+ *
+ * ============================================================================
+ * 73. COMPLETION CRITERIA
+ * ============================================================================
+ *
+ * THIS FILE IS DONE WHEN:
+ *
+ * [x] Grammar identity is CodeGenerationEffects.
+ *
+ * [x] Canonical Zamani lexer vocabulary is consumed.
+ *
+ * [x] No lexer rules are defined.
+ *
+ * [x] No embedded Rust is defined.
+ *
+ * [x] No unsafe code is required.
+ *
+ * [x] Core owns qualified-name syntax.
+ *
+ * [x] Expressions owns expression syntax.
+ *
+ * [x] EffectOperations owns effect operation syntax.
+ *
+ * [x] EffectSets owns effect-set syntax.
+ *
+ * [x] Generation grammar owns generation source syntax.
+ *
+ * [x] This file does not duplicate generation syntax.
+ *
+ * [x] This file does not duplicate macro syntax.
+ *
+ * [x] This file does not duplicate reflection syntax.
+ *
+ * [x] This file does not duplicate specialization syntax.
+ *
+ * [x] This file does not duplicate compile-time syntax.
+ *
+ * [x] This file does not duplicate quotation syntax.
+ *
+ * [x] This file does not duplicate FFI syntax.
+ *
+ * [x] This file does not duplicate ABI syntax.
+ *
+ * [x] This file does not duplicate capability syntax.
+ *
+ * [x] This file does not duplicate resource syntax.
+ *
+ * [x] This file does not duplicate contract syntax.
+ *
+ * [x] This file does not duplicate policy syntax.
+ *
+ * [x] This file does not duplicate handler syntax.
+ *
+ * [x] This file does not create an IR.
+ *
+ * [x] This file does not create a second generation IR.
+ *
+ * [x] This file does not create a quantum IR.
+ *
+ * [x] quantum::ir remains the canonical quantum boundary.
+ *
+ * [x] HDL/hardware realization remains downstream.
+ *
+ * [x] Operation names remain open-world.
+ *
+ * [x] No vendor catalogue is encoded.
+ *
+ * [x] No backend catalogue is encoded.
+ *
+ * [x] No target catalogue is encoded.
+ *
+ * [x] No machine capacity is encoded.
+ *
+ * [x] No physical device identity is encoded.
+ *
+ * [x] No topology is encoded.
+ *
+ * [x] No runtime execution occurs during parsing.
+ *
+ * [x] Source ordering is preserved.
+ *
+ * [x] Semantic classification remains downstream.
+ *
+ * [x] Capability analysis remains downstream.
+ *
+ * [x] Resource analysis remains downstream.
+ *
+ * [x] Security analysis remains downstream.
+ *
+ * [x] Policy analysis remains downstream.
+ *
+ * [x] Provenance remains downstream.
+ *
+ * [x] Deterministic parsing is required.
+ *
+ * [x] Compatibility with existing generic effect syntax is preserved.
+ *
+ * [x] Positive tests are defined.
+ *
+ * [x] Negative tests are defined.
+ *
+ * [x] Boundary tests are defined.
+ *
+ * [x] Scalability tests are defined.
+ *
+ * [x] Cross-domain tests are defined.
+ *
+ * [x] Determinism tests are defined.
+ *
+ * [x] Compatibility tests are defined.
+ *
+ * [x] Rust 1.97 / 1.97.1 safe-Rust requirements are defined.
+ *
+ * ============================================================================
+ * 74. FINAL ARCHITECTURAL INVARIANT
+ * ============================================================================
+ *
+ * This file answers exactly one question:
+ *
+ *     "What canonical effect syntax may participate in the semantic
+ *      code-generation effect domain?"
+ *
+ * It does NOT answer:
+ *
+ *     "How is source generated?"
+ *     "Which generator is used?"
+ *     "Which compiler is invoked?"
+ *     "Which language is emitted?"
+ *     "Which target is selected?"
+ *     "Which CPU is selected?"
+ *     "Which GPU is selected?"
+ *     "Which FPGA is selected?"
+ *     "Which QPU is selected?"
+ *     "Which device is selected?"
+ *     "Which resources are allocated?"
+ *     "Which capabilities are available?"
+ *     "Which policy authorizes generation?"
+ *     "Which files are written?"
+ *     "Which generated program executes?"
+ *
+ * Those decisions belong downstream.
+ *
+ * The permanent architecture is:
+ *
+ *     code-generation source/effect syntax
+ *                  |
+ *                  v
+ *          domain-neutral AST
+ *                  |
+ *                  v
+ *          semantic analysis
+ *                  |
+ *        +---------+---------+
+ *        |         |         |
+ *        v         v         v
+ *     effects  capabilities resources
+ *        |         |         |
+ *        +---------+---------+
+ *                  |
+ *             contracts
+ *                  |
+ *               policies
+ *                  |
+ *             provenance
+ *                  |
+ *                  v
+ *       canonical semantic representation
+ *                  |
+ *        +---------+----------+----------------+
+ *        |                    |                |
+ *        v                    v                v
+ *    classical            quantum::ir      HDL/hardware
+ *        |                    |                |
+ *        +--------------------+----------------+
+ *                             |
+ *                             v
+ *                  target-independent lowering
+ *                             |
+ *                             v
+ *                       target realization
+ *
+ * This preserves the central Zamani invariant:
+ *
+ *     source describes portable computation and intent;
+ *     semantic analysis determines meaning;
+ *     downstream compilation determines realization.
+ *
+ * ============================================================================
+ * END OF FILE
+ * ============================================================================
+ */
