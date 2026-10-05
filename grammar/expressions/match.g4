@@ -10,589 +10,266 @@
  *     MatchExpressions
  *
  * Status:
- *     Production-ready modular expression grammar.
+ *     Production-ready feature grammar.
  *
  * Rust baseline:
  *     Rust 1.97 / Rust 1.97.1
- *
- * Safety:
- *     No embedded Rust actions.
- *     No semantic predicates.
- *     No unsafe code.
- *     No filesystem access.
- *     No networking.
- *     No runtime execution.
- *     No hardware discovery.
- *     No device discovery.
- *     No mutable global parser state.
+ *     Edition 2021
+ *     Safe Rust only.
  *
  * ============================================================================
  * PURPOSE
  * ============================================================================
  *
- * This file owns the source-level syntax of Zamani match expressions.
+ * This file defines the source-level syntax contract for Zamani match
+ * expressions.
  *
- * It defines:
+ * A match expression is a domain-neutral expression construct that selects
+ * one arm according to the semantic relationship between:
  *
- *     matchExpression
- *
- * It deliberately reuses the repository's canonical shared pattern and match
- * arm contracts instead of creating a second pattern language.
- *
- * Shared pattern ownership remains in:
- *
- *     grammar/statements/pattern-matching.g4
- *
- * That file provides:
- *
- *     matchArm
+ *     scrutinee
  *     pattern
- *     guardClause
+ *     optional guard
+ *     arm result
  *
- * The final grammar composition must therefore contain exactly one definition
- * of each of those shared rules.
+ * Match expressions may therefore participate in:
+ *
+ *     classical computation
+ *     data processing
+ *     AI/ML computation
+ *     distributed computation
+ *     hardware control
+ *     HDL-oriented computation
+ *     quantum/classical control
+ *     resource/capability decisions
+ *     simulation
+ *     adaptive execution
+ *     future Zamani domains
+ *
+ * This file owns the existence and top-level structure of a match expression.
+ *
+ * It does NOT own:
+ *
+ *     - the general expression hierarchy;
+ *     - pattern syntax;
+ *     - guard syntax;
+ *     - block syntax;
+ *     - literal syntax;
+ *     - identifier syntax;
+ *     - type syntax;
+ *     - semantic matching;
+ *     - exhaustiveness;
+ *     - reachability;
+ *     - overlap analysis;
+ *     - type checking;
+ *     - effect checking;
+ *     - capability checking;
+ *     - resource negotiation;
+ *     - policy evaluation;
+ *     - AST construction;
+ *     - IR construction;
+ *     - optimization;
+ *     - lowering;
+ *     - scheduling;
+ *     - routing;
+ *     - hardware selection;
+ *     - runtime execution.
  *
  * ============================================================================
  * ARCHITECTURAL POSITION
  * ============================================================================
  *
  *     source
- *        |
- *        v
- *     ZamaniLexer
- *        |
- *        v
- *     expression
- *        |
- *        +--> matchExpression
- *        |
- *        v
- *     domain-neutral frontend AST
- *        |
- *        v
+ *       |
+ *       v
+ *     lexer
+ *       |
+ *       v
+ *     parser
+ *       |
+ *       v
+ *     matchExpression
+ *       |
+ *       v
+ *     domain-neutral AST
+ *       |
+ *       v
  *     structural validation
- *        |
- *        v
+ *       |
+ *       v
  *     semantic analysis
- *        |
- *        v
- *     canonical semantic model / ZUIR
- *        |
- *        +--------------------+--------------------+
- *        |                    |                    |
- *        v                    v                    v
- *     classical          quantum::ir          HDL/hardware
- *        |                    |                    |
- *        +--------------------+--------------------+
- *                             |
- *                             v
- *                  optimization / lowering
- *                             |
- *                  routing / scheduling
- *                             |
- *                 resilience / QEC / ZQN
- *                             |
- *                            HAL
- *                             |
- *                     target realization
- *
- * This file owns SOURCE SYNTAX ONLY.
- *
- * It does not perform:
- *
- *     - name resolution;
- *     - type checking;
- *     - exhaustiveness checking;
- *     - overlap checking;
- *     - reachability checking;
- *     - binding validation;
- *     - effect checking;
- *     - resource allocation;
- *     - quantum lowering;
- *     - QEC;
- *     - ZQN processing;
- *     - routing;
- *     - scheduling;
- *     - optimization;
- *     - hardware selection;
- *     - runtime execution.
+ *       |
+ *       +--> type analysis
+ *       +--> effect analysis
+ *       +--> capability analysis
+ *       +--> resource analysis
+ *       +--> contract analysis
+ *       +--> policy analysis
+ *       +--> provenance
+ *       |
+ *       v
+ *     canonical semantic model / IR
+ *       |
+ *       +--> classical
+ *       +--> quantum::ir
+ *       +--> HDL/hardware
+ *       +--> distributed
+ *       +--> data
+ *       +--> AI/ML
+ *       |
+ *       v
+ *     optimization
+ *       |
+ *       v
+ *     lowering
+ *       |
+ *       v
+ *     routing / scheduling / resilience
+ *       |
+ *       v
+ *     target realization
  *
  * ============================================================================
  * POCO-REAF
  * ============================================================================
  *
- * Match expressions are target-independent.
+ * Match syntax is target-independent.
  *
- * This grammar imposes no universal limit on:
+ * This file imposes no language-level upper bound on:
  *
  *     - number of match arms;
  *     - pattern size;
  *     - nesting depth;
- *     - tuple arity;
  *     - sequence length;
+ *     - tuple arity;
  *     - number of alternatives;
- *     - quantum values;
- *     - classical values;
- *     - distributed values;
- *     - hardware resources.
+ *     - value width;
+ *     - tensor dimensions;
+ *     - number of resources;
+ *     - number of devices;
+ *     - number of qubits;
+ *     - number of CPUs;
+ *     - number of GPUs;
+ *     - number of nodes;
+ *     - hardware topology.
  *
- * Any practical compiler/resource limits are implementation policy and must
- * never become language-level constants in this grammar.
- *
- * There is deliberately no:
+ * There are deliberately no constants such as:
  *
  *     MAX_MATCH_ARMS
  *     MAX_PATTERN_SIZE
  *     MAX_MATCH_DEPTH
  *     MAX_ALTERNATIVES
+ *     MAX_TUPLE_ARITY
+ *
+ * Any finite implementation limit is an implementation/resource policy and
+ * must not become part of the language's semantic definition.
  *
  * ============================================================================
- * DOMAIN NEUTRALITY
+ * OWNERSHIP
  * ============================================================================
  *
- * A match expression can operate over:
+ * THIS FILE OWNS:
  *
- *     - classical values;
- *     - enum/variant values;
- *     - structured data;
- *     - tensor/data values;
- *     - resource states;
- *     - capability results;
- *     - measurement-derived values;
- *     - hybrid quantum/classical values;
- *     - hardware-control values;
- *     - distributed values;
- *     - AI/ML values;
- *     - future Zamani domain values.
+ *     matchExpression
  *
- * The grammar does not distinguish these domains.
+ * THIS FILE CONSUMES:
  *
- * Domain meaning is established after parsing.
+ *     expression
+ *     matchArm
  *
- * ============================================================================
- * AST CONTRACT
- * ============================================================================
+ * but does not redefine them.
  *
- * This grammar maps to:
+ * The canonical expression hierarchy remains owned by:
  *
- *     src/frontend/ast/node/expressions/match_expr.rs
+ *     grammar/expressions/expressions.g4
  *
- * The source-level structure is:
- *
- *     MatchExpression
- *     ├── scrutinee
- *     └── arms
- *         ├── pattern
- *         ├── optional guard
- *         └── body
- *
- * The AST uses stable NodeId references and an ordered Vec<MatchArm>.
- *
- * Therefore this grammar MUST preserve:
- *
- *     1. scrutinee ordering;
- *     2. arm ordering;
- *     3. pattern identity;
- *     4. guard presence;
- *     5. body identity;
- *     6. source ordering.
- *
- * The parser must not:
- *
- *     - reorder arms;
- *     - deduplicate arms;
- *     - fold patterns;
- *     - perform exhaustiveness analysis;
- *     - build a decision tree;
- *     - lower to control flow.
+ * Pattern and arm syntax must eventually have one shared owner so that
+ * statement-form and expression-form matching cannot diverge.
  *
  * ============================================================================
- * SEMANTIC CONTRACT
+ * SINGLE-AUTHORITY RULE
  * ============================================================================
  *
- * Semantic analysis is responsible for:
+ * There must be exactly one authoritative definition of:
  *
- *     - resolving the scrutinee type;
- *     - resolving pattern names;
- *     - checking pattern compatibility;
- *     - validating bindings;
- *     - validating OR-pattern bindings;
- *     - checking guard validity;
- *     - checking guard result type;
- *     - determining exhaustiveness;
- *     - determining unreachable arms;
- *     - determining overlapping arms;
- *     - checking domain-specific restrictions;
- *     - checking effect/capability requirements;
- *     - determining whether a match is valid for a quantum-derived value.
+ *     matchExpression
  *
- * None of those rules belong in this grammar.
+ * The legacy monolithic grammar must not contain another competing
+ * matchExpression rule once the modular grammar is authoritative.
+ *
+ * A compatibility grammar may retain historical syntax only when explicitly
+ * marked as compatibility/reference material and excluded from the canonical
+ * parser composition.
  *
  * ============================================================================
- * IR CONTRACT
+ * LEXER CONTRACT
  * ============================================================================
  *
- * Match expressions lower through the canonical semantic pipeline.
- *
- * They MUST NOT introduce a match-specific IR.
- *
- * Possible downstream representations include:
- *
- *     - classical control flow;
- *     - conditional dataflow;
- *     - predication;
- *     - decision trees;
- *     - distributed control;
- *     - quantum/classical dynamic control;
- *     - HDL control structures.
- *
- * For quantum programs:
- *
- *     match
- *         |
- *         v
- *     semantic representation
- *         |
- *         v
- *     quantum::ir
- *
- * This grammar never creates a second quantum IR.
- *
- * ============================================================================
- * COMPILER CONTRACT
- * ============================================================================
- *
- * The compiler may optimize a match after semantic validation.
- *
- * Examples include:
- *
- *     - decision-tree construction;
- *     - branch elimination;
- *     - constant propagation;
- *     - jump-table generation;
- *     - predication;
- *     - branch fusion;
- *     - distributed dispatch;
- *     - target-specific lowering.
- *
- * Such transformations must preserve:
- *
- *     - arm order semantics;
- *     - guard semantics;
- *     - binding semantics;
- *     - observable effects;
- *     - determinism guarantees.
- *
- * ============================================================================
- * RUNTIME CONTRACT
- * ============================================================================
- *
- * Runtime behavior is downstream.
- *
- * This grammar does not select:
- *
- *     - CPU;
- *     - GPU;
- *     - FPGA;
- *     - QPU;
- *     - accelerator;
- *     - node;
- *     - thread;
- *     - register;
- *     - memory location;
- *     - physical qubit;
- *     - hardware topology.
- *
- * ============================================================================
- * LEXER INTEGRATION
- * ============================================================================
- *
- * This grammar uses the canonical Zamani lexer:
+ * This grammar consumes the canonical lexer:
  *
  *     grammar/antlr/ZamaniLexer.g4
  *
- * Required tokens include:
+ * Required tokens:
  *
  *     MATCH
  *     LBRACE
  *     RBRACE
  *
- * The shared match-arm grammar additionally uses:
+ * The match-arm implementation consumes the canonical tokens appropriate to
+ * the selected arm syntax, including:
  *
  *     FAT_ARROW
+ *
+ * and, where guards are supported:
+ *
  *     WHEN
  *
- * Pattern grammars use the canonical punctuation/operators such as:
- *
- *     PIPE
- *     DOT_DOT
- *     DOT_DOT_EQ
- *     UNDERSCORE
- *     AMPERSAND
- *     LPAREN
- *     RPAREN
- *     LBRACKET
- *     RBRACKET
- *     COLON
- *     COMMA
- *
- * No lexer tokens are defined in this file.
+ * This file MUST NOT define lexer rules.
  *
  * ============================================================================
- * IMPORTANT TOKEN CORRECTIONS
+ * TOP-LEVEL SYNTAX
  * ============================================================================
  *
- * The canonical lexer names the range operators:
+ * Canonical form:
  *
- *     DOT_DOT
- *     DOT_DOT_EQ
- *
- * Therefore this file deliberately does not introduce:
- *
- *     RANGE_EXCLUSIVE
- *     RANGE_INCLUSIVE
- *
- * Those names must not reappear in the modular grammar.
- *
- * ============================================================================
- * SHARED-RULE INTEGRATION
- * ============================================================================
- *
- * The following rules are intentionally NOT redefined here:
- *
- *     expression
- *     block
- *     matchArm
- *     pattern
- *     guardClause
- *
- * Their ownership is:
- *
- *     expression
- *         -> grammar/expressions/expressions.g4
- *
- *     block
- *         -> grammar/statements/blocks.g4
- *
- *     matchArm
- *     pattern
- *     guardClause
- *         -> grammar/statements/pattern-matching.g4
- *
- * This prevents competing definitions.
- *
- * ============================================================================
- * LEGACY INTEGRATION
- * ============================================================================
- *
- * Existing legacy grammar surfaces currently contain match productions:
- *
- *     grammar/antlr/Core.g4
- *     grammar/antlr/ZamaniParser.g4
- *
- * The final composition must remove their competing definitions of:
- *
- *     matchExpression
- *     matchStatement
- *
- * when the modular grammar becomes authoritative.
- *
- * The migration target is:
- *
- *     expression
- *        |
- *        +--> matchExpression
- *                 |
- *                 +--> matchArm
- *                         |
- *                         +--> pattern
- *                         +--> guardClause
- *                         +--> expression/block
- *
- * The legacy files may remain temporarily as compatibility/reference
- * surfaces, but they must not contribute duplicate parser rules to the
- * production grammar.
- *
- * ============================================================================
- * STATEMENT INTEGRATION
- * ============================================================================
- *
- * Match is an expression.
- *
- * A statement context may therefore consume it through the canonical
- * expression/statement grammar rather than defining another match language.
- *
- * If Zamani retains a statement-form spelling for compatibility, that
- * statement must be a thin composition around the canonical match expression,
- * not a second independently defined match grammar.
- *
- * ============================================================================
- * EXPRESSION INTEGRATION
- * ============================================================================
- *
- * The canonical expression hierarchy in:
- *
- *     grammar/expressions/expressions.g4
- *
- * already recognizes matchExpression as an expression alternative.
- *
- * The intended composition is:
- *
- *     primaryExpression
- *         |
- *         +--> matchExpression
- *
- * or, where required by the existing precedence architecture:
- *
- *     expression
- *         |
- *         +--> matchExpression
- *
- * The exact insertion point is determined by the existing expression
- * precedence contract; this file does not duplicate the complete expression
- * hierarchy.
- *
- * ============================================================================
- * PRECEDENCE
- * ============================================================================
- *
- * A match expression is a control-flow expression, not a binary operator.
- *
- * It therefore has no arithmetic/logical precedence of its own.
- *
- * The entire match construct forms one expression atom at its integration
- * point:
- *
- *     match scrutinee {
- *         pattern => body
+ *     match <scrutinee> {
+ *         <pattern> => <result>
  *     }
  *
- * Internal expressions retain their normal precedence:
+ * Guarded form:
  *
- *     match x + 1 {
- *         0 => ...
- *         _ => ...
+ *     match <scrutinee> {
+ *         <pattern> when <guard> => <result>
  *     }
  *
- * The scrutinee is parsed by the canonical expression grammar.
+ * Multiple arms:
  *
- * Arm bodies are also parsed through the canonical expression/block rules
- * supplied by the shared match-arm grammar.
- *
- * ============================================================================
- * DIAGNOSTICS
- * ============================================================================
- *
- * Syntax diagnostics are parser responsibilities.
- *
- * Examples:
- *
- *     match x {
- *         // missing arm
+ *     match <scrutinee> {
+ *         <pattern> => <result>,
+ *         <pattern> when <guard> => <result>,
+ *         _ => <fallback>
  *     }
  *
- *     match x {
- *         _        // missing =>
- *     }
+ * The grammar requires at least one arm.
  *
- *     match x {
- *         _ => y,
- *         // missing closing }
- *     }
- *
- * Semantic diagnostics are NOT parser responsibilities.
- *
- * Examples:
- *
- *     unreachable arm
- *     non-exhaustive match
- *     incompatible pattern
- *     invalid guard
- *     inconsistent OR-pattern bindings
+ * Exhaustiveness is semantic analysis, not parsing.
  *
  * ============================================================================
- * DETERMINISM
+ * MATCH EXPRESSION
  * ============================================================================
  *
- * The grammar is deterministic with respect to source ordering.
+ * `matchExpression` deliberately contains only the outer match construct.
  *
- * The parser must preserve:
+ * The scrutinee is parsed by the canonical `expression` rule.
  *
- *     source arm order.
+ * The arm structure is delegated to the canonical match-arm contract.
  *
- * It must not use:
+ * This prevents:
  *
- *     - hash-map iteration;
- *     - backend state;
- *     - runtime state;
- *     - target capabilities
- *
- * to determine parsing behavior.
- *
- * ============================================================================
- * SCALABILITY
- * ============================================================================
- *
- * Match expressions are structurally unbounded by the language.
- *
- * A source program may contain:
- *
- *     one arm;
- *     many arms;
- *     deeply structured patterns;
- *     large OR patterns;
- *     arbitrarily large source-level sequences;
- *
- * subject only to compiler/runtime resource availability and explicitly
- * configured implementation policies.
- *
- * No fixed hardware characteristic is encoded here.
- *
- * ============================================================================
- * SECURITY
- * ============================================================================
- *
- * This grammar:
- *
- *     - contains no actions;
- *     - contains no predicates;
- *     - performs no I/O;
- *     - performs no network access;
- *     - performs no filesystem access;
- *     - performs no hardware discovery;
- *     - performs no runtime execution;
- *     - contains no unsafe Rust;
- *     - contains no embedded Rust.
- *
- * ============================================================================
- * COMPLETION CRITERIA
- * ============================================================================
- *
- * This file is complete when:
- *
- *     [x] matchExpression has one authoritative owner;
- *     [x] matchExpression is expression-level syntax;
- *     [x] shared matchArm is reused;
- *     [x] shared pattern grammar is reused;
- *     [x] shared guard grammar is reused;
- *     [x] canonical lexer tokens are reused;
- *     [x] no duplicate lexer rules exist;
- *     [x] no hardware limits exist;
- *     [x] no quantum limits exist;
- *     [x] no target-specific syntax exists;
- *     [x] no semantic validation is embedded;
- *     [x] no IR is embedded;
- *     [x] AST ordering is preserved;
- *     [x] AST integration is predetermined;
- *     [x] semantic integration is predetermined;
- *     [x] IR integration is predetermined;
- *     [x] compiler integration is predetermined;
- *     [x] runtime integration is predetermined;
- *     [x] negative tests are defined downstream;
- *     [x] boundary tests are defined downstream;
- *     [x] scalability tests are defined downstream;
- *     [x] determinism requirements are defined;
- *     [x] compatibility requirements are defined.
+ *     - duplicate pattern grammars;
+ *     - duplicate guard grammars;
+ *     - duplicate arm grammars;
+ *     - different statement/expression pattern semantics.
  *
  * ============================================================================
  */
@@ -606,27 +283,736 @@ options {
 
 /*
  * ============================================================================
- * MATCH EXPRESSION
+ * PUBLIC RULE
  * ============================================================================
  *
- * Canonical source form:
+ * The rule intentionally has no alternative that represents an empty match.
  *
- *     match <expression> {
- *         <pattern> [when <expression>] => <expression-or-block>,
- *         ...
- *     }
+ * This guarantees structural validity:
  *
- * The arm itself is deliberately delegated to the shared matchArm rule.
+ *     match <expression> { ...at least one arm... }
  *
- * This means the expression grammar owns the fact that `match` is an
- * expression, while the pattern grammar owns the structure of an arm.
- *
- * At least one arm is required.
- *
- * This prevents an empty match from becoming a structurally valid expression.
- * Whether a particular future dialect permits an empty match is a language
- * compatibility decision, not something inferred from target hardware.
+ * Semantic validity remains downstream.
  */
 matchExpression
     : MATCH expression LBRACE matchArm+ RBRACE
     ;
+
+
+/*
+ * ============================================================================
+ * AST CONTRACT
+ * ============================================================================
+ *
+ * The parser structure exposed to the frontend is:
+ *
+ *     MatchExpression
+ *         scrutinee
+ *         arms[]
+ *
+ * Each arm preserves:
+ *
+ *     pattern
+ *     optional guard
+ *     body/result
+ *     source order
+ *
+ * This grammar MUST NOT:
+ *
+ *     - reorder arms;
+ *     - deduplicate arms;
+ *     - eliminate unreachable arms;
+ *     - build a decision tree;
+ *     - evaluate guards;
+ *     - evaluate expressions;
+ *     - perform constant folding;
+ *     - perform type inference;
+ *     - resolve names.
+ *
+ * Those operations belong downstream.
+ *
+ * ============================================================================
+ * SEMANTIC CONTRACT
+ * ============================================================================
+ *
+ * Semantic analysis MUST determine:
+ *
+ *     1. scrutinee type;
+ *     2. pattern compatibility;
+ *     3. pattern bindings;
+ *     4. guard validity;
+ *     5. guard result type;
+ *     6. arm reachability;
+ *     7. arm overlap;
+ *     8. exhaustiveness;
+ *     9. result-type compatibility;
+ *    10. effects;
+ *    11. required capabilities;
+ *    12. resource requirements;
+ *    13. applicable policies;
+ *    14. provenance requirements.
+ *
+ * None of these rules are encoded in this file.
+ *
+ * ============================================================================
+ * ARM ORDER
+ * ============================================================================
+ *
+ * Source arm order is semantically observable whenever multiple arms could
+ * otherwise match.
+ *
+ * Therefore the parser MUST preserve source order exactly.
+ *
+ * A later compiler stage may transform the representation into:
+ *
+ *     decision trees
+ *     jump structures
+ *     predicated control
+ *     dataflow
+ *     distributed dispatch
+ *     target-specific control
+ *
+ * only after semantic analysis establishes that the transformation preserves
+ * the language's matching semantics.
+ *
+ * ============================================================================
+ * GUARDS
+ * ============================================================================
+ *
+ * Guards are semantic expressions associated with an arm.
+ *
+ * Conceptually:
+ *
+ *     pattern
+ *     when guard
+ *     =>
+ *     body
+ *
+ * The guard MUST NOT become a second pattern language.
+ *
+ * The guard uses the ordinary Zamani expression system so that it can
+ * reference:
+ *
+ *     bindings
+ *     functions
+ *     values
+ *     capabilities
+ *     measurement results
+ *     classical results
+ *     data
+ *     domain-specific predicates
+ *
+ * Whether a guard is pure, effectful, deterministic, capability-dependent,
+ * or otherwise restricted is determined by semantic/effect analysis.
+ *
+ * ============================================================================
+ * BLOCK RESULTS
+ * ============================================================================
+ *
+ * An arm may produce either:
+ *
+ *     - an expression result;
+ *     - a block result.
+ *
+ * The exact arm-body ownership belongs to the shared match-arm grammar.
+ *
+ * The shared arm grammar MUST resolve the expression/block ambiguity in a
+ * deterministic manner.
+ *
+ * In particular, because Zamani also permits brace-delimited collection/map
+ * expressions, arm-body parsing MUST NOT accidentally interpret a statement
+ * block as a collection expression.
+ *
+ * This is an integration responsibility of the shared arm grammar.
+ *
+ * ============================================================================
+ * PATTERN CONTRACT
+ * ============================================================================
+ *
+ * Pattern syntax belongs to the shared pattern subsystem.
+ *
+ * Supported semantic families may include:
+ *
+ *     wildcard
+ *     binding
+ *     literal
+ *     tuple
+ *     sequence
+ *     structured
+ *     variant
+ *     range
+ *     reference
+ *     type
+ *     OR
+ *     parenthesized
+ *
+ * This file intentionally does not enumerate those forms.
+ *
+ * New pattern forms can therefore be added without modifying the outer
+ * match-expression structure.
+ *
+ * ============================================================================
+ * RANGE CONTRACT
+ * ============================================================================
+ *
+ * Range-pattern syntax must consume the canonical operator vocabulary:
+ *
+ *     DOT_DOT
+ *     DOT_DOT_EQ
+ *
+ * The match-expression grammar itself does not define range patterns.
+ *
+ * The pattern grammar MUST NOT invent aliases such as:
+ *
+ *     RANGE_EXCLUSIVE
+ *     RANGE_INCLUSIVE
+ *
+ * unless the canonical lexer explicitly establishes such tokens.
+ *
+ * ============================================================================
+ * EXPRESSION PRECEDENCE
+ * ============================================================================
+ *
+ * A complete match expression behaves as one primary/atomic expression at
+ * the expression-precedence level.
+ *
+ * It does not introduce an arithmetic, logical, relational, or assignment
+ * precedence.
+ *
+ * Therefore:
+ *
+ *     match x {
+ *         0 => a,
+ *         _ => b
+ *     }
+ *
+ * can be used wherever a primary expression is permitted.
+ *
+ * For example, after integration:
+ *
+ *     result = match value {
+ *         0 => zero,
+ *         _ => other
+ *     };
+ *
+ * or:
+ *
+ *     consume(match value {
+ *         0 => zero,
+ *         _ => other
+ *     });
+ *
+ * Internal expressions retain the normal Zamani precedence hierarchy.
+ *
+ * ============================================================================
+ * TYPE SYSTEM
+ * ============================================================================
+ *
+ * Match syntax imposes no fixed type universe.
+ *
+ * Semantic analysis may support:
+ *
+ *     primitive values
+ *     records
+ *     variants
+ *     tuples
+ *     sequences
+ *     references
+ *     generic values
+ *     tensor/data values
+ *     symbolic values
+ *     probabilistic values
+ *     measurement results
+ *     resource/capability values
+ *     hardware abstraction values
+ *     distributed values
+ *     future domain values
+ *
+ * This file remains independent of all such types.
+ *
+ * ============================================================================
+ * EFFECTS
+ * ============================================================================
+ *
+ * Matching itself does not automatically impose a particular effect.
+ *
+ * Effects originate from:
+ *
+ *     scrutinee evaluation
+ *     guard evaluation
+ *     arm-result evaluation
+ *
+ * The semantic effect system therefore determines whether a match participates
+ * in effects such as:
+ *
+ *     IO
+ *     network
+ *     mutation
+ *     randomness
+ *     measurement
+ *     foreign calls
+ *     distributed execution
+ *     learning
+ *     adaptation
+ *     simulation
+ *     reflection
+ *
+ * The grammar must not hard-code these effects.
+ *
+ * ============================================================================
+ * CAPABILITIES AND RESOURCES
+ * ============================================================================
+ *
+ * Match syntax contains no hardware/resource requirements.
+ *
+ * A program may nevertheless match on semantic values representing:
+ *
+ *     capabilities
+ *     resource availability
+ *     execution states
+ *     resilience states
+ *     measurement outcomes
+ *     device-independent properties
+ *
+ * Capability and resource requirements are resolved downstream.
+ *
+ * No match rule may contain:
+ *
+ *     CPU counts
+ *     GPU counts
+ *     QPU counts
+ *     FPGA counts
+ *     memory capacities
+ *     qubit capacities
+ *     node counts
+ *     topology sizes
+ *
+ * ============================================================================
+ * QUANTUM INTEGRATION
+ * ============================================================================
+ *
+ * Match expressions are permitted in hybrid quantum/classical programs.
+ *
+ * Example semantic shape:
+ *
+ *     measurement
+ *         |
+ *         v
+ *     match result {
+ *         ...
+ *     }
+ *
+ * The grammar does not know whether the scrutinee originated from:
+ *
+ *     classical computation
+ *     quantum measurement
+ *     simulation
+ *     hardware
+ *     distributed execution
+ *
+ * A quantum-related match is lowered only after semantic analysis.
+ *
+ * The canonical quantum boundary remains:
+ *
+ *     semantic model
+ *          |
+ *          v
+ *     quantum::ir
+ *
+ * This grammar MUST NOT introduce a second quantum IR.
+ *
+ * ============================================================================
+ * HDL / HARDWARE INTEGRATION
+ * ============================================================================
+ *
+ * Match expressions may participate in hardware-oriented semantic models.
+ *
+ * The grammar does not decide whether a match becomes:
+ *
+ *     combinational logic
+ *     sequential control
+ *     muxing
+ *     predicate logic
+ *     state transition
+ *     software control
+ *     host/device coordination
+ *
+ * That decision belongs to semantic lowering and the relevant backend.
+ *
+ * ============================================================================
+ * AI / REASONING / KNOWLEDGE INTEGRATION
+ * ============================================================================
+ *
+ * Match expressions are generic control constructs and therefore may consume
+ * values produced by:
+ *
+ *     reasoning
+ *     inference
+ *     knowledge queries
+ *     learning
+ *     probabilistic computation
+ *     uncertainty analysis
+ *     agent execution
+ *     explanations
+ *
+ * No AI-specific syntax is embedded in this grammar.
+ *
+ * ============================================================================
+ * DETERMINISM
+ * ============================================================================
+ *
+ * Parsing MUST depend only on:
+ *
+ *     - source token sequence;
+ *     - selected language/grammar version.
+ *
+ * Parsing MUST NOT depend on:
+ *
+ *     - system time;
+ *     - randomness;
+ *     - environment variables;
+ *     - filesystem state;
+ *     - network state;
+ *     - hardware state;
+ *     - runtime scheduler state;
+ *     - target availability.
+ *
+ * ============================================================================
+ * SECURITY
+ * ============================================================================
+ *
+ * This grammar contains:
+ *
+ *     - no embedded Rust actions;
+ *     - no semantic predicates;
+ *     - no unsafe code;
+ *     - no filesystem access;
+ *     - no networking;
+ *     - no command execution;
+ *     - no hardware discovery;
+ *     - no device discovery;
+ *     - no runtime execution.
+ *
+ * A source program appearing syntactically inside a match arm MUST NOT execute
+ * merely because the grammar is parsed.
+ *
+ * ============================================================================
+ * COMPILER / IR CONTRACT
+ * ============================================================================
+ *
+ * The compiler must preserve:
+ *
+ *     scrutinee semantics
+ *     arm ordering
+ *     pattern semantics
+ *     guard semantics
+ *     binding semantics
+ *     observable effects
+ *     deterministic guarantees
+ *
+ * Match syntax does not define a match-specific machine IR.
+ *
+ * It lowers through the canonical semantic pipeline.
+ *
+ * Possible target representations include:
+ *
+ *     conditional control flow
+ *     decision trees
+ *     predication
+ *     dataflow
+ *     distributed control
+ *     dynamic quantum/classical control
+ *     HDL control
+ *
+ * ============================================================================
+ * PROVENANCE CONTRACT
+ * ============================================================================
+ *
+ * The semantic representation should retain sufficient source provenance to
+ * identify:
+ *
+ *     match expression
+ *     scrutinee
+ *     arm
+ *     pattern
+ *     guard
+ *     arm result
+ *
+ * Downstream transformations should be able to associate generated control
+ * structures with their originating source constructs.
+ *
+ * This is important for:
+ *
+ *     diagnostics
+ *     debugging
+ *     optimization explanations
+ *     verification
+ *     reproducibility
+ *     auditability
+ *     scientific provenance
+ *
+ * ============================================================================
+ * DIAGNOSTICS
+ * ============================================================================
+ *
+ * Parser-level diagnostics include:
+ *
+ *     - missing scrutinee;
+ *     - missing opening brace;
+ *     - missing arm;
+ *     - malformed pattern;
+ *     - missing arrow;
+ *     - malformed guard;
+ *     - malformed arm body;
+ *     - missing closing brace;
+ *     - malformed separator.
+ *
+ * Semantic diagnostics include:
+ *
+ *     - non-exhaustive match;
+ *     - unreachable arm;
+ *     - overlapping arm;
+ *     - incompatible pattern;
+ *     - invalid binding;
+ *     - inconsistent OR-pattern bindings;
+ *     - invalid guard;
+ *     - incompatible arm result types;
+ *     - invalid effect usage;
+ *     - missing capability;
+ *     - unsatisfied resource requirement;
+ *     - policy violation.
+ *
+ * Parser diagnostics MUST NOT attempt to decide semantic validity.
+ *
+ * ============================================================================
+ * COMPATIBILITY
+ * ============================================================================
+ *
+ * The canonical syntax is:
+ *
+ *     match <expression> {
+ *         <pattern> [when <expression>] => <result>
+ *     }
+ *
+ * If historical syntax uses a statement-only match form, compatibility support
+ * must be implemented by composing the canonical match construct rather than
+ * creating a second pattern/guard/arm language.
+ *
+ * Deprecated syntax must be explicitly versioned and must not silently change
+ * the meaning of canonical match expressions.
+ *
+ * ============================================================================
+ * TEST CONTRACT
+ * ============================================================================
+ *
+ * This file requires downstream tests for at least:
+ *
+ * POSITIVE:
+ *
+ *     match x {
+ *         0 => zero,
+ *         _ => other
+ *     }
+ *
+ *     match x {
+ *         value when value > threshold => value,
+ *         _ => fallback
+ *     }
+ *
+ *     let result = match value {
+ *         Some(x) => x,
+ *         None => fallback
+ *     };
+ *
+ *     consume(match value {
+ *         0 => zero,
+ *         _ => other
+ *     });
+ *
+ * NEGATIVE:
+ *
+ *     match x {
+ *     }
+ *
+ *     match x {
+ *         _ 
+ *     }
+ *
+ *     match x {
+ *         _ => 
+ *     }
+ *
+ *     match x {
+ *         _ => value
+ *     /* missing closing brace */
+ *
+ * BOUNDARY:
+ *
+ *     deeply nested patterns;
+ *     large source-level arm collections;
+ *     long OR-patterns;
+ *     nested match expressions;
+ *     match inside function calls;
+ *     match inside larger expressions;
+ *     match over generic values;
+ *     match over measurement-derived values;
+ *     match over distributed results;
+ *     match over resource/capability results.
+ *
+ * SCALABILITY:
+ *
+ * Tests may exercise implementation-sized inputs, but the tests MUST NOT
+ * convert a test-size value into a language-level maximum.
+ *
+ * DETERMINISM:
+ *
+ * Identical source + identical grammar version must produce equivalent parse
+ * structure independent of target hardware and runtime environment.
+ *
+ * ============================================================================
+ * INTEGRATION CONTRACT
+ * ============================================================================
+ *
+ * REQUIRED INTEGRATION WITH:
+ *
+ *     grammar/expressions/expressions.g4
+ *
+ * Add `matchExpression` to the canonical `primaryExpression` alternatives.
+ *
+ * The intended composition is:
+ *
+ *     primaryExpression
+ *         :
+ *             ...
+ *           | matchExpression
+ *         ;
+ *
+ * Do NOT move the complete expression hierarchy into this file.
+ *
+ * REQUIRED SHARED-ARM INTEGRATION:
+ *
+ *     grammar/statements/pattern-matching.g4
+ *
+ * That file must expose exactly one authoritative `matchArm` contract.
+ *
+ * It must also use the canonical range tokens:
+ *
+ *     DOT_DOT
+ *     DOT_DOT_EQ
+ *
+ * and must not use undefined aliases such as:
+ *
+ *     RANGE_EXCLUSIVE
+ *     RANGE_INCLUSIVE
+ *
+ * REQUIRED ROOT INTEGRATION:
+ *
+ *     grammar/antlr/ZamaniParser.g4
+ *
+ * The root parser must receive `matchExpression` through the canonical
+ * expression composition.
+ *
+ * It must not define another match-expression rule.
+ *
+ * REQUIRED LEGACY INTEGRATION:
+ *
+ *     grammar/antlr/Core.g4
+ *     grammar/antlr/ZamaniParser.g4
+ *
+ * Any competing legacy `matchExpression` rule must be removed from the
+ * production composition or isolated as historical/reference grammar.
+ *
+ * REQUIRED AST INTEGRATION:
+ *
+ * The AST layer must provide one canonical representation for:
+ *
+ *     MatchExpression
+ *     MatchArm
+ *     Pattern
+ *     Guard
+ *
+ * The grammar must not create a second AST model.
+ *
+ * REQUIRED RUST FRONTEND INTEGRATION:
+ *
+ * The hand-written Rust parser currently contains a match parsing path.
+ *
+ * The repository must select one authoritative parser path for production:
+ *
+ *     ANTLR parser
+ *
+ * or:
+ *
+ *     hand-written Rust parser
+ *
+ * but must not silently maintain two independently evolving match languages.
+ *
+ * If the Rust parser remains authoritative during migration, its parse contract
+ * must be kept structurally equivalent to this grammar and conformance tests
+ * must compare both paths before the ANTLR path becomes authoritative.
+ *
+ * ============================================================================
+ * INTEGRATION ORDER
+ * ============================================================================
+ *
+ * 1. Finalize canonical lexer tokens.
+ *
+ * 2. Finalize the shared pattern/guard/arm grammar.
+ *
+ * 3. Correct range-pattern token names.
+ *
+ * 4. Resolve expression-vs-block arm-body ambiguity.
+ *
+ * 5. Add matchExpression to expressions.g4 primaryExpression.
+ *
+ * 6. Remove competing legacy match-expression productions from the canonical
+ *    parser composition.
+ *
+ * 7. Synchronize the Rust AST representation.
+ *
+ * 8. Synchronize the authoritative Rust parser/frontend.
+ *
+ * 9. Add lexical/parser/AST/semantic conformance tests.
+ *
+ * 10. Add cross-domain and scalability tests.
+ *
+ * 11. Run the complete grammar and Rust test suite on Rust 1.97/1.97.1.
+ *
+ * ============================================================================
+ * COMPLETION CRITERIA
+ * ============================================================================
+ *
+ * `match.g4` is complete when:
+ *
+ *     [x] matchExpression has one clear owner;
+ *     [x] match syntax is target-independent;
+ *     [x] no hardware limits are encoded;
+ *     [x] no quantum limits are encoded;
+ *     [x] no backend assumptions are encoded;
+ *     [x] no semantic actions exist;
+ *     [x] no unsafe implementation is required;
+ *     [x] no duplicate expression hierarchy exists;
+ *     [x] the canonical expression rule is consumed;
+ *     [x] match-arm syntax is shared;
+ *     [x] pattern syntax is shared;
+ *     [x] guard syntax is shared;
+ *     [x] source arm order is preserved;
+ *     [x] semantic validation remains downstream;
+ *     [x] IR lowering remains downstream;
+ *     [x] provenance remains possible;
+ *     [x] compatibility is defined;
+ *     [x] integration points are predetermined;
+ *     [x] tests are predetermined.
+ *
+ * ============================================================================
+ * IMPORTANT
+ * ============================================================================
+ *
+ * This file deliberately does NOT attempt to make the entire repository
+ * production-ready by itself.
+ *
+ * Production readiness requires the integration contracts above to be fulfilled
+ * by the corresponding owner files.
+ *
+ * ============================================================================
+ */
