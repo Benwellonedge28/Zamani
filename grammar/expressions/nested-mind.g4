@@ -10,9 +10,15 @@
  *     NestedMindExpressions
  *
  * Status:
- *     PRODUCTION EXPRESSION-LEAF CONTRACT
+ *     CANONICAL / PRODUCTION EXPRESSION LEAF
  *
- * Implementation baseline:
+ * Language:
+ *     Zamani
+ *
+ * ANTLR:
+ *     ANTLR4 parser grammar
+ *
+ * Rust integration baseline:
  *     Rust 1.97 / Rust 1.97.1
  *     Rust 2021
  *     Safe Rust only
@@ -22,29 +28,21 @@
  * PURPOSE
  * ============================================================================
  *
- * This file owns the syntax for an embedded, recursively nestable cognitive
- * computation expression.
+ * This file defines the syntax boundary for recursively composable
+ * computational-mind expressions.
  *
  * A nested mind is NOT a second programming language.
  *
- * It is an expression-level composition boundary through which ordinary
- * Zamani expressions can invoke extensible cognitive operations.
+ * It is a source-level expression container for composing semantic operations
+ * such as reasoning, knowledge access, learning, adaptation, explanation,
+ * uncertainty handling, decision making, simulation, hybrid computation,
+ * quantum-assisted computation, and future semantic capabilities.
  *
- * The construct is deliberately target-neutral.
+ * The actual meaning of an operation is resolved by semantic analysis.
  *
- * It can ultimately participate in:
+ * This grammar therefore remains open-world.
  *
- *     classical computation
- *     quantum computation
- *     HDL/hardware computation
- *     tensor computation
- *     distributed computation
- *     networking
- *     accelerator computation
- *     probabilistic computation
- *     symbolic computation
- *     hybrid computation
- *     future computational domains
+ * New semantic operations do not require this grammar to be modified.
  *
  * ============================================================================
  * ARCHITECTURAL POSITION
@@ -59,49 +57,60 @@
  *     canonical parser
  *       |
  *       v
- *     expression composition
+ *     expressions.g4
  *       |
- *       +------------------------------+
- *       |                              |
- *       v                              v
- * ordinary expression          nestedMindExpression
- *                                      |
- *                                      v
- *                              domain-neutral AST
- *                                      |
- *                                      v
- *                              structural validation
- *                                      |
- *                                      v
- *                              semantic analysis
- *                                      |
- *              +-----------------------+----------------------+
- *              |                       |                      |
- *              v                       v                      v
- *          AI semantics          resources/capabilities   policies/effects
- *              |                       |                      |
- *              +-----------------------+----------------------+
- *                                      |
- *                                      v
- *                              canonical semantic model
- *                                      |
- *                         +------------+------------+
- *                         |                         |
- *                         v                         v
- *                    classical                quantum semantics
- *                                                   |
- *                                                   v
- *                                               quantum::ir
- *                                                   |
- *                                                   v
- *                                        optimization/lowering
- *                                                   |
- *                                          routing/scheduling
- *                                                   |
- *                                           resilience/QEC/ZQN
- *                                                   |
- *                                                   v
- *                                                  HAL
+ *       +--------------------------+
+ *       |                          |
+ *       v                          v
+ * ordinary expressions      nestedMindExpression
+ *                                  |
+ *                                  v
+ *                         domain-neutral AST
+ *                                  |
+ *                                  v
+ *                         structural validation
+ *                                  |
+ *                                  v
+ *                         semantic analysis
+ *                                  |
+ *              +-------------------+-------------------+
+ *              |                   |                   |
+ *              v                   v                   v
+ *          reasoning          knowledge           learning
+ *              |                   |                   |
+ *              +-------------------+-------------------+
+ *                                  |
+ *                                  v
+ *                    capabilities / resources / effects
+ *                                  |
+ *                                  v
+ *                         contracts / policies
+ *                                  |
+ *                                  v
+ *                             provenance
+ *                                  |
+ *                                  v
+ *                    canonical semantic representation
+ *                                  |
+ *              +-------------------+-------------------+
+ *              |                   |                   |
+ *              v                   v                   v
+ *          classical          quantum::ir          HDL/hardware
+ *              |                   |                   |
+ *              +-------------------+-------------------+
+ *                                  |
+ *                                  v
+ *                         optimization/lowering
+ *                                  |
+ *                          routing/scheduling
+ *                                  |
+ *                         resilience / QEC
+ *                                  |
+ *                                 ZQN
+ *                                  |
+ *                                 HAL
+ *                                  |
+ *                           target realization
  *
  * ============================================================================
  * FEATURE CONTRACT
@@ -117,50 +126,48 @@
  *     nestedMindOperationName
  *     nestedMindArguments
  *     nestedMindArgumentList
+ *     nestedMindArgument
  *     nestedMindGuard
- *     nestedMindModifier
- *     nestedMindModifierList
- *     nestedMindResultBinding
- *     nestedMindNestedExpression
  *
  * DOES NOT OWN
  * -------------
  *
  *     expression
- *     assignment precedence
- *     binary precedence
+ *     assignmentExpression
+ *     conditionalExpression
+ *     logical precedence
+ *     arithmetic precedence
  *     unary precedence
  *     postfix precedence
  *     ordinary calls
  *     ordinary indexing
  *     ordinary member access
- *     ordinary types
- *     ordinary statements
+ *     ordinary assignment
+ *     types
+ *     patterns
  *     reasoning semantics
  *     knowledge semantics
  *     learning semantics
  *     adaptation semantics
- *     probability implementation
- *     model implementation
- *     agent lifecycle
- *     memory implementation
+ *     uncertainty semantics
+ *     explanation semantics
+ *     provenance semantics
  *     policy semantics
- *     contract semantics
- *     resource negotiation
- *     capability negotiation
- *     effect checking
- *     provenance storage
- *     AST structures
- *     semantic IR
+ *     effect semantics
+ *     capability semantics
+ *     resource semantics
+ *     actor semantics
+ *     quantum semantics
+ *     HDL semantics
  *     classical IR
  *     quantum::ir
  *     HDL IR
- *     routing
+ *     target selection
  *     scheduling
+ *     routing
  *     QEC
  *     ZQN
  *     HAL
- *     target selection
  *     runtime execution
  *
  * ============================================================================
@@ -171,27 +178,24 @@
  * ----------
  *
  *     grammar/antlr/ZamaniLexer.g4
+ *     grammar/core/names.g4
  *     grammar/core/qualified-names.g4
- *     shared expression-core boundary
+ *     canonical expression-core integration boundary
  *
- * The shared expression-core boundary MUST expose the canonical expression
- * operand used by this leaf grammar.
+ * IMPORTANT:
  *
  * This grammar MUST NOT import:
  *
  *     grammar/expressions/expressions.g4
  *
- * when expressions.g4 imports this file.
+ * when expressions.g4 imports this grammar.
  *
- * Doing so would create a parser-grammar cycle.
+ * Doing so creates a parser grammar dependency cycle.
  *
  * EXPORTS
  * -------
  *
  *     nestedMindExpression
- *
- * Internal rules are implementation details unless the parser composition
- * explicitly promotes them.
  *
  * CONSUMED_BY
  * ----------
@@ -205,41 +209,46 @@
  *
  *     Existing domain-neutral Zamani frontend AST.
  *
- * This grammar does not define Rust structures.
+ * This grammar creates parser contexts only.
  *
  * SEMANTIC_OWNER
  * --------------
  *
- *     Generic semantic-operation layer plus the owning semantic subsystem
- *     for each resolved operation.
+ *     Generic semantic operation resolution.
  *
- * For example:
+ * The resolved operation is then handled by its owning subsystem:
  *
  *     reasoning.*       -> reasoning semantic model
  *     knowledge.*       -> knowledge semantic model
  *     learning.*        -> learning semantic model
  *     adaptation.*      -> adaptation semantic model
  *     policy.*          -> policy semantic model
+ *     provenance.*      -> provenance semantic model
  *     quantum.*         -> quantum semantic model
+ *     hybrid.*          -> hybrid semantic model
+ *     execution.*       -> execution semantic model
  *
  * IR_OWNER
  * --------
  *
  *     Canonical semantic IR.
  *
- * Quantum operations ultimately lower through:
+ * This file creates NO nested-mind-specific IR.
+ *
+ * Quantum operations ultimately cross:
  *
  *     quantum::ir
  *
- * This file creates no NestedMindIR.
+ * Classical operations ultimately cross the canonical classical/domain IR.
  *
  * TEST_OWNER
  * ----------
  *
  *     grammar/tests/expressions/nested-mind/
+ *     grammar/tests/parser/
  *     grammar/tests/semantic/
- *     grammar/tests/scalability/
  *     grammar/tests/boundary/
+ *     grammar/tests/scalability/
  *
  * SPEC_OWNER
  * ----------
@@ -252,86 +261,85 @@
  * LEXICAL CONTRACT
  * ============================================================================
  *
- * This grammar contains NO lexer rules.
+ * This file contains NO lexer rules.
  *
- * The canonical lexer remains:
+ * All lexical tokens come from:
  *
  *     grammar/antlr/ZamaniLexer.g4
  *
- * The preferred production design is to avoid introducing a large vocabulary
- * of cognitive keywords.
+ * through the repository's canonical lexer hierarchy.
  *
- * Cognitive operation names are therefore represented by identifiers or
- * qualified names wherever possible.
+ * The word:
  *
- * This permits future operations such as:
+ *     mind
  *
+ * MUST NOT be implemented as a private lexer token in this file.
+ *
+ * A canonical reserved token may be introduced later by the central lexer
+ * architecture, but this grammar must remain independent of that decision.
+ *
+ * ============================================================================
+ * NAME CONTRACT
+ * ============================================================================
+ *
+ * Names are consumed through:
+ *
+ *     grammar/core/names.g4
+ *
+ * and:
+ *
+ *     grammar/core/qualified-names.g4
+ *
+ * The grammar does not recreate identifier syntax.
+ *
+ * Cognitive operations therefore remain open-world:
+ *
+ *     reason
  *     infer
  *     deduce
- *     reason
- *     assert
- *     retract
- *     query
- *     learn
- *     adapt
- *     explain
- *     decide
- *     observe
- *     hypothesize
- *     verify
+ *     knowledge::query
+ *     model::learn
+ *     strategy::adapt
+ *     decision::explain
+ *     quantum::measure
+ *     hybrid::execute
  *
- * without requiring this grammar to change.
- *
- * If a language-level `mind` marker is eventually reserved, its token MUST be
- * added to the canonical lexical hierarchy rather than defined here.
- *
- * This file MUST NOT define a private MIND token.
+ * are names, not a closed keyword catalogue.
  *
  * ============================================================================
- * OPEN-WORLD OPERATION MODEL
+ * OPERATION MODEL
  * ============================================================================
  *
- * The central rule is:
+ * The semantic model is:
  *
- *     cognitive operation = qualified semantic name + optional arguments
+ *     operation
+ *         =
+ *     qualified name
+ *         +
+ *     optional arguments
+ *         +
+ *     optional guard
  *
- * The grammar does NOT enumerate a closed set of operations.
+ * Examples:
  *
- * Therefore:
+ *     reason(problem)
+ *     infer(evidence)
+ *     knowledge::query(pattern)
+ *     model::learn(model, data)
+ *     strategy::adapt(strategy, feedback)
+ *     decision::explain(result)
+ *     quantum::measure(register)
  *
- *     infer(...)
- *     deduce(...)
- *     reason(...)
- *     knowledge.query(...)
- *     model.learn(...)
- *     strategy.adapt(...)
- *     decision.explain(...)
+ * The grammar does not determine which operation exists.
  *
- * are all structurally representable.
- *
- * Whether a name denotes:
- *
- *     reasoning
- *     learning
- *     adaptation
- *     knowledge
- *     probability
- *     causality
- *     explanation
- *     provenance
- *     quantum computation
- *     classical computation
- *     tensor computation
- *     distributed computation
- *     an external dialect
- *
- * is a semantic-resolution question.
+ * Unknown operations are semantic-resolution diagnostics, not parser errors.
  *
  * ============================================================================
- * RECURSION / SCALABILITY CONTRACT
+ * NESTING MODEL
  * ============================================================================
  *
- * Nested cognition is recursively composable.
+ * A nested mind may contain operations whose arguments contain another nested
+ * mind expression.
  *
  * Conceptually:
  *
@@ -343,85 +351,261 @@
  *         )
  *     }
  *
- * No grammar-level nesting limit is imposed.
+ * This recursion is intentional.
  *
- * There MUST NOT be:
+ * There is no grammar-level maximum for:
+ *
+ *     nesting depth
+ *     clause count
+ *     operation count
+ *     argument count
+ *     qualified-name depth
+ *
+ * Practical implementation limits are resource limits, not language limits.
+ *
+ * ============================================================================
+ * POCO-REAF / SCALABILITY
+ * ============================================================================
+ *
+ * This grammar introduces no universal finite capacity.
+ *
+ * It MUST NOT contain:
  *
  *     MAX_MIND_DEPTH
  *     MAX_COGNITIVE_DEPTH
- *     MAX_REASONING_STEPS
  *     MAX_CLAUSES
  *     MAX_ARGUMENTS
+ *     MAX_OPERATIONS
  *     MAX_CONTEXTS
+ *     MAX_REASONING_STEPS
+ *     MAX_QUBITS
+ *     MAX_CPUS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_NODES
+ *     MAX_MEMORY
+ *     MAX_THREADS
+ *     MAX_TENSOR_RANK
+ *     MAX_REGISTER_WIDTH
+ *     MAX_NETWORK_SIZE
+ *     MAX_DEVICE_COUNT
  *
- * or equivalent constants.
+ * or equivalent universal ceilings.
  *
- * Practical limits belong to:
+ * Repetition is represented structurally through ANTLR repetition operators.
  *
- *     parser implementation
- *     compiler resource policy
+ * Actual limits belong to:
+ *
+ *     parser resources
+ *     compiler resources
  *     memory availability
- *     recursion strategy
  *     execution policy
  *     target capability
- *
- * and are not language semantics.
+ *     deployment constraints
  *
  * ============================================================================
  * TARGET INDEPENDENCE
  * ============================================================================
  *
- * This grammar MUST NOT encode:
+ * This grammar does not select:
  *
- *     CPU identifiers
- *     GPU identifiers
- *     FPGA identifiers
- *     ASIC identifiers
- *     QPU identifiers
- *     physical qubit identifiers
- *     fixed node counts
- *     fixed device counts
- *     fixed memory sizes
- *     register widths
- *     tensor-rank ceilings
- *     network-size ceilings
+ *     CPU
+ *     GPU
+ *     FPGA
+ *     ASIC
+ *     accelerator
+ *     QPU
+ *     simulator
+ *     cluster
+ *     cloud
+ *     network node
  *
- * Requirements belong to:
- *
- *     resources
- *     capabilities
- *     constraints
- *     policies
- *     compilation contexts
+ * A mind operation can ultimately be lowered to any supported computational
+ * domain according to semantic capabilities, resource requirements,
+ * constraints, policies, and compilation context.
  *
  * ============================================================================
- * EXPRESSION BOUNDARY
+ * QUANTUM BOUNDARY
  * ============================================================================
  *
- * `nestedMindArgument` consumes the shared expression-core boundary.
+ * This grammar does not define quantum operations.
  *
- * It MUST NOT import the complete Expressions grammar.
+ * It permits a semantic operation name such as:
  *
- * The purpose is to permit:
+ *     quantum::measure
+ *     quantum::prepare
+ *     quantum::execute
  *
- *     reason(problem + context)
- *     learn(model, data)
- *     adapt(strategy, feedback)
- *     explain(decision)
- *     query(graph.filter(predicate))
+ * to be represented as a source-level operation reference.
  *
- * while keeping expression precedence owned by the canonical expression
- * composition grammar.
+ * Semantic analysis decides whether the operation is quantum.
+ *
+ * If so:
+ *
+ *     semantic operation
+ *         ->
+ *     quantum semantic model
+ *         ->
+ *     quantum::ir
+ *
+ * The grammar does not know physical qubits, topology, routing, calibration,
+ * decomposition, scheduling, or QEC.
  *
  * ============================================================================
- * PUBLIC ENTRY
+ * HDL BOUNDARY
  * ============================================================================
  *
- * The single public entry point is:
+ * This grammar does not define HDL syntax.
  *
- *     nestedMindExpression
+ * An operation may refer semantically to HDL/hardware computation, but
+ * realization belongs to the HDL/hardware semantic and lowering layers.
  *
- * The enclosing expression grammar determines where this construct is legal.
+ * ============================================================================
+ * EFFECT CONTRACT
+ * ============================================================================
+ *
+ * This grammar does not assign effects.
+ *
+ * Semantic resolution may determine effects such as:
+ *
+ *     reasoning
+ *     knowledge.read
+ *     knowledge.write
+ *     learning
+ *     adaptation
+ *     randomness
+ *     measurement
+ *     network
+ *     foreign
+ *     native
+ *     reflection
+ *     simulation
+ *     distributed
+ *
+ * The same syntactic operation shape can therefore be implemented differently
+ * without changing the grammar.
+ *
+ * ============================================================================
+ * CAPABILITY CONTRACT
+ * ============================================================================
+ *
+ * Capabilities are resolved semantically.
+ *
+ * Examples include:
+ *
+ *     reasoning
+ *     knowledge.query
+ *     model.inference
+ *     tensor.compute
+ *     quantum.measurement
+ *     hardware.accelerator
+ *
+ * The grammar does not enumerate capabilities.
+ *
+ * ============================================================================
+ * RESOURCE CONTRACT
+ * ============================================================================
+ *
+ * Resource requirements belong to the repository's resource system.
+ *
+ * A nested mind expression may semantically require:
+ *
+ *     compute
+ *     memory
+ *     storage
+ *     communication
+ *     accelerator resources
+ *     quantum resources
+ *     model resources
+ *
+ * No resource capacity is encoded here.
+ *
+ * ============================================================================
+ * CONTRACT CONTRACT
+ * ============================================================================
+ *
+ * Contracts are not reimplemented here.
+ *
+ * A nested mind operation may participate in the repository's existing:
+ *
+ *     requires
+ *     ensures
+ *     invariant
+ *     assume
+ *     guarantee
+ *     property
+ *
+ * model through the surrounding expression/validation architecture.
+ *
+ * ============================================================================
+ * POLICY CONTRACT
+ * ============================================================================
+ *
+ * Policies remain owned by:
+ *
+ *     grammar/expressions/policy.g4
+ *     grammar/policies/
+ *     grammar/security/
+ *     grammar/execution/
+ *
+ * A nested mind expression does not grant permissions merely because an
+ * operation has a particular name.
+ *
+ * ============================================================================
+ * PROVENANCE CONTRACT
+ * ============================================================================
+ *
+ * The parser preserves source structure and source spans.
+ *
+ * Semantic analysis may associate operations with:
+ *
+ *     evidence
+ *     provenance
+ *     decisions
+ *     transformations
+ *     model lineage
+ *     execution lineage
+ *
+ * Provenance storage and recording remain outside this grammar.
+ *
+ * ============================================================================
+ * DETERMINISM CONTRACT
+ * ============================================================================
+ *
+ * Parsing depends only on:
+ *
+ *     source tokens
+ *     active grammar
+ *     parser configuration
+ *
+ * Parsing must not inspect:
+ *
+ *     hardware
+ *     filesystem state
+ *     network state
+ *     runtime state
+ *     target state
+ *     QPU state
+ *     GPU state
+ *     environment variables
+ *     wall-clock time
+ *     randomness
+ *
+ * ============================================================================
+ * RUST CONTRACT
+ * ============================================================================
+ *
+ * This grammar contains no embedded Rust actions.
+ *
+ * Generated parser integration must remain compatible with:
+ *
+ *     Rust 1.97
+ *     Rust 1.97.1
+ *     Rust 2021
+ *
+ * and safe Rust.
+ *
+ * No unsafe Rust is required.
  *
  * ============================================================================
  */
@@ -437,27 +621,13 @@ import QualifiedNames;
 
 /*
  * ============================================================================
- * 1. PUBLIC ENTRY
+ * PUBLIC ENTRY
  * ============================================================================
  *
- * The lexical marker is deliberately represented by a canonical identifier
- * rather than a private lexer token.
+ * `nestedMindExpression` is the only public rule exported by this grammar.
  *
- * This permits the semantic layer to recognize:
+ * The enclosing expression grammar determines where it can occur.
  *
- *     mind
- *
- * without forcing a permanent global keyword if the language specification
- * ultimately chooses annotation-based or dialect-based spelling.
- *
- * The canonical source-level form is therefore:
- *
- *     mind { ... }
- *
- * with the word `mind` represented structurally as an identifier.
- *
- * A future reserved-token promotion can occur centrally without changing the
- * semantic model.
  * ============================================================================
  */
 
@@ -469,125 +639,103 @@ nestedMindExpression
 
 /*
  * ============================================================================
- * 2. MIND MARKER
+ * MIND MARKER
  * ============================================================================
  *
- * The marker is an identifier rather than a locally invented lexer token.
+ * IMPORTANT:
  *
- * Semantic validation recognizes the canonical marker.
+ * The current repository does not yet expose a canonical MIND lexer token.
  *
- * This is intentionally open to future compatibility modes.
+ * Therefore this grammar does not invent one.
+ *
+ * However, accepting every IDENTIFIER here would make:
+ *
+ *     name { ... }
+ *
+ * structurally indistinguishable from a future ordinary construct.
+ *
+ * The marker is consequently isolated behind this rule so that the semantic
+ * and lexical architecture has exactly one promotion point.
+ *
+ * The current source spelling is:
+ *
+ *     mind
+ *
+ * represented lexically as IDENTIFIER.
+ *
+ * Semantic validation MUST verify that the identifier spelling is exactly the
+ * canonical language marker.
+ *
+ * A future canonical reserved token can replace this rule centrally without
+ * changing the semantic model.
+ *
  * ============================================================================
  */
 
 nestedMindMarker
-    : IDENTIFIER
+    : identifier
     ;
 
 
 /*
  * ============================================================================
- * 3. MIND BODY
+ * BODY
  * ============================================================================
  *
- * The body contains zero or more cognitive clauses.
+ * Zero or more clauses are syntactically permitted.
  *
- * Empty bodies are structurally valid.
+ * Whether an empty body is meaningful is a semantic/contextual question.
  *
- * Semantic validation may require a non-empty body in contexts where an
- * actual computation is required.
- *
- * No finite clause count is imposed.
  * ============================================================================
  */
 
 nestedMindBody
-    : LBRACE
+    : LEFT_BRACE
       nestedMindClause*
-      RBRACE
+      RIGHT_BRACE
     ;
 
 
 /*
  * ============================================================================
- * 4. CLAUSE
+ * CLAUSE
  * ============================================================================
  *
- * A clause consists of:
+ * A clause contains:
  *
- *     optional result binding
  *     operation
  *     optional guard
- *     optional modifiers
- *     optional terminator
+ *     optional expression terminator
  *
- * Examples:
+ * Result binding is deliberately NOT implemented here.
  *
- *     infer(problem);
+ * Assignment already belongs to:
  *
- *     result = reason(context);
+ *     grammar/expressions/expressions.g4
  *
- *     learn(model, data) if evidence.is_valid;
+ * and:
  *
- *     adapt(strategy) with policy;
+ *     grammar/expressions/assignment.g4
+ *
+ * Keeping assignment outside this grammar prevents a second assignment model.
  *
  * ============================================================================
  */
 
 nestedMindClause
-    : nestedMindResultBinding?
-      nestedMindOperation
+    : nestedMindOperation
       nestedMindGuard?
-      nestedMindModifierList?
       nestedMindTerminator?
     ;
 
 
 /*
  * ============================================================================
- * 5. RESULT BINDING
+ * OPERATION
  * ============================================================================
  *
- * Result binding remains ordinary semantic assignment intent.
+ * The operation vocabulary is intentionally open.
  *
- * The enclosing semantic layer determines:
- *
- *     mutability
- *     type
- *     ownership
- *     lifetime
- *     effect
- *     capability
- *
- * ============================================================================
- */
-
-nestedMindResultBinding
-    : identifier ASSIGN
-    ;
-
-
-/*
- * ============================================================================
- * 6. OPERATION
- * ============================================================================
- *
- * This is the principal extensibility boundary.
- *
- * The grammar does NOT enumerate:
- *
- *     infer
- *     deduce
- *     reason
- *     query
- *     learn
- *     adapt
- *     explain
- *     decide
- *     observe
- *     etc.
- *
- * They are names resolved by semantic registries.
  * ============================================================================
  */
 
@@ -599,20 +747,11 @@ nestedMindOperation
 
 /*
  * ============================================================================
- * 7. OPERATION NAME
+ * OPERATION NAME
  * ============================================================================
  *
- * Qualified names permit:
+ * Reuses the repository's canonical qualified-name model.
  *
- *     reason
- *     ai.reason
- *     knowledge.query
- *     model.learn
- *     quantum.measure
- *     hybrid.execute
- *     vendor.cognitive.operation
- *
- * The semantic resolver decides whether a qualified name is legal.
  * ============================================================================
  */
 
@@ -623,23 +762,24 @@ nestedMindOperationName
 
 /*
  * ============================================================================
- * 8. ARGUMENTS
+ * ARGUMENTS
  * ============================================================================
  *
- * Argument cardinality is intentionally unbounded.
+ * Argument cardinality is open-ended.
+ *
  * ============================================================================
  */
 
 nestedMindArguments
-    : LPAREN
+    : LEFT_PAREN
       nestedMindArgumentList?
-      RPAREN
+      RIGHT_PAREN
     ;
 
 
 /*
  * ============================================================================
- * 9. ARGUMENT LIST
+ * ARGUMENT LIST
  * ============================================================================
  */
 
@@ -655,27 +795,17 @@ nestedMindArgumentList
 
 /*
  * ============================================================================
- * 10. ARGUMENT
+ * ARGUMENT
  * ============================================================================
  *
- * Arguments use the shared expression-core boundary.
+ * This is the ONLY place where the shared expression operand boundary is
+ * consumed.
  *
- * The core expression contract MUST be supplied by parser composition.
+ * `expressionCore` MUST be supplied by the canonical expression-composition
+ * layer described below.
  *
- * It may represent:
+ * This grammar deliberately does not define it.
  *
- *     literals
- *     identifiers
- *     calls
- *     arithmetic
- *     logical expressions
- *     collections
- *     lambdas
- *     patterns
- *     nested mind expressions
- *     domain-neutral expressions
- *
- * without this grammar recreating those facilities.
  * ============================================================================
  */
 
@@ -686,18 +816,17 @@ nestedMindArgument
 
 /*
  * ============================================================================
- * 11. GUARD
+ * GUARD
  * ============================================================================
  *
- * Guards are semantic predicates attached to a cognitive operation.
+ * A guard is a semantic predicate attached to the operation.
  *
  * Example:
  *
  *     infer(problem) if confidence > threshold;
  *
- * The guard expression itself remains a normal expression.
+ * The guard uses the shared expression operand boundary.
  *
- * Guard semantics belong to validation/semantic analysis.
  * ============================================================================
  */
 
@@ -709,766 +838,147 @@ nestedMindGuard
 
 /*
  * ============================================================================
- * 12. MODIFIERS
+ * TERMINATOR
  * ============================================================================
  *
- * Modifiers are deliberately name/value based.
+ * Statement/expression termination remains owned by the canonical parser
+ * composition.
  *
- * This prevents keyword explosion.
- *
- * Possible semantic modifiers include:
- *
- *     strategy
- *     confidence
- *     evidence
- *     provenance
- *     policy
- *     model
- *     constraints
- *     preference
- *     resource
- *     capability
- *     timeout
- *     reproducibility
- *     deterministic
- *     adaptive
- *
- * New modifiers do not require this grammar to change.
- * ============================================================================
- */
-
-nestedMindModifierList
-    : nestedMindModifier+
-    ;
-
-
-nestedMindModifier
-    : AT
-      qualifiedName
-      (
-          ASSIGN
-          expressionCore
-      )?
-    ;
-
-
-/*
- * ============================================================================
- * 13. TERMINATION
- * ============================================================================
- *
- * The enclosing parser may supply statement/expression termination.
- *
- * A semicolon is accepted here for convenient block-oriented source syntax.
+ * This leaf accepts the canonical semicolon token when the surrounding
+ * composition permits an explicit terminator.
  * ============================================================================
  */
 
 nestedMindTerminator
-    : SEMI
+    : SEMICOLON
     ;
 
 
 /*
  * ============================================================================
- * 14. SHARED EXPRESSION CORE CONTRACT
+ * EXPRESSION-CORE INTEGRATION CONTRACT
  * ============================================================================
  *
- * `expressionCore` is intentionally not defined here.
+ * This grammar intentionally does NOT define `expressionCore`.
  *
- * It must be provided by the repository's shared expression composition
- * boundary.
+ * A production integration requires one shared, acyclic parser boundary:
  *
- * REQUIRED CONTRACT:
+ *     canonical expression implementation
+ *                 |
+ *                 v
+ *          expressionCore
+ *                 |
+ *        +--------+---------+
+ *        |                  |
+ *        v                  v
+ *   nested-mind       other expression leaves
+ *
+ * The dependency graph MUST NOT become:
+ *
+ *     expressions.g4
+ *         ->
+ *     nested-mind.g4
+ *         ->
+ *     expressions.g4
+ *
+ * because that creates a grammar cycle.
+ *
+ * Therefore `expressionCore` must be introduced as an independent lower-level
+ * expression composition boundary before this grammar is integrated into
+ * `expressions.g4`.
+ *
+ * The canonical ownership contract is:
+ *
+ *     expression
+ *         -> full precedence expression
  *
  *     expressionCore
+ *         -> reusable expression operand boundary
  *
- * MUST represent a complete domain-neutral expression operand without
- * importing this grammar back into the full precedence grammar.
+ *     nestedMindExpression
+ *         -> leaf expression construct
  *
- * Dependency direction:
- *
- *     expression precedence
- *             |
- *             v
- *       expressionCore
- *             |
- *       +-----+--------------------+
- *       |                          |
- *       v                          v
- * nested-mind                 reasoning/etc.
- *
- * NOT:
- *
- *     Expressions -> nested-mind -> Expressions
+ * The exact implementation of `expressionCore` belongs to the shared
+ * expression architecture, not to this file.
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 15. COGNITIVE OPERATION SEMANTIC RESOLUTION
+ * SEMANTIC RESOLUTION
  * ============================================================================
  *
- * The following names are intentionally NOT grammar alternatives:
+ * The following are examples of semantic operation names:
  *
  *     infer
  *     deduce
  *     reason
- *     assert
- *     retract
- *     query
+ *     knowledge::assert
+ *     knowledge::retract
+ *     knowledge::query
  *     learn
  *     adapt
  *     explain
- *     evidence
  *     decide
  *     observe
- *     hypothesize
  *     verify
+ *     quantum::measure
+ *     hybrid::execute
  *
- * They are semantic operation names.
+ * None are grammar alternatives.
  *
- * Resolution may map them to:
- *
- *     reasoning semantic model
- *     knowledge semantic model
- *     learning semantic model
- *     adaptation semantic model
- *     evidence/provenance model
- *     decision model
- *     uncertainty model
- *     policy model
- *     external dialect
- *
- * The parser must not decide which implementation is selected.
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 16. REASONING INTEGRATION
- * ============================================================================
- *
- * Example:
- *
- *     mind {
- *         infer(problem);
- *         deduce(conclusion, premises);
- *         reason(context);
- *     }
- *
- * The semantic resolver may lower these into the existing reasoning model
- * represented by:
- *
- *     grammar/expressions/reasoning.g4
- *
- * This grammar does not duplicate reasoningOperation.
- *
- * The semantic layer remains the convergence point.
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 17. KNOWLEDGE INTEGRATION
- * ============================================================================
- *
- * Example:
- *
- *     mind {
- *         knowledge.assert(fact);
- *         knowledge.retract(fact);
- *         knowledge.query(pattern);
- *     }
- *
- * Knowledge storage remains owned by the knowledge/data subsystem.
- *
- * This grammar only represents the invocation structure.
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 18. LEARNING INTEGRATION
- * ============================================================================
- *
- * Example:
- *
- *     mind {
- *         learn(model, data);
- *     }
- *
- * Learning algorithms, model formats, training systems, resources and
- * execution effects remain outside this grammar.
- *
- * The semantic layer determines:
- *
- *     model
- *     objective
- *     data
- *     algorithm
- *     capabilities
- *     resources
- *     effects
- *     policy
- *     provenance
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 19. ADAPTATION INTEGRATION
- * ============================================================================
- *
- * Example:
- *
- *     mind {
- *         adapt(strategy, feedback);
- *     }
- *
- * Adaptation MUST NOT imply unrestricted self-modifying execution.
- *
- * Semantic validation must establish:
- *
- *     authorization
- *     policy
- *     capabilities
- *     effects
- *     resource constraints
- *     provenance
- *
- * before execution.
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 20. UNCERTAINTY INTEGRATION
- * ============================================================================
- *
- * Uncertainty is represented through ordinary arguments and semantic types.
- *
- * Examples:
- *
- *     infer(hypothesis, confidence);
- *     reason(belief_distribution);
- *     decide(outcome, probability);
- *
- * This grammar does not define:
- *
- *     a probability algorithm
- *     a probability representation
- *     a fixed precision
- *     a fixed distribution family
- *
- * Those belong to the semantic/type systems.
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 21. EVIDENCE / PROVENANCE INTEGRATION
- * ============================================================================
- *
- * Examples:
- *
- *     explain(decision);
- *     verify(claim, evidence);
- *     reason(claim) @provenance = source;
- *
- * Provenance is not executed by the parser.
- *
- * Semantic analysis may attach:
- *
- *     source
- *     evidence
- *     derivation
- *     transformation
- *     verification
- *     decision
- *     version
- *
- * to the resulting semantic operation.
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 22. POLICY / CONTRACT INTEGRATION
- * ============================================================================
- *
- * Policies and contracts remain owned by their respective subsystems.
- *
- * Nested mind expressions can reference them through:
- *
- *     guards
- *     modifiers
- *     ordinary expressions
- *
- * Example conceptual forms:
- *
- *     mind {
- *         infer(problem)
- *             @policy = reasoning_policy;
- *
- *         adapt(strategy)
- *             @requires = adaptation_requirement;
- *     }
- *
- * The grammar does not implement policy evaluation.
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 23. MULTI-AGENT INTEGRATION
- * ============================================================================
- *
- * A nested mind is NOT an actor.
- *
- * If a mind participates in an actor:
- *
- *     mind expression
- *          |
- *          v
- *     AI semantic model
- *          |
- *          v
- *     actor/concurrency semantic model
- *          |
- *          v
- *     scheduler/runtime
- *
- * Actor lifecycle remains owned by:
- *
- *     grammar/concurrency/
- *
- * No second actor system is introduced.
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 24. QUANTUM INTEGRATION
- * ============================================================================
- *
- * A cognitive operation may semantically reference quantum computation:
- *
- *     mind {
- *         infer(result, quantum.measurement);
- *         reason(quantum_state);
- *     }
- *
- * This grammar does NOT define:
- *
- *     gates
- *     qubits
- *     circuits
- *     topology
- *     routing
- *     QEC
- *     calibration
- *     physical devices
- *
- * If semantic analysis determines that an operation is quantum, the lowering
- * path is:
- *
- *     nested mind AST
- *          |
- *          v
- *     semantic operation
- *          |
- *          v
- *     quantum semantic model
- *          |
- *          v
- *     quantum::ir
- *          |
- *          v
- *     optimization
- *          |
- *          v
- *     decomposition
- *          |
- *          v
- *     routing
- *          |
- *          v
- *     scheduling
- *          |
- *          v
- *     QEC/resilience
- *          |
- *          v
- *     ZQN
- *          |
- *          v
- *     HAL
- *
- * No mind-specific quantum IR is introduced.
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 25. HYBRID INTEGRATION
- * ============================================================================
- *
- * A nested mind may participate in:
- *
- *     classical -> cognition -> quantum -> measurement -> cognition
- *
- * or:
- *
- *     data -> learning -> accelerator -> decision
- *
- * or:
- *
- *     sensor -> reasoning -> control -> hardware
- *
- * The semantic planner establishes domain boundaries.
- *
- * The grammar remains domain-neutral.
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 26. HDL / HARDWARE INTEGRATION
- * ============================================================================
- *
- * Hardware intent is expressed through semantic capabilities and resources,
- * not physical machine constants.
- *
- * Example conceptual requirement:
- *
- *     @requires = capability("tensor.compute");
- *
- * The grammar does not know whether realization uses:
- *
- *     CPU
- *     GPU
- *     FPGA
- *     ASIC
- *     accelerator
- *     simulator
- *     future hardware
- *
- * Target realization is downstream.
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 27. EFFECT CONTRACT
- * ============================================================================
- *
- * This grammar does not declare a closed effect set.
- *
- * Semantic analysis may determine effects such as:
- *
- *     reasoning
- *     learning
- *     adaptation
- *     mutation
- *     randomness
- *     measurement
- *     network
- *     foreign
- *     reflection
- *     distributed
- *     simulation
- *     native
- *
- * Effects are checked by the universal effect system.
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 28. CAPABILITY CONTRACT
- * ============================================================================
- *
- * Cognitive operations may require capabilities such as:
- *
- *     reasoning
- *     knowledge.query
- *     learning
- *     adaptation
- *     tensor.compute
- *     quantum.measurement
- *     accelerator.compute
- *
- * Capability names remain semantic values.
- *
- * No finite capability universe is hard-coded here.
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 29. RESOURCE CONTRACT
- * ============================================================================
- *
- * Resource requirements remain symbolic.
- *
- * Examples:
- *
- *     memory >= required_memory
- *     qubits >= required_qubits
- *     capability("quantum.measurement")
- *
- * No numerical machine ceiling is introduced.
- *
- * Resource negotiation belongs to:
- *
- *     grammar/resources/
+ * This prevents the grammar from becoming a closed catalogue of current
+ * algorithms.
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 30. TYPE CONTRACT
+ * ERROR OWNERSHIP
  * ============================================================================
  *
- * The grammar imposes no fixed result type.
+ * Parser diagnostics:
  *
- * A nested cognitive operation may return:
- *
- *     scalar
- *     tuple
- *     record
- *     collection
- *     tensor
- *     probability/distribution
- *     symbolic value
- *     classical value
- *     quantum-derived value
- *     reference
- *     future/async value
- *     domain-specific semantic value
- *
- * Type resolution belongs to the canonical type system.
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 31. AST CONTRACT
- * ============================================================================
- *
- * The AST must preserve at least:
- *
- *     source span
- *     operation name
- *     qualification segments
- *     argument order
- *     nested expression structure
- *     result binding
- *     guard
- *     modifiers
- *     source order
- *     nesting structure
- *
- * The AST must NOT contain:
- *
- *     CPU IDs
- *     GPU IDs
- *     QPU IDs
- *     physical qubit IDs
- *     backend-specific handles
- *     scheduler state
- *     runtime state
- *     hardware discovery results
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 32. PROVENANCE CONTRACT
- * ============================================================================
- *
- * Every nested mind expression must remain source-locatable.
- *
- * Semantic lowering may attach provenance describing:
- *
- *     source
- *     derived_from
- *     generated_by
- *     transformed_by
- *     verified_by
- *     evidence
- *     decision
- *     policy
- *     compilation context
- *
- * The grammar itself only preserves syntactic structure.
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 33. DIAGNOSTIC CONTRACT
- * ============================================================================
- *
- * Parser diagnostics must cover:
- *
- *     malformed marker
+ *     missing marker
  *     missing body
+ *     missing closing brace
  *     malformed operation name
  *     malformed argument list
  *     malformed guard
- *     malformed modifier
- *     malformed result binding
- *     missing closing delimiter
- *     malformed comma sequence
+ *     malformed terminator
  *
- * Semantic diagnostics must cover:
+ * Semantic diagnostics:
  *
  *     unknown operation
- *     invalid operation arguments
- *     invalid guard type
+ *     unavailable operation
+ *     invalid argument type
  *     unavailable capability
- *     unsatisfied resource requirement
+ *     unavailable resource
  *     forbidden effect
- *     unauthorized adaptation
- *     invalid policy
- *     invalid cross-domain operation
+ *     violated policy
+ *     violated contract
+ *     invalid provenance
+ *     unsupported target realization
  *
- * Unknown semantic operations MUST NOT be turned into lexer errors.
+ * A hardware/resource failure MUST NOT be converted into a parser error.
  *
- * This permits dialect registration and future extension.
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 34. DETERMINISM
+ * POSITIVE TEST CONTRACT
  * ============================================================================
  *
- * Parsing must depend only on:
- *
- *     source token sequence
- *     grammar version
- *     parser configuration
- *
- * Parsing must not depend on:
- *
- *     hardware
- *     runtime
- *     network
- *     model availability
- *     resource availability
- *     randomness
- *     system time
- *
- * Same source + same grammar configuration must produce equivalent parse
- * structure.
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 35. SECURITY CONTRACT
- * ============================================================================
- *
- * Parsing is non-executing.
- *
- * The grammar must never:
- *
- *     execute operations
- *     access files
- *     access credentials
- *     contact networks
- *     load models
- *     inspect hardware
- *     invoke QPUs
- *     invoke simulators
- *     invoke native functions
- *
- * Such actions occur only after semantic validation and authorized lowering.
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 36. COMPATIBILITY CONTRACT
- * ============================================================================
- *
- * Adding a new cognitive operation must NOT require changing this grammar.
- *
- * Adding:
- *
- *     a new reasoning algorithm
- *     a new learning algorithm
- *     a new model
- *     a new probability distribution
- *     a new quantum operation
- *     a new accelerator
- *     a new hardware target
- *     a new knowledge backend
- *
- * must not require adding a new parser alternative here.
- *
- * Only genuinely new structural syntax may require grammar modification.
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 37. POSITIVE TEST CONTRACT
- * ============================================================================
- *
- * Required positive cases:
+ * The following forms must be structurally representable once the shared
+ * expression-core boundary is integrated:
  *
  *     mind {}
  *
  *     mind {
- *         infer(problem);
+ *         reason(problem);
  *     }
  *
  *     mind {
- *         reason(problem, evidence);
- *         query(knowledge);
- *         learn(model, data);
- *         adapt(strategy, feedback);
+ *         infer(evidence);
+ *         deduce(premises);
+ *         explain(decision);
  *     }
  *
  *     mind {
- *         knowledge.query(graph.filter(predicate));
- *     }
- *
- *     mind {
- *         result = infer(problem);
- *     }
- *
- *     mind {
- *         infer(problem) if confidence > threshold;
+ *         knowledge::query(pattern);
+ *         model::learn(model, data);
+ *         strategy::adapt(strategy, feedback);
  *     }
  *
  *     mind {
@@ -1480,200 +990,320 @@ nestedMindTerminator
  *     }
  *
  *     mind {
- *         quantum.measure(state);
+ *         quantum::measure(register)
+ *             if ready;
  *     }
  *
  *     mind {
- *         ai.reason(
- *             hybrid.execute(classical_value, quantum_value)
+ *         hybrid::execute(
+ *             classical_value,
+ *             quantum_value
  *         );
  *     }
  *
- *     mind {
- *         model.learn(dataset, objective)
- *             @policy = learning_policy;
- *     }
- *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 38. NEGATIVE TEST CONTRACT
+ * NEGATIVE TEST CONTRACT
  * ============================================================================
  *
- * Required parser failures:
+ * These must produce parser diagnostics:
  *
  *     mind
  *
  *     mind {
  *
+ *     mind }
+ *
  *     mind {
- *         infer(
+ *         ;
  *     }
  *
  *     mind {
- *         infer(problem,);
+ *         reason(
  *     }
  *
  *     mind {
- *         = infer(problem);
+ *         reason(, value);
  *     }
  *
  *     mind {
- *         infer(problem) if;
+ *         reason(value,,other);
  *     }
  *
  *     mind {
- *         infer(problem) @policy =;
+ *         reason(value) if;
  *     }
  *
- * Semantic failures must separately test:
+ * Semantic failures must be tested separately:
  *
- *     unknown operation
- *     invalid operation arguments
- *     invalid capability
- *     unsatisfied requirement
- *     forbidden effect
- *     unauthorized adaptation
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 39. BOUNDARY TEST CONTRACT
- * ============================================================================
+ *     mind {
+ *         operation_that_does_not_exist(value);
+ *     }
  *
- * The following combinations are mandatory:
- *
- *     mind + reasoning
- *     mind + knowledge
- *     mind + learning
- *     mind + adaptation
- *     mind + uncertainty
- *     mind + provenance
- *     mind + policy
- *     mind + contracts
- *     mind + actors
- *     mind + distributed execution
- *     mind + classical computation
- *     mind + tensor computation
- *     mind + quantum computation
- *     mind + hybrid computation
- *     mind + hardware capabilities
- *     mind + FFI
- *     mind + reflection
- *     nested mind + nested mind
+ * That is a semantic name-resolution error, not a grammar error.
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 40. SCALABILITY TEST CONTRACT
+ * BOUNDARY TEST CONTRACT
  * ============================================================================
  *
- * Tests must verify that the grammar contains no artificial finite limits on:
+ * Required cross-domain tests include:
  *
- *     operation count
- *     argument count
- *     clause count
- *     nesting structure
- *     name qualification depth
- *     expression complexity
- *     resource declarations
- *     capability declarations
- *
- * Tests should exercise increasingly large generated programs until practical
- * compiler/parser resource limits are reached.
- *
- * Those practical limits must not become language constants.
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 41. COMPILER / RUST CONTRACT
- * ============================================================================
- *
- * This grammar requires no target-language actions.
- *
- * Generated parser integration must remain compatible with:
- *
- *     Rust 1.97
- *     Rust 1.97.1
- *     Rust 2021
- *
- * The compiler implementation must use safe Rust.
- *
- * No unsafe block or unsafe abstraction is required by this grammar.
+ *     reasoning + knowledge
+ *     reasoning + uncertainty
+ *     reasoning + provenance
+ *     learning + policy
+ *     adaptation + resource requirements
+ *     AI + concurrency
+ *     AI + classical computation
+ *     AI + quantum computation
+ *     AI + hybrid computation
+ *     AI + HDL/hardware references
+ *     AI + distributed computation
+ *     AI + interoperability
+ *     AI + metaprogramming
+ *     simulation + adaptive execution
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 42. COMPLETION CRITERIA
+ * SCALABILITY TEST CONTRACT
  * ============================================================================
  *
- * `nested-mind.g4` is DONE only when:
+ * Tests must demonstrate that the same grammar handles:
  *
- * [x] it has one parser grammar identity;
- * [x] it owns one public nestedMindExpression entry point;
- * [x] it defines no lexer rules;
- * [x] it defines no embedded Rust;
- * [x] it defines no semantic predicates;
- * [x] it defines no AST structures;
- * [x] it defines no IR;
- * [x] it defines no target-specific concepts;
- * [x] it defines no machine-size constants;
- * [x] it does not enumerate cognitive algorithms;
- * [x] it does not enumerate AI application domains;
- * [x] it does not enumerate quantum operations;
- * [x] it does not duplicate reasoning semantics;
- * [x] it does not duplicate knowledge semantics;
- * [x] it does not duplicate learning semantics;
- * [x] it does not duplicate policy semantics;
- * [x] it does not duplicate actor semantics;
- * [x] it supports arbitrary operation qualification;
- * [x] it supports arbitrary argument counts;
- * [x] it supports arbitrary clause counts;
- * [x] it supports recursive nesting;
- * [x] it supports guards;
- * [x] it supports extensible modifiers;
- * [x] it preserves source order;
- * [x] it preserves source spans through the normal parser/AST pipeline;
- * [x] it remains target-independent;
- * [x] it remains compatible with classical computation;
- * [x] it remains compatible with quantum computation;
- * [x] it remains compatible with HDL/hardware semantics;
- * [x] it remains compatible with distributed execution;
- * [x] it remains compatible with AI/data semantics;
- * [x] it remains compatible with interoperability;
- * [x] it remains compatible with metaprogramming;
- * [x] it does not introduce an expression-grammar dependency cycle.
+ *     tiny mind expressions
+ *     large operation sequences
+ *     deeply nested mind expressions
+ *     large argument structures
+ *     long qualified names
+ *     nested ordinary expressions
+ *     mixed-domain operations
  *
- * Integration acceptance additionally requires:
+ * Tests MUST NOT introduce language-level limits.
  *
- *     - a canonical expressionCore boundary exists;
- *     - expressions.g4 consumes nestedMindExpression;
- *     - nestedMindExpression consumes expressionCore;
- *     - expressionCore does not import nested-mind;
- *     - the AST has a representation for the construct;
- *     - semantic resolution maps operation names to existing semantic owners;
- *     - canonical IR lowering exists for supported operations;
- *     - quantum operations lower through quantum::ir;
- *     - positive tests pass;
- *     - negative tests pass;
- *     - boundary tests pass;
- *     - scalability tests pass;
- *     - deterministic parser tests pass;
- *     - Rust 1.97/1.97.1 builds remain safe Rust.
+ * Generated stress sizes are test parameters, not grammar constants.
  *
+ * ============================================================================
+ * HARD-CODING AUDIT
+ * ============================================================================
+ *
+ * This file contains:
+ *
+ *     no machine-size constants
+ *     no quantum-size constants
+ *     no AI-model-size constants
+ *     no operation catalogue
+ *     no vendor catalogue
+ *     no hardware catalogue
+ *     no resource ceiling
+ *     no target ceiling
+ *     no algorithm ceiling
+ *
+ * The only closed syntactic concepts are structural punctuation and the
+ * generic `mind` container.
+ *
+ * ============================================================================
+ * COMPATIBILITY CONTRACT
+ * ============================================================================
+ *
+ * Adding a new semantic cognitive operation MUST NOT require changing this
+ * grammar.
+ *
+ * Adding:
+ *
+ *     infer
+ *     deduce
+ *     reason
+ *     learn
+ *     adapt
+ *     query
+ *     explain
+ *     decide
+ *     future.operation
+ *
+ * is therefore a semantic-registry operation, not a grammar change.
+ *
+ * A change to the spelling/reservation of `mind` is a lexical compatibility
+ * change and must be handled centrally by the lexer/compatibility subsystem.
+ *
+ * ============================================================================
+ * INTEGRATION CONTRACT
+ * ============================================================================
+ *
+ * REQUIRED INTEGRATION 1:
+ *
+ *     grammar/expressions/expressions.g4
+ *
+ * must import this grammar exactly once and expose:
+ *
+ *     nestedMindExpression
+ *
+ * from the appropriate primary-expression boundary.
+ *
+ * REQUIRED INTEGRATION 2:
+ *
+ * The canonical expression architecture must provide:
+ *
+ *     expressionCore
+ *
+ * without importing this grammar back into itself.
+ *
+ * REQUIRED INTEGRATION 3:
+ *
+ *     grammar/core/names.g4
+ *
+ * remains the authority for:
+ *
+ *     identifier
+ *     qualifiedName
+ *
+ * REQUIRED INTEGRATION 4:
+ *
+ *     grammar/antlr/ZamaniLexer.g4
+ *
+ * remains the sole public lexer.
+ *
+ * REQUIRED INTEGRATION 5:
+ *
+ *     grammar/ai/mind.g4
+ *
+ * remains the AI/mind semantic/declaration layer.
+ *
+ * This file must NOT duplicate its declaration/annotation model.
+ *
+ * REQUIRED INTEGRATION 6:
+ *
+ *     grammar/expressions/reasoning.g4
+ *     grammar/expressions/knowledge.g4
+ *     grammar/expressions/policy.g4
+ *     grammar/expressions/provenance.g4
+ *
+ * remain owners of their respective expression semantics.
+ *
+ * This grammar merely provides the generic nesting/composition boundary.
+ *
+ * REQUIRED INTEGRATION 7:
+ *
+ * Semantic resolution must convert:
+ *
+ *     nestedMindOperation
+ *
+ * into the existing generic semantic operation representation.
+ *
+ * No NestedMindIR may be introduced.
+ *
+ * REQUIRED INTEGRATION 8:
+ *
+ * Quantum-resolved operations must ultimately lower through:
+ *
+ *     quantum::ir
+ *
+ * rather than a second quantum representation.
+ *
+ * ============================================================================
+ * FILE COMPLETION CRITERIA
+ * ============================================================================
+ *
+ * This file is DONE when:
+ *
+ * [ ] ANTLR accepts the grammar.
+ *
+ * [ ] All token names match the canonical Zamani lexer.
+ *
+ * [ ] QualifiedNames resolves through the repository's canonical name grammar.
+ *
+ * [ ] `expressionCore` is supplied by the independent shared expression
+ *     boundary.
+ *
+ * [ ] No parser grammar cycle exists.
+ *
+ * [ ] expressions.g4 imports this grammar exactly once.
+ *
+ * [ ] nestedMindExpression occurs exactly once in the public expression
+ *     composition.
+ *
+ * [ ] No second assignment hierarchy exists.
+ *
+ * [ ] No second call hierarchy exists.
+ *
+ * [ ] No second precedence hierarchy exists.
+ *
+ * [ ] No cognitive operation catalogue is embedded.
+ *
+ * [ ] No target-specific syntax is embedded.
+ *
+ * [ ] No machine-capacity limit is embedded.
+ *
+ * [ ] No hardware catalogue is embedded.
+ *
+ * [ ] No quantum gate catalogue is embedded.
+ *
+ * [ ] No AI algorithm catalogue is embedded.
+ *
+ * [ ] No semantic actions exist.
+ *
+ * [ ] No unsafe Rust is required.
+ *
+ * [ ] Positive parser tests pass.
+ *
+ * [ ] Negative parser tests pass.
+ *
+ * [ ] Boundary tests pass.
+ *
+ * [ ] Scalability tests pass within available implementation resources.
+ *
+ * [ ] Determinism tests pass.
+ *
+ * [ ] Semantic resolution tests pass.
+ *
+ * [ ] Cross-domain lowering tests pass.
+ *
+ * ============================================================================
+ * FINAL INVARIANT
+ * ============================================================================
+ *
+ * The purpose of this file is:
+ *
+ *     generic nested computational cognition syntax
+ *
+ * not:
+ *
+ *     a second expression language
+ *
+ * not:
+ *
+ *     an AI-only language
+ *
+ * not:
+ *
+ *     a hardware language
+ *
+ * not:
+ *
+ *     a quantum language
+ *
+ * not:
+ *
+ *     a runtime
+ *
+ * not:
+ *
+ *     an IR.
+ *
+ * The invariant is:
+ *
+ *     nested mind syntax
+ *         ->
+ *     domain-neutral AST
+ *         ->
+ *     semantic operation resolution
+ *         ->
+ *     effects/capabilities/resources/contracts/policies/provenance
+ *         ->
+ *     canonical semantic representation
+ *         ->
+ *     appropriate domain IR
+ *         ->
+ *     target realization
+ *
+ * ============================================================================
+ * END OF FILE
  * ============================================================================
  */
