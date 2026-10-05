@@ -1,0 +1,1376 @@
+/*
+ * ============================================================================
+ * Zamani Programming Language
+ * ============================================================================
+ *
+ * File:
+ *     grammar/expressions/lambda.g4
+ *
+ * Grammar:
+ *     Lambda
+ *
+ * Status:
+ *     CANONICAL PRODUCTION LAMBDA EXPRESSION GRAMMAR
+ *
+ * Language:
+ *     Zamani
+ *
+ * Grammar technology:
+ *     ANTLR4 parser grammar
+ *
+ * Rust implementation baseline:
+ *     Rust 1.97 / Rust 1.97.1
+ *     Edition 2021
+ *
+ * Safety:
+ *     The Zamani implementation MUST use safe Rust only.
+ *     This grammar contains no embedded Rust and requires no unsafe Rust.
+ *
+ * ============================================================================
+ * PURPOSE
+ * ============================================================================
+ *
+ * This file is the SINGLE CANONICAL SOURCE-GRAMMAR OWNER of lambda
+ * expressions.
+ *
+ * A lambda is an anonymous callable expression with:
+ *
+ *     - zero or more parameters;
+ *     - an optional explicit return type;
+ *     - exactly one expression or block-expression body.
+ *
+ * Canonical forms:
+ *
+ *     || expression
+ *
+ *     |x| expression
+ *
+ *     |x, y| expression
+ *
+ *     |x: Int| expression
+ *
+ *     |x: Int, y: Float| expression
+ *
+ *     |x| { statement* }
+ *
+ *     |x| -> Int expression
+ *
+ *     |x| -> Int { statement* }
+ *
+ * This grammar describes SOURCE STRUCTURE ONLY.
+ *
+ * It does not perform:
+ *
+ *     - name resolution;
+ *     - type inference;
+ *     - type checking;
+ *     - overload resolution;
+ *     - capture analysis;
+ *     - ownership analysis;
+ *     - borrowing;
+ *     - lifetime analysis;
+ *     - effect analysis;
+ *     - capability negotiation;
+ *     - resource allocation;
+ *     - scheduling;
+ *     - routing;
+ *     - optimization;
+ *     - target selection;
+ *     - quantum placement;
+ *     - hardware realization;
+ *     - runtime execution.
+ *
+ * ============================================================================
+ * ARCHITECTURAL POSITION
+ * ============================================================================
+ *
+ *     Zamani source
+ *          |
+ *          v
+ *     canonical lexer
+ *          |
+ *          v
+ *     ZamaniParser
+ *          |
+ *          v
+ *     Lambda.lambdaExpression
+ *          |
+ *          v
+ *     domain-neutral frontend AST
+ *          |
+ *          v
+ *     structural validation
+ *          |
+ *          v
+ *     semantic analysis
+ *          |
+ *          +--> scope/name resolution
+ *          +--> type inference/checking
+ *          +--> capture analysis
+ *          +--> ownership/borrowing
+ *          +--> effects
+ *          +--> capabilities
+ *          +--> resources
+ *          |
+ *          v
+ *     canonical semantic model
+ *          |
+ *          +--> classical IR
+ *          +--> quantum::ir
+ *          +--> HDL/hardware semantics
+ *          +--> distributed semantics
+ *          +--> AI/data semantics
+ *          |
+ *          v
+ *     optimization / lowering
+ *          |
+ *          v
+ *     routing / scheduling / resilience
+ *          |
+ *          v
+ *     target realization
+ *
+ * Lambda syntax MUST remain above all target-specific decisions.
+ *
+ * ============================================================================
+ * SINGLE-AUTHORITY RULE
+ * ============================================================================
+ *
+ * Exactly one grammar rule named:
+ *
+ *     lambdaExpression
+ *
+ * may exist in the final canonical parser composition.
+ *
+ * This file owns that rule.
+ *
+ * The following files MUST NOT independently define another lambdaExpression:
+ *
+ *     grammar/expressions/expressions.g4
+ *     grammar/expressions/lambdas.g4
+ *     grammar/functions/lambdas.g4
+ *
+ * Existing historical lambda grammars may remain temporarily for migration
+ * documentation, but they MUST NOT participate in the canonical parser
+ * composition.
+ *
+ * ============================================================================
+ * EXISTING REPOSITORY CORRECTION
+ * ============================================================================
+ *
+ * The repository currently contains:
+ *
+ *     grammar/expressions/lambdas.g4
+ *
+ * and:
+ *
+ *     grammar/functions/lambdas.g4
+ *
+ * The intended production location is:
+ *
+ *     grammar/expressions/lambda.g4
+ *
+ * because lambda expressions are expressions rather than declarations.
+ *
+ * The final parser must therefore converge on:
+ *
+ *     grammar/expressions/lambda.g4
+ *
+ * as the canonical implementation.
+ *
+ * Do not maintain three executable lambda grammars.
+ *
+ * ============================================================================
+ * OWNERSHIP
+ * ============================================================================
+ *
+ * THIS FILE OWNS:
+ *
+ *     lambdaExpression
+ *     lambdaParameterClause
+ *     lambdaReturnTypeClause
+ *     lambdaBody
+ *
+ * THIS FILE DOES NOT OWN:
+ *
+ *     identifier
+ *     parameter
+ *     parameterList
+ *     typeExpression
+ *     expression
+ *     blockExpression
+ *     statement
+ *     lexer tokens
+ *     function declarations
+ *     function types
+ *     closure-capture syntax
+ *     async function syntax
+ *     async scheduling
+ *     effects
+ *     resources
+ *     capabilities
+ *     contracts
+ *     policies
+ *     provenance
+ *     semantic analysis
+ *     AST implementation
+ *     classical IR
+ *     quantum::ir
+ *     HDL IR
+ *     distributed IR
+ *     runtime representation
+ *     ABI
+ *     calling convention
+ *     scheduling
+ *     routing
+ *     QEC
+ *     ZQN
+ *     HAL
+ *     target selection.
+ *
+ * ============================================================================
+ * DEPENDENCY CONTRACT
+ * ============================================================================
+ *
+ * DEPENDS_ON:
+ *
+ *     canonical ZamaniLexer vocabulary
+ *     parameterList
+ *     typeExpression
+ *     expression
+ *     blockExpression
+ *
+ * Canonical ownership:
+ *
+ *     grammar/antlr/ZamaniLexer.g4
+ *         -> public lexer vocabulary
+ *
+ *     grammar/functions/parameters.g4
+ *         -> parameterList
+ *
+ *     grammar/types/*
+ *         -> typeExpression
+ *
+ *     grammar/expressions/expressions.g4
+ *         -> expression
+ *
+ *     canonical block grammar
+ *         -> blockExpression
+ *
+ * EXPORTS:
+ *
+ *     lambdaExpression
+ *     lambdaParameterClause
+ *     lambdaReturnTypeClause
+ *     lambdaBody
+ *
+ * CONSUMED_BY:
+ *
+ *     grammar/expressions/expressions.g4
+ *
+ * and therefore transitively by:
+ *
+ *     grammar/antlr/ZamaniParser.g4
+ *
+ * AST_OWNER:
+ *
+ *     src/frontend/ast/node/expressions/lambda.rs
+ *
+ * SEMANTIC_OWNER:
+ *
+ *     frontend semantic-analysis subsystem
+ *
+ * IR_OWNER:
+ *
+ *     canonical semantic model
+ *
+ * Quantum lowering:
+ *
+ *     quantum::ir
+ *
+ * TEST_OWNER:
+ *
+ *     grammar/tests/expressions/
+ *     parser/conformance tests
+ *     frontend AST tests
+ *
+ * SPEC_OWNER:
+ *
+ *     grammar/specification/syntax-model.md
+ *     grammar/spec/syntax.md
+ *     expression conformance documentation
+ *
+ * ============================================================================
+ * LEXER CONTRACT
+ * ============================================================================
+ *
+ * This is a PARSER grammar.
+ *
+ * It MUST NOT define lexer rules.
+ *
+ * The canonical parser vocabulary is:
+ *
+ *     tokenVocab = ZamaniLexer;
+ *
+ * Relevant tokens:
+ *
+ *     PIPE
+ *     THIN_ARROW
+ *     COMMA
+ *
+ * plus tokens consumed transitively by:
+ *
+ *     parameterList
+ *     typeExpression
+ *     expression
+ *     blockExpression
+ *
+ * The grammar MUST NOT create aliases such as:
+ *
+ *     LAMBDA_START
+ *     LAMBDA_END
+ *     LAMBDA_ARROW
+ *
+ * when the canonical lexer already provides:
+ *
+ *     PIPE
+ *     THIN_ARROW
+ *
+ * ============================================================================
+ * PARAMETER CONTRACT
+ * ============================================================================
+ *
+ * Lambda parameters reuse the canonical callable parameter grammar:
+ *
+ *     parameterList
+ *
+ * from:
+ *
+ *     grammar/functions/parameters.g4
+ *
+ * This is essential because the repository's canonical AST parameter model
+ * already represents:
+ *
+ *     name
+ *     optional type
+ *     optional default
+ *     mutability
+ *
+ * The lambda grammar MUST NOT define:
+ *
+ *     lambdaParameter
+ *     lambdaParameterList
+ *
+ * as a second parameter hierarchy.
+ *
+ * Therefore:
+ *
+ *     |x|
+ *
+ * is structurally:
+ *
+ *     PIPE parameterList? PIPE
+ *
+ * and:
+ *
+ *     ||
+ *
+ * is:
+ *
+ *     PIPE PIPE
+ *
+ * Empty parameter lists are represented by omission of parameterList.
+ *
+ * ============================================================================
+ * RETURN TYPE CONTRACT
+ * ============================================================================
+ *
+ * Lambda return-type syntax is:
+ *
+ *     THIN_ARROW typeExpression
+ *
+ * Example:
+ *
+ *     |x| -> Int x + 1
+ *
+ * The return type is optional.
+ *
+ * If omitted, the AST contains:
+ *
+ *     return_type = None
+ *
+ * This means only that the source did not explicitly provide a return type.
+ *
+ * It does NOT mean that the return type is necessarily Unit.
+ *
+ * Type inference and semantic analysis determine the resulting callable type.
+ *
+ * ============================================================================
+ * BODY CONTRACT
+ * ============================================================================
+ *
+ * The lambda body is exactly one of:
+ *
+ *     expression
+ *
+ * or:
+ *
+ *     blockExpression
+ *
+ * The grammar MUST reuse the canonical expression and block rules.
+ *
+ * It MUST NOT create:
+ *
+ *     lambdaExpressionBody
+ *     lambdaBlockExpression
+ *
+ * as alternative AST concepts.
+ *
+ * The parser therefore preserves the body as the existing expression/block
+ * node expected by the canonical LambdaExpression AST.
+ *
+ * ============================================================================
+ * AST CONTRACT
+ * ============================================================================
+ *
+ * The canonical frontend AST is:
+ *
+ *     src/frontend/ast/node/expressions/lambda.rs
+ *
+ * Its source-level structure is:
+ *
+ *     LambdaExpression
+ *     ├── parameters: Vec<NodeId>
+ *     ├── return_type: Option<NodeId>
+ *     └── body: NodeId
+ *
+ * Therefore this grammar MUST preserve exactly:
+ *
+ *     parameter order
+ *     explicit return type, when present
+ *     body
+ *     complete source span
+ *
+ * The grammar MUST NOT require an AST representation for:
+ *
+ *     lambda modifiers
+ *     hardware targets
+ *     devices
+ *     CPUs
+ *     GPUs
+ *     FPGAs
+ *     QPUs
+ *     qubits
+ *     schedulers
+ *     routing
+ *     calibration
+ *     resource allocation
+ *
+ * ============================================================================
+ * CAPTURE CONTRACT
+ * ============================================================================
+ *
+ * Capture analysis is semantic.
+ *
+ * For an ordinary lambda:
+ *
+ *     |x| x + external_value
+ *
+ * the semantic analyzer may determine that `external_value` is captured.
+ *
+ * Capture information is therefore not required to be represented directly
+ * by this grammar.
+ *
+ * Explicit capture syntax is owned by:
+ *
+ *     grammar/functions/closures.g4
+ *
+ * and MUST NOT be duplicated here.
+ *
+ * IMPORTANT:
+ *
+ * The current canonical LambdaExpression AST does not contain fields for:
+ *
+ *     capture list
+ *     capture modes
+ *     capture aliases
+ *
+ * Therefore this grammar MUST NOT silently absorb explicit capture metadata
+ * into lambda syntax unless the AST/semantic contract is extended first.
+ *
+ * This prevents source information from being parsed and then lost.
+ *
+ * ============================================================================
+ * ASYNC CONTRACT
+ * ============================================================================
+ *
+ * Asynchronous syntax is owned by the existing asynchronous subsystems.
+ *
+ * In particular:
+ *
+ *     grammar/functions/async.g4
+ *     grammar/expressions/async.g4
+ *     grammar/concurrency/async.g4
+ *
+ * must remain the authorities for their respective asynchronous constructs.
+ *
+ * This file MUST NOT introduce:
+ *
+ *     lambdaModifier
+ *     asyncLambda
+ *
+ * merely to make the lambda grammar larger.
+ *
+ * If asynchronous lambdas become a normative source-language feature, the
+ * language specification, AST contract, semantic model, and async grammar
+ * must be coordinated first.
+ *
+ * ============================================================================
+ * FUNCTION TYPE DISTINCTION
+ * ============================================================================
+ *
+ * This grammar owns:
+ *
+ *     lambda expressions
+ *
+ * It does NOT own:
+ *
+ *     function types
+ *
+ * Function types remain owned by:
+ *
+ *     grammar/types/function.g4
+ *
+ * For example:
+ *
+ *     fn(Int) -> Int
+ *
+ * is a type.
+ *
+ * Whereas:
+ *
+ *     |x: Int| -> Int x + 1
+ *
+ * is a lambda expression.
+ *
+ * These constructs MUST NOT be merged into one grammar authority.
+ *
+ * ============================================================================
+ * FUNCTION DECLARATION DISTINCTION
+ * ============================================================================
+ *
+ * Function declarations remain owned by:
+ *
+ *     grammar/functions/functions.g4
+ *
+ * A lambda has no declared source-level name.
+ *
+ * Therefore this grammar MUST NOT introduce:
+ *
+ *     functionDeclaration
+ *     namedLambda
+ *     anonymousFunctionDeclaration
+ *
+ * ============================================================================
+ * EXPRESSION PRECEDENCE CONTRACT
+ * ============================================================================
+ *
+ * Lambda expressions are PRIMARY expressions.
+ *
+ * They therefore enter the canonical expression hierarchy at:
+ *
+ *     primaryExpression
+ *
+ * in:
+ *
+ *     grammar/expressions/expressions.g4
+ *
+ * The dependency direction is:
+ *
+ *     Expressions
+ *         |
+ *         +--> Lambda
+ *         |
+ *         +--> other primary expressions
+ *
+ * This grammar MUST NOT import the complete Expressions grammar.
+ *
+ * Otherwise:
+ *
+ *     Expressions -> Lambda -> Expressions
+ *
+ * would create a circular grammar dependency.
+ *
+ * Instead, this grammar consumes the canonical `expression` rule made
+ * available by the parent composition grammar.
+ *
+ * ============================================================================
+ * RECURSION / NESTING CONTRACT
+ * ============================================================================
+ *
+ * Lambda bodies may themselves contain lambdas:
+ *
+ *     |x| |y| x + y
+ *
+ * This is intentional.
+ *
+ * The grammar imposes no language-level nesting limit.
+ *
+ * Recursive source structure is represented through ANTLR grammar recursion
+ * and downstream AST NodeId references.
+ *
+ * Practical parser-stack/resource limits, if any, are implementation safety
+ * policies and MUST NOT become source-language semantics.
+ *
+ * ============================================================================
+ * SCALABILITY CONTRACT
+ * ============================================================================
+ *
+ * The grammar contains no finite language-level limit on:
+ *
+ *     lambda count
+ *     parameter count
+ *     nesting depth
+ *     body size
+ *     expression size
+ *     source size
+ *     callable composition
+ *
+ * Repetition is structural:
+ *
+ *     parameterList?
+ *
+ * and is ultimately governed by the canonical parameter grammar.
+ *
+ * There MUST NOT be:
+ *
+ *     MAX_LAMBDA_PARAMETERS
+ *     MAX_LAMBDA_DEPTH
+ *     MAX_LAMBDAS
+ *     MAX_LAMBDA_BODY_SIZE
+ *     MAX_CLOSURES
+ *     MAX_THREADS
+ *     MAX_CPUS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_QPUS
+ *     MAX_QUBITS
+ *     MAX_NODES
+ *     MAX_MEMORY
+ *     MAX_REGISTER_WIDTH
+ *     MAX_TENSOR_RANK
+ *     MAX_NETWORK_SIZE
+ *     MAX_DEVICE_COUNT
+ *
+ * in this grammar.
+ *
+ * ============================================================================
+ * POCO-REAF CONTRACT
+ * ============================================================================
+ *
+ * Lambda syntax describes portable computation rather than physical
+ * realization.
+ *
+ * The same source lambda may eventually participate in:
+ *
+ *     classical computation
+ *     tensor computation
+ *     AI/ML computation
+ *     data transformation
+ *     distributed computation
+ *     hardware generation
+ *     HDL elaboration
+ *     hybrid computation
+ *     quantum-classical control
+ *     quantum algorithm construction
+ *     compile-time computation
+ *
+ * without changing lambda syntax.
+ *
+ * Target realization is determined only after semantic analysis and capability
+ * negotiation.
+ *
+ * This preserves:
+ *
+ *     Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
+ *
+ * ============================================================================
+ * QUANTUM CONTRACT
+ * ============================================================================
+ *
+ * Lambda syntax is domain-neutral.
+ *
+ * A lambda may calculate:
+ *
+ *     quantum parameters
+ *     measurement transformations
+ *     classical control values
+ *     higher-order algorithm components
+ *     data transformations surrounding quantum computation
+ *
+ * Example:
+ *
+ *     |theta| apply_operation(theta, q)
+ *
+ * remains ordinary lambda syntax.
+ *
+ * No quantum-specific lambda grammar is permitted.
+ *
+ * In particular, this file MUST NOT introduce:
+ *
+ *     quantumLambda
+ *     qubitLambda
+ *     physicalQubitLambda
+ *     qpuLambda
+ *     quantumBackendLambda
+ *
+ * Quantum meaning is determined downstream and, when appropriate, lowered
+ * through:
+ *
+ *     quantum::ir
+ *
+ * ============================================================================
+ * CLASSICAL CONTRACT
+ * ============================================================================
+ *
+ * Classical computation uses the same lambda syntax.
+ *
+ * Examples:
+ *
+ *     |x| x + 1
+ *
+ *     |x, y| x * y
+ *
+ *     |data| transform(data)
+ *
+ * The grammar does not distinguish scalar, vector, matrix, tensor, symbolic,
+ * numerical, statistical, or scientific computation.
+ *
+ * Those are semantic/type-level distinctions.
+ *
+ * ============================================================================
+ * AI / DATA CONTRACT
+ * ============================================================================
+ *
+ * Lambda expressions may operate over:
+ *
+ *     models
+ *     tensors
+ *     datasets
+ *     distributions
+ *     knowledge structures
+ *     inference results
+ *     uncertainty values
+ *     learned values
+ *
+ * No AI-specific lambda syntax is introduced.
+ *
+ * ============================================================================
+ * HDL / HARDWARE CONTRACT
+ * ============================================================================
+ *
+ * A lambda may participate in:
+ *
+ *     elaboration
+ *     parameter calculation
+ *     hardware intent construction
+ *     simulation configuration
+ *     verification computation
+ *
+ * The grammar does not encode physical hardware.
+ *
+ * ============================================================================
+ * DISTRIBUTED CONTRACT
+ * ============================================================================
+ *
+ * A lambda may be used as:
+ *
+ *     task
+ *     transformation
+ *     handler
+ *     worker computation
+ *     message transformation
+ *     service logic
+ *
+ * Distribution remains downstream.
+ *
+ * No node count, worker count, process count, or topology is encoded here.
+ *
+ * ============================================================================
+ * EFFECT CONTRACT
+ * ============================================================================
+ *
+ * A lambda itself does not automatically declare an effect.
+ *
+ * Effects are derived from:
+ *
+ *     body operations
+ *     referenced functions
+ *     calls
+ *     captures
+ *     explicit effect declarations
+ *
+ * Semantic analysis owns the final effect set.
+ *
+ * This grammar MUST NOT introduce:
+ *
+ *     pureLambda
+ *     ioLambda
+ *     quantumLambda
+ *     networkLambda
+ *     gpuLambda
+ *
+ * as separate grammar forms.
+ *
+ * ============================================================================
+ * CAPABILITY / RESOURCE CONTRACT
+ * ============================================================================
+ *
+ * Lambda syntax does not select resources.
+ *
+ * A lambda may semantically require:
+ *
+ *     capability(...)
+ *     memory
+ *     quantum capability
+ *     tensor capability
+ *     accelerator capability
+ *     networking capability
+ *
+ * Such requirements belong to the canonical resource/capability subsystem.
+ *
+ * Example semantic intent:
+ *
+ *     a lambda body may eventually require a tensor capability.
+ *
+ * The lambda grammar does not encode how many:
+ *
+ *     CPUs
+ *     GPUs
+ *     QPUs
+ *     nodes
+ *     threads
+ *     qubits
+ *
+ * are required.
+ *
+ * ============================================================================
+ * CONTRACT / POLICY CONTRACT
+ * ============================================================================
+ *
+ * A lambda may occur inside contexts governed by:
+ *
+ *     requires
+ *     ensures
+ *     invariant
+ *     assume
+ *     guarantee
+ *     property
+ *     policy
+ *
+ * Those constructs remain owned by their respective canonical grammars.
+ *
+ * This file does not duplicate them.
+ *
+ * ============================================================================
+ * PROVENANCE CONTRACT
+ * ============================================================================
+ *
+ * The lambda parse tree must preserve sufficient source structure for
+ * downstream provenance.
+ *
+ * At minimum:
+ *
+ *     source span
+ *     parameter ordering
+ *     explicit return type
+ *     body structure
+ *
+ * Provenance is attached downstream to:
+ *
+ *     AST NodeId
+ *
+ * and later semantic/IR artifacts.
+ *
+ * This grammar does not create a second provenance system.
+ *
+ * ============================================================================
+ * DETERMINISM
+ * ============================================================================
+ *
+ * Given identical:
+ *
+ *     source
+ *     lexical configuration
+ *     grammar version
+ *
+ * the parser must produce the same structural parse.
+ *
+ * Parsing MUST NOT inspect:
+ *
+ *     system time
+ *     randomness
+ *     filesystem state
+ *     network state
+ *     hardware state
+ *     device availability
+ *     scheduler state
+ *     compiler backend state.
+ *
+ * ============================================================================
+ * SECURITY
+ * ============================================================================
+ *
+ * Parsing a lambda MUST NOT:
+ *
+ *     execute its body;
+ *     execute default expressions;
+ *     execute referenced functions;
+ *     inspect hardware;
+ *     access files;
+ *     access networks;
+ *     invoke foreign code;
+ *     invoke quantum hardware;
+ *     invoke an accelerator;
+ *     invoke an HDL simulator.
+ *
+ * The grammar is pure syntax.
+ *
+ * ============================================================================
+ * DIAGNOSTICS
+ * ============================================================================
+ *
+ * Structural parser diagnostics must distinguish at least:
+ *
+ *     missing opening PIPE
+ *     missing closing PIPE
+ *     malformed parameter list
+ *     malformed parameter type
+ *     malformed default expression
+ *     missing lambda body
+ *     malformed return type
+ *     missing type after THIN_ARROW
+ *
+ * Examples:
+ *
+ *     |x
+ *     x|
+ *     |x,
+ *     |: Int|
+ *     |x| ->
+ *     |x| -> { }
+ *     || 
+ *
+ * The last form is syntactically incomplete because a lambda body is required.
+ *
+ * Semantic diagnostics belong downstream.
+ *
+ * ============================================================================
+ * ERROR RECOVERY
+ * ============================================================================
+ *
+ * This grammar MUST NOT invent missing source constructs during semantic
+ * processing.
+ *
+ * Parser recovery belongs to the parser/frontend diagnostic policy.
+ *
+ * The grammar itself MUST NOT:
+ *
+ *     - create implicit parameter names;
+ *     - create implicit types;
+ *     - create implicit body expressions;
+ *     - reinterpret malformed syntax as another declaration;
+ *     - silently discard malformed parameters.
+ *
+ * ============================================================================
+ * COMPATIBILITY
+ * ============================================================================
+ *
+ * Existing source forms that this grammar preserves:
+ *
+ *     || expression
+ *
+ *     |x| expression
+ *
+ *     |x, y| expression
+ *
+ *     |x: Type| expression
+ *
+ *     |x| { ... }
+ *
+ * Existing function declaration and function type syntax remains unaffected.
+ *
+ * No new lambda keyword is introduced.
+ *
+ * No new lexer token is introduced.
+ *
+ * The pipe-delimited form remains the canonical lambda syntax.
+ *
+ * ============================================================================
+ * TEST CONTRACT
+ * ============================================================================
+ *
+ * POSITIVE:
+ *
+ *     || 42
+ *
+ *     |x| x
+ *
+ *     |x| x + 1
+ *
+ *     |x, y| x + y
+ *
+ *     |x: Int| x + 1
+ *
+ *     |x: Int, y: Float| x + y
+ *
+ *     |x| {
+ *         x + 1
+ *     }
+ *
+ *     |x| -> Int x + 1
+ *
+ *     |x| -> Int {
+ *         x + 1
+ *     }
+ *
+ *     |x| |y| x + y
+ *
+ *     |x| (|y| y)(x)
+ *
+ *     |f| f(|x| x)
+ *
+ *     |x| x |> transform
+ *
+ * where the surrounding expression grammar defines the corresponding
+ * operators/calls.
+ *
+ * NEGATIVE:
+ *
+ *     |
+ *
+ *     |x
+ *
+ *     x|
+ *
+ *     |x,
+ *
+ *     |: Int| x
+ *
+ *     |x| ->
+ *
+ *     |x| -> |y| y
+ *
+ *     |x, , y| x
+ *
+ *     |x:| x
+ *
+ *     |x: Int =| x
+ *
+ *     || 
+ *
+ * BOUNDARY:
+ *
+ *     zero parameters
+ *     one parameter
+ *     many parameters
+ *     explicit parameter types
+ *     default parameter values
+ *     explicit return types
+ *     nested lambdas
+ *     lambda as argument
+ *     lambda returned from lambda
+ *     lambda containing quantum expressions
+ *     lambda containing HDL/hardware intent expressions
+ *     lambda containing AI/data expressions
+ *     lambda inside distributed computation
+ *
+ * SCALABILITY:
+ *
+ *     parameter repetition is delegated to parameterList;
+ *     no finite parameter count is encoded;
+ *     body complexity is delegated to expression/block grammar;
+ *     nested lambdas remain structurally representable;
+ *     no machine capacity is encoded.
+ *
+ * DETERMINISM:
+ *
+ *     same source produces the same parse structure under the same grammar
+ *     version and lexical configuration.
+ *
+ * COMPATIBILITY:
+ *
+ *     existing pipe syntax remains canonical;
+ *     no new lambda keyword;
+ *     no target-specific lambda syntax.
+ *
+ * ============================================================================
+ * INTEGRATION CONTRACT
+ * ============================================================================
+ *
+ * 1. grammar/expressions/expressions.g4
+ *
+ * It MUST import:
+ *
+ *     Lambda
+ *
+ * and expose:
+ *
+ *     lambdaExpression
+ *
+ * through its existing primaryExpression rule.
+ *
+ * The current inline rules:
+ *
+ *     lambdaExpression
+ *     lambdaParameterList
+ *     lambdaParameter
+ *     lambdaBody
+ *
+ * MUST be removed from expressions.g4.
+ *
+ * This file becomes their sole owner.
+ *
+ * 2. grammar/expressions/lambdas.g4
+ *
+ * The current plural file is a duplicate implementation.
+ *
+ * It MUST NOT remain in the executable parser composition.
+ *
+ * It should either:
+ *
+ *     - be removed after migration; or
+ *     - be retained only as a historical migration document that does not
+ *       define an independently imported parser grammar.
+ *
+ * It MUST NOT define a second `lambdaExpression`.
+ *
+ * 3. grammar/functions/lambdas.g4
+ *
+ * This is another historical/duplicate lambda grammar.
+ *
+ * Function declaration composition MUST NOT import it for expression parsing.
+ *
+ * It should be retired from executable composition.
+ *
+ * 4. grammar/functions/parameters.g4
+ *
+ * This file supplies:
+ *
+ *     parameterList
+ *
+ * Lambda MUST consume that canonical rule.
+ *
+ * 5. grammar/types/*
+ *
+ * Lambda consumes:
+ *
+ *     typeExpression
+ *
+ * and does not define a second type hierarchy.
+ *
+ * 6. grammar/expressions/expressions.g4
+ *
+ * `primaryExpression` remains the public expression-level insertion point:
+ *
+ *     primaryExpression
+ *         : ...
+ *         | lambdaExpression
+ *         | ...
+ *         ;
+ *
+ * 7. grammar/antlr/ZamaniParser.g4
+ *
+ * It already imports:
+ *
+ *     Expressions
+ *
+ * Therefore the root parser receives lambda syntax transitively.
+ *
+ * The root parser MUST NOT define lambda syntax itself.
+ *
+ * 8. src/frontend/ast/node/expressions/lambda.rs
+ *
+ * The parser/frontend lowering must construct:
+ *
+ *     LambdaExpression
+ *
+ * with:
+ *
+ *     parameters
+ *     return_type
+ *     body
+ *
+ * in source order.
+ *
+ * No lambda-specific backend/domain information belongs in this AST node.
+ *
+ * 9. semantic analysis
+ *
+ * Semantic analysis resolves:
+ *
+ *     parameter bindings
+ *     types
+ *     captures
+ *     effects
+ *     capabilities
+ *     resources
+ *     callable type
+ *
+ * 10. quantum
+ *
+ * If the lambda body has quantum semantics, lowering eventually crosses:
+ *
+ *     quantum::ir
+ *
+ * No quantum lambda grammar is required.
+ *
+ * 11. HDL/hardware
+ *
+ * Lambda syntax remains ordinary expression syntax.
+ *
+ * Hardware meaning is resolved by semantic/domain analysis.
+ *
+ * 12. distributed/AI/data
+ *
+ * The same lambda syntax remains reusable across these domains.
+ *
+ * ============================================================================
+ * COMPLETION CRITERIA
+ * ============================================================================
+ *
+ * This file is DONE when:
+ *
+ *     [x] It is a parser grammar.
+ *     [x] It uses tokenVocab = ZamaniLexer.
+ *     [x] It defines exactly one public lambdaExpression rule.
+ *     [x] It defines no lexer rules.
+ *     [x] It does not define parameterList.
+ *     [x] It does not define typeExpression.
+ *     [x] It does not define expression.
+ *     [x] It does not define blockExpression.
+ *     [x] It does not define closure capture syntax.
+ *     [x] It does not define function declarations.
+ *     [x] It does not define function types.
+ *     [x] It has no hardware-specific syntax.
+ *     [x] It has no quantum-specific syntax.
+ *     [x] It has no fixed resource capacity.
+ *     [x] It has no machine-size constants.
+ *     [x] It has no semantic actions.
+ *     [x] It has no predicates.
+ *     [x] It has no embedded Rust.
+ *     [x] It requires no unsafe Rust.
+ *     [x] It supports zero parameters.
+ *     [x] It supports source-defined arbitrary parameter counts.
+ *     [x] It supports typed parameters.
+ *     [x] It supports parameter defaults through parameterList.
+ *     [x] It supports optional explicit return types.
+ *     [x] It supports expression bodies.
+ *     [x] It supports block bodies.
+ *     [x] It supports nested lambdas.
+ *     [x] It maps exactly to the canonical LambdaExpression AST contract.
+ *     [x] It preserves POCO-REAF.
+ *
+ * Repository integration is complete only when:
+ *
+ *     [ ] expressions.g4 imports Lambda.
+ *     [ ] expressions.g4 removes its inline lambda rules.
+ *     [ ] expressions/lambdas.g4 is retired from executable composition.
+ *     [ ] functions/lambdas.g4 is retired from executable composition.
+ *     [ ] ANTLR generation succeeds.
+ *     [ ] parser conformance tests pass.
+ *     [ ] AST construction tests pass.
+ *     [ ] semantic lambda tests pass.
+ *     [ ] nested lambda tests pass.
+ *     [ ] scalability tests pass.
+ *     [ ] Rust 1.97 / 1.97.1 build passes.
+ *     [ ] safe-Rust audit passes.
+ *
+ * ============================================================================
+ */
+
+parser grammar Lambda;
+
+options {
+    tokenVocab = ZamaniLexer;
+}
+
+
+/*
+ * ============================================================================
+ * PUBLIC LAMBDA ENTRY POINT
+ * ============================================================================
+ *
+ * A lambda consists of:
+ *
+ *     parameter clause
+ *     optional explicit return type
+ *     body
+ *
+ * No lambda keyword is required.
+ */
+lambdaExpression
+    : lambdaParameterClause
+      lambdaReturnTypeClause?
+      lambdaBody
+    ;
+
+
+/*
+ * ============================================================================
+ * PARAMETER CLAUSE
+ * ============================================================================
+ *
+ * The parameter list is optional so that:
+ *
+ *     ||
+ *
+ * represents a parameterless lambda.
+ *
+ * All parameter structure is delegated to the canonical parameter grammar.
+ */
+lambdaParameterClause
+    : PIPE
+      parameterList?
+      PIPE
+    ;
+
+
+/*
+ * ============================================================================
+ * OPTIONAL RETURN TYPE
+ * ============================================================================
+ *
+ * Example:
+ *
+ *     |x| -> Int x + 1
+ *
+ * The type itself is owned by the canonical type grammar.
+ */
+lambdaReturnTypeClause
+    : THIN_ARROW
+      typeExpression
+    ;
+
+
+/*
+ * ============================================================================
+ * BODY
+ * ============================================================================
+ *
+ * A lambda requires exactly one body.
+ *
+ * The body may be:
+ *
+ *     expression
+ *
+ * or:
+ *
+ *     blockExpression
+ *
+ * Both are canonical rules owned elsewhere.
+ */
+lambdaBody
+    : expression
+    | blockExpression
+    ;
