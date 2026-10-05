@@ -1,292 +1,58 @@
 /*
  * ============================================================================
- * Zamani Programming Language
+ * ZAMANI PROGRAMMING LANGUAGE
  * ============================================================================
  *
  * File:
  *     grammar/expressions/expressions.g4
  *
  * Status:
- *     Canonical expression-composition grammar.
+ *     CANONICAL PRODUCTION EXPRESSION COMPOSITION ROOT
  *
  * Grammar technology:
  *     ANTLR4 parser grammar
  *
- * Rust implementation baseline:
+ * Compiler baseline:
  *     Rust 1.97 / Rust 1.97.1
- *     Edition 2021
- *     Safe Rust only.
- *     No unsafe Rust is required or permitted by the compiler implementation.
+ *     Rust 2021 edition
+ *     Safe Rust only
+ *     No unsafe Rust
  *
  * ============================================================================
  * PURPOSE
  * ============================================================================
  *
- * This file owns the UNIVERSAL EXPRESSION PRECEDENCE AND COMPOSITION LAYER.
+ * This file is the SINGLE AUTHORITATIVE EXPRESSION COMPOSITION ROOT.
  *
- * It provides the public:
+ * It owns:
  *
- *     expression
+ *     - expression;
+ *     - the complete precedence hierarchy;
+ *     - expression-layer composition;
+ *     - assignment precedence;
+ *     - conditional precedence integration;
+ *     - range precedence integration;
+ *     - logical precedence;
+ *     - bitwise precedence;
+ *     - equality precedence;
+ *     - relational precedence;
+ *     - shift precedence;
+ *     - additive precedence;
+ *     - multiplicative precedence;
+ *     - prefix/unary boundary;
+ *     - postfix boundary;
+ *     - primary-expression composition;
+ *     - null-coalescing precedence;
+ *     - expression-list composition;
+ *     - type-expression-list composition where required by expression syntax.
  *
- * entry point and connects the expression precedence hierarchy.
+ * Specialized expression grammars own the syntax they implement.
  *
- * Canonical hierarchy:
- *
- *     expression
- *         |
- *         v
- *     assignmentExpression
- *         |
- *         v
- *     conditionalExpression
- *         |
- *         v
- *     rangeExpression
- *         |
- *         v
- *     logicalOrExpression
- *         |
- *         v
- *     logicalAndExpression
- *         |
- *         v
- *     bitwiseOrExpression
- *         |
- *         v
- *     bitwiseXorExpression
- *         |
- *         v
- *     bitwiseAndExpression
- *         |
- *         v
- *     equalityExpression
- *         |
- *         v
- *     relationalExpression
- *         |
- *         v
- *     shiftExpression
- *         |
- *         v
- *     additiveExpression
- *         |
- *         v
- *     multiplicativeExpression
- *         |
- *         v
- *     prefixExpression
- *         |
- *         v
- *     postfixExpression
- *         |
- *         v
- *     primaryExpression
+ * This file composes those components without creating competing expression
+ * hierarchies.
  *
  * ============================================================================
- * OWNERSHIP
- * ============================================================================
- *
- * THIS FILE OWNS:
- *
- *     - expression
- *     - assignmentExpression
- *     - assignmentTarget
- *     - assignmentOperator
- *     - rangeExpression composition
- *     - logical precedence
- *     - bitwise precedence
- *     - equality precedence
- *     - relational precedence
- *     - shift precedence
- *     - additive precedence
- *     - multiplicative precedence
- *     - prefix precedence
- *     - postfix composition
- *     - primary-expression composition
- *     - expression-list composition
- *     - argument-list composition
- *
- * THIS FILE DOES NOT OWN:
- *
- *     - lexer tokens
- *     - conditional-expression semantics
- *     - statement-level conditionals
- *     - declarations
- *     - types
- *     - blocks
- *     - semantic analysis
- *     - name resolution
- *     - overload resolution
- *     - ownership
- *     - borrowing
- *     - effects
- *     - capabilities
- *     - resources
- *     - quantum IR
- *     - classical IR
- *     - HDL IR
- *     - routing
- *     - scheduling
- *     - QEC
- *     - ZQN
- *     - HAL
- *     - target selection
- *     - runtime execution
- *
- * ============================================================================
- * SINGLE-AUTHORITY RULE
- * ============================================================================
- *
- * There must be exactly one authoritative public expression rule:
- *
- *     expression
- *
- * This file owns that rule.
- *
- * There must also be exactly one authoritative precedence hierarchy.
- *
- * Specialized expression files such as:
- *
- *     arithmetic.g4
- *     assignment.g4
- *     binary.g4
- *     bitwise.g4
- *     calls.g4
- *     comparison.g4
- *     conditionals.g4
- *     indexing.g4
- *     literals.g4
- *     match.g4
- *     member-access.g4
- *     postfix.g4
- *     ranges.g4
- *     unary.g4
- *
- * MUST NOT introduce a second public expression hierarchy.
- *
- * `conditionals.g4` remains the owner of:
- *
- *     conditionalExpression
- *     ifExpression
- *     else-if expression branches
- *     else expression branches
- *     ternary conditional expressions
- *
- * Therefore this file references `conditionalExpression` but does not
- * redefine it.
- *
- * ============================================================================
- * LEXER AUTHORITY
- * ============================================================================
- *
- * The canonical lexical vocabulary is:
- *
- *     grammar/antlr/ZamaniLexer.g4
- *
- * This file contains NO lexer rules.
- *
- * The parser consumes the canonical tokens rather than inventing aliases.
- *
- * Important canonical operator tokens include:
- *
- *     ASSIGN
- *     PLUS_ASSIGN
- *     MINUS_ASSIGN
- *     STAR_ASSIGN
- *     SLASH_ASSIGN
- *     PERCENT_ASSIGN
- *     AMPERSAND_ASSIGN
- *     PIPE_ASSIGN
- *     CARET_ASSIGN
- *     DOT_DOT
- *     DOT_DOT_EQ
- *     EQ_EQ
- *     NOT_EQ
- *     LE
- *     GE
- *     SHIFT_LEFT
- *     SHIFT_RIGHT
- *     AND_AND
- *     OR_OR
- *     PLUS
- *     MINUS
- *     STAR
- *     SLASH
- *     PERCENT
- *     NOT_OPERATOR
- *     TILDE
- *     AMPERSAND
- *     PIPE
- *     CARET
- *     QUESTION
- *     DOUBLE_COLON
- *     ARROW
- *     FAT_ARROW
- *     PLUS_PLUS
- *     MINUS_MINUS
- *     QUESTION_DOT
- *     NULL_COALESCE
- *
- * If a lexical token is not present in the canonical lexer, this grammar must
- * not silently invent a parser-side replacement.
- *
- * ============================================================================
- * AST CONTRACT
- * ============================================================================
- *
- * Every expression must lower to the existing domain-neutral frontend AST.
- *
- * The grammar does not define Rust AST structures.
- *
- * The AST must preserve:
- *
- *     - source spans;
- *     - source ordering;
- *     - operator identity;
- *     - operand ordering;
- *     - call argument ordering;
- *     - index ordering;
- *     - member names;
- *     - generic argument ordering;
- *     - literal meaning;
- *     - syntactic nesting.
- *
- * Operators are syntax-level constructs.
- *
- * Their semantic meaning is resolved downstream.
- *
- * ============================================================================
- * SEMANTIC CONTRACT
- * ============================================================================
- *
- * Parsing answers:
- *
- *     "Is this structurally a Zamani expression?"
- *
- * Semantic analysis answers:
- *
- *     "What does this expression mean?"
- *
- * Semantic analysis owns:
- *
- *     - name resolution;
- *     - type checking;
- *     - overload resolution;
- *     - generic inference;
- *     - conversions;
- *     - ownership;
- *     - borrowing;
- *     - effects;
- *     - capabilities;
- *     - resource requirements;
- *     - quantum legality;
- *     - classical legality;
- *     - HDL legality;
- *     - hardware capability requirements;
- *     - interoperability.
- *
- * ============================================================================
- * CANONICAL COMPUTATION PIPELINE
+ * ARCHITECTURAL PIPELINE
  * ============================================================================
  *
  *     source
@@ -295,7 +61,10 @@
  *     ZamaniLexer
  *       |
  *       v
- *     parser
+ *     ZamaniParser
+ *       |
+ *       v
+ *     Expressions
  *       |
  *       v
  *     domain-neutral frontend AST
@@ -306,186 +75,568 @@
  *       v
  *     semantic analysis
  *       |
- *       v
- *     canonical semantic model / ZUIR
- *       |
- *       +--------------------+----------------------+
- *       |                    |                      |
- *       v                    v                      v
- *   classical           quantum::ir           HDL/hardware
- *       |                    |                      |
- *       +--------------------+----------------------+
- *                            |
- *                            v
- *                       optimization
- *                            |
+ *       +-------------------+-------------------+
+ *       |                   |                   |
+ *       v                   v                   v
+ *   classical          quantum::ir        HDL/hardware
+ *       |                   |                   |
+ *       +-------------------+-------------------+
+ *                           |
+ *                           v
+ *                      optimization
+ *                           |
+ *                           v
+ *                 lowering / specialization
+ *                           |
  *                  routing / scheduling
- *                            |
- *                  resilience / QEC / ZQN
- *                            |
- *                           HAL
- *                            |
- *                     target realization
+ *                           |
+ *                resilience / QEC / ZQN
+ *                           |
+ *                           v
+ *                          HAL
+ *                           |
+ *                           v
+ *                    target realization
  *
  * `quantum::ir` remains the canonical quantum semantic boundary.
  *
- * This grammar MUST NOT introduce another quantum IR.
+ * This grammar creates NO IR.
  *
  * ============================================================================
- * POCO-REAF / SCALABILITY
+ * FILE CONTRACT
  * ============================================================================
  *
- * The grammar introduces NO universal finite limits for:
+ * OWNS
+ * ----
  *
- *     qubits
- *     CPUs
- *     cores
- *     threads
- *     GPUs
- *     FPGAs
- *     accelerators
- *     nodes
- *     memory
- *     registers
- *     tensor dimensions
- *     vector widths
- *     function arguments
- *     tuple elements
- *     collection elements
- *     index dimensions
- *     call depth
- *     member depth
- *     namespace depth
+ *     expression
+ *     assignment-expression precedence
+ *     conditional-expression precedence integration
+ *     range-expression precedence integration
+ *     logical precedence
+ *     bitwise precedence
+ *     equality precedence
+ *     relational precedence
+ *     shift precedence
+ *     additive precedence
+ *     multiplicative precedence
+ *     prefix boundary
+ *     postfix boundary
+ *     primary composition
+ *     null-coalescing precedence
+ *     expression lists
+ *     type-expression lists
+ *
+ * DOES NOT OWN
+ * -------------
+ *
+ *     lexer rules
+ *     token spellings
+ *     identifiers
+ *     names
+ *     types
+ *     blocks
+ *     declarations
+ *     statements
+ *     conditional implementation
+ *     assignment component implementation
+ *     unary implementation
+ *     postfix implementation
+ *     calls
+ *     indexing
+ *     member access
+ *     literals
+ *     match implementation
+ *     quantum operation implementation
+ *     reasoning semantics
+ *     learning semantics
+ *     knowledge semantics
+ *     adaptation semantics
+ *     uncertainty semantics
+ *     policy semantics
+ *     provenance semantics
+ *     effects
+ *     capabilities
+ *     resources
+ *     contracts
+ *     AST implementation
+ *     semantic analysis
+ *     classical IR
+ *     quantum::ir
+ *     HDL IR
+ *     routing
+ *     scheduling
+ *     QEC
+ *     ZQN
+ *     HAL
+ *     runtime execution
+ *     hardware selection
+ *
+ * ============================================================================
+ * DEPENDENCY CONTRACT
+ * ============================================================================
+ *
+ * DEPENDS_ON
+ * ----------
+ *
+ *     grammar/antlr/ZamaniLexer.g4
+ *
+ *     Canonical parser composition:
+ *         grammar/antlr/ZamaniParser.g4
+ *
+ *     Expression components:
+ *         grammar/expressions/assignment.g4
+ *         grammar/expressions/conditionals.g4
+ *         grammar/expressions/ranges.g4
+ *         grammar/expressions/unary.g4
+ *         grammar/expressions/postfix.g4
+ *         grammar/expressions/literals.g4
+ *         grammar/expressions/match.g4
+ *         grammar/expressions/quantum.g4
+ *
+ *     Core/type/block/name ownership is supplied by the parent parser
+ *     composition hierarchy.
+ *
+ * EXPORTS
+ * -------
+ *
+ *     expression
+ *
+ * CONSUMED_BY
+ * ----------
+ *
+ *     grammar/antlr/ZamaniParser.g4
+ *     statement grammars
+ *     declaration grammars
+ *     function grammars
+ *     module grammars
+ *     classical grammars
+ *     quantum grammars
+ *     hybrid grammars
+ *     HDL grammars
+ *     data grammars
+ *     AI grammars
+ *     distributed grammars
+ *     networking grammars
+ *     metaprogramming grammars
+ *     compile-time grammars
+ *
+ * AST_OWNER
+ * ---------
+ *
+ *     src/frontend/ast/
+ *
+ * This grammar produces parse structure only.
+ *
+ * SEMANTIC_OWNER
+ * --------------
+ *
+ *     semantic/type/effect/capability/resource analysis
+ *
+ * IR_OWNER
+ * --------
+ *
+ *     canonical semantic model
+ *     classical IR
+ *     quantum::ir
+ *     HDL/hardware semantic representation
+ *
+ * TEST_OWNER
+ * ----------
+ *
+ *     grammar/tests/parser/
+ *     grammar/tests/expressions/
+ *     grammar/tests/negative/
+ *     grammar/tests/boundary/
+ *     grammar/tests/scalability/
+ *     grammar/tests/compatibility/
+ *
+ * SPEC_OWNER
+ * ----------
+ *
+ *     grammar/specification/
+ *     grammar/spec/
+ *     grammar/expressions/precedence.md
+ *
+ * ============================================================================
+ * SINGLE-AUTHORITY RULE
+ * ============================================================================
+ *
+ * There MUST be exactly one public expression entry point:
+ *
+ *     expression
+ *
+ * This file owns it.
+ *
+ * There MUST be exactly one precedence hierarchy.
+ *
+ * Specialized files MUST NOT create another public `expression` hierarchy.
+ *
+ * In particular:
+ *
+ *     assignment.g4
+ *     conditionals.g4
+ *     ranges.g4
+ *     unary.g4
+ *     postfix.g4
+ *     calls.g4
+ *     indexing.g4
+ *     member-access.g4
+ *     literals.g4
+ *     match.g4
+ *     quantum.g4
+ *
+ * must provide reusable components rather than competing complete expression
+ * roots.
+ *
+ * ============================================================================
+ * LEXER AUTHORITY
+ * ============================================================================
+ *
+ * All lexical tokens are owned by:
+ *
+ *     grammar/lexer/
+ *     grammar/antlr/ZamaniLexer.g4
+ *
+ * This parser grammar defines NO lexer rules.
+ *
+ * The canonical operator names currently exposed by the lexical architecture
+ * include:
+ *
+ *     ELLIPSIS
+ *     DOT_DOT
+ *     DOT_DOT_EQ
+ *     THIN_ARROW
+ *     FAT_ARROW
+ *     DOUBLE_COLON
+ *
+ *     EQUAL_EQUAL
+ *     NOT_EQUAL
+ *     LESS_EQUAL
+ *     GREATER_EQUAL
+ *
+ *     LOGICAL_AND
+ *     LOGICAL_OR
+ *
+ *     LEFT_SHIFT
+ *     RIGHT_SHIFT
+ *
+ *     PLUS_ASSIGN
+ *     MINUS_ASSIGN
+ *     STAR_ASSIGN
+ *     SLASH_ASSIGN
+ *     PERCENT_ASSIGN
+ *     AMP_ASSIGN
+ *     PIPE_ASSIGN
+ *     CARET_ASSIGN
+ *
+ *     INCREMENT
+ *     DECREMENT
+ *
+ *     QUESTION_DOT
+ *     NULL_COALESCE
+ *
+ *     PLUS
+ *     MINUS
+ *     STAR
+ *     SLASH
+ *     MODULO
+ *     ASSIGN
+ *     AMPERSAND
+ *     PIPE
+ *     CARET
+ *     TILDE
+ *     LESS
+ *     GREATER
+ *     NOT
+ *
+ * Punctuation is owned separately:
+ *
+ *     LPAREN
+ *     RPAREN
+ *     LBRACE
+ *     RBRACE
+ *     LBRACKET
+ *     RBRACKET
+ *     COMMA
+ *     DOT
+ *     SEMICOLON
+ *     COLON
+ *     AT
+ *     HASH
+ *
+ * IMPORTANT:
+ *
+ * This file deliberately uses the actual canonical token names rather than
+ * historical aliases.
+ *
+ * ============================================================================
+ * PRECEDENCE CONTRACT
+ * ============================================================================
+ *
+ * LOWEST
+ *
+ *     assignment
+ *
+ *     conditional
+ *
+ *     range
+ *
+ *     logical OR
+ *
+ *     logical AND
+ *
+ *     null coalescing
+ *
+ *     bitwise OR
+ *
+ *     bitwise XOR
+ *
+ *     bitwise AND
+ *
+ *     equality
+ *
+ *     relational
+ *
+ *     shift
+ *
+ *     additive
+ *
+ *     multiplicative
+ *
+ *     prefix
+ *
+ *     postfix
+ *
+ *     primary
+ *
+ * HIGHEST
+ *
+ * The exact semantic precedence of `??` is owned by this composition layer
+ * and documented in precedence.md.
+ *
+ * It is intentionally below bitwise operators and above logical conjunction.
+ *
+ * If the normative specification changes that relationship, precedence.md
+ * and this file must be changed together as one language-versioned change.
+ *
+ * ============================================================================
+ * ASSOCIATIVITY CONTRACT
+ * ============================================================================
+ *
+ * Assignment:
+ *
+ *     right associative.
+ *
+ * Binary operators:
+ *
+ *     left associative unless explicitly specified otherwise by the
+ *     corresponding semantic specification.
+ *
+ * Conditional expressions:
+ *
+ *     owned by conditionals.g4.
+ *
+ * Prefix operators:
+ *
+ *     recursively right associative.
+ *
+ * Postfix operations:
+ *
+ *     left-to-right structural chaining.
+ *
+ * ============================================================================
+ * SCALABILITY CONTRACT
+ * ============================================================================
+ *
+ * This grammar imposes NO universal finite limit on:
+ *
+ *     expression count
  *     expression depth
- *     circuit depth
- *     operation count
- *     resource count
+ *     operand count
+ *     argument count
+ *     generic argument count
+ *     index count
+ *     tuple size
+ *     collection size
+ *     member-chain depth
+ *     call-chain depth
+ *     operator-chain depth
+ *     unary depth
+ *     range domain size
+ *     tensor rank
+ *     vector width
+ *     matrix dimensions
+ *     quantum operation count
+ *     qubit count
+ *     CPU count
+ *     GPU count
+ *     FPGA count
+ *     accelerator count
+ *     node count
+ *     device count
+ *     memory capacity
+ *     register width
+ *     network size
  *
- * Repetition is structural:
- *
- *     *
- *     +
- *
- * rather than enumerating finite capacities.
+ * No `MAX_*` machine or expression constants belong here.
  *
  * "Infinity" means:
  *
- *     no artificial language-level finite bound is imposed here.
+ *     no artificial finite language-level ceiling.
  *
- * Actual limits belong to:
+ * It does NOT mean the implementation is required to have infinite memory,
+ * storage, parser stack, compilation time, or execution resources.
  *
- *     - implementation resource policy;
- *     - compiler resource availability;
- *     - available memory/storage;
- *     - target capability;
- *     - deployment policy;
- *     - runtime resource availability.
+ * Exhaustion is an implementation/resource condition, not a language rule.
  *
  * ============================================================================
  * TARGET INDEPENDENCE
  * ============================================================================
  *
- * Expressions describe computation and intent.
+ * Expressions describe source-level computation.
  *
- * They MUST NOT hard-code:
+ * They MUST NOT encode:
  *
  *     physical CPU identifiers
- *     GPU identifiers
+ *     physical GPU identifiers
  *     FPGA identifiers
+ *     ASIC identifiers
  *     physical qubit identifiers
- *     fixed QPU topology
+ *     fixed topology
+ *     fixed register width
+ *     machine size
+ *     device count
  *     memory-bank identifiers
- *     accelerator counts
- *     network-node counts
- *     device addresses
- *     register widths
- *     machine sizes
+ *     network-node count
  *
- * Such information belongs to:
+ * Those belong to:
  *
  *     resources
  *     capabilities
+ *     compilation context
  *     target descriptions
- *     compilation contexts
  *     routing
  *     scheduling
- *     HAL
  *     deployment
+ *     HAL
  *
  * ============================================================================
- * QUANTUM INTEGRATION
+ * QUANTUM CONTRACT
  * ============================================================================
  *
- * Quantum names remain ordinary identifiers unless explicitly reserved by
- * the canonical lexer.
+ * Quantum expressions remain source-level expressions.
  *
- * The grammar MUST NOT enumerate:
+ * This file MUST NOT enumerate a fixed universal gate set.
  *
+ * Therefore names such as:
+ *
+ *     H
  *     X
  *     Y
  *     Z
- *     H
- *     CX
  *     CNOT
+ *     CX
+ *     CZ
+ *     SWAP
  *     RX
  *     RY
  *     RZ
- *     ...
  *
- * Generic calls and expressions can represent quantum operations:
+ * are NOT special expression alternatives here.
  *
- *     H(q)
- *     measure(q)
- *     reset(q)
- *     operation(theta)(q)
- *     circuit.apply(operation, q)
+ * A quantum operation may enter the expression system through:
  *
- * Semantic analysis determines whether those constructs represent quantum
- * operations and lowers them to quantum::ir.
+ *     quantum.g4
+ *
+ * or ordinary callable/member/qualified expression syntax.
+ *
+ * Semantic analysis determines whether the expression denotes:
+ *
+ *     quantum operation
+ *     measurement
+ *     state transformation
+ *     classical computation
+ *     hybrid operation
+ *     library operation
+ *     vendor operation
+ *     future operation
+ *
+ * Quantum semantics ultimately cross:
+ *
+ *     quantum::ir
+ *
+ * There is no second quantum expression IR.
  *
  * ============================================================================
- * CLASSICAL / HDL / AI / DATA / DISTRIBUTED INTEGRATION
+ * GENERAL COMPUTATION CONTRACT
  * ============================================================================
  *
- * The same expression system is intentionally reusable for:
+ * The expression layer is intentionally reusable for:
  *
- *     scalar computation
- *     vector computation
- *     matrix computation
- *     tensor computation
+ *     classical computation
+ *     numerical computation
  *     symbolic computation
+ *     tensors
  *     AI/ML
- *     dataflow
+ *     reasoning
+ *     knowledge queries
+ *     learning
+ *     adaptation
+ *     uncertainty
+ *     probabilistic computation
+ *     evidence
+ *     provenance
+ *     policy evaluation
  *     distributed values
- *     network services
- *     hardware abstractions
+ *     networking
+ *     hardware intent
  *     HDL expressions
- *     accelerator operations
- *     quantum/classical boundaries
- *     future computational domains
+ *     quantum computation
+ *     hybrid computation
+ *     accelerator computation
+ *     future domains
  *
- * Domain-specific semantics are downstream.
+ * The core expression grammar does NOT need a new keyword for each application.
+ *
+ * For example, constructs such as:
+ *
+ *     infer(...)
+ *     deduce(...)
+ *     reason(...)
+ *     assert(...)
+ *     query(...)
+ *     learn(...)
+ *     adapt(...)
+ *     explain(...)
+ *
+ * can be ordinary calls when their semantic model does not require dedicated
+ * syntax.
+ *
+ * This keeps the language open-ended and prevents an application-specific
+ * keyword explosion.
  *
  * ============================================================================
  * DETERMINISM
  * ============================================================================
  *
- * Parsing depends only on:
+ * Parsing is determined only by:
  *
- *     - source token sequence;
- *     - active grammar/language version.
+ *     source token sequence
+ *     selected language/grammar version
+ *     explicit dialect configuration
  *
- * Parsing MUST NOT depend on:
+ * Parsing MUST NOT inspect:
  *
- *     - system time;
- *     - randomness;
- *     - environment variables;
- *     - filesystem state;
- *     - network state;
- *     - hardware discovery;
- *     - device state;
- *     - runtime scheduler state;
- *     - backend availability.
+ *     hardware
+ *     target availability
+ *     memory availability
+ *     network state
+ *     filesystem state
+ *     wall-clock time
+ *     randomness
+ *     runtime state
+ *     scheduler state
  *
  * ============================================================================
  * SECURITY
@@ -493,23 +644,157 @@
  *
  * Parsing is non-executing.
  *
- * A syntactically valid call such as:
+ * No expression is evaluated while parsing.
  *
- *     system.run(command)
+ * This grammar contains:
  *
- * MUST NOT execute anything during parsing.
+ *     no Rust actions
+ *     no semantic predicates
+ *     no filesystem access
+ *     no network access
+ *     no process execution
+ *     no hardware discovery
+ *     no runtime calls
+ *     no plugin loading
+ *     no unsafe Rust
  *
- * The parser MUST NOT:
+ * ============================================================================
+ * AST CONTRACT
+ * ============================================================================
  *
- *     - open files;
- *     - access credentials;
- *     - contact networks;
- *     - execute commands;
- *     - load plugins;
- *     - inspect hardware;
- *     - invoke quantum devices;
- *     - invoke HDL simulators;
- *     - invoke compiler backends.
+ * The parse tree must preserve enough information for the frontend AST to
+ * represent:
+ *
+ *     literals
+ *     identifiers
+ *     qualified names
+ *     unary operations
+ *     binary operations
+ *     assignments
+ *     conditional expressions
+ *     ranges
+ *     calls
+ *     indexing
+ *     member access
+ *     optional member access
+ *     generic invocation
+ *     tuples
+ *     arrays
+ *     maps/records where supported
+ *     lambdas/closures
+ *     match expressions
+ *     quantum expressions
+ *     construction expressions
+ *
+ * Source spans remain available through the parser/frontend infrastructure.
+ *
+ * ============================================================================
+ * SEMANTIC CONTRACT
+ * ============================================================================
+ *
+ * This grammar does NOT decide:
+ *
+ *     operator types
+ *     overload resolution
+ *     implicit conversions
+ *     mutability
+ *     ownership
+ *     borrowing
+ *     lifetimes
+ *     effects
+ *     capabilities
+ *     resource requirements
+ *     contracts
+ *     policies
+ *     provenance
+ *     quantum legality
+ *     hardware feasibility
+ *     distributed placement
+ *     execution strategy
+ *
+ * Those decisions happen downstream.
+ *
+ * ============================================================================
+ * EFFECT / CAPABILITY / RESOURCE CONTRACT
+ * ============================================================================
+ *
+ * An expression can eventually have semantic metadata describing:
+ *
+ *     effects
+ *     required capabilities
+ *     required resources
+ *     constraints
+ *     preferences
+ *     policies
+ *     provenance
+ *
+ * This file does not encode those properties into the expression grammar
+ * unless a dedicated source-level construct explicitly requires syntax.
+ *
+ * Therefore:
+ *
+ *     infer(...)
+ *     learn(...)
+ *     adapt(...)
+ *     measure(...)
+ *     network(...)
+ *     ffi(...)
+ *
+ * may be parsed as ordinary expressions while semantic analysis determines
+ * their effects and requirements.
+ *
+ * ============================================================================
+ * IMPORTS
+ * ============================================================================
+ *
+ * The specialized parser components are imported here so that this grammar
+ * remains the single composition root while specialized files retain their
+ * own ownership.
+ *
+ * IMPORTANT:
+ *
+ * The component files MUST NOT import this file back.
+ *
+ * The dependency graph must remain directed:
+ *
+ *     Expressions
+ *         |
+ *         +--> Assignment
+ *         +--> Conditionals
+ *         +--> Ranges
+ *         +--> Unary
+ *         +--> Postfix
+ *         +--> Literals
+ *         +--> Match
+ *         +--> Quantum
+ *
+ * The parent parser composition additionally supplies:
+ *
+ *     Core
+ *     Types
+ *     Declarations
+ *     Statements
+ *     Functions
+ *     Modules
+ *     Effects
+ *     Memory
+ *     Concurrency
+ *     Classical
+ *     Hybrid
+ *     HDL
+ *     Hardware
+ *     Distributed
+ *     AI
+ *     Data
+ *     Networking
+ *     Security
+ *     Resources
+ *     Compile
+ *     Execution
+ *     Interoperability
+ *     Dialects
+ *     Macros
+ *     Metaprogramming
  *
  * ============================================================================
  */
@@ -520,16 +805,26 @@ options {
     tokenVocab = ZamaniLexer;
 }
 
+import
+    Assignment,
+    Conditionals,
+    Ranges,
+    Unary,
+    Postfix,
+    Literals,
+    Match,
+    Quantum
+;
+
 
 /* ============================================================================
  * 1. PUBLIC EXPRESSION ENTRY
  * ========================================================================== */
 
 /*
- * The single public expression entry point.
+ * There is exactly one public expression entry point.
  *
- * Assignment has the lowest precedence among the expression operators owned
- * here.
+ * This is the rule consumed by the rest of the language.
  */
 expression
     : assignmentExpression
@@ -537,37 +832,41 @@ expression
 
 
 /* ============================================================================
- * 2. ASSIGNMENT
+ * 2. ASSIGNMENT PRECEDENCE
  * ========================================================================== */
 
 /*
- * Assignment is right associative.
+ * Assignment syntax is owned by Assignment.
  *
- * Examples:
+ * This rule is intentionally a composition alias rather than a second
+ * implementation.
  *
- *     x = y
- *     x += y
- *     x -= y
- *     x *= y
- *     x /= y
- *     x %= y
- *     x &= y
- *     x |= y
- *     x ^= y
- *     a = b = c
- *
- * The grammar intentionally accepts a broad syntactic assignment target.
- * Semantic analysis determines whether the target is assignable.
+ * Right associativity remains the responsibility of Assignment.
  */
 assignmentExpression
     : conditionalExpression
     | assignmentTarget assignmentOperator assignmentExpression
     ;
 
+
+/*
+ * Assignment target.
+ *
+ * The syntactic target is broad by design.
+ *
+ * Semantic analysis determines whether it is actually assignable.
+ */
 assignmentTarget
     : postfixExpression
     ;
 
+
+/*
+ * Canonical assignment operators currently exposed by the lexer.
+ *
+ * Do not add parser aliases for operators that do not exist in the canonical
+ * lexical vocabulary.
+ */
 assignmentOperator
     : ASSIGN
     | PLUS_ASSIGN
@@ -575,78 +874,50 @@ assignmentOperator
     | STAR_ASSIGN
     | SLASH_ASSIGN
     | PERCENT_ASSIGN
-    | AMPERSAND_ASSIGN
+    | AMP_ASSIGN
     | PIPE_ASSIGN
     | CARET_ASSIGN
     ;
 
 
 /* ============================================================================
- * 3. CONDITIONAL INTEGRATION
+ * 3. CONDITIONAL PRECEDENCE
  * ========================================================================== */
 
 /*
- * `conditionalExpression` is owned by:
+ * The implementation of conditional expressions belongs to Conditionals.
  *
- *     grammar/expressions/conditionals.g4
- *
- * This file deliberately does not redefine it.
- *
- * Canonical integration:
- *
- *     assignmentExpression
- *             |
- *             v
- *     conditionalExpression
- *             |
- *             v
- *     rangeExpression
- *
- * This prevents duplicate conditional-expression definitions.
+ * This composition layer only places conditional expressions in the
+ * precedence hierarchy.
  */
+conditionalExpression
+    : ifExpression
+    | ternaryConditionalExpression
+    | rangeExpression
+    ;
 
 
 /* ============================================================================
- * 4. RANGE
+ * 4. RANGE PRECEDENCE
  * ========================================================================== */
 
 /*
- * Range composition is owned here.
+ * Range syntax is owned by Ranges.
  *
- * Range-specific operator documentation/contract belongs to:
- *
- *     grammar/expressions/ranges.g4
- *
- * A range is deliberately restricted to operands at the next precedence
- * level. This prevents:
- *
- *     expression -> range -> expression
- *
- * from creating an uncontrolled recursive precedence cycle.
- *
- * Examples:
- *
- *     0 .. n
- *     0 ..= n
- *     start .. finish
- *     start ..= finish
- *
- * Range size is semantic data.
- *
- * No maximum range cardinality is encoded.
+ * The canonical range layer is kept above logical expressions.
  */
 rangeExpression
-    : logicalOrExpression
-      (
-          rangeOperator
-          logicalOrExpression
-      )?
+    : range
+    | logicalOrExpression
     ;
 
-rangeOperator
-    : DOT_DOT
-    | DOT_DOT_EQ
-    ;
+
+/*
+ * `range` is expected to be supplied by the canonical Ranges component.
+ *
+ * This alias provides the composition boundary without creating another
+ * range grammar.
+ */
 
 
 /* ============================================================================
@@ -656,7 +927,7 @@ rangeOperator
 logicalOrExpression
     : logicalAndExpression
       (
-          OR_OR
+          LOGICAL_OR
           logicalAndExpression
       )*
     ;
@@ -667,16 +938,38 @@ logicalOrExpression
  * ========================================================================== */
 
 logicalAndExpression
+    : nullCoalescingExpression
+      (
+          LOGICAL_AND
+          nullCoalescingExpression
+      )*
+    ;
+
+
+/* ============================================================================
+ * 7. NULL COALESCING
+ * ========================================================================== */
+
+/*
+ * Example:
+ *
+ *     primary ?? fallback
+ *
+ * Nullability remains semantic.
+ *
+ * This rule only establishes source-level precedence.
+ */
+nullCoalescingExpression
     : bitwiseOrExpression
       (
-          AND_AND
+          NULL_COALESCE
           bitwiseOrExpression
       )*
     ;
 
 
 /* ============================================================================
- * 7. BITWISE OR
+ * 8. BITWISE OR
  * ========================================================================== */
 
 bitwiseOrExpression
@@ -689,7 +982,7 @@ bitwiseOrExpression
 
 
 /* ============================================================================
- * 8. BITWISE XOR
+ * 9. BITWISE XOR
  * ========================================================================== */
 
 bitwiseXorExpression
@@ -702,7 +995,7 @@ bitwiseXorExpression
 
 
 /* ============================================================================
- * 9. BITWISE AND
+ * 10. BITWISE AND
  * ========================================================================== */
 
 bitwiseAndExpression
@@ -715,7 +1008,7 @@ bitwiseAndExpression
 
 
 /* ============================================================================
- * 10. EQUALITY
+ * 11. EQUALITY
  * ========================================================================== */
 
 equalityExpression
@@ -727,13 +1020,13 @@ equalityExpression
     ;
 
 equalityOperator
-    : EQ_EQ
-    | NOT_EQ
+    : EQUAL_EQUAL
+    | NOT_EQUAL
     ;
 
 
 /* ============================================================================
- * 11. RELATIONAL
+ * 12. RELATIONAL
  * ========================================================================== */
 
 relationalExpression
@@ -747,13 +1040,13 @@ relationalExpression
 relationalOperator
     : LESS
     | GREATER
-    | LE
-    | GE
+    | LESS_EQUAL
+    | GREATER_EQUAL
     ;
 
 
 /* ============================================================================
- * 12. SHIFT
+ * 13. SHIFT
  * ========================================================================== */
 
 shiftExpression
@@ -765,13 +1058,13 @@ shiftExpression
     ;
 
 shiftOperator
-    : SHIFT_LEFT
-    | SHIFT_RIGHT
+    : LEFT_SHIFT
+    | RIGHT_SHIFT
     ;
 
 
 /* ============================================================================
- * 13. ADDITIVE
+ * 14. ADDITIVE
  * ========================================================================== */
 
 additiveExpression
@@ -789,7 +1082,7 @@ additiveOperator
 
 
 /* ============================================================================
- * 14. MULTIPLICATIVE
+ * 15. MULTIPLICATIVE
  * ========================================================================== */
 
 multiplicativeExpression
@@ -803,265 +1096,73 @@ multiplicativeExpression
 multiplicativeOperator
     : STAR
     | SLASH
-    | PERCENT
+    | MODULO
     ;
 
 
 /* ============================================================================
- * 15. PREFIX
+ * 16. PREFIX / UNARY BOUNDARY
  * ========================================================================== */
 
 /*
- * Prefix operators are recursively nestable.
+ * Prefix syntax is owned by Unary.
  *
- * Examples:
- *
- *     -x
- *     +x
- *     !x
- *     ~x
- *     &x
- *     *x
- *     !!!value
- *     -~*&value
- *
- * No artificial prefix-depth limit exists.
+ * This composition rule intentionally delegates to the canonical unary
+ * component.
  */
 prefixExpression
-    : prefixOperator prefixExpression
-    | postfixExpression
-    ;
-
-prefixOperator
-    : PLUS
-    | MINUS
-    | NOT_OPERATOR
-    | TILDE
-    | AMPERSAND
-    | STAR
+    : unaryExpression
     ;
 
 
 /* ============================================================================
- * 16. POSTFIX COMPOSITION
+ * 17. POSTFIX BOUNDARY
  * ========================================================================== */
 
 /*
- * Postfix chaining is deliberately unbounded.
- *
- * Examples:
- *
- *     value
- *     value()
- *     value[index]
- *     value.field
- *     value::member
- *     value?.field
- *     value()[index].field(argument)
- *
- * Specialized contracts:
- *
- *     calls.g4
- *     indexing.g4
- *     member-access.g4
- *     postfix.g4
- *
- * must converge on this composition model.
- *
- * The final parser assembly must bind the component rules without introducing
- * another complete expression hierarchy.
+ * Postfix syntax is owned by Postfix.
  */
 postfixExpression
-    : primaryExpression postfixPart*
+    : canonicalPostfixExpression
     ;
 
-postfixPart
-    : callPostfix
-    | indexPostfix
-    | memberPostfix
-    | qualifiedMemberPostfix
-    | optionalMemberPostfix
-    | postfixUpdate
-    ;
-
-
-/* ============================================================================
- * 17. CALL POSTFIX
- * ========================================================================== */
 
 /*
- * Calls are expression-level syntax.
+ * Integration alias.
  *
- * The argument list is open-ended and therefore has no fixed arity.
+ * The Postfix component must export `postfixExpression` under its canonical
+ * component name. If the repository keeps that exact public name, this alias
+ * must be replaced by a direct component import during parser assembly rather
+ * than introducing a duplicate rule.
  *
- * Examples:
+ * The preferred final architecture is:
  *
- *     f()
- *     f(x)
- *     f(x, y)
- *     f(x, y, z)
+ *     postfixExpression
+ *         -> Postfix.postfixExpression
  *
- * Generic invocation:
- *
- *     f::<T>(x)
- *
- * Semantic validation determines whether a callable value, generic parameter,
- * argument count, argument type, or calling convention is valid.
+ * with no second postfix implementation.
  */
-callPostfix
-    : LPAREN argumentList? RPAREN
-    | genericArgumentSuffix LPAREN argumentList? RPAREN
-    ;
 
 
 /* ============================================================================
- * 18. INDEX POSTFIX
+ * 18. PRIMARY EXPRESSION
  * ========================================================================== */
 
 /*
- * Indexing syntax is intentionally generic.
+ * Primary expressions are source-level atoms.
  *
- * Examples:
- *
- *     value[i]
- *     value[i, j]
- *     tensor[i, j, k]
- *
- * The expression inside brackets is semantic data.
- *
- * Whether indexing means:
- *
- *     array access
- *     tensor access
- *     map lookup
- *     string access
- *     memory access
- *     quantum-register selection
- *     hardware-resource selection
- *
- * is determined downstream.
- *
- * Index arity is unbounded by the language grammar.
- */
-indexPostfix
-    : LBRACKET expressionList? RBRACKET
-    ;
-
-
-/* ============================================================================
- * 19. MEMBER POSTFIX
- * ========================================================================== */
-
-/*
- * Ordinary member selection:
- *
- *     value.field
- *
- * The member identifier is resolved semantically.
- */
-memberPostfix
-    : DOT identifier
-    ;
-
-
-/* ============================================================================
- * 20. QUALIFIED MEMBER POSTFIX
- * ========================================================================== */
-
-/*
- * Qualified selection:
- *
- *     value::member
- *
- * The exact distinction between namespace qualification and value-level
- * associated selection is semantic.
- */
-qualifiedMemberPostfix
-    : DOUBLE_COLON identifier
-    ;
-
-
-/* ============================================================================
- * 21. OPTIONAL MEMBER POSTFIX
- * ========================================================================== */
-
-/*
- * Optional/null-propagating member access is represented by the canonical
- * compound lexer token when available.
- *
- * Example:
- *
- *     value?.field
- *
- * Nullability is semantic.
- */
-optionalMemberPostfix
-    : QUESTION_DOT identifier
-    ;
-
-
-/* ============================================================================
- * 22. POSTFIX UPDATE
- * ========================================================================== */
-
-/*
- * Examples:
- *
- *     value++
- *     value--
- *
- * Mutability and assignability are semantic properties.
- */
-postfixUpdate
-    : INCREMENT
-    | DECREMENT
-    ;
-
-
-/* ============================================================================
- * 23. GENERIC ARGUMENT SUFFIX
- * ========================================================================== */
-
-/*
- * Generic invocation is kept syntactically separate from ordinary calls.
- *
- * Examples:
- *
- *     function::<Type>(value)
- *     function::<A, B>(value)
- *
- * The number of generic arguments is unbounded.
- *
- * The exact type-expression grammar is owned by the canonical type system.
- *
- * IMPORTANT:
- *
- * This expression grammar does not invent a second type grammar.
- */
-genericArgumentSuffix
-    : DOUBLE_COLON LESS_THAN typeExpressionList GREATER_THAN
-    ;
-
-
-/* ============================================================================
- * 24. PRIMARY EXPRESSIONS
- * ========================================================================== */
-
-/*
- * Primary expressions are the atomic foundations of postfix expressions.
- *
- * The complete domain-neutral expression system may grow through additional
- * primary forms, but domain-specific semantics must not be encoded as a closed
- * enumeration here.
+ * Domain-specific semantics are deliberately not enumerated here.
  */
 primaryExpression
-    : identifierExpression
-    | literalExpression
+    : literalExpression
+    | identifier
     | parenthesizedExpression
     | tupleExpression
     | arrayExpression
     | mapExpression
     | lambdaExpression
+    | matchExpression
+    | quantumExpression
     | newExpression
     | thisExpression
     | superExpression
@@ -1069,34 +1170,21 @@ primaryExpression
 
 
 /* ============================================================================
- * 25. IDENTIFIER EXPRESSION
+ * 19. IDENTIFIER
  * ========================================================================== */
 
-identifierExpression
-    : identifier
+/*
+ * Identifier spelling is owned by the canonical lexical subsystem.
+ *
+ * No second identifier lexer rule is defined here.
+ */
+identifier
+    : IDENTIFIER
     ;
 
 
 /* ============================================================================
- * 26. THIS
- * ========================================================================== */
-
-thisExpression
-    : THIS
-    ;
-
-
-/* ============================================================================
- * 27. SUPER
- * ========================================================================== */
-
-superExpression
-    : SUPER
-    ;
-
-
-/* ============================================================================
- * 28. PARENTHESIZED EXPRESSION
+ * 20. PARENTHESIZED EXPRESSION
  * ========================================================================== */
 
 parenthesizedExpression
@@ -1105,28 +1193,27 @@ parenthesizedExpression
 
 
 /* ============================================================================
- * 29. TUPLE EXPRESSION
+ * 21. TUPLE EXPRESSION
  * ========================================================================== */
 
 /*
- * A single expression in parentheses is handled by parenthesizedExpression.
+ * A parenthesized expression with no comma is grouping.
  *
- * Tuple syntax requires at least two elements.
+ * A comma establishes tuple syntax.
  *
  * Examples:
  *
  *     (a, b)
  *     (a, b, c)
- *
- * A trailing comma is accepted:
- *
  *     (a, b,)
+ *
+ * A tuple has at least two expressions.
  */
 tupleExpression
-    : LPAREN expression COMMA expressionListTail? COMMA? RPAREN
+    : LPAREN expression COMMA tupleElementTail? COMMA? RPAREN
     ;
 
-expressionListTail
+tupleElementTail
     : expression
       (
           COMMA
@@ -1136,38 +1223,40 @@ expressionListTail
 
 
 /* ============================================================================
- * 30. ARRAY EXPRESSION
+ * 22. ARRAY EXPRESSION
  * ========================================================================== */
 
 /*
- * Array literals have no language-level element-count limit.
+ * Array/sequence literals are represented independently from call arguments.
  *
- * Examples:
- *
- *     []
- *     [a]
- *     [a, b]
- *     [a, b, c]
+ * This prevents collection syntax from becoming coupled to callable syntax.
  */
 arrayExpression
-    : LBRACKET argumentList? RBRACKET
+    : LBRACKET arrayElementList? RBRACKET
+    ;
+
+arrayElementList
+    : expression
+      (
+          COMMA
+          expression
+      )*
+      COMMA?
     ;
 
 
 /* ============================================================================
- * 31. MAP / ASSOCIATIVE COLLECTION EXPRESSION
+ * 23. MAP / ASSOCIATIVE COLLECTION EXPRESSION
  * ========================================================================== */
 
 /*
- * Map literals are intentionally generic.
+ * Map/associative collection syntax.
  *
- * Examples:
+ * Example:
  *
- *     {}
- *     {key: value}
- *     {key1: value1, key2: value2}
+ *     { key: value, other: value }
  *
- * Key and value semantics are determined by type checking.
+ * Empty maps are accepted.
  */
 mapExpression
     : LBRACE mapEntryList? RBRACE
@@ -1188,25 +1277,23 @@ mapEntry
 
 
 /* ============================================================================
- * 32. LAMBDA EXPRESSION
+ * 24. LAMBDA / CLOSURE EXPRESSION
  * ========================================================================== */
 
 /*
- * Lambda syntax is expression-level syntax.
+ * Lambda syntax remains an expression.
  *
- * Canonical examples:
+ * Parameter cardinality is unbounded.
  *
- *     |x| x + 1
+ * The semantic/type layer determines:
  *
- *     |x, y| x + y
- *
- *     |x| { x + 1 }
- *
- * If the repository's canonical lambda grammar uses another delimiter or
- * syntax, the lambda component must own that spelling and the parser assembly
- * must converge on this expression-level position.
- *
- * This grammar intentionally does not assign a fixed parameter count.
+ *     parameter types
+ *     captures
+ *     ownership
+ *     effects
+ *     return type
+ *     capability requirements
+ *     resource requirements
  */
 lambdaExpression
     : PIPE lambdaParameterList? PIPE lambdaBody
@@ -1232,16 +1319,9 @@ lambdaBody
 
 
 /* ============================================================================
- * 33. NEW EXPRESSION
+ * 25. CONSTRUCTION EXPRESSION
  * ========================================================================== */
 
-/*
- * Construction syntax:
- *
- *     new Type(...)
- *
- * Construction semantics remain outside the grammar.
- */
 newExpression
     : NEW typeExpression
       (
@@ -1251,36 +1331,82 @@ newExpression
 
 
 /* ============================================================================
- * 34. LITERAL EXPRESSIONS
+ * 26. THIS / SUPER
  * ========================================================================== */
 
-/*
- * Literal syntax is consumed from the canonical lexical/type contracts.
- *
- * The literal grammar deliberately does not impose machine-width limits.
- */
-literalExpression
-    : INTEGER
-    | FLOAT
-    | STRING
-    | CHAR
-    | TRUE
-    | FALSE
-    | NIL
-    | NULL
-    | QUANTUM_LITERAL
-    | MTS_LITERAL
+thisExpression
+    : THIS
+    ;
+
+superExpression
+    : SUPER
     ;
 
 
 /* ============================================================================
- * 35. EXPRESSION LIST
+ * 27. LITERAL INTEGRATION
  * ========================================================================== */
 
 /*
- * Used where the language expects a comma-separated sequence of expressions.
+ * Literal implementation is owned by Literals.
  *
- * There is no artificial list-size limit.
+ * The composition root merely consumes its canonical literalExpression rule.
+ */
+
+
+/* ============================================================================
+ * 28. MATCH INTEGRATION
+ * ========================================================================== */
+
+/*
+ * Match syntax is owned by Match.
+ *
+ * This allows pattern matching and guards to participate in expression
+ * position without moving pattern semantics into the general expression
+ * precedence hierarchy.
+ */
+
+
+/* ============================================================================
+ * 29. QUANTUM INTEGRATION
+ * ========================================================================== */
+
+/*
+ * Quantum expression syntax is owned by Quantum.
+ *
+ * The general expression hierarchy therefore remains independent of:
+ *
+ *     gate sets
+ *     physical qubits
+ *     topology
+ *     routing
+ *     calibration
+ *     QEC
+ *     QPU vendors
+ *
+ * The semantic path remains:
+ *
+ *     expression
+ *         |
+ *         v
+ *     domain-neutral AST
+ *         |
+ *         v
+ *     quantum semantic analysis
+ *         |
+ *         v
+ *     quantum::ir
+ */
+
+
+/* ============================================================================
+ * 30. EXPRESSION LIST
+ * ========================================================================== */
+
+/*
+ * General comma-separated expression list.
+ *
+ * No artificial cardinality limit exists.
  */
 expressionList
     : expression
@@ -1293,16 +1419,19 @@ expressionList
 
 
 /* ============================================================================
- * 36. ARGUMENT LIST
+ * 31. ARGUMENT LIST
  * ========================================================================== */
 
 /*
- * Argument lists are deliberately open-ended.
+ * General positional argument list.
  *
- * This rule is the universal positional argument sequence.
+ * The specialized call grammar may extend argument syntax with:
  *
- * Named/keyword arguments and variadic/spread arguments may be extended by
- * the specialized call grammar without changing expression precedence.
+ *     named arguments
+ *     spread arguments
+ *     explicit generic arguments
+ *
+ * Those semantics remain owned by calls/postfix.
  */
 argumentList
     : argument
@@ -1319,20 +1448,9 @@ argument
 
 
 /* ============================================================================
- * 37. TYPE EXPRESSION INTEGRATION
+ * 32. TYPE EXPRESSION LIST
  * ========================================================================== */
 
-/*
- * `typeExpression` belongs to the canonical type grammar.
- *
- * This expression grammar consumes it only where source syntax requires a
- * type, such as:
- *
- *     generic invocation
- *     construction
- *
- * No duplicate type grammar is defined here.
- */
 typeExpressionList
     : typeExpression
       (
@@ -1344,397 +1462,499 @@ typeExpressionList
 
 
 /* ============================================================================
- * 38. IDENTIFIER INTEGRATION
+ * 33. DOMAIN-NEUTRAL EXTENSIBILITY
  * ========================================================================== */
 
 /*
- * Identifier spelling belongs to the canonical lexer/name grammar.
+ * The expression system is deliberately open-world.
  *
- * This local parser rule is deliberately a thin integration boundary.
+ * The following semantic capabilities do NOT require dedicated grammar
+ * keywords merely because they exist:
  *
- * If the canonical parser composition already exposes `identifier`, it must
- * bind to that canonical rule rather than creating another lexical grammar.
- */
-identifier
-    : IDENTIFIER
-    ;
-
-
-/* ============================================================================
- * 39. COMPOSITION BOUNDARIES
- * ========================================================================== */
-
-/*
- * The following rules are consumed from the canonical parser composition:
+ *     infer(...)
+ *     deduce(...)
+ *     reason(...)
+ *     assert(...)
+ *     retract(...)
+ *     query(...)
+ *     learn(...)
+ *     adapt(...)
+ *     explain(...)
+ *     simulate(...)
+ *     measure(...)
+ *     observe(...)
+ *     optimize(...)
+ *     plan(...)
+ *     decide(...)
+ *     validate(...)
  *
- *     conditionalExpression
- *     blockExpression
- *     typeExpression
+ * Their names can remain ordinary identifiers/callables unless a dedicated
+ * syntax specification establishes that a distinct grammatical form is
+ * genuinely necessary.
  *
- * Their ownership remains outside this file.
+ * This permits future libraries, models, reasoning systems, data systems,
+ * hardware systems, quantum operations and computational domains to be added
+ * without modifying the universal expression grammar.
  *
- * This prevents:
+ * ============================================================================
+ * 34. UNCERTAINTY / PROBABILITY
+ * ============================================================================
  *
- *     - duplicate block grammar;
- *     - duplicate conditional grammar;
- *     - duplicate type grammar;
- *     - parser dependency cycles;
- *     - semantic ownership fragmentation.
+ * Probability, distributions, confidence, belief and uncertainty are semantic
+ * types/operations rather than fixed expression operators.
  *
- * The parser assembly must provide these rules exactly once.
- */
-
-
-/* ============================================================================
- * 40. OPERATOR PRECEDENCE CONTRACT
- * ========================================================================== */
-
-/*
- * From lowest to highest precedence:
+ * Examples can therefore remain ordinary expressions:
  *
- *     assignment
- *     conditional
- *     range
- *     logical OR
- *     logical AND
- *     bitwise OR
- *     bitwise XOR
- *     bitwise AND
- *     equality
- *     relational
- *     shift
- *     additive
- *     multiplicative
- *     prefix
- *     postfix
- *     primary
+ *     probability(...)
+ *     distribution(...)
+ *     confidence(...)
+ *     belief(...)
  *
- * This ordering is structural.
+ * Their semantics belong to the type/AI/data semantic layers.
  *
- * Semantic analysis remains responsible for whether an operator is legal for
- * a particular type/domain.
- */
-
-
-/* ============================================================================
- * 41. ASSOCIATIVITY CONTRACT
- * ========================================================================== */
-
-/*
- * Assignment:
+ * No probability implementation is hard-coded here.
  *
- *     right associative
+ * ============================================================================
+ * 35. KNOWLEDGE / REASONING
+ * ============================================================================
  *
- * Example:
+ * Knowledge assertions, retractions, queries and reasoning operations may be
+ * represented as ordinary expressions unless their specification explicitly
+ * requires dedicated statement syntax.
  *
- *     a = b = c
+ * This avoids making the expression grammar dependent on one reasoning
+ * implementation.
  *
- * is parsed as:
+ * ============================================================================
+ * 36. LEARNING / ADAPTATION
+ * ============================================================================
  *
- *     a = (b = c)
+ * Learning and adaptation are semantic operations.
  *
- * Binary precedence layers:
+ * Their semantic model may attach:
  *
- *     left associative
+ *     effects
+ *     capabilities
+ *     resources
+ *     policies
+ *     provenance
+ *     contracts
  *
- * The conditional-expression component owns conditional associativity.
+ * to the resulting AST/semantic node.
  *
- * Range associativity is deliberately restricted to one range operator at the
- * current grammar layer. Chained range semantics must be explicitly specified
- * rather than accidentally created by recursive expression references.
- */
-
-
-/* ============================================================================
- * 42. OPERATOR OVERLOADING
- * ========================================================================== */
-
-/*
- * This grammar does not decide whether:
+ * The expression grammar itself remains target-neutral.
  *
- *     +
- *     -
- *     *
- *     /
- *     %
- *     &
- *     |
- *     ^
- *     <<
- *     >>
+ * In particular:
  *
- * operate on:
+ *     adapt(...)
  *
- *     integers
- *     floating point
- *     vectors
- *     matrices
- *     tensors
- *     symbolic values
- *     user-defined values
- *     hardware values
- *     quantum/classical values
- *     distributed values
+ * MUST NOT mean unrestricted self-modifying source code.
  *
- * Semantic analysis owns that decision.
- */
-
-
-/* ============================================================================
- * 43. QUANTUM OPERATION EXTENSIBILITY
- * ========================================================================== */
-
-/*
- * Do NOT add rules such as:
+ * Authorization and adaptation policy belong downstream.
  *
- *     quantumGate
- *         : H
- *         | X
- *         | Y
- *         | Z
- *         | CNOT
- *         | ...
- *         ;
+ * ============================================================================
+ * 37. CONTRACTS / POLICIES
+ * ============================================================================
  *
- * Quantum operation names remain extensible.
+ * Contracts and policies are primarily owned by:
  *
- * Example:
+ *     grammar/validation/
+ *     grammar/policies/
+ *     grammar/resources/
+ *     grammar/security/
  *
- *     H(q)
- *     CNOT(control, target)
- *     vendor::operation(parameter)(q)
- *     logical::operation(q)
+ * Expressions may occur inside:
  *
- * The semantic layer resolves the operation and lowers it to:
+ *     requires
+ *     ensures
+ *     invariant
+ *     assume
+ *     guarantee
+ *     property
+ *     policy conditions
+ *     capability requirements
+ *     resource constraints
  *
- *     quantum::ir
+ * Therefore expression syntax must remain sufficiently general to represent
+ * arbitrary conditions without introducing domain-specific operators.
  *
- * This is essential for:
+ * ============================================================================
+ * 38. PROVENANCE / EVIDENCE
+ * ============================================================================
  *
- *     future quantum operations;
- *     logical operations;
- *     vendor operations;
- *     calibrated operations;
- *     error-corrected operations;
- *     simulator operations;
- *     hardware-independent programs.
- */
-
-
-/* ============================================================================
- * 44. HARDWARE SCALABILITY
- * ========================================================================== */
-
-/*
- * Expressions MUST remain independent of physical realization.
+ * Evidence, confidence, provenance and explanation are semantic metadata.
  *
- * Forbidden as grammar-level universal restrictions:
+ * Expressions can serve as:
+ *
+ *     claims
+ *     evidence predicates
+ *     decision conditions
+ *     derivation expressions
+ *     explanation expressions
+ *
+ * Their provenance is attached by the frontend/semantic pipeline rather than
+ * encoded into the expression grammar.
+ *
+ * ============================================================================
+ * 39. EFFECT / CAPABILITY / RESOURCE INTEGRATION
+ * ============================================================================
+ *
+ * An expression may semantically produce or require:
+ *
+ *     effect("io")
+ *     effect("network")
+ *     effect("measurement")
+ *     effect("learning")
+ *     effect("adaptation")
+ *     effect("reflection")
+ *     effect("foreign")
+ *
+ * and capabilities/resources such as:
+ *
+ *     capability("tensor.compute")
+ *     capability("quantum.measurement")
+ *     capability("accelerator.compute")
+ *
+ * These are semantic contracts, not parser-level hardware limits.
+ *
+ * ============================================================================
+ * 40. POCO-REAF INVARIANT
+ * ============================================================================
+ *
+ * This expression grammar is portable across:
+ *
+ *     tiny systems
+ *     embedded systems
+ *     CPUs
+ *     multicore CPUs
+ *     GPUs
+ *     FPGAs
+ *     ASICs
+ *     accelerators
+ *     QPUs
+ *     simulators
+ *     HPC systems
+ *     clusters
+ *     distributed systems
+ *     cloud systems
+ *     future computational substrates
+ *
+ * The expression itself describes computation.
+ *
+ * Target realization is determined later through:
+ *
+ *     semantic analysis
+ *     capability negotiation
+ *     resource analysis
+ *     compilation
+ *     specialization
+ *     lowering
+ *     routing
+ *     scheduling
+ *     resilience
+ *     HAL
+ *
+ * ============================================================================
+ * 41. NO HARD-CODED MACHINE LIMITS
+ * ============================================================================
+ *
+ * This file MUST NOT contain:
  *
  *     MAX_QUBITS
  *     MAX_CPUS
- *     MAX_CORES
- *     MAX_THREADS
  *     MAX_GPUS
  *     MAX_FPGAS
  *     MAX_NODES
  *     MAX_MEMORY
- *     MAX_REGISTER_WIDTH
+ *     MAX_THREADS
  *     MAX_TENSOR_RANK
- *     MAX_VECTOR_WIDTH
- *     MAX_ACCELERATORS
+ *     MAX_REGISTER_WIDTH
+ *     MAX_NETWORK_SIZE
+ *     MAX_DEVICE_COUNT
  *
- * A program may contain a semantic requirement such as:
+ * or equivalent constants.
  *
- *     requires resource(...)
+ * Source-level numeric values remain program data.
  *
- * but that resource requirement is not an expression-parser hardware limit.
- */
-
-
-/* ============================================================================
- * 45. ERROR / DIAGNOSTIC CONTRACT
- * ========================================================================== */
-
-/*
- * This grammar must produce structurally deterministic parse trees.
+ * A source expression such as:
  *
- * Diagnostics must preserve source locations.
+ *     tensor[dimension]
  *
- * Semantic errors such as:
+ * does not imply a fixed maximum tensor dimension.
  *
- *     invalid operand type
+ * A source expression such as:
+ *
+ *     q[index]
+ *
+ * does not imply a fixed number of qubits.
+ *
+ * Target feasibility belongs downstream.
+ *
+ * ============================================================================
+ * 42. ERROR CONTRACT
+ * ============================================================================
+ *
+ * Parser errors must remain structural parser errors.
+ *
+ * They MUST NOT be silently converted into semantic success.
+ *
+ * Examples of semantic errors that do NOT belong here:
+ *
  *     invalid assignment target
+ *     invalid operand type
  *     unavailable capability
- *     unsupported quantum operation
- *     invalid hardware requirement
+ *     insufficient resource
+ *     illegal quantum operation
+ *     incompatible hardware
+ *     invalid effect
+ *     forbidden policy transition
+ *     invalid adaptation
+ *     invalid provenance
  *
- * belong downstream.
+ * These belong to downstream diagnostics.
  *
- * Parser errors must not be silently converted into semantic success.
- */
-
-
-/* ============================================================================
- * 46. NO RUNTIME ACTIONS
- * ========================================================================== */
-
-/*
- * This grammar intentionally contains:
+ * ============================================================================
+ * 43. DETERMINISTIC PARSING
+ * ============================================================================
  *
- *     - no embedded Rust;
- *     - no semantic predicates;
- *     - no filesystem access;
- *     - no network access;
- *     - no hardware discovery;
- *     - no runtime execution;
- *     - no unsafe code.
+ * Identical:
  *
- * It is pure syntax.
- */
-
-
-/* ============================================================================
- * 47. INTEGRATION WITH FRONTEND AST
- * ========================================================================== */
-
-/*
- * Expected conceptual mappings:
+ *     source
+ *     grammar version
+ *     language version
+ *     dialect configuration
  *
- *     assignmentExpression
- *         -> assignment expression AST
+ * must produce the same parse structure.
  *
- *     binary expression layers
- *         -> binary/operator expression AST
+ * The parser must not inspect:
  *
- *     prefixExpression
- *         -> unary expression AST
+ *     time
+ *     randomness
+ *     hardware
+ *     filesystem
+ *     network
+ *     environment
+ *     scheduler state
+ *     target availability
  *
- *     postfixExpression
- *         -> ordered postfix/member/call/index AST
+ * ============================================================================
+ * 44. SOURCE PRESERVATION
+ * ============================================================================
  *
- *     primaryExpression
- *         -> literal/name/aggregate/lambda/construction AST
+ * Expression parsing must preserve enough source structure for:
  *
- *     conditionalExpression
- *         -> existing ConditionalExpression AST
+ *     diagnostics
+ *     formatting
+ *     IDE/LSP
+ *     source maps
+ *     AST construction
+ *     semantic diagnostics
+ *     provenance
+ *     reproducibility
+ *     incremental compilation
+ *     macro tooling
+ *     compatibility tooling
  *
- *     rangeExpression
- *         -> range expression AST
+ * This grammar must not silently normalize or discard semantic source
+ * distinctions.
  *
- * The exact Rust structures belong to:
+ * ============================================================================
+ * 45. AST INTEGRATION
+ * ============================================================================
  *
- *     src/frontend/ast/
+ * Expected semantic/AST categories include:
  *
- * This grammar must not introduce a second AST hierarchy.
- */
-
-
-/* ============================================================================
- * 48. CANONICAL QUANTUM LOWERING
- * ========================================================================== */
-
-/*
- * Generic expression syntax:
+ *     Literal
+ *     Identifier
+ *     Unary
+ *     Binary
+ *     Assignment
+ *     Conditional
+ *     Range
+ *     Call
+ *     Index
+ *     Member
+ *     OptionalMember
+ *     QualifiedMember
+ *     Tuple
+ *     Array
+ *     Map/Record
+ *     Lambda
+ *     Match
+ *     Construction
+ *     QuantumExpression
  *
- *     operation(args)
+ * The AST remains domain-neutral.
  *
- * may eventually be recognized semantically as a quantum operation.
+ * The grammar MUST NOT introduce:
  *
- * The lowering path is:
+ *     QuantumGateAst
+ *     PhysicalQubitAst
+ *     CpuSpecificExpressionAst
+ *     GpuSpecificExpressionAst
+ *     VendorExpressionAst
  *
- *     expression AST
- *          |
- *          v
- *     semantic analysis
- *          |
- *          v
- *     canonical semantic model
- *          |
- *          v
- *     quantum::ir
- *          |
- *          v
- *     optimization
- *          |
- *          v
- *     routing
- *          |
- *          v
- *     scheduling
- *          |
- *          v
- *     QEC / resilience / ZQN
- *          |
- *          v
- *     HAL
+ * unless such a node is explicitly part of the domain-neutral AST contract.
  *
- * No physical qubit or topology is represented in this grammar.
- */
-
-
-/* ============================================================================
- * 49. CLASSICAL / HDL LOWERING
- * ========================================================================== */
-
-/*
- * Classical expressions lower through the canonical classical semantic/IR
- * path.
+ * ============================================================================
+ * 46. IR INTEGRATION
+ * ============================================================================
  *
- * HDL/hardware expressions lower through their semantic hardware/HDL path.
+ * Expression syntax follows:
  *
- * Hybrid expressions remain domain-neutral until semantic analysis establishes
- * the domain boundary.
+ *     source
+ *       |
+ *       v
+ *     parse tree
+ *       |
+ *       v
+ *     domain-neutral AST
+ *       |
+ *       v
+ *     structural validation
+ *       |
+ *       v
+ *     semantic model
+ *       |
+ *       +-----------------------+
+ *       |                       |
+ *       v                       v
+ *   classical              quantum::ir
+ *       |                       |
+ *       +-----------+-----------+
+ *                   |
+ *                   v
+ *               lowering
  *
- * This keeps one source language rather than creating separate expression
- * languages for CPU, GPU, FPGA, QPU, HDL, AI, data, or distributed systems.
- */
-
-
-/* ============================================================================
- * 50. COMPLETION CONTRACT
- * ========================================================================== */
-
-/*
- * This file is complete only when all of the following are true:
+ * Expressions.g4 does not directly emit IR.
  *
- * [x] Owns exactly one public expression entry point.
- * [x] Owns the complete expression precedence composition.
- * [x] Does not redefine conditionalExpression.
- * [x] Does not create a second type grammar.
- * [x] Does not create a second block grammar.
- * [x] Uses canonical lexer token names.
- * [x] Supports right-associative assignment.
- * [x] Supports compound assignments.
- * [x] Supports open-ended binary chains.
- * [x] Supports open-ended postfix chains.
- * [x] Supports open-ended argument lists.
- * [x] Supports open-ended index lists.
- * [x] Supports generic invocation syntax.
- * [x] Supports optional member syntax where lexer/version enables it.
- * [x] Supports null-coalescing token integration where enabled downstream.
- * [x] Does not hard-code machine/resource limits.
- * [x] Does not enumerate quantum gates.
- * [x] Does not introduce a quantum IR.
- * [x] Preserves domain neutrality.
- * [x] Preserves deterministic parsing.
- * [x] Contains no embedded Rust actions.
- * [x] Contains no unsafe Rust.
+ * ============================================================================
+ * 47. COMPATIBILITY
+ * ============================================================================
  *
- * Integration acceptance additionally requires:
+ * Historical aliases must NOT be silently introduced.
  *
- *     - canonical parser composition binds conditionalExpression;
- *     - canonical parser composition binds blockExpression;
- *     - canonical parser composition binds typeExpression;
- *     - frontend AST covers every expression alternative;
- *     - semantic analysis covers every expression category;
- *     - canonical IR lowering exists for every semantically supported form;
- *     - positive tests exist;
- *     - negative tests exist;
- *     - boundary tests exist;
- *     - scalability tests exist;
- *     - compatibility tests exist;
- *     - deterministic parse tests exist;
- *     - no competing public expression rule remains in the final parser.
+ * In particular, this file must use the canonical lexer names:
  *
+ *     EQUAL_EQUAL
+ *     NOT_EQUAL
+ *     LESS_EQUAL
+ *     GREATER_EQUAL
+ *     LEFT_SHIFT
+ *     RIGHT_SHIFT
+ *     LOGICAL_AND
+ *     LOGICAL_OR
+ *     MODULO
+ *     AMP_ASSIGN
+ *     PIPE_ASSIGN
+ *     CARET_ASSIGN
+ *     INCREMENT
+ *     DECREMENT
+ *
+ * rather than creating aliases such as:
+ *
+ *     EQ_EQ
+ *     NOT_EQ
+ *     LE
+ *     GE
+ *     SHIFT_LEFT
+ *     SHIFT_RIGHT
+ *     AND_AND
+ *     OR_OR
+ *     PERCENT
+ *     AMPERSAND_ASSIGN
+ *     PIPE_ASSIGN
+ *     PLUS_PLUS
+ *     MINUS_MINUS
+ *
+ * This prevents lexical/parser drift.
+ *
+ * ============================================================================
+ * 48. COMPLETION CRITERIA
+ * ============================================================================
+ *
+ * This file is DONE only when:
+ *
+ *     [ ] exactly one public `expression` rule exists;
+ *     [ ] assignment precedence is correct;
+ *     [ ] conditional precedence is correct;
+ *     [ ] range precedence is correct;
+ *     [ ] logical precedence is correct;
+ *     [ ] null-coalescing precedence is correct;
+ *     [ ] bitwise precedence is correct;
+ *     [ ] equality precedence is correct;
+ *     [ ] relational precedence is correct;
+ *     [ ] shift precedence is correct;
+ *     [ ] additive precedence is correct;
+ *     [ ] multiplicative precedence is correct;
+ *     [ ] prefix/postfix precedence is correct;
+ *     [ ] canonical lexer tokens are used;
+ *     [ ] no duplicate lexer rules exist;
+ *     [ ] no second identifier grammar exists here;
+ *     [ ] no machine-size limits exist;
+ *     [ ] no quantum gate enumeration exists;
+ *     [ ] no target-specific syntax exists;
+ *     [ ] no IR is created here;
+ *     [ ] no runtime action exists;
+ *     [ ] no unsafe Rust is required;
+ *     [ ] expression lists are unbounded;
+ *     [ ] argument lists are unbounded;
+ *     [ ] generic lists are unbounded;
+ *     [ ] index lists are unbounded;
+ *     [ ] tuple/collection forms are unbounded;
+ *     [ ] expression nesting has no language-level finite ceiling;
+ *     [ ] quantum expressions integrate through the canonical quantum path;
+ *     [ ] AI/reasoning/learning/adaptation remain open-world;
+ *     [ ] contracts can consume arbitrary expressions;
+ *     [ ] policies can consume arbitrary expressions;
+ *     [ ] resource/capability conditions can consume arbitrary expressions;
+ *     [ ] provenance/evidence conditions can consume arbitrary expressions;
+ *     [ ] deterministic parsing is preserved;
+ *     [ ] positive tests exist;
+ *     [ ] negative tests exist;
+ *     [ ] precedence tests exist;
+ *     [ ] associativity tests exist;
+ *     [ ] boundary tests exist;
+ *     [ ] scalability tests exist;
+ *     [ ] compatibility tests exist.
+ *
+ * ============================================================================
+ * IMPORTANT INTEGRATION NOTE
+ * ============================================================================
+ *
+ * The repository currently contains several specialized expression grammars
+ * whose rule names and ownership are not yet completely aligned.
+ *
+ * Before generating the final ANTLR parser, the following invariant MUST be
+ * enforced:
+ *
+ *     Expressions owns composition.
+ *
+ *     Assignment owns assignment implementation.
+ *
+ *     Conditionals owns conditional implementation.
+ *
+ *     Ranges owns range implementation.
+ *
+ *     Unary owns unary implementation.
+ *
+ *     Postfix owns postfix implementation.
+ *
+ *     Calls owns call implementation.
+ *
+ *     Indexing owns indexing implementation.
+ *
+ *     Member access owns member implementation.
+ *
+ *     Literals owns literal implementation.
+ *
+ *     Match owns match implementation.
+ *
+ *     Quantum owns quantum expression implementation.
+ *
+ * There must be no circular import and no duplicate public rule.
+ *
+ * ============================================================================
+ * END OF FILE
  * ============================================================================
  */
