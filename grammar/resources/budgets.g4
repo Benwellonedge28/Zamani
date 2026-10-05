@@ -1,6 +1,6 @@
 /*
  * ============================================================================
- * Zamani Universal Programming Language
+ * Zamani Programming Language
  * ============================================================================
  *
  * File:
@@ -9,65 +9,71 @@
  * Grammar:
  *     ANTLR4 parser grammar
  *
- * Grammar identity:
+ * Grammar name:
  *     ResourceBudgets
+ *
+ * Status:
+ *     CANONICAL RESOURCE-BUDGET SYNTAX
  *
  * Baseline:
  *     Rust 1.97 / Rust 1.97.1
  *     Rust 2021
- *     safe Rust only
+ *     Safe Rust only
  *
  * ============================================================================
+ * FEATURE CONTRACT
+ * ============================================================================
+ *
  * PURPOSE
- * ============================================================================
+ * -------
  *
- * This file defines the canonical SOURCE-LEVEL RESOURCE-BUDGET grammar.
+ * This file owns the source-level syntax for RESOURCE BUDGETS.
  *
- * A budget is a declared allowance, envelope, objective boundary, or
- * consumption policy associated with a semantic resource.
+ * A budget describes a portable semantic allowance, envelope, objective,
+ * accounting quantity, consumption model, or resource-management boundary.
  *
  * A budget is NOT:
  *
+ *     - a physical hardware allocation;
+ *     - a device selection;
  *     - a compiler hard limit;
- *     - a hardware maximum;
- *     - a parser maximum;
- *     - a fixed machine capacity;
- *     - a physical device selection;
- *     - a scheduling implementation;
+ *     - a universal machine maximum;
  *     - a runtime allocator;
- *     - a resource inventory;
- *     - a hardware discovery mechanism.
+ *     - a hardware-discovery mechanism;
+ *     - a scheduling implementation;
+ *     - a routing implementation;
+ *     - a quantum-routing implementation;
+ *     - a QEC implementation;
+ *     - a HAL implementation.
  *
- * Budgets are therefore portable semantic intent.
  *
  * ============================================================================
- * POCO-REAF
+ * POCO-REAF CONTRACT
  * ============================================================================
  *
- * This grammar participates in:
+ * Budgets participate in:
  *
  *     Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
  *
- * A budget describes what the program is allowed, expected, or required to
- * consume or remain within.
+ * A budget belongs to PROGRAM INTENT.
  *
- * It does NOT select:
+ * It may be evaluated against:
  *
- *     CPU 0
- *     GPU 0
- *     FPGA 0
- *     QPU 0
- *     physical qubit 0
- *     node 0
- *     memory bank 0
+ *     compile-time resources;
+ *     execution resources;
+ *     deployment resources;
+ *     runtime resources;
+ *     simulation resources;
+ *     quantum resources;
+ *     classical resources;
+ *     accelerator resources;
+ *     distributed resources;
+ *     networking resources;
+ *     future resource domains.
  *
- * nor does it establish universal machine capacities.
+ * This grammar MUST NOT encode a finite machine universe.
  *
- * ============================================================================
- * HARD-CODING PROHIBITION
- * ============================================================================
- *
- * This grammar MUST NOT encode:
+ * In particular, this grammar MUST NOT encode:
  *
  *     MAX_QUBITS
  *     MAX_CPUS
@@ -81,66 +87,66 @@
  *     MAX_NETWORK_SIZE
  *     MAX_DEVICE_COUNT
  *
- * It also MUST NOT encode equivalent fixed assumptions such as:
+ * or equivalent constants.
  *
- *     32-bit registers
- *     64 GB RAM
- *     24 GB VRAM
- *     1024 physical qubits
- *     8 CPU cores
- *     16 GPU devices
+ * A source program may legitimately contain a concrete budget value.
  *
- * A source-level value such as:
+ * For example:
  *
  *     budget memory = required_memory;
  *
- * or:
+ * The value is a PROGRAM-SPECIFIC budget.
  *
- *     budget qubits = logical_qubits;
+ * It is not a universal language limit.
  *
- * is program semantics.
- *
- * It is not a language-level hardware limit.
  *
  * ============================================================================
- * SCALABILITY
+ * SCALABILITY CONTRACT
  * ============================================================================
  *
- * Budget expressions are deliberately open-ended.
+ * There is no grammar-defined maximum for:
  *
- * The grammar imposes no finite limit on:
+ *     budget count;
+ *     clause count;
+ *     resource-name depth;
+ *     expression complexity;
+ *     property depth;
+ *     namespace depth;
+ *     resource dimensions;
+ *     conditions;
+ *     scopes;
+ *     policies;
+ *     targets;
+ *     budget groups.
  *
- *     number of budgets
- *     number of budget clauses
- *     budget nesting
- *     budget expression complexity
- *     number of resources
- *     number of resource dimensions
- *     number of conditions
- *     number of scopes
- *     number of targets
+ * Repetition uses ANTLR's unbounded grammar constructs.
  *
- * ANTLR repetition and recursive structure represent arbitrary source
- * cardinality subject only to the actual implementation's externally
- * configurable parsing resources.
+ * Practical limits are implementation-resource limits such as:
  *
- * "Infinity" therefore means:
+ *     available memory;
+ *     parser configuration;
+ *     compiler resources;
+ *     operating-system resources;
+ *     deployment resources.
  *
- *     no language-level artificial capacity limit.
+ * Such implementation limits are NOT language semantics.
  *
- * It does NOT mean that physical hardware or compiler memory is infinite.
  *
  * ============================================================================
- * OWNERSHIP
+ * OWNS
  * ============================================================================
  *
- * THIS FILE OWNS:
+ * This file owns:
  *
  *     resourceBudgets
  *     resourceBudgetItem
  *     resourceBudgetDeclaration
  *     resourceBudgetSpecification
+ *     resourceBudgetAssignment
+ *     resourceBudgetRelation
+ *     resourceBudgetBlock
  *     resourceBudgetClause
+ *     resourceBudgetNamedClause
  *     resourceBudgetLimitClause
  *     resourceBudgetMinimumClause
  *     resourceBudgetMaximumClause
@@ -154,80 +160,128 @@
  *     resourceBudgetPolicyClause
  *     resourceBudgetPropertyClause
  *     resourceBudgetExpression
- *     resourceBudgetRelation
- *     resourceBudgetOperator
- *     resourceBudgetName
+ *     resourceBudgetRelationOperator
  *
- * THIS FILE DOES NOT OWN:
  *
- *     identifier
- *     qualifiedName
- *     literals
- *     operators
- *     general expression precedence
- *     resourceExpression
- *     resource requirements
- *     resource capabilities
- *     resource constraints
- *     resource preferences
- *     resource placement
- *     hardware discovery
- *     scheduling
- *     routing
- *     optimization
- *     runtime allocation
- *     physical device selection
- *     QEC
- *     ZQN
- *     HAL
- *     classical IR
- *     quantum::ir
- *     HDL IR
+ * ============================================================================
+ * DOES NOT OWN
+ * ============================================================================
+ *
+ * This file does NOT own:
+ *
+ *     identifiers;
+ *     qualified names;
+ *     general expressions;
+ *     arithmetic;
+ *     logical expressions;
+ *     literals;
+ *     operators;
+ *     requirements;
+ *     capabilities;
+ *     constraints;
+ *     preferences;
+ *     hints;
+ *     negotiation;
+ *     scalability semantics;
+ *     policies;
+ *     effects;
+ *     contracts;
+ *     hardware discovery;
+ *     allocation;
+ *     placement;
+ *     routing;
+ *     scheduling;
+ *     optimization;
+ *     classical IR;
+ *     quantum::ir;
+ *     HDL IR;
+ *     QEC;
+ *     ZQN;
+ *     HAL;
+ *     runtime behavior.
+ *
+ *
+ * ============================================================================
+ * DEPENDENCY CONTRACT
+ * ============================================================================
+ *
+ * DEPENDS_ON
+ * ----------
+ *
+ *     grammar/antlr/ZamaniLexer.g4
+ *     grammar/resources/resource-expressions.g4
+ *     grammar/core/names.g4
+ *
+ *
+ * DIRECT IMPORTS
+ * --------------
+ *
+ *     ResourceExpressions
+ *     Names
+ *
+ *
+ * EXPORTS
+ * -------
+ *
+ * Primary public rules:
+ *
+ *     resourceBudgets
+ *     resourceBudgetItem
+ *     resourceBudgetDeclaration
+ *     resourceBudgetSpecification
+ *     resourceBudgetClause
+ *     resourceBudgetExpression
+ *
+ *
+ * CONSUMED BY
+ * -----------
+ *
+ *     grammar/resources/resources.g4
+ *     grammar/declarations/resources.g4
+ *     grammar/execution/
+ *     grammar/compile/
+ *     grammar/hardware/
+ *     grammar/quantum/
+ *     grammar/hybrid/
+ *     grammar/distributed/
+ *     grammar/networking/
+ *     grammar/hdl/
+ *
  *
  * ============================================================================
  * AST CONTRACT
  * ============================================================================
  *
- * The parser is expected to map:
+ * This grammar produces parser contexts only.
  *
- *     resourceBudgetDeclaration
- *         ->
- *     ResourceBudgetDeclaration
+ * The domain-neutral frontend AST owns the actual AST representation.
  *
- *     resourceBudgetClause
- *         ->
- *     ResourceBudgetClause
+ * The AST should preserve:
  *
- *     resourceBudgetLimitClause
- *         ->
- *     ResourceBudgetLimit
+ *     budget identity;
+ *     source span;
+ *     source ordering;
+ *     budget specification kind;
+ *     expression structure;
+ *     clause ordering;
+ *     clause names;
+ *     clause values;
+ *     grouping;
+ *     conditional structure.
  *
- *     resourceBudgetMinimumClause
- *         ->
- *     ResourceBudgetMinimum
+ * The AST MUST NOT contain:
  *
- *     resourceBudgetMaximumClause
- *         ->
- *     ResourceBudgetMaximum
+ *     physical CPU IDs;
+ *     physical GPU IDs;
+ *     physical FPGA IDs;
+ *     physical QPU IDs;
+ *     physical qubit IDs;
+ *     memory-bank IDs;
+ *     node IDs;
+ *     vendor allocation decisions;
+ *     routing decisions;
+ *     scheduling decisions.
  *
- *     resourceBudgetTargetClause
- *         ->
- *     ResourceBudgetTarget
- *
- *     resourceBudgetReserveClause
- *         ->
- *     ResourceBudgetReservation
- *
- *     resourceBudgetConsumeClause
- *         ->
- *     ResourceBudgetConsumption
- *
- *     resourceBudgetConditionClause
- *         ->
- *     ResourceBudgetCondition
- *
- * The AST must preserve source spans and the original resource/budget
- * expressions.
  *
  * ============================================================================
  * SEMANTIC CONTRACT
@@ -235,141 +289,273 @@
  *
  * Semantic analysis determines:
  *
- *     - what resource the budget refers to;
- *     - what quantity/dimension is being budgeted;
- *     - whether the budget is a limit, minimum, target, reservation, or policy;
- *     - whether it is mandatory or advisory;
- *     - whether it is conditional;
- *     - how it composes with requirements and constraints;
- *     - whether it is satisfiable on a selected target;
- *     - whether the value has a valid semantic unit/type.
+ *     - what resource the budget identifies;
+ *     - what dimension or property is being budgeted;
+ *     - whether a value is a limit, minimum, target, reservation, etc.;
+ *     - whether the budget is hard, soft, advisory, or policy-controlled;
+ *     - whether units are compatible;
+ *     - whether expressions are type-correct;
+ *     - whether budgets conflict;
+ *     * whether budgets compose with requirements;
+ *     * whether budgets compose with constraints;
+ *     * whether budgets compose with preferences;
+ *     * whether a target can satisfy them.
  *
- * Parsing MUST NOT make those decisions.
+ * None of those decisions are made by this parser.
+ *
  *
  * ============================================================================
- * REQUIREMENT / CONSTRAINT / PREFERENCE DISTINCTION
+ * RESOURCE MODEL CONTRACT
  * ============================================================================
  *
- * A budget is not automatically a requirement.
+ * Resource concepts remain separate:
  *
- * Example:
+ *     requirement
+ *         = what must be satisfied
  *
- *     budget latency = latency_budget;
+ *     capability
+ *         = what an environment can provide
  *
- * merely declares a budget.
+ *     constraint
+ *         = a condition that must hold
  *
- * A containing semantic construct may subsequently make it:
+ *     preference
+ *         = a preferred realization
  *
- *     required
- *     constrained
- *     preferred
- *     advisory
+ *     hint
+ *         = advisory information
  *
- * A budget MUST NOT silently change a preference into a hard constraint.
+ *     budget
+ *         = an allowance/objective/accounting boundary
+ *
+ *     negotiation
+ *         = resolution of competing requirements and available realization
+ *
+ * Budgets MUST NOT silently become requirements, constraints, or preferences.
+ *
  *
  * ============================================================================
  * IR CONTRACT
  * ============================================================================
  *
- * This grammar does NOT define a ResourceBudget IR.
+ * This file defines NO resource-budget IR.
  *
- * Budget syntax is lowered into the repository's canonical semantic resource
- * model and then consumed by existing compiler/resource infrastructure.
- *
- * Conceptually:
+ * The pipeline is:
  *
  *     source
  *       |
  *       v
- *     ResourceBudgetDeclaration
+ *     parser context
+ *       |
+ *       v
+ *     domain-neutral AST
  *       |
  *       v
  *     semantic ResourceBudget
  *       |
- *       +---------------------+
- *       |                     |
- *       v                     v
- *     resource analysis   performance analysis
- *       |                     |
- *       +----------+----------+
- *                  |
- *                  v
- *          canonical semantic model
- *                  |
- *          +-------+--------+
- *          |                |
- *          v                v
- *     classical          quantum::ir
- *          |                |
- *          +-------+--------+
- *                  |
- *             optimization
- *                  |
- *          routing/scheduling
- *                  |
- *              resilience
- *                  |
- *                 ZQN
- *                  |
- *                 HAL
+ *       v
+ *     canonical semantic resource model
+ *       |
+ *       +-----------------------+
+ *       |                       |
+ *       v                       v
+ * classical realization    quantum semantic model
+ *                               |
+ *                               v
+ *                           quantum::ir
+ *                               |
+ *                               v
+ *                         optimization
+ *                               |
+ *                         routing/scheduling
+ *                               |
+ *                          resilience/QEC
+ *                               |
+ *                              ZQN
+ *                               |
+ *                              HAL
  *
- * No second resource IR and no second quantum IR are introduced here.
+ * This grammar MUST NOT introduce a second resource IR.
+ *
  *
  * ============================================================================
- * INTEGRATION CONTRACT
+ * QUANTUM CONTRACT
  * ============================================================================
  *
- * Primary integration:
+ * Quantum budgets are represented through ordinary resource names and
+ * expressions.
  *
- *     grammar/resources/resources.g4
+ * Examples:
  *
- * imports:
+ *     budget quantum::time = execution_budget;
  *
- *     ResourceBudgets
+ *     budget quantum::error = error_budget;
  *
- * and exposes:
+ *     budget quantum::fidelity = fidelity_target;
  *
- *     resourceBudgetDeclaration
+ *     budget quantum::sampling = sampling_budget;
  *
- * as a resource-domain item/clause.
+ *     budget quantum::logical_qubits = logical_qubits;
  *
- * Related grammars:
+ * The grammar does NOT:
  *
- *     requirements.g4
- *     constraints.g4
- *     capabilities.g4
- *     preferences.g4
- *     scaling.g4
- *     performance.g4
- *     placement.g4
- *     hardware/*.g4
- *     execution/*.g4
+ *     enumerate gates;
+ *     enumerate QPUs;
+ *     enumerate physical qubits;
+ *     define coupling maps;
+ *     define calibration;
+ *     define QEC;
+ *     define routing;
+ *     define pulse schedules.
  *
- * Those grammars retain ownership of their respective concepts.
+ * Quantum realization remains downstream through:
+ *
+ *     quantum::ir
+ *
  *
  * ============================================================================
- * IMPORTANT NON-DUPLICATION RULE
+ * HDL / HARDWARE CONTRACT
  * ============================================================================
  *
- * ResourceExpressions owns:
+ * Hardware and HDL budgets remain target-independent.
  *
- *     resourceExpression
+ * Examples:
  *
- * This file MUST NOT redefine:
+ *     budget latency = datapath_latency;
  *
- *     resourceExpression
- *     arithmeticExpression
- *     logicalExpression
- *     comparisonExpression
- *     functionCall
- *     indexing
- *     member access
- *     literals
+ *     budget power = power_budget;
  *
- * All budget values pass through:
+ *     budget energy = energy_budget;
  *
- *     resourceBudgetExpression
- *         -> resourceExpression
+ *     budget memory = storage_budget;
+ *
+ *     budget bandwidth = bandwidth_budget;
+ *
+ * They do not select:
+ *
+ *     FPGA;
+ *     ASIC;
+ *     CPU;
+ *     GPU;
+ *     QPU;
+ *     vendor;
+ *     board;
+ *     pin;
+ *     process node;
+ *     physical region.
+ *
+ *
+ * ============================================================================
+ * DISTRIBUTED CONTRACT
+ * ============================================================================
+ *
+ * Distributed programs may budget:
+ *
+ *     network::bandwidth;
+ *     network::latency;
+ *     communication::volume;
+ *     storage;
+ *     execution::time;
+ *     service::capacity;
+ *
+ * No node-count ceiling is encoded.
+ *
+ *
+ * ============================================================================
+ * AI / DATA / TENSOR CONTRACT
+ * ============================================================================
+ *
+ * Budgets may describe:
+ *
+ *     training;
+ *     inference;
+ *     tensor memory;
+ *     accelerator time;
+ *     communication;
+ *     throughput;
+ *     latency;
+ *     energy;
+ *     storage;
+ *     data movement.
+ *
+ * Tensor rank and dimensions remain semantic values.
+ *
+ * No tensor-rank or accelerator-capacity ceiling is encoded here.
+ *
+ *
+ * ============================================================================
+ * EFFECT CONTRACT
+ * ============================================================================
+ *
+ * Declaring a budget does not itself create an effect.
+ *
+ * Resource consumption may later interact with:
+ *
+ *     io;
+ *     network;
+ *     distributed;
+ *     measurement;
+ *     simulation;
+ *     learning;
+ *     adaptation;
+ *     native;
+ *     foreign;
+ *
+ * through the semantic/effect systems.
+ *
+ *
+ * ============================================================================
+ * POLICY CONTRACT
+ * ============================================================================
+ *
+ * A budget may carry policy metadata.
+ *
+ * Policy interpretation remains owned by the policy subsystem.
+ *
+ * This grammar does not authorize:
+ *
+ *     resource allocation;
+ *     privileged execution;
+ *     native execution;
+ *     network access;
+ *     FFI;
+ *     reflection.
+ *
+ *
+ * ============================================================================
+ * PROVENANCE CONTRACT
+ * ============================================================================
+ *
+ * Budget syntax must remain source-traceable.
+ *
+ * Downstream provenance may record:
+ *
+ *     source budget;
+ *     normalized budget;
+ *     resource-resolution decision;
+ *     target feasibility;
+ *     optimization decision;
+ *     execution realization.
+ *
+ * The grammar itself creates no provenance records.
+ *
+ *
+ * ============================================================================
+ * DETERMINISM CONTRACT
+ * ============================================================================
+ *
+ * This grammar contains:
+ *
+ *     no semantic predicates;
+ *     no actions;
+ *     no runtime calls;
+ *     no filesystem access;
+ *     no network access;
+ *     no hardware discovery;
+ *     no randomness.
+ *
+ * Parsing depends only on the token stream and grammar.
+ *
  *
  * ============================================================================
  */
@@ -385,14 +571,13 @@ import ResourceExpressions, Names;
 
 /*
  * ============================================================================
- * 1. PUBLIC ENTRY POINT
+ * PUBLIC ENTRY POINT
  * ============================================================================
- *
- * A budget grammar may contain zero or more budget items.
  *
  * No EOF is consumed here.
  *
- * EOF belongs to the canonical Zamani composition root.
+ * EOF belongs to the canonical Zamani parser composition root.
+ *
  * ============================================================================
  */
 
@@ -403,7 +588,14 @@ resourceBudgets
 
 /*
  * ============================================================================
- * 2. BUDGET ITEM
+ * RESOURCE BUDGET ITEM
+ * ============================================================================
+ *
+ * This rule intentionally remains small.
+ *
+ * Future budget forms should extend resourceBudgetDeclaration rather than
+ * creating another budget entry point.
+ *
  * ============================================================================
  */
 
@@ -414,91 +606,129 @@ resourceBudgetItem
 
 /*
  * ============================================================================
- * 3. BUDGET DECLARATION
+ * RESOURCE BUDGET DECLARATION
  * ============================================================================
  *
- * Simple form:
+ * Canonical forms:
  *
  *     budget memory = required_memory;
  *
  *     budget qubits = logical_qubits;
  *
- *     budget latency = latency_budget;
- *
- *     budget energy = energy_budget;
- *
- * Structured form:
+ *     budget latency <= latency_budget;
  *
  *     budget execution {
- *         limit = execution_limit;
+ *         limit = execution_budget;
  *         reserve = reserved_capacity;
  *         consume = expected_consumption;
  *     };
  *
- * The budget name is semantic data, not a finite enum.
+ * The budget name is open-world.
+ *
  * ============================================================================
  */
 
 resourceBudgetDeclaration
     : BUDGET
-      resourceBudgetName
+      qualifiedName
       resourceBudgetSpecification
     ;
 
 
 /*
  * ============================================================================
- * 4. BUDGET NAME
+ * RESOURCE BUDGET SPECIFICATION
  * ============================================================================
  *
- * Budget names are open-world.
+ * A budget has one of three source forms:
  *
- * Examples:
- *
- *     memory
- *     latency
- *     energy
- *     qubits
- *     execution
- *     quantum::error
- *     network::bandwidth
- *     accelerator::time
- *     future::resource
- *
- * No finite list of budget dimensions is encoded.
- * ============================================================================
- */
-
-resourceBudgetName
-    : identifier
-    | qualifiedName
-    ;
-
-
-/*
- * ============================================================================
- * 5. BUDGET SPECIFICATION
- * ============================================================================
- *
- * Simple assignment:
- *
- *     budget memory = required_memory;
- *
- * Structured declaration:
- *
- *     budget memory {
- *         limit = required_memory;
- *         reserve = reserved_memory;
- *     };
+ *     assignment
+ *     explicit relation
+ *     structured clause block
  *
  * ============================================================================
  */
 
 resourceBudgetSpecification
+    : resourceBudgetAssignment
+    | resourceBudgetRelation
+    | resourceBudgetBlock
+    ;
+
+
+/*
+ * ============================================================================
+ * SIMPLE ASSIGNMENT
+ * ============================================================================
+ *
+ * Examples:
+ *
+ *     budget memory = required_memory;
+ *
+ *     budget quantum::time = execution_budget;
+ *
+ *     budget network::bandwidth = bandwidth_budget;
+ *
+ * ============================================================================
+ */
+
+resourceBudgetAssignment
     : ASSIGN
       resourceBudgetExpression
       SEMICOLON
-    | LBRACE
+    ;
+
+
+/*
+ * ============================================================================
+ * DIRECT RELATIONAL BUDGET
+ * ============================================================================
+ *
+ * Examples:
+ *
+ *     budget memory >= required_memory;
+ *
+ *     budget latency <= latency_budget;
+ *
+ *     budget throughput >= required_throughput;
+ *
+ * The comparison has semantic meaning only after type and resource analysis.
+ *
+ * ============================================================================
+ */
+
+resourceBudgetRelation
+    : resourceBudgetRelationOperator
+      resourceBudgetExpression
+      SEMICOLON
+    ;
+
+
+/*
+ * ============================================================================
+ * STRUCTURED BUDGET
+ * ============================================================================
+ *
+ * Example:
+ *
+ *     budget execution {
+ *         limit = execution_limit;
+ *         minimum = required_capacity;
+ *         target = desired_capacity;
+ *         reserve = reserved_capacity;
+ *         consume = expected_consumption;
+ *         remaining = remaining_budget;
+ *         scope = execution;
+ *         condition = workload_size > threshold;
+ *         priority = execution_priority;
+ *         policy = adaptive;
+ *     };
+ *
+ * ============================================================================
+ */
+
+resourceBudgetBlock
+    : LBRACE
       resourceBudgetClause*
       RBRACE
       SEMICOLON?
@@ -507,10 +737,14 @@ resourceBudgetSpecification
 
 /*
  * ============================================================================
- * 6. BUDGET CLAUSE
+ * RESOURCE BUDGET CLAUSE
  * ============================================================================
  *
- * Every clause is independently semantic.
+ * The common property form keeps the grammar open to future resource-budget
+ * dimensions without requiring a universal keyword for every possible
+ * resource.
+ *
+ * Canonical semantic clauses have dedicated parser rules.
  *
  * ============================================================================
  */
@@ -527,24 +761,22 @@ resourceBudgetClause
     | resourceBudgetConditionClause
     | resourceBudgetPriorityClause
     | resourceBudgetPolicyClause
-    | resourceBudgetPropertyClause
+    | resourceBudgetNamedClause
     ;
 
 
 /*
  * ============================================================================
- * 7. LIMIT
+ * LIMIT
  * ============================================================================
- *
- * A limit expresses a maximum permitted semantic quantity.
- *
- * It does NOT establish a universal hardware maximum.
  *
  * Example:
  *
- *     budget execution {
- *         limit = execution_budget;
- *     };
+ *     limit = execution_limit;
+ *
+ * This is a budget-local semantic limit.
+ *
+ * It is NOT a universal machine maximum.
  *
  * ============================================================================
  */
@@ -559,11 +791,7 @@ resourceBudgetLimitClause
 
 /*
  * ============================================================================
- * 8. MINIMUM
- * ============================================================================
- *
- * A minimum expresses a lower semantic boundary.
- *
+ * MINIMUM
  * ============================================================================
  */
 
@@ -577,18 +805,12 @@ resourceBudgetMinimumClause
 
 /*
  * ============================================================================
- * 9. MAXIMUM
+ * MAXIMUM
  * ============================================================================
  *
- * `maximum` is a value associated with this particular budget declaration.
+ * This is a value for this particular program budget.
  *
- * It is NOT:
- *
- *     MAX_MEMORY
- *     MAX_QUBITS
- *     MAX_CPUS
- *
- * and MUST NOT be interpreted as a universal machine capacity.
+ * It MUST NOT be interpreted as a language-level hardware ceiling.
  *
  * ============================================================================
  */
@@ -603,12 +825,13 @@ resourceBudgetMaximumClause
 
 /*
  * ============================================================================
- * 10. TARGET
+ * TARGET
  * ============================================================================
  *
- * A target is an objective/reference value.
+ * Target is an objective value or semantic reference.
  *
- * It is not automatically a hard constraint.
+ * It does not select a physical target.
+ *
  * ============================================================================
  */
 
@@ -622,12 +845,13 @@ resourceBudgetTargetClause
 
 /*
  * ============================================================================
- * 11. RESERVE
+ * RESERVE
  * ============================================================================
  *
- * Reservation intent is semantic.
+ * Reservation intent only.
  *
- * Actual reservation is performed downstream by resource-management systems.
+ * Actual reservation is downstream.
+ *
  * ============================================================================
  */
 
@@ -641,12 +865,13 @@ resourceBudgetReserveClause
 
 /*
  * ============================================================================
- * 12. CONSUME
+ * CONSUME
  * ============================================================================
  *
- * Describes expected or declared consumption.
+ * Declares expected or modelled consumption.
  *
- * It does not perform allocation.
+ * It does not perform resource allocation.
+ *
  * ============================================================================
  */
 
@@ -660,12 +885,13 @@ resourceBudgetConsumeClause
 
 /*
  * ============================================================================
- * 13. REMAINING
+ * REMAINING
  * ============================================================================
  *
- * Describes an explicitly modelled remaining allowance.
+ * Represents a semantic remaining allowance.
  *
- * Runtime calculation is downstream.
+ * Runtime computation is downstream.
+ *
  * ============================================================================
  */
 
@@ -679,20 +905,20 @@ resourceBudgetRemainingClause
 
 /*
  * ============================================================================
- * 14. SCOPE
+ * SCOPE
  * ============================================================================
  *
- * Budget scope identifies the semantic region to which the budget applies.
+ * Scope is an expression rather than a finite enum.
  *
  * Examples:
  *
  *     scope = program;
  *     scope = function;
- *     scope = quantum_kernel;
  *     scope = execution;
  *     scope = deployment;
+ *     scope = quantum_kernel;
+ *     scope = future::execution_domain;
  *
- * The grammar does not enumerate scopes.
  * ============================================================================
  */
 
@@ -706,16 +932,15 @@ resourceBudgetScopeClause
 
 /*
  * ============================================================================
- * 15. CONDITION
+ * CONDITION
  * ============================================================================
- *
- * Conditional budget application.
  *
  * Example:
  *
  *     condition = workload_size > threshold;
  *
- * The expression remains owned by ResourceExpressions.
+ * The condition is parsed through the canonical expression system.
+ *
  * ============================================================================
  */
 
@@ -729,16 +954,18 @@ resourceBudgetConditionClause
 
 /*
  * ============================================================================
- * 16. PRIORITY
+ * PRIORITY
  * ============================================================================
  *
- * Priority is policy metadata.
+ * Priority remains an expression.
  *
- * The grammar deliberately does not constrain the representation to:
+ * The grammar deliberately does NOT impose:
  *
  *     0..10
  *     0..100
  *     integer-only
+ *
+ * semantics.
  *
  * ============================================================================
  */
@@ -753,20 +980,20 @@ resourceBudgetPriorityClause
 
 /*
  * ============================================================================
- * 17. POLICY
+ * POLICY
  * ============================================================================
  *
- * Open-world policy value.
+ * Policy values remain open-world expressions.
  *
  * Examples:
  *
  *     policy = strict;
- *     policy = best_effort;
  *     policy = adaptive;
- *     policy = quantum::resilience;
- *     policy = future::policy;
+ *     policy = best_effort;
+ *     policy = execution::adaptive;
  *
- * The policy semantics belong downstream.
+ * Policy semantics belong downstream.
+ *
  * ============================================================================
  */
 
@@ -780,46 +1007,48 @@ resourceBudgetPolicyClause
 
 /*
  * ============================================================================
- * 18. OPEN-WORLD PROPERTY
+ * OPEN-WORLD NAMED CLAUSE
  * ============================================================================
  *
- * Future budget dimensions must not require a grammar rewrite.
+ * This is the primary extensibility mechanism.
  *
  * Examples:
  *
- *     thermal_margin = required_margin;
+ *     thermal_margin = thermal_budget;
  *
- *     network::egress = egress_budget;
+ *     accounting::cost = cost_budget;
  *
  *     quantum::sampling = sampling_budget;
  *
  *     accelerator::occupancy = occupancy_budget;
  *
- *     future::metric = symbolic_budget;
+ *     network::egress = egress_budget;
+ *
+ *     future::resource_metric = symbolic_budget;
+ *
+ * A future resource dimension does not require a new grammar keyword.
  *
  * ============================================================================
  */
 
-resourceBudgetPropertyClause
-    : resourceBudgetPropertyName
+resourceBudgetNamedClause
+    : qualifiedName
       ASSIGN
       resourceBudgetExpression
       SEMICOLON
     ;
 
 
-resourceBudgetPropertyName
-    : identifier
-    | qualifiedName
-    ;
-
-
 /*
  * ============================================================================
- * 19. BUDGET EXPRESSION
+ * RESOURCE BUDGET EXPRESSION
  * ============================================================================
  *
- * ResourceExpressions is authoritative.
+ * ResourceExpressions is the sole authority for resource expressions.
+ *
+ * This wrapper exists to provide a stable API for this grammar.
+ *
+ * It MUST NOT grow its own arithmetic or logical expression implementation.
  *
  * ============================================================================
  */
@@ -831,40 +1060,17 @@ resourceBudgetExpression
 
 /*
  * ============================================================================
- * 20. OPTIONAL BUDGET RELATION
+ * RESOURCE BUDGET RELATION OPERATOR
  * ============================================================================
  *
- * Relations are useful when a budget is attached to an explicit comparison.
+ * Operators are supplied by ZamaniLexer.
  *
- * Examples:
+ * This rule does not assign semantic meaning.
  *
- *     latency <= latency_budget
- *     energy <= energy_budget
- *     throughput >= required_throughput
- *
- * The underlying expressions remain canonical resource expressions.
  * ============================================================================
  */
 
-resourceBudgetRelation
-    : resourceBudgetExpression
-      resourceBudgetOperator
-      resourceBudgetExpression
-    ;
-
-
-/*
- * ============================================================================
- * 21. BUDGET OPERATOR
- * ============================================================================
- *
- * These tokens are supplied by ZamaniLexer.
- *
- * No comparison semantics are implemented here.
- * ============================================================================
- */
-
-resourceBudgetOperator
+resourceBudgetRelationOperator
     : EQ_EQ
     | NOT_EQ
     | LE
@@ -876,234 +1082,106 @@ resourceBudgetOperator
 
 /*
  * ============================================================================
- * 22. SEMANTIC EXAMPLES
+ * INTEGRATION EXAMPLES
  * ============================================================================
  *
- * The following are intended source forms:
+ * The following are representative valid forms.
+ *
+ * They are NOT hardware limits.
+ *
+ * --------------------------------------------------------------------------
  *
  *     budget memory = required_memory;
  *
- *     budget qubits = logical_qubits;
+ * --------------------------------------------------------------------------
  *
- *     budget latency = latency_budget;
+ *     budget quantum::logical_qubits = logical_qubits;
  *
- *     budget energy = energy_budget;
+ * --------------------------------------------------------------------------
  *
- *     budget quantum::error = error_budget;
+ *     budget latency <= latency_budget;
+ *
+ * --------------------------------------------------------------------------
  *
  *     budget execution {
- *         limit = execution_budget;
+ *         limit = execution_limit;
+ *         minimum = minimum_capacity;
+ *         target = desired_capacity;
  *         reserve = reserved_capacity;
- *         consume = estimated_consumption;
+ *         consume = expected_consumption;
+ *         remaining = remaining_budget;
  *         scope = execution;
  *         condition = workload_size > threshold;
  *         priority = execution_priority;
  *         policy = adaptive;
  *     };
  *
+ * --------------------------------------------------------------------------
+ *
  *     budget network::bandwidth {
- *         maximum = available_bandwidth;
- *         target = desired_bandwidth;
+ *         minimum = required_bandwidth;
+ *         target = preferred_bandwidth;
+ *         limit = communication_budget;
  *     };
+ *
+ * --------------------------------------------------------------------------
+ *
+ *     budget quantum::error {
+ *         maximum = error_budget;
+ *     };
+ *
+ * --------------------------------------------------------------------------
  *
  *     budget accelerator::memory {
  *         minimum = required_memory;
- *         maximum = available_memory;
+ *         maximum = memory_budget;
  *     };
  *
- * These are semantic examples only.
+ * --------------------------------------------------------------------------
  *
- * They do not establish any physical capacity.
+ *     budget future::resource::metric = symbolic_value;
  *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 23. QUANTUM INTEGRATION
- * ============================================================================
+ * --------------------------------------------------------------------------
  *
- * Quantum programs may declare:
+ * No physical hardware is selected by any of these forms.
  *
- *     budget qubits = logical_qubits;
- *
- *     budget quantum::time = execution_time_budget;
- *
- *     budget quantum::error = error_budget;
- *
- *     budget quantum::fidelity = minimum_fidelity;
- *
- *     budget quantum::sampling = sampling_budget;
- *
- * The grammar does NOT:
- *
- *     - enumerate gates;
- *     - enumerate QPUs;
- *     - enumerate qubits;
- *     - select physical qubits;
- *     - define QEC;
- *     - define ZQN;
- *     - define routing;
- *     - define pulse scheduling.
- *
- * Quantum semantics continue through the canonical:
- *
- *     quantum::ir
- *
- * boundary.
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 24. CLASSICAL INTEGRATION
+ * REQUIREMENTS INTEGRATION
  * ============================================================================
  *
- * Budgets can describe:
- *
- *     memory
- *     execution time
- *     computation
- *     communication
- *     storage
- *     energy
- *     bandwidth
- *     throughput
- *     cost
- *
- * without imposing a fixed CPU/GPU/register model.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 25. HDL / HARDWARE INTEGRATION
- * ============================================================================
- *
- * Hardware descriptions may use budgets for intent such as:
- *
- *     budget latency = datapath_latency;
- *
- *     budget power = power_budget;
- *
- *     budget energy = energy_budget;
- *
- *     budget memory = required_storage;
- *
- *     budget bandwidth = required_bandwidth;
- *
- * The budget does not select an FPGA, ASIC, process node, physical region,
- * register width, or vendor device.
- *
- * Hardware realization remains downstream.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 26. DISTRIBUTED INTEGRATION
- * ============================================================================
- *
- * Distributed programs may express:
- *
- *     budget network::bandwidth = required_bandwidth;
- *
- *     budget network::latency = latency_budget;
- *
- *     budget communication::volume = communication_budget;
- *
- *     budget storage = required_storage;
- *
- * No node-count maximum is encoded.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 27. AI / TENSOR INTEGRATION
- * ============================================================================
- *
- * Budgets may apply to:
- *
- *     training
- *     inference
- *     tensor memory
- *     communication
- *     accelerator time
- *     energy
- *     latency
- *     throughput
- *
- * Tensor dimensions remain semantic data.
- *
- * No MAX_TENSOR_RANK or fixed accelerator memory is introduced.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 28. RELATIONSHIP WITH REQUIREMENTS
- * ============================================================================
- *
- * These are intentionally different:
+ * These constructs remain distinct:
  *
  *     requires memory >= required_memory;
  *
  *     budget memory = memory_budget;
  *
- * A requirement says:
+ * The first expresses a requirement.
  *
- *     this condition must be satisfiable.
+ * The second expresses a budget.
  *
- * A budget says:
+ * Semantic analysis may compare them, but the parser preserves the distinction.
  *
- *     this allowance/objective exists.
- *
- * Semantic analysis may relate them, but parsing must preserve the distinction.
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 29. RELATIONSHIP WITH CONSTRAINTS
+ * CONSTRAINT INTEGRATION
  * ============================================================================
  *
- * These are also distinct:
+ * These remain distinct:
  *
  *     constraint latency <= latency_budget;
  *
  *     budget latency = latency_budget;
  *
- * The first is a constraint.
+ * A downstream semantic phase may derive or enforce relationships between
+ * them according to the enclosing policy.
  *
- * The second declares a budget.
- *
- * A downstream semantic phase may use the budget as the source of a
- * constraint, depending on the enclosing policy.
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 30. RELATIONSHIP WITH PREFERENCES
+ * PREFERENCE INTEGRATION
  * ============================================================================
  *
- * A budget MUST NOT automatically imply:
+ * A budget does not automatically become:
  *
  *     prefer
  *
@@ -1111,352 +1189,326 @@ resourceBudgetOperator
  *
  *     require
  *
- * The enclosing semantic context determines the strength.
+ * The semantic policy determines its strength.
+ *
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 31. RESOURCE DISCOVERY
+ * CAPABILITY INTEGRATION
  * ============================================================================
  *
- * This grammar never queries:
+ * Capability expressions remain capability-system concepts.
  *
- *     CPU count
- *     GPU count
- *     FPGA resources
- *     QPU size
- *     physical memory
- *     network topology
- *     storage capacity
+ * A budget may reference capability-derived values through:
  *
- * Such information is supplied by:
+ *     resourceExpression
  *
- *     compiler
- *     target description
- *     hardware abstraction layer
- *     runtime
- *     deployment environment
+ * without defining capability syntax here.
+ *
+ * Example semantic relationship:
+ *
+ *     capability::tensor_compute
+ *             |
+ *             v
+ *     resource realization
+ *             |
+ *             v
+ *     budget evaluation
+ *
+ * This grammar does not duplicate capabilityReference.
+ *
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 32. SOURCE PORTABILITY
+ * NEGOTIATION INTEGRATION
  * ============================================================================
  *
- * A source program containing:
+ * Budgets become inputs to resource negotiation.
+ *
+ * Conceptual flow:
+ *
+ *     budget
+ *       |
+ *       v
+ *     requirements
+ *       |
+ *       v
+ *     constraints
+ *       |
+ *       v
+ *     capabilities
+ *       |
+ *       v
+ *     preferences
+ *       |
+ *       v
+ *     hints
+ *       |
+ *       v
+ *     negotiation
+ *       |
+ *       v
+ *     execution realization
+ *
+ * Negotiation belongs to:
+ *
+ *     grammar/resources/negotiation.g4
+ *
+ * and the corresponding semantic/compiler subsystems.
+ *
+ *
+ * ============================================================================
+ * SCALABILITY INTEGRATION
+ * ============================================================================
+ *
+ * `scalability.g4` remains the owner of scalability intent.
+ *
+ * This file only represents budget values that may participate in scalability
+ * analysis.
+ *
+ * It must not introduce:
+ *
+ *     maximum scale;
+ *     maximum resource count;
+ *     maximum topology size;
+ *     maximum tensor rank;
+ *     maximum quantum size.
+ *
+ *
+ * ============================================================================
+ * QUANTUM IR BOUNDARY
+ * ============================================================================
+ *
+ * This grammar never emits quantum::ir directly.
+ *
+ * Budget information may accompany the semantic quantum program until:
+ *
+ *     semantic quantum model
+ *         ->
+ *     quantum::ir
+ *
+ * Quantum optimization, decomposition, routing, scheduling, resilience,
+ * QEC, ZQN, and HAL remain downstream.
+ *
+ *
+ * ============================================================================
+ * HDL BOUNDARY
+ * ============================================================================
+ *
+ * Budget syntax remains independent of HDL implementation.
+ *
+ * HDL semantic analysis may consume budget information for:
+ *
+ *     timing;
+ *     power;
+ *     energy;
+ *     storage;
+ *     bandwidth;
+ *     throughput;
+ *     thermal behavior;
+ *     reliability.
+ *
+ * The grammar does not choose physical implementation.
+ *
+ *
+ * ============================================================================
+ * BACKEND BOUNDARY
+ * ============================================================================
+ *
+ * Backend realization may use budget information when selecting or evaluating
+ * an execution plan.
+ *
+ * This grammar does not:
+ *
+ *     inspect hardware;
+ *     choose devices;
+ *     allocate devices;
+ *     assign physical qubits;
+ *     assign CPU cores;
+ *     assign GPU devices;
+ *     assign FPGA regions;
+ *     select network nodes.
+ *
+ *
+ * ============================================================================
+ * DIAGNOSTIC CONTRACT
+ * ============================================================================
+ *
+ * Parser diagnostics must identify:
+ *
+ *     - missing budget name;
+ *     - missing assignment value;
+ *     - missing relation value;
+ *     - malformed budget block;
+ *     - malformed budget clause;
+ *     - missing semicolon where required;
+ *     - invalid token sequence.
+ *
+ * Semantic diagnostics, not parser diagnostics, report:
+ *
+ *     - unknown resource;
+ *     - invalid unit;
+ *     - incompatible dimensions;
+ *     - unsatisfiable budget;
+ *     - contradictory budgets;
+ *     - impossible target realization;
+ *     - policy conflict;
+ *     - capability conflict.
+ *
+ *
+ * ============================================================================
+ * COMPATIBILITY CONTRACT
+ * ============================================================================
+ *
+ * Existing canonical forms preserved by this grammar include:
+ *
+ *     budget <name> = <expression>;
+ *
+ *     budget <name> {
+ *         ...
+ *     };
+ *
+ * Existing source meaning MUST remain unchanged when this grammar is
+ * integrated into the resource composition root.
+ *
+ * Any incompatible surface change requires:
+ *
+ *     language-version documentation;
+ *     compatibility documentation;
+ *     migration guidance;
+ *     parser regression tests.
+ *
+ *
+ * ============================================================================
+ * TEST CONTRACT
+ * ============================================================================
+ *
+ * Positive parser tests MUST include:
  *
  *     budget memory = required_memory;
- *
- * must remain syntactically valid regardless of whether a target currently
- * has:
- *
- *     very little memory
- *     substantial memory
- *     distributed memory
- *     accelerator memory
- *     unified memory
- *     quantum memory
- *     future memory architecture
- *
- * Whether the target can satisfy the semantic requirement is a downstream
- * question.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 33. IMPLEMENTATION LIMITS
- * ============================================================================
- *
- * Compiler/runtime implementations may have externally configured resource
- * budgets for:
- *
- *     parsing
- *     AST construction
- *     semantic analysis
- *     compilation
- *     optimization
- *     diagnostics
- *     execution
- *
- * Such implementation budgets MUST NOT be encoded by this grammar.
- *
- * If an implementation budget is exhausted, the compiler must report an
- * implementation/resource diagnostic rather than treating valid source syntax
- * as invalid language syntax.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 34. DETERMINISM
- * ============================================================================
- *
- * This grammar contains:
- *
- *     no semantic actions
- *     no predicates
- *     no embedded Rust
- *     no filesystem access
- *     no network access
- *     no hardware access
- *     no random behavior
- *     no mutable global state
- *
- * Equivalent token streams therefore have deterministic grammatical meaning.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 35. SAFETY
- * ============================================================================
- *
- * This grammar requires no unsafe Rust.
- *
- * Generated parser integration must remain compatible with:
- *
- *     Rust 1.97
- *     Rust 1.97.1
- *     Rust 2021
- *
- * Handwritten Zamani compiler code remains safe Rust only.
- *
- * This file contains no embedded Rust actions or semantic predicates.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 36. DIAGNOSTIC BOUNDARY
- * ============================================================================
- *
- * Syntax errors:
- *
- *     malformed budget declaration
- *
- * belong to parsing.
- *
- * Semantic errors:
- *
- *     unknown budget type
- *     incompatible budget unit
- *     invalid budget relationship
- *
- * belong to semantic analysis.
- *
- * Resource errors:
- *
- *     target cannot satisfy the budget
- *
- * belong to resource/target analysis.
- *
- * Runtime errors:
- *
- *     actual execution exceeds a runtime policy
- *
- * belong to runtime/resilience systems.
- *
- * The grammar must not collapse these categories.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 37. COMPATIBILITY
- * ============================================================================
- *
- * Adding new budget property names should normally be backward compatible
- * because property names are open-world.
- *
- * Adding a new semantic interpretation requires:
- *
- *     specification update
- *     AST contract
- *     semantic contract
- *     IR contract if applicable
- *     conformance tests
- *     compatibility documentation
- *
- * Removing or changing the meaning of an existing budget construct requires
- * the normal Zamani compatibility/deprecation process.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 38. TEST CONTRACT
- * ============================================================================
- *
- * Positive tests MUST include:
- *
- *     budget memory = required_memory;
- *
- *     budget qubits = logical_qubits;
- *
  *     budget latency = latency_budget;
- *
- *     budget quantum::error = error_budget;
+ *     budget quantum::logical_qubits = logical_qubits;
+ *     budget network::bandwidth = bandwidth_budget;
+ *     budget future::resource::metric = symbolic_budget;
  *
  *     budget execution {
- *         limit = execution_budget;
+ *         limit = execution_limit;
+ *         minimum = required_capacity;
+ *         target = desired_capacity;
  *         reserve = reserved_capacity;
- *         consume = estimated_consumption;
+ *         consume = expected_consumption;
+ *         remaining = remaining_budget;
+ *         scope = execution;
+ *         condition = workload_size > threshold;
+ *         priority = execution_priority;
+ *         policy = adaptive;
  *     };
  *
- *     budget network::bandwidth {
- *         minimum = required_bandwidth;
- *         maximum = available_bandwidth;
- *     };
+ * Positive boundary tests MUST include:
  *
- * Negative tests MUST include:
+ *     deeply qualified resource names;
+ *     symbolic values;
+ *     expression-valued budgets;
+ *     arbitrarily long clause lists;
+ *     nested expression structures;
+ *     quantum resource names;
+ *     distributed resource names;
+ *     accelerator resource names;
+ *     future-domain resource names.
  *
- *     missing budget name
- *     missing assignment expression
- *     malformed structured budget
- *     missing semicolon where required
- *     malformed property path
+ * Negative parser tests MUST include:
  *
- * Boundary tests MUST include:
+ *     budget;
+ *     budget = value;
+ *     budget memory;
+ *     budget memory =;
+ *     budget memory {;
+ *     budget memory { limit = };
+ *     budget memory { unknown_clause };
  *
- *     empty budget block
- *     deeply nested expressions
- *     long qualified names
- *     many budget declarations
- *     many budget clauses
- *     symbolic quantities
- *     very large numeric literals
+ * Semantic negative tests MUST include:
  *
- * Scalability tests MUST verify that no grammar-level artificial capacity
- * exists for:
+ *     incompatible units;
+ *     contradictory budget values;
+ *     invalid resource dimensions;
+ *     impossible constraints;
+ *     unavailable capabilities.
  *
- *     budgets
- *     clauses
- *     resources
- *     resource dimensions
- *     expression complexity
- *
- * Cross-domain tests MUST cover:
- *
- *     classical
- *     quantum
- *     hybrid
- *     HDL
- *     hardware
- *     distributed
- *     AI
- *     networking
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 39. HARD-CODING AUDIT
+ * DETERMINISM TEST
  * ============================================================================
  *
- * This grammar contains:
+ * Identical source text and identical lexer/parser configuration MUST produce
+ * structurally equivalent parser output.
  *
- *     no MAX_QUBITS
- *     no MAX_CPUS
- *     no MAX_GPUS
- *     no MAX_FPGAS
- *     no MAX_NODES
- *     no MAX_MEMORY
- *     no MAX_THREADS
- *     no MAX_TENSOR_RANK
- *     no MAX_REGISTER_WIDTH
- *     no MAX_NETWORK_SIZE
- *     no MAX_DEVICE_COUNT
+ * This grammar contains no:
  *
- * It also contains no physical device identifiers.
+ *     actions;
+ *     semantic predicates;
+ *     I/O;
+ *     environment access;
+ *     hardware inspection;
+ *     random behavior.
  *
- * All quantities remain expressions.
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 40. COMPLETION CRITERIA
+ * HARD-CODING AUDIT
  * ============================================================================
  *
- * ResourceBudgets is complete when:
+ * This file contains:
  *
- * [ ] ResourceBudgets is the only owner of budget declaration syntax.
+ *     NO finite resource universe;
+ *     NO physical device identifiers;
+ *     NO hardware capacities;
+ *     NO universal maxima;
+ *     NO fixed tensor rank;
+ *     NO fixed register width;
+ *     NO fixed node count;
+ *     NO fixed thread count;
+ *     NO fixed memory size;
+ *     NO fixed quantum size;
+ *     NO target-specific allocation;
+ *     NO backend-specific syntax.
  *
- * [ ] ResourceExpressions remains the only owner of resource expressions.
+ * Resource names and values remain expressions.
  *
- * [ ] Names remains the only owner of canonical names.
  *
- * [ ] ZamaniLexer supplies every required token.
+ * ============================================================================
+ * COMPLETION CRITERIA
+ * ============================================================================
  *
- * [ ] No undefined lexer token is referenced.
+ * This file is DONE when:
  *
- * [ ] No EOF is consumed by this imported grammar.
+ *     1. It compiles with the canonical ZamaniLexer.
  *
- * [ ] Resources.g4 can import this grammar without creating a competing
- *     resource root.
+ *     2. It imports only the canonical resource-expression and name grammars.
  *
- * [ ] Hardware grammar can consume the resulting semantic budget.
+ *     3. `resources.g4` consumes `resourceBudgetDeclaration`.
  *
- * [ ] Execution grammar can consume budget semantics downstream.
+ *     4. No second budget entry point exists elsewhere.
  *
- * [ ] Quantum budgets lower through the existing quantum::ir architecture.
+ *     5. Budget syntax does not duplicate requirements, constraints,
+ *        preferences, hints, capabilities, or policies.
  *
- * [ ] No second resource IR is introduced.
+ *     6. Open-world resource names work without grammar modification.
  *
- * [ ] No second quantum IR is introduced.
+ *     7. Symbolic resource expressions work without grammar modification.
  *
- * [ ] No physical hardware assumptions are encoded.
+ *     8. No machine-size constant is encoded.
  *
- * [ ] No fixed resource capacities are encoded.
+ *     9. Quantum budgets remain target-independent and cross the
+ *        `quantum::ir` boundary only downstream.
  *
- * [ ] No unsafe Rust is required.
+ *    10. Classical, HDL, accelerator, distributed, networking, and future
+ *        resource domains can consume the same grammar.
  *
- * [ ] Rust 1.97 / 1.97.1 generated-parser integration succeeds.
+ *    11. Positive, negative, boundary, scalability, compatibility, and
+ *        determinism tests pass.
  *
- * [ ] Positive tests pass.
+ *    12. Generated Rust integration remains compatible with Rust 1.97 /
+ *        Rust 1.97.1 and uses no unsafe Zamani implementation code.
  *
- * [ ] Negative tests pass.
  *
- * [ ] Boundary tests pass.
- *
- * [ ] Scalability tests pass.
- *
- * [ ] Determinism tests pass.
- *
- * [ ] Compatibility tests pass.
- *
- * [ ] AST mapping is documented.
- *
- * [ ] Semantic mapping is documented.
- *
- * [ ] IR mapping is documented.
- *
- * [ ] Downstream consumers are documented.
- *
- * [ ] No later file needs to redefine the ownership established here.
- *
+ * ============================================================================
+ * END OF FILE
  * ============================================================================
  */
