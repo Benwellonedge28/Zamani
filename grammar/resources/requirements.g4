@@ -3,168 +3,487 @@
  * Zamani Universal Programming Language
  * ============================================================================
  *
- * File:
- *     grammar/resources/requirements.g4
+ * FILE
+ * ----
+ * grammar/resources/requirements.g4
  *
- * Grammar:
- *     ANTLR4 parser grammar
+ * GRAMMAR
+ * -------
+ * ANTLR4 parser grammar
  *
- * Grammar identity:
- *     Requirements
+ * GRAMMAR NAME
+ * ------------
+ * Requirements
  *
- * Baseline:
- *     Rust 1.97 / Rust 1.97.1
- *     Rust 2021
- *
- * Safety:
- *     Grammar-only.
- *     No embedded Rust actions.
- *     No semantic predicates.
- *     No filesystem access.
- *     No network access.
- *     No hardware access.
- *     No runtime execution.
- *     No unsafe Rust requirement.
- *
- * ============================================================================
  * STATUS
- * ============================================================================
+ * ------
+ * CANONICAL RESOURCE-REQUIREMENT SYNTAX AUTHORITY
  *
- * CANONICAL RESOURCE-REQUIREMENT GRAMMAR
- *
- * This file is the single source-level owner of universal resource
- * requirement syntax.
- *
- * It is composed by:
- *
- *     grammar/resources/resources.g4
- *
- * and may be consumed by domain grammars such as:
- *
- *     grammar/hardware/
- *     grammar/quantum/
- *     grammar/hybrid/
- *     grammar/distributed/
- *     grammar/ai/
- *     grammar/hdl/
- *     grammar/execution/
- *     grammar/compile/
- *
- * Domain grammars MUST NOT create competing general-purpose resource
- * requirement grammars.
+ * IMPLEMENTATION BASELINE
+ * ------------------------
+ * Rust 1.97 / Rust 1.97.1
+ * Rust 2021
+ * Safe Rust only
  *
  * ============================================================================
- * ARCHITECTURAL POSITION
+ * FEATURE CONTRACT
  * ============================================================================
  *
- *     Zamani source
- *          |
- *          v
- *     ZamaniLexer
- *          |
- *          v
- *     parser
- *          |
- *          v
- *     Requirements
- *          |
- *          v
- *     ResourceExpressions
- *          |
- *          v
- *     canonical expression grammar
- *          |
- *          v
- *     frontend AST
- *          |
- *          v
- *     semantic analysis
- *          |
- *          +-------------------------------+
- *          |                               |
- *          v                               v
- *     resource semantics             capability semantics
- *          |                               |
- *          +---------------+---------------+
- *                          |
- *                          v
- *                  canonical semantic model
- *                          |
- *             +------------+------------+
- *             |            |            |
- *             v            v            v
- *         classical     quantum::ir   HDL/hardware
- *             |            |            |
- *             +------------+------------+
- *                          |
- *                          v
- *                     optimization
- *                          |
- *                 +--------+--------+
- *                 |        |        |
- *                 v        v        v
- *              routing scheduling resilience
- *                 |        |        |
- *                 +--------+--------+
- *                          |
- *                         ZQN
- *                          |
- *                         HAL
- *                          |
- *                  target realization
+ * PURPOSE
+ * -------
  *
- * ============================================================================
- * CORE PRINCIPLE
- * ============================================================================
+ * This file owns source-level REQUIREMENTS whose subject is the resource
+ * realization of a Zamani program.
  *
- * A resource requirement describes WHAT a program requires.
- *
- * It does not decide WHICH physical resource will satisfy it.
+ * A resource requirement expresses what a program, operation, module,
+ * execution plan, domain, or contract requires from an available realization.
  *
  * Examples:
  *
  *     requires qubits >= logical_qubits;
+ *     requires memory >= required_memory;
+ *     requires nodes >= required_nodes;
+ *     requires bandwidth >= required_bandwidth;
+ *     requires latency <= latency_budget;
+ *
+ *     requires capability("quantum.measurement");
+ *     requires capability("tensor.compute");
+ *
+ *     requires capability quantum::measurement;
+ *
+ *     requires capability quantum::dynamic_control version >= 1.2.0;
+ *
+ * Resource requirements describe INTENT.
+ *
+ * They do not:
+ *
+ *     - select hardware;
+ *     - allocate hardware;
+ *     - reserve hardware;
+ *     - route operations;
+ *     - schedule operations;
+ *     - perform quantum routing;
+ *     - perform QEC;
+ *     - select a backend;
+ *     - inspect hardware;
+ *     - query runtime state;
+ *     - execute code.
+ *
+ * ============================================================================
+ * OWNS
+ * ============================================================================
+ *
+ * This file exclusively owns:
+ *
+ *     resourceRequirement
+ *     resourceRequirementExpression
+ *     resourceCapabilityCall
+ *     resourceCapabilityReference
+ *     resourceRequirementList
+ *     optionalResourceRequirementList
+ *     resourceRequirementGroup
+ *     resourceRequirementGroupItem
+ *     resourceRequirementExpressionList
+ *     optionalResourceRequirementExpressionList
+ *     resourceRequirementPredicate
+ *     resourceRequirementCondition
+ *
+ * ============================================================================
+ * DOES NOT OWN
+ * ============================================================================
+ *
+ * This file does NOT own:
+ *
+ *     requirement
+ *     requirementList
+ *     requirementDeclaration
+ *
+ * Those belong to:
+ *
+ *     grammar/core/requirements.g4
+ *
+ * It also does not own:
+ *
+ *     expression
+ *     arithmetic
+ *     comparison precedence
+ *     logical precedence
+ *     identifiers
+ *     qualified names
+ *     literals
+ *     capability declarations
+ *     capability identity
+ *     capability version syntax
+ *     resource declarations
+ *     constraints
+ *     preferences
+ *     hints
+ *     budgets
+ *     availability
+ *     capacity
+ *     scalability
+ *     policies
+ *     effects
+ *     contracts
+ *     hardware discovery
+ *     allocation
+ *     placement
+ *     routing
+ *     scheduling
+ *     optimization
+ *     QEC
+ *     ZQN
+ *     HAL
+ *     runtime execution
+ *     classical IR
+ *     quantum::ir
+ *     HDL IR
+ *
+ * ============================================================================
+ * DEPENDENCY CONTRACT
+ * ============================================================================
+ *
+ * DEPENDS_ON
+ * ----------
+ *
+ * Direct parser dependencies:
+ *
+ *     grammar/resources/resource-expressions.g4
+ *     grammar/core/names.g4
+ *     grammar/core/capabilities.g4
+ *
+ * Lexer boundary:
+ *
+ *     grammar/antlr/ZamaniLexer.g4
+ *
+ * The imported resource-expression grammar owns:
+ *
+ *     resourceExpression
+ *     resourceExpressionList
+ *     optionalResourceExpressionList
+ *
+ * The imported capability grammar owns:
+ *
+ *     capabilityReference
+ *     capabilityExpression
+ *     capabilityVersionClause
+ *
+ * This file MUST NOT duplicate those definitions.
+ *
+ * ============================================================================
+ * EXPORTS
+ * ============================================================================
+ *
+ * Primary:
+ *
+ *     resourceRequirement
+ *     resourceRequirementExpression
+ *
+ * Capability-specific:
+ *
+ *     resourceCapabilityCall
+ *     resourceCapabilityReference
+ *
+ * Collection:
+ *
+ *     resourceRequirementList
+ *     optionalResourceRequirementList
+ *     resourceRequirementExpressionList
+ *     optionalResourceRequirementExpressionList
+ *
+ * Reusable semantic boundaries:
+ *
+ *     resourceRequirementPredicate
+ *     resourceRequirementCondition
+ *     resourceRequirementGroup
+ *     resourceRequirementGroupItem
+ *
+ * ============================================================================
+ * CONSUMED BY
+ * ============================================================================
+ *
+ * Primary:
+ *
+ *     grammar/resources/resources.g4
+ *
+ * Known resource/semantic consumers include:
+ *
+ *     grammar/validation/requires.g4
+ *     grammar/quantum/resource-requirements.g4
+ *     grammar/hybrid/hybrid-resources.g4
+ *     grammar/hardware/
+ *     grammar/hdl/
+ *     grammar/distributed/
+ *     grammar/networking/
+ *     grammar/execution/
+ *     grammar/compile/
+ *
+ * Consumers MUST use the public rules exported by this file.
+ *
+ * They MUST NOT reproduce resource-requirement syntax locally.
+ *
+ * ============================================================================
+ * AST OWNER
+ * ============================================================================
+ *
+ * The grammar creates parser contexts only.
+ *
+ * The domain-neutral frontend AST owns the resulting representation.
+ *
+ * The AST must preserve at least:
+ *
+ *     - complete source span;
+ *     - requirement expression;
+ *     - expression grouping;
+ *     - capability-call structure;
+ *     - capability-reference structure;
+ *     - argument ordering;
+ *     - source ordering.
+ *
+ * The AST MUST NOT contain:
+ *
+ *     - physical device IDs;
+ *     - physical qubit IDs;
+ *     - GPU IDs;
+ *     - CPU IDs;
+ *     - FPGA IDs;
+ *     - memory-bank IDs;
+ *     - backend-specific allocation;
+ *     - routing decisions;
+ *     - scheduling decisions.
+ *
+ * ============================================================================
+ * SEMANTIC OWNER
+ * ============================================================================
+ *
+ * Resource semantic analysis owns:
+ *
+ *     - requirement classification;
+ *     - name resolution;
+ *     - capability resolution;
+ *     - unit/dimensional validation;
+ *     - type checking;
+ *     - comparison validity;
+ *     - requirement normalization;
+ *     - contradiction detection;
+ *     - satisfiability;
+ *     - target feasibility;
+ *     - resource negotiation;
+ *     - availability evaluation;
+ *     - resource budgeting;
+ *     - policy interaction;
+ *     - effect interaction.
+ *
+ * The parser does none of these.
+ *
+ * ============================================================================
+ * IR CONTRACT
+ * ============================================================================
+ *
+ * Resource requirements do not directly lower into target instructions.
+ *
+ * The intended pipeline is:
+ *
+ *     source
+ *       |
+ *       v
+ *     resource requirement AST
+ *       |
+ *       v
+ *     semantic requirement
+ *       |
+ *       +--------------------+
+ *       |                    |
+ *       v                    v
+ * capability analysis    resource analysis
+ *       |                    |
+ *       +---------+----------+
+ *                 |
+ *                 v
+ *         execution planning
+ *                 |
+ *                 +------------------+
+ *                 |                  |
+ *                 v                  v
+ *          classical path       quantum path
+ *                                      |
+ *                                      v
+ *                                  quantum::ir
+ *
+ * This file does not define an IR.
+ *
+ * ============================================================================
+ * SPEC OWNER
+ * ============================================================================
+ *
+ * Normative resource specification:
+ *
+ *     grammar/spec/resources.md
+ *
+ * Normative POCO-REAF specification:
+ *
+ *     grammar/specification/poco-reaf.md
+ *
+ * Grammar authority:
+ *
+ *     grammar/DESIGN.md
+ *     grammar/README.md
+ *     grammar/grammar.md
+ *
+ * ============================================================================
+ * TEST OWNER
+ * ============================================================================
+ *
+ * Required test areas:
+ *
+ *     grammar/tests/resources/
+ *     grammar/tests/parser/
+ *     grammar/tests/semantic/
+ *     grammar/tests/quantum/
+ *     grammar/tests/hardware/
+ *     grammar/tests/hybrid/
+ *     grammar/tests/distributed/
+ *     grammar/tests/scalability/
+ *     grammar/tests/portability/
+ *     grammar/tests/negative/
+ *     grammar/tests/boundary/
+ *
+ * ============================================================================
+ * SAFETY CONTRACT
+ * ============================================================================
+ *
+ * This is a pure ANTLR parser grammar.
+ *
+ * It contains:
+ *
+ *     - no embedded Rust actions;
+ *     - no semantic predicates;
+ *     - no unsafe code;
+ *     - no filesystem access;
+ *     - no network access;
+ *     - no hardware access;
+ *     - no resource discovery;
+ *     - no runtime execution;
+ *     - no randomness.
+ *
+ * Generated Zamani frontend code must remain compatible with:
+ *
+ *     Rust 1.97
+ *     Rust 1.97.1
+ *     Rust 2021
+ *
+ * and must not require unsafe Rust.
+ *
+ * ============================================================================
+ * POCO-REAF CONTRACT
+ * ============================================================================
+ *
+ * Resource requirements are one of the mechanisms that allow a Zamani source
+ * program to remain independent of machine scale.
+ *
+ * The source describes:
+ *
+ *     WHAT is required.
+ *
+ * The compiler/resource system determines:
+ *
+ *     WHERE and HOW that requirement is realized.
+ *
+ * Therefore:
+ *
+ *     requires qubits >= logical_qubits;
+ *
+ * does not select a QPU.
  *
  *     requires memory >= required_memory;
  *
+ * does not select a memory device.
+ *
  *     requires nodes >= required_nodes;
  *
- *     requires capability("quantum.measurement");
+ * does not select a cluster.
  *
  *     requires capability("tensor.compute");
  *
- *     requires capability(
- *         "quantum.mid_circuit_measurement",
- *         operation
- *     );
+ * does not select a GPU.
  *
- * The compiler, resource system, runtime, HAL, and deployment infrastructure
- * determine how those requirements are satisfied.
- *
- * ============================================================================
- * POCO-REAF
- * ============================================================================
- *
- * This grammar is part of:
+ * This distinction is fundamental to:
  *
  *     Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
  *
- * Requirements therefore remain:
+ * ============================================================================
+ * OPEN-WORLD CONTRACT
+ * ============================================================================
  *
- *     - target-independent;
- *     - resource-parametric;
- *     - capability-driven;
- *     - open-world;
- *     - scalable;
- *     - semantically declarative.
+ * Resource kinds and capability identities are OPEN-WORLD.
  *
- * The grammar MUST NOT encode today's hardware as tomorrow's language limit.
+ * This grammar MUST NOT enumerate:
+ *
+ *     CPU
+ *     GPU
+ *     FPGA
+ *     ASIC
+ *     QPU
+ *     accelerator
+ *     vendor
+ *     device model
+ *     cloud provider
+ *     future processor
+ *     future quantum architecture
+ *     future accelerator
+ *
+ * New resource categories and capabilities should normally be introduced
+ * through semantic registries, specifications, dialects, or target metadata.
+ *
+ * The universal resource grammar should not need to change merely because a
+ * new machine type appears.
+ *
+ * ============================================================================
+ * SCALABILITY CONTRACT
+ * ============================================================================
+ *
+ * There is NO language-level finite limit on:
+ *
+ *     - number of requirements;
+ *     - number of expressions;
+ *     - number of capability arguments;
+ *     - number of groups;
+ *     - number of nested groups;
+ *     - qualified-name depth;
+ *     - source program size;
+ *     - resource categories;
+ *     - resource quantities;
+ *     - quantum resource quantities;
+ *     - distributed resource quantities;
+ *     - tensor resource quantities.
+ *
+ * ANTLR repetition uses:
+ *
+ *     *
+ *     +
+ *
+ * rather than finite enumerations.
+ *
+ * "Infinity" means that the language architecture introduces no artificial
+ * machine-capacity ceiling.
+ *
+ * It does NOT claim that:
+ *
+ *     physical hardware;
+ *     operating systems;
+ *     compiler memory;
+ *     parser memory;
+ *     deployment infrastructure
+ *
+ * are literally infinite.
+ *
+ * Those are implementation or target constraints.
  *
  * ============================================================================
  * HARD-CODING PROHIBITION
  * ============================================================================
  *
- * This file MUST NOT define or imply:
+ * This file MUST NOT introduce:
  *
  *     MAX_QUBITS
  *     MAX_CPUS
@@ -178,81 +497,130 @@
  *     MAX_NETWORK_SIZE
  *     MAX_DEVICE_COUNT
  *
- * It also MUST NOT encode equivalent fixed limits such as:
+ * It must also not encode equivalent indirect limits.
  *
- *     exactly 32 CPUs
- *     exactly 1024 qubits
- *     exactly 64 GB memory
- *     exactly 24 GB VRAM
- *     exactly 32-bit registers
+ * For example, the grammar MUST NOT contain parser alternatives representing:
  *
- * A numeric literal inside a requirement is a PROGRAM VALUE.
+ *     exactly 32 CPUs;
+ *     exactly 1024 qubits;
+ *     exactly 64 GB memory;
+ *     exactly 24 GB accelerator memory;
+ *     exactly 32-bit registers.
  *
- * For example:
+ * A literal such as:
+ *
+ *     1024
+ *
+ * is a PROGRAM VALUE when it occurs in:
  *
  *     requires qubits >= 1024;
  *
- * is valid portable source syntax.
- *
- * The grammar MUST NOT interpret 1024 as a universal maximum.
+ * It is never interpreted by this grammar as a universal capacity.
  *
  * ============================================================================
- * OWNERSHIP
+ * RESOURCE REQUIREMENT VS UNIVERSAL REQUIREMENT
  * ============================================================================
  *
- * THIS FILE OWNS:
+ * The repository already has:
  *
- *     resourceRequirement
- *     resourceRequirementExpression
- *     resourceCapabilityCall
- *     resourceRequirementList
- *     optionalResourceRequirementList
+ *     grammar/core/requirements.g4
+ *
+ * That file owns generic requirements such as:
+ *
+ *     requires quantum::measurement;
+ *     requires execution::deterministic;
+ *
+ * This file owns RESOURCE-SPECIFIC requirements such as:
+ *
+ *     requires qubits >= logical_qubits;
+ *     requires memory >= required_memory;
+ *     requires capability("tensor.compute");
+ *
+ * This file therefore deliberately does NOT define:
+ *
  *     requirement
  *     requirementList
+ *     requirementDeclaration
  *
- * THIS FILE DOES NOT OWN:
- *
- *     expression
- *     arithmetic
- *     comparison precedence
- *     logical precedence
- *     identifiers
- *     qualified names
- *     literals
- *     types
- *     resource declarations
- *     resource constraints
- *     preferences
- *     hints
- *     resource discovery
- *     hardware discovery
- *     allocation
- *     placement
- *     routing
- *     scheduling
- *     optimization
- *     QEC
- *     ZQN
- *     HAL
- *     runtime execution
- *     physical device selection
- *     quantum::ir
- *     classical IR
- *     HDL/hardware IR
+ * Doing so would create competing semantic ownership.
  *
  * ============================================================================
- * IMPORT CONTRACT
+ * CAPABILITY INTEGRATION
  * ============================================================================
  *
- * ResourceExpressions owns the resource-expression composition boundary.
+ * The canonical capability grammar is:
  *
- * It imports the canonical expression grammar.
+ *     grammar/core/capabilities.g4
  *
- * Therefore this file MUST consume:
+ * Its primary capability reference syntax is:
  *
- *     resourceExpression
+ *     capabilityReference
  *
- * rather than defining:
+ * Examples:
+ *
+ *     quantum::measurement
+ *     quantum::dynamic_control
+ *     tensor::compute
+ *     distributed::collectives
+ *     security::trusted_execution
+ *
+ * A resource requirement may consume this canonical reference through:
+ *
+ *     resourceCapabilityReference
+ *
+ * In addition, this resource grammar preserves the convenient resource-level
+ * call form:
+ *
+ *     capability("quantum.measurement")
+ *
+ * This call form is intentionally a RESOURCE REQUIREMENT syntax bridge.
+ *
+ * It does not redefine capability identity.
+ *
+ * The semantic layer must normalize both forms to the same capability
+ * requirement representation.
+ *
+ * ============================================================================
+ * CAPABILITY CALL CONTRACT
+ * ============================================================================
+ *
+ * Canonical examples:
+ *
+ *     requires capability("quantum.measurement");
+ *
+ *     requires capability("tensor.compute");
+ *
+ *     requires capability("vendor.feature");
+ *
+ *     requires capability(namespace::feature);
+ *
+ *     requires capability(feature_name);
+ *
+ *     requires capability("quantum.operation", operation);
+ *
+ * Arguments remain canonical resource expressions.
+ *
+ * The grammar does not interpret:
+ *
+ *     string contents;
+ *     capability namespace;
+ *     capability provider;
+ *     capability version;
+ *     capability availability.
+ *
+ * Those belong to semantic analysis.
+ *
+ * ============================================================================
+ * RESOURCE EXPRESSIONS
+ * ============================================================================
+ *
+ * All quantitative and predicate expressions are delegated to:
+ *
+ *     grammar/resources/resource-expressions.g4
+ *
+ * which delegates further to the canonical expression grammar.
+ *
+ * Therefore this file does NOT redefine:
  *
  *     expression
  *     arithmeticExpression
@@ -261,402 +629,79 @@
  *     unaryExpression
  *     primaryExpression
  *
- * itself.
+ * This guarantees that:
  *
- * Names are imported explicitly because requirement-related semantic names
- * may be needed by downstream consumers and because canonical name syntax
- * must remain centralized.
+ *     x + y
+ *     x * y
+ *     x >= y
+ *     x <= y
+ *     x == y
+ *     x && y
+ *     x || y
+ *     !x
+ *
+ * have the same underlying expression semantics as the rest of Zamani.
  *
  * ============================================================================
- */
-
-parser grammar Requirements;
-
-options {
-    tokenVocab = ZamaniLexer;
-}
-
-import ResourceExpressions, Names;
-
-
-/*
- * ============================================================================
- * 1. CANONICAL RESOURCE REQUIREMENT
+ * SOURCE FORMS
  * ============================================================================
  *
- * A resource requirement is mandatory semantic intent.
- *
- * Canonical form:
+ * Resource requirement:
  *
  *     requires <resource-expression>;
  *
- * Examples:
+ * Capability-call requirement:
  *
- *     requires qubits >= logical_qubits;
+ *     requires capability(<resource-expression-list>);
  *
- *     requires memory >= required_memory;
+ * Canonical capability-reference requirement:
  *
- *     requires latency <= latency_budget;
+ *     requires capability <capability-reference>;
  *
- *     requires nodes >= required_nodes;
+ * Resource requirement group:
  *
- *     requires capability("tensor.compute");
+ *     requires {
+ *         ...
+ *     }
  *
- *     requires capability("quantum.measurement");
- *
- * The trailing semicolon belongs to the requirement statement.
- *
- * This rule deliberately does not own EOF.
- *
- * EOF belongs to the canonical root grammar:
- *
- *     grammar/Zamani.g4
+ * The grouped form is structural syntax only and does not introduce a second
+ * resource requirement semantic model.
  *
  * ============================================================================
- */
-
-resourceRequirement
-    : REQUIRES resourceRequirementExpression SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * 2. REQUIREMENT EXPRESSION
+ * RESOURCE QUANTITIES
  * ============================================================================
  *
- * A requirement expression normally uses the canonical resource-expression
- * grammar.
+ * Valid semantic quantities may include:
  *
- * The capability-call alternative exists because CAPABILITY is a reserved
- * lexical token in Zamani and therefore:
+ *     qubits
+ *     logical_qubits
+ *     physical_qubits
+ *     memory
+ *     storage
+ *     nodes
+ *     threads
+ *     lanes
+ *     bandwidth
+ *     throughput
+ *     latency
+ *     energy
+ *     power
+ *     tensor_elements
+ *     tensor_rank
+ *     work
+ *     problem_size
  *
- *     capability("tensor.compute")
+ * These names are NOT enumerated by this grammar.
  *
- * cannot safely be treated as an ordinary identifier-based function call
- * once CAPABILITY has been tokenized as a keyword.
+ * They are ordinary expressions.
  *
- * This is a syntactic bridge only.
- *
- * Capability identity and capability satisfaction remain semantic concerns.
- * ============================================================================
- */
-
-resourceRequirementExpression
-    : resourceCapabilityCall
-    | resourceExpression
-    ;
-
-
-/*
- * ============================================================================
- * 3. CAPABILITY REQUIREMENT
- * ============================================================================
- *
- * Canonical portable examples:
- *
- *     requires capability("tensor.compute");
- *
- *     requires capability("gpu.compute");
- *
- *     requires capability("quantum.measurement");
- *
- *     requires capability(
- *         "quantum.mid_circuit_measurement"
- *     );
- *
- *     requires capability(
- *         "quantum.operation",
- *         operation
- *     );
- *
- * The capability namespace is OPEN-WORLD.
- *
- * This grammar intentionally does not enumerate:
- *
- *     CPU capabilities
- *     GPU capabilities
- *     FPGA capabilities
- *     QPU capabilities
- *     vendor capabilities
- *     future accelerator capabilities
- *
- * Capability names are semantic data.
+ * This keeps the language open to future resource categories.
  *
  * ============================================================================
- */
-
-resourceCapabilityCall
-    : CAPABILITY
-      LPAREN
-      optionalResourceExpressionList
-      RPAREN
-    ;
-
-
-/*
- * ============================================================================
- * 4. REQUIREMENT LIST
+ * QUANTUM INTEGRATION
  * ============================================================================
  *
- * This rule provides a reusable composition boundary for consumers that need
- * several requirements as a syntactic collection.
- *
- * Cardinality is intentionally unbounded at the language level.
- *
- * There is no:
- *
- *     MAX_REQUIREMENTS
- *
- * and no fixed number of requirements is implied.
- *
- * Practical limits belong to compiler, runtime, deployment, or configured
- * resource budgets rather than to the language grammar.
- *
- * ============================================================================
- */
-
-resourceRequirementList
-    : resourceRequirement*
-    ;
-
-
-/*
- * ============================================================================
- * 5. OPTIONAL REQUIREMENT LIST
- * ============================================================================
- *
- * This wrapper is useful for resource declarations, profiles, contracts,
- * target specifications, and domain-specific resource sections.
- *
- * It does not introduce a second requirement representation.
- * ============================================================================
- */
-
-optionalResourceRequirementList
-    : resourceRequirementList?
-    ;
-
-
-/*
- * ============================================================================
- * 6. GENERIC REQUIREMENT ALIAS
- * ============================================================================
- *
- * `requirement` is a stable semantic-category wrapper.
- *
- * It intentionally resolves to the canonical resource requirement rather
- * than defining another requirement statement.
- *
- * Domain grammars may therefore consume:
- *
- *     requirement
- *
- * when they need a generic requirement category while preserving a single
- * concrete syntax owner.
- * ============================================================================
- */
-
-requirement
-    : resourceRequirement
-    ;
-
-
-/*
- * ============================================================================
- * 7. GENERIC REQUIREMENT LIST
- * ============================================================================
- *
- * Generic consumers may use this rule without creating another requirement
- * grammar.
- * ============================================================================
- */
-
-requirementList
-    : requirement*
-    ;
-
-
-/*
- * ============================================================================
- * 8. RESOURCE REQUIREMENT EXPRESSION LIST
- * ============================================================================
- *
- * ResourceExpressions already owns the canonical expression-list syntax.
- *
- * This rule is deliberately NOT redefined here.
- *
- * The imported rule:
- *
- *     resourceExpressionList
- *
- * is the canonical owner.
- *
- * The optional form used by resourceCapabilityCall is also provided by the
- * imported ResourceExpressions grammar:
- *
- *     optionalResourceExpressionList
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 9. SEMANTIC DISTINCTION
- * ============================================================================
- *
- * The parser preserves the syntactic category:
- *
- *     resourceRequirement
- *
- * Semantic analysis determines the actual requirement meaning.
- *
- * A requirement may represent:
- *
- *     quantitative requirement
- *     qualitative requirement
- *     capability requirement
- *     property requirement
- *     performance requirement
- *     latency requirement
- *     throughput requirement
- *     bandwidth requirement
- *     memory requirement
- *     compute requirement
- *     quantum resource requirement
- *     classical resource requirement
- *     HDL/hardware requirement
- *     distributed requirement
- *     networking requirement
- *     AI/data requirement
- *     resilience requirement
- *
- * No finite semantic enumeration belongs in this grammar.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 10. REQUIREMENT VS CAPABILITY
- * ============================================================================
- *
- * These concepts are deliberately not conflated.
- *
- * REQUIREMENT:
- *
- *     requires qubits >= logical_qubits;
- *
- * CAPABILITY REQUIREMENT:
- *
- *     requires capability("quantum.measurement");
- *
- * RESOURCE PROPERTY REQUIREMENT:
- *
- *     requires memory >= required_memory;
- *
- * PERFORMANCE REQUIREMENT:
- *
- *     requires latency <= latency_budget;
- *
- * The semantic layer decides whether the requirement is satisfiable and what
- * target realization can satisfy it.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 11. REQUIREMENT VS PREFERENCE
- * ============================================================================
- *
- * This grammar intentionally owns mandatory requirements only.
- *
- * It does NOT define:
- *
- *     prefer
- *     hint
- *
- * Those belong to their respective resource grammar components.
- *
- * This separation prevents an advisory preference from accidentally becoming
- * a mandatory requirement.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 12. REQUIREMENT VS CONSTRAINT
- * ============================================================================
- *
- * A requirement expresses what must be available or satisfied.
- *
- * A constraint expresses a restriction on valid realization.
- *
- * They may use the same underlying resource-expression system but remain
- * distinct semantic categories.
- *
- * Constraint syntax belongs to:
- *
- *     grammar/resources/constraints.g4
- *
- * Requirement syntax belongs here.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 13. RESOURCE QUANTITIES
- * ============================================================================
- *
- * Quantities are expressions.
- *
- * Therefore all of the following remain valid semantic possibilities:
- *
- *     requires qubits >= n;
- *
- *     requires memory >= required_memory;
- *
- *     requires tensor_rank >= required_rank;
- *
- *     requires lanes >= desired_parallelism;
- *
- *     requires nodes >= required_nodes;
- *
- *     requires bandwidth >= required_bandwidth;
- *
- * The grammar does not impose a maximum on any of these quantities.
- *
- * Dimensional validity, units, overflow policy, precision, and target
- * feasibility belong to semantic/type/resource analysis.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 14. QUANTUM INTEGRATION
- * ============================================================================
- *
- * Quantum-specific requirement grammars may wrap this universal requirement
- * grammar.
- *
- * They MUST NOT redefine:
- *
- *     resourceRequirement
- *     resourceRequirementExpression
- *     resourceCapabilityCall
- *     resourceExpression
- *
- * A quantum-specific property can therefore use the same universal form:
+ * Quantum source may express:
  *
  *     requires qubits >= logical_qubits;
  *
@@ -666,25 +711,46 @@ requirementList
  *
  *     requires capability("quantum.dynamic_control");
  *
- * The quantum frontend then lowers semantic quantum meaning through the
- * established:
+ *     requires capability("quantum.error_correction");
  *
+ * The grammar does not know:
+ *
+ *     physical qubit topology;
+ *     coupling map;
+ *     calibration;
+ *     routing;
+ *     scheduling;
+ *     QEC implementation.
+ *
+ * Semantic requirements may influence the pipeline:
+ *
+ *     source
+ *       ->
+ *     semantic quantum model
+ *       ->
  *     quantum::ir
+ *       ->
+ *     optimization
+ *       ->
+ *     decomposition
+ *       ->
+ *     routing
+ *       ->
+ *     scheduling
+ *       ->
+ *     resilience / QEC
+ *       ->
+ *     ZQN
+ *       ->
+ *     HAL
  *
- * boundary.
- *
- * This grammar does not create a quantum IR.
+ * No quantum IR is created here.
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 15. CLASSICAL INTEGRATION
+ * CLASSICAL INTEGRATION
  * ============================================================================
  *
- * Classical domains may use the same requirement grammar:
+ * Classical programs may express:
  *
  *     requires memory >= required_memory;
  *
@@ -694,18 +760,18 @@ requirementList
  *
  *     requires capability("parallel.compute");
  *
- * No CPU/core/thread count is encoded as a language-level maximum.
+ * The grammar does not assume:
+ *
+ *     fixed CPU count;
+ *     fixed register width;
+ *     fixed cache size;
+ *     fixed vector width.
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 16. GPU / FPGA / ACCELERATOR INTEGRATION
+ * GPU / FPGA / ACCELERATOR INTEGRATION
  * ============================================================================
  *
- * Target-independent source may express:
+ * Portable requirements may express:
  *
  *     requires capability("gpu.compute");
  *
@@ -715,21 +781,15 @@ requirementList
  *
  *     requires capability("accelerator.reconfigurable");
  *
- * The grammar does not enumerate vendors, models, device IDs, or fixed
- * capacities.
+ * The source does not select a device.
  *
- * Target discovery and matching belong downstream.
+ * Target negotiation happens downstream.
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 17. DISTRIBUTED INTEGRATION
+ * DISTRIBUTED INTEGRATION
  * ============================================================================
  *
- * Distributed programs may express:
+ * Portable distributed requirements may express:
  *
  *     requires nodes >= required_nodes;
  *
@@ -739,48 +799,38 @@ requirementList
  *
  *     requires capability("networking.low_latency");
  *
- * The grammar does not define a maximum number of nodes.
+ * No maximum node count is encoded.
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 18. HDL / HARDWARE INTEGRATION
+ * HDL / HARDWARE INTEGRATION
  * ============================================================================
  *
- * HDL and hardware grammars may consume the generic requirement category.
- *
- * Examples:
- *
- *     requires capability("hardware.reconfiguration");
- *
- *     requires capability("hardware.streaming");
+ * Hardware-oriented programs may express:
  *
  *     requires bandwidth >= required_bandwidth;
  *
  *     requires latency <= latency_budget;
  *
- * Hardware width, topology, timing, physical resources, and implementation
- * feasibility remain downstream semantic concerns.
+ *     requires capability("hardware.streaming");
  *
- * This grammar therefore does not contain constructs such as:
+ *     requires capability("hardware.reconfiguration");
  *
- *     wire [31:0]
- *     MAX_REGISTER_WIDTH
- *     MAX_FPGA_RESOURCES
+ * This file does not define:
+ *
+ *     wire widths;
+ *     physical cells;
+ *     pin counts;
+ *     FPGA resource counts;
+ *     register widths;
+ *     routing;
+ *     synthesis;
+ *     placement.
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 19. AI / DATA INTEGRATION
+ * AI / DATA / TENSOR INTEGRATION
  * ============================================================================
  *
- * AI/data programs may express:
+ * Requirements may express:
  *
  *     requires memory >= required_memory;
  *
@@ -792,247 +842,97 @@ requirementList
  *
  *     requires capability("data.streaming");
  *
- * Tensor rank, tensor dimensions, accelerator count, and available memory
- * remain semantic/resource values rather than grammar-level limits.
+ * Tensor dimensions and rank remain semantic values.
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 20. OPEN-WORLD CAPABILITY MODEL
+ * CONTRACT INTEGRATION
  * ============================================================================
  *
- * The capability argument is deliberately an expression rather than a fixed
- * parser enumeration.
+ * Resource requirements may be consumed by:
  *
- * This permits:
+ *     requires
+ *     ensures
+ *     invariant
+ *     assume
+ *     guarantee
+ *     property
+ *     assert
  *
- *     capability("quantum.measurement")
- *     capability("quantum.measurement", mode)
- *     capability("vendor.feature")
- *     capability(namespace::feature)
- *     capability(feature_name)
+ * validation and contract systems.
  *
- * subject to the canonical expression grammar.
- *
- * This design allows future capabilities to be introduced without changing
- * the universal requirement grammar.
+ * This file owns only the resource requirement syntax.
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 21. NO PHYSICAL RESOURCE SELECTION
+ * POLICY INTEGRATION
  * ============================================================================
  *
- * This grammar MUST NOT introduce source-level physical allocation such as:
+ * Resource requirements may be evaluated under policies controlling:
  *
- *     CPU 0
- *     GPU 3
- *     physical_qubit 17
- *     node 42
- *     memory_bank 2
+ *     resource selection;
+ *     permitted capabilities;
+ *     security;
+ *     adaptation;
+ *     deployment;
+ *     execution;
+ *     simulation;
+ *     fallback.
  *
- * Such realization-specific constructs, when genuinely necessary, belong to
- * explicitly target-specific or interoperability grammars and must not be
- * confused with portable resource requirements.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 22. NO TARGET LIMITS
- * ============================================================================
- *
- * A requirement such as:
- *
- *     requires qubits >= 1024;
- *
- * means:
- *
- *     the semantic workload requires at least 1024 qubits.
- *
- * It does NOT mean:
- *
- *     Zamani supports only 1024 qubits.
- *
- * Likewise:
- *
- *     requires memory >= required_memory;
- *
- * does not establish any universal memory maximum.
+ * Policies do not change the syntax owned here.
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 23. SOURCE SPANS
+ * EFFECT INTEGRATION
  * ============================================================================
  *
- * Every requirement construct must preserve its complete source span through
- * the parser/AST boundary.
+ * A resource requirement itself does not perform an effect.
  *
- * At minimum, semantic diagnostics must be able to identify:
+ * Semantic analysis may associate the requirement with an operation whose
+ * effects include:
  *
- *     REQUIRES keyword
- *     requirement expression
- *     capability call, when present
- *     argument expressions
- *     terminating semicolon
+ *     network
+ *     distributed
+ *     measurement
+ *     native
+ *     foreign
+ *     learning
+ *     adaptation
+ *     simulation
  *
- * The exact source-span type belongs to the frontend AST contract.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 24. AST CONTRACT
- * ============================================================================
- *
- * This grammar maps conceptually to:
- *
- *     ResourceRequirement
- *         expression
- *         source_span
- *
- * and, when applicable:
- *
- *     CapabilityRequirement
- *         capability
- *         arguments
- *         source_span
- *
- * The grammar MUST NOT depend on concrete Rust AST type names.
- *
- * The AST must preserve enough information to distinguish:
- *
- *     ordinary resource requirement
- *
- * from:
- *
- *     capability requirement
- *
- * without losing the original expression structure.
+ * This grammar does not authorize effects.
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 25. SEMANTIC CONTRACT
+ * PROVENANCE INTEGRATION
  * ============================================================================
  *
- * Semantic analysis is responsible for:
+ * The source span and structure of every resource requirement must remain
+ * traceable through semantic analysis.
  *
- *     name resolution
- *     type checking
- *     unit/dimension checking
- *     capability identity
- *     capability availability
- *     resource feasibility
- *     resource negotiation
- *     target compatibility
- *     portability analysis
- *     diagnostics
+ * Downstream provenance may record:
  *
- * The parser MUST NOT attempt to determine whether:
+ *     requirement;
+ *     evidence;
+ *     capability resolution;
+ *     resource decision;
+ *     target decision;
+ *     fallback;
+ *     compilation transformation.
  *
- *     qubits
- *     memory
- *     latency
- *     bandwidth
- *     nodes
- *     capability(...)
- *
- * can actually be satisfied.
+ * The parser does not create those records.
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 26. IR CONTRACT
+ * DETERMINISM CONTRACT
  * ============================================================================
  *
- * Requirements do not create a second resource IR inside this grammar.
+ * Parsing is deterministic for a given token stream and parser configuration.
  *
- * After semantic analysis, requirement information is represented by the
- * repository's canonical semantic/resource model and then consumed by the
- * appropriate compiler/IR layers.
+ * This file contains:
  *
- * Quantum requirements ultimately integrate with:
- *
- *     quantum::ir
- *
- * They do not create:
- *
- *     quantum_requirement_ir
- *
- * or another competing quantum representation.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 27. ERROR CLASSIFICATION
- * ============================================================================
- *
- * Syntax errors:
- *
- *     requires;
- *     requires ();
- *     requires capability(;
- *
- * are parser errors.
- *
- * Semantic errors such as:
- *
- *     requires qubits >= -1;
- *
- * where the semantic type/domain makes the value invalid, belong to semantic
- * analysis.
- *
- * Capability-unsatisfied errors such as:
- *
- *     requires capability("quantum.measurement");
- *
- * on a target without that capability are resource/capability diagnostics,
- * not syntax errors.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 28. DETERMINISM
- * ============================================================================
- *
- * This grammar contains:
- *
+ *     no actions;
  *     no semantic predicates;
- *     no embedded actions;
- *     no random behavior;
- *     no filesystem access;
+ *     no runtime calls;
+ *     no I/O;
+ *     no hardware discovery;
  *     no network access;
- *     no hardware access;
- *     no runtime callbacks.
- *
- * Parsing is therefore determined entirely by the input token stream.
+ *     no randomness.
  *
  * ============================================================================
  */
@@ -1040,125 +940,31 @@ requirementList
 
 /*
  * ============================================================================
- * 29. COMPATIBILITY
+ * GRAMMAR DEFINITION
+ * ============================================================================
+ */
+
+parser grammar Requirements;
+
+options {
+    tokenVocab = ZamaniLexer;
+}
+
+import ResourceExpressions, Capabilities, Names;
+
+
+/*
+ * ============================================================================
+ * 1. PRIMARY RESOURCE REQUIREMENT
  * ============================================================================
  *
- * Existing source form:
+ * Canonical form:
  *
  *     requires <resource-expression>;
  *
- * remains the canonical requirement form.
- *
- * Existing consumers of `resourceRequirement` continue to use that rule.
- *
- * The production change is ownership consolidation:
- *
- *     requirements.g4
- *         owns resourceRequirement
- *
- *     resources.g4
- *         composes resourceRequirement
- *
- * rather than:
- *
- *     resources.g4
- *         redefining resourceRequirement
- *
- * This prevents competing definitions of the same semantic category.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 30. INTEGRATION WITH resources.g4
- * ============================================================================
- *
- * `grammar/resources/resources.g4` MUST import this grammar:
- *
- *     import ResourceExpressions, Names, Requirements;
- *
- * Its `resourceItem` rule should continue to expose:
- *
- *     resourceRequirement
- *
- * but `resources.g4` MUST remove its local definitions of:
- *
- *     resourceRequirement
- *     resourceRequirementExpression
- *     resourceCapabilityCall
- *
- * because those rules are owned here.
- *
- * The resulting composition is:
- *
- *     Resources
- *         |
- *         +--> Requirements
- *         |       |
- *         |       +--> ResourceExpressions
- *         |
- *         +--> ResourceExpressions
- *         |
- *         +--> Names
- *
- * This gives one owner per grammar concept.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 31. INTEGRATION WITH DOMAIN GRAMMARS
- * ============================================================================
- *
- * Domain grammars should consume the canonical requirement rule.
- *
  * Examples:
  *
- *     hardware
- *         -> resourceRequirement
- *
- *     quantum
- *         -> resourceRequirement
- *
- *     hybrid
- *         -> resourceRequirement
- *
- *     distributed
- *         -> resourceRequirement
- *
- *     AI
- *         -> resourceRequirement
- *
- *     HDL
- *         -> resourceRequirement
- *
- * Domain-specific wrappers are permitted.
- *
- * Example:
- *
- *     quantumResourceRequirement
- *         : resourceRequirement
- *         ;
- *
- * Such wrappers must add semantic context rather than duplicate the
- * requirement grammar.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 32. TEST CONTRACT
- * ============================================================================
- *
- * Positive syntax cases:
- *
- *     requires qubits >= n;
+ *     requires qubits >= logical_qubits;
  *
  *     requires memory >= required_memory;
  *
@@ -1166,195 +972,959 @@ requirementList
  *
  *     requires latency <= latency_budget;
  *
- *     requires capability("quantum.measurement");
+ *     requires bandwidth >= required_bandwidth;
  *
- *     requires capability("tensor.compute");
+ * ============================================================================
+ */
+
+resourceRequirement
+    : REQUIRES resourceRequirementExpression SEMICOLON
+    ;
+
+
+/*
+ * ============================================================================
+ * 2. RESOURCE REQUIREMENT EXPRESSION
+ * ============================================================================
+ *
+ * The expression boundary remains open-world.
+ *
+ * The capability-call and capability-reference alternatives are kept
+ * structurally distinct from the general resource expression so that:
+ *
+ *     capability(...)
+ *
+ * and:
+ *
+ *     capability quantum::measurement
+ *
+ * can both be represented without redefining the general expression grammar.
+ *
+ * ============================================================================
+ */
+
+resourceRequirementExpression
+    : resourceCapabilityCall
+    | resourceCapabilityReference
+    | resourceExpression
+    ;
+
+
+/*
+ * ============================================================================
+ * 3. RESOURCE CAPABILITY CALL
+ * ============================================================================
+ *
+ * Resource-specific call form:
+ *
+ *     capability("tensor.compute")
+ *
+ *     capability("quantum.measurement")
+ *
+ *     capability(namespace::feature)
+ *
+ *     capability(feature_name)
+ *
+ *     capability("quantum.operation", operation)
+ *
+ * The arguments are expressions.
+ *
+ * This permits an open capability namespace without enumerating capability
+ * names in this grammar.
+ *
+ * ============================================================================
+ */
+
+resourceCapabilityCall
+    : CAPABILITY
+      LPAREN
+      optionalResourceRequirementExpressionList
+      RPAREN
+    ;
+
+
+/*
+ * ============================================================================
+ * 4. CANONICAL CAPABILITY REFERENCE
+ * ============================================================================
+ *
+ * Canonical capability-reference form:
+ *
+ *     capability quantum::measurement
+ *
+ *     capability quantum::dynamic_control version >= 1.2.0
+ *
+ * The capability identity/version grammar is owned by core/capabilities.g4.
+ *
+ * This wrapper gives resource requirements a stable integration boundary.
+ *
+ * ============================================================================
+ */
+
+resourceCapabilityReference
+    : CAPABILITY
+      capabilityReference
+    ;
+
+
+/*
+ * ============================================================================
+ * 5. RESOURCE REQUIREMENT EXPRESSION LIST
+ * ============================================================================
+ *
+ * A capability call may contain zero or more arguments.
+ *
+ * Empty argument lists remain syntactically representable:
+ *
+ *     capability()
+ *
+ * Semantic validation determines whether an empty capability call is valid.
+ *
+ * No parser-level provider or arity limit is imposed.
+ *
+ * ============================================================================
+ */
+
+resourceRequirementExpressionList
+    : resourceExpression
+      (COMMA resourceExpression)*
+      COMMA?
+    ;
+
+
+optionalResourceRequirementExpressionList
+    : resourceRequirementExpressionList?
+    ;
+
+
+/*
+ * ============================================================================
+ * 6. REQUIREMENT LIST
+ * ============================================================================
+ *
+ * This is specifically a LIST OF RESOURCE REQUIREMENT STATEMENTS.
+ *
+ * It is intentionally named:
+ *
+ *     resourceRequirementList
+ *
+ * and MUST NOT be confused with:
+ *
+ *     grammar/core/requirements.g4::requirementList
+ *
+ * ============================================================================
+ */
+
+resourceRequirementList
+    : resourceRequirement*
+    ;
+
+
+optionalResourceRequirementList
+    : resourceRequirementList?
+    ;
+
+
+/*
+ * ============================================================================
+ * 7. RESOURCE REQUIREMENT GROUP
+ * ============================================================================
+ *
+ * Grouped resource requirements provide a reusable structural boundary for
+ * consumers that need multiple requirements under one resource context.
+ *
+ * Example:
+ *
+ *     requires {
+ *         qubits >= logical_qubits;
+ *         memory >= required_memory;
+ *         capability("quantum.measurement");
+ *     }
+ *
+ * The group does not create a new semantic resource type.
+ *
+ * ============================================================================
+ */
+
+resourceRequirementGroup
+    : REQUIRES
+      LBRACE
+      resourceRequirementGroupItem*
+      RBRACE
+    ;
+
+
+resourceRequirementGroupItem
+    : resourceRequirement
+    | resourceRequirementGroup
+    ;
+
+
+/*
+ * ============================================================================
+ * 8. RESOURCE REQUIREMENT PREDICATE
+ * ============================================================================
+ *
+ * Explicit semantic boundary for consumers that need a requirement predicate.
+ *
+ * The parser delegates to the canonical resource expression.
+ *
+ * Type checking determines whether the resulting expression is a valid
+ * predicate.
+ *
+ * ============================================================================
+ */
+
+resourceRequirementPredicate
+    : resourceExpression
+    ;
+
+
+resourceRequirementCondition
+    : resourceRequirementPredicate
+    ;
+
+
+/*
+ * ============================================================================
+ * 9. OPTIONAL CAPABILITY CALL ARGUMENTS
+ * ============================================================================
+ *
+ * This rule is intentionally local to resource capability-call syntax.
+ *
+ * It does NOT replace:
+ *
+ *     resourceExpressionList
+ *
+ * as the canonical resource-expression list authority.
+ *
+ * The distinction exists because capability(...) is a resource requirement
+ * syntax boundary, while arbitrary resource expressions use the canonical
+ * resource-expression grammar.
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * 10. SEMANTIC REQUIREMENT CATEGORIES
+ * ============================================================================
+ *
+ * The following are semantic categories, not grammar enumerations:
+ *
+ *     compute
+ *     memory
+ *     storage
+ *     bandwidth
+ *     latency
+ *     throughput
+ *     energy
+ *     power
+ *     reliability
+ *     resilience
+ *     qubits
+ *     nodes
+ *     threads
+ *     tensor resources
+ *     accelerator resources
+ *     network resources
+ *     hardware resources
+ *     simulation resources
+ *     AI/data resources
+ *     future resources
+ *
+ * New categories do not require parser changes merely because their names
+ * change.
+ *
+ * ============================================================================
+ * 11. REQUIREMENT SATISFIABILITY
+ * ============================================================================
+ *
+ * The parser MUST accept syntactically valid requirements even when their
+ * satisfaction is unknown.
+ *
+ * Example:
+ *
+ *     requires capability("future.architecture.feature");
+ *
+ * is syntactically valid.
+ *
+ * Semantic analysis may classify it as:
+ *
+ *     satisfied
+ *     unsatisfied
+ *     unknown
+ *     conditional
+ *
+ * depending on the compilation/execution context.
+ *
+ * ============================================================================
+ * 12. TYPE AND UNIT VALIDATION
+ * ============================================================================
+ *
+ * The grammar does not determine whether:
+ *
+ *     qubits >= memory
+ *
+ * is meaningful.
+ *
+ * Type/unit/resource analysis determines whether both sides of the comparison
+ * are compatible.
+ *
+ * The same principle applies to:
+ *
+ *     latency
+ *     bandwidth
+ *     energy
+ *     power
+ *     throughput
+ *     memory
+ *     tensor dimensions
+ *     topology values
+ *     resource quantities.
+ *
+ * ============================================================================
+ * 13. SYMBOLIC RESOURCE REQUIREMENTS
+ * ============================================================================
+ *
+ * Requirements may be symbolic:
+ *
+ *     requires qubits >= logical_qubits;
+ *
+ *     requires memory >= dataset_size * element_size;
+ *
+ *     requires nodes >= required_nodes;
+ *
+ *     requires bandwidth >= workload_bandwidth;
+ *
+ *     requires latency <= latency_budget;
+ *
+ * This is essential for source portability.
+ *
+ * The grammar does not evaluate these expressions.
+ *
+ * ============================================================================
+ * 14. RESOURCE REQUIREMENTS MUST NOT SELECT TARGETS
+ * ============================================================================
+ *
+ * Invalid architectural interpretation:
+ *
+ *     requires GPU 0;
+ *
+ *     requires QPU 1;
+ *
+ *     requires CPU 3;
+ *
+ * Portable resource requirements should instead express intent:
  *
  *     requires capability("gpu.compute");
  *
- *     requires capability(
- *         "quantum.operation",
- *         operation
- *     );
+ *     requires capability("quantum.measurement");
  *
- *     requires workload_size * element_size <= available_memory;
+ *     requires capability("parallel.compute");
  *
- * Boundary/scalability cases:
+ * Physical target selection belongs downstream.
  *
- *     requires qubits >= 0;
+ * ============================================================================
+ * 15. RESOURCE REQUIREMENTS MUST NOT ALLOCATE
+ * ============================================================================
  *
- *     requires qubits >= 1;
+ * A requirement does not reserve or acquire a resource.
+ *
+ * These are separate semantic concepts owned by other resource grammars:
+ *
+ *     reservation
+ *     acquisition
+ *     allocation
+ *     placement
+ *     scheduling
+ *
+ * ============================================================================
+ * 16. RESOURCE REQUIREMENTS MUST NOT CREATE HARDWARE LIMITS
+ * ============================================================================
+ *
+ * This is valid:
  *
  *     requires qubits >= 1024;
  *
- *     requires qubits >= very_large_symbolic_value;
+ * This does not establish:
  *
- *     requires capability("a");
+ *     MAX_QUBITS = 1024
  *
- *     requires capability("vendor.feature", argument);
+ * Likewise:
  *
- *     many sequential requirements;
+ *     requires memory >= 64GB;
  *
- *     deeply nested resource expressions;
+ * does not establish:
  *
- *     large capability argument lists;
+ *     MAX_MEMORY = 64GB
  *
- *     large source files containing many requirements.
+ * ============================================================================
+ * 17. QUANTUM BOUNDARY
+ * ============================================================================
  *
- * Negative syntax cases:
+ * Resource requirements may influence quantum compilation.
+ *
+ * They do not directly construct quantum operations.
+ *
+ * The boundary remains:
+ *
+ *     resource requirement
+ *          |
+ *          v
+ *     semantic resource model
+ *          |
+ *          v
+ *     quantum semantic analysis
+ *          |
+ *          v
+ *     quantum::ir
+ *          |
+ *          v
+ *     optimization
+ *          |
+ *          v
+ *     decomposition
+ *          |
+ *          v
+ *     routing
+ *          |
+ *          v
+ *     scheduling
+ *          |
+ *          v
+ *     resilience / QEC
+ *          |
+ *          v
+ *     ZQN
+ *          |
+ *          v
+ *     HAL
+ *
+ * ============================================================================
+ * 18. CLASSICAL BOUNDARY
+ * ============================================================================
+ *
+ * Classical resource requirements participate in the canonical semantic model
+ * and may influence:
+ *
+ *     optimization
+ *     parallelization
+ *     vectorization
+ *     accelerator selection
+ *     memory planning
+ *     execution planning
+ *
+ * They do not directly select hardware.
+ *
+ * ============================================================================
+ * 19. HDL / HARDWARE BOUNDARY
+ * ============================================================================
+ *
+ * HDL and hardware consumers may use:
+ *
+ *     resourceRequirement
+ *
+ * without modifying this grammar.
+ *
+ * Hardware-specific semantic analysis may interpret:
+ *
+ *     bandwidth
+ *     latency
+ *     timing
+ *     power
+ *     energy
+ *     capacity
+ *     reconfiguration
+ *     streaming
+ *
+ * without adding hardware-specific parser alternatives here.
+ *
+ * ============================================================================
+ * 20. DISTRIBUTED BOUNDARY
+ * ============================================================================
+ *
+ * Distributed consumers may use:
+ *
+ *     requires nodes >= required_nodes;
+ *
+ *     requires capability("distributed.execution");
+ *
+ *     requires capability("distributed.collectives");
+ *
+ *     requires capability("networking.communication");
+ *
+ * The number of nodes is a semantic value.
+ *
+ * No finite node limit exists in the grammar.
+ *
+ * ============================================================================
+ * 21. AI / DATA BOUNDARY
+ * ============================================================================
+ *
+ * Resource requirements can express:
+ *
+ *     requires memory >= model_memory;
+ *
+ *     requires capability("tensor.compute");
+ *
+ *     requires capability("tensor.acceleration");
+ *
+ *     requires capability("data.streaming");
+ *
+ *     requires capability("distributed.training");
+ *
+ * Model semantics remain in their appropriate domain subsystem.
+ *
+ * ============================================================================
+ * 22. ADAPTIVE EXECUTION
+ * ============================================================================
+ *
+ * Resource requirements may participate in adaptive execution.
+ *
+ * Example semantic flow:
+ *
+ *     requirement
+ *        |
+ *        v
+ *     capability/resource evaluation
+ *        |
+ *        +--> satisfied
+ *        |
+ *        +--> unavailable
+ *        |
+ *        +--> conditional
+ *        |
+ *        +--> fallback
+ *        |
+ *        v
+ *     execution planning
+ *
+ * This grammar does not implement adaptation.
+ *
+ * ============================================================================
+ * 23. SIMULATION
+ * ============================================================================
+ *
+ * A resource requirement may be evaluated against a simulator when actual
+ * hardware is unavailable.
+ *
+ * Example:
+ *
+ *     requires capability("quantum.measurement");
+ *
+ * may be satisfied by a quantum simulator if the semantic execution policy
+ * explicitly permits that realization.
+ *
+ * The grammar does not decide whether simulation is acceptable.
+ *
+ * ============================================================================
+ * 24. PROVENANCE
+ * ============================================================================
+ *
+ * Every requirement must remain traceable to its source.
+ *
+ * Downstream records may contain:
+ *
+ *     source span
+ *     normalized requirement
+ *     capability resolution
+ *     resource resolution
+ *     target decision
+ *     fallback
+ *     evidence
+ *     policy decision
+ *
+ * ============================================================================
+ * 25. ERROR CONTRACT
+ * ============================================================================
+ *
+ * Parser diagnostics should identify at minimum:
+ *
+ *     missing REQUIRES
+ *     missing expression
+ *     missing capability arguments where syntax requires them
+ *     malformed capability reference
+ *     missing semicolon
+ *     malformed grouped requirement
+ *     malformed expression
+ *
+ * Semantic diagnostics should separately identify:
+ *
+ *     unknown resource
+ *     incompatible resource units
+ *     unsatisfied requirement
+ *     unavailable capability
+ *     incompatible capability version
+ *     contradictory requirements
+ *     forbidden resource/capability
+ *     impossible target realization
+ *
+ * The parser MUST NOT report a physical feasibility error as a lexical or
+ * parser error merely because the current machine cannot satisfy a requirement.
+ *
+ * ============================================================================
+ * 26. COMPATIBILITY CONTRACT
+ * ============================================================================
+ *
+ * Public rule names in this file are stable API:
+ *
+ *     resourceRequirement
+ *     resourceRequirementExpression
+ *     resourceCapabilityCall
+ *     resourceCapabilityReference
+ *     resourceRequirementList
+ *     optionalResourceRequirementList
+ *
+ * Changes to these rules are compatibility-sensitive.
+ *
+ * Generic core requirement rules must remain owned by:
+ *
+ *     grammar/core/requirements.g4
+ *
+ * A migration must be provided if a public resource rule changes.
+ *
+ * ============================================================================
+ * 27. DETERMINISM CONTRACT
+ * ============================================================================
+ *
+ * Given identical:
+ *
+ *     source tokens
+ *     grammar version
+ *     parser configuration
+ *
+ * this grammar must produce the same parser structure.
+ *
+ * No environmental state may affect parsing.
+ *
+ * ============================================================================
+ * 28. NEGATIVE TESTS
+ * ============================================================================
+ *
+ * The following categories must be rejected or diagnosed appropriately:
  *
  *     requires;
  *
- *     requires ;
+ *     requires >= memory;
  *
  *     requires capability;
  *
  *     requires capability(;
  *
- *     requires capability();
+ *     requires capability("x";
  *
- * Note:
+ *     requires qubits >= ;
  *
- *     Empty capability argument lists are syntactically accepted by the
- *     grammar if the repository chooses to treat capability() as a valid
- *     open-world call. Semantic analysis SHOULD reject it when a capability
- *     identity is required.
+ *     requires memory >= ;
  *
- * Therefore, if the language specification requires a capability identity,
- * semantic validation—not a machine-size grammar restriction—must reject
- * capability().
+ *     requires {;
+ *
+ *     requires { qubits >= n;
+ *
+ *     requires qubits >= n
+ *
+ * where the final semicolon is required by the selected syntax.
+ *
+ * Physical impossibility MUST NOT be confused with parser invalidity.
  *
  * ============================================================================
- */
-
-
-/*
+ * 29. POSITIVE TESTS
+ * ============================================================================
+ *
+ * The conformance suite must cover:
+ *
+ *     requires qubits >= logical_qubits;
+ *
+ *     requires memory >= required_memory;
+ *
+ *     requires nodes >= required_nodes;
+ *
+ *     requires latency <= latency_budget;
+ *
+ *     requires bandwidth >= required_bandwidth;
+ *
+ *     requires capability("quantum.measurement");
+ *
+ *     requires capability("quantum.dynamic_control");
+ *
+ *     requires capability("tensor.compute");
+ *
+ *     requires capability("distributed.collectives");
+ *
+ *     requires capability("future.architecture.feature");
+ *
+ *     requires capability(namespace::feature);
+ *
+ *     requires capability(feature_name);
+ *
+ *     requires capability("quantum.operation", operation);
+ *
+ *     requires capability quantum::measurement;
+ *
+ *     requires capability quantum::dynamic_control version >= 1.2.0;
+ *
+ *     requires {
+ *         qubits >= logical_qubits;
+ *         memory >= required_memory;
+ *         capability("quantum.measurement");
+ *     }
+ *
+ * ============================================================================
+ * 30. BOUNDARY TESTS
+ * ============================================================================
+ *
+ * Test:
+ *
+ *     symbolic quantities
+ *     large numeric literals
+ *     zero
+ *     negative values where expression syntax permits them
+ *     computed quantities
+ *     nested expressions
+ *     qualified capability names
+ *     long qualified names
+ *     capability arguments
+ *     nested resource groups
+ *     mixed resource domains
+ *     quantum + classical requirements
+ *     distributed + networking requirements
+ *     AI + accelerator requirements
+ *     HDL + hardware requirements
+ *
+ * ============================================================================
+ * 31. SCALABILITY TESTS
+ * ============================================================================
+ *
+ * The suite must test progressively larger:
+ *
+ *     requirement counts
+ *     expression sizes
+ *     capability argument counts
+ *     grouped requirements
+ *     qualified names
+ *     symbolic expressions
+ *
+ * The tests must never convert test sizes into language constants.
+ *
+ * ============================================================================
+ * 32. CROSS-DOMAIN TEST
+ * ============================================================================
+ *
+ * At least one integration fixture must combine:
+ *
+ *     classical resources
+ *     quantum resources
+ *     hardware resources
+ *     accelerator capabilities
+ *     distributed resources
+ *     networking capabilities
+ *     tensor requirements
+ *     execution capabilities
+ *
+ * in a single source program.
+ *
+ * The requirement parser must remain domain-neutral.
+ *
  * ============================================================================
  * 33. HARD-CODING AUDIT
  * ============================================================================
  *
- * This file contains no:
+ * Before marking this file complete, verify that it contains:
  *
- *     MAX_QUBITS
- *     MAX_CPUS
- *     MAX_GPUS
- *     MAX_FPGAS
- *     MAX_NODES
- *     MAX_MEMORY
- *     MAX_THREADS
- *     MAX_TENSOR_RANK
- *     MAX_REGISTER_WIDTH
- *     MAX_NETWORK_SIZE
- *     MAX_DEVICE_COUNT
+ *     [ ] no machine-capacity constants;
+ *     [ ] no quantum-capacity constants;
+ *     [ ] no CPU/GPU/FPGA/QPU enumeration;
+ *     [ ] no vendor enumeration;
+ *     [ ] no device IDs;
+ *     [ ] no fixed tensor rank;
+ *     [ ] no fixed network size;
+ *     [ ] no fixed node count;
+ *     [ ] no fixed memory size;
+ *     [ ] no fixed register width;
+ *     [ ] no parser-level resource allocation;
+ *     [ ] no hardware inspection;
+ *     [ ] no runtime execution;
+ *     [ ] no unsafe Rust requirement.
  *
- * It contains no finite enumeration of:
+ * ============================================================================
+ * 34. INTEGRATION CHECKLIST
+ * ============================================================================
  *
- *     CPUs
- *     GPUs
- *     FPGAs
- *     QPUs
- *     accelerators
- *     vendors
- *     machines
- *     nodes
- *     qubits
- *     memories
- *     tensor ranks
- *     network sizes
+ * Before declaring this file DONE:
  *
- * Resource quantities remain expressions.
+ *     [ ] ResourceExpressions imports successfully.
+ *     [ ] Capabilities imports successfully.
+ *     [ ] Names imports successfully.
+ *     [ ] ZamaniLexer provides every referenced token.
+ *     [ ] Resources consumes resourceRequirement.
+ *     [ ] Validation consumes resourceRequirement.
+ *     [ ] Quantum consumers use resourceRequirement rather than redefining it.
+ *     [ ] Hardware consumers use resourceRequirement rather than redefining it.
+ *     [ ] Hybrid consumers use resourceRequirement rather than redefining it.
+ *     [ ] Distributed consumers use resourceRequirement rather than redefining it.
+ *     [ ] No generic requirement rule is duplicated here.
+ *     [ ] No expression grammar is duplicated here.
+ *     [ ] No capability identity grammar is duplicated here.
+ *     [ ] AST mapping is documented.
+ *     [ ] Semantic mapping is documented.
+ *     [ ] Resource resolution is downstream.
+ *     [ ] Capability resolution is downstream.
+ *     [ ] quantum::ir remains the canonical quantum IR.
+ *     [ ] Positive tests exist.
+ *     [ ] Negative tests exist.
+ *     [ ] Boundary tests exist.
+ *     [ ] Scalability tests exist.
+ *     [ ] Determinism tests exist.
+ *     [ ] Compatibility tests exist.
+ *     [ ] Rust 1.97 compatibility is verified by the repository build.
+ *     [ ] Rust 1.97.1 compatibility is verified by the repository build.
+ *     [ ] No unsafe Rust is required.
  *
- * Capability identities remain open-world expressions.
+ * ============================================================================
+ * 35. COMPLETION CRITERIA
+ * ============================================================================
+ *
+ * This file is DONE when:
+ *
+ *     1. It is the single resource-specific requirement syntax owner.
+ *
+ *     2. It does not redefine generic core requirements.
+ *
+ *     3. It consumes the canonical resource-expression grammar.
+ *
+ *     4. It consumes the canonical capability grammar.
+ *
+ *     5. It supports symbolic and computed resource quantities.
+ *
+ *     6. It supports open-world capability requirements.
+ *
+ *     7. It introduces no machine-capacity ceiling.
+ *
+ *     8. It introduces no vendor/device catalogue.
+ *
+ *     9. It does not allocate or select hardware.
+ *
+ *    10. It preserves source structure for the AST.
+ *
+ *    11. It integrates with classical, quantum, hybrid, HDL, hardware,
+ *        distributed, networking, AI/data, execution and compilation
+ *        subsystems through stable grammar interfaces.
+ *
+ *    12. It preserves the quantum::ir boundary.
+ *
+ *    13. It has positive, negative, boundary and scalability tests.
+ *
+ *    14. Generated frontend code remains compatible with Rust 1.97/1.97.1
+ *        and safe Rust.
+ *
+ * ============================================================================
+ * FINAL ARCHITECTURAL RULE
+ * ============================================================================
+ *
+ * This file describes RESOURCE REQUIREMENT INTENT.
+ *
+ * It does not describe a machine.
+ *
+ * It does not describe a backend.
+ *
+ * It does not describe a physical device.
+ *
+ * It does not describe a fixed machine capacity.
+ *
+ * It does not decide feasibility.
+ *
+ * It does not perform allocation.
+ *
+ * It does not create an IR.
+ *
+ * It therefore preserves the central Zamani separation:
+ *
+ *     SOURCE MEANING
+ *          |
+ *          v
+ *     RESOURCE INTENT
+ *          |
+ *          v
+ *     SEMANTIC ANALYSIS
+ *          |
+ *          v
+ *     CAPABILITY / RESOURCE NEGOTIATION
+ *          |
+ *          v
+ *     EXECUTION PLANNING
+ *          |
+ *          +--------------------+
+ *          |                    |
+ *          v                    v
+ *     CLASSICAL PATH        QUANTUM PATH
+ *                               |
+ *                               v
+ *                           quantum::ir
+ *                               |
+ *                               v
+ *                     target realization
  *
  * ============================================================================
  */
 
+resourceRequirement
+    : REQUIRES resourceRequirementExpression SEMICOLON
+    ;
 
-/*
- * ============================================================================
- * 34. SECURITY CONTRACT
- * ============================================================================
- *
- * Parsing a requirement must never:
- *
- *     execute a capability;
- *     query hardware;
- *     access the network;
- *     access the filesystem;
- *     invoke a vendor API;
- *     execute a runtime operation;
- *     allocate a resource.
- *
- * All such operations belong to later, explicitly controlled compiler/runtime
- * layers.
- *
- * ============================================================================
- */
+resourceRequirementExpression
+    : resourceCapabilityCall
+    | resourceCapabilityReference
+    | resourceExpression
+    ;
 
+resourceCapabilityCall
+    : CAPABILITY
+      LPAREN
+      optionalResourceExpressionList
+      RPAREN
+    ;
 
-/*
- * ============================================================================
- * 35. RUST CONTRACT
- * ============================================================================
- *
- * This grammar contains no Rust implementation code.
- *
- * Generated parser integration must:
- *
- *     compile with Rust 1.97 / Rust 1.97.1;
- *     use safe Rust;
- *     require no unsafe blocks;
- *     require no unsafe functions;
- *     require no unsafe traits;
- *     preserve parser source spans;
- *     preserve deterministic behavior.
- *
- * No grammar construct may require an unsafe Rust implementation.
- *
- * ============================================================================
- */
+resourceCapabilityReference
+    : CAPABILITY
+      capabilityReference
+    ;
 
+resourceRequirementList
+    : resourceRequirement*
+    ;
 
-/*
- * ============================================================================
- * 36. COMPLETION CRITERIA
- * ============================================================================
- *
- * This file is complete when:
- *
- *     [x] grammar identity is Requirements;
- *     [x] canonical ZamaniLexer vocabulary is consumed;
- *     [x] no placeholder REQUIREMENT_* tokens exist;
- *     [x] resourceExpression remains owned by ResourceExpressions;
- *     [x] identifier/name syntax remains centrally owned;
- *     [x] resourceRequirement has one owner;
- *     [x] capability requirements are supported;
- *     [x] capability identity is open-world;
- *     [x] arbitrary capability arguments are supported;
- *     [x] resource quantities remain expressions;
- *     [x] no physical hardware limit is encoded;
- *     [x] no target is selected by the parser;
- *     [x] no resource is allocated by the parser;
- *     [x] no quantum IR is duplicated;
- *     [x] quantum requirements can flow toward quantum::ir;
- *     [x] classical requirements are supported;
- *     [x] HDL/hardware requirements are supported;
- *     [x] distributed requirements are supported;
- *     [x] AI/data requirements are supported;
- *     [x] source spans are specified;
- *     [x] AST mapping is specified;
- *     [x] semantic mapping is specified;
- *     [x] IR integration is specified;
- *     [x] resources.g4 integration is specified;
- *     [x] domain integration is specified;
- *     [x] positive tests are specified;
- *     [x] negative tests are specified;
- *     [x] boundary tests are specified;
- *     [x] scalability tests are specified;
- *     [x] determinism is specified;
- *     [x] no-unsafe integration is specified.
- *
- * ============================================================================
- * END OF REQUIREMENTS GRAMMAR
- * ============================================================================
- */
+optionalResourceRequirementList
+    : resourceRequirementList?
+    ;
+
+resourceRequirementExpressionList
+    : resourceExpression
+      (COMMA resourceExpression)*
+      COMMA?
+    ;
+
+optionalResourceRequirementExpressionList
+    : resourceRequirementExpressionList?
+    ;
+
+resourceRequirementGroup
+    : REQUIRES
+      LBRACE
+      resourceRequirementGroupItem*
+      RBRACE
+    ;
+
+resourceRequirementGroupItem
+    : resourceRequirement
+    | resourceRequirementGroup
+    ;
+
+resourceRequirementPredicate
+    : resourceExpression
+    ;
+
+resourceRequirementCondition
+    : resourceRequirementPredicate
+    ;
