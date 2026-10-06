@@ -1,168 +1,288 @@
-Zamani Quantum Grammar
+Worked for 9s
 
-Path: "grammar/quantum/README.md"
-Status: Normative quantum-subsystem architecture and integration contract
-Language: Zamani
-Grammar technology: ANTLR
-Rust baseline: Rust 1.97 / Rust 1.97.1, Rust 2021
-Safety: Safe Rust only; "unsafe" Rust is prohibited
-Architecture: Program Once, Compile Once, Run Everywhere, Anywhere, Forever (POCO-REAF)
+I inspected the repository's existing quantum grammar architecture and the surrounding contracts. The important correction is that grammar/quantum/README.md should be an architecture and integration contract, not a second grammar specification. It should define ownership, boundaries, dependency direction, scalability rules, canonical integration points, and the definition of done for the entire quantum grammar directory.
+
+Below is a complete replacement for grammar/quantum/README.md. It deliberately keeps operation names, qubit counts, resource sizes, hardware topology, and future quantum features open-ended.
+
+# Zamani Quantum Grammar
+
+**Path:** `grammar/quantum/`  
+**Status:** Normative quantum-grammar architecture and integration contract  
+**Language:** Zamani  
+**Grammar technology:** ANTLR4  
+**Rust baseline:** Rust 1.97+ / Rust 2021  
+**Safety:** Safe Rust only; `unsafe` is prohibited  
+**Portability model:** Program Once, Compile Once, Run Everywhere, Anywhere, Forever (POCO-REAF)
 
 ---
 
-1. Purpose
+## 1. Purpose
 
-"grammar/quantum/" is the quantum source-language grammar subsystem of Zamani.
+`grammar/quantum/` is the quantum-language grammar subsystem of Zamani.
 
-It defines the syntax required to express quantum computation as part of the single Zamani language while preserving:
+It defines the source-level syntax required to express quantum computation while preserving:
 
 - target independence;
-- quantum/classical composition;
-- arbitrary resource scale;
+- classical/quantum composition;
+- arbitrary program scale;
 - open-ended quantum operations;
-- logical and physical resource intent;
+- symbolic resource requirements;
+- capability requirements;
 - dynamic circuits;
 - measurement and feed-forward;
 - observables;
-- channels and noise intent;
+- quantum channels;
+- noise intent;
 - error-correction intent;
-- pulse-level intent where explicitly required;
-- quantum kernels and circuits;
-- capability and resource requirements;
-- dialect extensibility;
-- interoperability with external quantum representations.
+- logical quantum computation;
+- physical-resource intent where explicitly requested;
+- quantum kernels;
+- quantum/classical interaction;
+- adaptive execution;
+- quantum learning;
+- quantum reasoning;
+- quantum interoperability;
+- quantum dialect extensibility;
+- provenance;
+- contracts;
+- policies;
+- deterministic and reproducible source semantics.
 
-This directory does not define a second language.
+This directory is part of the single Zamani language.
 
-It does not define a second quantum compiler.
+It is **not** a second language.
 
-It does not define a second quantum AST.
+It is **not** a second compiler.
 
-It does not define a second quantum IR.
+It is **not** a second AST.
 
-The complete Zamani architecture remains:
+It is **not** a second quantum semantic model.
 
-Zamani source
-    │
-    ▼
-canonical lexer
-    │
-    ▼
-canonical Zamani parser
-    │
-    ▼
-domain-neutral frontend AST
-    │
-    ▼
-semantic analysis
-    │
-    ├── types
-    ├── effects
-    ├── capabilities
-    ├── resources
-    ├── ownership
-    ├── portability
-    └── quantum semantics
-    │
-    ▼
-canonical semantic representation
-    │
-    ▼
-quantum::ir
-    │
-    ├── optimization
-    ├── decomposition
-    ├── routing
-    ├── scheduling
-    ├── QEC
-    ├── resilience
-    └── ZQN
-    │
-    ▼
-hardware abstraction / HAL
-    │
-    ▼
-target lowering
-    │
-    ▼
-runtime / simulator / QPU / accelerator / future target
-
-The quantum grammar participates only in the source-language parsing boundary.
+It is **not** a second quantum IR.
 
 ---
 
-2. Normative authority
+# 2. Architectural position
 
-The quantum grammar is governed by the repository-wide authority hierarchy.
+The quantum grammar participates in the following canonical pipeline:
 
-2.1 Architecture
+```text
+Zamani source
+    |
+    v
+Canonical lexer
+    |
+    v
+Canonical ANTLR parser
+    |
+    v
+Domain-neutral frontend AST
+    |
+    v
+Structural validation
+    |
+    +--> type analysis
+    +--> ownership analysis
+    +--> effect analysis
+    +--> capability analysis
+    +--> resource analysis
+    +--> contract analysis
+    +--> policy analysis
+    +--> provenance
+    |
+    v
+Semantic model
+    |
+    +--> classical semantics
+    +--> quantum semantics
+    +--> hybrid semantics
+    +--> AI/learning/reasoning semantics
+    +--> distributed semantics
+    +--> HDL/hardware intent
+    |
+    v
+Canonical IR
+    |
+    +--> classical IR
+    |
+    +--> quantum::ir
+    |
+    v
+Target-independent optimization
+    |
+    v
+Lowering
+    |
+    v
+Decomposition
+    |
+    v
+Routing / placement
+    |
+    v
+Scheduling
+    |
+    v
+Resilience / recovery / QEC
+    |
+    v
+ZQN
+    |
+    v
+HAL
+    |
+    v
+Target realization
 
-The normative architectural authority is:
+The quantum grammar is responsible only for the source-language boundary.
+
+
+---
+
+3. Normative authority
+
+The following ownership hierarchy is mandatory.
+
+3.1 Repository architecture
+
+The repository-wide architecture is governed by:
 
 grammar/DESIGN.md
 
 It defines:
 
-- grammar authority;
-- composition;
-- frontend boundaries;
-- AST ownership;
-- semantic boundaries;
-- IR ownership;
-- portability;
-- resource/capability separation;
-- compatibility;
-- validation;
-- safety;
-- POCO-REAF.
+grammar authority;
 
-2.2 Quantum specification
+parser composition;
 
-The normative quantum specification is:
+AST boundaries;
+
+semantic boundaries;
+
+IR ownership;
+
+resource abstraction;
+
+capability abstraction;
+
+effect abstraction;
+
+contracts;
+
+policies;
+
+provenance;
+
+dialects;
+
+compatibility;
+
+portability;
+
+scalability;
+
+safety;
+
+POCO-REAF.
+
+
+No quantum grammar file may contradict it.
+
+
+---
+
+3.2 Quantum specification
+
+The normative quantum-language semantics are defined by:
 
 grammar/spec/quantum.md
 
-It defines the language-level semantic contract for quantum constructs.
+Quantum grammar files implement the syntax described by that specification.
 
-2.3 General syntax
+The specification remains the semantic authority.
 
-General syntax remains governed by:
+
+---
+
+3.3 General language specification
+
+Quantum grammar must reuse the repository-wide definitions for:
 
 grammar/spec/syntax.md
 grammar/lexer/
 grammar/core/
-grammar/expressions/
 grammar/types/
-grammar/declarations/
+grammar/expressions/
 grammar/statements/
+grammar/declarations/
+grammar/functions/
+grammar/modules/
 
-Quantum grammar files must reuse these contracts rather than redefining them.
+Quantum files must not independently redefine common language concepts.
 
-2.4 Composition root
 
-The repository-wide source grammar remains:
+---
+
+3.4 Complete-language composition
+
+The complete Zamani grammar is composed by:
 
 grammar/Zamani.g4
 
-"Zamani.g4" owns complete-language composition.
+The quantum subsystem is composed by:
 
-"grammar/quantum/quantum.g4" owns only quantum-domain composition.
+grammar/quantum/quantum.g4
 
-2.5 Parser implementation
+Zamani.g4 remains the complete-language composition root.
 
-The generated/canonical parser infrastructure must remain aligned with the repository's canonical ANTLR parser structure.
+quantum.g4 remains the quantum-domain composition root.
 
-Quantum grammar files must not become an independent parser architecture.
+Neither root should duplicate leaf grammar rules.
 
-2.6 AST
 
-The frontend AST is owned outside this directory:
+---
 
-src/frontend/ast/
+4. AST ownership
 
-Quantum grammar files describe syntax that is lowered into the domain-neutral AST.
+The quantum grammar does not own the frontend AST.
 
-2.7 Canonical quantum IR
+The canonical frontend AST remains outside this directory.
+
+The grammar produces parser structures that are converted into the repository's domain-neutral AST.
+
+The AST must remain independent of:
+
+LLVM;
+
+QIR;
+
+MLIR;
+
+vendor instruction sets;
+
+physical qubit maps;
+
+QPU topology;
+
+calibration;
+
+routing decisions;
+
+scheduling decisions;
+
+pulse implementations;
+
+QEC implementation details.
+
+
+Quantum syntax may identify quantum intent.
+
+It must not turn the frontend AST into a physical backend representation.
+
+
+---
+
+5. Canonical quantum IR
 
 The canonical quantum semantic/IR boundary is:
 
@@ -170,107 +290,169 @@ quantum::ir
 
 There must be exactly one canonical quantum IR.
 
-This directory must never introduce another competing:
+This directory must not introduce competing structures such as:
 
 QuantumIR
 QuantumOperationIR
 QuantumGateIR
 QuantumCircuitIR
 QuantumHardwareIR
+QuantumBackendIR
 
-or equivalent semantic IR.
+when those structures would duplicate the canonical semantic/IR responsibility.
 
----
+The intended flow is:
 
-3. Core architectural principle
+quantum grammar
+    |
+    v
+domain-neutral AST
+    |
+    v
+quantum semantic model
+    |
+    v
+quantum::ir
 
-The fundamental rule is:
+After that boundary, optimization and target realization belong to downstream compiler layers.
 
-«Quantum grammar expresses portable computational meaning and intent; downstream compilation determines realization.»
-
-The grammar describes:
-
-- what operation is requested;
-- what quantum resources are referenced;
-- what classical information participates;
-- what measurements occur;
-- what capabilities are required;
-- what resource requirements exist;
-- what constraints/preferences/hints are expressed;
-- what logical quantum structure is intended.
-
-The grammar does not decide:
-
-- which QPU is selected;
-- which simulator is selected;
-- which physical qubits are used unless explicitly requested;
-- how logical qubits map to physical qubits;
-- how operations are decomposed;
-- how circuits are optimized;
-- how routing occurs;
-- how schedules are generated;
-- how pulses are synthesized;
-- how QEC is implemented;
-- how noise is simulated;
-- how a provider is contacted;
-- how runtime resources are allocated.
 
 ---
 
-4. POCO-REAF
+6. Core principle
 
-Zamani quantum syntax is designed around:
+The fundamental quantum grammar rule is:
 
-Program
-   Once
-     │
-     ▼
-Compile
-   Once
-     │
-     ▼
-Semantic meaning
-     │
-     ├── tiny quantum system
-     ├── CPU-assisted quantum system
-     ├── GPU-assisted simulator
-     ├── FPGA accelerator
-     ├── ASIC accelerator
-     ├── QPU
-     ├── heterogeneous system
-     ├── distributed quantum/classical system
-     └── future architecture
+> Quantum syntax expresses portable computational meaning and intent. Downstream compilation determines realization.
 
-The same source program must not require semantic rewriting merely because the target has a different:
 
-- qubit count;
-- topology;
-- memory capacity;
-- accelerator;
-- instruction set;
-- vendor;
-- calibration;
-- physical implementation;
-- execution environment.
 
-This is the quantum component of:
+The grammar may express:
 
-Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
+quantum operations;
+
+quantum operands;
+
+parameters;
+
+measurements;
+
+states;
+
+circuits;
+
+dynamic control;
+
+classical feed-forward;
+
+channels;
+
+noise intent;
+
+observables;
+
+logical operations;
+
+error-correction intent;
+
+resource requirements;
+
+capability requirements;
+
+constraints;
+
+preferences;
+
+hints;
+
+policies;
+
+provenance;
+
+adaptive execution;
+
+quantum/classical composition.
+
+
+The grammar must not decide:
+
+which QPU is selected;
+
+which simulator is selected;
+
+which physical qubits are selected;
+
+how routing occurs;
+
+how mapping occurs;
+
+how an operation is decomposed;
+
+which native instruction is selected;
+
+how pulses are generated;
+
+how calibration is performed;
+
+how QEC is physically implemented;
+
+which provider is contacted;
+
+how runtime resources are allocated.
+
+
 
 ---
 
-5. Unbounded-by-grammar scalability
+7. POCO-REAF requirement
 
-The grammar imposes no artificial universal hardware ceilings.
+Quantum source programs must be target-independent wherever the programmer has expressed target-independent intent.
 
-The quantum grammar must not define language limits such as:
+The same semantic program should be able to participate in compilation for:
+
+tiny systems
+CPU systems
+multicore systems
+GPU systems
+FPGA systems
+ASIC systems
+accelerators
+quantum simulators
+QPU systems
+heterogeneous systems
+HPC systems
+clusters
+distributed systems
+cloud systems
+future computational architectures
+
+The source program must not need semantic rewriting merely because a target changes.
+
+A target may instead report:
+
+capability unavailable
+resource insufficient
+constraint unsatisfied
+policy conflict
+unsupported realization
+
+rather than silently changing program meaning.
+
+
+---
+
+8. No artificial grammar limits
+
+The quantum grammar must impose no universal machine-size limits.
+
+It must not define constants such as:
 
 MAX_QUBITS
-MAX_QUBIT_REGISTERS
 MAX_LOGICAL_QUBITS
 MAX_PHYSICAL_QUBITS
-MAX_CONTROLS
+MAX_REGISTERS
 MAX_TARGETS
+MAX_CONTROLS
 MAX_PARAMETERS
 MAX_OPERATIONS
 MAX_GATES
@@ -279,125 +461,125 @@ MAX_CIRCUIT_WIDTH
 MAX_MEASUREMENTS
 MAX_SHOTS
 MAX_CHANNELS
-MAX_TIMELINES
 MAX_QPUS
 MAX_DEVICES
 MAX_MEMORY
 
 or equivalent hidden limits.
 
-The following must never become grammar-level limits:
+The same rule applies to numeric literals embedded in grammar rules.
+
+For example:
 
 64 qubits
-128 qubits
-256 qubits
-1024 qubits
+128 targets
+1024 operations
 32 controls
-32 parameters
-64 targets
 
-A number appearing in source code is allowed when it is program data or semantic intent.
+must never become parser-level ceilings.
 
-For example:
+A number appearing in source is program data or semantic intent.
 
-let n = 1024;
-allocate qubits[n];
+It must not become a language capacity limit.
 
-is fundamentally different from:
-
-the grammar supports at most 1024 qubits
-
-The former is source semantics.
-
-The latter is an artificial language limitation and is prohibited.
 
 ---
 
-6. Physical reality versus grammar scalability
+9. Physical limits are not grammar limits
 
-"Unbounded quantum grammar" does not mean physically infinite execution.
+The language can be open-ended while real execution remains finite.
 
-Actual execution remains constrained by available:
+Actual execution can be constrained by:
 
-- memory;
-- compiler resources;
-- simulator resources;
-- QPU resources;
-- accelerator resources;
-- runtime resources;
-- provider resources;
-- physical hardware;
-- topology;
-- timing;
-- error rates;
-- energy;
-- thermal conditions;
-- user-defined constraints.
+available memory;
 
-Those limitations are discovered and evaluated downstream.
+available compute;
 
-Therefore:
+available QPU resources;
 
-grammar capacity
+simulator capacity;
 
-must never be confused with:
+accelerator capacity;
 
-target capacity
+topology;
 
-or:
+timing;
 
-runtime capacity
+energy;
+
+thermal conditions;
+
+reliability;
+
+calibration;
+
+provider constraints;
+
+user policies;
+
+compiler resources.
+
+
+Those conditions belong to semantic analysis, resource negotiation, compilation, scheduling, deployment, or runtime.
+
+They do not belong in universal grammar cardinality rules.
+
 
 ---
 
-7. Requirement / constraint / preference / hint / capability separation
+10. Requirement, capability, resource and target separation
 
-Quantum grammar must preserve the distinction between:
+The quantum subsystem must preserve these distinctions:
 
-Concept| Meaning
-Requirement| Must be satisfied
-Constraint| Condition that must be respected
-Preference| Desired property that may be traded off
-Hint| Advisory information
-Capability| Property supplied by an environment
-Resource| Abstract quantity or facility
-Target| Realization destination
-Placement| Explicit realization intent
-Mapping| Physical/logical realization information
+Concept	Meaning
 
-For example:
+Requirement	Must be satisfied
+Constraint	Must not be violated
+Preference	Desired but potentially negotiable
+Hint	Advisory information
+Capability	Property supplied by an environment
+Resource	Abstract quantity or facility
+Target	Possible realization destination
+Placement	Explicit realization intent
+Mapping	Logical-to-real realization information
+Policy	Rule controlling permitted behavior
 
-requires qubits >= n
+
+Examples:
+
+requires qubits >= required_qubits;
 
 is a requirement.
 
-requires capability("quantum.mid_circuit_measurement")
+requires capability("quantum.mid_circuit_measurement");
 
 is a capability requirement.
 
-prefer capability("quantum.dynamic_control")
+prefer capability("quantum.dynamic_control");
 
 is a preference.
 
-hint resource("quantum_memory")
+hint resource("quantum_memory");
 
 is advisory.
 
-None of those automatically means:
+None of these means:
 
-use QPU 0
+use device 0
+use QPU 1
 use physical qubit 17
 use topology X
 
+unless such realization intent is explicitly expressed by a separate, authorized construct.
+
+
 ---
 
-8. Open-world quantum operation model
-
-This is a non-negotiable architectural rule.
+11. Open-world quantum operations
 
 Quantum operations are open-ended.
 
-The grammar must not define a permanently closed list such as:
+The grammar must not encode a permanently closed catalogue such as:
 
 H
 X
@@ -414,37 +596,42 @@ RZ
 
 as the complete language of quantum operations.
 
-Those names may be recognized by semantic libraries, standard-operation registries, dialects, or target backends.
+These names may be recognized by:
 
-They must not define the grammar's fundamental operation model.
+standard libraries;
 
-The grammar must support the same structural representation for:
+operation registries;
 
-apply H(q);
+semantic libraries;
 
-apply X(q);
+dialects;
 
-apply CNOT(q0, q1);
+target descriptions;
 
-apply RX(theta)(q);
+interoperability layers.
 
-apply custom_gate(q);
 
-apply library::operation(q);
+They are not the fundamental grammar model.
 
-apply vendor::operation(parameter)(q0, q1);
+The grammar must support operation identities such as:
 
-apply future::operation(arguments)(targets);
+H
+custom_operation
+quantum::operation
+library::operation
+vendor::operation
+future::operation
 
-The operation identity is semantic data.
+without requiring a grammar modification for every new operation.
+
 
 ---
 
-9. Generic operation model
+12. Canonical quantum operation model
 
-The canonical conceptual operation structure is:
+The conceptual operation model is:
 
-QuantumOperation {
+QuantumOperation
     name
     namespace
     operands
@@ -455,41 +642,40 @@ QuantumOperation {
     effects
     capabilities
     source
-}
 
-The exact Rust AST/IR representation is owned downstream.
+The concrete Rust representation belongs downstream.
 
-The grammar must provide enough source structure to populate this semantic model.
+The grammar only provides the syntactic structure required to construct that semantic representation.
 
-It must not turn the model into a fixed gate enum.
 
 ---
 
-10. Canonical operation structure
+13. Operation syntax
 
-The preferred conceptual syntax is:
+The canonical conceptual shape is:
 
 quantumOperation
-    = operationSpecifier
-      operationParameters?
-      operationTargets
+    operationSpecifier
+    operationParameters?
+    operationTargets
 
-The grammar must support:
+The operation subsystem must support:
 
-operationSpecifier
+operation identity
 operation parameters
 operation targets
 operation modifiers
-operation controls
 operation attributes
+operation controls
 
-without requiring every future quantum operation to be added to the grammar.
+without requiring future operations to be added to the grammar.
+
 
 ---
 
-11. Operation namespaces
+14. Operation namespaces
 
-Qualified operation names must be supported.
+Operation names must reuse the repository's canonical qualified-name system.
 
 Examples:
 
@@ -497,12 +683,11 @@ library::operation
 vendor::operation
 domain::operation
 future::operation
+library::quantum::operation
 
-Namespace depth should be determined by the common qualified-name grammar.
+Quantum grammar must not create an independent namespace system.
 
-Quantum grammar must not invent a separate namespace system.
-
-It must reuse:
+Common ownership remains in:
 
 grammar/core/
 grammar/modules/
@@ -510,88 +695,108 @@ grammar/expressions/
 
 where applicable.
 
----
-
-12. Gate syntax versus gate semantics
-
-The existing "gates.g4" must not become a fixed gate catalogue.
-
-Its role is limited to source-level gate declaration/name-level syntax.
-
-The following are semantic concerns, not grammar concerns:
-
-- unitary validation;
-- matrix construction;
-- decomposition;
-- native-gate determination;
-- synthesis;
-- equivalence;
-- optimization;
-- hardware support.
-
-A standard operation such as "H" may be known to the semantic operation registry without "H" becoming the only possible operation.
 
 ---
 
-13. Existing quantum directory and ownership
+15. Gate semantics versus grammar
 
-The current repository contains the following quantum grammar surfaces.
+gates.g4 must not become a closed gate catalogue.
 
-They must not all become independent authorities.
+Gate syntax may describe:
 
-The production ownership model is:
+operation declarations;
 
-Existing file| Canonical responsibility
-"quantum.g4"| Quantum composition root
-"operations.g4"| Generic quantum operation invocation
-"gates.g4"| Gate declaration/name-level syntax
-"parameterized-operations.g4"| Parameterized-operation syntax
-"controlled-operations.g4"| Controlled-operation syntax
-"controls.g4"| General control/modifier syntax
-"adjoints.g4"| Adjoint/inverse operation syntax
-"qubits.g4"| Qubit source syntax
-"registers.g4"| Quantum register syntax
-"logical-qubits.g4"| Logical-qubit intent
-"physical-qubits.g4"| Explicit physical-resource intent
-"types.g4"| Canonical quantum type syntax
-"quantum-types.g4"| Legacy/overlapping quantum-type surface; must not remain a second owner
-"states.g4"| State syntax
-"quantum-states.g4"| Legacy/overlapping state surface; must not remain a second owner
-"measurement.g4"| Measurement syntax
-"reset.g4"| Reset syntax
-"barriers.g4"| Barrier syntax
-"observables.g4"| Observable syntax
-"channels.g4"| Channel syntax
-"noise.g4"| Source-level noise intent
-"error-correction.g4"| QEC intent
-"logical-operations.g4"| Logical operation syntax
-"dynamic-circuits.g4"| Dynamic-circuit structure
-"dynamic-control.g4"| Dynamic control semantics at syntax level
-"mid-circuit-control.g4"| Measurement-dependent control syntax
-"quantum-classical.g4"| Quantum/classical boundary
-"classical-feedforward.g4"| Classical feed-forward syntax
-"quantum-capabilities.g4"| Quantum capability requirements
-"quantum-resources.g4"| Quantum resource contracts
-"resource-requirements.g4"| Resource-requirement compatibility/overlap surface; must not duplicate ownership
-"circuits.g4"| Circuit structure
-"kernels.g4"| Quantum kernel structure
-"parameters.g4"| Quantum parameter syntax
-"pulse-intent.g4"| Abstract pulse-level intent
-"quantum-dialects.g4"| Quantum dialect extension
-"interoperability.md"| Quantum interoperability contract
-"README.md"| This architecture/integration contract
+operation names;
 
-The existence of a file does not mean it automatically owns a production rule.
+gate parameters;
+
+gate bodies;
+
+gate-level modifiers.
+
+
+Semantic analysis determines:
+
+whether an operation exists;
+
+whether it is unitary;
+
+whether it has an adjoint;
+
+whether it has an inverse;
+
+whether it is decomposable;
+
+whether it is equivalent to another operation;
+
+whether a target supports it.
+
+
+These are not parser responsibilities.
+
 
 ---
 
-14. Duplicate-file resolution policy
+16. Quantum directory ownership model
 
-The current directory contains overlapping file names and responsibilities.
+The quantum directory must have one owner for each semantic concept.
 
-This must be resolved through single ownership, not parallel composition.
+The expected ownership model is:
 
-The following pairs are especially important:
+File	Responsibility
+
+quantum.g4	Quantum composition root
+operations.g4	Generic operation invocation
+gates.g4	Gate declaration/name syntax
+parameterized-operations.g4	Parameterized-operation compatibility/integration
+controlled-operations.g4	Extended controlled-operation syntax
+controls.g4	Control/modifier syntax
+adjoints.g4	Adjoint/inverse syntax
+qubits.g4	Qubit source syntax
+registers.g4	Quantum-register syntax
+logical-qubits.g4	Logical-qubit intent
+physical-qubits.g4	Explicit physical-resource syntax
+types.g4	Canonical quantum type syntax
+quantum-types.g4	Compatibility/legacy surface if overlapping
+states.g4	Canonical state syntax
+quantum-states.g4	Compatibility/legacy surface if overlapping
+measurement.g4	Measurement syntax
+reset.g4	Reset syntax
+barriers.g4	Barrier syntax
+observables.g4	Observable syntax
+channels.g4	Quantum-channel syntax
+noise.g4	Noise intent
+error-correction.g4	QEC intent
+logical-operations.g4	Logical-operation syntax
+dynamic-circuits.g4	Dynamic-circuit structure
+dynamic-control.g4	Dynamic control integration
+mid-circuit-control.g4	Measurement-dependent control
+quantum-classical.g4	Quantum/classical boundary
+classical-feedforward.g4	Classical feed-forward
+quantum-capabilities.g4	Quantum capability requirements
+quantum-resources.g4	Quantum resource contracts
+resource-requirements.g4	Resource integration/compatibility
+circuits.g4	Circuit structure
+kernels.g4	Quantum kernel structure
+parameters.g4	Quantum parameter syntax
+pulse-intent.g4	Abstract pulse-level intent
+quantum-dialects.g4	Quantum dialect extension
+quantum-learning.g4	Quantum-learning integration
+quantum-reasoning.g4	Quantum reasoning integration
+adaptive-quantum-execution.g4	Adaptive quantum execution composition
+README.md	Quantum subsystem architecture
+
+
+The exact final file set may grow as capabilities expand.
+
+Any new file must declare its ownership before it is added.
+
+
+---
+
+17. One concept, one canonical owner
+
+The following overlaps require explicit ownership resolution:
 
 types.g4
 quantum-types.g4
@@ -612,216 +817,207 @@ classical-feedforward.g4
 quantum-resources.g4
 resource-requirements.g4
 
-The production rule is:
-
-«One semantic concept → one canonical grammar owner.»
-
-Existing files must not be unnecessarily renamed.
-
-Instead, each overlapping file must be classified as exactly one of:
+Every overlapping file must be classified as exactly one of:
 
 1. canonical implementation;
-2. composition wrapper;
-3. compatibility grammar;
-4. historical/reference grammar;
-5. migration surface;
-6. obsolete and removable after dependency verification.
 
-Two files must never silently contribute the same production to the canonical parser.
+
+2. composition wrapper;
+
+
+3. compatibility grammar;
+
+
+4. historical/reference grammar;
+
+
+5. migration surface;
+
+
+6. removable obsolete surface.
+
+
+
+Two files must never silently define the same canonical production.
+
 
 ---
 
-15. "quantum.g4"
+18. quantum.g4
 
-"quantum.g4" is the single quantum-domain composition grammar.
+quantum.g4 is the quantum composition root.
 
 It owns:
 
-- quantum-domain entry;
-- quantum declaration dispatch;
-- quantum statement dispatch;
-- quantum expression dispatch;
-- quantum type dispatch;
-- quantum-domain composition;
-- cross-quantum-subdomain composition;
-- extension dispatch.
+quantum-domain dispatch;
+
+quantum declaration dispatch;
+
+quantum statement dispatch;
+
+quantum expression dispatch;
+
+quantum type dispatch;
+
+quantum subsystem composition;
+
+quantum dialect dispatch.
+
 
 It does not own detailed leaf syntax.
 
-It must not duplicate:
+It must compose canonical leaf grammars.
 
-- operation rules;
-- measurement rules;
-- state rules;
-- qubit rules;
-- register rules;
-- QEC rules;
-- resource rules;
-- capability rules;
-- classical rules.
-
-The root grammar must compose canonical leaf owners.
 
 ---
 
-16. Composition-root invariant
+19. Composition hierarchy
 
-The composition hierarchy must remain:
+The intended hierarchy is:
 
 grammar/Zamani.g4
-        │
-        ▼
-    Quantum
-        │
-        ├── QuantumOperations
-        ├── QuantumMeasurement
-        ├── QuantumReset
-        ├── QuantumTypes
-        ├── QuantumStates
-        ├── QuantumCapabilities
-        ├── QuantumDialects
-        ├── QuantumErrorCorrection
-        ├── QuantumDynamicControl
-        ├── QuantumClassical
-        ├── QuantumClassicalFeedForward
-        ├── QuantumObservables
-        ├── QuantumResourceRequirements
-        ├── LogicalOperations
-        ├── QuantumCircuits
-        ├── QuantumRegisters
-        ├── QuantumQubits
-        ├── QuantumParameters
-        ├── QuantumControls
-        └── QuantumAdjoints
+        |
+        v
+grammar/quantum/quantum.g4
+        |
+        +-- operations
+        +-- parameters
+        +-- qubits
+        +-- registers
+        +-- types
+        +-- states
+        +-- measurement
+        +-- reset
+        +-- circuits
+        +-- kernels
+        +-- controls
+        +-- adjoints
+        +-- observables
+        +-- channels
+        +-- noise
+        +-- dynamic control
+        +-- classical feed-forward
+        +-- quantum/classical integration
+        +-- resources
+        +-- capabilities
+        +-- resilience
+        +-- QEC
+        +-- learning
+        +-- reasoning
+        +-- adaptive execution
+        +-- dialects
 
-The exact generated ANTLR import list must contain each canonical grammar exactly once.
+The exact import graph must contain each canonical grammar exactly once.
 
-In particular, the current duplicate "QuantumClassical" import must be removed.
-
----
-
-17. Canonical lexer authority
-
-Quantum grammars must use the repository's canonical lexical vocabulary.
-
-The quantum subsystem must not introduce its own independent lexer.
-
-The canonical production lexer must be whatever lexer is designated by the repository's current architecture and "grammar/DESIGN.md".
-
-Where the ANTLR parser grammars use:
-
-tokenVocab = ZamaniLexer;
-
-that vocabulary must be used consistently throughout the production composition.
-
-Historical references to:
-
-ZamaniTokens
-
-must not create a second lexical authority.
-
-No compatibility alias should conceal an unresolved production-vocabulary conflict.
 
 ---
 
-18. Quantum keywords
+20. Canonical lexer
 
-Quantum operations must not require every operation name to become a lexer keyword.
+Quantum grammars must use the repository's canonical lexer.
 
-For example:
+No quantum file may introduce an independent lexer.
 
-H
-X
-CNOT
-RX
-custom_gate
-vendor::operation
-future::operation
+Quantum operation names should normally remain identifiers rather than lexer keywords.
 
-should be representable as operation designators without continually expanding the lexer keyword table.
+The lexer should reserve a word only when the word has stable language-level grammatical meaning.
 
-Keywords should exist only when they have stable language-level grammatical meaning.
+For example, future operation names must not require new lexer keywords.
+
 
 ---
 
-19. Identifiers and qualified names
+21. Identifier reuse
 
-Quantum grammar must reuse the canonical identifier and qualified-name syntax.
-
-Do not redefine:
+Quantum grammars must reuse the canonical:
 
 identifier
 qualifiedName
 namespace
 path
+generic arguments
+expression
+literal
+attribute
+annotation
 
-inside each quantum file.
+rules.
 
-Use the common grammar infrastructure.
+Do not redefine them independently inside quantum files.
 
-This ensures:
-
-library::operation
-vendor::operation
-custom::future::operation
-
-behave consistently throughout Zamani.
 
 ---
 
-20. Qubit ownership
+22. Qubit ownership
 
-"qubits.g4" owns source syntax for:
+qubits.g4 owns source syntax for:
 
-- qubit declarations;
-- qubit references;
-- qubit collections;
-- symbolic qubit references;
-- aliases;
-- indexed access;
-- slices/ranges where supported.
+qubit declarations;
+
+qubit references;
+
+qubit collections;
+
+symbolic references;
+
+indexed access;
+
+aliases;
+
+ranges;
+
+slices where supported.
+
 
 It does not own:
 
-- physical allocation;
-- topology;
-- routing;
-- mapping;
-- calibration;
-- QPU discovery.
+allocation;
+
+routing;
+
+placement;
+
+physical mapping;
+
+coupling maps;
+
+calibration;
+
+QPU discovery.
+
+
 
 ---
 
-21. Register ownership
+23. Register ownership
 
-"registers.g4" owns:
+registers.g4 owns:
 
-- quantum-register declarations;
-- register references;
-- register indexing;
-- register slicing;
-- register extents;
-- symbolic register dimensions.
+quantum-register declarations;
 
-Register cardinality is not a grammar limit.
+register references;
 
-For example:
+indexing;
 
-Qubit[n]
+slicing;
 
-is a semantic/program-level type or extent.
+symbolic extents;
 
-It must not mean:
+register expressions.
 
-n <= compiler_defined_constant
+
+Register cardinality is semantic/program data.
+
+The grammar must never define a maximum register size.
+
 
 ---
 
-22. Quantum type ownership
+24. Quantum types
 
-"types.g4" is the canonical quantum type syntax owner.
+types.g4 is the canonical owner of quantum type syntax.
 
-Quantum types may represent concepts such as:
+The semantic system may represent concepts including:
 
 Qubit
 Qubit[n]
@@ -833,831 +1029,552 @@ MeasurementResult
 Observable
 QuantumChannel
 
-The exact semantic type model belongs to semantic analysis.
+These are semantic types.
 
-Types must remain independent of physical hardware capacity.
+They do not imply hardware capacities.
+
 
 ---
 
-23. State syntax
+25. Quantum states
 
-The state grammar may represent:
+State syntax may represent:
 
-- basis states;
-- named states;
-- state constructors;
-- state references;
-- state preparation;
-- symbolic state expressions.
+basis states;
+
+named states;
+
+symbolic states;
+
+state constructors;
+
+state references;
+
+preparation intent.
+
 
 Examples may include:
 
-|0⟩
-|1⟩
-|+⟩
-|-⟩
-|ψ⟩
+|0>
+|1>
+|+>
+|->
+|psi>
 
-where supported by the canonical lexical and syntax contracts.
+where permitted by the lexical specification.
 
-The grammar does not allocate state vectors.
+The grammar does not allocate amplitudes.
 
-It does not simulate amplitudes.
+The grammar does not simulate state vectors.
 
-It does not impose a finite simulator dimension.
+The grammar does not impose simulator dimensions.
+
 
 ---
 
-24. Quantum literals
+26. Quantum literals
 
-Quantum literals are lexical/source constructs.
+Quantum literals belong to the lexical and syntax contracts.
 
-The lexer and grammar must support the repository's specified forms without making the set artificially closed.
+Semantic analysis determines:
+
+dimensional validity;
+
+normalization;
+
+type compatibility;
+
+state validity;
+
+preparation semantics.
+
+
+No finite catalogue of state representations should become a universal language ceiling.
+
+
+---
+
+27. Measurement
+
+measurement.g4 owns source measurement syntax.
+
+It must support the semantic forms required for:
+
+measurement targets;
+
+result bindings;
+
+measurement bases;
+
+destinations;
+
+repeated measurement intent;
+
+mid-circuit measurement;
+
+final measurement.
+
+
+It must not define a maximum measurement count.
+
+
+---
+
+28. Measurement/classical boundary
+
+Measurement results enter the ordinary Zamani semantic value/type system.
+
+The conceptual flow is:
+
+quantum measurement
+        |
+        v
+measurement result
+        |
+        v
+classical semantic value
+        |
+        v
+classical expression/control
+
+The quantum grammar must not create a second classical expression language.
+
+
+---
+
+29. Dynamic circuits
+
+Dynamic circuits permit later computation to depend on information produced during execution.
+
+Conceptually:
+
+measure q -> result
+
+if result {
+    apply operation(...);
+}
+
+The exact surface syntax must use the repository's canonical conditional/control grammar.
+
+Whether a target supports dynamic execution is a capability issue.
+
+The parser must not reject valid source merely because a particular backend lacks the capability.
+
+
+---
+
+30. Classical feed-forward
+
+Classical feed-forward belongs at the quantum/classical integration boundary.
+
+The architecture is:
+
+measurement
+    |
+    v
+classical result
+    |
+    v
+classical computation
+    |
+    v
+control decision
+    |
+    v
+quantum operation
+
+This must integrate with existing:
+
+grammar/classical/
+grammar/expressions/
+grammar/statements/
+grammar/quantum/
+
+without creating a duplicate expression system.
+
+
+---
+
+31. Quantum/classical hybrid computation
+
+Quantum syntax must be composable with ordinary Zamani computation.
+
+Supported semantic relationships include:
+
+classical -> quantum
+quantum -> classical
+classical control -> quantum
+quantum measurement -> classical
+classical optimization -> quantum kernel
+AI model -> quantum operation
+quantum result -> AI model
+
+The semantic boundary belongs to the hybrid subsystem.
+
+The quantum grammar only supplies the quantum-side syntax.
+
+
+---
+
+32. Quantum learning
+
+Quantum learning must integrate with the universal learning model.
+
+The intended architecture is:
+
+learning semantics
+       |
+       +---- classical model
+       |
+       +---- quantum model
+       |
+       +---- hybrid model
+       |
+       v
+canonical semantic representation
+       |
+       v
+quantum::ir where quantum computation is present
+
+The grammar must not enumerate every machine-learning algorithm.
+
+Algorithms belong to libraries, semantic registries, dialects, or capabilities.
+
+
+---
+
+33. Quantum reasoning
+
+Reasoning constructs must use the repository-wide reasoning and knowledge abstractions.
+
+Quantum reasoning may consume:
+
+measurement evidence;
+
+quantum state metadata;
+
+experimental data;
+
+classical facts;
+
+probabilistic information;
+
+provenance;
+
+contracts.
+
+
+The quantum subsystem must not create an independent reasoning language.
+
+
+---
+
+34. Uncertainty and probability
+
+Quantum computation naturally interacts with uncertainty.
+
+The grammar must integrate with the common type/semantic model for:
+
+probability
+distribution
+confidence
+uncertainty
+observation
+belief
+
+The grammar must not hard-code one probability representation or backend.
+
+
+---
+
+35. Observables
+
+observables.g4 owns source syntax for observable intent.
+
+Semantic analysis determines:
+
+observable validity;
+
+type;
+
+compatibility;
+
+measurement strategy;
+
+decomposition;
+
+execution strategy.
+
+
+The grammar does not select a physical measurement implementation.
+
+
+---
+
+36. Channels
+
+channels.g4 owns source syntax for channel intent.
 
 The semantic layer determines:
 
-- state validity;
-- type compatibility;
-- dimensionality;
-- normalization;
-- preparation semantics.
+channel validity;
+
+dimensional compatibility;
+
+composability;
+
+representation;
+
+realization.
+
+
+The grammar must not enumerate every possible future channel.
+
 
 ---
 
-25. Measurement
+37. Noise
 
-"measurement.g4" owns source measurement syntax.
+noise.g4 expresses noise intent.
 
-Measurement syntax must support the semantic model for:
+It must not become a provider-specific noise instruction set.
 
-- measurement targets;
-- result bindings;
-- measurement bases where supported;
-- measurement destinations;
-- repeated measurement semantics where specified;
-- mid-circuit measurement;
-- final measurement.
+Noise models should be extensible through semantic metadata, libraries, dialects, or capability descriptions.
 
-It must not impose a maximum number of measurements.
-
-It must not encode provider-specific measurement instructions.
 
 ---
 
-26. Measurement results
+38. Error correction
 
-Measurement results must integrate with the common Zamani type/value system.
-
-The grammar must not create a separate classical language for measurement values.
-
-The semantic boundary is:
-
-quantum measurement
-       │
-       ▼
-measurement result
-       │
-       ▼
-canonical classical semantic model
-
-This is essential for dynamic circuits and classical feed-forward.
-
----
-
-27. Dynamic circuits
-
-"dynamic-circuits.g4" owns circuit structures whose later behavior can depend on information produced during execution.
-
-The grammar must permit semantic constructs such as:
-
-measure
-if result { ... }
-apply ...
-
-or the canonical Zamani equivalent.
-
-Whether a target supports dynamic execution is not a parsing question.
-
-It is a capability question.
-
-Therefore:
-
-valid source
-    ↓
-semantic capability analysis
-    ↓
-target supports capability?
-    ├── yes → lower
-    └── no  → diagnostic/adaptation
-
----
-
-28. Mid-circuit control
-
-"mid-circuit-control.g4" owns syntax for control derived from runtime quantum/classical information.
-
-It integrates with:
-
-measurement.g4
-classical-feedforward.g4
-dynamic-control.g4
-dynamic-circuits.g4
-expressions/
-statements/
-
-It must not implement runtime branching.
-
----
-
-29. Classical feed-forward
-
-"classical-feedforward.g4" owns source constructs in which classical information produced by quantum execution influences later computation.
-
-It must reuse the canonical classical expression and statement grammars.
-
-It must not create a second conditional-expression system.
-
----
-
-30. Quantum/classical boundary
-
-"quantum-classical.g4" defines the syntax boundary between quantum and classical computation.
-
-The boundary must remain explicit enough for semantic analysis to determine:
-
-- value domains;
-- ownership;
-- measurement flow;
-- mutability;
-- effects;
-- timing;
-- synchronization;
-- runtime availability.
-
-Quantum and classical are parts of one language, not two disconnected languages.
-
----
-
-31. Parameterized operations
-
-"parameterized-operations.g4" owns syntax for operation parameters.
-
-Parameters may be:
-
-- literals;
-- identifiers;
-- expressions;
-- symbolic values;
-- compile-time values;
-- runtime values;
-- generic parameters.
-
-The grammar must not impose a fixed parameter count.
-
-For example:
-
-apply rotation(theta)(q);
-
-is structurally preferable to requiring every possible rotation operation to have its own grammar rule.
-
----
-
-32. Controls
-
-"controls.g4" owns reusable control/modifier structure.
-
-It must support arbitrary syntactically valid control composition without a fixed maximum.
-
-For example, the language must not establish:
-
-maximum two controls
-
-as a grammar limitation.
-
-Whether a target supports an operation with a given control structure is determined downstream.
-
----
-
-33. Controlled operations
-
-"controlled-operations.g4" owns controlled-operation syntax.
-
-It must compose with:
-
-operations.g4
-controls.g4
-parameters.g4
-expressions/
-
-It must not create a separate operation representation.
-
-The semantic operation remains one generic operation with modifiers/controls.
-
----
-
-34. Adjoints and inverses
-
-"adjoints.g4" owns syntax expressing adjoint/inverse intent.
-
-It must not perform algebraic transformation.
-
-For example:
-
-adjoint(operation)
-inverse(operation)
-
-is syntax/intent.
-
-Actual transformation belongs downstream.
-
----
-
-35. Circuit syntax
-
-"circuits.g4" owns circuit declarations and composition.
-
-A circuit is a source-level computational structure.
+error-correction.g4 expresses error-correction intent.
 
 It must not encode:
 
-- physical topology;
-- gate duration;
-- physical device;
-- calibration;
-- routing;
-- scheduling;
-- provider job identifiers.
+fixed code sizes;
+
+fixed physical-qubit counts;
+
+provider-specific decoder limits;
+
+routing algorithms;
+
+calibration;
+
+hardware topology.
+
+
+QEC implementation belongs downstream.
+
+The canonical quantum flow remains:
+
+source
+  |
+  v
+quantum::ir
+  |
+  v
+optimization
+  |
+  v
+decomposition
+  |
+  v
+routing
+  |
+  v
+scheduling
+  |
+  v
+QEC / resilience
+  |
+  v
+ZQN
+  |
+  v
+HAL
+
 
 ---
 
-36. Quantum kernels
+39. Logical versus physical resources
 
-"kernels.g4" owns source-level quantum kernel structure.
+Logical quantum intent and physical realization must remain separate.
 
-A kernel may represent a computation intended for specialized quantum execution.
-
-It must remain composable with:
-
-- functions;
-- types;
-- expressions;
-- classical computation;
-- resource requirements;
-- capabilities;
-- effects.
-
-A kernel must not hard-code a particular QPU.
-
----
-
-37. Logical qubits
-
-"logical-qubits.g4" owns logical-qubit source intent.
-
-Logical qubits are semantic abstractions.
-
-The grammar does not implement:
-
-- encoding;
-- decoding;
-- syndrome extraction;
-- stabilizer simulation;
-- logical-to-physical mapping.
-
-Those belong to QEC and downstream compilation.
-
----
-
-38. Physical qubits
-
-"physical-qubits.g4" exists for cases where the programmer intentionally expresses physical-resource intent.
-
-Physical references must remain clearly distinct from logical resources.
-
-For example:
+Logical constructs can express:
 
 logical qubit
+logical operation
+logical circuit
+logical resource requirement
 
-must not silently mean:
+Physical constructs may be used only when the programmer explicitly requests physical realization information.
 
-physical qubit 0
+Physical syntax must never silently contaminate ordinary target-independent source.
 
-Physical mapping belongs downstream unless explicitly required by source semantics.
-
----
-
-39. Error correction
-
-"error-correction.g4" owns source-level QEC intent.
-
-It may express concepts such as:
-
-- error-correction requirements;
-- fault-tolerance intent;
-- logical-resource requirements;
-- code-level semantic selection where specified;
-- correction-related attributes.
-
-It must not implement:
-
-- decoders;
-- syndrome algorithms;
-- recovery algorithms;
-- QEC scheduling;
-- physical error correction;
-- provider-specific QEC execution.
-
-QEC remains a downstream subsystem.
 
 ---
 
-40. QEC resource separation
+40. Physical qubits
 
-A source requirement such as:
+physical-qubits.g4 may represent explicit physical-resource intent.
 
-requires logical qubits >= n
+It must not make physical qubits mandatory for ordinary quantum programs.
 
-must remain distinct from:
+The normal POCO-REAF path is:
 
-physical qubits required by selected QEC realization
-
-The second quantity may be derived downstream.
-
-The grammar must not encode an assumed physical overhead.
-
-This is critical for scalability.
-
----
-
-41. Noise
-
-"noise.g4" owns source-level noise intent where Zamani exposes noise semantics.
-
-It must not become a provider calibration database.
-
-It must not hard-code:
-
-- device-specific error rates;
-- calibration values;
-- fixed noise channels for particular hardware;
-- simulator implementation;
-- random execution.
-
-Noise semantics belong to ZQN and related semantic/runtime systems.
-
----
-
-42. Channels
-
-"channels.g4" owns syntax for quantum-channel concepts.
-
-The grammar expresses channel structure/intent.
-
-It does not implement:
-
-- Kraus-operator execution;
-- density-matrix simulation;
-- stochastic sampling;
-- numerical linear algebra.
-
-Those belong downstream.
-
----
-
-43. Observables
-
-"observables.g4" owns observable syntax.
-
-The grammar expresses:
-
-what is observed
-
-not:
-
-how a backend estimates it
-
-Backend-specific strategies remain downstream.
-
----
-
-44. Barriers
-
-"barriers.g4" owns source-level barrier intent.
-
-A barrier is not automatically a physical pulse or hardware instruction.
-
-The semantic/compiler layers determine whether and how the barrier affects:
-
-- optimization;
-- scheduling;
-- routing;
-- execution.
-
----
-
-45. Reset
-
-"reset.g4" owns reset syntax.
-
-Reset semantics remain independent of:
-
-- hardware reset implementation;
-- pulse sequences;
-- calibration;
-- timing;
-- device-specific instructions.
-
----
-
-46. Pulse intent
-
-"pulse-intent.g4" provides a controlled source-level representation for applications that intentionally require pulse-level semantic information.
-
-It must remain intent, not a hardware calibration language.
-
-It must not embed:
-
-- device calibration tables;
-- physical channel IDs as universal syntax;
-- provider-specific pulse APIs;
-- hard-coded clock frequencies;
-- physical device addresses.
-
-The downstream target layer determines realization.
-
----
-
-47. Quantum resources
-
-"quantum-resources.g4" owns source-level quantum resource contracts.
-
-Examples include abstract requirements involving:
-
-qubits
-logical_qubits
-quantum_memory
-measurement_capacity
-coherence
-communication
-reliability
-latency
-energy
-
-Resource quantities must be expressions.
-
-No universal resource ceiling is permitted.
-
----
-
-48. Resource requirements
-
-"resource-requirements.g4" must not become a second resource grammar.
-
-Its final status must be established explicitly during consolidation:
-
-- canonical owner;
-- compatibility wrapper;
-- migration surface;
-- historical/reference;
-- removable.
-
-The canonical semantic resource contract must remain one system.
-
----
-
-49. Capability requirements
-
-"quantum-capabilities.g4" owns quantum-specific capability references and requirements.
-
-Examples:
-
-requires capability("quantum.measurement");
-
-requires capability("quantum.mid_circuit_measurement");
-
-requires capability("quantum.dynamic_control");
-
-requires capability("quantum.logical_qubits");
-
-Capability names remain open-ended semantic identifiers.
-
-The grammar must not enumerate every future hardware capability.
-
----
-
-50. Capability versus device
-
-A capability requirement:
-
-requires capability("quantum.dynamic_control");
-
-does not mean:
-
-use vendor/device X
-
-The compiler may satisfy the capability using any compatible target.
-
----
-
-51. Quantum dialects
-
-"quantum-dialects.g4" provides the controlled extension mechanism.
-
-A dialect may introduce:
-
-- syntax extensions;
-- semantic extensions;
-- operation namespaces;
-- attributes;
-- target-specific constructs.
-
-Every dialect must identify:
-
-- name;
-- namespace;
-- version;
-- ownership;
-- compatibility;
-- syntax extensions;
-- semantic mapping;
-- AST mapping;
-- IR mapping.
-
-Vendor syntax must never silently become universal core Zamani syntax.
-
----
-
-52. Dialect isolation
-
-A dialect must not:
-
-- replace the core operation model;
-- introduce another quantum IR;
-- create another type system;
-- create another resource system;
-- create another capability model;
-- bypass semantic validation.
-
-Dialect syntax must eventually converge into the canonical Zamani semantic model and "quantum::ir".
-
----
-
-53. Interoperability
-
-"interoperability.md" documents integration with external quantum representations.
-
-Examples may include:
-
-- OpenQASM;
-- QIR;
-- external circuit representations;
-- other quantum interchange formats.
-
-External formats are interoperability boundaries, not competing Zamani semantic authorities.
-
-The canonical flow remains:
-
-external representation
-       │
-       ▼
-adapter/import
-       │
-       ▼
-Zamani semantic model
-       │
-       ▼
-quantum::ir
-
-and in the other direction:
-
-quantum::ir
-       │
-       ▼
-export/lowering adapter
-       │
-       ▼
-external representation
-
----
-
-54. OpenQASM integration
-
-OpenQASM syntax must be handled through the repository's interoperability/frontend architecture rather than copied wholesale into the Zamani core grammar.
-
-The OpenQASM frontend must eventually integrate with:
-
-src/quantum/frontend/
-
-and its OpenQASM format support.
-
-Imported OpenQASM constructs must map into Zamani's semantic model.
-
-They must not create a second canonical quantum IR.
-
----
-
-55. Canonical AST boundary
-
-The grammar must lower conceptually as:
-
-ANTLR parse tree
-       │
-       ▼
-domain-neutral AST
-       │
-       ▼
-semantic quantum model
-       │
-       ▼
-quantum::ir
-
-The AST must preserve enough information for:
-
-- source locations;
-- identifiers;
-- operation names;
-- namespaces;
-- parameters;
-- operands;
-- targets;
-- controls;
-- modifiers;
-- results;
-- attributes;
-- capabilities;
-- resources;
-- requirements;
-- constraints;
-- preferences;
-- dialect information.
-
----
-
-56. Source spans
-
-Every parser-visible quantum construct must preserve source-location information through the frontend.
-
-At minimum, diagnostics must be able to identify:
-
-- file/source unit;
-- start position;
-- end position;
-- offending construct;
-- relevant semantic context where available.
-
-The grammar must not discard source structure needed for high-quality diagnostics.
-
----
-
-57. Semantic analysis
-
-Semantic analysis owns:
-
-- operation resolution;
-- type checking;
-- qubit/resource validity;
-- scope;
-- ownership;
-- capability checking;
-- resource checking;
-- effect checking;
-- dimensionality;
-- parameter compatibility;
-- control validity;
-- measurement validity;
-- logical/physical distinction;
-- dialect semantics;
-- interoperability validation.
-
-The parser must not perform these checks.
-
----
-
-58. Canonical "quantum::ir"
-
-All semantically valid quantum computation must cross one canonical boundary:
-
-quantum::ir
-
-The grammar must never directly construct or depend upon Rust IR types.
-
-The architecture must be:
-
-grammar
-  │
-  ▼
-AST
-  │
-  ▼
+logical intent
+    |
+    v
 semantic analysis
-  │
-  ▼
-quantum::ir
+    |
+    v
+resource/capability negotiation
+    |
+    v
+placement/mapping
+    |
+    v
+physical realization
 
-Never:
-
-grammar
-  │
-  ▼
-quantum::ir
-
-and never:
-
-grammar
-  │
-  ▼
-QuantumGateIR
-  │
-  ▼
-quantum::ir
-
-unless a repository-wide architecture explicitly establishes that intermediate as a different, formally owned semantic layer. The quantum grammar itself must not introduce one.
 
 ---
 
-59. "quantum::ir" semantic operation requirements
+41. Controls and modifiers
 
-A generic quantum operation entering "quantum::ir" must be capable of preserving, as required by the canonical IR contract:
+Controlled operations, adjoints and inverses must be represented structurally.
 
-operation identity
-namespace
-operands
-targets
-parameters
-controls
-modifiers
-results
-attributes
-effects
-capabilities
-resource requirements
-source information
+The grammar should support recursive composition where specified:
 
-The grammar provides source information.
+control(operation)
+adjoint(operation)
+inverse(operation)
 
-Semantic lowering determines canonical meaning.
+control(adjoint(operation))
+inverse(control(operation))
+
+No fixed modifier nesting depth may be encoded.
+
+Semantic validation determines whether a requested modifier is valid.
+
 
 ---
 
-60. Optimization boundary
+42. Parameters
 
-Optimization starts after semantic lowering.
+Parameter syntax must remain separate from target operands.
 
-The quantum grammar does not perform:
+Conceptually:
 
-- gate cancellation;
-- commutation optimization;
-- synthesis;
-- decomposition;
-- algebraic simplification;
-- depth reduction;
-- measurement optimization;
-- hardware-specific optimization.
+operation(parameters)(targets)
 
-Those belong to optimization/decomposition passes.
+The exact canonical form is determined by the operation grammar.
+
+Parameter cardinality must remain open-ended.
+
+Parameter validity is semantic.
+
 
 ---
 
-61. Routing boundary
+43. Quantum kernels
 
-Routing starts after the canonical semantic representation.
+kernels.g4 owns quantum-kernel structure.
 
-Routing determines physical realization where necessary.
+A kernel describes quantum computation as a reusable semantic unit.
 
-The grammar must not encode a coupling map as the universal execution model.
+It does not select:
 
-Source may express an explicit physical requirement where semantically justified, but ordinary portable programs must remain independent of physical topology.
+QPU;
+
+simulator;
+
+CPU;
+
+GPU;
+
+FPGA;
+
+ASIC;
+
+topology;
+
+pulse implementation.
+
+
+Those are downstream concerns.
+
 
 ---
 
-62. Scheduling boundary
+44. Circuits
 
-Scheduling determines actual:
+circuits.g4 owns circuit-level grouping and composition.
 
-- order;
-- timing;
-- resource occupation;
-- synchronization;
-- execution schedule.
+A circuit is a source-level semantic structure.
 
-The grammar may express semantic timing requirements where timing is part of program meaning.
+It does not imply a particular physical circuit representation.
 
-It must not hard-code a particular target's clock or gate duration.
+Circuit size is not bounded by grammar constants.
+
 
 ---
 
-63. Resilience boundary
+45. Adaptive quantum execution
 
-The repository's resilience subsystem owns decisions such as:
+adaptive-quantum-execution.g4 owns only the source-level composition boundary for adaptive quantum execution.
 
-ACCEPT
-DEGRADED_ACCEPT
-RETRY
-RECOVER
-ESCALATE
-REJECT
+It must integrate existing adaptive execution and resilience mechanisms rather than duplicate them.
 
-and the relevant resilience states:
+The intended semantic sequence is:
+
+observe
+    |
+    v
+evaluate
+    |
+    v
+select strategy
+    |
+    v
+execute
+    |
+    v
+evaluate outcome
+    |
+    +--> accept
+    +--> degraded accept
+    +--> retry
+    +--> recover
+    +--> escalate
+    +--> reject
+
+Adaptive execution must remain governed by:
+
+capabilities;
+
+resources;
+
+effects;
+
+contracts;
+
+policies;
+
+authorization;
+
+provenance.
+
+
+It must never imply unrestricted self-modification.
+
+
+---
+
+46. Resilience states
+
+The canonical resilience state model is owned by the resilience subsystem.
+
+The currently defined semantic states are:
 
 Unknown
 Healthy
@@ -1668,2437 +1585,1703 @@ Recovering
 Quarantined
 Retired
 
-The quantum grammar may express relevant requirements or metadata, but it must not implement resilience policy.
+Quantum grammar files must reference the canonical resilience model rather than redefine it.
+
 
 ---
 
-64. ZQN boundary
+47. Execution outcomes
 
-ZQN owns fault/noise semantics and their downstream processing.
+The canonical semantic outcomes are:
 
-Quantum grammar may express source-level noise/fault requirements.
+ACCEPT
+DEGRADED_ACCEPT
+RETRY
+RECOVER
+ESCALATE
+REJECT
 
-It must not implement:
+These are semantic/runtime outcomes.
 
-- stochastic simulation;
-- fault models;
-- device calibration;
-- mitigation algorithms;
-- decoder algorithms;
-- runtime noise adaptation.
+They are not hardware limits.
 
----
+They must not be redefined independently by individual quantum grammars.
 
-65. Hardware/HAL boundary
-
-Hardware availability is resolved after parsing.
-
-The grammar must not perform hardware discovery.
-
-The downstream system resolves:
-
-program requirements
-       +
-capabilities
-       +
-resources
-       +
-constraints
-       +
-target availability
-
-into an actual target realization.
 
 ---
 
-66. Physical mapping
+48. Resource requirements
 
-A portable quantum program should normally describe:
+Quantum resource requirements must use the repository-wide resource abstraction.
 
-logical qubits
-operations
-measurements
-requirements
-capabilities
+Examples:
 
-rather than:
-
-physical qubit 17
-physical qubit 18
-physical link 17-18
-
-Physical mapping becomes relevant only when the programmer intentionally requires physical-level control.
-
----
-
-67. Topology
-
-Topology does not belong in the core quantum computation grammar.
-
-Topology belongs to the hardware/routing layer.
-
-Quantum grammar may refer to topology-related requirements when the language specification explicitly supports them, but it must not implement topology.
-
----
-
-68. Vendor independence
-
-Vendor-specific operations may be represented through qualified names or dialects:
-
-vendor::operation
-vendor::namespace::operation
-
-The core grammar must not accumulate permanent vendor keyword lists.
-
-Vendor support must be implemented through:
-
-dialect
-semantic registry
-capability model
-lowering
-backend
-
-rather than by continuously modifying the core operation grammar.
-
----
-
-69. No hidden hardware assumptions
-
-The quantum grammar must not assume:
-
-64 qubits
-127 qubits
-133 qubits
-256 qubits
-32-bit registers
-64-bit registers
-24 GB memory
-specific topology
-specific QPU count
-specific accelerator count
-
-as universal language characteristics.
-
-Any such number in a grammar/test must be classified as:
-
-- example;
-- test data;
-- program data;
-- explicit user requirement;
-- target-specific declaration;
-- compatibility fixture.
-
-It must never become an implicit universal language limit.
-
----
-
-70. Generic resource expressions
-
-Resource quantities should be represented by expressions.
-
-Conceptually:
-
-requires qubits >= n;
-
-or:
-
-requires resource quantum.qubits >= required_qubits;
-
-where supported by the canonical resource grammar.
-
-The exact syntax must follow the canonical repository resource contract rather than being independently invented here.
-
----
-
-71. Quantum/classical scaling
-
-Quantum programs may contain classical computation of arbitrary semantic scale.
-
-For example:
-
-let n = problem_size;
-allocate qubits[n];
-
-The grammar must not require the compiler to know a fixed "n" during parsing.
-
-Semantic analysis determines what can be established statically.
-
-Runtime-dependent values remain runtime-dependent where the language permits dynamic allocation.
-
----
-
-72. Dynamic allocation
-
-Where dynamic quantum resource allocation is supported by Zamani semantics, the grammar must represent it without assuming a fixed resource pool.
-
-The grammar does not decide whether a backend can dynamically allocate those resources.
-
-That becomes a capability/resource question.
-
----
-
-73. Quantum memory
-
-Quantum-memory syntax must remain abstract.
-
-The grammar must not assume:
-
-specific number of qubits in memory
-specific memory technology
-specific coherence duration
-specific memory address space
-
-Memory semantics belong to the common memory/resource architecture and quantum semantic analysis.
-
----
-
-74. Effects
-
-Quantum operations may have semantic effects.
-
-Examples can include:
-
-- measurement;
-- state mutation;
-- reset;
-- allocation;
-- deallocation;
-- synchronization;
-- classical observation.
-
-Effects are analyzed downstream.
-
-The grammar must not duplicate the global effect system.
-
----
-
-75. Ownership and lifetime
-
-Quantum resource ownership must integrate with the repository's common ownership/memory model.
-
-The grammar must not invent an isolated ownership system for qubits.
-
-Semantic analysis determines:
-
-- lifetime;
-- aliasing;
-- borrowing/ownership constraints where applicable;
-- use-after-measurement rules;
-- resource release.
-
----
-
-76. Deterministic parsing
-
-Parsing must be deterministic.
-
-Parsing may depend only on:
-
-- source text;
-- selected language version;
-- canonical lexer;
-- canonical grammar;
-- explicitly selected dialect/version.
-
-Parsing must not depend on:
-
-- QPU availability;
-- hardware discovery;
-- calibration;
-- network state;
-- runtime state;
-- filesystem state;
-- wall-clock time;
-- randomness;
-- environment variables.
-
----
-
-77. Safe Rust requirement
-
-All Rust code integrating this grammar must remain:
-
-Rust 2021
-Rust 1.97 / Rust 1.97.1
-safe Rust
-
-The project must not introduce "unsafe".
-
-The crate should retain or enforce:
-
-#![deny(unsafe_code)]
-
-where applicable to the repository's Rust crate architecture.
-
-ANTLR grammar files must contain no embedded Rust actions.
-
----
-
-78. No grammar actions
-
-Production quantum grammar must contain no actions that:
-
-- access files;
-- access networks;
-- access hardware;
-- invoke runtime code;
-- mutate global state;
-- allocate device resources;
-- query capabilities;
-- perform randomness;
-- perform semantic execution.
-
-The grammar is declarative.
-
----
-
-79. No parser-time hardware discovery
-
-This is a permanent invariant.
-
-Never:
-
-parse source
-    ↓
-query QPU
-    ↓
-change grammar behavior
-
-Instead:
-
-parse source
-    ↓
-semantic model
-    ↓
-capability/resource analysis
-    ↓
-target realization
-
----
-
-80. No parser-time capability discovery
-
-Capability discovery belongs downstream.
-
-The grammar recognizes the syntax of a requirement.
-
-It does not determine whether the current machine satisfies it.
-
----
-
-81. No parser-time resource allocation
-
-Parsing must never allocate:
-
-- qubits;
-- memory;
-- devices;
-- execution slots;
-- QPU jobs;
-- simulator state.
-
-Allocation belongs downstream.
-
----
-
-82. Integration with "grammar/expressions/"
-
-Quantum expressions must reuse the canonical expression grammar.
-
-Quantum-specific syntax may add an explicit wrapper where necessary, but it must not create a separate precedence system.
-
-Operation parameters should therefore be ordinary Zamani expressions wherever semantically appropriate.
-
----
-
-83. Integration with "grammar/types/"
-
-Quantum types must compose with:
-
-- generic types;
-- function types;
-- references;
-- collections;
-- constraints;
-- capabilities;
-- resource types.
-
-Quantum types must not create a disconnected type language.
-
----
-
-84. Integration with "grammar/statements/"
-
-Quantum statements must be legal Zamani statements.
-
-The quantum grammar supplies domain-specific statement forms where needed.
-
-Common control flow remains owned by:
-
-grammar/statements/
-
-Dynamic quantum control must integrate rather than duplicate general "if", "match", loop, and block syntax.
-
----
-
-85. Integration with "grammar/functions/"
-
-Quantum functions/kernels must integrate with:
-
-- parameters;
-- generic parameters;
-- return types;
-- effects;
-- contracts;
-- calling conventions.
-
-A quantum function is still a Zamani function.
-
----
-
-86. Integration with "grammar/modules/"
-
-Quantum operations and types may be imported/exported through the normal module system.
-
-Quantum namespaces must not create a separate module system.
-
----
-
-87. Integration with "grammar/effects/"
-
-Quantum effects must use the common effect system.
-
-A quantum operation may be semantically effectful without requiring a second effect grammar.
-
----
-
-88. Integration with "grammar/resources/"
-
-Quantum resource requirements must compose with the universal resource model.
-
-The quantum subsystem may add quantum-specific resource vocabulary, but it must not redefine:
-
-requirement
-constraint
-preference
-hint
-capability
-resource
-
----
-
-89. Integration with "grammar/hardware/"
-
-The quantum grammar may express abstract hardware-related requirements.
-
-The hardware grammar owns:
-
-- target descriptions;
-- hardware capabilities;
-- resource models;
-- topology;
-- placement;
-- device classes;
-- accelerator descriptions.
-
-The quantum grammar must not duplicate those definitions.
-
----
-
-90. Integration with "grammar/hybrid/"
-
-Hybrid quantum/classical programs must remain first-class Zamani programs.
-
-The integration path is:
-
-classical
-   +
-quantum
-   +
-shared types/expressions
-   +
-effects/resources/capabilities
-
-No separate hybrid language should be created.
-
----
-
-91. Integration with "grammar/hdl/"
-
-Quantum/HDL co-design may express:
-
-- quantum computation;
-- control hardware;
-- accelerators;
-- interfaces;
-- timing intent;
-- hardware resources.
-
-HDL implementation remains owned by "grammar/hdl/".
-
-Quantum grammar must not duplicate HDL syntax.
-
----
-
-92. Integration with "grammar/distributed/"
-
-Quantum programs may execute across distributed resources.
-
-The quantum grammar can express distributed-relevant requirements where the language specifies them.
-
-Distributed topology and deployment remain owned by:
-
-grammar/distributed/
-
----
-
-93. Integration with AI and data domains
-
-Quantum computation may participate in:
-
-- AI;
-- machine learning;
-- tensors;
-- data processing;
-- optimization;
-- scientific computing.
-
-Quantum grammar must compose with these domains through shared types, expressions, functions, resources, effects, and capabilities.
-
-It must not create framework-specific syntax for every external AI or scientific library.
-
----
-
-94. Quantum kernels and accelerators
-
-Quantum kernels may be compiled to:
-
-- QPU;
-- simulator;
-- CPU;
-- GPU;
-- FPGA;
-- ASIC;
-- heterogeneous accelerator;
-- distributed execution environment.
-
-The kernel source must express computation rather than hard-code the eventual implementation.
-
----
-
-95. Interoperability with classical computation
-
-Measurement results, parameters, control values, and classical conditions must use the common Zamani semantic model.
-
-The language should permit:
-
-classical computation
-      ↓
-quantum operation
-      ↓
-measurement
-      ↓
-classical computation
-      ↓
-quantum operation
-
-without requiring separate source languages.
-
----
-
-96. Mathematical operations
-
-The quantum grammar must not become a second mathematics grammar.
-
-Quantum parameters should use the canonical expression system.
-
-Mathematical functions should generally remain:
-
-- expressions;
-- intrinsics;
-- library operations;
-- semantic capabilities.
-
-They should not become new parser keywords merely because a new quantum algorithm uses them.
-
----
-
-97. Algorithm independence
-
-The grammar should not require dedicated syntax for every quantum algorithm.
-
-Algorithms such as:
-
-- search;
-- factoring;
-- simulation;
-- optimization;
-- chemistry;
-- machine learning;
-- phase estimation;
-
-should normally be represented using the general language, libraries, kernels, and generic quantum operations.
-
-Dedicated syntax is justified only when the construct has stable language-level semantics.
-
----
-
-98. Program meaning versus implementation
-
-The quantum grammar should answer:
-
-«What quantum computation is being expressed?»
-
-It should not answer:
-
-«How does today's QPU execute it?»
-
-This distinction must be maintained throughout the subsystem.
-
----
-
-99. Target-independent example model
-
-A conceptual portable program might express:
-
+requires qubits >= required_qubits;
+requires memory >= required_memory;
 requires capability("quantum.measurement");
 requires capability("quantum.dynamic_control");
+requires topology(required_topology);
 
-let n = problem_size;
+The grammar must preserve symbolic expressions.
 
-quantum {
-    allocate q[n];
+It must not convert them into fixed machine constants.
 
-    apply operation(q);
 
-    let result = measure q;
-
-    if result {
-        apply next_operation(q);
-    }
-}
-
-The exact surface syntax must follow the canonical Zamani grammar contracts.
-
-The architectural property is what matters:
-
-- no QPU identifier;
-- no fixed qubit limit;
-- no fixed topology;
-- no physical addresses;
-- no vendor instruction set.
-
----
-
-100. Explicit target intent
-
-Zamani may permit explicit target intent where the programmer genuinely requires it.
-
-Such intent must remain distinguishable from portable computation.
-
-For example:
-
-requires capability("quantum.mid_circuit_measurement");
-
-is portable capability intent.
-
-An explicit physical mapping is a much stronger statement and must remain isolated from normal portable source.
-
-The compiler must never silently infer that ordinary abstract quantum source is physical-source programming.
-
----
-
-101. Resource negotiation
-
-Resource requirements should flow through:
-
-source requirement
-       ↓
-semantic resource contract
-       ↓
-compiler resource analysis
-       ↓
-target capability/resource matching
-       ↓
-placement
-       ↓
-routing
-       ↓
-scheduling
-       ↓
-execution
-
-This permits the same program to operate at different scales.
-
----
-
-102. Tiny-to-large scaling
-
-The language must be able to represent programs conceptually ranging from:
-
-one qubit
-
-to:
-
-large logical computation
-
-to:
-
-large distributed heterogeneous quantum/classical computation
-
-without changing the grammar because the resource scale changed.
-
-The implementation may of course encounter finite limits imposed by the actual host and toolchain.
-
-Those are implementation limits, not language semantics.
-
----
-
-103. Infinite terminology
-
-"Infinity" in POCO-REAF means:
-
-«no arbitrary finite ceiling encoded by the language architecture.»
-
-It does not mean that a parser, compiler, simulator, QPU, or physical system can literally allocate infinite resources.
-
-This distinction must remain explicit in all documentation and tests.
-
----
-
-104. Hard-coding audit
-
-Every quantum grammar modification must be audited for:
-
-- fixed qubit counts;
-- fixed register counts;
-- fixed operation counts;
-- fixed target counts;
-- fixed control counts;
-- fixed parameter counts;
-- fixed circuit depths;
-- fixed measurement counts;
-- fixed QPU counts;
-- fixed device counts;
-- fixed memory sizes;
-- fixed topology;
-- fixed addresses;
-- fixed vendor assumptions;
-- fixed simulator dimensions.
-
-Each numeric value must be classified as:
-
-1. language semantics;
-2. program data;
-3. explicit user requirement;
-4. target-specific intent;
-5. compatibility fixture;
-6. test data;
-7. accidental hard-coding.
-
-Accidental hard-coding must be removed.
-
----
-
-105. Forbidden examples
-
-The quantum grammar must never evolve into:
-
-quantumRegister : QUBIT_0 | QUBIT_1 | ... ;
-
-or:
-
-MAX_QUBITS = 1024;
-
-or:
-
-gate : H | X | Y | Z | CNOT | ... ;
-
-or:
-
-only 2 controls allowed
-
-or:
-
-only 64 targets allowed
-
-or:
-
-QPU_0
-QPU_1
-QPU_2
-
-as the universal hardware model.
-
----
-
-106. Preferred generic representation
-
-The preferred model is:
-
-operation name
-    +
-parameters
-    +
-controls/modifiers
-    +
-targets
-    +
-attributes
-    +
-semantic requirements
-
-This enables future quantum operations without changing the core grammar.
-
----
-
-107. Source-level operation extensibility
-
-A future operation such as:
-
-future::topological_operation
-
-must be representable without modifying the generic operation grammar merely because the operation did not exist when the compiler was written.
-
-Semantic validation determines whether that operation is known, imported, provided by a dialect, or otherwise valid.
-
----
-
-108. Unknown operation handling
-
-The parser should distinguish:
-
-syntactically valid operation designator
-
-from:
-
-semantically unresolved operation
-
-This allows extensibility.
-
-An unknown operation name should normally produce a semantic-resolution diagnostic rather than requiring the parser grammar to be rewritten for every new operation.
-
----
-
-109. Diagnostics
-
-Quantum diagnostics must distinguish:
-
-Lexical errors
-
-Examples:
-
-- malformed quantum literal;
-- invalid identifier;
-- invalid delimiter.
-
-Syntax errors
-
-Examples:
-
-- missing target;
-- malformed parameter list;
-- malformed control expression.
-
-Semantic errors
-
-Examples:
-
-- unknown operation;
-- incompatible parameter;
-- invalid target type;
-- invalid measurement;
-- unavailable required capability.
-
-Resource errors
-
-Examples:
-
-- insufficient target resources.
-
-Target errors
-
-Examples:
-
-- target cannot realize required capability.
-
-The parser must not incorrectly report downstream capability/resource failures as syntax errors.
-
----
-
-110. Deterministic diagnostics
-
-Given the same:
-
-source
-language version
-dialect set
-
-the grammar must produce deterministic parse behavior and deterministic syntax diagnostics.
-
-Hardware availability must not change parser diagnostics.
-
----
-
-111. Testing architecture
-
-Quantum grammar tests must exist at several levels.
-
-lexer
-syntax
-AST
-semantic
-IR
-compiler
-target
-runtime
-
-The grammar tests themselves must not attempt to prove functionality that belongs to downstream systems.
-
----
-
-112. Required positive tests
-
-At minimum, the quantum conformance suite must cover:
-
-- minimal quantum program;
-- single qubit;
-- multiple qubits;
-- symbolic qubit counts;
-- registers;
-- indexed registers;
-- state literals;
-- generic operation;
-- standard operation name;
-- custom operation;
-- qualified operation;
-- parameterized operation;
-- multiple parameters;
-- multiple targets;
-- controlled operation;
-- nested modifiers;
-- adjoint operation;
-- measurement;
-- reset;
-- barrier;
-- observable;
-- circuit;
-- kernel;
-- logical qubit;
-- physical-resource intent;
-- dynamic circuit;
-- mid-circuit measurement;
-- classical feed-forward;
-- resource requirement;
-- capability requirement;
-- dialect extension;
-- channel;
-- noise intent;
-- QEC intent;
-- pulse intent;
-- hybrid classical/quantum program.
-
----
-
-113. Required negative tests
-
-Negative tests must cover:
-
-- malformed operation;
-- missing target;
-- malformed parameter expression;
-- malformed control;
-- malformed measurement;
-- invalid quantum literal;
-- invalid register access;
-- malformed resource requirement;
-- malformed capability requirement;
-- malformed dialect declaration;
-- invalid syntax boundary;
-- duplicate syntax where prohibited;
-- ambiguous constructs;
-- invalid source-level combinations.
-
----
-
-114. Boundary tests
-
-Boundary tests must cover:
-
-- one qubit;
-- many syntactically representable qubits;
-- empty collections where legal;
-- one target;
-- many targets;
-- one parameter;
-- many parameters;
-- deeply nested modifiers;
-- deeply nested qualified names;
-- large operation sequences;
-- large circuits;
-- large resource declarations;
-- large capability lists.
-
-No boundary test may accidentally become a language ceiling.
-
----
-
-115. Scalability tests
-
-Scalability tests must prove absence of grammar-defined limits.
-
-Conceptually test:
-
-n = small
-n = larger
-n = much larger
-
-using generated source fixtures.
-
-The expected invariant is:
-
-language validity does not change merely because n increased
-
-provided the syntax remains representable and the test environment has sufficient resources.
-
----
-
-116. No artificial test ceilings
-
-A test such as:
-
-supports exactly 1024 qubits
-
-is prohibited unless 1024 is explicitly testing a user program requirement.
-
-The test suite must not establish arbitrary language limits.
-
----
-
-117. Determinism tests
-
-Repeated parsing of identical quantum source must produce equivalent parser results.
-
-The test environment must not alter parsing through:
-
-- hardware;
-- network;
-- randomness;
-- time;
-- environment variables.
-
----
-
-118. AST conformance tests
-
-Every public quantum grammar construct must map to a predetermined AST representation.
-
-For every construct, the project must know:
-
-grammar rule
-    ↓
-AST node/field
-
-before declaring the grammar feature complete.
-
----
-
-119. Semantic conformance tests
-
-Every quantum AST construct must have a documented semantic interpretation.
-
-For every construct:
-
-AST
- ↓
-semantic validation
- ↓
-semantic quantum model
-
-must be defined.
-
----
-
-120. IR conformance tests
-
-Every semantically meaningful quantum construct must have a known downstream path to:
-
-quantum::ir
-
-If a construct intentionally does not lower into quantum IR because it is compile-time metadata, resource metadata, or another semantic category, that must be explicitly documented.
-
-No unexplained syntax is production complete.
-
----
-
-121. Compiler integration tests
-
-Tests must verify that valid quantum source can flow through the compiler architecture without requiring target-specific source rewrites.
-
-Where target realization differs, the semantic source meaning must remain stable.
-
----
-
-122. Cross-target tests
-
-The same semantic quantum program should be tested against different target classes where supported:
-
-simulator
-CPU-assisted simulator
-GPU-assisted simulator
-FPGA accelerator
-ASIC accelerator
-QPU
-heterogeneous target
-distributed target
-
-The test is not that every target can execute every program.
-
-The test is that target differences are handled by capability/resource/lowering analysis rather than by changing the source grammar.
-
----
-
-123. Cross-domain tests
-
-Mandatory quantum combinations include:
-
-classical + quantum
-quantum + hardware
-quantum + HDL
-quantum + AI
-quantum + data
-quantum + distributed
-quantum + networking
-quantum + security
-classical + quantum + hardware
-quantum + HDL + hardware
-AI + quantum + hardware
-classical + quantum + HDL + hardware
-
-The goal is one composable language.
-
----
-
-124. Round-trip tests
-
-Where a canonical formatter/printer exists:
-
-source
-  ↓
-lexer
-  ↓
-parser
-  ↓
-AST
-  ↓
-formatter/printer
-  ↓
-parser
-
-must preserve semantic meaning.
-
-Formatting may change.
-
-Meaning must not.
-
----
-
-125. Interoperability tests
-
-Where external formats are supported:
-
-external format
-    ↓
-import
-    ↓
-Zamani semantic representation
-    ↓
-quantum::ir
-
-and, where supported:
-
-quantum::ir
-    ↓
-export
-    ↓
-external format
-
-must be tested.
-
----
-
-126. Compatibility
-
-Quantum grammar changes must respect:
-
-grammar/compatibility/
-
-and repository language versioning.
-
-Changes must be classified as:
-
-- additive;
-- compatible;
-- breaking;
-- deprecated;
-- migration-required.
-
-Renaming existing quantum files is not permitted merely for aesthetic reasons.
-
----
-
-127. Grammar-version compatibility
-
-A quantum dialect or syntax feature must be associated with a language version or feature lifecycle where necessary.
-
-The parser must not silently reinterpret old source under a new incompatible meaning.
-
----
-
-128. Feature lifecycle
-
-Quantum features should progress through:
-
-historical
-    ↓
-proposed
-    ↓
-experimental
-    ↓
-specified
-    ↓
-implemented
-    ↓
-tested
-    ↓
-stable
-
-"Zamani-Grammar.md" is not sufficient authority to make a feature stable.
-
-A feature becomes stable only after:
-
-semantic design
-    ↓
-AST contract
-    ↓
-grammar
-    ↓
-semantic implementation
-    ↓
-IR contract
-    ↓
-tests
-    ↓
-compatibility
-
----
-
-129. Existing "Zamani-Grammar.md"
-
-Quantum features documented in:
-
-grammar/Zamani-Grammar.md
-
-must be treated according to their feature status.
-
-The broad design document may contain:
-
-- proposed features;
-- historical concepts;
-- future concepts;
-- experimental concepts.
-
-It must not silently override this quantum grammar.
-
----
-
-130. Existing "grammar/grammar.md"
-
-"grammar/grammar.md" is the implementation-conformance reference.
-
-Quantum implementation status must eventually be reflected there as:
-
-SPECIFIED
-IMPLEMENTED
-PARTIALLY IMPLEMENTED
-PLANNED
-DEPRECATED
-
-This README does not replace that implementation status document.
-
----
-
-131. Quantum grammar file header contract
-
-Every ".g4" file in this directory must document:
-
-File
-Grammar name
-Status
-Purpose
-Owns
-Does not own
-Inputs
-Outputs
-Dependencies
-Upstream contracts
-Downstream consumers
-AST contract
-Semantic contract
-IR contract
-Compiler integration
-Runtime integration
-Tooling integration
-Cross-domain integration
-Positive tests
-Negative tests
-Boundary tests
-Scalability tests
-Compatibility
-Determinism
-Hard-coding audit
-Safety
-Completion criteria
-
-This is mandatory.
-
----
-
-132. Single-owner rule
-
-Every grammar production must have exactly one canonical owner.
-
-For example:
-
-quantumOperation
-
-must have one owner.
-
-Other files may compose or reference it.
-
-They must not redefine it.
-
-The same rule applies to:
-
-- qubit;
-- register;
-- measurement;
-- state;
-- control;
-- parameter;
-- capability;
-- resource;
-- dialect;
-- circuit.
-
----
-
-133. No competing quantum grammars
-
-The following architecture is prohibited:
-
-Quantum grammar A
-      +
-Quantum grammar B
-      +
-Quantum grammar C
-
-where all three claim to be canonical.
-
-The correct architecture is:
-
-one canonical quantum grammar
-       +
-explicitly owned leaf grammars
-       +
-compatibility/reference material
-
----
-
-134. Dependency direction
-
-Quantum grammar dependencies must flow toward shared syntax infrastructure.
-
-Preferred:
-
-canonical lexer
-      ↓
-core
-      ↓
-names/types/expressions
-      ↓
-quantum leaf grammars
-      ↓
-Quantum composition
-      ↓
-Zamani composition
-
-Never:
-
-quantum grammar ↔ runtime
-
-or:
-
-quantum grammar ↔ quantum::ir
-
-or circular leaf-grammar dependencies.
-
----
-
-135. Grammar composition versus semantic composition
-
-ANTLR grammar composition is not semantic composition.
-
-The grammar may compose:
-
-operations
-measurement
-types
-states
-resources
-capabilities
-
-but semantic analysis determines how those concepts interact.
-
-This distinction prevents grammar files from becoming semantic implementation containers.
-
----
-
-136. No embedded simulator
-
-The grammar must never:
-
-- allocate state vectors;
-- allocate density matrices;
-- execute gates;
-- sample measurement;
-- calculate amplitudes;
-- simulate noise.
-
-Those belong to simulator/runtime implementations.
-
----
-
-137. No embedded QPU execution
-
-The grammar must never:
-
-- submit jobs;
-- query devices;
-- reserve qubits;
-- invoke hardware;
-- query calibration;
-- execute pulses.
-
-Those belong to downstream systems.
-
----
-
-138. No embedded routing
-
-The grammar must never calculate:
-
-logical qubit → physical qubit
-
-routing.
-
-It may preserve explicit source-level mapping intent.
-
-Routing owns actual mapping.
-
----
-
-139. No embedded scheduling
-
-The grammar must not generate physical execution schedules.
-
-Timing intent may be expressed.
-
-Scheduling determines realization.
-
----
-
-140. No embedded QEC
-
-The grammar expresses QEC intent.
-
-It does not perform QEC.
-
----
-
-141. No embedded ZQN
-
-The grammar may describe noise/fault-related source intent.
-
-ZQN owns fault/noise semantics and processing.
-
----
-
-142. No embedded calibration
-
-Calibration is target-specific and dynamic.
-
-It must not be encoded as core grammar semantics.
-
----
-
-143. No embedded hardware discovery
-
-The grammar must remain valid even when no hardware is available.
-
-This property is essential for:
-
-- offline compilation;
-- CI;
-- deterministic builds;
-- simulation;
-- cross-compilation;
-- reproducibility.
-
----
-
-144. Reproducibility
-
-Parsing and semantic representation must be reproducible given the same:
-
-source
-language version
-dialect versions
-compiler version
-specified semantic environment
-
-Hardware discovery must not alter parsing.
-
----
-
-145. Build reproducibility
-
-The quantum grammar must not require:
-
-- a live QPU;
-- network connectivity;
-- vendor credentials;
-- calibration services;
-- runtime access
-
-to generate the parser or validate syntax.
-
----
-
-146. Security
-
-Grammar processing must not execute arbitrary source-language operations.
-
-Quantum syntax must be treated as untrusted input.
-
-The parser must not:
-
-- execute code;
-- access files;
-- access network resources;
-- invoke external processes;
-- access devices.
-
----
-
-147. Resource exhaustion
-
-Although no language-level resource ceiling is permitted, implementation-level resource exhaustion must still be handled safely.
-
-The distinction is:
-
-language semantic limit
-
-versus:
-
-implementation resource exhaustion
-
-The latter must produce controlled diagnostics/failure behavior rather than memory corruption or unsafe behavior.
-
----
-
-148. No "unsafe"
-
-No quantum grammar feature may require "unsafe" Rust.
-
-The complete Rust implementation must remain compatible with:
-
-Rust 1.97
-Rust 1.97.1
-Rust 2021
-
-and safe Rust only.
-
----
-
-149. Tooling
-
-The grammar must support downstream tooling such as:
-
-- syntax highlighting;
-- formatting;
-- language-server parsing;
-- completion;
-- navigation;
-- documentation generation;
-- syntax-tree inspection;
-- diagnostics;
-- refactoring.
-
-Public grammar rule names therefore constitute compatibility surfaces.
-
----
-
-150. Documentation generation
-
-Quantum documentation should be generated or derived from authoritative contracts where practical.
-
-Documentation must not become a competing grammar authority.
-
----
-
-151. Generated files
-
-Generated parser artifacts must not become manually maintained grammar authorities.
-
-The source ".g4" contracts remain authoritative.
-
-Generated files should be reproducible from the canonical grammar/toolchain.
-
----
-
-152. Production quality requirements
-
-The quantum subsystem is production-ready only when:
-
-- grammar ownership is unambiguous;
-- all duplicate surfaces are classified;
-- canonical lexer vocabulary is used;
-- the composition root is unique;
-- operation syntax is open-ended;
-- quantum types are composable;
-- registers are scalable;
-- controls are scalable;
-- parameters are scalable;
-- circuits are scalable;
-- measurement is composable;
-- dynamic circuits are represented;
-- classical feed-forward is represented;
-- logical and physical resources are distinct;
-- QEC intent is represented;
-- noise intent is represented;
-- resource/capability semantics are separated;
-- no hardware limits are encoded;
-- no vendor gate catalogue is hard-coded;
-- no runtime behavior occurs in grammar;
-- no "unsafe" Rust is required;
-- AST mappings exist;
-- semantic mappings exist;
-- "quantum::ir" mappings exist;
-- compiler integration exists;
-- target integration exists;
-- interoperability is defined;
-- diagnostics are deterministic;
-- compatibility is documented;
-- positive tests exist;
-- negative tests exist;
-- boundary tests exist;
-- scalability tests exist;
-- cross-domain tests exist;
-- hard-coding audits pass.
-
----
-
-153. Definition of Done for an individual quantum grammar file
-
-A quantum ".g4" file is not complete merely because ANTLR accepts it.
-
-It is complete only when all applicable items below are satisfied:
-
-Identity
-
-- [ ] file purpose documented;
-- [ ] grammar name documented;
-- [ ] status documented.
-
-Ownership
-
-- [ ] every rule has one owner;
-- [ ] duplicate ownership eliminated;
-- [ ] non-ownership documented.
-
-Dependencies
-
-- [ ] lexer dependency identified;
-- [ ] upstream grammar dependencies identified;
-- [ ] no circular dependency.
-
-Syntax
-
-- [ ] syntax specified;
-- [ ] ambiguity resolved;
-- [ ] precedence resolved where applicable;
-- [ ] cardinality is intentionally unbounded.
-
-AST
-
-- [ ] every construct has an AST mapping;
-- [ ] source spans preserved.
-
-Semantics
-
-- [ ] semantic meaning specified;
-- [ ] invalid semantic cases specified.
-
-IR
-
-- [ ] canonical downstream representation identified;
-- [ ] no competing quantum IR introduced.
-
-Compiler
-
-- [ ] compiler consumer identified;
-- [ ] lowering expectations documented.
-
-Runtime
-
-- [ ] runtime relevance documented;
-- [ ] no runtime behavior embedded in grammar.
-
-Hardware
-
-- [ ] no accidental hardware assumptions;
-- [ ] no artificial capacity limits.
-
-Testing
-
-- [ ] positive tests;
-- [ ] negative tests;
-- [ ] boundary tests;
-- [ ] scalability tests;
-- [ ] determinism tests;
-- [ ] compatibility tests;
-- [ ] cross-domain tests where applicable.
-
-Safety
-
-- [ ] no grammar actions;
-- [ ] no filesystem access;
-- [ ] no network access;
-- [ ] no device access;
-- [ ] no randomness;
-- [ ] no "unsafe" Rust integration.
-
-Only then is the file independently complete.
-
----
-
-154. Definition of Done for "quantum/"
-
-The entire quantum grammar subsystem is complete only when:
-
-all leaf owners
-      ↓
-canonical Quantum composition
-      ↓
-canonical Zamani composition
-      ↓
-canonical lexer/parser
-      ↓
-domain-neutral AST
-      ↓
-semantic analysis
-      ↓
-quantum::ir
-      ↓
-optimization
-      ↓
-routing
-      ↓
-scheduling
-      ↓
-QEC / resilience / ZQN
-      ↓
-HAL
-      ↓
-target realization
-
-has an explicit, tested contract.
-
----
-
-155. Repository-wide quantum integration matrix
-
-Layer| Quantum responsibility
-"grammar/DESIGN.md"| Architecture
-"grammar/Zamani.g4"| Complete-language composition
-"grammar/lexer/"| Tokens/lexical rules
-"grammar/core/"| Names/paths/common syntax
-"grammar/expressions/"| Expressions/precedence
-"grammar/types/"| General type system
-"grammar/statements/"| General statements/control flow
-"grammar/functions/"| Functions/kernels/function semantics
-"grammar/effects/"| Effects
-"grammar/resources/"| Universal resources
-"grammar/hardware/"| Hardware intent/capabilities/targets
-"grammar/hybrid/"| Hybrid domain composition
-"grammar/distributed/"| Distributed computation
-"grammar/hdl/"| Hardware description
-"grammar/interoperability/"| External representations
-"grammar/quantum/"| Quantum source syntax
-"src/frontend/ast/"| Domain-neutral AST
-semantic analysis| Quantum semantic validation
-"quantum::ir"| Canonical quantum representation
-optimization| Quantum optimization/decomposition
-routing| Logical/physical realization
-scheduling| Execution scheduling
-QEC| Error correction
-ZQN| Noise/fault semantics
-HAL| Hardware abstraction
-runtime| Execution
-tests| Conformance
-
----
-
-156. Quantum ownership matrix
-
-Concept| Owner
-Quantum composition| "quantum.g4"
-Quantum operation invocation| "operations.g4"
-Gate declaration syntax| "gates.g4"
-Parameterized operations| "parameterized-operations.g4"
-Controls| "controls.g4"
-Controlled operations| "controlled-operations.g4"
-Adjoint/inverse| "adjoints.g4"
-Qubits| "qubits.g4"
-Registers| "registers.g4"
-Quantum types| "types.g4"
-States| canonical state grammar after duplicate consolidation
-Measurement| "measurement.g4"
-Reset| "reset.g4"
-Barrier| "barriers.g4"
-Observable| "observables.g4"
-Channels| "channels.g4"
-Noise intent| "noise.g4"
-Dynamic circuits| "dynamic-circuits.g4"
-Dynamic control| "dynamic-control.g4"
-Mid-circuit control| "mid-circuit-control.g4"
-Quantum/classical boundary| "quantum-classical.g4"
-Feed-forward| "classical-feedforward.g4"
-Logical qubits| "logical-qubits.g4"
-Physical-resource intent| "physical-qubits.g4"
-Logical operations| "logical-operations.g4"
-QEC intent| "error-correction.g4"
-Quantum resources| "quantum-resources.g4"
-Quantum capabilities| "quantum-capabilities.g4"
-Circuits| "circuits.g4"
-Kernels| "kernels.g4"
-Pulse intent| "pulse-intent.g4"
-Quantum parameters| "parameters.g4"
-Dialects| "quantum-dialects.g4"
-Interoperability contract| "interoperability.md"
-Canonical quantum semantics| semantic layer
-Canonical quantum IR| "quantum::ir"
-Routing| downstream routing subsystem
-Scheduling| downstream scheduling subsystem
-QEC implementation| QEC subsystem
-Noise/fault processing| ZQN
-Physical realization| HAL/backend
-
----
-
-157. Existing duplicate surfaces: required consolidation
-
-The following are explicitly identified as consolidation work.
-
-"types.g4" / "quantum-types.g4"
-
-Exactly one becomes the canonical type owner.
-
-The other becomes compatibility/reference material or is removed only after repository-wide dependency verification.
-
-"states.g4" / "quantum-states.g4"
-
-Exactly one becomes the canonical state owner.
-
-"controlled-operations.g4" / "controls.g4"
-
-These may legitimately remain separate because:
-
-- "controls.g4" can own reusable control/modifier syntax;
-- "controlled-operations.g4" can own the controlled-operation composition.
-
-They must not duplicate the same productions.
-
-"dynamic-circuits.g4" / "dynamic-control.g4" / "mid-circuit-control.g4"
-
-These can remain separate if their ownership is explicitly:
-
-dynamic-circuits
-    = circuit-level dynamic structure
-
-dynamic-control
-    = generic dynamic control composition
-
-mid-circuit-control
-    = measurement-result-dependent control
-
-No overlapping production ownership is allowed.
-
-"quantum-classical.g4" / "classical-feedforward.g4"
-
-These may remain separate as:
-
-quantum-classical
-    = domain boundary
-
-classical-feedforward
-    = classical result propagation/control
-
-"quantum-resources.g4" / "resource-requirements.g4"
-
-These must be consolidated into one resource semantic ownership model.
-
-They must not create two competing quantum resource languages.
-
----
-
-158. Required "quantum.g4" cleanup
-
-Before the quantum parser is declared production-conformant, "quantum.g4" must be audited for:
-
-- duplicate imports;
-- duplicate rules;
-- stale grammar names;
-- stale lexer vocabulary;
-- obsolete imports;
-- overlapping grammar owners;
-- unreachable imports;
-- circular dependencies;
-- undefined imported rules;
-- conflicting token vocabularies.
-
-In particular, the current duplicate "QuantumClassical" import must not remain.
-
----
-
-159. Required lexer cleanup
-
-The quantum subsystem must participate in the repository-wide lexer cleanup.
-
-Known lexical duplication must be resolved centrally rather than inside quantum grammar.
-
-Examples include duplicate conceptual tokens such as:
-
-Question / QuestionMark
-Ampersand / BitAnd
-
-where the distinction is not semantically justified.
-
-Quantum grammar must consume the canonical token model.
-
----
-
-160. Numeric magnitude
-
-Quantum source must not impose artificial numeric magnitude limits.
-
-The language may use implementation-appropriate numeric representations, but the quantum grammar must not define machine-width assumptions such as:
-
-32-bit quantum count
-64-bit quantum count
-
-unless explicitly required by a separately specified language type.
-
----
-
-161. Tensor and quantum data integration
-
-Quantum programs may interact with:
-
-Tensor<T, shape>
-
-and other data structures.
-
-The quantum grammar must reuse the common tensor/type/data semantics rather than creating a second tensor language.
-
 ---
 
-162. Resource-size semantics
-
-A resource quantity such as:
-
-qubits >= n
-
-is a semantic requirement.
-
-It must not be interpreted as:
-
-physical qubit identifiers 0 through n-1
-
-This distinction is mandatory for POCO-REAF.
-
----
+49. Capabilities
 
-163. Capability examples
+Quantum capabilities describe what an environment can provide.
 
-Valid semantic capability categories may include:
+Examples include conceptual capabilities such as:
 
 quantum.measurement
 quantum.mid_circuit_measurement
 quantum.dynamic_control
-quantum.logical_qubits
+quantum.feedback
 quantum.error_correction
-quantum.fault_tolerance
+quantum.reset
 quantum.observable_measurement
-quantum.parameterized_operations
+quantum.parameterized_execution
 
-The list is extensible.
+The list is open-ended.
 
-The grammar must not make it a finite universal catalogue.
+New capabilities must not require changing the fundamental operation grammar.
 
----
-
-164. Future quantum technologies
-
-The grammar must remain capable of representing future quantum technologies without requiring a new core grammar architecture.
-
-Future technology should first attempt to use:
-
-- generic operations;
-- qualified names;
-- attributes;
-- types;
-- capabilities;
-- resources;
-- requirements;
-- constraints;
-- dialects.
-
-A new core syntax construct should be added only when existing abstractions cannot express the new semantic concept adequately.
 
 ---
 
-165. Quantum technology neutrality
+50. Effects
 
-The grammar must remain neutral regarding:
+Quantum operations may participate in the universal effect system.
 
-- superconducting systems;
-- trapped-ion systems;
-- neutral atoms;
-- photonic systems;
-- spin systems;
-- topological systems;
-- annealing/optimization systems where semantically supported;
-- future quantum architectures.
+Possible effects include:
 
-Technology-specific implementation belongs downstream.
+quantum
+measurement
+randomness
+learning
+adaptation
+simulation
+distributed
+io
+network
+foreign
+native
 
----
+The grammar expresses source constructs.
 
-166. Simulation neutrality
+Effect checking occurs downstream.
 
-The same source language should support quantum simulation where the semantic model permits it.
-
-The grammar must not contain simulator-specific syntax merely because simulation is one possible execution target.
-
----
-
-167. Distributed quantum computing
-
-The grammar should remain capable of representing distributed quantum computation through:
-
-- abstract resources;
-- communication;
-- channels;
-- capabilities;
-- synchronization;
-- distributed constructs.
-
-It must not impose a fixed number of QPUs or nodes.
 
 ---
 
-168. Fault-tolerant scaling
+51. Contracts
 
-Fault-tolerant source intent must remain independent of a particular physical-code overhead.
+Quantum constructs must integrate with the universal contract system.
+
+Applicable concepts include:
+
+requires
+ensures
+invariant
+assume
+guarantee
+property
+assert
+
+Examples of semantic use include:
+
+requires capability("quantum.measurement");
+ensures measurement_result_valid;
+invariant state_condition;
+
+Contract syntax is owned by the common validation/contract subsystem.
+
+Quantum grammar must not create a second contract language.
+
+
+---
+
+52. Policies
+
+Quantum execution can be constrained by policies governing:
+
+resource use;
+
+capability use;
+
+adaptation;
+
+execution;
+
+simulation;
+
+security;
+
+deployment;
+
+provenance;
+
+fallback;
+
+resilience.
+
+
+Policy syntax belongs to the universal policy subsystem.
+
+Quantum files consume that policy model.
+
+
+---
+
+53. Provenance
+
+Quantum computation must be compatible with the universal provenance system.
+
+Provenance may capture:
+
+source
+derived_from
+generated_by
+transformed_by
+verified_by
+reason
+evidence
+decision
+version
+timestamp
+
+Quantum grammar must preserve enough source structure for downstream provenance.
+
+The grammar itself does not generate timestamps or runtime records.
+
+
+---
+
+54. Explainability
+
+Quantum execution can produce decisions that need explanation.
+
+The universal explanation model may explain:
+
+why an operation was selected;
+
+why a resource was required;
+
+why a target was selected;
+
+why a decomposition was chosen;
+
+why routing changed;
+
+why recovery occurred;
+
+why execution was rejected.
+
+
+These are downstream semantic/compiler/runtime responsibilities.
+
+The quantum grammar only supplies source constructs that request or constrain such behavior.
+
+
+---
+
+55. Simulation
+
+Simulation is an execution strategy, not a separate language.
+
+Quantum programs must be capable of participating in:
+
+exact simulation
+approximate simulation
+state simulation
+circuit simulation
+noise simulation
+fault simulation
+performance simulation
+distributed simulation
+hybrid simulation
+
+The grammar must not impose simulator-specific limits.
+
+
+---
+
+56. Dialects
+
+Quantum dialects provide controlled extensibility.
+
+A dialect may introduce:
+
+operation declarations;
+
+semantic metadata;
+
+domain-specific constructs;
+
+external representations;
+
+vendor-specific features.
+
+
+A dialect must not silently modify the meaning of core Zamani syntax.
+
+Dialect extensions must declare:
+
+name
+version
+syntax
+semantic owner
+capabilities
+effects
+resources
+compatibility
+lowering
+provenance
+tests
+
+
+---
+
+57. Interoperability
+
+Quantum interoperability must support external representations without making them the canonical Zamani grammar.
+
+Examples may include:
+
+OpenQASM
+external circuit formats
+quantum IR interchange
+provider-specific formats
+research formats
+future formats
+
+The architecture is:
+
+external format
+    |
+    v
+format-specific frontend
+    |
+    v
+Zamani semantic model
+    |
+    v
+quantum::ir
+
+No external format becomes a second Zamani semantic authority.
+
+
+---
+
+58. OpenQASM integration
+
+OpenQASM support must remain under its interoperability/frontend boundary.
+
+Its operation names and syntax must be translated into the canonical Zamani semantic model.
+
+The existing OpenQASM implementation must not force Zamani's core grammar to become OpenQASM-specific.
+
+
+---
+
+59. AI, reasoning and learning integration
+
+Quantum computation must consume the universal semantic systems for:
+
+reasoning
+knowledge
+learning
+adaptation
+uncertainty
+evidence
+explanation
+provenance
+agents
+policies
+
+The quantum subsystem must not duplicate those concepts.
+
+The integration should be:
+
+universal semantic primitive
+        |
+        +--> classical realization
+        |
+        +--> quantum realization
+        |
+        +--> hybrid realization
+
+
+---
+
+60. Multi-agent integration
+
+Quantum agents must reuse the existing concurrency/actor architecture.
+
+The intended relationship is:
+
+AI agent
+    |
+    v
+actor
+    |
+    v
+message
+    |
+    v
+channel/task
+    |
+    v
+scheduler
+
+Quantum grammar must not create a second actor runtime.
+
+
+---
+
+61. Security and sandboxing
+
+Quantum execution must integrate with the universal security model.
+
+A sandbox may constrain:
+
+effects
+capabilities
+resources
+network access
+filesystem access
+native calls
+foreign calls
+reflection
+adaptation
+deployment
+
+Security syntax belongs to the security subsystem.
+
+Quantum grammar consumes the resulting policy/capability model.
+
+
+---
+
+62. Interoperability with FFI/ABI
+
+Quantum code may interface with external systems through the universal interoperability subsystem.
+
+The boundary is:
+
+Zamani quantum source
+    |
+    v
+foreign declaration
+    |
+    v
+ABI contract
+    |
+    v
+effect/capability analysis
+    |
+    v
+backend
+
+Quantum grammar must not create a second FFI syntax.
+
+
+---
+
+63. Metaprogramming
+
+Quantum metaprogramming must use the common metaprogramming architecture.
+
+Possible facilities include:
+
+reflection;
+
+introspection;
+
+compile-time execution;
+
+code generation;
+
+quotation;
+
+syntax trees;
+
+type-level computation.
+
+
+These facilities must be governed by:
+
+explicit capabilities;
+
+effects;
+
+policies;
+
+provenance.
+
+
+Unrestricted runtime self-modification is not implied.
+
+
+---
+
+64. Determinism and reproducibility
+
+The quantum grammar must be deterministic.
+
+Grammar files must contain:
+
+no embedded Rust actions;
+
+no random behavior;
+
+no network access;
+
+no filesystem access;
+
+no hardware access;
+
+no runtime calls;
+
+no provider calls.
+
+
+Reproducibility is enforced through compiler and provenance layers.
+
+Where quantum execution is inherently probabilistic, the semantic model must distinguish:
+
+deterministic compilation
+
+from:
+
+probabilistic execution
+
+
+---
+
+65. Safe Rust requirement
+
+The grammar itself must not contain embedded Rust implementation code.
+
+The generated Rust frontend must remain compatible with:
+
+Rust 2021
+Rust 1.97+
+safe Rust
+no unsafe
+
+Quantum grammar changes must not introduce a requirement for unsafe.
+
+
+---
+
+66. Public/private rule discipline
+
+Every .g4 file must explicitly identify:
+
+Public Rules
+Private Rules
+
+Public rules are stable integration boundaries.
+
+Private rules may be refactored internally without affecting consumers.
+
+A file must not expose internal implementation rules as accidental public API.
+
+
+---
+
+67. Required feature contract for every grammar file
+
+Every quantum .g4 file must contain or have an adjacent authoritative contract defining:
+
+Purpose
+Owns
+Does Not Own
+Public Rules
+Private Rules
+Lexer Dependencies
+Grammar Dependencies
+AST Contract
+Semantic Contract
+Type Contract
+Effect Contract
+Capability Contract
+Resource Contract
+Contract Integration
+Policy Integration
+Provenance Integration
+IR Contract
+Quantum::IR Boundary
+Classical Boundary
+HDL Boundary
+Backend Boundary
+Diagnostics
+Positive Tests
+Negative Tests
+Boundary Tests
+Scalability Tests
+Compatibility
+Integration
+Completion Criteria
+
+This contract is mandatory.
+
+
+---
+
+68. File dependency contract
+
+Every quantum grammar file must declare:
+
+DEPENDS_ON:
+EXPORTS:
+CONSUMED_BY:
+AST_OWNER:
+SEMANTIC_OWNER:
+IR_OWNER:
+TEST_OWNER:
+SPEC_OWNER:
 
 For example:
 
-requires logical qubits >= n
+DEPENDS_ON:
+    lexer/tokens.g4
+    core/names.g4
+    expressions/expressions.g4
+    quantum/parameters.g4
 
-does not become:
+EXPORTS:
+    quantumOperation
+    quantumOperationSpecifier
 
-requires exactly f(n) physical qubits
+CONSUMED_BY:
+    quantum/quantum.g4
+    quantum/dynamic-circuits.g4
+    quantum/kernels.g4
 
-inside the grammar.
+AST_OWNER:
+    canonical frontend AST
 
-The physical overhead is determined by QEC/target compilation.
+SEMANTIC_OWNER:
+    quantum semantic layer
 
----
+IR_OWNER:
+    quantum::ir
 
-169. Compilation scaling
+TEST_OWNER:
+    grammar/tests/quantum/
 
-Compilation may specialize the same semantic source for different resource environments.
+SPEC_OWNER:
+    grammar/spec/quantum.md
 
-The source grammar must not force a new source program for each machine size.
+The actual entries must reflect the repository's current canonical ownership.
 
----
-
-170. Runtime scaling
-
-Runtime resource availability may change dynamically.
-
-The grammar remains deterministic and target-independent.
-
-Runtime decisions occur after parsing.
-
----
-
-171. No source rewriting for ordinary scaling
-
-Changing:
-
-small target
-
-to:
-
-larger target
-
-must not require rewriting the quantum algorithm solely to account for hardware capacity.
-
-The compiler may produce different lowerings.
-
-The source semantic intent remains the same.
 
 ---
 
-172. Completion workflow
+69. Dependency direction
 
-The production workflow for every quantum feature is:
+Dependencies must flow toward foundational abstractions.
 
-feature proposal
-      ↓
-quantum semantic design
-      ↓
-AST contract
-      ↓
-grammar owner selected
-      ↓
-leaf grammar implemented
-      ↓
-Quantum composition integrated
-      ↓
-Zamani.g4 integrated
-      ↓
-lexer/parser conformance
-      ↓
-semantic implementation
-      ↓
-quantum::ir mapping
-      ↓
-compiler integration
-      ↓
-target integration
-      ↓
+The intended direction is:
+
+lexer
+  |
+  v
+core
+  |
+  v
+expressions/types/statements
+  |
+  v
+quantum leaf grammar
+  |
+  v
+quantum composition
+  |
+  v
+complete language composition
+
+Quantum leaf grammars must not depend on:
+
+backend implementations;
+
+QPU drivers;
+
+runtime instances;
+
+physical calibration;
+
+target-specific scheduling;
+
+vendor SDK implementations.
+
+
+
+---
+
+70. No circular grammar ownership
+
+No two grammar files may depend on each other merely to obtain each other's private rules.
+
+If two domains need a common concept, move the common concept to its canonical owner.
+
+For example:
+
+quantum
+    |
+    +--> common expression
+
+classical
+    |
+    +--> common expression
+
+rather than:
+
+quantum <--> classical
+
+through duplicated definitions.
+
+
+---
+
+71. Error handling
+
+The grammar must provide structurally precise syntax errors.
+
+Semantic errors must remain semantic errors.
+
+Examples of semantic errors include:
+
+unknown quantum operation
+invalid operation parameters
+invalid target type
+invalid modifier
+missing capability
+insufficient resource
+unsupported dynamic execution
+invalid contract
+policy violation
+invalid provenance relationship
+
+The parser must not attempt to perform semantic resource or hardware validation.
+
+
+---
+
+72. Error recovery
+
+ANTLR error recovery must remain compatible with the repository-wide parser strategy.
+
+Quantum grammar must avoid ambiguous alternatives where a simpler unambiguous representation exists.
+
+The grammar must not use semantic predicates merely to simulate semantic analysis.
+
+
+---
+
+73. Negative syntax testing
+
+Every canonical quantum construct must have negative tests.
+
+Examples include:
+
+missing operation
+missing targets
+unbalanced delimiters
+invalid modifier structure
+invalid parameter syntax
+invalid declaration structure
+invalid quantum/classical boundary
+
+Semantic-negative tests belong to semantic test suites rather than parser-only tests.
+
+
+---
+
+74. Scalability testing
+
+Scalability tests must verify that syntax remains valid as source cardinality grows.
+
+Tests must not depend on artificial constants such as:
+
+MAX_QUBITS
+MAX_TARGETS
+MAX_PARAMETERS
+MAX_CONTROLS
+MAX_OPERATIONS
+
+Instead, tests should generate workloads based on available test resources.
+
+The grammar should remain structurally valid until an external implementation or environment limit is reached.
+
+
+---
+
+75. Cross-domain testing
+
+Quantum grammar must be tested together with:
+
+classical
+hybrid
+AI
+data
+concurrency
+distributed
+networking
+HDL
+hardware
+security
+interoperability
+metaprogramming
+execution
+resources
+effects
+validation
+policies
+provenance
+
+The goal is not merely to prove that quantum syntax parses.
+
+The goal is to prove that quantum syntax composes with the rest of Zamani.
+
+
+---
+
+76. Mandatory integration examples
+
+The quantum grammar test corpus should include at minimum:
+
+minimal quantum program
+classical/quantum hybrid program
+parameterized operation
+custom operation
+qualified operation
+controlled operation
+adjoint operation
+inverse operation
+dynamic circuit
+mid-circuit measurement
+classical feed-forward
+observable measurement
+channel
+noise intent
+logical operation
+resource requirement
+capability requirement
+contract
+policy
+provenance
+adaptive execution
+quantum learning
+quantum reasoning
+simulation
+interoperability
+
+
+---
+
+77. Mandatory POCO-REAF test
+
+At least one conformance program must express quantum intent without selecting a specific machine.
+
+Conceptually:
+
+requires capability("quantum.measurement");
+requires qubits >= required_qubits;
+
+apply operation(parameters)(targets);
+
+measure targets -> result;
+
+if result {
+    apply next_operation(targets);
+}
+
+The same semantic source must be eligible for multiple realizations.
+
+The compiler may choose different:
+
+decomposition;
+
+routing;
+
+scheduling;
+
+QEC;
+
+simulator;
+
+accelerator;
+
+QPU;
+
+runtime strategy.
+
+
+The source meaning must remain stable.
+
+
+---
+
+78. Mandatory large-scale test
+
+A scalability test must construct quantum programs whose size is determined by:
+
+program data
+symbolic extents
+available resources
+test configuration
+
+rather than parser constants.
+
+For example:
+
+n = symbolic_or_runtime_extent;
+
+must remain representable without grammar changes as n grows.
+
+
+---
+
+79. Hard-coding audit
+
+Every quantum grammar file must pass the following audit.
+
+It must contain no:
+
+finite operation catalogue
+finite hardware catalogue
+finite vendor catalogue
+fixed qubit count
+fixed target count
+fixed control count
+fixed parameter count
+fixed circuit width
+fixed circuit depth
+fixed resource capacity
+fixed topology
+fixed QPU count
+fixed device count
+backend selection
+runtime discovery
+hardware probing
+provider API calls
+embedded Rust
+unsafe code
+
+A finite list of lexical keywords is acceptable only when those keywords have genuine language-level grammatical meaning.
+
+
+---
+
+80. What belongs outside this directory
+
+The following must remain outside the quantum grammar:
+
+QPU discovery
+device selection
+physical calibration
+routing implementation
+placement algorithms
+scheduling algorithms
+pulse synthesis
+QEC implementation
+decoder implementation
+backend drivers
+runtime resource allocation
+provider APIs
+hardware probing
+simulation engines
+optimization algorithms
+compiler cost models
+
+Quantum grammar expresses the input to these systems.
+
+
+---
+
+81. Quantum compiler boundary
+
+The canonical downstream boundary is:
+
+quantum syntax
+    |
+    v
+frontend AST
+    |
+    v
+quantum semantic model
+    |
+    v
+quantum::ir
+
+After quantum::ir:
+
+optimization
+    |
+    v
+decomposition
+    |
+    v
+routing
+    |
+    v
+scheduling
+    |
+    v
+resilience / QEC
+    |
+    v
+ZQN
+    |
+    v
+HAL
+    |
+    v
+target
+
+No grammar file may bypass this architecture.
+
+
+---
+
+82. Quantum grammar and hardware abstraction
+
+The grammar may express hardware-related requirements or intent.
+
+It must not encode hardware realization by default.
+
+For example:
+
+requires capability("quantum.dynamic_control");
+
+is portable.
+
+A hard-coded physical topology is not portable unless the programmer explicitly requests physical realization.
+
+This distinction is essential to POCO-REAF.
+
+
+---
+
+83. Future extensibility
+
+A future quantum technology must be addable through:
+
+new semantic capability
+new operation registration
+new dialect
+new interoperability adapter
+new lowering
+new backend
+new target description
+
+without requiring a redesign of the fundamental quantum grammar.
+
+This is a primary production-readiness requirement.
+
+
+---
+
+84. Adding a new quantum operation
+
+Adding a new quantum operation must normally require:
+
+operation metadata
+semantic registration
+implementation/lowering
+capability declaration if necessary
 tests
-      ↓
-compatibility
-      ↓
+documentation
+
+It must not require modifying a closed grammar rule such as:
+
+quantumOperation
+    : H
+    | X
+    | Y
+    | Z
+    | ...
+
+The fundamental grammar remains unchanged.
+
+
+---
+
+85. Adding a new hardware target
+
+Adding a target must normally require:
+
+target description
+capabilities
+resources
+constraints
+lowering
+backend/HAL integration
+tests
+
+It must not require adding a grammar-level hardware size constant.
+
+
+---
+
+86. Adding a new quantum representation
+
+Adding an external representation must use:
+
+format frontend
+    |
+    v
+Zamani semantic model
+    |
+    v
+quantum::ir
+
+The external representation must not become the canonical Zamani grammar.
+
+
+---
+
+87. Compatibility
+
+Compatibility must be explicit.
+
+Every changed public rule must declare whether it is:
+
 stable
+experimental
+deprecated
+compatibility-only
+historical
 
-A feature must not skip these stages.
+Breaking changes require:
 
----
+migration documentation;
 
-173. Independent-file completion principle
+compatibility tests;
 
-A file must contain enough advance integration information that completing it does not require waiting for another file's undocumented design.
+version metadata;
 
-For every file, the contract must already identify:
+diagnostics;
 
-who consumes it
-what it consumes
-what AST it produces
-what semantics it represents
-what IR receives it
-what compiler uses it
-what runtime uses it
-what tests prove it
-what files it must not duplicate
+semantic impact analysis.
 
-This is the required independent-first development model.
+
 
 ---
 
-174. Recommended implementation order
+88. Deprecation
 
-The quantum subsystem should be stabilized in this order:
+Deprecated quantum grammar must not silently remain a second authority.
 
-1. canonical quantum ownership map
-2. canonical lexer vocabulary
-3. quantum type owner
-4. quantum qubit owner
-5. quantum register owner
-6. parameter owner
-7. generic operation owner
-8. controls/modifiers
-9. controlled operations
-10. adjoints
-11. measurement
-12. reset
-13. states
-14. circuits
-15. kernels
-16. quantum/classical boundary
-17. dynamic control
-18. classical feed-forward
-19. observables
-20. channels
-21. noise intent
-22. logical qubits
-23. logical operations
-24. physical-resource intent
-25. resource requirements
-26. capability requirements
-27. QEC intent
-28. pulse intent
-29. dialects
-30. interoperability
-31. quantum.g4 composition
-32. Zamani.g4 integration
-33. AST conformance
-34. semantic conformance
-35. quantum::ir conformance
-36. compiler integration
-37. target integration
-38. complete conformance suite
+A deprecated construct should follow:
 
-This ordering minimizes rework.
+deprecated syntax
+    |
+    v
+diagnostic
+    |
+    v
+canonical equivalent
+    |
+    v
+canonical semantic model
+
+Historical grammar must never become automatically legal syntax merely because it exists in documentation.
+
 
 ---
 
-175. What must not be changed unnecessarily
+89. Documentation authority
 
-This README does not authorize unnecessary renaming.
+The following distinction is mandatory:
 
-Existing major repository files remain:
+README.md
+    = architecture/navigation/integration
 
-grammar/Zamani.g4
-grammar/grammar.md
+*.g4
+    = syntax implementation
+
+grammar/spec/quantum.md
+    = normative quantum semantics
+
 grammar/Zamani-Grammar.md
+    = historical/extended reference
+
+grammar/grammar.md
+    = conformance/status
+
 grammar/DESIGN.md
+    = repository architecture
 
-Existing quantum filenames should also be retained unless dependency analysis proves that an overlapping file is obsolete and removal is preferable to maintaining a duplicate authority.
+No documentation file should accidentally become a second syntax authority.
 
----
-
-176. What may be deleted
-
-A quantum file may be removed only when repository-wide dependency analysis establishes that it is:
-
-- unused;
-- redundant;
-- superseded;
-- not required for compatibility;
-- not required as historical/reference documentation.
-
-Deletion must never happen merely because two filenames look similar.
 
 ---
 
-177. Production invariants
+90. Test ownership
 
-The following are permanent invariants of "grammar/quantum/":
+Quantum grammar tests should be organized under the repository's canonical test hierarchy.
 
-ONE quantum composition root
-ONE canonical quantum semantic boundary
-ONE canonical quantum IR
-ONE canonical lexer vocabulary
-ONE canonical ownership per production
-ONE language
-OPEN-WORLD operations
-NO fixed hardware limits
-NO fixed qubit limits
-NO fixed register limits
-NO fixed control limits
-NO fixed parameter limits
-NO fixed circuit limits
-NO hardware discovery during parsing
-NO runtime execution during parsing
-NO QEC implementation in grammar
-NO ZQN implementation in grammar
-NO routing implementation in grammar
-NO scheduling implementation in grammar
-NO optimization implementation in grammar
-NO calibration implementation in grammar
-NO simulator implementation in grammar
-NO unsafe Rust
-NO embedded Rust actions
-NO circular grammar dependencies
-NO silent vendor lock-in
-NO competing quantum IR
+Recommended structure:
 
-And:
+grammar/tests/
+    quantum/
+        lexical/
+        parser/
+        ast/
+        semantic/
+        types/
+        effects/
+        capabilities/
+        resources/
+        contracts/
+        policies/
+        provenance/
+        dynamic/
+        hybrid/
+        adaptive/
+        learning/
+        reasoning/
+        interoperability/
+        scalability/
+        compatibility/
+        negative/
+        boundary/
 
-YES target independence
-YES capability-based design
-YES resource-based design
-YES generic operations
-YES logical/physical separation
-YES quantum/classical composition
-YES dynamic circuits
-YES extensibility
-YES dialects
-YES interoperability
-YES deterministic parsing
-YES source spans
-YES diagnostics
-YES scalability
-YES conformance testing
-YES POCO-REAF
+The exact test path may follow the repository's established convention.
+
 
 ---
 
-178. Final architecture
+91. Required test classes
 
-The production quantum subsystem must ultimately be:
+Every quantum feature must have:
 
-                         Zamani Source
-                              │
-                              ▼
-                     grammar/Zamani.g4
-                              │
-                              ▼
-                     canonical lexer
-                              │
-                              ▼
-                     canonical parser
-                              │
-                              ▼
-                 ┌───────────────────────┐
-                 │   Quantum grammar     │
-                 │                       │
-                 │ operations            │
-                 │ qubits                │
-                 │ registers             │
-                 │ states                │
-                 │ measurement           │
-                 │ controls              │
-                 │ circuits              │
-                 │ kernels               │
-                 │ dynamic control       │
-                 │ classical feedforward │
-                 │ observables           │
-                 │ channels              │
-                 │ noise intent          │
-                 │ QEC intent            │
-                 │ resources             │
-                 │ capabilities          │
-                 │ dialects              │
-                 └───────────┬───────────┘
-                             │
-                             ▼
-                    domain-neutral AST
-                             │
-                             ▼
-                    semantic analysis
-                             │
-              ┌──────────────┼──────────────┐
-              │              │              │
-           types          effects       resources
-              │              │              │
-              └──────────────┼──────────────┘
-                             │
-                             ▼
-                      quantum semantics
-                             │
-                             ▼
-                        quantum::ir
-                             │
-          ┌──────────────────┼──────────────────┐
-          │                  │                  │
-          ▼                  ▼                  ▼
-      optimization        routing          scheduling
-          │                  │                  │
-          └──────────────────┼──────────────────┘
-                             │
-                             ▼
-                      QEC / resilience
-                             │
-                             ▼
-                            ZQN
-                             │
-                             ▼
-                            HAL
-                             │
-                             ▼
-                    target realization
-                             │
-             ┌───────────────┼────────────────┐
-             │               │                │
-             ▼               ▼                ▼
-          simulator         QPU          heterogeneous
-             │               │             hardware
-             └───────────────┼────────────────┘
-                             │
-                             ▼
-                          runtime
+positive tests
+negative tests
+boundary tests
+scalability tests
+cross-domain tests
+compatibility tests
+determinism tests
+
+Where applicable it must also have:
+
+resource tests
+capability tests
+effect tests
+contract tests
+policy tests
+provenance tests
+IR tests
+lowering tests
+
 
 ---
 
-179. Final principle
+92. Grammar conformance
 
-The success criterion for "grammar/quantum/" is not:
+A quantum grammar feature is not considered implemented merely because ANTLR accepts it.
 
-«"Does the grammar know every quantum gate and every QPU?"»
+The minimum conformance chain is:
 
-The success criterion is:
+SPECIFICATION
+    |
+    v
+LEXER
+    |
+    v
+GRAMMAR
+    |
+    v
+AST
+    |
+    v
+SEMANTICS
+    |
+    v
+TYPE CHECKING
+    |
+    v
+EFFECT CHECKING
+    |
+    v
+CAPABILITY CHECKING
+    |
+    v
+RESOURCE CHECKING
+    |
+    v
+CONTRACT CHECKING
+    |
+    v
+POLICY CHECKING
+    |
+    v
+PROVENANCE
+    |
+    v
+quantum::ir
+    |
+    v
+OPTIMIZATION
+    |
+    v
+LOWERING
+    |
+    v
+ROUTING
+    |
+    v
+SCHEDULING
+    |
+    v
+RESILIENCE / QEC
+    |
+    v
+ZQN
+    |
+    v
+HAL
+    |
+    v
+TARGET
 
-«Can Zamani express quantum computation, quantum intent, requirements, capabilities and constraints once, in a target-independent form, and allow the rest of the toolchain to realize that same semantic program across different scales, architectures and future quantum systems without imposing artificial language limits?»
 
-Therefore:
+---
 
-ONE PROGRAM
-     ↓
-ONE LANGUAGE
-     ↓
+93. Completion criteria for each file
+
+A quantum grammar file is complete only when:
+
+1. Its purpose is documented.
+
+
+2. Its ownership is explicit.
+
+
+3. Its non-ownership is explicit.
+
+
+4. Its public rules are documented.
+
+
+5. Its private rules are documented.
+
+
+6. Lexer dependencies are known.
+
+
+7. Grammar dependencies are known.
+
+
+8. AST ownership is known.
+
+
+9. Semantic ownership is known.
+
+
+10. Type interactions are documented.
+
+
+11. Effects are documented.
+
+
+12. Capabilities are documented.
+
+
+13. Resource interactions are documented.
+
+
+14. Contract interactions are documented.
+
+
+15. Policy interactions are documented.
+
+
+16. Provenance interactions are documented.
+
+
+17. IR destination is documented.
+
+
+18. Quantum/classical boundaries are documented.
+
+
+19. HDL/backend boundaries are documented where applicable.
+
+
+20. Diagnostics are defined.
+
+
+21. Positive tests exist.
+
+
+22. Negative tests exist.
+
+
+23. Boundary tests exist.
+
+
+24. Scalability tests exist.
+
+
+25. Cross-domain tests exist.
+
+
+26. Compatibility behavior is defined.
+
+
+27. Hard-coding audit passes.
+
+
+28. No duplicate semantic owner exists.
+
+
+29. The canonical AST boundary is preserved.
+
+
+30. The canonical quantum::ir boundary is preserved.
+
+
+31. No target-specific implementation is embedded.
+
+
+32. Generated Rust remains compatible with Rust 1.97+.
+
+
+33. No unsafe implementation is required.
+
+
+34. Adding a future operation does not require reopening the file merely to extend a closed operation list.
+
+
+35. Adding a future target does not require reopening the file merely to increase a capacity constant.
+
+
+
+
+---
+
+94. Completion criteria for grammar/quantum/
+
+The entire directory is production-ready only when:
+
+single lexical authority
+        +
+single quantum composition root
+        +
+single owner per semantic concept
+        +
+open-world operations
+        +
+open-ended cardinality
+        +
+target-independent syntax
+        +
+domain-neutral AST
+        +
+canonical semantic model
+        +
+canonical quantum::ir
+        +
+resource abstraction
+        +
+capability abstraction
+        +
+effect abstraction
+        +
+contract abstraction
+        +
+policy abstraction
+        +
+provenance
+        +
+dynamic circuits
+        +
+adaptive execution
+        +
+quantum/classical integration
+        +
+learning/reasoning integration
+        +
+interoperability
+        +
+dialect extensibility
+        +
+complete conformance tests
+        =
+production-ready quantum grammar
+
+
+---
+
+95. Final architecture invariant
+
+The quantum subsystem must preserve this invariant:
+
+SOURCE INTENT
+     |
+     v
+OPEN-WORLD SYNTAX
+     |
+     v
+DOMAIN-NEUTRAL AST
+     |
+     v
+SEMANTIC VALIDATION
+     |
+     +--> TYPES
+     +--> EFFECTS
+     +--> CAPABILITIES
+     +--> RESOURCES
+     +--> CONTRACTS
+     +--> POLICIES
+     +--> PROVENANCE
+     |
+     v
+quantum::ir
+     |
+     v
+OPTIMIZATION
+     |
+     v
+DECOMPOSITION
+     |
+     v
+ROUTING
+     |
+     v
+SCHEDULING
+     |
+     v
+RESILIENCE / QEC
+     |
+     v
+ZQN
+     |
+     v
+HAL
+     |
+     v
+TARGET
+
+The grammar must never collapse these stages into one layer.
+
+
+---
+
+96. Final scalability invariant
+
+The quantum grammar has no universal machine-size ceiling.
+
+The following are intentionally open-ended:
+
+number of qubits
+number of logical qubits
+number of physical qubits
+number of registers
+number of operations
+number of parameters
+number of targets
+number of controls
+number of measurements
+number of circuits
+number of kernels
+number of channels
+number of devices
+namespace depth
+modifier depth
+program size
+resource size
+
+Any real limit belongs to the environment that processes the program.
+
+Therefore the correct model is:
+
+Zamani grammar
+    |
+    |  no artificial universal capacity
+    v
+semantic intent
+    |
+    v
+available resources + capabilities + policies
+    |
+    v
+feasible realization
+
+
+---
+
+97. Final POCO-REAF invariant
+
+The quantum subsystem must make the following possible:
+
+ONE SOURCE PROGRAM
+       |
+       v
 ONE SEMANTIC MEANING
-     ↓
-ONE CANONICAL quantum::ir
-     ↓
-MANY OPTIMIZATIONS
-     ↓
-MANY ROUTINGS
-     ↓
-MANY SCHEDULES
-     ↓
-MANY QEC/RESILIENCE STRATEGIES
-     ↓
-MANY HARDWARE TARGETS
-     ↓
-MANY SCALES
+       |
+       +-----------------------------+
+       |                             |
+       v                             v
+SMALL SYSTEM                    LARGE SYSTEM
+       |                             |
+       v                             v
+SIMULATOR                       QPU
+       |                             |
+       v                             v
+ACCELERATOR                    DISTRIBUTED SYSTEM
+       |                             |
+       +-------------+---------------+
+                     |
+                     v
+               FUTURE TARGET
 
-The grammar describes the computation.
+The source program expresses computational intent.
 
-The semantic layer determines the meaning.
-
-"quantum::ir" provides the canonical quantum representation.
-
-Optimization determines an efficient realization.
-
-Routing determines placement.
-
-Scheduling determines execution order and timing.
-
-QEC determines fault-tolerant realization.
-
-ZQN determines noise/fault semantics.
-
-HAL determines available hardware capabilities.
+The compiler determines realization.
 
 The runtime determines execution.
 
-That separation is the foundation of quantum POCO-REAF and of Zamani's goal of scaling from the smallest meaningful quantum computation to arbitrarily large systems constrained only by the resources actually available—not by arbitrary limits embedded in the language grammar.
+The target provides actual capabilities and resources.
 
-"grammar/quantum/README.md" is complete when every file beneath "grammar/quantum/" can be judged against this contract independently, without creating a second quantum language, second AST, second quantum IR, or hidden hardware ceiling.
+No layer may silently change the program's meaning merely to accommodate a particular machine.
+
+
+---
+
+98. Non-negotiable rules
+
+The following rules apply to every file under grammar/quantum/:
+
+1. No artificial universal capacity constants.
+
+
+2. No fixed quantum-operation catalogue.
+
+
+3. No vendor-specific core grammar.
+
+
+4. No backend selection in the grammar.
+
+
+5. No physical topology in target-independent syntax.
+
+
+6. No routing implementation in grammar.
+
+
+7. No scheduling implementation in grammar.
+
+
+8. No QEC implementation in grammar.
+
+
+9. No calibration implementation in grammar.
+
+
+10. No runtime or hardware access from grammar.
+
+
+11. No duplicate AST.
+
+
+12. No duplicate quantum IR.
+
+
+13. No duplicate resource system.
+
+
+14. No duplicate capability system.
+
+
+15. No duplicate effect system.
+
+
+16. No duplicate contract system.
+
+
+17. No duplicate policy system.
+
+
+18. No duplicate provenance system.
+
+
+19. No independent lexer.
+
+
+20. No independent namespace system.
+
+
+21. No embedded Rust actions.
+
+
+22. No unsafe.
+
+
+23. No finite operation list masquerading as universal syntax.
+
+
+24. No semantic validation hidden inside parser predicates.
+
+
+25. No application-specific keyword explosion.
+
+
+26. No requirement to edit core grammar when a new operation is added.
+
+
+27. No requirement to edit core grammar when a new hardware target is added.
+
+
+28. No requirement to edit core grammar when a new provider is added.
+
+
+29. All public rules have explicit ownership.
+
+
+30. All files have explicit integration contracts.
+
+
+
+
+---
+
+99. Definition of production readiness
+
+grammar/quantum/ is production-ready only when it is possible to add:
+
+a new quantum operation
+a new quantum algorithm
+a new quantum learning method
+a new reasoning method
+a new quantum device
+a new QPU
+a new simulator
+a new accelerator
+a new backend
+a new provider
+a new interoperability format
+a new resilience strategy
+a new QEC strategy
+a new routing strategy
+a new scheduling strategy
+a new capability
+a new resource
+a new policy
+
+without changing the fundamental language architecture.
+
+The quantum grammar must therefore describe what the program means, not what today's hardware happens to look like.
+
+That is the quantum grammar's central contribution to POCO-REAF.
+
+  
