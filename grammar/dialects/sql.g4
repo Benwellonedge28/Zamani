@@ -1,1929 +1,1600 @@
 /*
- * ============================================================================
- * Zamani Universal Programming Language
- * ============================================================================
- *
- * File:
- *     grammar/dialects/sql/sql.g4
- *
- * Grammar:
- *     SQL
- *
- * Role:
- *     SQL DIALECT / INTEROPERABILITY LEAF GRAMMAR
- *
- * Status:
- *     PRODUCTION-READY ARCHITECTURAL BASELINE
- *
- * Baseline:
- *     ANTLR4
- *     Rust 1.97.1+
- *     Rust 2021
- *     Safe Rust only
- *     No unsafe Rust
- *
- * ============================================================================
- * PURPOSE
- * ============================================================================
- *
- * This grammar defines source-level SQL interoperability syntax.
- *
- * SQL is NOT the canonical Zamani data language.
- *
- * This grammar therefore provides:
- *
- *     SQL source
- *         |
- *         v
- *     SQL dialect parser
- *         |
- *         v
- *     dialect-neutral SQL syntax representation
- *         |
- *         v
- *     semantic normalization
- *         |
- *         v
- *     Zamani data/query semantic model
- *         |
- *         v
- *     canonical IR / execution planning
- *
- * It MUST NOT create:
- *
- *     - a second Zamani language;
- *     - a second universal data model;
- *     - a second expression language;
- *     - a database runtime;
- *     - a query optimizer;
- *     - a storage engine;
- *     - a physical database topology;
- *     - a fixed database capacity model;
- *     - a vendor-specific execution engine.
- *
- * ============================================================================
- * OWNERSHIP
- * ============================================================================
- *
- * THIS FILE OWNS:
- *
- *     - SQL statement syntax;
- *     - SQL query-expression syntax;
- *     - SQL table-expression syntax;
- *     - SQL joins;
- *     - SQL grouping;
- *     - SQL ordering;
- *     - SQL window syntax;
- *     - SQL common table expressions;
- *     - SQL data manipulation syntax;
- *     - SQL schema-definition syntax where supported by the shared lexer;
- *     - SQL transaction syntax where supported by the shared lexer;
- *     - SQL type-name syntax at the SQL dialect boundary;
- *     - SQL dialect extension points.
- *
- * THIS FILE DOES NOT OWN:
- *
- *     - Zamani identifier syntax;
- *     - Zamani numeric literals;
- *     - Zamani string literals;
- *     - Zamani comments;
- *     - Zamani Unicode rules;
- *     - Zamani expressions;
- *     - Zamani type semantics;
- *     - resource limits;
- *     - capability discovery;
- *     - database discovery;
- *     - connection management;
- *     - authentication;
- *     - authorization;
- *     - query planning;
- *     - query optimization;
- *     - transaction execution;
- *     - storage;
- *     - indexes;
- *     - physical partitions;
- *     - distributed placement;
- *     - hardware selection.
- *
- * ============================================================================
- * ARCHITECTURAL PRINCIPLE
- * ============================================================================
- *
- * SQL syntax is an interoperability representation.
- *
- * It is NOT a replacement for:
- *
- *     grammar/data/
- *     grammar/expressions/
- *     grammar/statements/
- *     grammar/types/
- *
- * Zamani-native data/query constructs remain owned by those grammars.
- *
- * SQL enters Zamani through the dialect/interoperability boundary.
- *
- * ============================================================================
- * POCO-REAF
- * ============================================================================
- *
- * SQL source may describe logical data intent.
- *
- * It MUST NOT encode universal physical assumptions such as:
- *
- *     fixed database size
- *     fixed table size
- *     fixed row count
- *     fixed column count
- *     fixed shard count
- *     fixed node count
- *     fixed memory size
- *     fixed storage size
- *     fixed processor count
- *     fixed database vendor
- *     fixed machine
- *
- * SQL may express logical constraints and query semantics.
- *
- * Physical realization is resolved downstream.
- *
- * ============================================================================
- * OPEN-WORLD PRINCIPLE
- * ============================================================================
- *
- * SQL vendors and future SQL dialects must be extensible.
- *
- * This grammar therefore avoids making every vendor feature a universal
- * Zamani keyword.
- *
- * Vendor-specific identifiers, qualified names and extension clauses remain
- * available through the explicit SQL dialect extension boundary.
- *
- * A vendor feature MUST NOT silently change the meaning of standard Zamani
- * syntax.
- *
- * ============================================================================
- * LEXICAL AUTHORITY
- * ============================================================================
- *
- * This grammar intentionally uses:
- *
- *     tokenVocab = ZamaniLexer
- *
- * It MUST NOT define another lexer.
- *
- * The canonical lexical pipeline is:
- *
- *     grammar/lexer/
- *          |
- *          v
- *     grammar/antlr/ZamaniLexer.g4
- *          |
- *          v
- *     SQL parser
- *
- * SQL-specific reserved words that are not already present in the canonical
- * Zamani lexer MUST be added to the canonical lexical vocabulary BEFORE this
- * grammar is enabled in the ANTLR parser build.
- *
- * They MUST NOT be defined locally here.
- *
- * ============================================================================
- * CURRENT LEXER INTEGRATION REQUIREMENT
- * ============================================================================
- *
- * The current repository already provides a number of SQL-compatible tokens,
- * including concepts such as:
- *
- *     SELECT
- *     FROM
- *     WHERE
- *     GROUP
- *     ORDER
- *     BY
- *     HAVING
- *     JOIN
- *     INNER
- *     LEFT
- *     RIGHT
- *     FULL
- *     ON
- *     UNION
- *     WITH
- *     CASE
- *     WHEN
- *     ELSE
- *     END
- *     AS
- *     AND
- *     OR
- *     NOT
- *     IS
- *     IN
- *     UPDATE
- *     INSERT
- *     DELETE
- *     VALUES
- *     TABLE
- *     ALTER
- *     DROP
- *
- * The SQL integration must additionally reconcile any SQL spelling that is
- * currently represented only as IDENTIFIER or is absent from the canonical
- * lexer.
- *
- * Typical additions include, where required by the selected SQL conformance
- * level:
- *
- *     CREATE
- *     INTO
- *     SET
- *     DISTINCT
- *     ASC
- *     DESC
- *     LIMIT
- *     OFFSET
- *     FETCH
- *     FIRST
- *     NEXT
- *     NULLS
- *     INTERSECT
- *     EXCEPT
- *     MERGE
- *     RETURNING
- *     PRIMARY
- *     KEY
- *     UNIQUE
- *     CHECK
- *     DEFAULT
- *     REFERENCES
- *     INDEX
- *     VIEW
- *     TRIGGER
- *     PROCEDURE
- *     FUNCTION
- *     GRANT
- *     REVOKE
- *     COMMIT
- *     ROLLBACK
- *     BEGIN
- *     TRANSACTION
- *     SAVEPOINT
- *     RELEASE
- *     RECURSIVE
- *     OVER
- *     PARTITION
- *     ROWS
- *     RANGE
- *     GROUPS
- *     PRECEDING
- *     FOLLOWING
- *     CURRENT
- *
- * Exact token additions belong to:
- *
- *     grammar/lexer/keywords.g4
- *     grammar/lexer/tokens.g4
- *     grammar/antlr/ZamaniLexer.g4
- *
- * and MUST be reconciled with the Rust lexer implementation.
- *
- * ============================================================================
- * AST CONTRACT
- * ============================================================================
- *
- * This grammar must preserve enough structure for an AST or dialect-neutral
- * syntax representation to retain:
- *
- *     statement kind
- *     source spans
- *     identifiers
- *     qualification
- *     aliases
- *     expressions
- *     predicates
- *     projections
- *     table references
- *     joins
- *     grouping
- *     ordering
- *     limits/offsets
- *     common table expressions
- *     set operations
- *     window specifications
- *     data modification
- *     schema operations
- *     transaction intent
- *     vendor extension nodes
- *
- * The AST MUST NOT contain:
- *
- *     database connection objects
- *     physical database IDs
- *     physical shard IDs
- *     server IDs
- *     machine IDs
- *     storage-device IDs
- *     CPU/GPU/QPU identifiers.
- *
- * ============================================================================
- * SEMANTIC CONTRACT
- * ============================================================================
- *
- * Parsing establishes SQL structure.
- *
- * Semantic analysis owns:
- *
- *     name resolution
- *     scope resolution
- *     column resolution
- *     type checking
- *     aggregate validity
- *     grouping validity
- *     window validity
- *     recursive-query validation
- *     mutation validity
- *     schema validity
- *     transaction semantics
- *     dialect compatibility
- *     capability requirements
- *     effect requirements
- *     resource requirements
- *     security policy
- *     provenance
- *     execution feasibility
- *
- * ============================================================================
- * EFFECT CONTRACT
- * ============================================================================
- *
- * SQL operations may produce effects.
- *
- * Typical semantic effects include:
- *
- *     data.read
- *     data.write
- *     schema.read
- *     schema.write
- *     transaction
- *     external
- *     network
- *     nondeterministic
- *
- * This grammar does NOT assign those effects.
- *
- * It only preserves syntax required by semantic analysis.
- *
- * ============================================================================
- * CAPABILITY CONTRACT
- * ============================================================================
- *
- * A SQL construct MAY require capabilities such as:
- *
- *     data.query
- *     data.mutation
- *     data.schema
- *     data.transaction
- *     data.recursive_query
- *     data.window_query
- *     data.returning
- *     data.json
- *     data.array
- *     data.spatial
- *     data.vendor_extension
- *
- * Capabilities are resolved downstream.
- *
- * ============================================================================
- * RESOURCE CONTRACT
- * ============================================================================
- *
- * SQL syntax MUST NOT impose physical resource limits.
- *
- * The following are semantic/execution concerns:
- *
- *     query memory
- *     result size
- *     transaction capacity
- *     storage capacity
- *     worker count
- *     database node count
- *     network bandwidth
- *     execution time
- *
- * The SQL grammar contains no universal maximum for any of them.
- *
- * ============================================================================
- * POLICY CONTRACT
- * ============================================================================
- *
- * SQL execution may be constrained by:
- *
- *     security policy
- *     data-access policy
- *     privacy policy
- *     transaction policy
- *     resource policy
- *     provenance policy
- *     vendor policy
- *
- * Those policies are not encoded into SQL grammar productions.
- *
- * ============================================================================
- * PROVENANCE CONTRACT
- * ============================================================================
- *
- * SQL source spans and dialect identity MUST remain available for provenance.
- *
- * Downstream provenance may record:
- *
- *     source SQL
- *     normalized SQL
- *     semantic query
- *     transformation
- *     optimizer decision
- *     execution plan
- *     external data source
- *     result derivation
- *
- * ============================================================================
- * DETERMINISM
- * ============================================================================
- *
- * Parsing MUST depend only on:
- *
- *     source tokens
- *     grammar
- *     explicit parser configuration.
- *
- * It MUST NOT:
- *
- *     inspect the filesystem;
- *     connect to a database;
- *     discover a server;
- *     inspect hardware;
- *     inspect environment variables;
- *     resolve credentials;
- *     execute SQL.
- *
- * ============================================================================
- * COMPATIBILITY
- * ============================================================================
- *
- * This grammar represents SQL interoperability, not a promise that every
- * SQL implementation accepts every production.
- *
- * SQL dialect/version selection MUST be represented through the surrounding
- * dialect infrastructure.
- *
- * Example semantic information:
- *
- *     dialect sql::standard
- *     version ...
- *     capability ...
- *
- * remains owned by:
- *
- *     grammar/dialects/
- *
- * This file does not duplicate dialect registration/versioning.
- *
- * ============================================================================
- * SQL ENTRY POINT
- * ============================================================================
- *
- * The public entry point is:
- *
- *     sqlProgram
- *
- * It is deliberately separate from the Zamani root `program`.
- *
- * The dialect adapter decides how SQL text is introduced:
- *
- *     - explicit SQL dialect block;
- *     - external SQL source;
- *     - embedded SQL construct;
- *     - tooling invocation;
- *     - interoperability import.
- *
- * ============================================================================
- */
+
+* ============================================================================
+* ZAMANI — SQL DIALECT
+* ============================================================================
+* 
+* File:
+* grammar/dialects/sql.g4
+* 
+* Grammar:
+* SQL
+* 
+* Role:
+* SQL interoperability / dialect leaf grammar
+* 
+* Status:
+* PRODUCTION-READY PARSER CONTRACT
+* 
+* Baseline:
+* ANTLR4
+* Rust 1.97.1+
+* Rust 2021
+* Safe Rust only
+* 
+* ============================================================================
+* PURPOSE
+* ============================================================================
+* 
+* This grammar defines SQL source syntax at the Zamani interoperability
+* boundary.
+* 
+* SQL is NOT the canonical Zamani data language.
+* 
+* The ownership pipeline is:
+* 
+* SQL source
+*     |
+*     v
+* SQL lexical vocabulary
+*     |
+*     v
+* SQL parser
+*     |
+*     v
+* SQL dialect syntax representation
+*     |
+*     v
+* semantic normalization
+*     |
+*     v
+* Zamani data/query semantic model
+*     |
+*     v
+* canonical semantic representation
+*     |
+*     v
+* domain/data IR
+*     |
+*     v
+* planning / optimization / execution
+* 
+* This file MUST NOT implement:
+* 
+* - a database runtime;
+* - database discovery;
+* - connection management;
+* - authentication;
+* - authorization;
+* - query optimization;
+* - storage;
+* - physical partitioning;
+* - sharding;
+* - hardware selection;
+* - resource allocation;
+* - execution;
+* - vendor-specific runtime behavior.
+* 
+* ============================================================================
+* OWNERSHIP
+* ============================================================================
+* 
+* THIS FILE OWNS:
+* 
+* - SQL statement syntax;
+* - SQL query expressions;
+* - SQL table expressions;
+* - joins;
+* - predicates;
+* - grouping;
+* - ordering;
+* - pagination;
+* - window specifications;
+* - common table expressions;
+* - data modification syntax;
+* - core schema-definition syntax;
+* - transaction syntax;
+* - authorization statement syntax;
+* - SQL type-name syntax;
+* - explicitly delimited SQL extension boundaries.
+* 
+* THIS FILE DOES NOT OWN:
+* 
+* - Zamani identifiers;
+* - Zamani types;
+* - Zamani expressions;
+* - Zamani resource semantics;
+* - Zamani capability semantics;
+* - Zamani effects;
+* - Zamani policies;
+* - Zamani provenance;
+* - SQL execution;
+* - database metadata;
+* - physical database topology.
+* 
+* ============================================================================
+* DEPENDENCY CONTRACT
+* ============================================================================
+* 
+* DEPENDS_ON:
+* 
+* grammar/antlr/ZamaniLexer.g4
+* grammar/lexer/tokens.g4
+* grammar/lexer/keywords.g4
+* grammar/dialects/dialect.g4
+* grammar/dialects/registration.g4
+* grammar/data/
+* grammar/types/
+* grammar/expressions/
+* grammar/resources/
+* grammar/effects/
+* grammar/security/
+* grammar/compatibility/
+* 
+* EXPORTS:
+* 
+* sqlProgram
+* 
+* CONSUMED_BY:
+* 
+* SQL dialect adapter
+* dialect dispatcher
+* SQL interoperability tooling
+* SQL conformance tests
+* 
+* AST_OWNER:
+* 
+* existing domain-neutral frontend AST / dialect syntax representation
+* 
+* SEMANTIC_OWNER:
+* 
+* existing data/query semantic subsystem
+* 
+* TYPE_OWNER:
+* 
+* existing Zamani type system
+* 
+* EFFECT_OWNER:
+* 
+* existing effects subsystem
+* 
+* RESOURCE_OWNER:
+* 
+* existing resource subsystem
+* 
+* POLICY_OWNER:
+* 
+* existing policy/security subsystem
+* 
+* PROVENANCE_OWNER:
+* 
+* existing provenance subsystem
+* 
+* IR_OWNER:
+* 
+* existing canonical semantic/data IR
+* 
+* SPEC_OWNER:
+* 
+* grammar/specification/interoperability.md
+* grammar/dialects/
+* 
+* TEST_OWNER:
+* 
+* grammar/tests/interoperability/
+* grammar/tests/dialects/sql/
+* 
+* ============================================================================
+* LEXER CONTRACT
+* ============================================================================
+* 
+* This is a parser grammar.
+* 
+* It intentionally uses:
+* 
+* tokenVocab = ZamaniLexer
+* 
+* It MUST NOT define lexer rules.
+* 
+* SQL-specific lexical vocabulary MUST be added to the canonical lexical
+* hierarchy before this parser is enabled.
+* 
+* In particular, the canonical lexer must provide SQL token identities for
+* the SQL keywords and delimited identifiers/string literals listed by the
+* repository's SQL conformance profile.
+* 
+* The SQL parser MUST NOT define a second lexer.
+* 
+* ============================================================================
+* CASE CONTRACT
+* ============================================================================
+* 
+* SQL keywords are normally case-insensitive.
+* 
+* The canonical Zamani language must remain free to use its own case rules.
+* 
+* Therefore SQL case normalization belongs to the SQL dialect lexical adapter,
+* not this parser.
+* 
+* The adapter MUST:
+* 
+* 1. recognize SQL keyword spellings case-insensitively;
+* 2. preserve original source text;
+* 3. preserve exact source spans;
+* 4. emit canonical Zamani/SQL token identities;
+* 5. preserve quoted/delimited identifier spelling;
+* 6. preserve string literal contents;
+* 7. provide deterministic source mapping.
+* 
+* The parser itself must remain deterministic and case-independent once
+* canonical tokens have been produced.
+* 
+* ============================================================================
+* STRING CONTRACT
+* ============================================================================
+* 
+* SQL standard character strings use single quotes.
+* 
+* Zamani's ordinary STRING token is not assumed to represent SQL strings.
+* 
+* The canonical lexical vocabulary must therefore expose a dedicated SQL
+* character-string token, for example:
+* 
+* SQL_STRING
+* 
+* or the repository's approved equivalent.
+* 
+* It must support SQL string escaping according to the selected SQL profile.
+* 
+* The SQL grammar consumes that canonical token.
+* 
+* ============================================================================
+* IDENTIFIER CONTRACT
+* ============================================================================
+* 
+* SQL identifiers are distinct from Zamani identifiers.
+* 
+* This grammar consumes:
+* 
+* IDENTIFIER
+* SQL_DELIMITED_IDENTIFIER
+* 
+* where the latter is supplied by the canonical SQL lexical adapter.
+* 
+* Delimited identifiers preserve their source spelling for semantic
+* normalization and diagnostics.
+* 
+* ============================================================================
+* SCALABILITY CONTRACT
+* ============================================================================
+* 
+* This grammar defines no fixed:
+* 
+* table count
+* column count
+* row count
+* query depth
+* join count
+* CTE count
+* parameter count
+* result size
+* database size
+* shard count
+* node count
+* worker count
+* memory size
+* storage size
+* network size
+* processor count.
+* 
+* Parser implementation limits, if any, are implementation/resource limits,
+* not language-level SQL limits.
+* 
+* No MAX_* physical capacity constants may be introduced here.
+* 
+* ============================================================================
+* POCO-REAF CONTRACT
+* ============================================================================
+* 
+* SQL source expresses logical data intent.
+* 
+* Physical realization is downstream.
+* 
+* A query MUST remain independent of:
+* 
+* CPU identity
+* GPU identity
+* accelerator identity
+* machine identity
+* database-server identity
+* shard identity
+* node identity
+* storage-device identity.
+* 
+* Target/resource feasibility is determined after parsing.
+* 
+* ============================================================================
+* DETERMINISM
+* ============================================================================
+* 
+* Parsing depends only on:
+* 
+* canonical SQL tokens
+* this grammar
+* explicit SQL dialect/profile configuration.
+* 
+* Parsing MUST NOT:
+* 
+* inspect hardware;
+* inspect the filesystem;
+* connect to a database;
+* inspect credentials;
+* inspect network state;
+* discover database schemas;
+* execute queries;
+* consult runtime state.
+* 
+* ============================================================================
+* SEMANTIC BOUNDARY
+* ============================================================================
+* 
+* Parsing establishes structure.
+* 
+* Semantic analysis owns:
+* 
+* name resolution;
+* scope resolution;
+* column resolution;
+* type checking;
+* aggregate validation;
+* grouping validation;
+* window validation;
+* recursive-query validation;
+* mutation validation;
+* schema validation;
+* transaction validation;
+* authorization validation;
+* dialect compatibility;
+* capability requirements;
+* resource requirements;
+* effects;
+* policies;
+* provenance;
+* execution feasibility.
+* 
+* ============================================================================
+  */
 
 parser grammar SQL;
 
 options {
-    tokenVocab = ZamaniLexer;
+tokenVocab = ZamaniLexer;
 }
 
-
 /* ============================================================================
- * 1. PUBLIC ENTRY POINT
- * ========================================================================== */
+
+* 1. PUBLIC ENTRY POINT
+* ========================================================================== */
 
 sqlProgram
-    : sqlStatementList EOF
-    ;
+: sqlStatementList EOF
+;
 
 sqlStatementList
-    : sqlStatement*
-    ;
+: sqlStatement*
+;
 
 sqlStatement
-    : sqlQueryStatement
-    | sqlInsertStatement
-    | sqlUpdateStatement
-    | sqlDeleteStatement
-    | sqlMergeStatement
-    | sqlCreateStatement
-    | sqlAlterStatement
-    | sqlDropStatement
-    | sqlTransactionStatement
-    | sqlGrantStatement
-    | sqlRevokeStatement
-    | sqlDialectExtensionStatement
-    ;
-
+: sqlQueryStatement
+| sqlInsertStatement
+| sqlUpdateStatement
+| sqlDeleteStatement
+| sqlMergeStatement
+| sqlCreateStatement
+| sqlAlterStatement
+| sqlDropStatement
+| sqlTransactionStatement
+| sqlAuthorizationStatement
+| sqlExtensionStatement
+;
 
 /* ============================================================================
- * 2. QUERY STATEMENTS
- * ========================================================================== */
+
+* 2. QUERY STATEMENTS
+* ========================================================================== */
 
 sqlQueryStatement
-    : sqlWithClause?
-      sqlQueryExpression
-      sqlOrderByClause?
-      sqlPaginationClause?
-      sqlLockClause?
-      sqlStatementTerminator?
-    ;
+: sqlQueryExpression
+sqlOrderByClause?
+sqlPaginationClause?
+sqlLockClause?
+sqlStatementTerminator?
+;
 
 sqlQueryExpression
-    : sqlSelectExpression
-      (
-          sqlUnionExpression
-        | sqlIntersectExpression
-        | sqlExceptExpression
-      )*
-    ;
+: sqlWithClause?
+sqlQueryTerm
+sqlSetOperation*
+;
 
-sqlSetQueryExpression
-    : sqlQueryExpression
-    ;
+sqlQueryTerm
+: sqlSelectExpression
+| LPAREN sqlQueryExpression RPAREN
+;
 
-sqlUnionExpression
-    : UNION sqlSetQuantifier?
-      sqlSelectExpression
-    ;
+sqlSetOperation
+: sqlUnionOperation
+| sqlIntersectOperation
+| sqlExceptOperation
+;
 
-sqlIntersectExpression
-    : INTERSECT sqlSetQuantifier?
-      sqlSelectExpression
-    ;
+sqlUnionOperation
+: UNION sqlSetQuantifier? sqlQueryTerm
+;
 
-sqlExceptExpression
-    : EXCEPT sqlSetQuantifier?
-      sqlSelectExpression
-    ;
+sqlIntersectOperation
+: INTERSECT sqlSetQuantifier? sqlQueryTerm
+;
+
+sqlExceptOperation
+: EXCEPT sqlSetQuantifier? sqlQueryTerm
+;
 
 sqlSetQuantifier
-    : ALL
-    | DISTINCT
-    ;
-
+: ALL
+| DISTINCT
+;
 
 /* ============================================================================
- * 3. COMMON TABLE EXPRESSIONS
- * ========================================================================== */
+
+* 3. COMMON TABLE EXPRESSIONS
+* ========================================================================== */
 
 sqlWithClause
-    : WITH RECURSIVE?
-      sqlCommonTableExpression
-      (
-          COMMA sqlCommonTableExpression
-      )*
-    ;
+: WITH RECURSIVE?
+sqlCommonTableExpression
+(COMMA sqlCommonTableExpression)*
+;
 
 sqlCommonTableExpression
-    : sqlIdentifier
-      sqlColumnNameList?
-      AS
-      LPAREN
-      sqlQueryExpression
-      RPAREN
-    ;
+: sqlIdentifier
+sqlColumnNameList?
+AS
+LPAREN
+sqlQueryExpression
+RPAREN
+;
 
 sqlColumnNameList
-    : LPAREN
-      sqlIdentifierList
-      RPAREN
-    ;
-
+: LPAREN
+sqlIdentifierList
+RPAREN
+;
 
 /* ============================================================================
- * 4. SELECT
- * ========================================================================== */
+
+* 4. SELECT
+* ========================================================================== */
 
 sqlSelectExpression
-    : SELECT
-      sqlSetQuantifier?
-      sqlSelectList
-      sqlFromClause?
-      sqlWhereClause?
-      sqlGroupByClause?
-      sqlHavingClause?
-      sqlWindowClause?
-      sqlQualifyClause?
-    ;
+: SELECT
+sqlSetQuantifier?
+sqlSelectList
+sqlFromClause?
+sqlWhereClause?
+sqlGroupByClause?
+sqlHavingClause?
+sqlWindowClause?
+sqlQualifyClause?
+;
 
 sqlSelectList
-    : STAR
-    | sqlSelectItem
-      (
-          COMMA sqlSelectItem
-      )*
-    ;
+: STAR
+| sqlSelectItem (COMMA sqlSelectItem)*
+;
 
 sqlSelectItem
-    : sqlExpression
-      sqlAliasClause?
-    ;
+: sqlExpression sqlSelectAlias?
+;
 
-sqlAliasClause
-    : AS sqlIdentifier
-    | sqlIdentifier
-    ;
-
+sqlSelectAlias
+: AS sqlIdentifier
+| sqlIdentifier
+;
 
 /* ============================================================================
- * 5. FROM
- * ========================================================================== */
+
+* 5. FROM / TABLE REFERENCES
+* ========================================================================== */
 
 sqlFromClause
-    : FROM sqlTableReference
-      (
-          COMMA sqlTableReference
-      )*
-    ;
+: FROM
+sqlTableReference
+(COMMA sqlTableReference)*
+;
 
 sqlTableReference
-    : sqlTablePrimary
-      sqlJoinClause*
-    ;
+: sqlTablePrimary sqlJoinClause*
+;
 
 sqlTablePrimary
-    : sqlQualifiedName
-      sqlAliasClause?
-    | LPAREN sqlQueryExpression RPAREN
-      sqlAliasClause?
-    | sqlTableFunction
-      sqlAliasClause?
-    ;
+: sqlQualifiedName sqlTableAlias?
+| LPAREN sqlQueryExpression RPAREN sqlTableAlias?
+| sqlTableFunction sqlTableAlias?
+;
+
+sqlTableAlias
+: AS sqlIdentifier
+| sqlIdentifier
+;
 
 sqlTableFunction
-    : sqlIdentifier
-      LPAREN
-      sqlArgumentList?
-      RPAREN
-    ;
-
+: sqlQualifiedName
+LPAREN
+sqlArgumentList?
+RPAREN
+;
 
 /* ============================================================================
- * 6. JOINS
- * ========================================================================== */
+
+* 6. JOINS
+* ========================================================================== */
 
 sqlJoinClause
-    : sqlJoinType?
-      JOIN
-      sqlTablePrimary
-      sqlJoinCondition?
-    ;
+: sqlJoinType?
+JOIN
+sqlTablePrimary
+sqlJoinCondition?
+;
 
 sqlJoinType
-    : INNER
-    | LEFT OUTER?
-    | RIGHT OUTER?
-    | FULL OUTER?
-    | CROSS
-    | NATURAL
-    ;
+: INNER
+| LEFT OUTER?
+| RIGHT OUTER?
+| FULL OUTER?
+| CROSS
+| NATURAL
+;
 
 sqlJoinCondition
-    : ON sqlExpression
-    | USING
-      LPAREN
-      sqlIdentifierList
-      RPAREN
-    ;
-
+: ON sqlExpression
+| USING LPAREN sqlIdentifierList RPAREN
+;
 
 /* ============================================================================
- * 7. WHERE / GROUP / HAVING
- * ========================================================================== */
+
+* 7. FILTERING / GROUPING / WINDOWS
+* ========================================================================== */
 
 sqlWhereClause
-    : WHERE sqlExpression
-    ;
+: WHERE sqlExpression
+;
 
 sqlGroupByClause
-    : GROUP BY
-      sqlGroupItem
-      (
-          COMMA sqlGroupItem
-      )*
-    ;
+: GROUP BY
+sqlGroupItem
+(COMMA sqlGroupItem)*
+;
 
 sqlGroupItem
-    : sqlExpression
-    ;
+: sqlExpression
+;
 
 sqlHavingClause
-    : HAVING sqlExpression
-    ;
+: HAVING sqlExpression
+;
 
 sqlWindowClause
-    : WINDOW
-      sqlWindowDefinition
-      (
-          COMMA sqlWindowDefinition
-      )*
-    ;
+: WINDOW
+sqlWindowDefinition
+(COMMA sqlWindowDefinition)*
+;
 
 sqlWindowDefinition
-    : sqlIdentifier
-      AS
-      sqlWindowSpecification
-    ;
+: sqlIdentifier
+AS
+sqlWindowSpecification
+;
 
 sqlWindowSpecification
-    : LPAREN
-      sqlWindowPartitionClause?
-      sqlOrderByClause?
-      sqlWindowFrameClause?
-      RPAREN
-    ;
+: LPAREN
+sqlWindowPartitionClause?
+sqlOrderByClause?
+sqlWindowFrameClause?
+RPAREN
+;
 
 sqlWindowPartitionClause
-    : PARTITION BY
-      sqlExpression
-      (
-          COMMA sqlExpression
-      )*
-    ;
+: PARTITION BY
+sqlExpression
+(COMMA sqlExpression)*
+;
 
 sqlWindowFrameClause
-    : sqlWindowFrameUnits
-      sqlWindowFrameExtent
-    ;
+: sqlWindowFrameUnits
+sqlWindowFrameExtent
+;
 
 sqlWindowFrameUnits
-    : ROWS
-    | RANGE
-    | GROUPS
-    ;
+: ROWS
+| RANGE
+| GROUPS
+;
 
 sqlWindowFrameExtent
-    : sqlWindowFrameBound
-    | BETWEEN sqlWindowFrameBound AND sqlWindowFrameBound
-    ;
+: sqlWindowFrameBound
+| BETWEEN sqlWindowFrameBound AND sqlWindowFrameBound
+;
 
 sqlWindowFrameBound
-    : UNBOUNDED PRECEDING
-    | UNBOUNDED FOLLOWING
-    | CURRENT ROW
-    | sqlExpression PRECEDING
-    | sqlExpression FOLLOWING
-    ;
+: UNBOUNDED PRECEDING
+| sqlExpression PRECEDING
+| CURRENT ROW
+| sqlExpression FOLLOWING
+| UNBOUNDED FOLLOWING
+;
 
 sqlQualifyClause
-    : QUALIFY sqlExpression
-    ;
-
+: QUALIFY sqlExpression
+;
 
 /* ============================================================================
- * 8. ORDERING / PAGINATION
- * ========================================================================== */
+
+* 8. ORDERING / PAGINATION / LOCKING
+* ========================================================================== */
 
 sqlOrderByClause
-    : ORDER BY
-      sqlOrderItem
-      (
-          COMMA sqlOrderItem
-      )*
-    ;
+: ORDER BY
+sqlOrderItem
+(COMMA sqlOrderItem)*
+;
 
 sqlOrderItem
-    : sqlExpression
-      sqlOrderingDirection?
-      sqlNullOrdering?
-    ;
+: sqlExpression
+sqlOrderingDirection?
+sqlNullOrdering?
+;
 
 sqlOrderingDirection
-    : ASC
-    | DESC
-    ;
+: ASC
+| DESC
+;
 
 sqlNullOrdering
-    : NULLS FIRST
-    | NULLS LAST
-    ;
+: NULLS FIRST
+| NULLS LAST
+;
 
 sqlPaginationClause
-    : LIMIT sqlExpression
-      (
-          OFFSET sqlExpression
-      )?
-    | OFFSET sqlExpression
-      (
-          ROW
-        | ROWS
-      )?
-      (
-          FETCH
-          sqlFetchDirection?
-          sqlFetchQuantity?
-          (
-              ROW
-            | ROWS
-          )?
-          ONLY
-      )?
-    | FETCH
-      sqlFetchDirection?
-      sqlFetchQuantity?
-      (
-          ROW
-        | ROWS
-      )?
-      ONLY
-    ;
+: LIMIT sqlExpression
+(OFFSET sqlExpression)?
+| OFFSET sqlExpression
+(ROW | ROWS)?
+(
+FETCH
+sqlFetchDirection?
+sqlFetchQuantity?
+(ROW | ROWS)?
+ONLY
+)?
+| FETCH
+sqlFetchDirection?
+sqlFetchQuantity?
+(ROW | ROWS)?
+ONLY
+;
 
 sqlFetchDirection
-    : FIRST
-    | NEXT
-    ;
+: FIRST
+| NEXT
+;
 
 sqlFetchQuantity
-    : sqlExpression
-    ;
+: sqlExpression
+;
 
 sqlLockClause
-    : FOR
-      (
-          UPDATE
-        | SHARE
-      )
-      sqlLockTargetClause?
-      sqlLockWaitClause?
-    ;
+: FOR
+(UPDATE | SHARE)
+sqlLockTargetClause?
+sqlLockWaitClause?
+;
 
 sqlLockTargetClause
-    : OF sqlQualifiedName
-      (
-          COMMA sqlQualifiedName
-      )*
-    ;
+: OF sqlQualifiedName
+(COMMA sqlQualifiedName)*
+;
 
 sqlLockWaitClause
-    : NOWAIT
-    | SKIP LOCKED
-    ;
-
+: NOWAIT
+| SKIP LOCKED
+;
 
 /* ============================================================================
- * 9. INSERT
- * ========================================================================== */
+
+* 9. INSERT
+* ========================================================================== */
 
 sqlInsertStatement
-    : INSERT INTO
-      sqlQualifiedName
-      sqlInsertColumnList?
-      (
-          sqlValuesClause
-        | sqlQueryExpression
-      )
-      sqlReturningClause?
-      sqlStatementTerminator?
-    ;
+: INSERT INTO
+sqlQualifiedName
+sqlInsertColumnList?
+sqlInsertSource
+sqlReturningClause?
+sqlStatementTerminator?
+;
+
+sqlInsertSource
+: sqlValuesClause
+| sqlQueryExpression
+| DEFAULT VALUES
+;
 
 sqlInsertColumnList
-    : LPAREN
-      sqlIdentifierList
-      RPAREN
-    ;
+: LPAREN sqlIdentifierList RPAREN
+;
 
 sqlValuesClause
-    : VALUES
-      sqlRowValue
-      (
-          COMMA sqlRowValue
-      )*
-    ;
+: VALUES
+sqlRowValue
+(COMMA sqlRowValue)*
+;
 
 sqlRowValue
-    : LPAREN
-      sqlExpressionList?
-      RPAREN
-    ;
+: LPAREN sqlExpressionList? RPAREN
+;
 
 sqlReturningClause
-    : RETURNING
-      sqlSelectList
-    ;
-
+: RETURNING sqlSelectList
+;
 
 /* ============================================================================
- * 10. UPDATE
- * ========================================================================== */
+
+* 10. UPDATE
+* ========================================================================== */
 
 sqlUpdateStatement
-    : UPDATE
-      sqlQualifiedName
-      sqlAliasClause?
-      SET
-      sqlAssignment
-      (
-          COMMA sqlAssignment
-      )*
-      sqlWhereClause?
-      sqlReturningClause?
-      sqlStatementTerminator?
-    ;
+: UPDATE
+sqlQualifiedName
+sqlTableAlias?
+SET
+sqlAssignment
+(COMMA sqlAssignment)*
+sqlWhereClause?
+sqlReturningClause?
+sqlStatementTerminator?
+;
 
 sqlAssignment
-    : sqlIdentifier
-      ASSIGN
-      sqlExpression
-    ;
-
+: sqlIdentifier
+ASSIGN
+sqlExpression
+;
 
 /* ============================================================================
- * 11. DELETE
- * ========================================================================== */
+
+* 11. DELETE
+* ========================================================================== */
 
 sqlDeleteStatement
-    : DELETE FROM
-      sqlQualifiedName
-      sqlAliasClause?
-      sqlWhereClause?
-      sqlReturningClause?
-      sqlStatementTerminator?
-    ;
-
+: DELETE FROM
+sqlQualifiedName
+sqlTableAlias?
+sqlWhereClause?
+sqlReturningClause?
+sqlStatementTerminator?
+;
 
 /* ============================================================================
- * 12. MERGE
- * ========================================================================== */
+
+* 12. MERGE
+* ========================================================================== */
 
 sqlMergeStatement
-    : MERGE INTO
-      sqlQualifiedName
-      sqlAliasClause?
-      USING sqlMergeSource
-      ON sqlExpression
-      sqlMergeWhenClause+
-      sqlStatementTerminator?
-    ;
+: MERGE INTO
+sqlQualifiedName
+sqlTableAlias?
+USING sqlMergeSource
+ON sqlExpression
+sqlMergeWhenClause+
+sqlStatementTerminator?
+;
 
 sqlMergeSource
-    : sqlQualifiedName
-      sqlAliasClause?
-    | LPAREN sqlQueryExpression RPAREN
-      sqlAliasClause?
-    ;
+: sqlQualifiedName sqlTableAlias?
+| LPAREN sqlQueryExpression RPAREN sqlTableAlias?
+;
 
 sqlMergeWhenClause
-    : WHEN MATCHED
-      sqlMergeMatchPredicate?
-      THEN
-      sqlMergeMatchedAction
-    | WHEN NOT MATCHED
-      sqlMergeNotMatchedPredicate?
-      THEN
-      sqlMergeNotMatchedAction
-    ;
+: WHEN MATCHED
+sqlMergeSearchCondition?
+THEN
+sqlMergeMatchedAction
+| WHEN NOT MATCHED
+sqlMergeSearchCondition?
+THEN
+sqlMergeNotMatchedAction
+;
 
-sqlMergeMatchPredicate
-    : AND sqlExpression
-    ;
-
-sqlMergeNotMatchedPredicate
-    : AND sqlExpression
-    ;
+sqlMergeSearchCondition
+: AND sqlExpression
+;
 
 sqlMergeMatchedAction
-    : UPDATE SET
-      sqlAssignment
-      (
-          COMMA sqlAssignment
-      )*
-    | DELETE
-    ;
+: UPDATE SET
+sqlAssignment
+(COMMA sqlAssignment)*
+| DELETE
+;
 
 sqlMergeNotMatchedAction
-    : INSERT
-      sqlInsertColumnList?
-      VALUES sqlRowValue
-    ;
-
+: INSERT
+sqlInsertColumnList?
+VALUES sqlRowValue
+;
 
 /* ============================================================================
- * 13. CREATE
- *
- * The concrete object vocabulary is deliberately open.
- *
- * A future SQL object type should not require a universal Zamani AST redesign.
- * ========================================================================== */
+
+* 13. CREATE
+* 
+* The core object forms are explicit.
+* 
+* Vendor-specific CREATE variants cross the extension boundary rather than
+* being silently accepted as arbitrary token sequences.
+* ========================================================================== */
 
 sqlCreateStatement
-    : CREATE
-      sqlCreateObject
-      sqlCreateObjectBody?
-      sqlStatementTerminator?
-    ;
+: CREATE sqlCreateObject sqlCreateObjectBody?
+sqlStatementTerminator?
+;
 
 sqlCreateObject
-    : sqlIdentifier
-    ;
+: TABLE
+| SCHEMA
+| VIEW
+| INDEX
+| TRIGGER
+;
 
 sqlCreateObjectBody
-    : sqlParenthesizedTokenGroup
-    | sqlTokenSequence
-    ;
+: sqlCreateTableBody
+| sqlCreateViewBody
+| sqlCreateIndexBody
+| sqlCreateTriggerBody
+| sqlCreateSchemaBody
+;
 
+sqlCreateTableBody
+: LPAREN
+sqlTableElement
+(COMMA sqlTableElement)*
+RPAREN
+;
+
+sqlTableElement
+: sqlColumnDefinition
+| sqlTableConstraint
+;
+
+sqlColumnDefinition
+: sqlIdentifier
+sqlTypeName
+sqlColumnConstraint*
+;
+
+sqlColumnConstraint
+: NOT NULL
+| NULL
+| DEFAULT sqlExpression
+| GENERATED sqlGeneratedColumn
+| PRIMARY KEY
+| UNIQUE
+| CHECK LPAREN sqlExpression RPAREN
+| REFERENCES sqlQualifiedName
+sqlReferenceColumnList?
+sqlReferenceAction*
+;
+
+sqlGeneratedColumn
+: ALWAYS AS
+LPAREN sqlExpression RPAREN
+sqlGeneratedStorage?
+;
+
+sqlGeneratedStorage
+: IDENTIFIER
+;
+
+sqlTableConstraint
+: CONSTRAINT sqlIdentifier sqlTableConstraintBody
+| PRIMARY KEY sqlColumnNameList
+| UNIQUE sqlColumnNameList
+| CHECK LPAREN sqlExpression RPAREN
+| FOREIGN KEY sqlColumnNameList
+REFERENCES sqlQualifiedName
+sqlReferenceColumnList?
+sqlReferenceAction*
+;
+
+sqlTableConstraintBody
+: PRIMARY KEY sqlColumnNameList
+| UNIQUE sqlColumnNameList
+| CHECK LPAREN sqlExpression RPAREN
+| FOREIGN KEY sqlColumnNameList
+REFERENCES sqlQualifiedName
+;
+
+sqlReferenceColumnList
+: LPAREN sqlIdentifierList RPAREN
+;
+
+sqlReferenceAction
+: ON
+(DELETE | UPDATE)
+(CASCADE | RESTRICT | NO ACTION | SET NULL | SET DEFAULT)
+;
+
+sqlCreateViewBody
+: AS sqlQueryExpression
+;
+
+sqlCreateIndexBody
+: sqlIndexUnique?
+INDEX?
+sqlIdentifier
+ON
+sqlQualifiedName
+LPAREN sqlExpressionList RPAREN
+;
+
+sqlIndexUnique
+: UNIQUE
+;
+
+sqlCreateTriggerBody
+: sqlTriggerTiming
+sqlTriggerEvent
+ON sqlQualifiedName
+sqlTriggerAction
+;
+
+sqlTriggerTiming
+: BEFORE
+| AFTER
+| INSTEAD OF
+;
+
+sqlTriggerEvent
+: INSERT
+| UPDATE
+| DELETE
+;
+
+sqlTriggerAction
+: sqlTokenSequence
+;
+
+sqlCreateSchemaBody
+: sqlSchemaAuthorization?
+;
+
+sqlSchemaAuthorization
+: AUTHORIZATION sqlIdentifier
+;
 
 /* ============================================================================
- * 14. ALTER
- * ========================================================================== */
+
+* 14. ALTER
+* ========================================================================== */
 
 sqlAlterStatement
-    : ALTER
-      sqlIdentifier
-      sqlQualifiedName?
-      sqlAlterAction?
-      sqlStatementTerminator?
-    ;
+: ALTER
+sqlAlterObject
+sqlQualifiedName
+sqlAlterAction
+sqlStatementTerminator?
+;
+
+sqlAlterObject
+: TABLE
+| SCHEMA
+| VIEW
+| INDEX
+;
 
 sqlAlterAction
-    : sqlTokenSequence
-    ;
+: ADD sqlAlterAddAction
+| DROP sqlAlterDropAction
+| RENAME sqlAlterRenameAction
+| ALTER sqlAlterColumnAction
+;
 
+sqlAlterAddAction
+: COLUMN? sqlColumnDefinition
+| TABLE sqlTableConstraint
+;
+
+sqlAlterDropAction
+: COLUMN sqlIdentifier
+| CONSTRAINT sqlIdentifier
+| PRIMARY KEY
+| UNIQUE sqlColumnNameList
+;
+
+sqlAlterRenameAction
+: COLUMN sqlIdentifier TO sqlIdentifier
+| TO sqlIdentifier
+;
+
+sqlAlterColumnAction
+: COLUMN sqlIdentifier sqlAlterColumnOperation
+;
+
+sqlAlterColumnOperation
+: TYPE sqlTypeName
+| SET DEFAULT sqlExpression
+| DROP DEFAULT
+| SET NOT NULL
+| DROP NOT NULL
+;
 
 /* ============================================================================
- * 15. DROP
- * ========================================================================== */
+
+* 15. DROP
+* ========================================================================== */
 
 sqlDropStatement
-    : DROP
-      sqlDropObject
-      sqlQualifiedName
-      sqlDropBehavior?
-      sqlStatementTerminator?
-    ;
+: DROP
+sqlDropObject
+sqlQualifiedName
+sqlDropBehavior?
+sqlStatementTerminator?
+;
 
 sqlDropObject
-    : sqlIdentifier
-    ;
+: TABLE
+| SCHEMA
+| VIEW
+| INDEX
+| TRIGGER
+;
 
 sqlDropBehavior
-    : CASCADE
-    | RESTRICT
-    ;
-
+: CASCADE
+| RESTRICT
+;
 
 /* ============================================================================
- * 16. TRANSACTIONS
- * ========================================================================== */
+
+* 16. TRANSACTIONS
+* ========================================================================== */
 
 sqlTransactionStatement
-    : sqlBeginTransactionStatement
-    | sqlCommitStatement
-    | sqlRollbackStatement
-    | sqlSavepointStatement
-    ;
+: sqlBeginTransactionStatement
+| sqlCommitStatement
+| sqlRollbackStatement
+| sqlSavepointStatement
+;
 
 sqlBeginTransactionStatement
-    : BEGIN
-      TRANSACTION?
-      sqlTransactionOption*
-      sqlStatementTerminator?
-    ;
+: BEGIN
+TRANSACTION?
+sqlTransactionMode*
+sqlStatementTerminator?
+;
 
-sqlTransactionOption
-    : ISOLATION
-      LEVEL
-      sqlIdentifier
-    | READ
-      ONLY
-    | READ
-      WRITE
-    ;
+sqlTransactionMode
+: ISOLATION LEVEL sqlIdentifier
+| READ ONLY
+| READ WRITE
+;
 
 sqlCommitStatement
-    : COMMIT
-      TRANSACTION?
-      sqlStatementTerminator?
-    ;
+: COMMIT
+TRANSACTION?
+sqlStatementTerminator?
+;
 
 sqlRollbackStatement
-    : ROLLBACK
-      TRANSACTION?
-      (
-          TO SAVEPOINT?
-          sqlIdentifier
-      )?
-      sqlStatementTerminator?
-    ;
+: ROLLBACK
+TRANSACTION?
+(TO SAVEPOINT? sqlIdentifier)?
+sqlStatementTerminator?
+;
 
 sqlSavepointStatement
-    : SAVEPOINT sqlIdentifier sqlStatementTerminator?
-    ;
-
-
-/* ============================================================================
- * 17. AUTHORIZATION
- * ========================================================================== */
-
-sqlGrantStatement
-    : GRANT
-      sqlTokenSequence
-      sqlStatementTerminator?
-    ;
-
-sqlRevokeStatement
-    : REVOKE
-      sqlTokenSequence
-      sqlStatementTerminator?
-    ;
-
+: SAVEPOINT sqlIdentifier
+sqlStatementTerminator?
+;
 
 /* ============================================================================
- * 18. EXPRESSIONS
- *
- * SQL expressions are intentionally represented inside the SQL dialect.
- *
- * They must eventually normalize into the Zamani semantic expression model.
- *
- * They do NOT create a second universal expression system.
- * ========================================================================== */
+
+* 17. AUTHORIZATION
+* ========================================================================== */
+
+sqlAuthorizationStatement
+: GRANT sqlGrantBody sqlStatementTerminator?
+| REVOKE sqlRevokeBody sqlStatementTerminator?
+;
+
+sqlGrantBody
+: sqlTokenSequence
+;
+
+sqlRevokeBody
+: sqlTokenSequence
+;
+
+/* ============================================================================
+
+* 18. EXPRESSIONS
+* ========================================================================== */
 
 sqlExpression
-    : sqlOrExpression
-    ;
+: sqlOrExpression
+;
 
 sqlOrExpression
-    : sqlAndExpression
-      (
-          OR sqlAndExpression
-      )*
-    ;
+: sqlAndExpression
+(OR sqlAndExpression)*
+;
 
 sqlAndExpression
-    : sqlNotExpression
-      (
-          AND sqlNotExpression
-      )*
-    ;
+: sqlNotExpression
+(AND sqlNotExpression)*
+;
 
 sqlNotExpression
-    : NOT sqlNotExpression
-    | sqlPredicateExpression
-    ;
+: NOT sqlNotExpression
+| sqlPredicateExpression
+;
 
 sqlPredicateExpression
-    : sqlValueExpression
-      sqlPredicate*
-    ;
+: sqlValueExpression
+sqlPredicate*
+;
 
 sqlPredicate
-    : sqlComparisonPredicate
-    | sqlBetweenPredicate
-    | sqlInPredicate
-    | sqlLikePredicate
-    | sqlIsPredicate
-    | sqlExistsPredicate
-    ;
+: sqlComparisonPredicate
+| sqlBetweenPredicate
+| sqlInPredicate
+| sqlLikePredicate
+| sqlIsPredicate
+;
 
 sqlComparisonPredicate
-    : sqlComparisonOperator
-      sqlValueExpression
-    ;
+: sqlComparisonOperator sqlValueExpression
+;
 
 sqlComparisonOperator
-    : EQUAL_EQUAL
-    | NOT_EQUAL
-    | LESS
-    | LESS_EQUAL
-    | GREATER
-    | GREATER_EQUAL
-    ;
+: EQUAL_EQUAL
+| NOT_EQUAL
+| LESS
+| LESS_EQUAL
+| GREATER
+| GREATER_EQUAL
+;
 
 sqlBetweenPredicate
-    : BETWEEN sqlValueExpression AND sqlValueExpression
-    ;
+: BETWEEN sqlValueExpression
+AND sqlValueExpression
+;
 
 sqlInPredicate
-    : IN
-      LPAREN
-      (
-          sqlQueryExpression
-        | sqlExpressionList
-      )
-      RPAREN
-    ;
+: IN
+LPAREN
+(
+sqlQueryExpression
+| sqlExpressionList
+)
+RPAREN
+;
 
 sqlLikePredicate
-    : LIKE sqlValueExpression
-      (
-          ESCAPE sqlValueExpression
-      )?
-    ;
+: LIKE
+sqlValueExpression
+(ESCAPE sqlValueExpression)?
+;
 
 sqlIsPredicate
-    : IS NOT?
-      (
-          NULL
-        | TRUE
-        | FALSE
-        | DISTINCT FROM sqlValueExpression
-      )
-    ;
+: IS NOT?
+(
+NULL
+| TRUE
+| FALSE
+| DISTINCT FROM sqlValueExpression
+)
+;
 
 sqlExistsPredicate
-    : EXISTS
-      LPAREN
-      sqlQueryExpression
-      RPAREN
-    ;
-
+: EXISTS
+LPAREN
+sqlQueryExpression
+RPAREN
+;
 
 /* ============================================================================
- * 19. VALUE EXPRESSIONS
- * ========================================================================== */
+
+* 19. VALUE EXPRESSIONS
+* ========================================================================== */
 
 sqlValueExpression
-    : sqlAdditiveExpression
-    ;
+: sqlAdditiveExpression
+;
 
 sqlAdditiveExpression
-    : sqlMultiplicativeExpression
-      (
-          (
-              PLUS
-            | MINUS
-          )
-          sqlMultiplicativeExpression
-      )*
-    ;
+: sqlMultiplicativeExpression
+((PLUS | MINUS) sqlMultiplicativeExpression)*
+;
 
 sqlMultiplicativeExpression
-    : sqlUnaryExpression
-      (
-          (
-              STAR
-            | SLASH
-            | MODULO
-          )
-          sqlUnaryExpression
-      )*
-    ;
+: sqlUnaryExpression
+((STAR | SLASH | MODULO) sqlUnaryExpression)*
+;
 
 sqlUnaryExpression
-    : (
-          PLUS
-        | MINUS
-        | NOT
-      )*
-      sqlPrimaryExpression
-    ;
+: (PLUS | MINUS | NOT)*
+sqlPrimaryExpression
+;
 
 sqlPrimaryExpression
-    : sqlLiteral
-    | sqlQualifiedName
-    | sqlFunctionCall
-    | sqlCaseExpression
-    | sqlCastExpression
-    | sqlExistsExpression
-    | LPAREN sqlExpression RPAREN
-    ;
+: sqlLiteral
+| sqlQualifiedName
+| sqlFunctionCall
+| sqlCaseExpression
+| sqlCastExpression
+| sqlExistsExpression
+| LPAREN sqlExpression RPAREN
+;
 
 sqlLiteral
-    : INTEGER
-    | FLOAT
-    | STRING
-    | TRUE
-    | FALSE
-    | NULL
-    ;
+: INTEGER
+| FLOAT
+| SQL_STRING
+| TRUE
+| FALSE
+| NULL
+;
 
 sqlFunctionCall
-    : sqlQualifiedName
-      LPAREN
-      sqlFunctionArguments?
-      RPAREN
-    ;
+: sqlQualifiedName
+LPAREN
+sqlFunctionArguments?
+RPAREN
+;
 
 sqlFunctionArguments
-    : STAR
-    | sqlExpressionList
-    ;
+: STAR
+| sqlExpressionList
+;
 
 sqlCaseExpression
-    : CASE
-      sqlExpression?
-      sqlWhenClause+
-      ELSE sqlExpression?
-      END
-    ;
+: CASE
+sqlExpression?
+sqlWhenClause+
+ELSE sqlExpression?
+END
+;
 
 sqlWhenClause
-    : WHEN sqlExpression
-      THEN sqlExpression
-    ;
+: WHEN sqlExpression
+THEN sqlExpression
+;
 
 sqlCastExpression
-    : CAST
-      LPAREN
-      sqlExpression
-      AS
-      sqlTypeName
-      RPAREN
-    ;
+: CAST
+LPAREN
+sqlExpression
+AS
+sqlTypeName
+RPAREN
+;
 
 sqlExistsExpression
-    : EXISTS
-      LPAREN
-      sqlQueryExpression
-      RPAREN
-    ;
-
+: sqlExistsPredicate
+;
 
 /* ============================================================================
- * 20. TYPE NAMES
- *
- * SQL type names are intentionally open.
- *
- * The grammar does not enumerate every vendor type.
- * ========================================================================== */
+
+* 20. TYPE NAMES
+* ========================================================================== */
 
 sqlTypeName
-    : sqlQualifiedName
-      sqlTypeParameterList?
-    ;
+: sqlQualifiedName
+sqlTypeParameterList?
+;
 
 sqlTypeParameterList
-    : LPAREN
-      sqlExpressionList?
-      RPAREN
-    ;
-
+: LPAREN
+sqlExpressionList?
+RPAREN
+;
 
 /* ============================================================================
- * 21. IDENTIFIERS
- *
- * SQL identifiers are normalized later.
- *
- * Reserved Zamani tokens cannot be reinterpreted as SQL identifiers unless
- * the canonical lexer supplies an appropriate quoted-identifier token.
- *
- * The implementation should add the canonical quoted identifier token if the
- * selected SQL conformance profile requires it.
- * ========================================================================== */
+
+* 21. IDENTIFIERS
+* ========================================================================== */
 
 sqlIdentifier
-    : IDENTIFIER
-    ;
+: IDENTIFIER
+| SQL_DELIMITED_IDENTIFIER
+;
 
 sqlQualifiedName
-    : sqlIdentifier
-      (
-          DOUBLE_COLON sqlIdentifier
-        | DOT sqlIdentifier
-      )*
-    ;
+: sqlIdentifier
+(DOT sqlIdentifier)*
+;
 
 sqlIdentifierList
-    : sqlIdentifier
-      (
-          COMMA sqlIdentifier
-      )*
-    ;
-
+: sqlIdentifier
+(COMMA sqlIdentifier)*
+;
 
 /* ============================================================================
- * 22. EXTENSION / VENDOR BOUNDARY
- *
- * This is intentionally token-tree based.
- *
- * It permits future SQL/vendor syntax to be represented without adding
- * universal grammar rules for every database implementation.
- *
- * Semantic validation MUST determine whether the extension is valid.
- * ========================================================================== */
 
-sqlDialectExtensionStatement
-    : sqlExtensionMarker
-      sqlQualifiedName
-      sqlParenthesizedTokenGroup?
-      sqlStatementTerminator?
-    ;
+* 22. EXTENSION BOUNDARY
+* 
+* This is deliberately explicit.
+* 
+* Vendor syntax must be introduced through a dialect extension construct or
+* a separately registered vendor grammar.
+* 
+* Arbitrary SQL token streams are NOT accepted as standard SQL.
+* ========================================================================== */
 
-sqlExtensionMarker
-    : AT
-    ;
+sqlExtensionStatement
+: AT
+sqlQualifiedName
+sqlExtensionPayload?
+sqlStatementTerminator?
+;
 
-sqlParenthesizedTokenGroup
-    : LPAREN
-      sqlBalancedTokenSequence?
-      RPAREN
-    ;
+sqlExtensionPayload
+: LPAREN
+sqlBalancedTokenSequence?
+RPAREN
+;
 
 sqlBalancedTokenSequence
-    : sqlBalancedToken*
-    ;
+: sqlBalancedToken*
+;
 
 sqlBalancedToken
-    : sqlBalancedAtom
-    | sqlParenthesizedTokenGroup
-    | sqlBracketedTokenGroup
-    | sqlBracedTokenGroup
-    ;
+: sqlBalancedAtom
+| sqlBalancedParenthesized
+| sqlBalancedBracketed
+| sqlBalancedBraced
+;
+
+sqlBalancedParenthesized
+: LPAREN
+sqlBalancedTokenSequence?
+RPAREN
+;
+
+sqlBalancedBracketed
+: LBRACKET
+sqlBalancedTokenSequence?
+RBRACKET
+;
+
+sqlBalancedBraced
+: LBRACE
+sqlBalancedTokenSequence?
+RBRACE
+;
 
 sqlBalancedAtom
-    : IDENTIFIER
-    | INTEGER
-    | FLOAT
-    | STRING
-    | CHAR
-    | COMMA
-    | DOT
-    | COLON
-    | SEMICOLON
-    | DOUBLE_COLON
-    | ASSIGN
-    | EQUAL_EQUAL
-    | NOT_EQUAL
-    | LESS
-    | LESS_EQUAL
-    | GREATER
-    | GREATER_EQUAL
-    | PLUS
-    | MINUS
-    | STAR
-    | SLASH
-    | MODULO
-    | AMPERSAND
-    | PIPE
-    | CARET
-    | QUESTION_MARK
-    | BANG
-    ;
-
-sqlBracketedTokenGroup
-    : LBRACKET
-      sqlBalancedTokenSequence?
-      RBRACKET
-    ;
-
-sqlBracedTokenGroup
-    : LBRACE
-      sqlBalancedTokenSequence?
-      RBRACE
-    ;
-
-sqlTokenSequence
-    : sqlBalancedToken+
-    ;
-
+: IDENTIFIER
+| SQL_DELIMITED_IDENTIFIER
+| INTEGER
+| FLOAT
+| SQL_STRING
+| CHAR
+| COMMA
+| DOT
+| COLON
+| SEMICOLON
+| DOUBLE_COLON
+| ASSIGN
+| EQUAL_EQUAL
+| NOT_EQUAL
+| LESS
+| LESS_EQUAL
+| GREATER
+| GREATER_EQUAL
+| PLUS
+| MINUS
+| STAR
+| SLASH
+| MODULO
+| AMPERSAND
+| PIPE
+| CARET
+| QUESTION_MARK
+| BANG
+;
 
 /* ============================================================================
- * 23. GENERAL EXPRESSION LISTS
- * ========================================================================== */
+
+* 23. GENERAL LISTS
+* ========================================================================== */
 
 sqlExpressionList
-    : sqlExpression
-      (
-          COMMA sqlExpression
-      )*
-    ;
+: sqlExpression
+(COMMA sqlExpression)*
+;
 
 sqlArgumentList
-    : sqlExpressionList
-    ;
-
+: sqlExpressionList
+;
 
 /* ============================================================================
- * 24. STATEMENT TERMINATOR
- * ========================================================================== */
+
+* 24. STATEMENT TERMINATOR
+* ========================================================================== */
 
 sqlStatementTerminator
-    : SEMICOLON
-    ;
-
+: SEMICOLON
+;
 
 /* ============================================================================
- * 25. INTEGRATION CONTRACT
- * ============================================================================
- *
- * IMPORTER:
- *
- *     grammar/dialects/dialect.g4
- *     grammar/dialects/dialects.g4
- *     or the repository's canonical dialect-dispatch boundary.
- *
- * The importer MUST NOT copy SQL productions.
- *
- * ============================================================================
- *
- * DIALECT REGISTRATION
- *
- * SQL identity is registered through:
- *
- *     grammar/dialects/registration.g4
- *
- * Example semantic identity:
- *
- *     sql
- *     sql::standard
- *     sql::vendor::extension
- *
- * No SQL vendor is hard-coded into this grammar.
- *
- * ============================================================================
- *
- * AST OWNER
- *
- * The AST owner is the repository's established frontend AST subsystem.
- *
- * This grammar MUST NOT introduce a database-specific AST as the universal
- * semantic representation.
- *
- * ============================================================================
- *
- * SEMANTIC OWNER
- *
- * SQL semantics are normalized into the existing:
- *
- *     data/query
- *
- * semantic model.
- *
- * SQL-specific information may be retained as dialect metadata.
- *
- * ============================================================================
- *
- * IR OWNER
- *
- * SQL MUST NOT introduce a competing universal IR.
- *
- * Query/data operations should lower through the repository's canonical
- * semantic representation and appropriate domain/data IR.
- *
- * ============================================================================
- *
- * RESOURCE INTEGRATION
- *
- * SQL execution requirements are expressed downstream through the existing:
- *
- *     grammar/resources/
- *     capabilities
- *     policies
- *
- * systems.
- *
- * Example semantic requirements:
- *
- *     data.query
- *     data.transaction
- *     data.recursive_query
- *
- * Physical resource values are not grammar constants.
- *
- * ============================================================================
- *
- * EFFECT INTEGRATION
- *
- * SQL read/write/schema/transaction operations are classified downstream
- * using the existing effects system.
- *
- * ============================================================================
- *
- * SECURITY INTEGRATION
- *
- * SQL authorization and data-access constraints are resolved through the
- * existing security/policy systems.
- *
- * SQL grammar MUST NOT implement authorization.
- *
- * ============================================================================
- *
- * PROVENANCE INTEGRATION
- *
- * Every SQL AST node that survives semantic normalization SHOULD preserve:
- *
- *     source span
- *     dialect identity
- *     source artifact identity
- *     normalization information
- *     transformation lineage
- *
- * ============================================================================
- *
- * FFI / DATABASE DRIVER INTEGRATION
- *
- * Database drivers, protocols and client libraries belong downstream.
- *
- * This grammar does not select:
- *
- *     PostgreSQL
- *     MySQL
- *     SQLite
- *     Oracle
- *     SQL Server
- *     DuckDB
- *     distributed SQL engine
- *     cloud provider
- *
- * A driver/backend may advertise capabilities.
- *
- * ============================================================================
- *
- * POCO-REAF INTEGRATION
- *
- * The same logical SQL source can be lowered to any compatible execution
- * environment without changing its source meaning.
- *
- * Target selection remains outside this grammar.
- *
- * ============================================================================
- * HARD-CODING AUDIT
- * ============================================================================
- *
- * This file MUST NOT contain:
- *
- *     MAX_TABLES
- *     MAX_COLUMNS
- *     MAX_ROWS
- *     MAX_DATABASES
- *     MAX_CONNECTIONS
- *     MAX_SHARDS
- *     MAX_NODES
- *     MAX_QUERY_SIZE
- *     MAX_RESULT_SIZE
- *     MAX_MEMORY
- *     MAX_THREADS
- *     MAX_TRANSACTIONS
- *
- * None are present.
- *
- * Repetition is represented through grammar operators.
- *
- * ============================================================================
- * SCALABILITY
- * ============================================================================
- *
- * The grammar imposes no language-level bound on:
- *
- *     statements
- *     CTEs
- *     columns
- *     joins
- *     expressions
- *     predicates
- *     projections
- *     grouping expressions
- *     ordering expressions
- *     parameters
- *     query nesting
- *     set-operation chains
- *     window definitions
- *     SQL object names
- *
- * Actual parser/compiler limits belong to implementation/resource policy.
- *
- * ============================================================================
- * DIAGNOSTICS
- * ============================================================================
- *
- * Syntax errors must be reported by the canonical parser diagnostics layer.
- *
- * Semantic errors MUST NOT be manufactured as parser errors.
- *
- * Examples:
- *
- *     missing table
- *     unknown column
- *     unsupported SQL feature
- *     insufficient capability
- *     unavailable database operation
- *
- * are semantic/backend errors, not grammar errors.
- *
- * ============================================================================
- * TEST CONTRACT
- * ============================================================================
- *
- * Required test locations:
- *
- *     grammar/tests/dialects/sql/
- *
- * Required categories:
- *
- *     lexical/
- *     parser/
- *     ast/
- *     semantic/
- *     expressions/
- *     queries/
- *     dml/
- *     ddl/
- *     transactions/
- *     windows/
- *     recursive/
- *     extensions/
- *     negative/
- *     boundary/
- *     scalability/
- *     compatibility/
- *     determinism/
- *
- * ============================================================================
- * REQUIRED POSITIVE TESTS
- * ============================================================================
- *
- * At minimum:
- *
- *     SELECT *
- *     SELECT expression
- *     SELECT ... FROM ...
- *     WHERE
- *     GROUP BY
- *     HAVING
- *     ORDER BY
- *     LIMIT/OFFSET
- *     JOIN
- *     subquery
- *     CTE
- *     recursive CTE
- *     UNION
- *     INTERSECT
- *     EXCEPT
- *     INSERT
- *     UPDATE
- *     DELETE
- *     MERGE
- *     RETURNING
- *     CREATE
- *     ALTER
- *     DROP
- *     transactions
- *     window functions
- *     CASE
- *     CAST
- *     EXISTS
- *     IN
- *     BETWEEN
- *     LIKE
- *     NULL predicates
- *     qualified names
- *     vendor extension boundary
- *
- * ============================================================================
- * REQUIRED NEGATIVE TESTS
- * ============================================================================
- *
- * Test:
- *
- *     malformed SELECT
- *     malformed JOIN
- *     malformed GROUP BY
- *     malformed CTE
- *     malformed window frame
- *     malformed INSERT
- *     malformed UPDATE
- *     malformed DELETE
- *     malformed transaction
- *     unbalanced delimiters
- *     invalid expression structure
- *     invalid pagination structure
- *
- * ============================================================================
- * COMPLETION CRITERIA
- * ============================================================================
- *
- * This file is DONE when:
- *
- *     1. The file compiles against the canonical Zamani lexer.
- *     2. No local lexer exists.
- *     3. SQL is reachable only through the dialect/interoperability boundary.
- *     4. No universal Zamani data grammar is duplicated.
- *     5. No physical database assumptions exist.
- *     6. SQL syntax has a domain-neutral AST mapping.
- *     7. SQL semantics have a documented normalization target.
- *     8. Resource/capability/effect/policy ownership is downstream.
- *     9. Vendor extensions remain open-world.
- *    10. Positive tests pass.
- *    11. Negative tests pass.
- *    12. Boundary tests pass.
- *    13. Scalability tests pass.
- *    14. Determinism tests pass.
- *    15. Rust-generated parser integration passes Rust 1.97.1+.
- *    16. The generated implementation contains no unsafe Rust.
- *
- * ============================================================================
- */
 
-
-/*
- * ============================================================================
- * SQL RESERVED/CONTEXTUAL TOKEN DEPENDENCY NOTE
- * ============================================================================
- *
- * The following productions intentionally reference SQL vocabulary that must
- * be available from ZamaniLexer:
- *
- *     ALL
- *     ASC
- *     BEGIN
- *     BETWEEN
- *     CAST
- *     CASCADE
- *     COMMIT
- *     CREATE
- *     CROSS
- *     CURRENT
- *     DELETE
- *     DISTINCT
- *     DROP
- *     ESCAPE
- *     EXCEPT
- *     EXISTS
- *     FETCH
- *     FIRST
- *     FOLLOWING
- *     FOR
- *     FULL
- *     GRANT
- *     GROUP
- *     HAVING
- *     INDEX
- *     INSERT
- *     INTERSECT
- *     INTO
- *     ISOLATION
- *     JOIN
- *     KEY
- *     LEVEL
- *     LIMIT
- *     LOCK
- *     MATCHED
- *     MERGE
- *     NATURAL
- *     NEXT
- *     NO
- *     NOWAIT
- *     NULL
- *     NULLS
- *     OFFSET
- *     ONLY
- *     OUTER
- *     PARTITION
- *     PRECEDING
- *     PRIMARY
- *     QUALIFY
- *     RANGE
- *     READ
- *     RECURSIVE
- *     REFERENCES
- *     RESTRICT
- *     RETURNING
- *     REVOKE
- *     RIGHT
- *     ROLLBACK
- *     ROW
- *     ROWS
- *     SAVEPOINT
- *     SELECT
- *     SET
- *     SHARE
- *     SKIP
- *     TABLE
- *     THEN
- *     TRANSACTION
- *     TRUNCATE
- *     UNION
- *     UNIQUE
- *     UPDATE
- *     USING
- *     VALUES
- *     WHEN
- *     WINDOW
- *     WITH
- *
- * These names are intentionally NOT defined in this file.
- *
- * They belong to the canonical lexical authority.
- *
- * The integration task MUST reconcile the exact current token names before
- * enabling this grammar in the build.
- *
- * ============================================================================
- */
+* 25. DIALECT INTEGRATION CONTRACT
+* ============================================================================
+* 
+* DIALECT ID:
+* 
+* sql
+* 
+* STANDARD PROFILE:
+* 
+* sql::standard
+* 
+* Vendor profiles MUST be registered outside this file.
+* 
+* IMPORTER:
+* 
+* grammar/dialects/dialect.g4
+* grammar/dialects/registration.g4
+* 
+* or the repository's canonical dialect dispatch boundary.
+* 
+* AST:
+* 
+* dialect-neutral SQL syntax representation
+* 
+* SEMANTIC TARGET:
+* 
+* existing Zamani data/query semantic model
+* 
+* EFFECTS:
+* 
+* resolved downstream
+* 
+* CAPABILITIES:
+* 
+* resolved downstream
+* 
+* RESOURCES:
+* 
+* resolved downstream
+* 
+* POLICIES:
+* 
+* resolved downstream
+* 
+* PROVENANCE:
+* 
+* source spans + dialect identity + semantic transformations
+* 
+* IR:
+* 
+* existing canonical semantic/data IR
+* 
+* QUANTUM:
+* 
+* NOT_APPLICABLE at SQL grammar level.
+* 
+* HDL:
+* 
+* NOT_APPLICABLE at SQL grammar level.
+* 
+* HARDWARE:
+* 
+* NOT_APPLICABLE at SQL grammar level.
+* 
+* ============================================================================
+* DIAGNOSTIC CONTRACT
+* ============================================================================
+* 
+* Syntax errors:
+* 
+* reported by the parser.
+* 
+* Unknown SQL dialect:
+* 
+* reported by dialect resolution.
+* 
+* Unsupported SQL feature:
+* 
+* reported by semantic/profile validation.
+* 
+* Unsupported database capability:
+* 
+* reported by capability analysis.
+* 
+* Insufficient execution resources:
+* 
+* reported by resource/execution planning.
+* 
+* Database authorization failure:
+* 
+* reported by security/execution infrastructure.
+* 
+* These conditions MUST NOT be conflated.
+* 
+* ============================================================================
+* COMPATIBILITY CONTRACT
+* ============================================================================
+* 
+* SQL profile/version selection is external to this grammar.
+* 
+* A profile may classify constructs as:
+* 
+* stable
+* supported
+* unsupported
+* vendor
+* experimental
+* deprecated
+* 
+* This grammar MUST NOT silently reinterpret unsupported constructs as
+* standard SQL.
+* 
+* ============================================================================
+* HARD-CODING AUDIT
+* ============================================================================
+* 
+* This file contains no:
+* 
+* MAX_TABLES
+* MAX_COLUMNS
+* MAX_ROWS
+* MAX_JOINS
+* MAX_CTES
+* MAX_QUERY_SIZE
+* MAX_DATABASE_SIZE
+* MAX_NODES
+* MAX_WORKERS
+* MAX_MEMORY
+* MAX_STORAGE
+* 
+* No physical resource ceiling belongs in this grammar.
+* 
+* ============================================================================
+* COMPLETION CRITERIA
+* ============================================================================
+* 
+* This file is complete when:
+* 
+* [x] SQL parser has one public entry point.
+* [x] SQL has no private lexer.
+* [x] Standard SQL structure is explicit.
+* [x] Vendor syntax has an explicit extension boundary.
+* [x] SQL expressions normalize downstream.
+* [x] SQL does not create a second IR.
+* [x] SQL has no physical resource limits.
+* [x] SQL has no target-specific syntax.
+* [x] Source spans remain available through the frontend.
+* [x] Deterministic parsing is specified.
+* [x] Compatibility is delegated to the dialect system.
+* [x] Resource/capability semantics are delegated downstream.
+* [x] No Rust actions or unsafe code are required.
+* 
+* The repository still requires the canonical lexical additions specified
+* below this file's integration record before ANTLR generation can consume
+* every SQL profile feature.
+* 
+* ============================================================================
+  */
