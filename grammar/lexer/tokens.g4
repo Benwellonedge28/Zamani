@@ -13,19 +13,54 @@
  *     CANONICAL PRODUCTION LEXICAL VOCABULARY
  *
  * Purpose:
- *     Defines the actual public lexical vocabulary consumed by:
+ *     Single authoritative emitted-token grammar for the Zamani language.
  *
- *         grammar/lexer/lexer.g4
- *             ->
- *         grammar/antlr/ZamaniLexer.g4
- *             ->
- *         grammar/antlr/ZamaniParser.g4
+ * Architecture:
+ *
+ *     source
+ *       |
+ *       v
+ *     ZamaniLexer.g4
+ *       |
+ *       v
+ *     lexer/lexer.g4
+ *       |
+ *       v
+ *     ZamaniTokens
+ *       |
+ *       v
+ *     parser
+ *       |
+ *       v
+ *     domain-neutral AST
+ *       |
+ *       v
+ *     semantic model
+ *       |
+ *       +-------------------------------+
+ *       |                               |
+ *       v                               v
+ *     classical                      quantum::ir
+ *       |                               |
+ *       +---------------+---------------+
+ *                       |
+ *                       v
+ *               optimization/lowering
+ *                       |
+ *                       v
+ *              routing/scheduling/etc.
+ *                       |
+ *                       v
+ *                 target realization
  *
  * Rust baseline:
  *     Rust 1.97+
  *
+ * Rust edition:
+ *     2021
+ *
  * Safety:
- *     No target-language actions.
+ *     No embedded Rust actions.
  *     No unsafe Rust.
  *
  * ============================================================================
@@ -34,30 +69,37 @@
  *
  * THIS FILE OWNS:
  *
- *   - actual keyword tokens;
- *   - actual operator tokens;
- *   - actual punctuation tokens;
+ *   - canonical emitted token names;
+ *   - keyword token spellings;
+ *   - operator token spellings;
+ *   - punctuation token spellings;
  *   - identifiers;
  *   - primitive literals;
+ *   - numeric literals;
  *   - quantum literals;
  *   - hardware/resource literals;
  *   - duration literals;
  *   - size literals;
+ *   - annotations;
  *   - comments;
- *   - lexical error tokens;
- *   - lexical fragments required by those tokens.
+ *   - whitespace;
+ *   - lexical-error categories;
+ *   - lexical fragments required by the above.
  *
  * THIS FILE DOES NOT OWN:
  *
  *   - parser productions;
- *   - AST nodes;
- *   - semantic analysis;
- *   - type checking;
- *   - effect checking;
+ *   - AST construction;
+ *   - type semantics;
+ *   - name resolution;
+ *   - effect semantics;
  *   - capability negotiation;
  *   - resource negotiation;
+ *   - policies;
+ *   - contracts;
+ *   - provenance semantics;
  *   - quantum routing;
- *   - scheduling;
+ *   - quantum scheduling;
  *   - QEC;
  *   - ZQN;
  *   - HAL;
@@ -68,11 +110,9 @@
  * SINGLE TOKEN AUTHORITY
  * ============================================================================
  *
- * Every emitted lexical token has exactly one definition here.
+ * Every emitted lexical spelling has exactly one canonical token identity.
  *
- * The following files are lexical design partitions/reference owners but are
- * NOT imported by the production lexer composition after this file becomes
- * canonical:
+ * The following files remain lexical design/reference partitions:
  *
  *   keywords.g4
  *   operators.g4
@@ -90,18 +130,44 @@
  *   annotations.g4
  *   comments.g4
  *   lexer-errors.g4
+ *   unicode.g4
  *
- * This prevents duplicate token definitions.
+ * They must not create a second production token authority.
+ *
+ * Their definitions are reconciled into this grammar before production
+ * generation.
+ *
+ * ============================================================================
+ * TOKEN CANONICALIZATION
+ * ============================================================================
+ *
+ * The production token identity is canonicalized as follows:
+ *
+ *     "->"  -> THIN_ARROW
+ *     "&"   -> AMPERSAND
+ *     "|"   -> PIPE
+ *     "?"   -> QUESTION_MARK
+ *
+ * The following historical/internal duplicate identities must not be emitted:
+ *
+ *     Arrow
+ *     BitAnd
+ *     BitOr
+ *     Question
+ *
+ * Compatibility code may temporarily recognize legacy Rust enum names, but
+ * generated lexical streams must contain only the canonical identities.
  *
  * ============================================================================
  * SCALABILITY
  * ============================================================================
  *
- * This grammar contains no artificial machine limits.
+ * This grammar contains NO artificial language-level limits.
  *
- * It does NOT define limits for:
+ * It does not define limits for:
  *
  *   qubits
+ *   quantum registers
  *   CPUs
  *   cores
  *   threads
@@ -112,6 +178,8 @@
  *   accelerators
  *   nodes
  *   devices
+ *   processes
+ *   actors
  *   memory
  *   storage
  *   registers
@@ -119,56 +187,99 @@
  *   tensor rank
  *   tensor dimensions
  *   network size
- *   actor count
- *   process count
+ *   topology size
+ *   source size
+ *   identifier length
+ *   literal magnitude
  *
- * Numeric and textual values are source values, not machine-capacity limits.
+ * Numeric values represent source values.
+ *
+ * Resource feasibility belongs downstream:
+ *
+ *     semantic analysis
+ *         ->
+ *     resource analysis
+ *         ->
+ *     capability negotiation
+ *         ->
+ *     execution planning
+ *         ->
+ *     target realization
  *
  * ============================================================================
  * QUANTUM SCALABILITY
  * ============================================================================
  *
- * Quantum operation names remain identifiers.
+ * Quantum operation names are identifiers.
  *
- * The lexer does NOT enumerate:
+ * This grammar intentionally does NOT enumerate:
  *
- *   H
- *   X
- *   Y
- *   Z
- *   CNOT
- *   CX
- *   CZ
- *   SWAP
- *   RX
- *   RY
- *   RZ
+ *     H
+ *     X
+ *     Y
+ *     Z
+ *     CX
+ *     CNOT
+ *     CZ
+ *     SWAP
+ *     RX
+ *     RY
+ *     RZ
  *
- * or future/vendor/custom operations.
+ * or any other finite physical gate catalogue.
  *
- * They are resolved semantically and eventually lowered through:
+ * Built-in, custom, parameterized, vendor, decomposed and future operations
+ * remain lexically representable through IDENTIFIER.
+ *
+ * Their semantics eventually cross:
  *
  *     quantum::ir
+ *
+ * ============================================================================
+ * POCO-REAF
+ * ============================================================================
+ *
+ * Lexical validity is target-independent.
+ *
+ * The same source vocabulary must remain usable for:
+ *
+ *   embedded systems
+ *   CPUs
+ *   multicore systems
+ *   GPUs
+ *   FPGAs
+ *   ASICs
+ *   accelerators
+ *   QPUs
+ *   simulators
+ *   HPC systems
+ *   clusters
+ *   distributed systems
+ *   cloud systems
+ *   future execution substrates
+ *
+ * Target feasibility is not lexical validity.
  *
  * ============================================================================
  * DETERMINISM
  * ============================================================================
  *
- * Lexical classification depends only upon:
+ * Lexical classification depends only on:
  *
- *   source text;
+ *   source characters;
  *   lexical grammar;
- *   language/compatibility configuration.
+ *   explicitly selected language/compatibility version.
  *
- * It never depends upon:
+ * It must not depend on:
  *
  *   hardware;
- *   network;
  *   filesystem state;
+ *   network state;
  *   runtime state;
- *   target availability;
+ *   wall-clock time;
  *   random state;
- *   wall-clock time.
+ *   target availability;
+ *   resource availability.
  *
  * ============================================================================
  */
@@ -177,71 +288,76 @@ lexer grammar ZamaniTokens;
 
 
 /* ============================================================================
- * KEYWORDS — CORE LANGUAGE
+ * CORE DECLARATION / CONTROL KEYWORDS
  * ========================================================================== */
 
-FN          : 'fn' ;
-LET         : 'let' ;
-VAR         : 'var' ;
-MUT         : 'mut' ;
-CONST       : 'const' ;
-RETURN      : 'return' ;
+FN              : 'fn' ;
+LET             : 'let' ;
+VAR             : 'var' ;
+MUT             : 'mut' ;
+CONST           : 'const' ;
+RETURN          : 'return' ;
 
-IF          : 'if' ;
-ELSE        : 'else' ;
-FOR         : 'for' ;
-IN          : 'in' ;
-WHILE       : 'while' ;
-LOOP        : 'loop' ;
-BREAK       : 'break' ;
-CONTINUE    : 'continue' ;
-MATCH       : 'match' ;
-CASE        : 'case' ;
-WHEN        : 'when' ;
-YIELD       : 'yield' ;
+IF              : 'if' ;
+ELSE            : 'else' ;
+FOR             : 'for' ;
+IN              : 'in' ;
+WHILE           : 'while' ;
+LOOP            : 'loop' ;
+BREAK           : 'break' ;
+CONTINUE        : 'continue' ;
+MATCH           : 'match' ;
+CASE            : 'case' ;
+WHEN            : 'when' ;
+THEN            : 'then' ;
+YIELD           : 'yield' ;
+SWITCH          : 'switch' ;
 
-MODULE      : 'module' ;
-IMPORT      : 'import' ;
-EXPORT      : 'export' ;
-USE         : 'use' ;
-FROM        : 'from' ;
-AS          : 'as' ;
-PACKAGE     : 'package' ;
+MODULE          : 'module' ;
+IMPORT          : 'import' ;
+EXPORT          : 'export' ;
+USE             : 'use' ;
+FROM            : 'from' ;
+AS              : 'as' ;
+PACKAGE         : 'package' ;
 
-TYPE        : 'type' ;
-STRUCT      : 'struct' ;
-ENUM        : 'enum' ;
-TRAIT       : 'trait' ;
-IMPL        : 'impl' ;
-CLASS       : 'class' ;
-INTERFACE   : 'interface' ;
-RECORD      : 'record' ;
-UNION       : 'union' ;
-ALIAS       : 'alias' ;
+TYPE            : 'type' ;
+STRUCT          : 'struct' ;
+ENUM            : 'enum' ;
+TRAIT           : 'trait' ;
+IMPL            : 'impl' ;
+CLASS           : 'class' ;
+INTERFACE       : 'interface' ;
+RECORD          : 'record' ;
+UNION           : 'union' ;
+ALIAS           : 'alias' ;
 
-SEALED      : 'sealed' ;
-PARTIAL     : 'partial' ;
-PUBLIC      : 'public' ;
-PUB         : 'pub' ;
-PRIVATE     : 'private' ;
-PROTECTED   : 'protected' ;
-INTERNAL    : 'internal' ;
-STATIC      : 'static' ;
-OVERRIDE    : 'override' ;
-VIRTUAL     : 'virtual' ;
-ABSTRACT    : 'abstract' ;
-FINAL       : 'final' ;
-EXTENDS     : 'extends' ;
-IMPLEMENTS  : 'implements' ;
-THIS        : 'this' ;
-SELF        : 'self' ;
-SUPER       : 'super' ;
-NEW         : 'new' ;
-WHERE       : 'where' ;
+SEALED          : 'sealed' ;
+PARTIAL         : 'partial' ;
+
+PUBLIC          : 'public' ;
+PUB             : 'pub' ;
+PRIVATE         : 'private' ;
+PROTECTED       : 'protected' ;
+INTERNAL        : 'internal' ;
+
+STATIC          : 'static' ;
+OVERRIDE        : 'override' ;
+VIRTUAL         : 'virtual' ;
+ABSTRACT        : 'abstract' ;
+FINAL           : 'final' ;
+
+EXTENDS         : 'extends' ;
+IMPLEMENTS      : 'implements' ;
+THIS            : 'this' ;
+SELF            : 'self' ;
+SUPER           : 'super' ;
+NEW             : 'new' ;
+WHERE           : 'where' ;
 
 
 /* ============================================================================
- * CONCURRENCY / CONTROL / EFFECTS
+ * CONCURRENCY / ASYNCHRONY / CONTROL
  * ========================================================================== */
 
 ASYNC           : 'async' ;
@@ -249,13 +365,16 @@ AWAIT           : 'await' ;
 SPAWN           : 'spawn' ;
 PARALLEL        : 'parallel' ;
 
-UNSAFE          : 'unsafe' ;
-
 TRY             : 'try' ;
 CATCH           : 'catch' ;
 FINALLY         : 'finally' ;
 THROW           : 'throw' ;
 HANDLE          : 'handle' ;
+
+
+/* ============================================================================
+ * EFFECTS
+ * ========================================================================== */
 
 EFFECT          : 'effect' ;
 EFFECTS         : 'effects' ;
@@ -276,6 +395,8 @@ REFLECTION      : 'reflection' ;
 CODE_GENERATION : 'code_generation' ;
 SIMULATION      : 'simulation' ;
 
+UNSAFE          : 'unsafe' ;
+
 
 /* ============================================================================
  * CONTRACTS / VALIDATION
@@ -292,9 +413,15 @@ POSTCONDITION   : 'postcondition' ;
 CONTRACT        : 'contract' ;
 ASSERT          : 'assert' ;
 
+PROVE           : 'prove' ;
+VERIFY          : 'verify' ;
+VALIDATE        : 'validate' ;
+REFINE          : 'refine' ;
+REFINEMENT      : 'refinement' ;
+
 
 /* ============================================================================
- * RESOURCES / CAPABILITIES / PORTABILITY
+ * RESOURCE / CAPABILITY / PORTABILITY VOCABULARY
  * ========================================================================== */
 
 RESOURCE        : 'resource' ;
@@ -324,10 +451,12 @@ CAPACITY        : 'capacity' ;
 AVAILABILITY    : 'availability' ;
 PORTABILITY     : 'portability' ;
 SCALABILITY     : 'scalability' ;
+
 PERFORMANCE     : 'performance' ;
 LATENCY         : 'latency' ;
 THROUGHPUT      : 'throughput' ;
 BANDWIDTH       : 'bandwidth' ;
+
 ENERGY          : 'energy' ;
 POWER           : 'power' ;
 RELIABILITY     : 'reliability' ;
@@ -381,10 +510,6 @@ PREMISE         : 'premise' ;
 PREMISES        : 'premises' ;
 CONCLUSION      : 'conclusion' ;
 
-PROVE           : 'prove' ;
-VERIFY          : 'verify' ;
-VALIDATE        : 'validate' ;
-
 ASSUMPTION      : 'assumption' ;
 OBSERVATION     : 'observation' ;
 INTERVENTION    : 'intervention' ;
@@ -400,9 +525,11 @@ FACTS           : 'facts' ;
 RELATION        : 'relation' ;
 RELATIONS       : 'relations' ;
 
+ANCESTOR        : 'ancestor' ;
+
 
 /* ============================================================================
- * LEARNING / PROBABILISTIC COMPUTATION
+ * LEARNING / ADAPTATION
  * ========================================================================== */
 
 LEARN           : 'learn' ;
@@ -411,12 +538,20 @@ TRAIN           : 'train' ;
 PREDICT         : 'predict' ;
 EVALUATE        : 'evaluate' ;
 FEEDBACK        : 'feedback' ;
+
 MODEL           : 'model' ;
 DATASET         : 'dataset' ;
 OBJECTIVE       : 'objective' ;
 TRANSFER        : 'transfer' ;
 REINFORCEMENT   : 'reinforcement' ;
 UPDATE          : 'update' ;
+
+MOVE            : 'move' ;
+
+
+/* ============================================================================
+ * UNCERTAINTY / PROBABILISTIC COMPUTATION
+ * ========================================================================== */
 
 UNCERTAIN       : 'uncertain' ;
 UNCERTAINTY     : 'uncertainty' ;
@@ -435,6 +570,7 @@ LIKELIHOOD      : 'likelihood' ;
 EVIDENCE        : 'evidence' ;
 EXPLAIN         : 'explain' ;
 EXPLANATION     : 'explanation' ;
+
 PROVENANCE      : 'provenance' ;
 SOURCE          : 'source' ;
 DERIVATION      : 'derivation' ;
@@ -469,15 +605,18 @@ GUARDS          : 'guards' ;
 QUANTUM         : 'quantum' ;
 CIRCUIT         : 'circuit' ;
 QUBIT           : 'qubit' ;
+
 APPLY           : 'apply' ;
 MEASURE         : 'measure' ;
 RESET           : 'reset' ;
 BARRIER         : 'barrier' ;
+
 CONTROL         : 'control' ;
 ADJOINT         : 'adjoint' ;
 INVERSE         : 'inverse' ;
 OBSERVE         : 'observe' ;
 ENTANGLE        : 'entangle' ;
+
 NOISE           : 'noise' ;
 FIDELITY        : 'fidelity' ;
 SURFACE         : 'surface' ;
@@ -494,7 +633,9 @@ DYNAMIC         : 'dynamic' ;
 
 HYBRID          : 'hybrid' ;
 CLASSICAL       : 'classical' ;
-QUANTUM_CLASSICAL: 'quantum_classical' ;
+QUANTUM_CLASSICAL
+                : 'quantum_classical'
+                ;
 
 ACCELERATOR     : 'accelerator' ;
 DEVICE          : 'device' ;
@@ -528,7 +669,7 @@ INOUT           : 'inout' ;
 
 
 /* ============================================================================
- * DISTRIBUTED / ACTORS / NETWORK SERVICES
+ * DISTRIBUTED / ACTORS / SERVICES
  * ========================================================================== */
 
 NODE            : 'node' ;
@@ -563,6 +704,7 @@ AGENTS          : 'agents' ;
 NEURAL          : 'neural' ;
 SYMBOLIC        : 'symbolic' ;
 NEURAL_SYMBOLIC : 'neural_symbolic' ;
+
 COGNITIVE       : 'cognitive' ;
 PLANNING        : 'planning' ;
 
@@ -604,22 +746,25 @@ LANGUAGE        : 'language' ;
 
 MACRO           : 'macro' ;
 EXTERN          : 'extern' ;
+
 COMPILE         : 'compile' ;
 COMPTIME        : 'comptime' ;
 
 REFLECTIVE      : 'reflective' ;
 INTROSPECT      : 'introspect' ;
+
 GENERATE        : 'generate' ;
 QUOTE           : 'quote' ;
 SYNTAX          : 'syntax' ;
 
 
 /* ============================================================================
- * TYPE-SYSTEM QUALIFIERS
+ * TYPE SYSTEM
  * ========================================================================== */
 
 LINEAR          : 'linear' ;
 AFFINE          : 'affine' ;
+
 IMMUTABLE       : 'immutable' ;
 INLINE          : 'inline' ;
 VOLATILE        : 'volatile' ;
@@ -630,12 +775,13 @@ NONE            : 'none' ;
 
 
 /* ============================================================================
- * LANGUAGE / LEGACY COMPATIBILITY VOCABULARY
+ * LANGUAGE / COMPATIBILITY VOCABULARY
  * ========================================================================== */
 
 MTS             : 'mts' ;
 ZAMANI          : 'zamani' ;
 SASA            : 'sasa' ;
+
 REMEMBER        : 'remember' ;
 RECALL          : 'recall' ;
 WISDOM          : 'wisdom' ;
@@ -646,6 +792,10 @@ NEVER           : 'Never' ;
 PI_KEYWORD      : 'Pi' ;
 SIGMA_KEYWORD   : 'Sigma' ;
 
+NIL             : 'nil' | 'null' ;
+
+CODE            : 'code' ;
+
 
 /* ============================================================================
  * BUILT-IN TYPES / BUILT-IN OPERATIONS
@@ -655,8 +805,9 @@ VOID            : 'void' ;
 INT             : 'int' ;
 FLOAT_TYPE      : 'float' ;
 BOOL_TYPE       : 'bool' ;
+
 STR_TYPE        : 'str' ;
-STRING_TYPE     : 'string' ;
+STRING_TYPE     : 'string' | 'String' ;
 CHAR_TYPE       : 'char' ;
 
 PRINT           : 'print' ;
@@ -669,8 +820,9 @@ SIZEOF          : 'sizeof' ;
 /* ============================================================================
  * LOGICAL WORD OPERATORS
  *
- * NOT owns the word "not".
- * BANG owns the symbolic "!". This removes the old duplicate NOT conflict.
+ * "not" is a word operator.
+ * "!" is BANG.
+ * They are distinct source spellings and therefore distinct token kinds.
  * ========================================================================== */
 
 IS              : 'is' ;
@@ -727,10 +879,18 @@ FALSE           : 'false' ;
 
 
 /* ============================================================================
+ * UNICODE SYMBOLIC KEYWORDS / MATHEMATICAL SYMBOLS
+ * ========================================================================== */
+
+SIGMA_SYMBOL    : 'Σ' ;
+PI_SYMBOL       : 'Π' ;
+
+
+/* ============================================================================
  * HARDWARE / RESOURCE LITERALS
  *
- * These rules precede AT, MODULO and HASH so their complete lexical form is
- * emitted as one token.
+ * These rules precede AT, MODULO and HASH because their complete lexical
+ * forms must be recognized before their individual punctuation components.
  * ========================================================================== */
 
 HARDWARE_WIDTH_LITERAL
@@ -759,31 +919,120 @@ HARDWARE_BANK_INDEX_LITERAL
 
 
 /* ============================================================================
- * DURATION / SIZE LITERALS
+ * DURATION LITERALS
+ *
+ * Units remain open through the lexical unit vocabulary rather than imposing
+ * any physical timing limitation.
  * ========================================================================== */
 
 DURATION_LITERAL
-    : DECIMAL_INTEGER DURATION_UNIT
+    : DURATION_NUMBER DURATION_UNIT
     ;
 
+DURATION_NUMBER
+    : DECIMAL_DIGITS
+      ('.' DECIMAL_DIGITS)?
+      DURATION_EXPONENT?
+    ;
+
+fragment DURATION_EXPONENT
+    : [eE] [+-]? DECIMAL_DIGITS
+    ;
+
+fragment DURATION_UNIT
+    : 'fs'
+    | 'ps'
+    | 'ns'
+    | 'us'
+    | 'µs'
+    | 'μs'
+    | 'ms'
+    | 's'
+    | 'min'
+    | 'h'
+    | 'd'
+    | 'wk'
+    ;
+
+
+/* ============================================================================
+ * SIZE / DATA QUANTITY LITERALS
+ *
+ * Both byte-oriented and bit-oriented units are supported.
+ * ========================================================================== */
+
 SIZE_LITERAL
-    : DECIMAL_INTEGER SIZE_UNIT
+    : SIZE_NUMBER SIZE_UNIT
+    ;
+
+SIZE_NUMBER
+    : DECIMAL_DIGITS
+      ('.' DECIMAL_DIGITS)?
+      SIZE_EXPONENT?
+    ;
+
+fragment SIZE_EXPONENT
+    : [eE] [+-]? DECIMAL_DIGITS
+    ;
+
+fragment SIZE_UNIT
+    : 'Kibit'
+    | 'Mibit'
+    | 'Gibit'
+    | 'Tibit'
+    | 'Pibit'
+    | 'Eibit'
+    | 'Zibit'
+    | 'Yibit'
+    | 'KiB'
+    | 'MiB'
+    | 'GiB'
+    | 'TiB'
+    | 'PiB'
+    | 'EiB'
+    | 'ZiB'
+    | 'YiB'
+    | 'kbit'
+    | 'Mbit'
+    | 'Gbit'
+    | 'Tbit'
+    | 'Pbit'
+    | 'Ebit'
+    | 'Zbit'
+    | 'Ybit'
+    | 'bit'
+    | 'kB'
+    | 'KB'
+    | 'MB'
+    | 'GB'
+    | 'TB'
+    | 'PB'
+    | 'EB'
+    | 'ZB'
+    | 'YB'
+    | 'B'
+    | 'byte'
     ;
 
 
 /* ============================================================================
  * NUMERIC LITERALS
  *
- * No machine width is encoded here.
+ * The lexer recognizes mathematical/source magnitude.
+ *
+ * It does NOT constrain the value to a target machine integer width.
  * ========================================================================== */
 
 FLOAT
     : DECIMAL_DIGITS
-      (
-          '.' DECIMAL_DIGITS
-      )
-      EXPONENT?
-    | DECIMAL_DIGITS EXPONENT
+      '.'
+      DECIMAL_DIGITS
+      EXPONENT_PART?
+    | DECIMAL_DIGITS
+      EXPONENT_PART
+    | '.'
+      DECIMAL_DIGITS
+      EXPONENT_PART?
     ;
 
 INTEGER
@@ -793,44 +1042,210 @@ INTEGER
     | DECIMAL_INTEGER
     ;
 
+fragment DECIMAL_INTEGER
+    : DECIMAL_DIGITS
+    ;
+
+fragment DECIMAL_DIGITS
+    : DECIMAL_DIGIT
+      (DECIMAL_DIGIT | '_')*
+      DECIMAL_DIGIT?
+    ;
+
+fragment EXPONENT_PART
+    : [eE]
+      [+-]?
+      DECIMAL_DIGITS
+    ;
+
+fragment DECIMAL_DIGIT
+    : [0-9]
+    ;
+
+fragment DECIMAL_DIGIT_OR_SEPARATOR
+    : [0-9_]
+    ;
+
+fragment BIN_DIGIT
+    : [01]
+    ;
+
+fragment OCT_DIGIT
+    : [0-7]
+    ;
+
+fragment HEX_DIGIT
+    : [0-9a-fA-F]
+    ;
+
+fragment HEX_INTEGER
+    : '0' [xX]
+      HEX_DIGIT
+      (HEX_DIGIT | '_')*
+      HEX_DIGIT?
+    ;
+
+fragment BINARY_INTEGER
+    : '0' [bB]
+      BIN_DIGIT
+      (BIN_DIGIT | '_')*
+      BIN_DIGIT?
+    ;
+
+fragment OCTAL_INTEGER
+    : '0' [oO]
+      OCT_DIGIT
+      (OCT_DIGIT | '_')*
+      OCT_DIGIT?
+    ;
+
 
 /* ============================================================================
  * QUANTUM STATE LITERALS
  *
- * A quantum ket/state literal has an explicit closing '>'.
+ * Supported closing delimiters:
  *
- * Examples:
+ *     >
+ *     ⟩
  *
- *     |0>
- *     |1>
- *     |psi>
+ * Both represent source-level ket notation.
  *
  * A bare "|" remains PIPE.
+ *
+ * Quantum operations remain identifiers.
  * ========================================================================== */
 
 QUANTUM_LITERAL
-    : '|' QUANTUM_STATE_BODY '>'
+    : '|'
+      QUANTUM_STATE_BODY
+      ('>' | '⟩')
+    ;
+
+fragment QUANTUM_STATE_BODY
+    : QUANTUM_STATE_CHARACTER+
+    ;
+
+fragment QUANTUM_STATE_CHARACTER
+    : [A-Za-z0-9_]
+    | '.'
+    | '+'
+    | '-'
+    | '/'
+    | '\\'
+    | '\u0080'..'\uFFFF'
     ;
 
 
 /* ============================================================================
- * STRING / CHARACTER LITERALS
+ * STRING LITERALS
  * ========================================================================== */
 
 STRING
-    : '"' STRING_CHARACTER* '"'
+    : '"'
+      STRING_CHARACTER*
+      '"'
     ;
 
+UNTERMINATED_STRING
+    : '"'
+      (ESCAPE_SEQUENCE | ~["\\\r\n])*
+      ( '\r' | '\n' | EOF )
+    ;
+
+fragment STRING_CHARACTER
+    : ESCAPE_SEQUENCE
+    | ~["\\\r\n]
+    ;
+
+fragment STRING_TERMINATOR
+    : '"'
+    ;
+
+
+/* ============================================================================
+ * CHARACTER LITERALS
+ * ========================================================================== */
+
 CHAR
-    : '\'' CHARACTER_CONTENT '\''
+    : '\''
+      CHARACTER_CONTENT
+      '\''
+    ;
+
+UNTERMINATED_CHARACTER
+    : '\''
+      (ESCAPE_SEQUENCE | ~['\\\r\n])*
+      ( '\r' | '\n' | EOF )
+    ;
+
+fragment CHARACTER_CONTENT
+    : ESCAPE_SEQUENCE
+    | ~['\\\r\n]
+    ;
+
+fragment CHARACTER
+    : CHARACTER_CONTENT
+    ;
+
+fragment CHARACTER_ESCAPE
+    : ESCAPE_SEQUENCE
+    ;
+
+
+/* ============================================================================
+ * ESCAPE / UNICODE FRAGMENTS
+ * ========================================================================== */
+
+fragment ESCAPE_SEQUENCE
+    : '\\'
+      (
+          'n'
+        | 'r'
+        | 't'
+        | 'b'
+        | 'f'
+        | 'v'
+        | '0'
+        | '\\'
+        | '"'
+        | '\''
+        | 'u' UNICODE_ESCAPE
+        | 'U' UNICODE_LONG_ESCAPE
+        | 'x' HEX_ESCAPE
+      )
+    ;
+
+fragment UNICODE_ESCAPE
+    : HEX_DIGIT HEX_DIGIT HEX_DIGIT HEX_DIGIT
+    ;
+
+fragment UNICODE_LONG_ESCAPE
+    : HEX_DIGIT HEX_DIGIT HEX_DIGIT HEX_DIGIT
+      HEX_DIGIT HEX_DIGIT HEX_DIGIT HEX_DIGIT
+    ;
+
+fragment HEX_ESCAPE
+    : HEX_DIGIT HEX_DIGIT
     ;
 
 
 /* ============================================================================
  * ANNOTATIONS
  *
- * AT is the sole token for "@". Hardware address literals are recognized
- * earlier when followed by a hexadecimal integer.
+ * AT is the single canonical token for "@", except where a longer
+ * HARDWARE_ADDRESS_LITERAL has already matched.
+ *
+ * Nano/domain annotation names are NOT individual token kinds.
+ *
+ * Example:
+ *
+ *     @atom
+ *
+ * becomes:
+ *
+ *     AT IDENTIFIER
+ *
+ * This keeps the language extensible.
  * ========================================================================== */
 
 AT
@@ -841,7 +1256,7 @@ AT
 /* ============================================================================
  * OPERATORS
  *
- * Longer operators MUST precede their prefixes.
+ * Longer operators precede their prefixes.
  * ========================================================================== */
 
 ELLIPSIS
@@ -996,6 +1411,10 @@ GREATER
     : '>'
     ;
 
+QUESTION_MARK
+    : '?'
+    ;
+
 BANG
     : '!'
     ;
@@ -1053,12 +1472,13 @@ HASH
 /* ============================================================================
  * COMMENTS
  *
- * Comments precede SLASH and STAR so comment prefixes are recognized before
- * ordinary operators.
+ * Comments are hidden from the parser but remain available to tooling.
  * ========================================================================== */
 
 DOC_LINE_COMMENT
-    : '///' ~[\r\n]* -> channel(HIDDEN)
+    : '///'
+      ~[\r\n]*
+      -> channel(HIDDEN)
     ;
 
 DOC_BLOCK_COMMENT
@@ -1083,9 +1503,12 @@ BLOCK_COMMENT
 
 
 /* ============================================================================
- * LEXICAL ERROR TOKENS
+ * LEXICAL ERROR CATEGORIES
  *
- * These are deliberately explicit rather than a generic catch-all token.
+ * There is intentionally NO universal catch-all ERROR_CHAR rule.
+ *
+ * Unknown source characters must be surfaced through the canonical lexer
+ * diagnostic mechanism rather than silently becoming a valid token.
  * ========================================================================== */
 
 UNTERMINATED_DOC_BLOCK_COMMENT
@@ -1100,42 +1523,111 @@ UNTERMINATED_BLOCK_COMMENT
       EOF
     ;
 
-UNTERMINATED_STRING
-    : '"'
-      ( '\\' . | ~["\\\r\n] )*
-      ( '\r' | '\n' | EOF )
+
+/* ============================================================================
+ * IDENTIFIERS
+ *
+ * Identifiers remain open-ended.
+ *
+ * They cover:
+ *
+ *   quantum operation names
+ *   AI model names
+ *   tensor names
+ *   mathematical functions
+ *   HDL components
+ *   hardware devices
+ *   vendor operations
+ *   network services
+ *   domain names
+ *   future computational constructs
+ *
+ * No artificial identifier-length limit is encoded.
+ * ========================================================================== */
+
+IDENTIFIER
+    : IDENTIFIER_START
+      IDENTIFIER_CONTINUE*
     ;
 
-UNTERMINATED_CHARACTER
-    : '\''
-      ( '\\' . | ~['\\\r\n] )*
-      ( '\r' | '\n' | EOF )
+fragment IDENTIFIER_START
+    : [A-Z]
+    | [a-z]
+    | '_'
+    | UNICODE_IDENTIFIER_START
+    ;
+
+fragment IDENTIFIER_CONTINUE
+    : IDENTIFIER_START
+    | [0-9]
+    | UNICODE_IDENTIFIER_CONTINUE
     ;
 
 
 /* ============================================================================
- * IDENTIFIER
+ * UNICODE IDENTIFIER SUPPORT
  *
- * Domain-specific names remain identifiers.
+ * These fragments intentionally avoid imposing a fixed identifier-length
+ * ceiling.
  *
- * This includes:
- *
- *   quantum operations
- *   AI models
- *   agents
- *   hardware devices
- *   vendor operations
- *   mathematical functions
- *   tensors
- *   HDL components
- *   network services
- *   future computational constructs
- *
- * Identifier length is not artificially bounded.
+ * Source decoding must first guarantee valid Unicode scalar values.
  * ========================================================================== */
 
-IDENTIFIER
-    : IDENTIFIER_START IDENTIFIER_CONTINUE*
+fragment UNICODE_IDENTIFIER_START
+    : '\u0080'..'\uFFFF'
+    ;
+
+fragment UNICODE_IDENTIFIER_CONTINUE
+    : '\u0080'..'\uFFFF'
+    ;
+
+fragment UNICODE_LETTER
+    : '\u0080'..'\uFFFF'
+    ;
+
+fragment UNICODE_LETTER_NUMBER
+    : '\u2160'..'\u2188'
+    ;
+
+fragment UNICODE_DECIMAL_DIGIT
+    : '\u0660'..'\u0669'
+    ;
+
+fragment UNICODE_NONSPACING_MARK
+    : '\u0300'..'\u036F'
+    ;
+
+fragment UNICODE_SPACING_COMBINING_MARK
+    : '\u0900'..'\u0903'
+    ;
+
+fragment UNICODE_COMBINING_MARK
+    : '\u20D0'..'\u20FF'
+    ;
+
+fragment UNICODE_CONNECTOR_PUNCTUATION
+    : '\u005F'
+    ;
+
+fragment ZAMANI_LINE_FEED
+    : '\u000A'
+    ;
+
+fragment ZAMANI_CARRIAGE_RETURN
+    : '\u000D'
+    ;
+
+fragment ZAMANI_LINE_TERMINATOR
+    : ZAMANI_LINE_FEED
+    | ZAMANI_CARRIAGE_RETURN
+    ;
+
+fragment UNICODE_LINE_SEPARATOR
+    : '\u2028'
+    ;
+
+fragment UNICODE_PARAGRAPH_SEPARATOR
+    : '\u2029'
     ;
 
 
@@ -1144,166 +1636,48 @@ IDENTIFIER
  * ========================================================================== */
 
 WS
-    : [ \t\r\n\u000B\u000C]+ -> channel(HIDDEN)
+    : [ \t\r\n\u000B\u000C]+
+      -> channel(HIDDEN)
     ;
 
 
 /* ============================================================================
- * IDENTIFIER FRAGMENTS
- * ========================================================================== */
-
-fragment IDENTIFIER_START
-    : [A-Z]
-    | [a-z]
-    | '_'
-    | '\u0080'..'\uFFFF'
-    ;
-
-fragment IDENTIFIER_CONTINUE
-    : IDENTIFIER_START
-    | [0-9]
-    ;
-
-
-/* ============================================================================
- * INTEGER FRAGMENTS
- * ========================================================================== */
-
-fragment DECIMAL_INTEGER
-    : [0-9]+
-    ;
-
-fragment DECIMAL_DIGITS
-    : [0-9]+
-    ;
-
-fragment HEX_INTEGER
-    : '0' [xX] HEX_DIGIT+
-    ;
-
-fragment BINARY_INTEGER
-    : '0' [bB] [01]+
-    ;
-
-fragment OCTAL_INTEGER
-    : '0' [oO] [0-7]+
-    ;
-
-fragment HEX_DIGIT
-    : [0-9a-fA-F]
-    ;
-
-
-/* ============================================================================
- * FLOAT FRAGMENTS
- * ========================================================================== */
-
-fragment EXPONENT
-    : [eE] [+-]? DECIMAL_DIGITS
-    ;
-
-
-/* ============================================================================
- * STRING / CHARACTER FRAGMENTS
- * ========================================================================== */
-
-fragment STRING_CHARACTER
-    : ESCAPE_SEQUENCE
-    | ~["\\\r\n]
-    ;
-
-fragment CHARACTER_CONTENT
-    : ESCAPE_SEQUENCE
-    | ~['\\\r\n]
-    ;
-
-fragment ESCAPE_SEQUENCE
-    : '\\'
-      (
-          'n'
-        | 'r'
-        | 't'
-        | 'b'
-        | 'f'
-        | '0'
-        | '\\'
-        | '"'
-        | '\''
-        | 'u'
-        | 'U'
-        | 'x'
-      )
-    ;
-
-
-/* ============================================================================
- * QUANTUM STATE FRAGMENTS
- * ========================================================================== */
-
-fragment QUANTUM_STATE_BODY
-    : QUANTUM_STATE_CHARACTER+
-    ;
-
-fragment QUANTUM_STATE_CHARACTER
-    : [A-Za-z0-9_]
-    | '.'
-    | '+'
-    | '-'
-    | '/'
-    | '\\'
-    | '\u0080'..'\uFFFF'
-    ;
-
-
-/* ============================================================================
- * DURATION UNITS
+ * FINAL ARCHITECTURAL INVARIANTS
+ * ============================================================================
  *
- * The lexical unit is deliberately open to the language-defined duration
- * vocabulary without encoding a machine timing limit.
- * ========================================================================== */
-
-fragment DURATION_UNIT
-    : 'ns'
-    | 'us'
-    | 'µs'
-    | 'ms'
-    | 's'
-    | 'min'
-    | 'h'
-    | 'd'
-    ;
-
-
-/* ============================================================================
- * SIZE UNITS
- * ========================================================================== */
-
-fragment SIZE_UNIT
-    : 'B'
-    | 'KB'
-    | 'KiB'
-    | 'MB'
-    | 'MiB'
-    | 'GB'
-    | 'GiB'
-    | 'TB'
-    | 'TiB'
-    | 'PB'
-    | 'PiB'
-    | 'EB'
-    | 'EiB'
-    | 'ZB'
-    | 'ZiB'
-    | 'YB'
-    | 'YiB'
-    ;
-
-
-/* ============================================================================
- * FINAL FALLBACK
+ * 1. One source spelling has one canonical emitted token identity.
  *
- * No generic ERROR_CHAR rule is provided.
+ * 2. One emitted token has one lexical owner.
  *
- * Invalid characters must be surfaced by ANTLR's normal lexical error
- * mechanism rather than silently converted into an apparently valid token.
- * ========================================================================== */
+ * 3. Domain grammars do not create competing lexical authorities.
+ *
+ * 4. Quantum operations are identifiers, not a finite lexer catalogue.
+ *
+ * 5. Hardware scale is not encoded in lexical rules.
+ *
+ * 6. Resource availability is not lexical validity.
+ *
+ * 7. Tokenization is deterministic and target-independent.
+ *
+ * 8. Rust implementation remains safe.
+ *
+ * 9. Rust 1.97+ is supported.
+ *
+ * 10. Parser and AST layers receive canonical tokens.
+ *
+ * 11. Semantic interpretation remains downstream.
+ *
+ * 12. Classical and quantum computation share the same lexical foundation.
+ *
+ * 13. HDL and hardware syntax share the same lexical foundation.
+ *
+ * 14. AI, data, distributed and networking constructs share the same lexical
+ *     foundation.
+ *
+ * 15. Future domains can use IDENTIFIER and extensible syntax without
+ *     requiring a universal token catalogue.
+ *
+ * 16. No MAX_* machine-capacity constants exist in this grammar.
+ *
+ * ============================================================================
+ */
