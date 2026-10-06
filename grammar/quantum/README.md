@@ -1,8 +1,4 @@
-Worked for 9s
 
-I inspected the repository's existing quantum grammar architecture and the surrounding contracts. The important correction is that grammar/quantum/README.md should be an architecture and integration contract, not a second grammar specification. It should define ownership, boundaries, dependency direction, scalability rules, canonical integration points, and the definition of done for the entire quantum grammar directory.
-
-Below is a complete replacement for grammar/quantum/README.md. It deliberately keeps operation names, qubit counts, resource sizes, hardware topology, and future quantum features open-ended.
 
 # Zamani Quantum Grammar
 
