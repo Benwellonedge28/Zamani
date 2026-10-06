@@ -1973,4 +1973,20 @@ aiTransferLearningConstruct
 ;
 */
 
- 
+Now, there is one important integration consequence: do not add "AITransferLearning" beside "AILearning" in "grammar/ai/ai.g4". Both ultimately consume the same "learnStatement", so doing so would create competing parse paths rather than adding capability. The file above is intentionally a stable semantic/tooling boundary.
+
+Required downstream integration
+
+The file itself is therefore independently complete at the grammar layer. The remaining work belongs elsewhere:
+
+- "grammar/ai/learning.g4" remains the sole AI parser adapter for "learn".
+- "grammar/statements/learn.g4" remains the sole source syntax owner.
+- The semantic model should classify a learning operation as transfer learning when its resolved source/target/strategy semantics establish knowledge reuse.
+- The AST should preserve the ordinary learning structure rather than introduce a mandatory AI-specific AST.
+- Transfer-learning semantics should carry source/target, strategy, requirements, capabilities, effects, contracts, policies and provenance.
+- The existing "src/stdlib/ml.rs" "TransferLearningManager" should eventually be changed at the implementation layer so its fixed "frozen_layers: usize" model is not treated as the language's definition of transfer learning.
+- No lexer change is required merely to add this feature.
+- No new permanent keyword is required.
+- No hardware/resource ceiling is introduced.
+- Quantum participation continues through "quantum::ir".
+- All implementation remains compatible with Rust 1.97+ and safe Rust.
