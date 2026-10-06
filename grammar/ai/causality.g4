@@ -13,7 +13,7 @@
  *     CANONICAL AI-DOMAIN CAUSAL-COMPUTATION COMPOSITION GRAMMAR
  *
  * Implementation baseline:
- *     Rust 1.97 or later
+ *     Rust 1.97+
  *     Rust edition 2021
  *     Safe Rust only
  *     No unsafe Rust
@@ -28,33 +28,33 @@
  * PURPOSE
  * -------
  *
- * This file defines the AI-domain composition boundary for generic causal
+ * This file defines the AI-domain composition boundary for causal
  * computation.
  *
- * Causality is treated as a general computational relationship rather than
- * as a particular AI algorithm, causal graph implementation, temporal engine,
- * probability engine, database, simulator, theorem prover, or hardware
- * mechanism.
+ * Causality is a semantic computational capability. It is not restricted to
+ * machine learning and is not tied to a particular causal graph format,
+ * statistical model, temporal engine, database, simulator, theorem prover,
+ * hardware architecture, quantum implementation, or runtime.
  *
- * The grammar provides a stable source-level structure for expressing:
+ * The grammar provides source-level structure for:
  *
- *     - causal relationships;
- *     - causes;
- *     - effects;
- *     - observations;
- *     - interventions;
- *     - counterfactuals;
- *     - causal dependencies;
- *     - causal queries;
- *     - causal assertions;
- *     - causal explanations;
- *     - causal context;
- *     - causal metadata;
- *     - open-world causal extensions.
+ *     causal relationships
+ *     causes
+ *     effects
+ *     observations
+ *     interventions
+ *     counterfactuals
+ *     dependencies
+ *     causal queries
+ *     causal assertions
+ *     causal explanations
+ *     causal context
+ *     causal metadata
+ *     extensible causal operations
  *
- * The grammar expresses COMPUTATIONAL INTENT.
+ * The grammar describes COMPUTATIONAL INTENT.
  *
- * It does not prescribe how that intent is realized.
+ * It does not decide how that intent is executed.
  *
  *
  * ============================================================================
@@ -64,81 +64,51 @@
  *     Zamani source
  *          |
  *          v
- *     canonical lexer
+ *     ZamaniLexer
  *          |
  *          v
- *     canonical parser
+ *     ZamaniParser
  *          |
  *          v
- *     AI
+ *     AI composition
  *          |
  *          v
- *     AICausality                         <-- THIS FILE
+ *     AICausality                    <-- THIS FILE
  *          |
  *          v
- *     domain-neutral frontend AST
+ *     domain-neutral AST
  *          |
  *          v
  *     structural validation
  *          |
- *          +-------------------+-------------------+
- *          |                   |                   |
- *          v                   v                   v
- *        types              effects           provenance
- *          |                   |                   |
- *          +-------------------+-------------------+
+ *          +------------------+------------------+------------------+
+ *          |                  |                  |                  |
+ *          v                  v                  v                  v
+ *        types             effects          capabilities         resources
+ *          |                  |                  |                  |
+ *          +------------------+------------------+------------------+
+ *                                     |
+ *                                     v
+ *                             semantic causal model
+ *                                     |
+ *          +------------------+-------+------------------+
+ *          |                  |                          |
+ *          v                  v                          v
+ *      classical          quantum semantic          other domains
  *                              |
  *                              v
- *                       causal semantic model
- *                              |
- *              +---------------+---------------+
- *              |               |               |
- *              v               v               v
- *         classical       quantum::ir      other domains
- *              |               |               |
- *              +---------------+---------------+
+ *                          quantum::ir
  *                              |
  *                              v
  *                    optimization / lowering
  *                              |
- *                       specialization
- *                              |
- *                    routing / scheduling
+ *                       routing / scheduling
  *                              |
  *                    resilience / recovery
  *                              |
- *                         ZQN / HAL
+ *                           ZQN / HAL
  *                              |
  *                       target realization
- *
- *
- * ============================================================================
- * CORE PRINCIPLE
- * ============================================================================
- *
- * CAUSALITY IS NOT THE SAME AS TEMPORALITY.
- *
- * A causal relationship may be:
- *
- *     temporal;
- *     logical;
- *     probabilistic;
- *     physical;
- *     computational;
- *     data-derived;
- *     observational;
- *     intervention-based;
- *     counterfactual;
- *     distributed;
- *     quantum-derived;
- *     hardware-derived;
- *     simulation-derived;
- *     domain-defined.
- *
- * Therefore this grammar MUST NOT make causal semantics depend exclusively on
- * the MTS temporal subsystem.
- *
- * Temporal causality is one semantic realization of the general causal model.
  *
  *
  * ============================================================================
@@ -158,8 +128,10 @@
  *     causalNamedArgument
  *     causalContext
  *     causalContextItem
+ *
+ * It also provides stable semantic-category parser boundaries:
+ *
  *     causalRelation
- *     causalRelationOperator
  *     causalObservation
  *     causalIntervention
  *     causalCounterfactual
@@ -168,228 +140,114 @@
  *     causalAssertion
  *     causalExplanation
  *
+ * These category rules deliberately share one operation representation.
  *
- * THIS FILE DOES NOT OWN
- * ---------------------
  *
- *     - lexer rules;
- *     - keyword spelling;
- *     - identifiers;
- *     - qualified-name syntax;
- *     - expression precedence;
- *     - general expressions;
- *     - general types;
- *     - pattern syntax;
- *     - guards;
- *     - knowledge storage;
- *     - probability mathematics;
- *     - uncertainty mathematics;
- *     - statistical algorithms;
- *     - causal discovery algorithms;
- *     - structural causal models;
- *     - Bayesian networks;
- *     - graph databases;
- *     - theorem provers;
- *     - SAT/SMT solvers;
- *     - machine-learning algorithms;
- *     - neural models;
- *     - reinforcement-learning algorithms;
- *     - temporal storage;
- *     - temporal scheduling;
- *     - simulation engines;
- *     - quantum operation syntax;
- *     - quantum physical mapping;
- *     - QEC;
- *     - HDL syntax;
- *     - hardware realization;
- *     - resource allocation;
- *     - capability discovery;
- *     - policy enforcement;
- *     - provenance storage;
- *     - runtime execution;
- *     - scheduling;
- *     - routing;
- *     - optimization;
- *     - canonical IR;
- *     - quantum::ir;
- *     - ZQN;
- *     - HAL.
+ * ============================================================================
+ * DOES NOT OWN
+ * ============================================================================
+ *
+ * This file does NOT own:
+ *
+ *     lexer rules
+ *     keywords
+ *     identifiers
+ *     qualified-name syntax
+ *     expression precedence
+ *     expressions
+ *     literals
+ *     types
+ *     patterns
+ *     guards
+ *     reasoning
+ *     inference
+ *     deduction
+ *     knowledge storage
+ *     knowledge query semantics
+ *     uncertainty
+ *     probability
+ *     distributions
+ *     evidence storage
+ *     provenance storage
+ *     contracts
+ *     policies
+ *     effects
+ *     capabilities
+ *     resources
+ *     temporal syntax
+ *     temporal storage
+ *     learning algorithms
+ *     adaptation algorithms
+ *     causal discovery algorithms
+ *     causal inference algorithms
+ *     Bayesian networks
+ *     graph databases
+ *     theorem provers
+ *     simulation engines
+ *     quantum syntax
+ *     quantum routing
+ *     quantum scheduling
+ *     QEC
+ *     HDL syntax
+ *     hardware syntax
+ *     distributed actor syntax
+ *     networking syntax
+ *     FFI
+ *     ABI
+ *     runtime execution
+ *     target selection
+ *     optimization
+ *     lowering
+ *     canonical IR
+ *     quantum::ir
+ *     ZQN
+ *     HAL
  *
  *
  * ============================================================================
  * SINGLE-AUTHORITY RULE
  * ============================================================================
  *
- * This file owns AI-domain causal composition only.
+ * Generic language facilities remain owned by their canonical grammars.
  *
- * It MUST NOT duplicate:
+ * In particular this grammar MUST NOT redefine:
  *
  *     expression
  *     typeExpression
  *     identifier
  *     qualifiedName
- *     statement
  *     reasonStatement
  *     knowledgeExpression
  *     uncertaintyExpression
- *     queryExpression
- *     policyExpression
- *     provenanceExpression
+ *     pattern
+ *     guard
+ *     requirement
+ *     capability
+ *     contract
+ *     policy
+ *     provenance
+ *     effect
  *
- * Those remain owned by their canonical grammar components.
- *
- *
- * ============================================================================
- * CAUSALITY / REASONING DISTINCTION
- * ============================================================================
- *
- * Generic reasoning answers questions such as:
- *
- *     infer conclusion from evidence;
- *     deduce result from premises;
- *     reason decision from observation;
- *
- * Causal computation additionally represents a directed semantic relationship
- * between computational entities.
- *
- * Therefore:
- *
- *     reasoning != causality
- *
- * although reasoning may consume causal information and causal computation
- * may consume reasoning results.
- *
- * This file must not replace:
- *
- *     grammar/statements/reason.g4
- *
- * and reasoning.g4 must not be made responsible for causal graph semantics.
- *
- *
- * ============================================================================
- * CAUSALITY / TEMPORAL DISTINCTION
- * ============================================================================
- *
- * The repository already contains temporal infrastructure including:
- *
- *     grammar/types/temporal.g4
- *     grammar/memory/temporal.g4
- *     src/toolchain/causality_checker.rs
- *
- * Those components remain valid consumers of causal semantics.
- *
- * They do NOT become the source-language owner of this AI causal grammar.
- *
- * A causal relationship MAY have temporal information, but temporal ordering
- * is not required for every causal relationship.
- *
- * Examples of possible semantic forms include:
- *
- *     causal::cause(source, target)
- *     causal::effect(source, target)
- *     causal::observe(value)
- *     causal::intervene(variable, value)
- *     causal::counterfactual(condition, outcome)
- *     causal::depends_on(value, dependency)
- *
- * The actual semantic interpretation is downstream.
- *
- *
- * ============================================================================
- * OPEN-WORLD DESIGN
- * ============================================================================
- *
- * Causal computation MUST remain extensible.
- *
- * The grammar therefore does NOT enumerate a fixed catalogue of:
- *
- *     causal algorithms;
- *     graph algorithms;
- *     causal estimators;
- *     discovery methods;
- *     intervention methods;
- *     counterfactual solvers;
- *     probability models;
- *     domain ontologies;
- *     scientific theories;
- *     hardware mechanisms.
- *
- * New causal operations can be represented through the generic operation
- * boundary and qualified names.
- *
- * For example:
- *
- *     causal::cause(...)
- *     causal::effect(...)
- *     causal::observe(...)
- *     causal::intervene(...)
- *     causal::counterfactual(...)
- *     causal::depends_on(...)
- *
- * are semantic operation names.
- *
- * Future operations may be introduced without creating a new universal
- * hardware or mathematical ceiling.
- *
- *
- * ============================================================================
- * NAMESPACE CONTRACT
- * ============================================================================
- *
- * The canonical source namespace for the generic causal operation family is:
- *
- *     causal
- *
- * The canonical qualified form is:
- *
- *     causal::operation(...)
- *
- * IMPORTANT:
- *
- * `causal` is intentionally NOT introduced as a global reserved keyword.
- *
- * The repository's open-world name architecture allows semantic namespaces
- * to remain extensible without continually expanding the global keyword set.
- *
- * The semantic layer MUST validate that the first qualification segment of a
- * construct entering this grammar is the canonical causal namespace.
- *
- * This parser-level design avoids:
- *
- *     CAUSAL
- *     CAUSE
- *     EFFECT
- *     INTERVENTION
- *     OBSERVATION
- *     COUNTERFACTUAL
- *     DEPENDENCY
- *
- * becoming mandatory global lexer keywords.
- *
- * This is important for long-term language extensibility.
+ * Causal computation consumes those facilities through their public
+ * interfaces.
  *
  *
  * ============================================================================
  * DEPENDENCY CONTRACT
  * ============================================================================
  *
- * DEPENDS_ON
- * ----------
+ * DEPENDS_ON:
  *
  *     grammar/antlr/ZamaniLexer.g4
  *     grammar/core/names.g4
  *     grammar/expressions/expressions.g4
  *
- *
- * IMPORTS
- * -------
+ * IMPORTS:
  *
  *     Names
  *     Expressions
  *
- *
- * EXPORTS
- * -------
+ * EXPORTS:
  *
  *     aiCausalityConstruct
  *     causalStatement
@@ -402,7 +260,6 @@
  *     causalContext
  *     causalContextItem
  *     causalRelation
- *     causalRelationOperator
  *     causalObservation
  *     causalIntervention
  *     causalCounterfactual
@@ -411,28 +268,19 @@
  *     causalAssertion
  *     causalExplanation
  *
- *
- * CONSUMED BY
- * -----------
+ * CONSUMED_BY:
  *
  *     grammar/ai/ai.g4
  *
+ * AST_OWNER:
  *
- * AST_OWNER
- * ---------
+ *     Existing domain-neutral frontend AST.
  *
- * Existing domain-neutral frontend AST.
+ * SEMANTIC_OWNER:
  *
- * This grammar MUST NOT require an AI-specific AST hierarchy merely because
- * the construct is consumed through the AI domain.
+ *     Causal semantic subsystem.
  *
- *
- * SEMANTIC_OWNER
- * --------------
- *
- * Causal semantic analysis.
- *
- * Semantic analysis integrates with:
+ * SEMANTIC_CONSUMERS:
  *
  *     type analysis
  *     effect analysis
@@ -442,66 +290,32 @@
  *     policy analysis
  *     provenance
  *     temporal semantics
- *     uncertainty/probability semantics
- *     knowledge semantics
- *     reasoning semantics
- *     concurrency semantics
+ *     reasoning
+ *     knowledge
+ *     uncertainty
+ *     concurrency
  *     distributed semantics
- *     simulation semantics
+ *     simulation
  *     quantum semantics
  *     HDL/hardware semantics
  *
+ * IR_OWNER:
  *
- * IR_OWNER
- * --------
+ *     Canonical semantic representation.
  *
- * This grammar owns NO IR.
+ *     Classical causal computation uses the canonical classical path.
  *
- * Causal semantics lower into the repository's canonical semantic model.
+ *     Quantum-related computation crosses the canonical:
  *
- * Classical causal computation may lower through the canonical classical
- * representation.
+ *         quantum::ir
  *
- * Quantum-related causal computation MUST use the canonical quantum semantic
- * boundary and, when quantum operations are represented, must cross:
+ *     boundary.
  *
- *     quantum::ir
- *
- * There MUST NOT be:
- *
- *     causal::ir
- *     ai::causal_ir
- *     quantum_causal_ir
- *
- * merely because causal computation is present.
- *
- *
- * TEST_OWNER
- * ----------
+ * TEST_OWNER:
  *
  *     grammar/tests/ai/causality/
  *
- * Recommended groups:
- *
- *     relation/
- *     observation/
- *     intervention/
- *     counterfactual/
- *     dependency/
- *     query/
- *     assertion/
- *     explanation/
- *     context/
- *     namespace/
- *     quantum/
- *     temporal/
- *     distributed/
- *     scalability/
- *     negative/
- *
- *
- * SPEC_OWNER
- * ----------
+ * SPEC_OWNER:
  *
  *     grammar/spec/ai.md
  *     grammar/spec/causality.md
@@ -512,64 +326,109 @@
  *
  *
  * ============================================================================
+ * DEPENDENCY DIRECTION
+ * ============================================================================
+ *
+ * The intended dependency direction is:
+ *
+ *     ZamaniLexer
+ *          |
+ *          v
+ *     Names / Expressions
+ *          |
+ *          v
+ *     AICausality
+ *          |
+ *          v
+ *     AI
+ *          |
+ *          v
+ *     Zamani parser composition
+ *
+ * This grammar MUST NOT import AI itself.
+ *
+ * This grammar MUST NOT import ZamaniParser.
+ *
+ * This grammar MUST NOT import the complete Statements grammar.
+ *
+ * This prevents circular parser dependencies.
+ *
+ *
+ * ============================================================================
  * LEXER CONTRACT
  * ============================================================================
  *
  * This file defines NO lexer rules.
  *
- * It introduces NO new global tokens.
+ * No new global keyword is required for causal computation.
  *
- * It consumes the existing canonical token vocabulary through:
- *
- *     tokenVocab = ZamaniLexer
- *
- * In particular, the following remain ordinary names unless separately
- * reserved by the canonical lexical specification:
+ * The canonical causal namespace is:
  *
  *     causal
- *     cause
- *     effect
- *     observe
- *     intervene
- *     counterfactual
- *     depends_on
- *     query
- *     assert
- *     explain
  *
- * If any of these words already has a canonical token in the lexer, the
- * semantic/grammar integration must use that canonical token instead of
- * attempting to recreate an identifier token.
+ * Canonical operations are conventionally represented as:
+ *
+ *     causal::cause(...)
+ *     causal::effect(...)
+ *     causal::observe(...)
+ *     causal::intervene(...)
+ *     causal::counterfactual(...)
+ *     causal::depends_on(...)
+ *     causal::query(...)
+ *     causal::assert(...)
+ *     causal::explain(...)
+ *
+ * These names remain ordinary names at the lexical layer unless the canonical
+ * lexer independently reserves one of them.
+ *
+ * This deliberately avoids adding a permanent global catalogue such as:
+ *
+ *     CAUSAL
+ *     CAUSE
+ *     EFFECT
+ *     OBSERVATION
+ *     INTERVENTION
+ *     COUNTERFACTUAL
+ *     DEPENDENCY
+ *
+ * merely to support this subsystem.
+ *
+ * A new causal operation therefore does not normally require a lexer change.
  *
  *
  * ============================================================================
  * NAME CONTRACT
  * ============================================================================
  *
- * `qualifiedName` remains owned by Names.
+ * `qualifiedName` is the canonical name boundary.
  *
- * A causal operation name is therefore:
+ * `causalOperationName` delegates completely to `qualifiedName`.
  *
- *     qualifiedName
+ * Semantic analysis determines whether a resolved operation belongs to:
  *
- * and its semantic owner validates:
+ *     causal
  *
- *     causal::<operation>
+ * or to a registered causal extension namespace.
  *
- * or a registered causal extension namespace.
+ * Therefore this grammar intentionally permits:
  *
- * This allows future domain extensions without modifying the causal grammar.
+ *     causal::operation(...)
+ *
+ * and also permits a syntactically valid qualified name which semantic
+ * analysis may subsequently reject because it is not a causal operation.
+ *
+ * This is preferable to duplicating namespace semantics in the parser.
  *
  *
  * ============================================================================
  * EXPRESSION CONTRACT
  * ============================================================================
  *
- * All causal operands are ordinary Zamani expressions.
+ * Every causal operand is an ordinary Zamani expression.
  *
- * This means causal computation may operate on:
+ * Consequently causal operations may consume:
  *
- *     scalars
+ *     scalar values
  *     tuples
  *     records
  *     collections
@@ -580,64 +439,487 @@
  *     knowledge values
  *     uncertain values
  *     probabilistic values
- *     observations
+ *     reasoning results
+ *     classical computation results
+ *     quantum measurement results
  *     simulation results
- *     classical results
- *     quantum measurements
- *     quantum states where semantically valid
- *     hardware observations
  *     distributed results
+ *     hardware observations
  *     future-domain values
  *
- * No AI-specific expression hierarchy is introduced.
+ * This grammar creates no AI-specific expression hierarchy.
+ *
+ *
+ * ============================================================================
+ * STATEMENT / EXPRESSION BOUNDARY
+ * ============================================================================
+ *
+ * Causal computation is represented as an operation expression.
+ *
+ * A standalone causal operation becomes a statement only through:
+ *
+ *     causalStatement
+ *
+ * This gives the same semantic operation a reusable expression boundary.
+ *
+ * Example:
+ *
+ *     causal::observe(sensor_value)
+ *
+ * may be embedded in an expression.
+ *
+ * Example:
+ *
+ *     causal::observe(sensor_value);
+ *
+ * is a causal statement.
+ *
+ * The grammar does not define assignment or general expression precedence.
+ *
+ *
+ * ============================================================================
+ * OPEN-WORLD OPERATION CONTRACT
+ * ============================================================================
+ *
+ * The following operations are canonical semantic conventions:
+ *
+ *     causal::cause
+ *     causal::effect
+ *     causal::observe
+ *     causal::intervene
+ *     causal::counterfactual
+ *     causal::depends_on
+ *     causal::query
+ *     causal::assert
+ *     causal::explain
+ *
+ * They are NOT a closed catalogue.
+ *
+ * A causal provider, library, scientific domain, simulator, compiler
+ * extension, or future computational domain may register additional
+ * operations.
+ *
+ * The parser therefore MUST NOT contain one alternative for every causal
+ * algorithm.
+ *
+ * For example, these remain possible semantic extensions:
+ *
+ *     causal::discover(...)
+ *     causal::estimate(...)
+ *     causal::identify(...)
+ *     causal::simulate(...)
+ *     causal::validate(...)
+ *     causal::mechanism(...)
+ *
+ * without changing this grammar.
+ *
+ *
+ * ============================================================================
+ * CAUSAL RELATION CONTRACT
+ * ============================================================================
+ *
+ * A causal relation represents a semantic directed relationship between
+ * computational entities.
+ *
+ * The grammar does not force a graph representation.
+ *
+ * A semantic implementation may represent causal information as:
+ *
+ *     relations
+ *     graphs
+ *     rules
+ *     equations
+ *     models
+ *     constraints
+ *     symbolic structures
+ *     distributed representations
+ *     other future representations
+ *
+ * A causal relation is not automatically:
+ *
+ *     temporal dependency
+ *     data dependency
+ *     memory dependency
+ *     hardware dependency
+ *     network dependency
+ *     thread dependency
+ *
+ * Those meanings belong to their respective semantic systems.
+ *
+ *
+ * ============================================================================
+ * OBSERVATION CONTRACT
+ * ============================================================================
+ *
+ * `causal::observe(...)` represents an observation request.
+ *
+ * An observation may derive from:
+ *
+ *     ordinary data
+ *     sensor data
+ *     simulation
+ *     hardware
+ *     quantum measurement
+ *     distributed state
+ *     model output
+ *     knowledge
+ *     external systems
+ *
+ * The grammar does not guarantee that an observation is physically
+ * non-invasive.
+ *
+ * The semantic layer determines whether the selected operation is truly
+ * observational and what effects it has.
+ *
+ *
+ * ============================================================================
+ * INTERVENTION CONTRACT
+ * ============================================================================
+ *
+ * `causal::intervene(...)` represents an explicit causal manipulation or
+ * hypothetical manipulation.
+ *
+ * It may refer to:
+ *
+ *     variables
+ *     states
+ *     values
+ *     relations
+ *     models
+ *     simulation parameters
+ *     control conditions
+ *
+ * It does not imply a particular:
+ *
+ *     actuator
+ *     CPU
+ *     GPU
+ *     QPU
+ *     FPGA
+ *     sensor
+ *     hardware device
+ *     physical mechanism
+ *
+ * Authorization and execution are semantic/runtime concerns.
+ *
+ *
+ * ============================================================================
+ * COUNTERFACTUAL CONTRACT
+ * ============================================================================
+ *
+ * `causal::counterfactual(...)` represents evaluation of an alternative
+ * condition, intervention, state, or world relative to a specified semantic
+ * context.
+ *
+ * It may consume:
+ *
+ *     observations
+ *     interventions
+ *     models
+ *     evidence
+ *     uncertainty
+ *     probability
+ *     reasoning
+ *     simulation
+ *
+ * The grammar does not prescribe a counterfactual algorithm.
+ *
+ *
+ * ============================================================================
+ * DEPENDENCY CONTRACT
+ * ============================================================================
+ *
+ * `causal::depends_on(...)` represents a causal dependency.
+ *
+ * It must not be confused with the repository's other dependency concepts.
+ *
+ * In particular, causal dependency does not automatically mean:
+ *
+ *     execution dependency
+ *     resource dependency
+ *     module dependency
+ *     memory dependency
+ *     data dependency
+ *     network dependency
+ *     scheduling dependency
+ *
+ * Semantic analysis determines the intended relation.
+ *
+ *
+ * ============================================================================
+ * QUERY CONTRACT
+ * ============================================================================
+ *
+ * `causal::query(...)` represents a request for causal information.
+ *
+ * Query semantics may be backed by:
+ *
+ *     causal models
+ *     knowledge systems
+ *     datasets
+ *     symbolic rules
+ *     statistical systems
+ *     simulation
+ *     distributed systems
+ *     external providers
+ *
+ * This grammar does not create a separate query language.
+ *
+ *
+ * ============================================================================
+ * ASSERTION CONTRACT
+ * ============================================================================
+ *
+ * `causal::assert(...)` represents a causal claim or causal assertion.
+ *
+ * The operation may reference:
+ *
+ *     a claim
+ *     evidence
+ *     observations
+ *     interventions
+ *     model information
+ *     provenance
+ *     confidence
+ *     uncertainty
+ *
+ * General assertion/contract syntax remains owned by the validation system.
+ *
+ * A causal assertion operation must therefore not be confused with the
+ * universal assertion/contract grammar.
+ *
+ *
+ * ============================================================================
+ * EXPLANATION CONTRACT
+ * ============================================================================
+ *
+ * `causal::explain(...)` represents a request for a causal explanation.
+ *
+ * Explanations may be consumed by:
+ *
+ *     AI tooling
+ *     scientific tooling
+ *     compiler diagnostics
+ *     optimization analysis
+ *     resource planning
+ *     quantum analysis
+ *     hardware analysis
+ *     security analysis
+ *
+ * The grammar does not prescribe the explanation representation.
+ *
+ *
+ * ============================================================================
+ * ARGUMENT CONTRACT
+ * ============================================================================
+ *
+ * Causal operations accept zero or more arguments syntactically.
+ *
+ * Semantic operation metadata determines:
+ *
+ *     required arity
+ *     optional arity
+ *     argument roles
+ *     argument types
+ *     ordering constraints
+ *     required metadata
+ *     incompatible metadata
+ *
+ * This allows the grammar to remain stable while semantic operation
+ * definitions evolve.
+ *
+ * A semantic implementation may reject an operation whose arguments do not
+ * satisfy its registered contract.
+ *
+ *
+ * ============================================================================
+ * NAMED ARGUMENT CONTRACT
+ * ============================================================================
+ *
+ * Named arguments provide extensible causal metadata without introducing a
+ * new grammar rule for every future causal property.
+ *
+ * Canonical examples include:
+ *
+ *     evidence: e
+ *     provenance: p
+ *     context: c
+ *     model: m
+ *     policy: policy_value
+ *     confidence: confidence_value
+ *
+ * The canonical parser representation uses:
+ *
+ *     identifier ASSIGN expression
+ *
+ * where the semantic layer determines the meaning of the field.
+ *
+ * The grammar does not create a fixed metadata catalogue.
+ *
+ *
+ * ============================================================================
+ * CONTEXT CONTRACT
+ * ============================================================================
+ *
+ * `causalContext` is a reusable parser boundary for operation contexts.
+ *
+ * Context items may be:
+ *
+ *     expressions
+ *
+ * or:
+ *
+ *     named arguments
+ *
+ * This permits context such as:
+ *
+ *     causal::cause(a, b, context: model);
+ *
+ *     causal::intervene(x, value, policy: intervention_policy);
+ *
+ *     causal::counterfactual(condition, outcome, evidence: evidence);
+ *
+ * Semantic analysis determines which context fields are valid.
+ *
+ *
+ * ============================================================================
+ * AST CONTRACT
+ * ============================================================================
+ *
+ * This grammar creates parser contexts only.
+ *
+ * The frontend AST remains domain-neutral.
+ *
+ * The AST must preserve at least:
+ *
+ *     source span
+ *     qualified operation name
+ *     ordered arguments
+ *     named argument names
+ *     argument expressions
+ *     syntactic statement/expression context
+ *
+ * A semantic normalization may produce a generic operation representation
+ * equivalent to:
+ *
+ *     Operation {
+ *         name
+ *         namespace
+ *         operands
+ *         parameters
+ *         results
+ *         attributes
+ *         modifiers
+ *         effects
+ *         capabilities
+ *         source
+ *     }
+ *
+ * The exact AST type is owned by the existing frontend.
+ *
+ * This grammar MUST NOT introduce:
+ *
+ *     AICausalNode
+ *     CauseNode
+ *     EffectNode
+ *     ObservationNode
+ *     InterventionNode
+ *     CounterfactualNode
+ *     CausalGraphNode
+ *
+ * merely because causal syntax was encountered.
+ *
+ *
+ * ============================================================================
+ * SEMANTIC CONTRACT
+ * ============================================================================
+ *
+ * Semantic analysis must:
+ *
+ *     1. resolve the operation name;
+ *     2. validate its causal namespace;
+ *     3. resolve registered causal operation metadata;
+ *     4. validate argument arity;
+ *     5. validate argument roles;
+ *     6. validate argument types;
+ *     7. normalize named arguments;
+ *     8. determine semantic operation category;
+ *     9. determine effects;
+ *    10. determine capabilities;
+ *    11. determine resource requirements;
+ *    12. evaluate applicable contracts;
+ *    13. evaluate applicable policies;
+ *    14. attach evidence/provenance where required;
+ *    15. determine determinism/reproducibility properties;
+ *    16. normalize into the canonical semantic representation.
+ *
+ * The parser MUST NOT perform these operations.
+ *
+ *
+ * ============================================================================
+ * OPERATION REGISTRY CONTRACT
+ * ============================================================================
+ *
+ * Causal operation semantics should be registered through semantic metadata.
+ *
+ * The registry should contain information such as:
+ *
+ *     qualified name
+ *     category
+ *     argument schema
+ *     type requirements
+ *     effect requirements
+ *     capability requirements
+ *     resource requirements
+ *     contract requirements
+ *     policy requirements
+ *     provenance requirements
+ *     determinism properties
+ *     supported execution modes
+ *     supported domain interactions
+ *
+ * The registry is semantic data.
+ *
+ * It is NOT a grammar-level finite catalogue.
  *
  *
  * ============================================================================
  * TYPE CONTRACT
  * ============================================================================
  *
- * This file defines NO types.
+ * Causal operands use ordinary Zamani expressions.
  *
- * In particular, it must NOT create:
+ * Causal semantics may therefore operate on values from:
  *
- *     CausalType
- *     CauseType
- *     EffectType
- *     InterventionType
- *     CounterfactualType
- *     CausalGraphType
+ *     classical computation
+ *     numerical computation
+ *     tensors
+ *     datasets
+ *     graphs
+ *     knowledge
+ *     uncertainty
+ *     probability
+ *     models
+ *     quantum measurements
+ *     quantum states where semantically valid
+ *     simulation
+ *     distributed computation
+ *     hardware observations
+ *     HDL simulation
+ *     future domains
  *
- * merely to represent causal syntax.
+ * Type compatibility is checked by the canonical type system.
  *
- * Causal values are ordinary Zamani values whose semantic roles are determined
- * downstream.
- *
- * The semantic layer may impose additional requirements such as:
- *
- *     compatible intervention target;
- *     valid observation;
- *     valid counterfactual condition;
- *     compatible cause/effect domains;
- *     valid dependency direction;
- *     supported causal model;
- *
- * without making those concepts parser-level types.
+ * This grammar defines no causal type hierarchy.
  *
  *
  * ============================================================================
  * EFFECT CONTRACT
  * ============================================================================
  *
- * Causal observation is normally observational.
+ * Causal syntax itself is effect-neutral.
  *
- * Causal intervention is potentially state/model-changing and may therefore
- * carry an appropriate semantic effect.
- *
- * Counterfactual evaluation may require simulation or speculative evaluation.
- *
- * The grammar does not assign effect identities.
- *
- * Semantic analysis must determine effects such as:
+ * Semantic analysis may derive effects such as:
  *
  *     observation
  *     mutation
@@ -645,80 +927,98 @@
  *     randomness
  *     network
  *     distributed
- *     quantum
+ *     measurement
  *     native
  *     foreign
  *     reflection
+ *     learning
+ *     adaptation
  *
- * according to the actual operation and semantic implementation.
+ * according to the actual operation and its resolved implementation.
+ *
+ * For example:
+ *
+ *     causal::observe(measurement)
+ *
+ * may inherit a measurement effect from the operand.
+ *
+ *     causal::intervene(target, value)
+ *
+ * may require a mutation or simulation effect.
+ *
+ * The grammar does not infer either effect.
  *
  *
  * ============================================================================
  * CAPABILITY CONTRACT
  * ============================================================================
  *
- * The grammar does not require a particular implementation capability.
+ * Capability requirements are semantic.
  *
- * Semantic analysis may derive capabilities such as:
+ * Possible capabilities include:
  *
  *     causal.observation
  *     causal.intervention
  *     causal.counterfactual
- *     causal.discovery
  *     causal.inference
+ *     causal.discovery
+ *     causal.simulation
  *
- * only when the selected semantic operation actually needs them.
+ * These are examples of semantic capability identities, not a closed list.
  *
- * These are capability identities, not hardware identifiers.
+ * The capability system determines whether a realization can provide the
+ * requested capability.
  *
- * Capability negotiation occurs downstream.
+ * This grammar does not inspect hardware.
  *
  *
  * ============================================================================
  * RESOURCE CONTRACT
  * ============================================================================
  *
- * This grammar imposes NO resource ceiling.
+ * Causal computation may consume arbitrary:
  *
- * In particular it MUST NOT define limits on:
+ *     compute
+ *     memory
+ *     storage
+ *     communication
+ *     accelerator resources
+ *     distributed resources
+ *     quantum resources
+ *     model resources
+ *     simulation resources
  *
- *     causal nodes
- *     causal edges
+ * Resource requirements belong to the canonical resource system.
+ *
+ * This file introduces no resource grammar.
+ *
+ * There is no grammar-level limit on:
+ *
+ *     causal relations
  *     observations
  *     interventions
  *     counterfactuals
  *     dependencies
- *     graph depth
- *     graph width
  *     variables
  *     models
- *     samples
- *     datasets
+ *     evidence items
+ *     context items
+ *     graph size
+ *     graph depth
+ *     graph width
  *     processors
  *     threads
  *     devices
- *     memory
  *     nodes
  *     qubits
  *     tensor dimensions
  *
- * A causal structure may therefore scale according to:
- *
- *     source semantics
- *     representation requirements
- *     declared constraints
- *     compiler resources
- *     runtime resources
- *     target capabilities
- *
- * and not according to a grammar-level finite ceiling.
- *
  *
  * ============================================================================
- * CONTRACT / POLICY CONTRACT
+ * CONTRACT CONTRACT
  * ============================================================================
  *
- * Causal constructs may appear inside programs governed by:
+ * Causal operations may participate in the universal contract model:
  *
  *     requires
  *     ensures
@@ -726,49 +1026,571 @@
  *     assume
  *     guarantee
  *     property
+ *     assert
  *
- * and policy constructs.
+ * Contract syntax remains owned by the validation subsystem.
  *
- * This grammar does not duplicate those grammars.
+ * This grammar does not duplicate contract productions.
  *
- * A semantic causal operation may therefore be:
  *
- *     required;
- *     prohibited;
- *     constrained;
- *     audited;
- *     explained;
- *     provenance-tracked;
- *     authorized;
+ * ============================================================================
+ * POLICY CONTRACT
+ * ============================================================================
  *
- * by the universal contract/policy system.
+ * Causal computation may be controlled by:
+ *
+ *     security policy
+ *     privacy policy
+ *     evidence policy
+ *     provenance policy
+ *     resource policy
+ *     execution policy
+ *     model policy
+ *     adaptation policy
+ *     reproducibility policy
+ *
+ * Policy enforcement occurs downstream.
+ *
+ * Parsing a causal operation never grants authorization.
+ *
+ *
+ * ============================================================================
+ * EVIDENCE CONTRACT
+ * ============================================================================
+ *
+ * Evidence is represented as ordinary expressions.
+ *
+ * Causal operations may therefore consume evidence from:
+ *
+ *     datasets
+ *     observations
+ *     knowledge
+ *     reasoning
+ *     simulations
+ *     classical computation
+ *     quantum measurement
+ *     hardware
+ *     distributed systems
+ *     external sources
+ *
+ * The evidence subsystem owns evidence semantics.
+ *
+ * This grammar does not create a second evidence representation.
  *
  *
  * ============================================================================
  * PROVENANCE CONTRACT
  * ============================================================================
  *
- * Causal computation should preserve provenance whenever the semantic
- * operation produces a derived causal claim.
+ * Causal claims and derived results may require provenance.
  *
- * Provenance may include:
+ * Provenance may record:
  *
  *     source
  *     observation
  *     intervention
+ *     evidence
  *     model
  *     derivation
- *     evidence
  *     transformation
  *     verification
  *     policy
  *     decision
+ *     version
  *     source span
  *
- * The grammar does not implement provenance.
+ * Provenance storage and semantics remain owned by the canonical provenance
+ * subsystem.
  *
- * It only preserves the source structure necessary for semantic analysis to
- * create provenance records.
+ *
+ * ============================================================================
+ * REASONING INTEGRATION
+ * ============================================================================
+ *
+ * Causal computation and generic reasoning are complementary.
+ *
+ *     reasoning
+ *         asks:
+ *             what follows from premises/evidence?
+ *
+ *     causality
+ *         represents:
+ *             causal relationships and interventions.
+ *
+ * Causal results may be consumed by:
+ *
+ *     infer
+ *     deduce
+ *     reason
+ *
+ * through ordinary expression composition.
+ *
+ * This grammar does not import or duplicate:
+ *
+ *     grammar/statements/reason.g4
+ *
+ *
+ * ============================================================================
+ * KNOWLEDGE INTEGRATION
+ * ============================================================================
+ *
+ * Causal operations may consume or produce knowledge values.
+ *
+ * For example, semantically:
+ *
+ *     causal::query(knowledge_value)
+ *
+ * or:
+ *
+ *     causal::assert(claim, evidence: knowledge_value)
+ *
+ * may be valid.
+ *
+ * The knowledge grammar remains independently owned.
+ *
+ * This file intentionally does not import the knowledge grammar, preventing
+ * unnecessary dependency cycles.
+ *
+ *
+ * ============================================================================
+ * UNCERTAINTY / PROBABILITY INTEGRATION
+ * ============================================================================
+ *
+ * Causal operands may contain:
+ *
+ *     uncertainty expressions
+ *     probabilities
+ *     distributions
+ *     confidence values
+ *     beliefs
+ *     likelihoods
+ *
+ * These are consumed through the ordinary expression boundary.
+ *
+ * No probability or uncertainty syntax is duplicated here.
+ *
+ * Semantic analysis determines whether uncertainty is valid for a particular
+ * causal operation.
+ *
+ *
+ * ============================================================================
+ * TEMPORAL INTEGRATION
+ * ============================================================================
+ *
+ * Causality is not equivalent to temporal ordering.
+ *
+ * A causal relationship MAY contain temporal information, but temporal syntax
+ * remains owned by the temporal subsystem.
+ *
+ * The causal semantic model may therefore be consumed by:
+ *
+ *     temporal semantics
+ *     MTS semantics
+ *     memory semantics
+ *     concurrency ordering
+ *     distributed ordering
+ *
+ * This grammar does not import temporal grammars.
+ *
+ *
+ * ============================================================================
+ * QUANTUM INTEGRATION
+ * ============================================================================
+ *
+ * Causal expressions may consume quantum-derived values, including results of
+ * quantum measurement and hybrid computation.
+ *
+ * Example semantic composition:
+ *
+ *     causal::observe(measurement_result)
+ *
+ * or:
+ *
+ *     causal::counterfactual(
+ *         condition,
+ *         quantum_derived_outcome,
+ *         context: model
+ *     )
+ *
+ * This grammar does NOT define quantum operations.
+ *
+ * It does NOT define:
+ *
+ *     qubits
+ *     gates
+ *     circuits
+ *     physical qubits
+ *     coupling maps
+ *     routing
+ *     scheduling
+ *     calibration
+ *     QEC
+ *
+ * When causal semantics require quantum computation, the canonical boundary is:
+ *
+ *     causal semantic model
+ *          |
+ *          v
+ *     quantum semantic model
+ *          |
+ *          v
+ *     quantum::ir
+ *          |
+ *          v
+ *     optimization
+ *          |
+ *          v
+ *     decomposition
+ *          |
+ *          v
+ *     routing
+ *          |
+ *          v
+ *     scheduling
+ *          |
+ *          v
+ *     resilience / QEC
+ *          |
+ *          v
+ *     ZQN
+ *          |
+ *          v
+ *     HAL
+ *
+ * No causal-specific quantum IR is permitted.
+ *
+ *
+ * ============================================================================
+ * HYBRID INTEGRATION
+ * ============================================================================
+ *
+ * Causal computation can participate in hybrid execution:
+ *
+ *     classical computation
+ *          |
+ *          v
+ *     causal operation
+ *          |
+ *          v
+ *     quantum operation
+ *          |
+ *          v
+ *     measurement
+ *          |
+ *          v
+ *     causal/reasoning decision
+ *
+ * The grammar does not encode the physical execution path.
+ *
+ * Hybrid orchestration belongs to the semantic and execution layers.
+ *
+ *
+ * ============================================================================
+ * HDL / HARDWARE INTEGRATION
+ * ============================================================================
+ *
+ * Causal operands may represent:
+ *
+ *     HDL simulation values
+ *     hardware observations
+ *     control values
+ *     timing observations
+ *     sensor values
+ *     resource observations
+ *     verification results
+ *
+ * This grammar does not define:
+ *
+ *     wire widths
+ *     register widths
+ *     fixed clock counts
+ *     fixed device counts
+ *     fixed FPGA resources
+ *     physical pins
+ *     placement
+ *     routing
+ *     synthesis
+ *
+ * Hardware realization remains downstream.
+ *
+ *
+ * ============================================================================
+ * DISTRIBUTED INTEGRATION
+ * ============================================================================
+ *
+ * Causal relationships may span:
+ *
+ *     actors
+ *     processes
+ *     services
+ *     nodes
+ *     channels
+ *     distributed state
+ *     network observations
+ *
+ * This grammar does not own actor, message, channel, topology, scheduling or
+ * consensus syntax.
+ *
+ * Distributed semantics may attach those meanings after parsing.
+ *
+ *
+ * ============================================================================
+ * AI / LEARNING INTEGRATION
+ * ============================================================================
+ *
+ * Causal operations may consume learned models and learning results.
+ *
+ * Learning algorithms remain outside this grammar.
+ *
+ * The same causal syntax can therefore work with:
+ *
+ *     symbolic models
+ *     learned models
+ *     hybrid models
+ *     statistical models
+ *     simulation models
+ *     domain-defined models
+ *
+ * No model-family catalogue is encoded.
+ *
+ *
+ * ============================================================================
+ * ADAPTATION INTEGRATION
+ * ============================================================================
+ *
+ * An adaptation operation may semantically use causal information to select
+ * another model, strategy, policy, or execution path.
+ *
+ * Causality does not authorize adaptation.
+ *
+ * Adaptation remains governed by:
+ *
+ *     policy
+ *     capabilities
+ *     effects
+ *     contracts
+ *     resources
+ *     provenance
+ *
+ * through the existing adaptation subsystem.
+ *
+ *
+ * ============================================================================
+ * SIMULATION INTEGRATION
+ * ============================================================================
+ *
+ * Counterfactual and intervention operations may use simulation.
+ *
+ * Simulation may represent:
+ *
+ *     classical systems
+ *     quantum systems
+ *     hardware
+ *     HDL
+ *     distributed systems
+ *     AI models
+ *     future domains
+ *
+ * Simulation is an execution strategy, not a second source language.
+ *
+ *
+ * ============================================================================
+ * RESOURCE / CAPABILITY NEGOTIATION
+ * ============================================================================
+ *
+ * Source-level causal intent must remain independent of target selection.
+ *
+ * For example, semantic analysis may derive:
+ *
+ *     requires capability("causal.counterfactual")
+ *
+ * or:
+ *
+ *     requires capability("causal.intervention")
+ *
+ * but the source grammar does not select:
+ *
+ *     CPU
+ *     GPU
+ *     FPGA
+ *     ASIC
+ *     QPU
+ *     device
+ *     node
+ *     physical qubit
+ *
+ * Target feasibility is evaluated after semantic analysis.
+ *
+ *
+ * ============================================================================
+ * POCO-REAF / SCALABILITY CONTRACT
+ * ============================================================================
+ *
+ * Causal syntax MUST NOT encode a finite machine or causal-model universe.
+ *
+ * In particular, this file contains no limits for:
+ *
+ *     causal nodes
+ *     causal edges
+ *     observations
+ *     interventions
+ *     counterfactuals
+ *     dependencies
+ *     variables
+ *     models
+ *     evidence
+ *     context
+ *     graph depth
+ *     graph width
+ *     tensor rank
+ *     tensor dimensions
+ *     CPUs
+ *     cores
+ *     threads
+ *     GPUs
+ *     FPGAs
+ *     ASICs
+ *     accelerators
+ *     QPUs
+ *     qubits
+ *     nodes
+ *     devices
+ *     memory
+ *     storage
+ *     network size
+ *
+ * No capacity constants or equivalent finite grammar alternatives are allowed.
+ *
+ * Numeric literals in source remain program values.
+ *
+ * For example:
+ *
+ *     causal::intervene(x, 1024);
+ *
+ * does not make 1024 a language-level capacity.
+ *
+ * "Scale to infinity given resources" means:
+ *
+ *     the source language introduces no artificial universal ceiling.
+ *
+ * It does not claim that finite physical implementations have infinite
+ * resources.
+ *
+ * Resource exhaustion, target infeasibility, implementation limits and
+ * policy restrictions are downstream conditions.
+ *
+ *
+ * ============================================================================
+ * HARD-CODING AUDIT
+ * ============================================================================
+ *
+ * PROHIBITED:
+ *
+ *     MAX_CAUSAL_NODES
+ *     MAX_CAUSAL_EDGES
+ *     MAX_OBSERVATIONS
+ *     MAX_INTERVENTIONS
+ *     MAX_COUNTERFACTUALS
+ *     MAX_DEPENDENCIES
+ *     MAX_CAUSAL_DEPTH
+ *     MAX_CAUSAL_WIDTH
+ *     MAX_CAUSAL_GRAPH_SIZE
+ *     MAX_MODELS
+ *     MAX_VARIABLES
+ *     MAX_EVIDENCE
+ *
+ * Also prohibited are equivalent indirect parser ceilings.
+ *
+ * This grammar contains none.
+ *
+ *
+ * ============================================================================
+ * DETERMINISM CONTRACT
+ * ============================================================================
+ *
+ * Parsing must depend only on:
+ *
+ *     source text
+ *     lexical grammar
+ *     parser grammar
+ *     selected language/compatibility configuration
+ *
+ * Parsing must not depend on:
+ *
+ *     hardware
+ *     filesystem state
+ *     network state
+ *     wall-clock time
+ *     randomness
+ *     scheduler state
+ *     runtime state
+ *     resource availability
+ *
+ * For identical lexical/parser configuration and identical source text,
+ * parsing must be deterministic.
+ *
+ * Semantic execution may be nondeterministic because of:
+ *
+ *     randomness
+ *     external observations
+ *     distributed execution
+ *     probabilistic computation
+ *     quantum measurement
+ *     hardware behavior
+ *     model behavior
+ *
+ * Such nondeterminism belongs to semantic/effect/provenance analysis.
+ *
+ *
+ * ============================================================================
+ * SECURITY CONTRACT
+ * ============================================================================
+ *
+ * This grammar performs no:
+ *
+ *     intervention
+ *     observation
+ *     device access
+ *     filesystem access
+ *     network access
+ *     foreign invocation
+ *     native invocation
+ *     secret access
+ *     hardware discovery
+ *     policy enforcement
+ *
+ * It contains no embedded Rust actions or semantic predicates.
+ *
+ *
+ * ============================================================================
+ * DIAGNOSTIC CONTRACT
+ * ============================================================================
+ *
+ * Parser diagnostics are limited to syntactic failures.
+ *
+ * Semantic diagnostics should distinguish:
+ *
+ *     CAUSAL_NAMESPACE_INVALID
+ *     CAUSAL_OPERATION_UNKNOWN
+ *     CAUSAL_ARGUMENT_ARITY_INVALID
+ *     CAUSAL_ARGUMENT_ROLE_INVALID
+ *     CAUSAL_ARGUMENT_TYPE_MISMATCH
+ *     CAUSAL_NAMED_ARGUMENT_UNKNOWN
+ *     CAUSAL_NAMED_ARGUMENT_DUPLICATE
+ *     CAUSAL_INTERVENTION_NOT_ALLOWED
+ *     CAUSAL_COUNTERFACTUAL_UNSUPPORTED
+ *     CAUSAL_CAPABILITY_UNAVAILABLE
+ *     CAUSAL_RESOURCE_UNSATISFIED
+ *     CAUSAL_CONTRACT_VIOLATION
+ *     CAUSAL_POLICY_VIOLATION
+ *     CAUSAL_PROVENANCE_REQUIRED
+ *     CAUSAL_EVIDENCE_INVALID
+ *     CAUSAL_DEPENDENCY_INVALID
+ *     CAUSAL_TARGET_INCOMPATIBLE
+ *
+ * These are semantic diagnostic identities.
+ *
+ * They are not lexer tokens.
  *
  *
  * ============================================================================
@@ -793,7 +1615,7 @@ import
  * PUBLIC AI ENTRY
  * ============================================================================
  *
- * The AI subsystem consumes causal constructs through this one public rule.
+ * This is the only public entry into this grammar from AI composition.
  *
  * ============================================================================
  */
@@ -806,13 +1628,17 @@ aiCausalityConstruct
 
 /*
  * ============================================================================
- * STATEMENT BOUNDARY
+ * CAUSAL STATEMENT
  * ============================================================================
  *
- * A causal statement is a causal operation followed by a terminator.
+ * A causal operation may appear as a standalone statement.
  *
- * The operation itself remains expression-oriented and therefore can be
- * reused by semantic tooling without creating a second statement hierarchy.
+ * Examples:
+ *
+ *     causal::cause(a, b);
+ *     causal::observe(value);
+ *     causal::intervene(variable, value);
+ *     causal::counterfactual(condition, outcome);
  *
  * ============================================================================
  */
@@ -824,25 +1650,10 @@ causalStatement
 
 /*
  * ============================================================================
- * EXPRESSION BOUNDARY
+ * CAUSAL EXPRESSION
  * ============================================================================
  *
- * Causal expressions are calls in the canonical causal namespace.
- *
- * Example semantic forms:
- *
- *     causal::cause(a, b)
- *     causal::effect(a, b)
- *     causal::observe(x)
- *     causal::intervene(x, value)
- *     causal::counterfactual(condition, outcome)
- *     causal::depends_on(result, dependency)
- *
- * The parser intentionally accepts a qualified operation name.
- *
- * Semantic analysis is responsible for validating that the operation belongs
- * to the causal namespace or to an explicitly registered causal extension
- * namespace.
+ * A causal operation is also reusable as an expression.
  *
  * ============================================================================
  */
@@ -851,6 +1662,19 @@ causalExpression
     : causalOperation
     ;
 
+
+/*
+ * ============================================================================
+ * CAUSAL OPERATION
+ * ============================================================================
+ *
+ * The parser accepts an open qualified operation name.
+ *
+ * Semantic validation determines whether the resolved name belongs to the
+ * canonical causal namespace or a registered causal extension namespace.
+ *
+ * ============================================================================
+ */
 
 causalOperation
     : causalOperationName
@@ -867,14 +1691,12 @@ causalOperationName
 
 /*
  * ============================================================================
- * ARGUMENTS
+ * ARGUMENT LIST
  * ============================================================================
  *
- * Causal arguments are ordinary Zamani expressions.
+ * No trailing comma is accepted.
  *
- * Named arguments provide a stable extension point for semantic metadata
- * without forcing new grammar rules whenever a causal engine introduces a
- * new option.
+ * The number of arguments is not fixed by this grammar.
  *
  * ============================================================================
  */
@@ -894,6 +1716,24 @@ causalArgument
     ;
 
 
+/*
+ * ============================================================================
+ * NAMED ARGUMENT
+ * ============================================================================
+ *
+ * Named causal metadata remains open-world.
+ *
+ * Example:
+ *
+ *     evidence: e
+ *     provenance: p
+ *     context: model
+ *
+ * The semantic operation registry owns the meaning.
+ *
+ * ============================================================================
+ */
+
 causalNamedArgument
     : identifier
       ASSIGN
@@ -903,18 +1743,43 @@ causalNamedArgument
 
 /*
  * ============================================================================
- * SEMANTIC CAUSAL RELATION BOUNDARY
+ * REUSABLE CONTEXT
  * ============================================================================
  *
- * The following rules provide stable semantic categories for tooling and
- * AST construction without creating separate parser implementations for each
- * category.
+ * This rule is intentionally independent of causalOperation so semantic tools
+ * may consume the context boundary without creating another operation syntax.
  *
- * They are intentionally based on the open causal operation form.
+ * ============================================================================
+ */
+
+causalContext
+    : LEFT_PAREN
+      causalContextItem
+      (
+          COMMA
+          causalContextItem
+      )*
+      RIGHT_PAREN
+    ;
+
+
+causalContextItem
+    : causalNamedArgument
+    | expression
+    ;
+
+
+/*
+ * ============================================================================
+ * SEMANTIC CATEGORY BOUNDARIES
+ * ============================================================================
  *
- * The semantic layer identifies the operation category from its canonical
- * qualified name.
+ * These rules do not create independent syntaxes.
  *
+ * They all delegate to the canonical causal operation representation.
+ *
+ * Semantic analysis determines the actual category from the resolved
+ * operation metadata.
  * ============================================================================
  */
 
@@ -960,53 +1825,16 @@ causalExplanation
 
 /*
  * ============================================================================
- * CONTEXT
+ * CAUSAL RELATION OPERATOR BOUNDARY
  * ============================================================================
  *
- * Context is deliberately represented as ordinary expressions.
+ * The canonical causal representation uses named operations rather than
+ * introducing another relation-operator language.
  *
- * Examples:
+ * This reusable boundary therefore delegates to the canonical name system.
  *
- *     causal::cause(a, b, context: model)
- *     causal::intervene(x, v, policy: policy)
- *     causal::counterfactual(c, y, evidence: evidence)
- *
- * No fixed context vocabulary is imposed.
- *
- * ============================================================================
- */
-
-causalContext
-    : LEFT_PAREN
-      causalContextItem
-      (
-          COMMA
-          causalContextItem
-      )*
-      RIGHT_PAREN
-    ;
-
-
-causalContextItem
-    : causalNamedArgument
-    | expression
-    ;
-
-
-/*
- * ============================================================================
- * RELATION OPERATOR BOUNDARY
- * ============================================================================
- *
- * Causal relationships are semantically directed.
- *
- * The grammar does not create a special arrow operator because the repository
- * already owns its operator vocabulary and because the semantic relation may
- * be represented through ordinary causal operations.
- *
- * This rule is retained as a stable semantic category for tooling and future
- * canonical relation syntax.
- *
+ * It exists for tooling and future source forms, but does not create an
+ * additional parser path for causal relations.
  * ============================================================================
  */
 
@@ -1017,617 +1845,20 @@ causalRelationOperator
 
 /*
  * ============================================================================
- * AST CONTRACT
+ * EXAMPLES OF CANONICAL SEMANTIC FORMS
  * ============================================================================
  *
- * The parser produces contexts only.
- *
- * The frontend AST must preserve:
- *
- *     source span
- *     qualified operation name
- *     ordered arguments
- *     named arguments
- *     syntactic category
- *
- * A semantic normalization may then produce a generic causal operation such
- * as:
- *
- *     CausalOperation {
- *         operation
- *         operands
- *         parameters
- *         attributes
- *         source
- *     }
- *
- * This is an application of the repository's generic operation model.
- *
- * It MUST NOT introduce:
- *
- *     AICausalNode
- *     CauseNode
- *     EffectNode
- *     InterventionNode
- *     CounterfactualNode
- *
- * merely because the source operation was causal.
- *
- *
- * ============================================================================
- * SEMANTIC CONTRACT
- * ============================================================================
- *
- * Semantic analysis must:
- *
- *     1. resolve the operation name;
- *     2. verify that the operation is in the causal namespace or an explicitly
- *        registered causal extension namespace;
- *     3. classify the operation:
- *
- *            relation
- *            observation
- *            intervention
- *            counterfactual
- *            dependency
- *            query
- *            assertion
- *            explanation
- *
- *        where applicable;
- *     4. type-check all operands;
- *     5. determine effects;
- *     6. determine required capabilities;
- *     7. determine resource requirements;
- *     8. apply contracts;
- *     9. apply policies;
- *    10. attach provenance;
- *    11. normalize into the canonical semantic representation.
- *
- *
- * ============================================================================
- * CANONICAL OPERATION SEMANTICS
- * ============================================================================
- *
- * The following names are RECOMMENDED canonical semantic operations:
- *
- *     causal::cause
- *     causal::effect
- *     causal::observe
- *     causal::intervene
- *     causal::counterfactual
- *     causal::depends_on
- *     causal::query
- *     causal::assert
- *     causal::explain
- *
- * These are NOT a closed universal operation catalogue.
- *
- * They are semantic conventions for the core causal model.
- *
- * Implementations may register additional operations through the semantic
- * extension mechanism.
- *
- *
- * ============================================================================
- * OBSERVATION CONTRACT
- * ============================================================================
- *
- * An observation represents information obtained without necessarily changing
- * the causal system being observed.
- *
- * The grammar itself does not guarantee non-interference.
- *
- * Semantic analysis must determine whether an operation is genuinely
- * observational.
- *
- * An observation may originate from:
- *
- *     data
- *     sensors
- *     simulation
- *     hardware
- *     quantum measurement
- *     distributed state
- *     model output
- *     knowledge
- *     external systems
- *
- *
- * ============================================================================
- * INTERVENTION CONTRACT
- * ============================================================================
- *
- * An intervention represents an explicit causal manipulation or hypothetical
- * manipulation of a variable, state, relation, or model.
- *
- * It may require:
- *
- *     mutation effects;
- *     simulation effects;
- *     authorization;
- *     policy approval;
- *     capability negotiation;
- *     resource requirements;
- *     provenance.
- *
- * An intervention MUST NOT imply a particular physical actuator.
- *
- *
- * ============================================================================
- * COUNTERFACTUAL CONTRACT
- * ============================================================================
- *
- * A counterfactual evaluates a semantic alternative relative to some stated
- * context, observation, model, or intervention.
- *
- * It may require:
- *
- *     speculative execution;
- *     simulation;
- *     reasoning;
- *     uncertainty;
- *     probability;
- *     provenance.
- *
- * The grammar does not require a particular counterfactual algorithm.
- *
- *
- * ============================================================================
- * DEPENDENCY CONTRACT
- * ============================================================================
- *
- * A causal dependency expresses a directed dependency relationship.
- *
- * It MUST NOT automatically mean:
- *
- *     temporal dependency;
- *     data dependency;
- *     memory dependency;
- *     hardware dependency;
- *     thread dependency;
- *     network dependency.
- *
- * Semantic analysis determines the dependency kind.
- *
- * This prevents the causal grammar from incorrectly owning unrelated
- * dependency systems.
- *
- *
- * ============================================================================
- * TEMPORAL INTEGRATION
- * ============================================================================
- *
- * Temporal causality may consume the causal semantic representation.
- *
- * The integration path is:
- *
- *     causal source construct
- *          |
- *          v
- *     causal semantic model
- *          |
- *          +----> temporal semantic analysis
- *          |
- *          +----> memory/MTS semantic analysis
- *          |
- *          +----> concurrency ordering
- *
- * The grammar does NOT import:
- *
- *     grammar/types/temporal.g4
- *
- * or:
- *
- *     grammar/memory/temporal.g4
- *
- * because doing so would make causal syntax depend on a specific temporal
- * representation and would create unnecessary grammar coupling.
- *
- *
- * ============================================================================
- * REASONING INTEGRATION
- * ============================================================================
- *
- * Causal constructs may be consumed by generic reasoning.
- *
- * For example, semantically:
- *
- *     reason conclusion from causal::query(...)
- *
- * is valid when the types and effects permit it.
- *
- * This is represented through the ordinary expression boundary.
- *
- * No direct grammar dependency on:
- *
- *     grammar/statements/reason.g4
- *
- * is required.
- *
- *
- * ============================================================================
- * KNOWLEDGE INTEGRATION
- * ============================================================================
- *
- * Causal information may be asserted, queried, or derived from knowledge.
- *
- * The causal grammar therefore does NOT import the knowledge grammar.
- *
- * Instead:
- *
- *     causal expression
- *          |
- *          v
- *     ordinary expression / semantic value
- *          |
- *          v
- *     knowledge subsystem
- *
- * avoids a cyclic grammar dependency.
- *
- *
- * ============================================================================
- * UNCERTAINTY / PROBABILITY INTEGRATION
- * ============================================================================
- *
- * Causal operations may consume:
- *
- *     uncertain values;
- *     probabilities;
- *     distributions;
- *     confidence;
- *     evidence;
- *
- * through ordinary expressions.
- *
- * No duplicate probability or uncertainty grammar is created here.
- *
- *
- * ============================================================================
- * QUANTUM INTEGRATION
- * ============================================================================
- *
- * Causal computation may consume:
- *
- *     quantum measurements;
- *     quantum-derived values;
- *     hybrid results;
- *     simulation results.
- *
- * This grammar does NOT import the quantum grammar.
- *
- * The integration is:
- *
- *     causal expression
- *          |
- *          v
- *     domain-neutral AST
- *          |
- *          v
- *     semantic analysis
- *          |
- *          v
- *     quantum semantic model where applicable
- *          |
- *          v
- *     quantum::ir
- *
- * There MUST NOT be a causal-specific quantum IR.
- *
- *
- * ============================================================================
- * HDL / HARDWARE INTEGRATION
- * ============================================================================
- *
- * Causal expressions may refer to:
- *
- *     HDL observations;
- *     hardware measurements;
- *     control results;
- *     simulation results;
- *     hardware state;
- *     resource observations.
- *
- * The grammar remains target-independent.
- *
- * No:
- *
- *     register width;
- *     wire width;
- *     device count;
- *     accelerator count;
- *     physical topology;
- *     clock limit;
- *
- * is encoded here.
- *
- *
- * ============================================================================
- * DISTRIBUTED INTEGRATION
- * ============================================================================
- *
- * Causal relationships may span distributed computation.
- *
- * The causal grammar does not own:
- *
- *     actors;
- *     channels;
- *     nodes;
- *     network topology;
- *     message scheduling;
- *     distributed consensus.
- *
- * Those remain owned by their respective subsystems.
- *
- * Semantic analysis may combine causal relationships with distributed
- * execution semantics.
- *
- *
- * ============================================================================
- * EFFECT INTEGRATION
- * ============================================================================
- *
- * Causal operation classification must participate in the universal effect
- * system.
- *
- * Example semantic mappings:
- *
- *     observe
- *         -> observation effect where required
- *
- *     intervene
- *         -> mutation/simulation effect where required
- *
- *     counterfactual
- *         -> simulation/speculation effect where required
- *
- *     query
- *         -> effect determined by the queried resource
- *
- * The grammar itself remains effect-neutral.
- *
- *
- * ============================================================================
- * RESOURCE / CAPABILITY INTEGRATION
- * ============================================================================
- *
- * Causal computation participates in the universal:
- *
- *     requirement
- *     capability
- *     constraint
- *     budget
- *     preference
- *     hint
- *
- * system.
- *
- * For example, semantic analysis may derive:
- *
- *     requires capability("causal.counterfactual")
- *
- * or:
- *
- *     requires capability("causal.intervention")
- *
- * without changing the source grammar.
- *
- * No finite capacity is encoded.
- *
- *
- * ============================================================================
- * POLICY INTEGRATION
- * ============================================================================
- *
- * Causal operations may be constrained by policy.
- *
- * In particular, interventions and external observations may be subject to:
- *
- *     authorization;
- *     security policy;
- *     privacy policy;
- *     resource policy;
- *     provenance policy;
- *     execution policy.
- *
- * Policy enforcement belongs downstream.
- *
- *
- * ============================================================================
- * PROVENANCE INTEGRATION
- * ============================================================================
- *
- * A derived causal claim SHOULD carry provenance sufficient to reconstruct:
- *
- *     what was observed;
- *     what was assumed;
- *     what was intervened upon;
- *     which operation produced the result;
- *     what evidence was used;
- *     what transformation occurred;
- *     which policy governed the operation;
- *     which source construct produced it.
- *
- * This file provides the syntactic structure necessary for that provenance.
- *
- *
- * ============================================================================
- * DETERMINISM / REPRODUCIBILITY
- * ============================================================================
- *
- * Causal grammar parsing must be deterministic.
- *
- * Semantic causal execution may or may not be deterministic depending on:
- *
- *     randomness;
- *     external observations;
- *     distributed state;
- *     model behavior;
- *     hardware measurements;
- *     quantum measurements;
- *     simulation policy.
- *
- * Reproducibility belongs to semantic/execution layers.
- *
- * The grammar MUST NOT embed runtime randomness or implementation state.
- *
- *
- * ============================================================================
- * POCO-REAF CONTRACT
- * ============================================================================
- *
- * A causal source construct describes causal intent, not physical realization.
- *
- * The same source can therefore be compiled for:
- *
- *     embedded systems;
- *     CPU;
- *     multicore CPU;
- *     GPU;
- *     FPGA;
- *     ASIC;
- *     accelerator;
- *     QPU;
- *     simulator;
- *     HPC;
- *     cluster;
- *     distributed infrastructure;
- *     cloud;
- *     future computational targets.
- *
- * The grammar imposes no universal target-size ceiling.
- *
- * Actual feasibility is determined downstream by:
- *
- *     semantic requirements;
- *     representation;
- *     capabilities;
- *     resources;
- *     policies;
- *     compiler limits;
- *     runtime limits;
- *     target limits.
- *
- *
- * ============================================================================
- * HARD-CODING AUDIT
- * ============================================================================
- *
- * PROHIBITED:
- *
- *     MAX_CAUSAL_NODES
- *     MAX_CAUSAL_EDGES
- *     MAX_OBSERVATIONS
- *     MAX_INTERVENTIONS
- *     MAX_COUNTERFACTUALS
- *     MAX_DEPENDENCIES
- *     MAX_CAUSAL_DEPTH
- *     MAX_CAUSAL_WIDTH
- *     MAX_CAUSAL_GRAPH_SIZE
- *     MAX_MODELS
- *     MAX_VARIABLES
- *
- * This grammar contains none of those limits.
- *
- * Numeric literals are permitted only as ordinary source expressions and
- * therefore have program meaning rather than language-capacity meaning.
- *
- *
- * ============================================================================
- * SECURITY CONTRACT
- * ============================================================================
- *
- * The grammar performs no security decision.
- *
- * It MUST NOT:
- *
- *     execute an intervention;
- *     access a device;
- *     inspect a filesystem;
- *     access a network;
- *     mutate runtime state;
- *     invoke foreign code;
- *     access secrets;
- *     discover hardware.
- *
- * Security and authorization are semantic/runtime concerns.
- *
- *
- * ============================================================================
- * DIAGNOSTICS
- * ============================================================================
- *
- * The parser should report ordinary ANTLR syntax diagnostics for malformed
- * operation calls.
- *
- * Semantic diagnostics should be responsible for:
- *
- *     CAUSAL_NAMESPACE_INVALID
- *     CAUSAL_OPERATION_UNKNOWN
- *     CAUSAL_ARGUMENT_TYPE_MISMATCH
- *     CAUSAL_INTERVENTION_NOT_ALLOWED
- *     CAUSAL_COUNTERFACTUAL_UNSUPPORTED
- *     CAUSAL_CAPABILITY_UNAVAILABLE
- *     CAUSAL_RESOURCE_UNSATISFIED
- *     CAUSAL_POLICY_VIOLATION
- *     CAUSAL_PROVENANCE_REQUIRED
- *     CAUSAL_DEPENDENCY_INVALID
- *
- * These diagnostic identities are semantic contracts, not lexer tokens.
- *
- *
- * ============================================================================
- * NEGATIVE SEMANTIC CASES
- * ============================================================================
- *
- * The following must be rejected semantically even if they are syntactically
- * well-formed:
- *
- *     unrelated::operation(value)
- *
- * when used through aiCausalityConstruct without a registered causal
- * extension namespace.
- *
- * Also reject:
- *
- *     causal::intervene()
- *
- * when intervention semantics require an explicit target/value.
- *
- * Also reject:
- *
- *     causal::counterfactual()
- *
- * when the selected semantic operation requires a condition/context.
- *
- * The exact arity and type requirements belong to the semantic operation
- * registry rather than this grammar.
- *
- *
- * ============================================================================
- * POSITIVE FORMS
- * ============================================================================
- *
- * Canonical semantic examples:
+ * The following illustrate intended semantic operations:
  *
  *     causal::cause(a, b);
- *
  *     causal::effect(a, b);
- *
  *     causal::observe(observation);
- *
  *     causal::intervene(variable, value);
- *
  *     causal::counterfactual(condition, outcome);
- *
  *     causal::depends_on(result, dependency);
- *
  *     causal::query(target);
- *
- *     causal::assert(claim, evidence: evidence);
- *
- *     causal::explain(decision, evidence: evidence);
+ *     causal::assert(claim, evidence: evidence_value);
+ *     causal::explain(decision, evidence: evidence_value);
  *
  * Extended:
  *
@@ -1640,122 +1871,172 @@ causalRelationOperator
  *     causal::counterfactual(
  *         condition,
  *         outcome,
- *         evidence: evidence,
+ *         evidence: evidence_value,
  *         context: model
  *     );
  *
+ * These examples are documentation of semantic conventions.
  *
- * ============================================================================
- * SCALABILITY TEST CONTRACT
- * ============================================================================
- *
- * The grammar tests must verify that the source syntax does not depend on:
- *
- *     causal graph size;
- *     number of observations;
- *     number of interventions;
- *     number of counterfactuals;
- *     number of dependencies;
- *     number of variables;
- *     number of models;
- *     number of targets;
- *     number of execution resources.
- *
- * Tests should include:
- *
- *     one causal relation;
- *     many relations;
- *     nested expressions;
- *     large generated causal operation sequences;
- *     symbolic quantities;
- *     dynamic quantities;
- *     distributed causal values;
- *     quantum-derived observations;
- *     hybrid values;
- *     simulation results.
+ * They are not a closed grammar catalogue.
  *
  *
  * ============================================================================
- * COMPLETION CRITERIA
+ * COMPLETENESS / INTEGRATION CONTRACT
  * ============================================================================
  *
- * This file is COMPLETE when:
+ * This file is DONE when:
  *
- *     [x] It has one clear ownership boundary.
- *     [x] It defines no lexer rules.
- *     [x] It defines no hardware limits.
- *     [x] It defines no resource ceilings.
- *     [x] It defines no runtime behavior.
- *     [x] It defines no causal algorithm.
- *     [x] It reuses canonical names.
- *     [x] It reuses canonical expressions.
- *     [x] It creates no duplicate type system.
- *     [x] It creates no duplicate reasoning grammar.
- *     [x] It creates no duplicate knowledge grammar.
- *     [x] It creates no duplicate uncertainty grammar.
- *     [x] It creates no AI-specific IR.
- *     [x] It preserves quantum::ir as the quantum boundary.
- *     [x] It supports open-world causal extensions.
- *     [x] It remains target-independent.
- *     [x] It is compatible with safe Rust implementations.
- *     [x] It is compatible with Rust 1.97+.
- *     [x] It supports POCO-REAF source portability.
+ * [ ] AICausality is the unique grammar identity for this AI causal adapter.
  *
- * Repository integration still requires the composition steps documented
- * below.
+ * [ ] tokenVocab is ZamaniLexer.
+ *
+ * [ ] No lexer rules exist in this file.
+ *
+ * [ ] Names is the canonical name dependency.
+ *
+ * [ ] Expressions is the canonical expression dependency.
+ *
+ * [ ] aiCausalityConstruct is the sole AI-facing causal entry.
+ *
+ * [ ] causalStatement delegates to causalOperation.
+ *
+ * [ ] causalExpression delegates to causalOperation.
+ *
+ * [ ] causalOperation is open-world.
+ *
+ * [ ] causalOperationName delegates to qualifiedName.
+ *
+ * [ ] Named arguments use canonical identifier/expression boundaries.
+ *
+ * [ ] No fixed causal-operation catalogue is encoded.
+ *
+ * [ ] No application-specific operation catalogue is encoded.
+ *
+ * [ ] No duplicate reasoning grammar exists.
+ *
+ * [ ] No duplicate knowledge grammar exists.
+ *
+ * [ ] No duplicate uncertainty grammar exists.
+ *
+ * [ ] No duplicate evidence grammar exists.
+ *
+ * [ ] No duplicate provenance grammar exists.
+ *
+ * [ ] No duplicate contract grammar exists.
+ *
+ * [ ] No duplicate policy grammar exists.
+ *
+ * [ ] No duplicate resource grammar exists.
+ *
+ * [ ] No duplicate capability grammar exists.
+ *
+ * [ ] No duplicate type hierarchy exists.
+ *
+ * [ ] No duplicate expression hierarchy exists.
+ *
+ * [ ] No causal-specific IR exists.
+ *
+ * [ ] Quantum semantics retain the quantum::ir boundary.
+ *
+ * [ ] No physical hardware assumptions exist.
+ *
+ * [ ] No universal machine-capacity limit exists.
+ *
+ * [ ] No causal graph capacity limit exists.
+ *
+ * [ ] No embedded Rust exists.
+ *
+ * [ ] No unsafe implementation is required.
+ *
+ * [ ] Rust 1.97+ compatibility is preserved.
+ *
+ * [ ] Parser behavior is deterministic.
+ *
+ * [ ] Positive tests exist.
+ *
+ * [ ] Negative tests exist.
+ *
+ * [ ] Boundary tests exist.
+ *
+ * [ ] Scalability tests exist.
+ *
+ * [ ] Cross-domain tests exist.
+ *
+ * [ ] Compatibility tests exist.
+ *
+ * [ ] Diagnostics tests exist.
  *
  *
  * ============================================================================
- * REQUIRED INTEGRATION
+ * REQUIRED REPOSITORY INTEGRATION
  * ============================================================================
+ *
+ * This file is independently complete at the grammar boundary, but the
+ * following repository integration must be performed once.
+ *
  *
  * 1. grammar/ai/ai.g4
  *
- * Add:
+ * Add the canonical import:
  *
  *     AICausality
  *
- * to the AI grammar imports.
+ * to the existing AI composition imports.
  *
  * Add:
  *
  *     | aiCausalityConstruct
  *
- * to `aiConstruct`.
+ * to:
+ *
+ *     aiConstruct
+ *
+ * This makes causality reachable from the canonical AI grammar.
  *
  *
  * 2. grammar/spec/causality.md
  *
- * Create the normative causal semantic specification defining:
+ * Create the normative semantic specification.
  *
- *     relation;
- *     observation;
- *     intervention;
- *     counterfactual;
- *     dependency;
- *     causal query;
- *     causal assertion;
- *     causal explanation;
- *     causal namespaces;
- *     operation registry;
- *     effects;
- *     capabilities;
- *     resources;
- *     provenance;
- *     policies;
- *     diagnostics;
- *     determinism;
- *     compatibility.
+ * It must define:
+ *
+ *     causal namespace
+ *     operation registration
+ *     relation semantics
+ *     observation semantics
+ *     intervention semantics
+ *     counterfactual semantics
+ *     dependency semantics
+ *     query semantics
+ *     assertion semantics
+ *     explanation semantics
+ *     argument roles
+ *     named metadata
+ *     type rules
+ *     effect rules
+ *     capability rules
+ *     resource rules
+ *     contract interaction
+ *     policy interaction
+ *     evidence interaction
+ *     provenance requirements
+ *     determinism
+ *     compatibility
+ *     diagnostics
+ *     IR lowering
  *
  *
  * 3. grammar/spec/ai.md
  *
- * Add the causal subsystem to the AI semantic integration matrix.
+ * Add causality to the AI semantic integration matrix.
+ *
+ * It must state that causality is an AI composition capability while its
+ * underlying semantic model remains reusable by non-AI domains.
  *
  *
  * 4. grammar/tests/ai/causality/
  *
- * Add:
+ * Create/maintain:
  *
  *     relation/
  *     observation/
@@ -1765,16 +2046,21 @@ causalRelationOperator
  *     query/
  *     assertion/
  *     explanation/
+ *     context/
  *     namespace/
  *     negative/
  *     scalability/
  *     quantum/
+ *     hybrid/
  *     temporal/
+ *     distributed/
+ *     provenance/
+ *     determinism/
  *
  *
  * 5. Semantic operation registry
  *
- * The semantic layer must register the canonical operations:
+ * Register the initial semantic conventions:
  *
  *     causal::cause
  *     causal::effect
@@ -1786,75 +2072,313 @@ causalRelationOperator
  *     causal::assert
  *     causal::explain
  *
- * This registry must be data/semantic metadata driven rather than a finite
- * grammar catalogue of all future causal algorithms.
+ * The registry must remain open to additional operations.
+ *
+ * The grammar must not be regenerated merely because a new semantic causal
+ * operation is registered.
  *
  *
- * 6. Existing temporal causality
+ * 6. Evidence integration
  *
- * Existing temporal causality infrastructure:
+ * Causal operations consume evidence through ordinary expressions and the
+ * canonical evidence semantic model.
  *
- *     grammar/types/temporal.g4
- *     grammar/memory/temporal.g4
- *     src/toolchain/causality_checker.rs
- *
- * must consume or interoperate with the canonical causal semantic model.
- *
- * `src/toolchain/causality_checker.rs` MUST NOT become the parser or grammar
- * owner.
+ * No causal-specific evidence AST or evidence store is permitted.
  *
  *
- * 7. Rust implementation
+ * 7. Provenance integration
  *
- * Any implementation associated with this grammar must use:
+ * Derived causal claims should preserve source provenance according to the
+ * canonical provenance specification.
+ *
+ *
+ * 8. Reasoning integration
+ *
+ * Causal values must remain usable by the canonical reasoning subsystem:
+ *
+ *     grammar/statements/reason.g4
+ *
+ * No causal-specific reasoning syntax is required.
+ *
+ *
+ * 9. Knowledge integration
+ *
+ * Causal values must remain composable with the canonical knowledge subsystem.
+ *
+ * No causal-specific knowledge storage is required.
+ *
+ *
+ * 10. Uncertainty integration
+ *
+ * Causal operands must remain ordinary expressions so they can consume the
+ * canonical uncertainty subsystem without grammar duplication.
+ *
+ *
+ * 11. Quantum integration
+ *
+ * Quantum-derived causal operations must lower through the canonical quantum
+ * semantic pipeline and ultimately:
+ *
+ *     quantum::ir
+ *
+ * No causal quantum IR is permitted.
+ *
+ *
+ * 12. Resource/capability integration
+ *
+ * Semantic causal operations may produce resource requirements and capability
+ * requirements.
+ *
+ * Those requirements must be represented by the existing resource and
+ * capability systems.
+ *
+ *
+ * 13. Effects integration
+ *
+ * Semantic causal operations must participate in the existing effect system.
+ *
+ *
+ * 14. Contract/policy integration
+ *
+ * Causal operations must be evaluable under the existing contracts and policy
+ * systems.
+ *
+ *
+ * 15. Rust integration
+ *
+ * The grammar requires no embedded Rust.
+ *
+ * Generated frontend/compiler implementation must remain:
  *
  *     Rust 1.97+
  *     Rust 2021
- *     safe Rust only
+ *     safe Rust
  *
- * No `unsafe` implementation is required or permitted.
+ * No unsafe Rust is required or permitted.
+ *
+ *
+ * ============================================================================
+ * REQUIRED TEST CONTRACT
+ * ============================================================================
+ *
+ * POSITIVE
+ * --------
+ *
+ *     causal::cause(a, b);
+ *     causal::effect(a, b);
+ *     causal::observe(x);
+ *     causal::intervene(x, value);
+ *     causal::counterfactual(condition, outcome);
+ *     causal::depends_on(result, dependency);
+ *     causal::query(target);
+ *     causal::assert(claim, evidence: evidence_value);
+ *     causal::explain(decision, evidence: evidence_value);
+ *
+ *
+ * EXTENDED
+ * --------
+ *
+ *     causal::intervene(
+ *         variable,
+ *         value,
+ *         policy: intervention_policy
+ *     );
+ *
+ *     causal::counterfactual(
+ *         condition,
+ *         outcome,
+ *         evidence: evidence_value,
+ *         context: model
+ *     );
+ *
+ *
+ * COMPOSITION
+ * -----------
+ *
+ *     causal::observe(measurement_result);
+ *
+ *     causal::query(knowledge_result);
+ *
+ *     causal::counterfactual(
+ *         uncertain(condition),
+ *         result
+ *     );
+ *
+ *     causal::explain(
+ *         decision,
+ *         provenance: provenance_value
+ *     );
+ *
+ *
+ * NEGATIVE SYNTAX
+ * ---------------
+ *
+ * Reject malformed forms such as:
+ *
+ *     causal::observe(;
+ *
+ *     causal::observe(x;
+ *
+ *     causal::observe(x,);
+ *
+ *     causal::intervene(x,);
+ *
+ *     causal::query(,x);
+ *
+ *     causal::cause(x,,y);
+ *
+ *     causal::operation(x y);
+ *
+ * These are parser errors.
+ *
+ *
+ * NEGATIVE SEMANTICS
+ * ------------------
+ *
+ * Syntax may succeed while semantic analysis rejects:
+ *
+ *     unrelated::operation(x);
+ *
+ * when reached through the causal AI boundary and no causal extension
+ * namespace is registered.
+ *
+ * Semantic analysis may also reject:
+ *
+ *     causal::intervene()
+ *
+ *     causal::counterfactual()
+ *
+ *     causal::unknown_operation(x)
+ *
+ * according to the registered semantic operation contracts.
+ *
+ *
+ * SCALABILITY
+ * ----------
+ *
+ * Tests must demonstrate that syntax does not depend on:
+ *
+ *     number of causal relations
+ *     number of observations
+ *     number of interventions
+ *     number of counterfactuals
+ *     number of variables
+ *     number of models
+ *     graph size
+ *     graph depth
+ *     graph width
+ *     number of processors
+ *     number of devices
+ *     number of qubits
+ *     tensor dimensions
+ *     machine memory capacity
+ *
+ * Test generators may produce arbitrarily large valid operation sequences
+ * subject only to actual implementation resource availability.
+ *
+ *
+ * CROSS-DOMAIN
+ * -----------
+ *
+ * Required integration cases include:
+ *
+ *     classical + causal
+ *     AI + causal
+ *     knowledge + causal
+ *     reasoning + causal
+ *     uncertainty + causal
+ *     quantum measurement + causal
+ *     hybrid + causal
+ *     HDL simulation + causal
+ *     distributed state + causal
+ *     hardware observation + causal
+ *     simulation + causal
+ *     contracts + causal
+ *     policies + causal
+ *     provenance + causal
+ *     resource requirements + causal
+ *
+ *
+ * DETERMINISM
+ * -----------
+ *
+ * Identical source and parser configuration must produce identical parse
+ * structure and source spans.
  *
  *
  * ============================================================================
  * FINAL ARCHITECTURAL RULE
  * ============================================================================
  *
- * The causal subsystem is:
+ * Causality describes semantic intent.
  *
- *     source intent
- *          |
- *          v
+ * It does not describe a physical machine.
+ *
+ * The final architecture remains:
+ *
+ *     source
+ *       |
+ *       v
+ *     lexer
+ *       |
+ *       v
+ *     parser
+ *       |
+ *       v
  *     domain-neutral AST
- *          |
- *          v
- *     semantic causal model
- *          |
- *          +------------------+
- *          |                  |
- *          v                  v
- *     classical            quantum
+ *       |
+ *       v
+ *     structural validation
+ *       |
+ *       +--> types
+ *       +--> effects
+ *       +--> capabilities
+ *       +--> resources
+ *       +--> contracts
+ *       +--> policies
+ *       +--> provenance
+ *       |
+ *       v
+ *     causal semantic model
+ *       |
+ *       +--------------------+
+ *       |                    |
+ *       v                    v
+ *   classical            quantum semantic model
  *                            |
  *                            v
  *                        quantum::ir
- *          |                  |
- *          +--------+---------+
- *                   |
- *                   v
- *            canonical semantic
- *               representation
- *                   |
- *          optimization / lowering
- *                   |
- *             routing / scheduling
- *                   |
- *               resilience
- *                   |
- *                ZQN/HAL
- *                   |
- *             target realization
+ *                            |
+ *                            v
+ *                     optimization
+ *                            |
+ *                         lowering
+ *                            |
+ *                   routing / scheduling
+ *                            |
+ *                    resilience / recovery
+ *                            |
+ *                         ZQN / HAL
+ *                            |
+ *                     target realization
  *
- * This keeps causality universal, extensible, resource-independent and
- * compatible with POCO-REAF.
+ * The same causal source meaning must remain independent of:
  *
+ *     machine size
+ *     processor count
+ *     accelerator count
+ *     QPU size
+ *     node count
+ *     memory capacity
+ *     network size
+ *     physical topology
+ *
+ * POCO-REAF is therefore achieved through stable semantics, open-world
+ * operations, canonical IR boundaries, explicit resource/capability
+ * negotiation, policy-controlled realization, and target-independent source
+ * meaning.
+ *
+ * ============================================================================
+ * END OF FILE
  * ============================================================================
  */
