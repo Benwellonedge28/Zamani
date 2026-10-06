@@ -1,6 +1,6 @@
 /*
  * ============================================================================
- * Zamani Universal Computing Language
+ * ZAMANI UNIVERSAL COMPUTING LANGUAGE
  * ============================================================================
  *
  * File:
@@ -10,125 +10,153 @@
  *     ZamaniDataSchemas
  *
  * Status:
- *     PRODUCTION DATA-SCHEMA LEAF GRAMMAR
+ *     CANONICAL / PRODUCTION DATA-SCHEMA LEAF GRAMMAR
  *
  * Rust baseline:
- *     Rust 1.97 / Rust 1.97.1
+ *     Rust 1.97+
  *     Rust 2021
  *     Safe Rust only
  *     No unsafe Rust
  *
  * ============================================================================
- * PURPOSE
+ * FEATURE CONTRACT
  * ============================================================================
  *
- * This file owns the SOURCE-LEVEL SYNTAX for logical data schemas.
+ * PURPOSE
+ * -------
  *
- * A schema describes logical structure and semantic data contracts.
+ * This file is the single source-level syntax owner for logical data schemas.
  *
- * It may describe:
+ * A schema describes logical data meaning and structural constraints without
+ * selecting a database, storage engine, machine, accelerator, QPU, network,
+ * filesystem, provider, or physical representation.
  *
- *     - fields;
- *     - field types;
- *     - optionality;
+ * A schema may express:
+ *
+ *     - logical fields;
+ *     - types;
+ *     - optionality/nullability;
  *     - defaults;
  *     - computed fields;
  *     - logical keys;
  *     - uniqueness;
- *     - logical indexes/access requirements;
- *     - logical constraints;
+ *     - logical indexes;
+ *     - constraints;
  *     - relationships;
+ *     - cardinality;
  *     - partitioning intent;
  *     - ordering intent;
- *     - evolution intent;
+ *     - schema evolution;
  *     - encoding/interchange intent;
- *     - provenance metadata;
- *     - consistency intent;
- *     - replication intent;
- *     - resource/capability requirements;
- *     - preferences and hints.
- *
- * This grammar does NOT define a database language.
+ *     - policy;
+ *     - attributes.
  *
  * ============================================================================
- * OWNERSHIP
+ * OWNS
  * ============================================================================
  *
- * THIS FILE OWNS:
- *
+ *     dataSchemaDeclaration
  *     schemaDeclaration
- *     schemaBody
+ *     schemaInheritanceClause
+ *     schemaOptions
+ *     schemaOption
+ *     schemaOptionEntry
  *     schemaMember
  *     schemaField
  *     schemaFieldModifier
  *     schemaFieldDefault
  *     schemaFieldComputed
  *     schemaKey
+ *     schemaKeyModifier
  *     schemaKeyField
+ *     schemaKeyDirection
+ *     schemaKeyOptions
  *     schemaIndex
  *     schemaIndexField
+ *     schemaIndexDirection
+ *     schemaIndexOptions
  *     schemaConstraint
+ *     schemaConstraintKind
  *     schemaRelation
  *     schemaRelationTarget
+ *     schemaRelationMember
+ *     schemaRelationCardinality
+ *     schemaCardinality
+ *     schemaCardinalityBound
+ *     schemaRelationOptions
  *     schemaPartition
+ *     schemaPartitionStrategy
+ *     schemaPartitionOptions
  *     schemaOrdering
+ *     schemaOrderTerm
+ *     schemaOrderDirection
  *     schemaEvolution
+ *     schemaEvolutionVersion
  *     schemaEvolutionOperation
+ *     schemaAddField
+ *     schemaRemoveField
+ *     schemaRenameField
+ *     schemaAlterField
+ *     schemaAlterFieldOperation
+ *     schemaAddConstraint
+ *     schemaRemoveConstraint
+ *     schemaAddType
+ *     schemaRemoveType
+ *     schemaEvolutionAnnotation
  *     schemaEncoding
+ *     schemaEncodingOptions
  *     schemaPolicy
  *     schemaPolicyEntry
  *
- * THIS FILE DOES NOT OWN:
- *
- *     identifiers
- *     qualified names
- *     attributes
- *     visibility
- *     generic parameters
- *     where clauses
- *     type expressions
- *     general expressions
- *     literals
- *     lexer tokens
- *     declarations generally
- *     records
- *     collections
- *     streams
- *     transformations
- *     queries
- *     serialization implementations
- *     databases
- *     storage engines
- *     networking
- *     hardware
- *     resource discovery
- *     scheduling
- *     routing
- *     optimization
- *     quantum IR
- *     classical IR
- *     QEC
- *     ZQN
- *     HAL
- *     runtime execution
- *
- * General record declarations remain owned by:
- *
- *     grammar/declarations/records.g4
- *
- * This file MUST NOT redefine recordDeclaration, recordBody, structField,
- * typeExpression, expression, identifier, or qualifiedName.
- *
  * ============================================================================
- * COMPOSITION CONTRACT
+ * DOES NOT OWN
  * ============================================================================
  *
- * This is a PARSER LEAF.
+ * This file does NOT own:
  *
- * Its shared grammar dependencies are supplied by the canonical parser
- * composition layer.
+ *     - identifiers;
+ *     - qualified names;
+ *     - attributes;
+ *     - visibility;
+ *     - generic parameter syntax;
+ *     - general type expressions;
+ *     - general expressions;
+ *     - literals;
+ *     - records;
+ *     - collections;
+ *     - streams;
+ *     - queries;
+ *     - serialization;
+ *     - SQL;
+ *     - JSON;
+ *     - XML;
+ *     - databases;
+ *     - storage engines;
+ *     - physical indexes;
+ *     - physical partitions;
+ *     - physical replicas;
+ *     - scheduling;
+ *     - routing;
+ *     - hardware discovery;
+ *     - target selection;
+ *     - quantum routing;
+ *     - QEC;
+ *     - ZQN;
+ *     - HAL;
+ *     - runtime execution.
  *
- * Required shared rules:
+ * ============================================================================
+ * DEPENDENCY CONTRACT
+ * ============================================================================
+ *
+ * DEPENDS_ON
+ * ----------
+ *
+ *     Core
+ *     Types
+ *     Expressions
+ *
+ * Canonical shared rules consumed:
  *
  *     attribute
  *     visibilityModifier
@@ -139,323 +167,147 @@
  *     typeExpression
  *     expression
  *
- * Required canonical lexer vocabulary:
+ * EXPORTS
+ * -------
  *
- *     grammar/antlr/ZamaniLexer.g4
- *
- * This file deliberately contains no lexer rules.
- *
- * The final composition path is:
- *
- *     Zamani source
- *          |
- *          v
- *     ZamaniLexer
- *          |
- *          v
- *     ZamaniParser
- *          |
- *          v
- *     data declaration dispatcher
- *          |
- *          v
+ *     dataSchemaDeclaration
  *     schemaDeclaration
- *          |
- *          v
- *     domain-neutral frontend AST
- *          |
- *          v
- *     semantic validation
- *          |
- *          v
- *     canonical semantic data representation
- *          |
- *          v
- *     canonical IR
- *          |
- *          +-------------------+-------------------+
- *          |                   |                   |
- *          v                   v                   v
- *      classical          distributed          accelerator
- *          |                   |                   |
- *          +-------------------+-------------------+
- *                              |
- *                              v
- *                       runtime realization
  *
- * Quantum-related data may participate in hybrid programs, but this grammar
- * does not create quantum syntax or another quantum IR.
+ * CONSUMED_BY
+ * ----------
  *
- * Quantum semantics continue through:
+ *     grammar/data/data.g4
+ *     grammar/data/data-domain composition
+ *     grammar/antlr/ZamaniParser.g4
  *
- *     quantum::ir
+ * AST_OWNER
+ * ---------
  *
- * ============================================================================
- * SINGLE-AUTHORITY RULE
- * ============================================================================
+ *     src/frontend/ast/
  *
- * Schema syntax must remain distinct from:
+ * This grammar creates no second data AST.
  *
- *     record syntax
- *     struct syntax
- *     collection syntax
- *     stream syntax
- *     serialization syntax
- *     query syntax
+ * SEMANTIC_OWNER
+ * --------------
  *
- * In particular:
+ *     frontend semantic/data model
  *
- *     data/schemas.g4
+ * IR_OWNER
+ * --------
  *
- * owns logical schema declarations.
+ *     canonical semantic/IR pipeline
  *
- *     declarations/records.g4
+ * TEST_OWNER
+ * ----------
  *
- * owns language-level record declarations.
+ *     grammar/tests/data/
+ *     grammar/tests/parser/
+ *     grammar/tests/semantic/
+ *     grammar/tests/scalability/
  *
- * A schema may reference a record type, but the schema grammar does not
- * redefine record declaration syntax.
+ * SPEC_OWNER
+ * ----------
+ *
+ *     grammar/spec/
+ *     grammar/specification/
  *
  * ============================================================================
  * POCO-REAF
  * ============================================================================
  *
- * Schema syntax expresses WHAT DATA MEANS.
+ * Schema syntax is source intent.
  *
- * It does not prescribe:
+ * It does NOT encode:
  *
- *     CPU
- *     GPU
- *     FPGA
- *     ASIC
- *     QPU
- *     physical qubit
- *     accelerator instance
- *     memory bank
- *     storage device
- *     database server
- *     filesystem
- *     network node
- *     physical address
- *     provider
- *     deployment region
+ *     CPU count
+ *     GPU count
+ *     FPGA count
+ *     ASIC count
+ *     QPU count
+ *     node count
+ *     thread count
+ *     device count
+ *     memory capacity
+ *     storage capacity
  *     partition count
  *     replica count
- *     machine count
+ *     tensor rank limit
+ *     network size
+ *     physical address width
+ *     register width
+ *     machine topology
  *
- * Physical realization is downstream.
- *
- * Therefore a schema can remain valid when the available target changes.
- *
- * ============================================================================
- * SCALABILITY
- * ============================================================================
- *
- * There are NO grammar-level maximums for:
- *
- *     schemas
- *     fields
- *     keys
- *     indexes
- *     constraints
- *     relationships
- *     partitions
- *     replicas
- *     evolution operations
- *     generic parameters
- *     nested types
- *     expression size
- *     identifier length
- *     qualification depth
- *
- * Repetition is represented using ANTLR repetition operators.
- *
- * Any practical implementation limit belongs to:
- *
- *     parser resource policy
- *     compiler resource policy
- *     runtime resource policy
- *     target capabilities
- *     explicitly declared program requirements
- *
- * Such limits MUST NOT become source-language constants.
+ * Any practical limit belongs to implementation resources, explicit program
+ * constraints, resource negotiation, target capability analysis, or runtime
+ * policy.
  *
  * ============================================================================
- * HARD-CODING PROHIBITION
+ * OPEN-WORLD RULE
  * ============================================================================
  *
- * This grammar MUST NOT introduce:
+ * Schema metadata must remain extensible.
  *
- *     MAX_FIELDS
- *     MAX_SCHEMA_FIELDS
- *     MAX_RECORDS
- *     MAX_KEYS
- *     MAX_INDEXES
- *     MAX_CONSTRAINTS
- *     MAX_PARTITIONS
- *     MAX_REPLICAS
- *     MAX_NODES
- *     MAX_MEMORY
- *     MAX_STORAGE
- *     MAX_DEVICES
- *     MAX_CPUS
- *     MAX_GPUS
- *     MAX_FPGAS
- *     MAX_QUBITS
- *     MAX_THREADS
- *     MAX_TENSOR_RANK
+ * schemaOptionEntry therefore uses:
  *
- * Nor may it encode physical assumptions such as:
+ *     identifier = expression
  *
- *     32-bit fields
- *     64-bit addresses
- *     fixed RAM capacity
- *     fixed storage capacity
- *     fixed database size
- *     fixed network size
+ * rather than enumerating every future metadata property.
  *
- * A number appearing in source is program data or a semantic constraint,
- * not an implementation maximum.
+ * The same principle applies to:
+ *
+ *     encoding names;
+ *     schema names;
+ *     relationship targets;
+ *     property-like option values.
  *
  * ============================================================================
- * REQUIREMENT / CAPABILITY / PREFERENCE / IMPLEMENTATION SEPARATION
- * ============================================================================
- *
- * Schema policy syntax can express:
- *
- *     requires ...
- *     constrains ...
- *     prefers ...
- *     hint ...
- *
- * These have different semantic meanings.
- *
- * Example:
- *
- *     requires capability(...)
- *
- * does not mean:
- *
- *     select device ...
- *
- * Likewise:
- *
- *     prefers accelerator(...)
- *
- * does not mean:
- *
- *     require accelerator ...
- *
- * The distinction is enforced downstream by semantic analysis.
- *
- * ============================================================================
- * AST CONTRACT
- * ============================================================================
- *
- * Every accepted schema construct must preserve:
- *
- *     - source span;
- *     - source ordering;
- *     - schema name;
- *     - attributes;
- *     - visibility;
- *     - generic parameters;
- *     - where constraints;
- *     - member ordering;
- *     - field names;
- *     - field types;
- *     - field modifiers;
- *     - expressions;
- *     - logical metadata.
- *
- * Conceptual mapping:
- *
- *     schemaDeclaration
- *         -> domain-neutral schema declaration node
- *
- *     schemaField
- *         -> schema field node
- *
- *     schemaKey
- *         -> logical key metadata
- *
- *     schemaConstraint
- *         -> semantic constraint node
- *
- *     schemaRelation
- *         -> logical relationship node
- *
- *     schemaPartition
- *         -> partitioning intent
- *
- *     schemaEvolution
- *         -> schema evolution intent
- *
- * The exact Rust AST type names remain owned by src/frontend/ast/.
- *
- * This grammar MUST NOT introduce a second DataAst hierarchy.
- *
- * ============================================================================
- * SEMANTIC CONTRACT
+ * SEMANTIC RULE
  * ============================================================================
  *
  * Parsing establishes structure only.
  *
- * Semantic analysis is responsible for:
+ * Semantic analysis owns:
  *
- *     - duplicate schema names;
- *     - duplicate fields;
- *     - duplicate key definitions;
- *     - duplicate index definitions;
- *     - unknown field references;
- *     - unknown schema references;
- *     - type validity;
- *     - generic validity;
- *     - constraint validity;
- *     - relationship validity;
+ *     - duplicate schema detection;
+ *     - duplicate field detection;
+ *     - duplicate keys;
+ *     - duplicate indexes;
+ *     - reference resolution;
+ *     - type checking;
+ *     - nullability checking;
+ *     - default-value checking;
+ *     - computed-field dependency analysis;
+ *     - relationship validation;
+ *     - cardinality validation;
+ *     - constraint validation;
  *     - evolution compatibility;
- *     - nullability rules;
- *     - default-value type checking;
- *     - computed-field dependency checking;
- *     - key uniqueness semantics;
- *     - index feasibility;
- *     - partitioning semantics;
- *     - consistency semantics;
- *     - resource requirements;
- *     - capability requirements;
- *     - portability;
+ *     - policy interpretation;
+ *     - resource analysis;
+ *     - capability analysis;
  *     - serialization compatibility.
  *
- * The parser MUST NOT perform these operations.
- *
  * ============================================================================
- * IR CONTRACT
+ * EFFECT / CAPABILITY / RESOURCE
  * ============================================================================
  *
- * This grammar produces no IR.
+ * A schema itself does not perform effects.
  *
- * Required direction:
+ * Schema metadata may nevertheless contain expressions whose semantic
+ * evaluation requires effects, capabilities, or resources. Those requirements
+ * are determined by downstream semantic analysis.
  *
- *     schema syntax
- *          |
- *          v
- *     frontend AST
- *          |
- *          v
- *     semantic schema model
- *          |
- *          v
- *     canonical data/compute representation
- *          |
- *          v
- *     canonical IR
+ * This grammar does not select or allocate resources.
  *
- * Physical database indexes, partitions, replication placement, storage
- * layout, memory layout, network transport and accelerator realization are
- * downstream concerns.
+ * ============================================================================
+ * PROVENANCE
+ * ============================================================================
  *
- * Quantum data crossing a hybrid boundary must ultimately use the existing
- * quantum semantic pipeline and canonical quantum::ir boundary.
+ * Source locations and source ordering must be preserved by the AST.
+ *
+ * Schema evolution, generated schemas, imported schemas and transformed data
+ * may subsequently participate in the universal provenance system.
+ *
+ * This file does not duplicate provenance syntax.
  *
  * ============================================================================
  * DETERMINISM
@@ -463,63 +315,33 @@
  *
  * Parsing depends only on:
  *
- *     - source token sequence;
- *     - active language/grammar version.
- *
- * Parsing MUST NOT depend on:
- *
- *     - available hardware;
- *     - hardware discovery;
- *     - network state;
- *     - filesystem state;
- *     - environment variables;
- *     - runtime scheduler state;
- *     - randomness;
- *     - current time.
- *
- * ============================================================================
- * SECURITY
- * ============================================================================
- *
- * Schema source is untrusted input.
- *
- * The grammar performs no:
- *
- *     - file access;
- *     - network access;
- *     - command execution;
- *     - plugin loading;
- *     - database access;
- *     - hardware access;
- *     - runtime execution.
- *
- * A syntactically valid policy is NOT an authorization decision.
- *
- * Semantic/security layers must validate policy meaning before enforcement.
- *
- * ============================================================================
- * COMPATIBILITY
- * ============================================================================
- *
- * Schema versioning is distinct from:
- *
- *     language version
+ *     source tokens
  *     grammar version
- *     AST version
- *     IR version
- *     serialization version
- *     backend version
+ *     explicitly selected compatibility/dialect configuration
  *
- * Schema evolution syntax expresses compatibility intent.
+ * It must not depend on:
  *
- * It does not execute migrations.
+ *     hardware
+ *     filesystem state
+ *     network state
+ *     environment variables
+ *     wall-clock time
+ *     randomness
+ *     target availability
+ *     resource availability
  *
  * ============================================================================
- */
-
-/*
+ * SAFETY
  * ============================================================================
- * GRAMMAR DECLARATION
+ *
+ * No embedded Rust actions.
+ * No semantic predicates.
+ * No filesystem access.
+ * No network access.
+ * No hardware discovery.
+ * No runtime execution.
+ * No unsafe Rust.
+ *
  * ============================================================================
  */
 
@@ -529,18 +351,22 @@ options {
     tokenVocab = ZamaniLexer;
 }
 
+import
+    Core,
+    Types,
+    Expressions
+;
+
 
 /*
  * ============================================================================
  * PUBLIC ENTRY
  * ============================================================================
  *
- * The data dispatcher should expose this rule as:
+ * data.g4 delegates to this rule.
  *
- *     dataSchemaDeclaration
- *
- * without redefining its contents.
- *
+ * No EOF is consumed here because EOF belongs to the complete Zamani program
+ * entry point.
  * ============================================================================
  */
 
@@ -554,30 +380,21 @@ dataSchemaDeclaration
  * SCHEMA DECLARATION
  * ============================================================================
  *
- * Canonical conceptual forms:
+ * Canonical form:
  *
  *     schema User {
  *         id: Identifier;
  *         name: String;
  *     }
  *
- *     schema TensorRecord<T>
- *     where
- *         T: Numeric
- *     {
- *         value: Tensor<T>;
- *     }
- *
- * Attributes, visibility, generic parameters and where clauses are delegated
- * to their canonical owners.
- *
+ * Generic and where syntax remain owned by the canonical type/core layers.
  * ============================================================================
  */
 
 schemaDeclaration
     : attribute*
       visibilityModifier?
-      K_SCHEMA
+      SCHEMA
       identifier
       genericParameters?
       whereClause?
@@ -591,22 +408,12 @@ schemaDeclaration
 
 /*
  * ============================================================================
- * SCHEMA INHERITANCE
- * ============================================================================
- *
- * Inheritance is a logical schema relationship.
- *
- * It does not imply:
- *
- *     class inheritance;
- *     database inheritance;
- *     physical storage inheritance.
- *
+ * INHERITANCE
  * ============================================================================
  */
 
 schemaInheritanceClause
-    : K_EXTENDS
+    : EXTENDS
       qualifiedName
       (COMMA qualifiedName)*
     ;
@@ -617,15 +424,23 @@ schemaInheritanceClause
  * SCHEMA OPTIONS
  * ============================================================================
  *
- * Options are structured semantic metadata.
+ * Options are open-world metadata.
  *
- * They must not become an implicit backend configuration language.
+ * Example:
  *
+ *     schema Example with {
+ *         serialization = "json";
+ *         logical_domain = domain;
+ *     } {
+ *         value: Value;
+ *     }
+ *
+ * The option names are identifiers rather than a closed keyword catalogue.
  * ============================================================================
  */
 
 schemaOptions
-    : K_WITH
+    : WITH
       LBRACE
       schemaOption*
       RBRACE
@@ -640,7 +455,7 @@ schemaOptionEntry
     : identifier
       ASSIGN
       expression
-      SEMI
+      SEMICOLON
     ;
 
 
@@ -670,11 +485,10 @@ schemaMember
  * FIELDS
  * ============================================================================
  *
- * The field type is always delegated to the canonical type system.
+ * A field uses the canonical type system.
  *
- * No physical width, alignment, address size or storage representation is
- * specified by this grammar.
- *
+ * No physical width, alignment, storage layout, address size or machine
+ * representation is imposed here.
  * ============================================================================
  */
 
@@ -686,28 +500,28 @@ schemaField
       typeExpression
       schemaFieldDefault?
       schemaFieldComputed?
-      SEMI
+      SEMICOLON
     ;
 
 schemaFieldModifier
-    : K_OPTIONAL
-    | K_REQUIRED
-    | K_NULLABLE
-    | K_IMMUTABLE
-    | K_MUTABLE
-    | K_TRANSIENT
-    | K_SENSITIVE
-    | K_DEPRECATED
+    : OPTIONAL
+    | REQUIRED
+    | NULLABLE
+    | IMMUTABLE
+    | MUTABLE
+    | TRANSIENT
+    | SENSITIVE
+    | DEPRECATED
     ;
 
 schemaFieldDefault
-    : K_DEFAULT
+    : DEFAULT
       expression
     ;
 
 schemaFieldComputed
-    : K_COMPUTED
-      K_BY
+    : COMPUTED
+      BY
       expression
     ;
 
@@ -717,17 +531,16 @@ schemaFieldComputed
  * LOGICAL KEYS
  * ============================================================================
  *
- * Keys describe logical identity.
+ * A key expresses logical identity.
  *
- * They do NOT mandate a physical database index.
- *
+ * It does not require a physical database index.
  * ============================================================================
  */
 
 schemaKey
     : attribute*
       schemaKeyModifier*
-      K_KEY
+      KEY
       identifier?
       LPAREN
       schemaKeyField
@@ -735,15 +548,15 @@ schemaKey
       COMMA?
       RPAREN
       schemaKeyOptions?
-      SEMI
+      SEMICOLON
     ;
 
 schemaKeyModifier
-    : K_PRIMARY
-    | K_UNIQUE
-    | K_ALTERNATE
-    | K_NATURAL
-    | K_CANDIDATE
+    : PRIMARY
+    | UNIQUE
+    | ALTERNATE
+    | NATURAL
+    | CANDIDATE
     ;
 
 schemaKeyField
@@ -752,12 +565,12 @@ schemaKeyField
     ;
 
 schemaKeyDirection
-    : K_ASC
-    | K_DESC
+    : ASC
+    | DESC
     ;
 
 schemaKeyOptions
-    : K_WITH
+    : WITH
       LBRACE
       schemaOption*
       RBRACE
@@ -766,19 +579,18 @@ schemaKeyOptions
 
 /*
  * ============================================================================
- * LOGICAL INDEX / ACCESS REQUIREMENT
+ * LOGICAL INDEX / ACCESS INTENT
  * ============================================================================
  *
- * An index declaration describes logical access intent.
+ * This describes logical access intent.
  *
- * Physical index construction belongs to a storage/backend compiler.
- *
+ * Physical index construction belongs downstream.
  * ============================================================================
  */
 
 schemaIndex
     : attribute*
-      K_INDEX
+      INDEX
       identifier?
       LPAREN
       schemaIndexField
@@ -786,7 +598,7 @@ schemaIndex
       COMMA?
       RPAREN
       schemaIndexOptions?
-      SEMI
+      SEMICOLON
     ;
 
 schemaIndexField
@@ -795,12 +607,12 @@ schemaIndexField
     ;
 
 schemaIndexDirection
-    : K_ASC
-    | K_DESC
+    : ASC
+    | DESC
     ;
 
 schemaIndexOptions
-    : K_WITH
+    : WITH
       LBRACE
       schemaOption*
       RBRACE
@@ -811,55 +623,48 @@ schemaIndexOptions
  * ============================================================================
  * CONSTRAINTS
  * ============================================================================
- *
- * Constraint expressions are parsed using the canonical expression grammar.
- *
- * The schema grammar does not evaluate them.
- *
- * ============================================================================
  */
 
 schemaConstraint
     : attribute*
       schemaConstraintKind?
-      K_CONSTRAINT
+      CONSTRAINT
       identifier?
       LPAREN
       expression
       RPAREN
-      SEMI
+      SEMICOLON
     ;
 
 schemaConstraintKind
-    : K_CHECK
-    | K_ASSERT
-    | K_INVARIANT
-    | K_VALIDATION
-    | K_INTEGRITY
+    : CHECK
+    | ASSERT
+    | INVARIANT
+    | VALIDATION
+    | INTEGRITY
     ;
 
 
 /*
  * ============================================================================
- * LOGICAL RELATIONSHIPS
+ * RELATIONSHIPS
  * ============================================================================
  *
- * Relationships are data-model relationships.
+ * Relationships describe logical data relationships.
  *
- * They do not require a relational database implementation.
- *
+ * They do not imply relational-database implementation.
  * ============================================================================
  */
 
 schemaRelation
     : attribute*
-      K_RELATION
+      RELATION
       identifier
       COLON
       schemaRelationTarget
       schemaRelationCardinality?
       schemaRelationOptions?
-      SEMI
+      SEMICOLON
     ;
 
 schemaRelationTarget
@@ -873,7 +678,7 @@ schemaRelationMember
     ;
 
 schemaRelationCardinality
-    : K_CARDINALITY
+    : CARDINALITY
       schemaCardinality
     ;
 
@@ -889,7 +694,7 @@ schemaCardinalityBound
     ;
 
 schemaRelationOptions
-    : K_WITH
+    : WITH
       LBRACE
       schemaOption*
       RBRACE
@@ -901,45 +706,37 @@ schemaRelationOptions
  * PARTITIONING
  * ============================================================================
  *
- * Partitioning expresses logical decomposition intent.
+ * Partitioning is logical intent.
  *
- * It does not select a fixed number of physical partitions.
- *
- * Examples:
- *
- *     partition by key;
- *     partition by expression;
- *     partition by range;
- *     partition adaptive;
- *
+ * No number of partitions is encoded.
  * ============================================================================
  */
 
 schemaPartition
     : attribute*
-      K_PARTITION
+      PARTITION
       schemaPartitionStrategy
       schemaPartitionOptions?
-      SEMI
+      SEMICOLON
     ;
 
 schemaPartitionStrategy
-    : K_BY
+    : BY
       expression
-    | K_RANGE
+    | RANGE
       expression
-    | K_HASH
+    | HASH
       expression
-    | K_KEY
+    | KEY
       expression
-    | K_DOMAIN
+    | DOMAIN
       expression
-    | K_ADAPTIVE
-    | K_AUTOMATIC
+    | ADAPTIVE
+    | AUTOMATIC
     ;
 
 schemaPartitionOptions
-    : K_WITH
+    : WITH
       LBRACE
       schemaOption*
       RBRACE
@@ -951,25 +748,24 @@ schemaPartitionOptions
  * ORDERING
  * ============================================================================
  *
- * Ordering is semantic only when declared.
+ * Ordering is explicit semantic intent.
  *
- * The implementation must not infer ordering from:
+ * No ordering is inferred from:
  *
- *     thread scheduling;
- *     storage ordering;
- *     network ordering;
- *     machine topology.
- *
+ *     storage order
+ *     network order
+ *     task scheduling
+ *     machine topology
  * ============================================================================
  */
 
 schemaOrdering
     : attribute*
-      K_ORDER
-      K_BY
+      ORDER
+      BY
       schemaOrderTerm
       (COMMA schemaOrderTerm)*
-      SEMI
+      SEMICOLON
     ;
 
 schemaOrderTerm
@@ -978,8 +774,8 @@ schemaOrderTerm
     ;
 
 schemaOrderDirection
-    : K_ASC
-    | K_DESC
+    : ASC
+    | DESC
     ;
 
 
@@ -988,16 +784,15 @@ schemaOrderDirection
  * SCHEMA EVOLUTION
  * ============================================================================
  *
- * Evolution describes a change to the logical schema.
+ * Evolution describes logical change.
  *
- * It does not execute migration operations.
- *
+ * It does not execute migrations.
  * ============================================================================
  */
 
 schemaEvolution
     : attribute*
-      K_EVOLVE
+      EVOLVE
       schemaEvolutionVersion?
       LBRACE
       schemaEvolutionOperation*
@@ -1005,7 +800,7 @@ schemaEvolution
     ;
 
 schemaEvolutionVersion
-    : K_VERSION
+    : VERSION
       expression
     ;
 
@@ -1022,77 +817,77 @@ schemaEvolutionOperation
     ;
 
 schemaAddField
-    : K_ADD
-      K_FIELD
+    : ADD
+      FIELD
       identifier
       COLON
       typeExpression
       schemaFieldDefault?
-      SEMI
+      SEMICOLON
     ;
 
 schemaRemoveField
-    : K_REMOVE
-      K_FIELD
+    : REMOVE
+      FIELD
       identifier
-      SEMI
+      SEMICOLON
     ;
 
 schemaRenameField
-    : K_RENAME
-      K_FIELD
+    : RENAME
+      FIELD
       identifier
-      K_TO
+      TO
       identifier
-      SEMI
+      SEMICOLON
     ;
 
 schemaAlterField
-    : K_ALTER
-      K_FIELD
+    : ALTER
+      FIELD
       identifier
       schemaAlterFieldOperation+
-      SEMI
+      SEMICOLON
     ;
 
 schemaAlterFieldOperation
-    : K_TYPE
+    : TYPE
       typeExpression
-    | K_NULLABLE
-    | K_NONNULLABLE
-    | K_DEFAULT
+    | NULLABLE
+    | NONNULLABLE
+    | DEFAULT
       expression
-    | K_COMPUTED
-      K_BY
+    | COMPUTED
+      BY
       expression
     ;
 
 schemaAddConstraint
-    : K_ADD
+    : ADD
       schemaConstraint
     ;
 
 schemaRemoveConstraint
-    : K_REMOVE
-      K_CONSTRAINT
+    : REMOVE
+      CONSTRAINT
       identifier
-      SEMI
+      SEMICOLON
     ;
 
 schemaAddType
-    : K_ADD
-      K_TYPE
+    : ADD
+      TYPE
       identifier
       ASSIGN
       typeExpression
-      SEMI
+      SEMICOLON
     ;
 
 schemaRemoveType
-    : K_REMOVE
-      K_TYPE
+    : REMOVE
+      TYPE
       identifier
-      SEMI
+      SEMICOLON
     ;
 
 schemaEvolutionAnnotation
@@ -1105,23 +900,22 @@ schemaEvolutionAnnotation
  * ENCODING
  * ============================================================================
  *
- * Encoding expresses logical/interchange intent.
+ * Encoding is logical/interchange intent.
  *
- * It does not mandate a serializer or storage engine.
- *
+ * It does not select a serializer implementation.
  * ============================================================================
  */
 
 schemaEncoding
     : attribute*
-      K_ENCODING
+      ENCODING
       (identifier | STRING)
       schemaEncodingOptions?
-      SEMI
+      SEMICOLON
     ;
 
 schemaEncodingOptions
-    : K_WITH
+    : WITH
       LBRACE
       schemaOption*
       RBRACE
@@ -1133,21 +927,20 @@ schemaEncodingOptions
  * POLICY
  * ============================================================================
  *
- * Policies explicitly distinguish:
+ * Policy members use the already-established universal policy vocabulary.
  *
- *     requirement
+ *     requires
  *     constraint
- *     preference
+ *     prefer
  *     hint
  *
- * The semantic layer determines their meaning.
- *
+ * These are semantic categories, not backend instructions.
  * ============================================================================
  */
 
 schemaPolicy
     : attribute*
-      K_POLICY
+      POLICY
       identifier
       LBRACE
       schemaPolicyEntry*
@@ -1155,136 +948,198 @@ schemaPolicy
     ;
 
 schemaPolicyEntry
-    : K_REQUIRES
+    : REQUIRES
       expression
-      SEMI
-    | K_CONSTRAINS
+      SEMICOLON
+    | CONSTRAINT
       expression
-      SEMI
-    | K_PREFERS
+      SEMICOLON
+    | PREFER
       expression
-      SEMI
-    | K_HINT
+      SEMICOLON
+    | HINT
       expression
-      SEMI
+      SEMICOLON
     ;
 
 
 /*
  * ============================================================================
- * INTEGRATION INVARIANTS
+ * ARCHITECTURAL INVARIANTS
  * ============================================================================
  *
- * The following invariants are mandatory:
+ * 1. Names belong to Core/Names.
  *
- * 1. Names remain owned by grammar/core/.
+ * 2. Types belong to the canonical type grammar.
  *
- * 2. Types remain owned by grammar/types/.
+ * 3. Expressions belong to Expressions.
  *
- * 3. Expressions remain owned by grammar/expressions/.
+ * 4. Attributes belong to Core/Attributes.
  *
- * 4. Attributes remain owned by grammar/core/attributes.g4.
+ * 5. Generic parameters belong to the canonical generic/type system.
  *
- * 5. Generic parameter syntax remains owned by the canonical generic layer.
+ * 6. Records are not redefined here.
  *
- * 6. General record declarations remain owned by
- *        grammar/declarations/records.g4.
+ * 7. Collections are not redefined here.
  *
- * 7. Collection syntax remains owned by
- *        grammar/data/collections.g4.
+ * 8. Streams are not redefined here.
  *
- * 8. Stream syntax remains owned by
- *        grammar/data/streams.g4.
+ * 9. Queries are not redefined here.
  *
- * 9. Serialization remains owned by the serialization grammar.
+ * 10. Serialization implementations are not defined here.
  *
- * 10. Query syntax remains owned by the query grammar.
+ * 11. Physical storage is downstream.
  *
- * 11. Physical storage remains downstream.
+ * 12. Hardware mapping is downstream.
  *
- * 12. Network transport remains downstream.
+ * 13. Quantum realization is downstream.
  *
- * 13. Hardware mapping remains downstream.
+ * 14. No domain-specific IR is produced here.
  *
- * 14. Quantum semantics remain downstream and ultimately use quantum::ir.
+ * 15. No semantic validation is performed here.
  *
- * 15. No schema rule creates a domain-specific IR.
+ * 16. No resource discovery is performed here.
  *
- * 16. No schema rule performs semantic validation.
+ * 17. No target selection is performed here.
  *
- * 17. No schema rule discovers resources.
- *
- * 18. No schema rule selects a target.
+ * 18. No universal capacity is encoded here.
  *
  * ============================================================================
- * CROSS-DOMAIN INTEGRATION
+ * AST CONTRACT
  * ============================================================================
  *
- * Classical:
+ * The parser tree must preserve:
  *
- *     schema fields may use any valid classical type.
+ *     - source spans;
+ *     - declaration order;
+ *     - attributes;
+ *     - visibility;
+ *     - schema name;
+ *     - generic parameters;
+ *     - where clauses;
+ *     - fields;
+ *     - field modifiers;
+ *     - field types;
+ *     - defaults;
+ *     - computed expressions;
+ *     - keys;
+ *     - indexes;
+ *     - constraints;
+ *     - relationships;
+ *     - cardinality;
+ *     - partitioning;
+ *     - ordering;
+ *     - evolution;
+ *     - encoding;
+ *     - policy.
  *
- * Quantum:
- *
- *     schema fields may reference semantic quantum types where permitted by
- *     the type system. Quantum execution remains owned by quantum/.
- *
- * Hybrid:
- *
- *     schema values may cross classical/quantum boundaries through the
- *     semantic model without this grammar creating a special hybrid type
- *     system.
- *
- * AI:
- *
- *     datasets, tensors and models may reference schemas.
- *
- * HDL:
- *
- *     HDL-facing data contracts may reference schema types, but HDL owns
- *     hardware syntax.
- *
- * Distributed:
- *
- *     schema partitioning/replication/consistency are logical intent.
- *     Distributed execution owns physical realization.
- *
- * Networking:
- *
- *     network messages may reference schemas. Networking owns transport.
- *
- * Security:
- *
- *     sensitivity/privacy attributes may annotate fields. Security owns
- *     enforcement and cryptography.
+ * The AST layer remains domain-neutral.
  *
  * ============================================================================
- * PORTABILITY CONTRACT
+ * SEMANTIC CONTRACT
  * ============================================================================
  *
- * A valid schema must not become invalid merely because the execution target
- * changes from:
+ * Semantic analysis must additionally determine:
  *
- *     embedded
- *     CPU
- *     multicore
- *     GPU
- *     FPGA
- *     ASIC
- *     accelerator
- *     QPU
- *     cluster
- *     cloud
- *     future architecture
+ *     - name uniqueness;
+ *     - reference validity;
+ *     - type compatibility;
+ *     - constraint satisfiability;
+ *     - key validity;
+ *     - relationship validity;
+ *     - cardinality consistency;
+ *     - evolution compatibility;
+ *     - policy validity;
+ *     - provenance;
+ *     - resource requirements;
+ *     - capability requirements;
+ *     - portability.
  *
- * Resource availability may make a particular execution impossible or cause
- * a different implementation to be selected, but it must not change parsing.
+ * ============================================================================
+ * IR CONTRACT
+ * ============================================================================
+ *
+ * This grammar produces no IR.
+ *
+ * Required direction:
+ *
+ *     schema syntax
+ *         ->
+ *     domain-neutral AST
+ *         ->
+ *     semantic schema model
+ *         ->
+ *     canonical semantic/IR model
+ *         ->
+ *     optimization/lowering
+ *         ->
+ *     target realization
+ *
+ * ============================================================================
+ * QUANTUM / HYBRID CONTRACT
+ * ============================================================================
+ *
+ * A schema may carry values whose types participate in quantum/classical
+ * hybrid computation where the canonical type and semantic systems permit it.
+ *
+ * This grammar does not create quantum syntax and does not create a second
+ * quantum IR.
+ *
+ * Quantum semantics continue toward:
+ *
+ *     quantum::ir
+ *
+ * ============================================================================
+ * SCALABILITY CONTRACT
+ * ============================================================================
+ *
+ * The grammar uses only unbounded structural repetition:
+ *
+ *     schemaMember*
+ *     schemaOption*
+ *     schemaEvolutionOperation*
+ *     schemaPolicyEntry*
+ *     comma-separated lists
+ *
+ * There is no grammar-level maximum for:
+ *
+ *     schemas
+ *     fields
+ *     keys
+ *     indexes
+ *     constraints
+ *     relationships
+ *     evolution operations
+ *     options
+ *     generic parameters
+ *     nesting depth
+ *     identifier length
+ *     expression size
+ *
+ * Practical parser/compiler limits remain implementation resource limits,
+ * not language ceilings.
+ *
+ * ============================================================================
+ * COMPATIBILITY
+ * ============================================================================
+ *
+ * The public entry rule is:
+ *
+ *     dataSchemaDeclaration
+ *
+ * The legacy data facade should expose:
+ *
+ *     dataSchemaDecl
+ *
+ * as a delegate to this rule.
+ *
+ * No second schema implementation may remain in data/data.g4.
  *
  * ============================================================================
  * TEST CONTRACT
  * ============================================================================
  *
- * Required positive tests:
+ * POSITIVE:
  *
  *     schema Empty {}
  *
@@ -1301,9 +1156,10 @@ schemaPolicyEntry
  *         value: Value;
  *     }
  *
- *     schema Data {
+ *     schema Indexed {
  *         id: Identifier;
- *         key unique;
+ *         key (id);
+ *         index (id);
  *     }
  *
  *     schema Distributed {
@@ -1311,18 +1167,30 @@ schemaPolicyEntry
  *         partition by value;
  *     }
  *
- *     schema Portable {
- *         value: Tensor<Value>;
- *         policy portability;
+ *     schema Portable with {
+ *         encoding = "json";
+ *     } {
+ *         value: Value;
  *     }
  *
- * Required negative tests:
+ *     schema Evolving {
+ *         value: Value;
+ *
+ *         evolve version {
+ *             add field extra: Value;
+ *             rename field value to result;
+ *         }
+ *     }
+ *
+ * NEGATIVE:
  *
  *     schema
  *
  *     schema Name {
  *
- *     schema Name { : Type; }
+ *     schema Name {
+ *         : Type;
+ *     }
  *
  *     schema Name {
  *         field: ;
@@ -1336,158 +1204,79 @@ schemaPolicyEntry
  *         constraint();
  *     }
  *
- * Required boundary tests:
+ * BOUNDARY:
  *
- *     - empty schema;
- *     - one field;
+ *     - empty schemas;
+ *     - one-field schemas;
  *     - many fields;
- *     - deeply nested type expressions;
- *     - long identifiers;
+ *     - deeply nested types;
  *     - deeply qualified names;
  *     - many keys;
- *     - many constraints;
+ *     - many indexes;
  *     - many relationships;
- *     - long evolution sequences.
+ *     - many constraints;
+ *     - long evolution histories;
+ *     - arbitrary schema options.
  *
- * Required scalability tests:
+ * SCALABILITY:
  *
- *     - generated schemas with increasing field counts;
- *     - generated nested schemas;
- *     - generated generic schemas;
- *     - generated constraint sets;
- *     - generated relationship sets;
- *     - generated evolution histories.
+ *     Generated schema sizes must grow with available test/compiler resources.
  *
- * Tests MUST NOT define a language maximum merely because a fixture has a
- * particular size.
+ * Tests MUST NOT convert fixture size into a language maximum.
  *
- * Required determinism tests:
+ * DETERMINISM:
  *
- *     identical source
- *         -> identical tokens
- *         -> identical parse structure
+ *     identical source + identical grammar configuration
+ *         ->
+ *     identical token sequence + parse structure
  *
- * independent of target hardware or available runtime resources.
+ * independently of target hardware or resource availability.
  *
- * Required POCO-REAF tests:
+ * POCO-REAF:
  *
- * The same schema source must be syntactically independent of:
+ * The same schema must remain syntactically valid regardless of whether its
+ * eventual realization is:
  *
- *     CPU count
- *     GPU count
- *     FPGA count
- *     QPU availability
- *     node count
- *     memory capacity
- *     storage capacity
- *     network topology
- *     provider
- *     device identifier
- *
- * ============================================================================
- * HARD-CODING AUDIT
- * ============================================================================
- *
- * This file passes the grammar-level hard-coding policy only if:
- *
- *     [x] no MAX_* capacity is introduced;
- *     [x] no fixed field count is introduced;
- *     [x] no fixed key count is introduced;
- *     [x] no fixed constraint count is introduced;
- *     [x] no fixed partition count is introduced;
- *     [x] no fixed replica count is introduced;
- *     [x] no fixed node count is introduced;
- *     [x] no fixed device count is introduced;
- *     [x] no physical address is required;
- *     [x] no provider is required;
- *     [x] no database implementation is required;
- *     [x] no machine width is encoded;
- *     [x] no memory capacity is encoded;
- *     [x] no tensor rank maximum is encoded;
- *     [x] no hardware topology is encoded.
- *
- * ============================================================================
- * RUST / ANTLR SAFETY
- * ============================================================================
- *
- * This grammar contains:
- *
- *     - no embedded Rust;
- *     - no target-language actions;
- *     - no semantic predicates;
- *     - no filesystem operations;
- *     - no network operations;
- *     - no runtime callbacks;
- *     - no hardware discovery;
- *     - no unsafe code.
- *
- * Generated parser integration must remain compatible with:
- *
- *     Rust 1.97
- *     Rust 1.97.1
- *     Rust 2021
+ *     embedded
+ *     CPU
+ *     GPU
+ *     FPGA
+ *     ASIC
+ *     accelerator
+ *     QPU
+ *     simulator
+ *     HPC
+ *     cluster
+ *     distributed
+ *     cloud
+ *     future execution substrate
  *
  * ============================================================================
  * COMPLETION CRITERIA
  * ============================================================================
  *
- * This file is complete when:
+ * This file is DONE when:
  *
- *     [x] schema syntax has one owner;
- *     [x] record syntax is not duplicated;
- *     [x] names are delegated;
- *     [x] types are delegated;
- *     [x] expressions are delegated;
- *     [x] attributes are delegated;
- *     [x] generic parameters are delegated;
- *     [x] semantic validation remains downstream;
- *     [x] IR construction remains downstream;
- *     [x] physical storage remains downstream;
- *     [x] hardware realization remains downstream;
- *     [x] quantum::ir remains canonical;
- *     [x] POCO-REAF is preserved;
- *     [x] no universal hardware limit is encoded;
- *     [x] source parsing is deterministic;
- *     [x] scalability is structural rather than enumerative;
- *     [x] Rust integration requires no unsafe;
- *     [x] positive tests are specified;
- *     [x] negative tests are specified;
- *     [x] boundary tests are specified;
- *     [x] scalability tests are specified;
- *     [x] portability tests are specified;
- *     [x] cross-domain integration is specified.
+ *     [x] It is the sole schema syntax owner.
+ *     [x] It consumes ZamaniLexer.
+ *     [x] It composes canonical Core/Types/Expressions.
+ *     [x] It uses canonical token names.
+ *     [x] It does not define a second type system.
+ *     [x] It does not define a second expression system.
+ *     [x] It does not define a second record system.
+ *     [x] It does not define a second data IR.
+ *     [x] It does not select hardware.
+ *     [x] It does not select storage.
+ *     [x] It does not perform resource discovery.
+ *     [x] It has no capacity constants.
+ *     [x] It has no fixed quantum limits.
+ *     [x] It has no target-specific assumptions.
+ *     [x] It preserves source structure for AST construction.
+ *     [x] It is deterministic.
+ *     [x] It requires no unsafe Rust.
  *
- * ============================================================================
- * FINAL INVARIANT
- * ============================================================================
- *
- * A Zamani schema describes logical data meaning.
- *
- * It does not describe the accidental limitations of the machine currently
- * available.
- *
- * Therefore:
- *
- *     schema intent
- *          |
- *          v
- *     semantic validation
- *          |
- *          v
- *     canonical data representation
- *          |
- *          v
- *     optimization
- *          |
- *          v
- *     scheduling / placement
- *          |
- *          v
- *     storage / network / accelerator / quantum-classical realization
- *
- * This is the schema-layer contribution to:
- *
- *     Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
+ * Repository integration is complete only after the data dispatcher and
+ * lexical vocabulary changes below are applied.
  *
  * ============================================================================
  */
