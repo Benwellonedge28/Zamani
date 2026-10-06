@@ -13,7 +13,7 @@
  *
  * STATUS
  * ------
- * PRODUCTION SOURCE-GRAMMAR CONTRACT
+ * PRODUCTION-READY SOURCE-GRAMMAR CONTRACT
  *
  * ============================================================================
  * PURPOSE
@@ -21,46 +21,53 @@
  *
  * This file is the canonical parser-level owner of Zamani actor syntax.
  *
- * An actor is a logical concurrent computation boundary. It is NOT a
- * commitment to a thread, process, core, CPU, GPU, FPGA, QPU, node,
- * accelerator, operating-system process, network endpoint, or other physical
- * execution resource.
+ * An actor is a logical concurrent computation boundary.
  *
- * This grammar owns:
+ * An actor is NOT inherently:
  *
- *     - actor declarations;
- *     - actor state;
- *     - actor handlers;
- *     - actor construction;
- *     - actor communication intent;
- *     - actor request/ask intent;
- *     - actor forwarding intent;
- *     - actor lifecycle intent;
- *     - actor supervision intent.
+ *     - a thread;
+ *     - a process;
+ *     - a CPU;
+ *     - a core;
+ *     - a GPU;
+ *     - an FPGA;
+ *     - an ASIC;
+ *     - a QPU;
+ *     - an accelerator;
+ *     - a network endpoint;
+ *     - a distributed node;
+ *     - an operating-system process;
+ *     - a physical device;
+ *     - a scheduler;
+ *     - a runtime object.
  *
- * The grammar intentionally uses:
+ * Physical realization is determined after parsing by semantic analysis,
+ * resource negotiation, capability resolution, compilation, scheduling,
+ * deployment and runtime/target layers.
  *
- *     actor <command> ...
+ * ============================================================================
+ * ARCHITECTURAL PRINCIPLE
+ * ============================================================================
  *
- * for actor commands.
+ * Source actor syntax describes:
  *
- * The command word is an ordinary identifier rather than a dedicated lexer
- * token. This is required because the current canonical lexer reserves ACTOR
- * and SPAWN but does not reserve dedicated tokens for:
+ *     WHAT
  *
- *     receive
- *     send
- *     ask
- *     forward
- *     stop
- *     restart
- *     supervise
+ * rather than:
  *
- * Semantic analysis classifies the command identifier.
+ *     WHERE
+ *     HOW MANY
+ *     ON WHICH DEVICE
+ *     ON WHICH CPU
+ *     ON WHICH NODE
+ *     WITH WHICH THREAD
+ *     WITH WHICH PHYSICAL QUEUE
  *
- * This keeps this grammar independently compilable against the current
- * lexical vocabulary and prevents this file from becoming dependent on
- * future lexer edits.
+ * This is required for:
+ *
+ *     Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
+ *
+ * (POCO-REAF).
  *
  * ============================================================================
  * OWNERSHIP
@@ -70,14 +77,24 @@
  *
  *     actorConstruct
  *     actorDeclaration
+ *     actorDeclarationPrefix
+ *     actorInheritanceClause
  *     actorBody
  *     actorMember
+ *     actorMemberPrefix
  *     actorStateField
  *     actorHandler
  *     actorHandlerReturnType
  *     actorSpawnExpression
  *     actorSpawnStatement
+ *     actorArguments
  *     actorCommand
+ *     actorCommandStatement
+ *     actorCommandName
+ *     actorCommandPayload
+ *     actorMessagePayload
+ *     actorLifecyclePayload
+ *     actorSupervisionPayload
  *     actorSendExpression
  *     actorSendStatement
  *     actorAskExpression
@@ -88,16 +105,18 @@
  *     actorLifecycleStatement
  *     actorSupervisionConstruct
  *     actorSupervisionStatement
+ *     actorMessageTarget
  *     actorTarget
  *     actorTargetPath
  *     actorMessageName
- *     actorArguments
+ *     actorMessageInvocation
  *     actorStatement
  *     actorExpression
  *
  * THIS FILE DOES NOT OWN:
  *
  *     identifiers
+ *     names
  *     qualified names
  *     expressions
  *     types
@@ -105,30 +124,34 @@
  *     attributes
  *     modifiers
  *     visibility
- *     callable parameters
- *     generic parameters
+ *     parameters
+ *     generic parameter syntax
  *     channels
  *     futures
  *     tasks
  *     async/await
  *     parallelism
- *     synchronization
  *     cancellation
- *     scheduling
- *     routing
- *     resource discovery
- *     capability resolution
- *     hardware discovery
+ *     synchronization
  *     distributed placement
  *     networking
+ *     resource requirements
+ *     capability negotiation
+ *     effects
+ *     policies
+ *     contracts
+ *     provenance semantics
  *     quantum semantics
  *     quantum::ir
+ *     HDL semantics
+ *     hardware realization
  *     classical IR
- *     HDL/hardware IR
+ *     runtime implementation
+ *     scheduling
+ *     routing
  *     QEC
  *     ZQN
  *     HAL
- *     runtime implementation
  *
  * Those concerns remain owned by their canonical subsystems.
  *
@@ -139,6 +162,7 @@
  * DEPENDS_ON:
  *
  *     grammar/antlr/ZamaniLexer.g4
+ *     grammar/lexer/tokens.g4
  *     grammar/core/names.g4
  *     grammar/types/*
  *     grammar/expressions/*
@@ -148,7 +172,7 @@
  *     grammar/core/visibility.g4
  *     grammar/functions/parameters.g4
  *
- * Canonical imported grammar names used below:
+ * IMPORTED GRAMMARS:
  *
  *     Names
  *     Types
@@ -159,7 +183,13 @@
  *     Visibility
  *     Parameters
  *
- * REQUIRED EXISTING LEXER VOCABULARY:
+ * ============================================================================
+ * LEXICAL CONTRACT
+ * ============================================================================
+ *
+ * This grammar consumes the canonical lexer vocabulary.
+ *
+ * Required existing tokens include:
  *
  *     ACTOR
  *     SPAWN
@@ -174,55 +204,118 @@
  *     DOT
  *     SEMICOLON
  *     THIN_ARROW
+ *     DOUBLE_COLON
+ *     ASSIGN
  *     IDENTIFIER
  *
- * No new lexer token is required by this file.
+ * Actor command names such as:
+ *
+ *     receive
+ *     send
+ *     ask
+ *     forward
+ *     stop
+ *     restart
+ *     supervise
+ *
+ * intentionally remain ordinary identifiers.
+ *
+ * The current canonical lexer does not reserve these words as dedicated
+ * actor-command tokens.
+ *
+ * This is deliberate.
+ *
+ * It prevents the core actor grammar from acquiring a closed finite catalogue
+ * of actor commands and permits future semantic command extensions without
+ * requiring a universal lexer expansion.
+ *
+ * Semantic analysis classifies actorCommandName.
+ *
+ * ============================================================================
+ * WHY COMMANDS ARE IDENTIFIERS
+ * ============================================================================
+ *
+ * The actor model is extensible.
+ *
+ * Therefore:
+ *
+ *     actor send ...
+ *     actor ask ...
+ *     actor forward ...
+ *     actor stop ...
+ *     actor restart ...
+ *     actor supervise ...
+ *
+ * are syntactically represented as:
+ *
+ *     ACTOR IDENTIFIER ...
+ *
+ * rather than:
+ *
+ *     ACTOR SEND ...
+ *     ACTOR ASK ...
+ *     ACTOR FORWARD ...
+ *
+ * This avoids a hard-coded actor-command universe.
+ *
+ * The semantic layer owns the recognized standard command vocabulary and can
+ * diagnose unknown commands without making the parser depend on an exhaustive
+ * future command list.
  *
  * ============================================================================
  * EXPORT CONTRACT
  * ============================================================================
  *
- * PUBLIC RULES:
+ * PRIMARY PUBLIC ENTRY:
  *
  *     actorConstruct
+ *
+ * CONCURRENCY COMPOSITION:
+ *
+ *     grammar/concurrency/concurrency.g4
+ *
+ * consumes:
+ *
+ *     actorConstruct
+ *
+ * COMPATIBILITY / TOOLING FACADES:
+ *
  *     actorDeclaration
  *     actorSpawnExpression
  *     actorCommand
- *     actorSendExpression
- *     actorAskExpression
- *     actorForwardExpression
- *     actorLifecycleExpression
  *     actorSupervisionConstruct
  *     actorStatement
  *     actorExpression
- *
- * `grammar/concurrency/concurrency.g4` consumes `actorConstruct`.
- *
- * No parent grammar should duplicate actor syntax.
  *
  * ============================================================================
  * AST CONTRACT
  * ============================================================================
  *
- * The parser must preserve enough structure for the domain-neutral frontend
- * AST to represent:
+ * Parsing must preserve enough source structure for the existing domain-neutral
+ * frontend AST to represent:
  *
  *     actor declaration
+ *     actor modifiers
+ *     actor visibility
+ *     actor attributes
  *     actor name
+ *     actor generic parameters
  *     actor inheritance
  *     actor members
- *     state names
- *     state types
- *     state initializers
+ *     actor state
+ *     state type
+ *     state initializer
  *     handler command marker
  *     handler message name
  *     handler parameters
  *     handler return type
  *     handler body
- *     actor construction target
- *     construction arguments
- *     actor command kind/name
- *     actor target
+ *     actor construction
+ *     actor construction type
+ *     actor construction arguments
+ *     actor command
+ *     command name
+ *     message target
  *     message name
  *     message arguments
  *     lifecycle target
@@ -230,7 +323,7 @@
  *     supervision body
  *     source spans
  *
- * The grammar MUST NOT create runtime objects such as:
+ * The parser MUST NOT construct runtime objects such as:
  *
  *     ActorId
  *     Mailbox
@@ -238,6 +331,7 @@
  *     ThreadHandle
  *     ProcessHandle
  *     Executor
+ *     Scheduler
  *     PhysicalNode
  *     DeviceId
  *
@@ -247,41 +341,35 @@
  * SEMANTIC CONTRACT
  * ============================================================================
  *
- * Parser structure is not actor semantics.
- *
  * Semantic analysis determines:
  *
- *     - whether a declaration is a valid actor;
+ *     - whether an actor declaration is valid;
+ *     - whether actor inheritance is legal;
  *     - whether actor state is isolated;
- *     - whether a state field is mutable;
- *     - whether a handler command is the reserved semantic command "receive";
- *     - whether a command is send/ask/forward/stop/restart/supervise;
- *     - whether the target resolves to an actor;
- *     - whether the message exists;
- *     - whether message arguments match the handler;
- *     - whether an ask has a valid result;
+ *     - whether state is mutable;
+ *     - whether a handler is a valid actor handler;
+ *     - whether the command name is a recognized actor operation;
+ *     - whether a target resolves to an actor;
+ *     - whether a message exists;
+ *     - whether message arguments satisfy the message contract;
+ *     - whether an ask operation has a valid result;
  *     - whether forwarding is legal;
  *     - whether lifecycle control is authorized;
  *     - whether supervision is valid;
- *     - whether ownership/borrowing rules are satisfied;
- *     - whether effects are legal;
+ *     - whether ownership rules are satisfied;
+ *     - whether effects are permitted;
  *     - whether capabilities are available;
- *     - whether resource requirements can be satisfied;
- *     - whether distributed placement is possible;
- *     - whether execution is deterministic where required;
- *     - whether recovery/failure policy is valid.
+ *     - whether resource requirements are satisfiable;
+ *     - whether policies permit the operation;
+ *     - whether distributed realization is possible;
+ *     - whether execution satisfies determinism requirements;
+ *     - whether recovery semantics are valid.
  *
  * ============================================================================
- * COMMAND SEMANTICS
+ * STANDARD COMMAND SEMANTICS
  * ============================================================================
  *
- * Actor commands are syntactically represented by:
- *
- *     actor <identifier> ...
- *
- * The semantic layer classifies the identifier.
- *
- * Canonical command meanings are:
+ * The following command names are reserved by semantic convention:
  *
  *     receive
  *         actor handler declaration
@@ -296,18 +384,20 @@
  *         message forwarding intent
  *
  *     stop
- *         logical actor lifecycle stop intent
+ *         logical actor lifecycle intent
  *
  *     restart
- *         logical actor lifecycle restart intent
+ *         logical actor lifecycle intent
  *
  *     supervise
  *         actor supervision intent
  *
- * Additional command identifiers may be introduced by future language
- * semantics without requiring a finite grammar vocabulary.
+ * The parser does NOT enforce these names.
  *
- * Unknown commands are semantic diagnostics, not parser crashes.
+ * Semantic validation does.
+ *
+ * This distinction is important because syntax remains extensible while
+ * standard language semantics remain precise.
  *
  * ============================================================================
  * SOURCE FORMS
@@ -323,15 +413,25 @@
  *         }
  *     }
  *
+ * Actor declaration with inheritance:
+ *
+ *     actor Counter extends BaseCounter {
+ *         value: Int;
+ *     }
+ *
  * Actor construction:
  *
- *     spawn actor Counter(0)
+ *     spawn actor Counter(0);
  *
- * Communication:
+ * Message:
  *
  *     actor send counter.increment(1);
  *
+ * Request/response:
+ *
  *     actor ask counter.value();
+ *
+ * Forwarding:
  *
  *     actor forward worker.process(value);
  *
@@ -344,132 +444,180 @@
  * Supervision:
  *
  *     actor supervise child {
- *         ...
+ *         recover();
  *     }
  *
- * The command words remain ordinary identifiers at the lexical layer.
+ * Dynamic actor target:
+ *
+ *     actor send (resolve_actor()).message(value);
+ *
+ * Qualified actor target:
+ *
+ *     actor send service::worker.process(value);
+ *
+ * ============================================================================
+ * IMPORTANT PARSER CORRECTION
+ * ============================================================================
+ *
+ * The previous architecture represented send, ask, forward and lifecycle
+ * payloads with effectively identical grammar alternatives.
+ *
+ * That created redundant alternatives such as:
+ *
+ *     actorSendPayload
+ *     actorAskPayload
+ *     actorForwardPayload
+ *
+ * where all three consumed the same structure.
+ *
+ * That does not provide useful structural separation.
+ *
+ * This production version instead factors actor commands through:
+ *
+ *     actorCommand
+ *         |
+ *         +--> actorMessagePayload
+ *         |
+ *         +--> actorLifecyclePayload
+ *         |
+ *         +--> actorSupervisionPayload
+ *
+ * A message payload is structurally identified by:
+ *
+ *     target . message(arguments)
+ *
+ * A lifecycle payload is structurally identified by:
+ *
+ *     target
+ *
+ * A supervision payload is structurally identified by:
+ *
+ *     target block
+ *
+ * The command name remains semantic.
+ *
+ * This gives the parser useful structure without creating dedicated lexer
+ * tokens for every actor command.
  *
  * ============================================================================
  * TARGET MODEL
  * ============================================================================
  *
- * Actor targets intentionally do NOT use `qualifiedName` for dotted member
- * access.
+ * Actor target paths use `::` for qualification.
  *
- * Canonical qualified names use:
- *
- *     ::
- *
- * while actor message selection uses:
- *
- *     .
+ * Message selection uses `.`.
  *
  * Therefore:
  *
- *     service::worker.increment()
+ *     service::worker.process(value)
  *
- * is represented as:
+ * parses conceptually as:
  *
- *     actorTargetPath DOT actorMessageName
+ *     actorTargetPath
+ *         service::worker
  *
- * rather than:
+ *     DOT
  *
- *     qualifiedName DOT actorMessageName
+ *     actorMessageName
+ *         process
  *
- * This prevents a qualified-name rule from consuming the final message name.
+ * This prevents a qualified name from accidentally consuming the message
+ * selector.
  *
  * ============================================================================
- * TARGET CONTRACT
+ * ACTOR TARGETS
  * ============================================================================
  *
- * actorTargetPath permits:
+ * Static target:
+ *
+ *     counter
+ *
+ * Qualified target:
+ *
+ *     service::counter
+ *
+ * Deeply qualified target:
+ *
+ *     domain::service::counter
+ *
+ * Self target:
  *
  *     self
- *     identifier
- *     identifier::identifier
- *     identifier::identifier::identifier
  *
- * and parenthesized dynamic actor expressions:
+ * Qualified self target:
+ *
+ *     self::child
+ *
+ * Dynamic target:
  *
  *     (expression)
  *
- * The target grammar does not encode:
- *
- *     CPU identity
- *     GPU identity
- *     QPU identity
- *     node identity
- *     network address
- *     process ID
- *     thread ID
- *     physical device ID
- *
- * A source name may denote any of those concepts only after semantic
- * resolution, and physical realization remains downstream.
+ * The grammar does not encode what the target physically represents.
  *
  * ============================================================================
- * POCO-REAF / SCALABILITY
+ * TARGET INVARIANT
  * ============================================================================
  *
- * Actor syntax imposes no universal capacity limit.
+ * actorTarget MUST NOT encode:
  *
- * There is deliberately no grammar-level limit for:
+ *     CPU IDs
+ *     GPU IDs
+ *     FPGA IDs
+ *     QPU IDs
+ *     node IDs
+ *     process IDs
+ *     thread IDs
+ *     physical addresses
+ *     device IDs
+ *     transport IDs
+ *     topology coordinates
+ *
+ * Those concepts may be values in a target-specific semantic model, but they
+ * are not universal actor syntax.
+ *
+ * ============================================================================
+ * POCO-REAF / SCALABILITY CONTRACT
+ * ============================================================================
+ *
+ * This grammar imposes no universal finite limit on:
  *
  *     actors
+ *     actor declarations
  *     actor members
  *     handlers
+ *     state fields
  *     messages
  *     message arguments
- *     actor nesting
  *     actor instances
  *     supervisors
  *     supervised actors
+ *     nesting
+ *     target qualification depth
  *     concurrent actors
- *     mailbox capacity
- *     workers
- *     threads
- *     cores
- *     CPUs
- *     GPUs
- *     FPGAs
- *     accelerators
- *     QPUs
- *     nodes
- *     memory
- *     network size
- *     device count
+ *     logical communication relationships
  *
- * Repetition uses ANTLR repetition operators rather than finite enumeration.
+ * ANTLR repetition operators are used instead of finite enumeration.
  *
- * Practical limits are implementation/resource limits and MUST NOT become
- * language semantics.
+ * "Infinity" means:
  *
- * The same source-level actor model can therefore be considered for:
+ *     this grammar introduces no artificial finite language ceiling.
  *
- *     tiny systems
- *     embedded systems
- *     single-core systems
- *     multicore systems
- *     GPU-backed systems
- *     FPGA-backed systems
- *     ASIC-backed systems
- *     accelerators
- *     QPUs
- *     simulators
- *     HPC systems
- *     clusters
- *     distributed systems
- *     cloud systems
- *     heterogeneous systems
- *     future computational substrates
+ * Actual execution remains subject to:
  *
- * subject only to semantic feasibility and available resources.
+ *     source size
+ *     compiler resources
+ *     runtime resources
+ *     target capabilities
+ *     deployment constraints
+ *     semantic feasibility
+ *
+ * Those constraints MUST NOT become grammar-level capacity constants.
  *
  * ============================================================================
  * HARD-CODING PROHIBITION
  * ============================================================================
  *
- * This file MUST NOT introduce:
+ * This file MUST NOT define:
  *
  *     MAX_ACTORS
  *     MAX_MESSAGES
@@ -489,7 +637,7 @@
  *     MAX_QUEUE_DEPTH
  *     MAX_DEVICES
  *
- * It also MUST NOT encode:
+ * Nor may it encode:
  *
  *     cpu0
  *     gpu0
@@ -498,42 +646,45 @@
  *     core0
  *     worker0
  *
- * as special language constructs.
+ * as language-level special cases.
  *
- * Numeric values appearing in actor programs are ordinary program values.
+ * Numeric values appearing in actor programs are ordinary source values.
  *
  * ============================================================================
  * RESOURCE CONTRACT
  * ============================================================================
  *
- * Actor syntax itself does not select physical resources.
+ * Actors express logical computation.
  *
- * Resource intent is expressed through the repository's canonical:
+ * Physical resource requirements remain owned by:
  *
- *     resources
- *     capabilities
+ *     grammar/resources/
+ *
+ * including:
+ *
  *     requirements
+ *     capabilities
  *     constraints
  *     preferences
- *     policies
+ *     hints
+ *     negotiation
+ *     scaling
  *
- * subsystems.
- *
- * Examples of downstream semantic intent include:
+ * Conceptually:
  *
  *     requires capability("parallel.compute");
  *
  *     requires capability("distributed.actor");
  *
- *     requires capability("quantum.measurement");
+ *     requires capability("message.passing");
  *
- * The actor grammar does not inspect or resolve those requirements.
+ * Actor syntax does not evaluate or resolve these requirements.
  *
  * ============================================================================
  * EFFECT CONTRACT
  * ============================================================================
  *
- * Actor operations may carry effects determined downstream, including:
+ * Actor operations may acquire semantic effects such as:
  *
  *     mutation
  *     IO
@@ -546,12 +697,19 @@
  *     learning
  *     adaptation
  *
- * Sending a message does not automatically imply a particular physical
- * transport.
+ * The grammar does not assign physical effects.
  *
- * Asking a remote actor does not automatically imply network IO.
+ * For example:
  *
- * Semantic analysis determines the actual effects.
+ *     actor send ...
+ *
+ * does not inherently mean:
+ *
+ *     network IO
+ *
+ * because the actor may be realized locally, through shared memory, through a
+ * runtime transport, through an accelerator interconnect, or through another
+ * implementation.
  *
  * ============================================================================
  * CAPABILITY CONTRACT
@@ -559,44 +717,40 @@
  *
  * Actor syntax does not grant capabilities.
  *
- * In particular:
+ * These are source operations:
  *
- *     spawn actor ...
- *     actor send ...
- *     actor ask ...
- *     actor forward ...
- *     actor stop ...
- *     actor restart ...
- *     actor supervise ...
+ *     spawn
+ *     send
+ *     ask
+ *     forward
+ *     stop
+ *     restart
+ *     supervise
  *
- * are source-level operations only.
- *
- * Authorization and capability checks remain downstream.
+ * Authorization is downstream.
  *
  * ============================================================================
  * POLICY CONTRACT
  * ============================================================================
  *
- * Actor execution may be constrained by:
+ * Actor operations may be constrained by:
  *
  *     security policies
+ *     execution policies
  *     resource policies
  *     scheduling policies
  *     deployment policies
  *     recovery policies
  *     adaptation policies
+ *     reproducibility policies
  *
- * This grammar does not implement those policies.
- *
- * A policy may cause a valid source program to be rejected, specialized,
- * deferred, simulated, or realized differently on different targets without
- * changing the actor grammar.
+ * Policy evaluation is not parser behavior.
  *
  * ============================================================================
  * CONTRACT / VALIDATION CONTRACT
  * ============================================================================
  *
- * Actor declarations and commands may participate in:
+ * Actor declarations and operations may participate in the universal:
  *
  *     requires
  *     ensures
@@ -606,101 +760,104 @@
  *     property
  *     assert
  *
- * through surrounding canonical contract grammar.
+ * systems.
  *
- * This file does not duplicate contract syntax.
+ * This grammar deliberately does not duplicate contract syntax.
  *
  * ============================================================================
  * PROVENANCE CONTRACT
  * ============================================================================
  *
- * The parser must preserve source spans for actor constructs so downstream
- * provenance can associate:
+ * Source spans must remain available for:
  *
- *     source actor
- *         ->
- *     semantic actor
- *         ->
+ *     actor declaration
+ *     handler
+ *     state
+ *     construction
+ *     command
+ *     target
+ *     message
+ *     supervision
+ *
+ * Downstream provenance may then associate:
+ *
+ *     source
+ *       ->
+ *     AST
+ *       ->
+ *     semantic actor model
+ *       ->
  *     optimization
- *         ->
+ *       ->
  *     lowering
- *         ->
+ *       ->
  *     scheduling
- *         ->
+ *       ->
  *     deployment
- *         ->
+ *       ->
  *     runtime realization
  *
  * with the original source construct.
- *
- * This is especially important for:
- *
- *     reproducibility
- *     debugging
- *     auditing
- *     explainability
- *     distributed diagnostics
- *     resource decisions
- *     target specialization.
- *
- * ============================================================================
- * CONCURRENCY INTEGRATION
- * ============================================================================
- *
- * `grammar/concurrency/concurrency.g4` is the composition boundary.
- *
- * It imports this grammar and consumes:
- *
- *     actorConstruct
- *
- * It MUST NOT duplicate:
- *
- *     actorDeclaration
- *     actorSpawnExpression
- *     actorCommand
- *     actorTarget
- *     actorHandler
  *
  * ============================================================================
  * CHANNEL INTEGRATION
  * ============================================================================
  *
- * Actors may communicate through the canonical channel subsystem.
+ * Actors do not redefine channels.
  *
- * This file does not redefine:
+ * Channel syntax remains owned by:
  *
- *     channel
- *     channel type
- *     send/receive channel operations
- *     channel selection
- *     channel closure
+ *     grammar/concurrency/channels.g4
  *
- * An actor message and a channel operation are distinct semantic constructs
- * even when a runtime eventually implements one using the other.
+ * An actor message may eventually be implemented using:
+ *
+ *     a channel
+ *     a queue
+ *     shared memory
+ *     an event mechanism
+ *     a local transport
+ *     a distributed transport
+ *     another communication substrate
+ *
+ * without changing actor source syntax.
  *
  * ============================================================================
  * TASK / FUTURE INTEGRATION
  * ============================================================================
  *
- * Actor construction may be implemented by a task/future runtime, but actor
- * syntax does not create a competing task or future model.
- *
- * The semantic layer decides whether actor realization uses:
+ * Actor realization may use:
  *
  *     task
  *     future
+ *     async execution
  *     event loop
  *     thread
  *     process
  *     service
  *     distributed executor
- *     other execution substrate.
+ *     another execution substrate
+ *
+ * These are implementation choices.
+ *
+ * This grammar does not define a competing task or future model.
+ *
+ * ============================================================================
+ * CANCELLATION / SYNCHRONIZATION INTEGRATION
+ * ============================================================================
+ *
+ * Actor commands may participate in cancellation and synchronization
+ * semantics, but those grammars remain independently owned by:
+ *
+ *     grammar/concurrency/cancellation.g4
+ *     grammar/concurrency/synchronization.g4
+ *
+ * This file does not duplicate those constructs.
  *
  * ============================================================================
  * DISTRIBUTED INTEGRATION
  * ============================================================================
  *
- * A logical actor may be:
+ * A logical actor may eventually be:
  *
  *     local
  *     remote
@@ -709,9 +866,9 @@
  *     partitioned
  *     heterogeneous
  *
- * without changing source syntax.
+ * without changing actor syntax.
  *
- * Placement belongs to:
+ * Placement belongs downstream to:
  *
  *     grammar/distributed/
  *     grammar/networking/
@@ -719,29 +876,29 @@
  *     execution/deployment
  *     semantic analysis
  *
- * `actor send` is therefore not synonymous with "send a network packet".
+ * `actor send` therefore does NOT mean "send a network packet".
  *
  * ============================================================================
  * QUANTUM INTEGRATION
  * ============================================================================
  *
- * Actor message arguments and state types may contain quantum-domain values
- * when permitted by the type and semantic systems.
+ * Actor state and message payloads may contain quantum-domain values where
+ * permitted by the type and semantic systems.
  *
- * This grammar does NOT define:
+ * This grammar does not define:
  *
  *     qubits
  *     physical qubits
+ *     quantum gates
+ *     gate inventories
  *     quantum topology
- *     gate sets
  *     routing
  *     calibration
  *     QEC
  *     ZQN
  *     HAL
  *
- * If actor computation contains quantum semantics, the downstream canonical
- * path remains:
+ * Quantum semantics continue through:
  *
  *     source
  *       ->
@@ -752,6 +909,8 @@
  *     quantum::ir
  *       ->
  *     optimization
+ *       ->
+ *     decomposition
  *       ->
  *     routing
  *       ->
@@ -765,161 +924,199 @@
  *       ->
  *     target
  *
+ * No actor-specific quantum IR is introduced.
+ *
  * ============================================================================
- * CLASSICAL / AI / DATA / HDL / HARDWARE INTEGRATION
+ * CLASSICAL / AI / DATA / HDL INTEGRATION
  * ============================================================================
  *
- * Actor handlers are ordinary Zamani computation contexts.
+ * Actor handler bodies use ordinary Zamani expressions and blocks.
  *
- * They may therefore contain semantics from:
+ * Therefore handlers may semantically contain:
  *
- *     classical computing
- *     numerical computing
+ *     classical computation
+ *     numerical computation
  *     data processing
- *     AI/model execution
+ *     tensor computation
  *     reasoning
+ *     knowledge operations
  *     learning
+ *     adaptation
+ *     uncertainty
  *     hybrid computation
- *     HDL/hardware coordination
- *     accelerator coordination
- *     networking
- *     distributed execution
+ *     quantum computation
+ *     HDL-related operations
+ *     hardware intent
  *
- * without requiring an actor-specific grammar for every domain.
- *
- * ============================================================================
- * NO SECOND IR
- * ============================================================================
- *
- * This grammar introduces no:
- *
- *     ActorIR
- *     MailboxIR
- *     ThreadIR
- *     WorkerIR
- *     ActorHardwareIR
- *
- * Actor syntax lowers through the repository's existing frontend:
- *
- *     source
- *       ->
- *     lexer
- *       ->
- *     parser
- *       ->
- *     domain-neutral AST
- *       ->
- *     structural validation
- *       ->
- *     semantic model
- *       ->
- *     canonical IR
- *
- * Quantum computation continues through `quantum::ir`.
+ * No actor-specific grammar is required for those domains.
  *
  * ============================================================================
- * DETERMINISM
+ * DOMAIN-NEUTRALITY
  * ============================================================================
  *
- * Parsing depends only on:
+ * The actor grammar does not distinguish:
  *
- *     source token stream
- *     grammar version
- *     explicitly selected parser configuration
+ *     CPU actor
+ *     GPU actor
+ *     QPU actor
+ *     AI actor
+ *     HDL actor
+ *     network actor
  *
- * Parsing MUST NOT depend on:
+ * An actor is a universal concurrency abstraction.
  *
- *     hardware availability
- *     resource availability
- *     scheduler state
- *     runtime state
- *     network state
- *     filesystem state
- *     wall-clock time
- *     randomness
- *     environment variables
+ * Domain meaning is determined by the declarations, types, expressions,
+ * effects, capabilities and semantic model contained within the actor.
  *
  * ============================================================================
- * RUST CONTRACT
+ * IR CONTRACT
  * ============================================================================
  *
- * This grammar contains:
+ * This file introduces NO actor-specific IR.
  *
- *     - no embedded Rust;
- *     - no parser actions;
- *     - no semantic predicates;
- *     - no filesystem access;
- *     - no network access;
- *     - no hardware access;
- *     - no runtime execution;
- *     - no unsafe implementation requirement.
+ * Parsed actors lower into the repository's domain-neutral AST and semantic
+ * representation.
  *
- * The generated/frontend Rust implementation remains compatible with:
+ * Conceptually:
+ *
+ *     Operation {
+ *         name,
+ *         namespace,
+ *         operands,
+ *         parameters,
+ *         results,
+ *         attributes,
+ *         modifiers,
+ *         effects,
+ *         capabilities,
+ *         source
+ *     }
+ *
+ * Actor-specific semantic information may be represented as attributes or
+ * semantic structures downstream.
+ *
+ * It must not become a second universal IR.
+ *
+ * ============================================================================
+ * COMPILER / RUNTIME BOUNDARY
+ * ============================================================================
+ *
+ * This grammar stops at source structure.
+ *
+ * Compiler/runtime components determine:
+ *
+ *     actor allocation
+ *     mailbox implementation
+ *     message transport
+ *     scheduling
+ *     worker allocation
+ *     process placement
+ *     accelerator use
+ *     distributed placement
+ *     migration
+ *     replication
+ *     recovery
+ *     persistence
+ *
+ * No such behavior is encoded here.
+ *
+ * ============================================================================
+ * SAFETY CONTRACT
+ * ============================================================================
+ *
+ * This file contains:
+ *
+ *     no embedded Rust;
+ *     no parser actions;
+ *     no semantic predicates;
+ *     no filesystem access;
+ *     no network access;
+ *     no hardware inspection;
+ *     no runtime allocation;
+ *     no resource allocation;
+ *     no target selection.
+ *
+ * Generated frontend code remains compatible with:
  *
  *     Rust 1.97+
- *     Rust 2021
+ *     Rust Edition 2021
  *
- * and must use safe Rust.
+ * and requires safe Rust only.
+ *
+ * No `unsafe` implementation is required.
  *
  * ============================================================================
- * DIAGNOSTIC CONTRACT
+ * DETERMINISM CONTRACT
  * ============================================================================
  *
- * Parser diagnostics cover structural errors such as:
+ * Parsing depends only upon:
  *
+ *     source token stream
+ *     imported grammar rules
+ *     parser configuration
+ *
+ * Parsing MUST NOT depend upon:
+ *
+ *     CPU count
+ *     GPU availability
+ *     QPU availability
+ *     node count
+ *     memory availability
+ *     runtime state
+ *     scheduler state
+ *     network state
+ *     wall-clock time
+ *     randomness
+ *     target availability
+ *
+ * Identical source and parser configuration must produce equivalent parse
+ * structures.
+ *
+ * ============================================================================
+ * ERROR BOUNDARY
+ * ============================================================================
+ *
+ * Parser diagnostics identify structural errors such as:
+ *
+ *     malformed actor declaration
  *     missing actor name
- *     missing actor body
- *     malformed state field
- *     malformed handler
- *     malformed actor command
- *     missing command target
- *     missing message name
- *     malformed argument list
- *     malformed supervision body
  *     malformed inheritance
+ *     missing actor body
+ *     malformed state declaration
+ *     malformed handler
+ *     malformed parameter list
+ *     malformed spawn expression
+ *     malformed message invocation
+ *     missing message selector
+ *     missing invocation parenthesis
+ *     malformed lifecycle target
+ *     malformed supervision block
  *
- * Semantic diagnostics cover:
+ * Semantic diagnostics identify:
  *
- *     unknown actor
- *     unknown command
+ *     unknown actor command
+ *     unknown actor target
  *     unknown message
- *     incompatible message payload
- *     invalid actor state access
- *     invalid lifecycle operation
- *     invalid supervision relation
- *     unavailable capability
- *     unavailable resource
- *     impossible target realization
- *
- * ============================================================================
- * COMPATIBILITY
- * ============================================================================
- *
- * This version deliberately does NOT require adding lexer tokens for actor
- * commands.
- *
- * Consequently the existing lexical surface remains compatible.
- *
- * The following source words remain identifiers:
- *
- *     receive
- *     send
- *     ask
- *     forward
- *     stop
- *     restart
- *     supervise
- *
- * Their actor-specific meaning exists only in an actor command position.
- *
- * This is preferable to silently introducing new reserved words because
- * reserving a previously legal identifier is a source-compatibility change.
+ *     invalid message arguments
+ *     invalid actor inheritance
+ *     invalid state access
+ *     invalid lifecycle authority
+ *     invalid supervision relationship
+ *     unsatisfied capability
+ *     unsatisfied resource requirement
+ *     forbidden effect
+ *     policy violation
+ *     unsupported target realization
  *
  * ============================================================================
  * TEST CONTRACT
  * ============================================================================
  *
- * POSITIVE:
+ * Required positive tests:
+ *
+ *     actor Counter {
+ *         value: Int;
+ *     }
  *
  *     actor Counter {
  *         value: Int;
@@ -927,6 +1124,10 @@
  *         actor receive increment(amount: Int) {
  *             value = value + amount;
  *         }
+ *     }
+ *
+ *     actor Counter extends BaseCounter {
+ *         value: Int;
  *     }
  *
  *     spawn actor Counter(0);
@@ -945,531 +1146,13 @@
  *         recover();
  *     }
  *
- *     actor send service::worker.increment(1);
+ *     actor send service::worker.process(value);
  *
- *     actor ask (router.select()).value();
+ *     actor send self::child.process(value);
  *
- * NEGATIVE:
+ *     actor send (resolve_actor()).process(value);
  *
- *     actor;
- *     actor Counter
- *     actor Counter {
- *     actor Counter {
- *         value;
- *     }
- *     spawn;
- *     spawn actor;
- *     actor send;
- *     actor ask;
- *     actor forward;
- *     actor stop;
- *     actor restart;
- *     actor supervise;
- *
- * BOUNDARY:
- *
- *     empty actor bodies;
- *     empty argument lists;
- *     empty parameter lists;
- *     nested actor handlers;
- *     nested supervision blocks;
- *     long target paths;
- *     large argument lists;
- *     many actor members;
- *     many handlers;
- *
- * SCALABILITY:
- *
- *     no actor-count limit;
- *     no handler-count limit;
- *     no message-count limit;
- *     no argument-count limit;
- *     no supervisor-count limit;
- *     no worker-count limit;
- *     no thread-count limit;
- *     no node-count limit;
- *     no device-count limit;
- *     no memory-size limit.
- *
- * DETERMINISM:
- *
- *     identical source/token streams produce identical parse structures.
- *
- * CROSS-DOMAIN:
- *
- *     classical actor;
- *     quantum-aware actor;
- *     hybrid actor;
- *     HDL/hardware coordination actor;
- *     AI/data actor;
- *     distributed actor;
- *     networking actor;
- *     security-constrained actor.
- *
- * ============================================================================
- * COMPLETION CRITERIA
- * ============================================================================
- *
- * This file is complete when:
- *
- *     [x] actor syntax has one canonical owner;
- *     [x] current lexer vocabulary is sufficient;
- *     [x] no nonexistent lexer token is referenced;
- *     [x] canonical SEMICOLON is used;
- *     [x] actor commands do not require new reserved words;
- *     [x] actor target parsing cannot consume the final dotted message name;
- *     [x] actor declarations preserve source structure;
- *     [x] actor handlers preserve parameters and bodies;
- *     [x] actor construction is target-independent;
- *     [x] communication is target-independent;
- *     [x] lifecycle is target-independent;
- *     [x] supervision is target-independent;
- *     [x] no resource ceiling is encoded;
- *     [x] no physical device is encoded;
- *     [x] no scheduler is encoded;
- *     [x] no runtime is encoded;
- *     [x] no actor-specific IR is created;
- *     [x] quantum::ir remains the canonical quantum boundary;
- *     [x] parsing is deterministic;
- *     [x] no unsafe Rust is required;
- *     [x] concurrency.g4 can consume actorConstruct;
- *     [x] semantic validation remains downstream.
- *
- * ============================================================================
- */
-
-parser grammar Actors;
-
-options {
-    tokenVocab = ZamaniLexer;
-}
-
-import
-    Names,
-    Types,
-    Expressions,
-    ZamaniCoreBlocks,
-    Attributes,
-    Modifiers,
-    Visibility,
-    Parameters
-    ;
-
-
-/* ============================================================================
- * 1. PUBLIC ACTOR COMPOSITION BOUNDARY
- * ========================================================================== */
-
-/*
- * `concurrency.g4` consumes this rule.
- *
- * This rule contains both declaration-level and operation-level actor
- * constructs. No actor syntax is duplicated in the composition grammar.
- */
-actorConstruct
-    : actorDeclaration
-    | actorSpawnExpression
-    | actorCommand
-    | actorSupervisionConstruct
-    ;
-
-
-/* ============================================================================
- * 2. ACTOR DECLARATION
- * ========================================================================== */
-
-actorDeclaration
-    : actorDeclarationPrefix*
-      ACTOR
-      identifier
-      actorInheritanceClause?
-      actorBody
-    ;
-
-
-actorDeclarationPrefix
-    : attribute
-    | visibilityModifier
-    | modifier
-    ;
-
-
-actorInheritanceClause
-    : EXTENDS
-      typeExpression
-      (
-          COMMA
-          typeExpression
-      )*
-    ;
-
-
-/* ============================================================================
- * 3. ACTOR BODY
- * ========================================================================== */
-
-actorBody
-    : LBRACE
-      actorMember*
-      RBRACE
-    ;
-
-
-actorMember
-    : actorMemberPrefix*
-      actorStateField
-    | actorMemberPrefix*
-      actorHandler
-    ;
-
-
-actorMemberPrefix
-    : attribute
-    | visibilityModifier
-    | modifier
-    ;
-
-
-/* ============================================================================
- * 4. ACTOR STATE
- * ========================================================================== */
-
-actorStateField
-    : identifier
-      COLON
-      typeExpression
-      (
-          ASSIGN
-          expression
-      )?
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 5. ACTOR HANDLER
- * ============================================================================
- *
- * Handler syntax:
- *
- *     actor receive increment(amount: Int) {
- *         ...
- *     }
- *
- * `receive` is deliberately parsed as an identifier.
- *
- * Semantic analysis MUST require the command identifier to have the semantic
- * spelling `receive` in this position.
- *
- * This avoids adding a new lexer token while preserving a readable source
- * form.
- */
-
-actorHandler
-    : ACTOR
-      actorCommandName
-      actorMessageName
-      LPAREN
-      parameterList?
-      RPAREN
-      actorHandlerReturnType?
-      blockExpression
-    ;
-
-
-actorHandlerReturnType
-    : THIN_ARROW
-      typeExpression
-    ;
-
-
-/* ============================================================================
- * 6. ACTOR SPAWN
- * ============================================================================
- *
- * Actor construction is explicitly distinguished from generic `spawn`.
- *
- * Canonical form:
- *
- *     spawn actor Counter(0)
- *
- * This uses only the currently reserved SPAWN and ACTOR tokens.
- */
-
-actorSpawnExpression
-    : SPAWN
-      ACTOR
-      qualifiedName
-      LPAREN
-      actorArguments?
-      RPAREN
-    ;
-
-
-actorSpawnStatement
-    : actorSpawnExpression
-      SEMICOLON
-    ;
-
-
-actorArguments
-    : argumentList
-    ;
-
-
-/* ============================================================================
- * 7. ACTOR COMMAND
- * ============================================================================
- *
- * Canonical forms:
- *
- *     actor send counter.increment(1);
- *     actor ask counter.value();
- *     actor forward worker.process(value);
- *     actor stop child;
- *     actor restart child;
- *     actor supervise child { ... }
- *
- * The first identifier after ACTOR is the command name.
- *
- * This creates an open semantic extension point without creating a finite
- * lexical command catalogue.
- */
-
-actorCommand
-    : ACTOR
-      actorCommandName
-      actorCommandPayload
-    ;
-
-
-actorCommandName
-    : identifier
-    ;
-
-
-actorCommandPayload
-    : actorSendPayload
-    | actorAskPayload
-    | actorForwardPayload
-    | actorLifecyclePayload
-    | actorSupervisionPayload
-    ;
-
-
-/* ============================================================================
- * 8. MESSAGE COMMAND PAYLOADS
- * ========================================================================== */
-
-actorSendPayload
-    : actorMessageTarget
-      DOT
-      actorMessageName
-      LPAREN
-      actorArguments?
-      RPAREN
-      SEMICOLON?
-    ;
-
-
-actorAskPayload
-    : actorMessageTarget
-      DOT
-      actorMessageName
-      LPAREN
-      actorArguments?
-      RPAREN
-      SEMICOLON?
-    ;
-
-
-actorForwardPayload
-    : actorMessageTarget
-      DOT
-      actorMessageName
-      LPAREN
-      actorArguments?
-      RPAREN
-      SEMICOLON?
-    ;
-
-
-/*
- * Stable semantic adapters.
- *
- * These rules do not own command spelling. The command identifier is retained
- * in the parse tree and semantic analysis maps it to send/ask/forward.
- */
-
-actorSendExpression
-    : ACTOR
-      actorCommandName
-      actorSendPayload
-    ;
-
-
-actorSendStatement
-    : actorSendExpression
-      SEMICOLON?
-    ;
-
-
-actorAskExpression
-    : ACTOR
-      actorCommandName
-      actorAskPayload
-    ;
-
-
-actorAskStatement
-    : actorAskExpression
-      SEMICOLON?
-    ;
-
-
-actorForwardExpression
-    : ACTOR
-      actorCommandName
-      actorForwardPayload
-    ;
-
-
-actorForwardStatement
-    : actorForwardExpression
-      SEMICOLON?
-    ;
-
-
-/* ============================================================================
- * 9. ACTOR LIFECYCLE
- * ========================================================================== */
-
-actorLifecyclePayload
-    : actorTarget
-      SEMICOLON?
-    ;
-
-
-actorLifecycleExpression
-    : ACTOR
-      actorCommandName
-      actorLifecyclePayload
-    ;
-
-
-actorLifecycleStatement
-    : actorLifecycleExpression
-      SEMICOLON?
-    ;
-
-
-/* ============================================================================
- * 10. SUPERVISION
- * ========================================================================== */
-
-actorSupervisionPayload
-    : actorTarget
-      blockExpression
-    ;
-
-
-actorSupervisionConstruct
-    : ACTOR
-      actorCommandName
-      actorSupervisionPayload
-    ;
-
-
-actorSupervisionStatement
-    : actorSupervisionConstruct
-      SEMICOLON?
-    ;
-
-
-/* ============================================================================
- * 11. ACTOR TARGET
- * ============================================================================
- *
- * IMPORTANT:
- *
- * Do not replace this with `qualifiedName`.
- *
- * `qualifiedName` uses `::`, while message selection uses `.`.
- *
- * This rule explicitly consumes only `::`-separated target segments before
- * the message DOT, preventing the final message name from being swallowed.
- */
-
-actorMessageTarget
-    : actorTarget
-    ;
-
-
-actorTarget
-    : actorTargetPath
-    | LPAREN
-      expression
-      RPAREN
-    ;
-
-
-actorTargetPath
-    : SELF
-      (
-          DOUBLE_COLON
-          identifier
-      )*
-    | identifier
-      (
-          DOUBLE_COLON
-          identifier
-      )*
-    ;
-
-
-/* ============================================================================
- * 12. ACTOR MESSAGE NAME
- * ========================================================================== */
-
-actorMessageName
-    : identifier
-    ;
-
-
-/* ============================================================================
- * 13. ACTOR STATEMENT / EXPRESSION ADAPTERS
- * ============================================================================
- *
- * These are stable downstream-facing names.
- *
- * Semantic analysis classifies the command identifier rather than this parser
- * grammar attempting to encode the command vocabulary lexically.
- */
-
-actorStatement
-    : actorSpawnStatement
-    | actorSendStatement
-    | actorAskStatement
-    | actorForwardStatement
-    | actorLifecycleStatement
-    | actorSupervisionStatement
-    ;
-
-
-actorExpression
-    : actorSpawnExpression
-    | actorSendExpression
-    | actorAskExpression
-    | actorForwardExpression
-    | actorLifecycleExpression
-    ;
-
-
-/* ============================================================================
- * 14. SEMANTIC COMMAND CLASSIFICATION CONTRACT
- * ============================================================================
- *
- * The following source forms are semantically canonical:
+ * Required command compatibility tests:
  *
  *     actor receive ...
  *     actor send ...
@@ -1479,518 +1162,326 @@ actorExpression
  *     actor restart ...
  *     actor supervise ...
  *
- * The grammar deliberately accepts the command as `identifier`.
- *
- * Semantic validation MUST:
- *
- *     1. preserve the command spelling;
- *     2. classify it in actor context;
- *     3. reject unsupported command names;
- *     4. never reinterpret an unsupported command as a different command;
- *     5. produce a source-span diagnostic for the command identifier.
- *
- * This provides future extensibility without reserving an unbounded keyword
- * catalogue.
- *
- * ============================================================================
- * 15. ACTOR HANDLER SEMANTICS
- * ============================================================================
- *
- * `actor receive name(...) { ... }` is a handler declaration.
- *
- * Semantic analysis must verify:
- *
- *     command == receive
- *
- * and then establish:
- *
- *     message name
- *     parameter types
- *     return type
- *     handler effects
- *     handler capabilities
- *     handler requirements
- *     state access
- *     isolation
- *     contracts
- *     policies
- *
- * A handler is not automatically a thread.
- *
- * A handler is not automatically a process.
- *
- * A handler is not automatically a network service.
- *
- * ============================================================================
- * 16. MESSAGE SEMANTICS
- * ============================================================================
- *
- * `actor send`:
- *
- *     asynchronous communication intent.
- *
- * `actor ask`:
- *
- *     request/response intent.
- *
- * `actor forward`:
- *
- *     forwarding intent.
- *
- * The grammar does not decide:
- *
- *     local vs remote
- *     synchronous vs asynchronous runtime implementation
- *     queue implementation
- *     serialization
- *     transport
- *     ordering implementation
- *     persistence
- *     replication
- *     retry strategy
- *
- * Those are semantic/runtime/deployment decisions.
- *
- * ============================================================================
- * 17. LIFECYCLE SEMANTICS
- * ============================================================================
- *
- * `actor stop target`
- *
- * and:
- *
- * `actor restart target`
- *
- * represent logical lifecycle intent.
- *
- * They do not mean:
- *
- *     terminate thread
- *     terminate process
- *     power off machine
- *     reset device
- *
- * unless a downstream target-specific realization explicitly establishes that
- * correspondence.
- *
- * ============================================================================
- * 18. SUPERVISION SEMANTICS
- * ============================================================================
- *
- * `actor supervise target { ... }`
- *
- * expresses supervision intent.
- *
- * The block may contain ordinary Zamani computation.
- *
- * Semantic analysis/runtime policy determines:
- *
- *     failure handling
- *     restart behavior
- *     escalation
- *     recovery
- *     isolation
- *     observability
- *     placement
- *     resource requirements
- *
- * No supervisor resource is allocated by parsing.
- *
- * ============================================================================
- * 19. ERROR BOUNDARIES
- * ============================================================================
- *
- * Parser errors:
- *
- *     malformed actor declaration
- *     missing actor name
- *     missing actor body
- *     malformed state field
- *     malformed handler
- *     missing command name
- *     malformed command payload
- *     missing actor target
- *     missing message name
- *     malformed argument list
- *     malformed supervision block
- *
- * Semantic errors:
- *
- *     unknown actor command
- *     command used in wrong actor context
- *     unknown actor target
- *     unknown message
- *     incompatible arguments
- *     invalid handler return type
- *     illegal state access
- *     invalid lifecycle relationship
- *     invalid supervision relationship
- *     unavailable capability
- *     unavailable resource
- *     invalid distributed realization
- *
- * ============================================================================
- * 20. SOURCE-LEVEL SECURITY
- * ============================================================================
- *
- * Actor syntax never grants authority.
- *
- * Capability and policy checks remain mandatory for:
- *
- *     actor creation
- *     message communication
- *     lifecycle control
- *     supervision
- *     foreign calls
- *     network communication
- *     resource acquisition
- *     hardware interaction
- *
- * Parser execution itself performs none of these actions.
- *
- * ============================================================================
- * 21. DOMAIN-NEUTRALITY
- * ============================================================================
- *
- * Actor bodies use the canonical expression/block/type systems.
- *
- * Consequently actors may coordinate:
- *
- *     classical computation
- *     quantum computation
- *     hybrid computation
- *     AI/model computation
- *     data processing
- *     distributed computation
- *     networking
- *     HDL/hardware coordination
- *     accelerator computation
- *
- * without introducing domain-specific actor grammars.
- *
- * ============================================================================
- * 22. QUANTUM BOUNDARY
- * ============================================================================
- *
- * This file does not define quantum operations.
- *
- * If an actor handler performs quantum computation, the downstream semantic
- * pipeline remains:
- *
- *     actor syntax
- *       ->
- *     domain-neutral AST
- *       ->
- *     semantic quantum model
- *       ->
- *     quantum::ir
- *       ->
- *     optimization
- *       ->
- *     routing
- *       ->
- *     scheduling
- *       ->
- *     resilience / QEC
- *       ->
- *     ZQN
- *       ->
- *     HAL
- *       ->
- *     target
- *
- * No actor-specific quantum IR is introduced.
- *
- * ============================================================================
- * 23. DISTRIBUTED BOUNDARY
- * ============================================================================
- *
- * An actor may be realized locally or across a distributed substrate.
- *
- * This file does not define:
- *
- *     node IDs
- *     addresses
- *     transports
- *     network topology
- *     replication counts
- *     placement
- *     consensus
- *
- * Distributed specialization belongs downstream.
- *
- * ============================================================================
- * 24. RESOURCE / CAPABILITY BOUNDARY
- * ============================================================================
- *
- * Resource requirements and capabilities are intentionally absent from the
- * concrete actor productions.
- *
- * They are consumed from:
- *
- *     grammar/resources/
- *     grammar/security/
- *     grammar/distributed/
- *     grammar/execution/
- *     grammar/compile/
- *
- * Actor semantics may reference their resulting semantic information.
- *
- * ============================================================================
- * 25. NO PHYSICAL LIMITS
- * ============================================================================
- *
- * This grammar contains no finite actor/resource expansion.
- *
- * Examples:
- *
- *     actorMember*
- *     parameterList?
- *     actorArguments?
- *     (DOUBLE_COLON identifier)*
- *
- * are structurally open-ended.
- *
- * There is no grammar constant limiting:
- *
- *     actor count
- *     handler count
- *     member count
- *     message count
- *     argument count
- *     supervision count
- *     target path length
- *     worker count
- *     thread count
+ * Required cross-domain tests:
+ *
+ *     actor containing classical computation
+ *     actor containing data operations
+ *     actor containing reasoning
+ *     actor containing learning
+ *     actor containing adaptation
+ *     actor containing tensor operations
+ *     actor containing quantum operations
+ *     actor containing hybrid computation
+ *     actor containing HDL/hardware intent
+ *     actor containing distributed operations
+ *
+ * Required resource tests:
+ *
+ *     actor + capability requirement
+ *     actor + resource requirement
+ *     actor + policy
+ *     actor + effect declaration
+ *     actor + contract
+ *
+ * Required negative syntax tests:
+ *
+ *     actor
+ *     actor {
+ *     actor Name
+ *     actor Name {
+ *     actor Name { field; }
+ *     actor receive
+ *     actor send
+ *     actor ask
+ *     actor forward
+ *     actor stop
+ *     actor restart
+ *     actor supervise
+ *     spawn
+ *     spawn actor
+ *     spawn actor Name(
+ *     actor send target
+ *     actor send target.
+ *     actor send target.message(
+ *     actor supervise target
+ *
+ * Required scalability tests:
+ *
+ *     many actor declarations
+ *     many actor members
+ *     many handlers
+ *     many state fields
+ *     deeply qualified logical targets
+ *     many message arguments
+ *     deeply nested handler blocks
+ *     many supervision relationships
+ *
+ * No test may introduce an artificial actor count or resource ceiling.
+ *
+ * Required determinism tests:
+ *
+ *     identical token stream
+ *         ->
+ *     equivalent parse structure
+ *
+ * Required portability tests:
+ *
+ *     same actor source
+ *         ->
+ *     syntactically valid
+ *
+ * regardless of:
+ *
+ *     processor count
+ *     accelerator count
+ *     QPU availability
  *     node count
- *     device count
- *     memory
- *     compute
+ *     memory size
+ *     topology
+ *     deployment environment
  *
  * ============================================================================
- * 26. COMPATIBILITY
+ * HARD-CODING AUDIT
  * ============================================================================
  *
- * No new reserved words are introduced.
+ * PASS CONDITIONS:
  *
- * Existing programs using:
- *
- *     send
- *     ask
- *     receive
- *     forward
- *     stop
- *     restart
- *     supervise
- *
- * as ordinary identifiers remain lexically valid.
- *
- * Actor-specific interpretation occurs only in actor command positions.
- *
- * ============================================================================
- * 27. ANTLR / RUST SAFETY
- * ============================================================================
- *
- * This grammar is parser-only.
- *
- * It contains:
- *
- *     no actions
- *     no predicates
+ *     no MAX_ACTORS
+ *     no MAX_MESSAGES
+ *     no MAX_HANDLERS
+ *     no MAX_CHILDREN
+ *     no MAX_SUPERVISORS
+ *     no MAX_MAILBOXES
+ *     no MAX_THREADS
+ *     no MAX_WORKERS
+ *     no MAX_CORES
+ *     no MAX_CPUS
+ *     no MAX_GPUS
+ *     no MAX_FPGAS
+ *     no MAX_QPUS
+ *     no MAX_NODES
+ *     no MAX_MEMORY
+ *     no MAX_QUEUE_DEPTH
+ *     no MAX_DEVICES
+ *     no physical placement
+ *     no hardware topology
+ *     no fixed actor capacity
+ *     no fixed mailbox capacity
+ *     no runtime allocation
+ *     no scheduler implementation
+ *     no actor-specific IR
  *     no embedded Rust
- *     no filesystem access
- *     no network access
- *     no runtime calls
- *     no hardware calls
- *
- * Generated Rust remains compatible with:
- *
- *     Rust 1.97+
- *     Rust 2021
- *
- * and requires no unsafe Rust.
+ *     no unsafe Rust
  *
  * ============================================================================
- * 28. CONCURRENCY COMPOSITION INTEGRATION
+ * INTEGRATION CONTRACT
  * ============================================================================
  *
- * `grammar/concurrency/concurrency.g4` must retain:
+ * 1. LEXER
+ * ---------------------------------------------------------------------------
  *
- *     import
- *         AsyncExpressions,
- *         Tasks,
- *         Futures,
- *         Parallel,
- *         DataParallel,
- *         TaskParallel,
- *         Actors,
- *         Channels,
- *         Cancellation,
- *         Synchronization
- *         ;
+ * Canonical lexical source:
  *
- * and consume:
+ *     grammar/lexer/tokens.g4
+ *     grammar/antlr/ZamaniLexer.g4
+ *
+ * This grammar consumes canonical emitted tokens.
+ *
+ *
+ * 2. CONCURRENCY COMPOSITION
+ * ---------------------------------------------------------------------------
+ *
+ * grammar/concurrency/concurrency.g4
+ *
+ * consumes:
  *
  *     actorConstruct
  *
- * through:
+ * It MUST NOT duplicate actor syntax.
  *
- *     actorConcurrencyConstruct
- *         : actorConstruct
- *         ;
  *
- * No actor production should be copied into `concurrency.g4`.
+ * 3. UNIVERSAL STATEMENT DISPATCH
+ * ---------------------------------------------------------------------------
+ *
+ * The universal statement layer may consume:
+ *
+ *     actorStatement
+ *
+ * through the established concurrency composition boundary.
+ *
+ * It must not recreate actor declarations or commands.
+ *
+ *
+ * 4. EXPRESSIONS
+ * ---------------------------------------------------------------------------
+ *
+ * Actor handler bodies and actor arguments consume the canonical:
+ *
+ *     expression
+ *
+ * and:
+ *
+ *     blockExpression
+ *
+ * rules.
+ *
+ * This prevents actors from becoming a second expression language.
+ *
+ *
+ * 5. TYPES
+ * ---------------------------------------------------------------------------
+ *
+ * State fields and handler return types consume:
+ *
+ *     typeExpression
+ *
+ * from the canonical type grammar.
+ *
+ *
+ * 6. PARAMETERS
+ * ---------------------------------------------------------------------------
+ *
+ * Handler parameters consume:
+ *
+ *     parameterList
+ *
+ * from the canonical parameter grammar.
+ *
+ *
+ * 7. ATTRIBUTES / MODIFIERS / VISIBILITY
+ * ---------------------------------------------------------------------------
+ *
+ * Actor declarations and members use the canonical:
+ *
+ *     attribute
+ *     modifier
+ *     visibilityModifier
+ *
+ * rules.
+ *
+ *
+ * 8. CHANNELS
+ * ---------------------------------------------------------------------------
+ *
+ * Actor communication does not redefine:
+ *
+ *     channel
+ *     channel send
+ *     channel receive
+ *     channel close
+ *     channel select
+ *
+ * Those remain owned by:
+ *
+ *     grammar/concurrency/channels.g4
+ *
+ *
+ * 9. TASKS / FUTURES
+ * ---------------------------------------------------------------------------
+ *
+ * Actor realization may use tasks/futures, but the grammar does not redefine
+ * them.
+ *
+ *
+ * 10. DISTRIBUTED
+ * ---------------------------------------------------------------------------
+ *
+ * Distributed actor semantics remain downstream and/or in:
+ *
+ *     grammar/distributed/
+ *     grammar/networking/
+ *
+ * This file contains no physical placement syntax.
+ *
+ *
+ * 11. RESOURCES / CAPABILITIES
+ * ---------------------------------------------------------------------------
+ *
+ * Resource requirements remain owned by:
+ *
+ *     grammar/resources/
+ *
+ * Actor grammar does not duplicate `requires`, `capability`, resource
+ * negotiation or scaling syntax.
+ *
+ *
+ * 12. EFFECTS
+ * ---------------------------------------------------------------------------
+ *
+ * Effects remain owned by:
+ *
+ *     grammar/effects/
+ *
+ * Actor commands may acquire effects semantically.
+ *
+ *
+ * 13. POLICIES
+ * ---------------------------------------------------------------------------
+ *
+ * Policies remain owned by the policy/security/execution subsystems.
+ *
+ *
+ * 14. VALIDATION / CONTRACTS
+ * ---------------------------------------------------------------------------
+ *
+ * Contract syntax remains owned by:
+ *
+ *     grammar/validation/
+ *     grammar/statements/
+ *     grammar/functions/
+ *
+ * Actor syntax only provides source constructs that can become contract
+ * subjects.
+ *
+ *
+ * 15. PROVENANCE
+ * ---------------------------------------------------------------------------
+ *
+ * Source spans and AST structure feed the repository's provenance system.
+ *
+ * Actor grammar does not implement provenance storage.
+ *
+ *
+ * 16. QUANTUM
+ * ---------------------------------------------------------------------------
+ *
+ * Quantum semantics remain outside this grammar and ultimately use:
+ *
+ *     quantum::ir
+ *
+ * Actor syntax MUST NOT create an actor-specific quantum representation.
+ *
+ *
+ * 17. HDL / HARDWARE
+ * ---------------------------------------------------------------------------
+ *
+ * Hardware realization remains downstream.
+ *
+ * Actor syntax does not encode:
+ *
+ *     register widths
+ *     bus widths
+ *     device counts
+ *     FPGA dimensions
+ *     CPU counts
+ *     GPU counts
+ *     QPU counts
+ *
+ *
+ * 18. RUST
+ * ---------------------------------------------------------------------------
+ *
+ * Grammar generation and frontend implementation remain compatible with:
+ *
+ *     Rust 1.97+
+ *     Rust Edition 2021
+ *
+ * and safe Rust only.
  *
  * ============================================================================
- * 29. AST / SEMANTIC INTEGRATION
- * ============================================================================
- *
- * Frontend AST integration must preserve:
- *
- *     ActorDeclaration
- *     ActorState
- *     ActorHandler
- *     ActorCommand
- *     ActorSpawn
- *     ActorTarget
- *     ActorMessage
- *     ActorLifecycle
- *     ActorSupervision
- *
- * without making those names runtime object types.
- *
- * Recommended semantic normalization:
- *
- *     ActorCommand {
- *         command,
- *         target,
- *         message,
- *         arguments,
- *         body,
- *         source
- *     }
- *
- * where `command` remains source-derived and semantic analysis classifies it.
- *
- * ============================================================================
- * 30. IR INTEGRATION
- * ============================================================================
- *
- * There is no actor-specific parser IR.
- *
- * Actor operations become canonical semantic operations with fields such as:
- *
- *     name
- *     namespace
- *     operands
- *     parameters
- *     results
- *     attributes
- *     modifiers
- *     effects
- *     capabilities
- *     source
- *
- * Lowering determines whether the operation becomes:
- *
- *     local communication
- *     asynchronous execution
- *     distributed communication
- *     service invocation
- *     heterogeneous coordination
- *     another supported target representation.
- *
- * ============================================================================
- * 31. TEST INTEGRATION
- * ============================================================================
- *
- * Required test ownership:
- *
- *     grammar/tests/concurrency/actors/
- *
- * Required categories:
- *
- *     declaration
- *     state
- *     handler
- *     spawn
- *     send
- *     ask
- *     forward
- *     lifecycle
- *     supervision
- *     target paths
- *     dynamic targets
- *     nested blocks
- *     contracts
- *     effects
- *     capabilities
- *     resources
- *     provenance
- *     distributed integration
- *     quantum integration
- *     negative syntax
- *     semantic diagnostics
- *     scalability
- *     determinism
- *     compatibility
- *
- * ============================================================================
- * 32. HARD-CODING AUDIT
- * ============================================================================
- *
- * PASS:
- *
- *     no hardware capacity constants
- *     no actor capacity constants
- *     no thread constants
- *     no worker constants
- *     no node constants
- *     no device constants
- *     no mailbox capacity constants
- *     no topology constants
- *     no quantum capacity constants
- *     no parser actions
- *     no unsafe Rust
- *     no physical placement
- *     no runtime allocation
- *     no second IR
- *
- * ============================================================================
- * 33. COMPLETION CRITERIA
- * ============================================================================
- *
- * This file is complete when:
- *
- *     [x] It composes as parser grammar `Actors`.
- *     [x] It consumes only the current canonical lexer vocabulary.
- *     [x] It does not reference nonexistent actor tokens.
- *     [x] It uses `SEMICOLON`, not `SEMI`.
- *     [x] Actor command words remain extensible identifiers.
- *     [x] Actor target paths cannot consume the final dotted message name.
- *     [x] Actor declarations have one owner.
- *     [x] Actor handlers have one owner.
- *     [x] Actor construction has one owner.
- *     [x] Actor communication has one owner.
- *     [x] Lifecycle and supervision remain logical source intent.
- *     [x] Resource realization remains downstream.
- *     [x] Capability authorization remains downstream.
- *     [x] Distributed placement remains downstream.
- *     [x] Quantum lowering remains through `quantum::ir`.
- *     [x] No actor-specific IR is created.
- *     [x] No hard-coded scalability limit exists.
- *     [x] Parsing is deterministic.
- *     [x] No embedded Rust exists.
- *     [x] No unsafe Rust is required.
- *     [x] `concurrency.g4` can consume `actorConstruct`.
- *
+ * GRAMMAR
  * ============================================================================
  */
-
-
-/* ============================================================================
- * PARSER GRAMMAR
- * ========================================================================== */
 
 parser grammar Actors;
 
@@ -2014,11 +1505,15 @@ import
  * PUBLIC COMPOSITION
  * ========================================================================== */
 
+/*
+ * Single canonical actor composition root.
+ *
+ * `concurrency.g4` consumes this rule.
+ */
 actorConstruct
     : actorDeclaration
     | actorSpawnExpression
     | actorCommand
-    | actorSupervisionConstruct
     ;
 
 
@@ -2030,6 +1525,7 @@ actorDeclaration
     : actorDeclarationPrefix*
       ACTOR
       identifier
+      actorGenericParameters?
       actorInheritanceClause?
       actorBody
     ;
@@ -2039,6 +1535,11 @@ actorDeclarationPrefix
     : attribute
     | visibilityModifier
     | modifier
+    ;
+
+
+actorGenericParameters
+    : genericParameterClause
     ;
 
 
@@ -2094,6 +1595,15 @@ actorStateField
  * ACTOR HANDLER
  * ========================================================================== */
 
+/*
+ * Handler syntax deliberately uses an identifier for the command name.
+ *
+ * Canonical semantic convention:
+ *
+ *     actor receive message(...)
+ *
+ * The parser preserves the command marker and message name separately.
+ */
 actorHandler
     : ACTOR
       actorCommandName
@@ -2116,10 +1626,26 @@ actorHandlerReturnType
  * ACTOR SPAWN
  * ========================================================================== */
 
+/*
+ * Logical actor construction.
+ *
+ * The source says WHAT actor is to be created.
+ *
+ * The source does not say:
+ *
+ *     on which CPU
+ *     on which node
+ *     on which thread
+ *     on which device
+ *     with which physical executor
+ *
+ * Those decisions are downstream.
+ */
 actorSpawnExpression
     : SPAWN
       ACTOR
       qualifiedName
+      actorGenericArguments?
       LPAREN
       actorArguments?
       RPAREN
@@ -2137,14 +1663,42 @@ actorArguments
     ;
 
 
+actorGenericArguments
+    : genericArgumentClause
+    ;
+
+
 /* ============================================================================
- * ACTOR COMMANDS
+ * ACTOR COMMAND ROOT
  * ========================================================================== */
 
+/*
+ * Canonical command structure:
+ *
+ *     actor <command> <payload>
+ *
+ * The command name remains an identifier.
+ *
+ * Payload structure is intentionally factored so that:
+ *
+ *     target.message(arguments)
+ *
+ *     target
+ *
+ *     target { ... }
+ *
+ * are structurally distinct.
+ */
 actorCommand
     : ACTOR
       actorCommandName
       actorCommandPayload
+    ;
+
+
+actorCommandStatement
+    : actorCommand
+      SEMICOLON?
     ;
 
 
@@ -2154,19 +1708,39 @@ actorCommandName
 
 
 actorCommandPayload
-    : actorSendPayload
-    | actorAskPayload
-    | actorForwardPayload
-    | actorLifecyclePayload
+    : actorMessagePayload
     | actorSupervisionPayload
+    | actorLifecyclePayload
     ;
 
 
 /* ============================================================================
- * COMMUNICATION
+ * MESSAGE COMMANDS
  * ========================================================================== */
 
-actorSendPayload
+/*
+ * Shared structural representation for:
+ *
+ *     send
+ *     ask
+ *     forward
+ *
+ * Semantic analysis determines which operation the command name denotes.
+ *
+ * Example:
+ *
+ *     actor send counter.increment(1);
+ *
+ *     actor ask counter.value();
+ *
+ *     actor forward worker.process(value);
+ */
+actorMessagePayload
+    : actorMessageInvocation
+    ;
+
+
+actorMessageInvocation
     : actorMessageTarget
       DOT
       actorMessageName
@@ -2177,32 +1751,36 @@ actorSendPayload
     ;
 
 
-actorAskPayload
-    : actorMessageTarget
-      DOT
-      actorMessageName
-      LPAREN
-      actorArguments?
-      RPAREN
-      SEMICOLON?
+actorMessageTarget
+    : actorTarget
     ;
 
 
-actorForwardPayload
-    : actorMessageTarget
-      DOT
-      actorMessageName
-      LPAREN
-      actorArguments?
-      RPAREN
-      SEMICOLON?
+actorMessageName
+    : identifier
     ;
 
 
+/* ============================================================================
+ * COMPATIBILITY MESSAGE FACADES
+ * ========================================================================== */
+
+/*
+ * These rules are compatibility/tooling entry points.
+ *
+ * They intentionally delegate to the canonical command representation rather
+ * than duplicating message grammar.
+ *
+ * Semantic analysis verifies that actorCommandName is respectively:
+ *
+ *     send
+ *     ask
+ *     forward
+ *
+ * when these facades are used as isolated validation entry points.
+ */
 actorSendExpression
-    : ACTOR
-      actorCommandName
-      actorSendPayload
+    : actorCommand
     ;
 
 
@@ -2213,9 +1791,7 @@ actorSendStatement
 
 
 actorAskExpression
-    : ACTOR
-      actorCommandName
-      actorAskPayload
+    : actorCommand
     ;
 
 
@@ -2226,9 +1802,7 @@ actorAskStatement
 
 
 actorForwardExpression
-    : ACTOR
-      actorCommandName
-      actorForwardPayload
+    : actorCommand
     ;
 
 
@@ -2242,6 +1816,18 @@ actorForwardStatement
  * LIFECYCLE
  * ========================================================================== */
 
+/*
+ * Lifecycle commands include semantic operations such as:
+ *
+ *     stop
+ *     restart
+ *
+ * Structural form:
+ *
+ *     actor <command> <target>
+ *
+ * The command name remains semantic.
+ */
 actorLifecyclePayload
     : actorTarget
       SEMICOLON?
@@ -2249,9 +1835,7 @@ actorLifecyclePayload
 
 
 actorLifecycleExpression
-    : ACTOR
-      actorCommandName
-      actorLifecyclePayload
+    : actorCommand
     ;
 
 
@@ -2265,6 +1849,16 @@ actorLifecycleStatement
  * SUPERVISION
  * ========================================================================== */
 
+/*
+ * Structural distinction:
+ *
+ *     actor supervise target {
+ *         ...
+ *     }
+ *
+ * The trailing block makes supervision structurally different from ordinary
+ * lifecycle commands.
+ */
 actorSupervisionPayload
     : actorTarget
       blockExpression
@@ -2288,11 +1882,16 @@ actorSupervisionStatement
  * TARGETS
  * ========================================================================== */
 
-actorMessageTarget
-    : actorTarget
-    ;
-
-
+/*
+ * A target can be:
+ *
+ *     self
+ *     name
+ *     qualified::name
+ *     (expression)
+ *
+ * No physical resource identity is represented here.
+ */
 actorTarget
     : actorTargetPath
     | LPAREN
@@ -2315,29 +1914,64 @@ actorTargetPath
     ;
 
 
-actorMessageName
-    : identifier
-    ;
-
-
 /* ============================================================================
  * PUBLIC ADAPTERS
  * ========================================================================== */
 
+/*
+ * `actorStatement` is a stable actor-domain statement facade.
+ *
+ * Concrete syntax remains owned above.
+ */
 actorStatement
     : actorSpawnStatement
-    | actorSendStatement
-    | actorAskStatement
-    | actorForwardStatement
-    | actorLifecycleStatement
+    | actorCommandStatement
     | actorSupervisionStatement
     ;
 
 
 actorExpression
     : actorSpawnExpression
-    | actorSendExpression
-    | actorAskExpression
-    | actorForwardExpression
-    | actorLifecycleExpression
+    | actorCommand
     ;
+
+
+/* ============================================================================
+ * SEMANTIC TOOLING ADAPTERS
+ * ========================================================================== */
+
+/*
+ * These aliases provide stable semantic categories without creating a second
+ * actor grammar.
+ */
+
+actorDeclarationConstruct
+    : actorDeclaration
+    ;
+
+
+actorConstructionConstruct
+    : actorSpawnExpression
+    ;
+
+
+actorCommunicationConstruct
+    : actorCommand
+    ;
+
+
+actorLifecycleConstruct
+    : actorLifecycleExpression
+    ;
+
+
+actorSupervisionConstructRoot
+    : actorSupervisionConstruct
+    ;
+
+
+/*
+ * ============================================================================
+ * END OF ACTORS GRAMMAR
+ * ============================================================================
+ */
