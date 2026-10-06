@@ -1681,3 +1681,52 @@ WS
  *
  * ============================================================================
  */
+
+
+OPTIONAL       : 'optional' ;
+REQUIRED       : 'required' ;
+NULLABLE       : 'nullable' ;
+MUTABLE        : 'mutable' ;
+TRANSIENT      : 'transient' ;
+SENSITIVE      : 'sensitive' ;
+DEPRECATED     : 'deprecated' ;
+
+DEFAULT        : 'default' ;
+COMPUTED       : 'computed' ;
+BY             : 'by' ;
+
+KEY            : 'key' ;
+PRIMARY        : 'primary' ;
+UNIQUE         : 'unique' ;
+ALTERNATE      : 'alternate' ;
+NATURAL        : 'natural' ;
+CANDIDATE      : 'candidate' ;
+
+INDEX          : 'index' ;
+
+CHECK          : 'check' ;
+VALIDATION     : 'validation' ;
+INTEGRITY      : 'integrity' ;
+
+RELATION       : 'relation' ;
+CARDINALITY    : 'cardinality' ;
+
+PARTITION      : 'partition' ;
+RANGE          : 'range' ;
+DOMAIN         : 'domain' ;
+ADAPTIVE       : 'adaptive' ;
+AUTOMATIC      : 'automatic' ;
+
+ORDER          : 'order' ;
+
+EVOLVE         : 'evolve' ;
+VERSION        : 'version' ;
+ADD            : 'add' ;
+FIELD          : 'field' ;
+REMOVE         : 'remove' ;
+RENAME         : 'rename' ;
+TO             : 'to' ;
+ALTER          : 'alter' ;
+NONNULLABLE    : 'nonnull' ;
+
+ENCODING       : 'encoding' ;
