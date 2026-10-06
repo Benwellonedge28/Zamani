@@ -4,19 +4,16 @@
  * ============================================================================
  *
  * File:
- *     grammar/expressions/adaptive.g4
+ *     grammar/execution/adaptive.g4
  *
  * Grammar:
  *     AdaptiveExpressions
  *
- * Role:
- *     CANONICAL EXPRESSION-LEVEL ADAPTATION BOUNDARY
- *
  * Status:
- *     PRODUCTION-READY DESIGN
+ *     CANONICAL EXPRESSION-LEVEL ADAPTATION GRAMMAR
  *
  * Compiler baseline:
- *     Rust 1.97 / Rust 1.97.1 or later
+ *     Rust 1.97+
  *     Rust 2021 edition
  *     Safe Rust only
  *
@@ -27,126 +24,99 @@
  * PURPOSE
  * ============================================================================
  *
- * This file owns the EXPRESSION-LEVEL representation of adaptive
+ * This file owns the UNIVERSAL EXPRESSION-LEVEL syntax for adaptive
  * computational intent.
  *
- * It complements, but does not replace:
+ * It provides the value-producing form:
  *
- *     grammar/statements/adapt.g4
+ *     adapt(target)
+ *     adapt(target, context)
+ *     adapt(target, context_a, context_b, ...)
  *
- * The statement grammar owns:
- *
- *     adapt TARGET;
- *     adapt TARGET from SOURCE;
- *     adapt TARGET with (CONTEXT);
- *     adapt TARGET from SOURCE with (CONTEXT);
- *
- * This file owns only the value-producing expression form:
- *
- *     adapt(TARGET)
- *     adapt(TARGET, SOURCE)
- *     adapt(TARGET, SOURCE, CONTEXT...)
- *
- * The expression form represents an adaptation operation whose result may be
- * consumed by another expression.
+ * The result of an adaptive expression is an ordinary semantic value and can
+ * therefore participate in the normal Zamani expression hierarchy.
  *
  * Examples:
  *
- *     let next_strategy = adapt(strategy);
+ *     adapt(strategy)
  *
- *     let next_model = adapt(model, training_result);
+ *     adapt(model, training_result)
  *
- *     let next_plan = adapt(
- *         execution_plan,
- *         observation,
- *         policy,
- *         evidence
- *     );
+ *     adapt(plan, observation, policy)
  *
- * The exact semantic interpretation is downstream.
+ *     adapt(strategy, evidence, provenance, constraints)
  *
- * This grammar does NOT decide:
- *
- *     - whether adaptation is permitted;
- *     - whether a target is adaptable;
- *     - what adaptation algorithm is selected;
- *     - whether the result mutates state;
- *     - whether code is regenerated;
- *     - whether recompilation occurs;
- *     - whether execution is rescheduled;
- *     - whether routing changes;
- *     - whether quantum computation changes;
- *     - whether hardware changes;
- *     - whether a model changes;
- *     - whether a policy authorizes the operation;
- *     - whether resources are sufficient;
- *     - whether capabilities are available.
+ * The grammar intentionally treats all operands after the target as generic
+ * expressions. Their semantic roles are determined downstream.
  *
  * ============================================================================
  * ARCHITECTURAL POSITION
  * ============================================================================
  *
- *     Zamani source
- *          |
- *          v
- *     canonical lexer
- *          |
- *          v
- *     ANTLR parser
- *          |
- *          v
- *     adaptiveExpression
- *          |
- *          v
+ *     source
+ *       |
+ *       v
+ *     ZamaniLexer
+ *       |
+ *       v
+ *     ZamaniParser
+ *       |
+ *       v
+ *     Expressions
+ *       |
+ *       +--> AdaptiveExpressions
+ *       |
+ *       v
  *     domain-neutral AST
- *          |
- *          v
+ *       |
+ *       v
  *     structural validation
- *          |
- *          +-------------------+-------------------+
- *          |                   |                   |
- *          v                   v                   v
- *        types             effects            contracts
- *          |                   |                   |
- *          +-------------------+-------------------+
- *                              |
- *                  +-----------+-----------+
- *                  |           |           |
- *                  v           v           v
- *             capabilities  resources   policies
- *                  |           |           |
- *                  +-----------+-----------+
- *                              |
- *                              v
- *                         provenance
- *                              |
- *                              v
- *                   semantic adaptation model
- *                              |
- *             +----------------+----------------+
- *             |                |                |
- *             v                v                v
- *         classical       quantum::ir       other domains
- *             |                |                |
- *             +----------------+----------------+
- *                              |
- *                              v
- *                         optimization
- *                              |
- *                         specialization
- *                              |
- *                           lowering
- *                              |
- *                    routing / scheduling
- *                              |
- *                    resilience / recovery
- *                              |
- *                         ZQN / HAL
- *                              |
- *                              v
- *                       target realization
+ *       |
+ *       +--> type analysis
+ *       +--> effect analysis
+ *       +--> capability analysis
+ *       +--> resource analysis
+ *       +--> contract analysis
+ *       +--> policy analysis
+ *       +--> provenance analysis
+ *       |
+ *       v
+ *     semantic adaptation operation
+ *       |
+ *       +--> classical semantics
+ *       +--> quantum semantics
+ *       +--> HDL/hardware semantics
+ *       +--> AI/ML semantics
+ *       +--> distributed semantics
+ *       +--> data semantics
+ *       +--> future domain semantics
+ *       |
+ *       v
+ *     canonical IR
+ *       |
+ *       +--> classical IR
+ *       +--> quantum::ir
+ *       +--> domain-specific semantic representations
+ *       |
+ *       v
+ *     optimization
+ *       |
+ *       v
+ *     specialization / lowering
+ *       |
+ *       v
+ *     routing / scheduling
+ *       |
+ *       v
+ *     resilience / recovery
+ *       |
+ *       v
+ *     ZQN / HAL
+ *       |
+ *       v
+ *     target realization
  *
- * This file remains entirely above physical realization.
+ * This grammar never selects the physical realization.
  *
  * ============================================================================
  * OWNERSHIP CONTRACT
@@ -157,9 +127,8 @@
  *
  *     adaptiveExpression
  *     adaptiveOperation
+ *     adaptiveArgumentList
  *     adaptiveTarget
- *     adaptiveSource
- *     adaptiveContextList
  *     adaptiveContext
  *
  * THIS FILE DOES NOT OWN
@@ -167,73 +136,67 @@
  *
  *     lexer rules
  *     keyword definitions
- *     token spellings
- *     expression precedence
- *     primary-expression composition
- *     postfix expressions
+ *     punctuation definitions
  *     identifiers
- *     names
- *     types
+ *     qualified names
+ *     expression precedence
+ *     assignments
+ *     conditionals
+ *     unary operators
+ *     binary operators
+ *     calls
+ *     indexing
+ *     member access
+ *     literals
  *     statements
- *     statement-level adapt syntax
- *     learning syntax
- *     reasoning syntax
- *     knowledge syntax
- *     uncertainty syntax
- *     policies
+ *     statement-level adaptation
+ *     learning
+ *     reasoning
+ *     knowledge
+ *     uncertainty
  *     contracts
  *     effects
  *     capabilities
  *     resources
+ *     policies
  *     provenance
- *     AI semantics
+ *     AI-specific semantics
  *     quantum syntax
  *     HDL syntax
  *     hardware syntax
- *     execution planning
- *     scheduling
+ *     execution scheduling
  *     routing
  *     QEC
  *     ZQN
  *     HAL
- *     runtime implementation
  *     AST implementation
  *     semantic implementation
  *     IR implementation
+ *     runtime implementation
  *
  * ============================================================================
  * SINGLE-AUTHORITY RULE
  * ============================================================================
  *
- * There are intentionally TWO source-level adaptation forms, but they have
- * different syntactic roles:
+ * There are two source-level adaptation forms:
+ *
+ *     statement:
+ *
+ *         adapt target;
+ *
+ *     expression:
+ *
+ *         adapt(target)
+ *
+ * They are intentionally different syntactic forms.
+ *
+ * Their semantics MUST converge on the same canonical adaptation operation.
+ *
+ * The statement form is owned by:
  *
  *     grammar/statements/adapt.g4
- *         -> statement-level adaptation
  *
- *     grammar/expressions/adaptive.g4
- *         -> expression-level adaptation
- *
- * They MUST converge on the SAME semantic adaptation operation.
- *
- * They MUST NOT become two unrelated adaptation semantics.
- *
- * The statement form is effectful/statement-oriented.
- *
- * The expression form produces a value/result that can participate in the
- * ordinary expression hierarchy.
- *
- * The semantic layer determines whether either form represents:
- *
- *     state mutation
- *     model transformation
- *     strategy transformation
- *     execution-plan transformation
- *     pure planning
- *     runtime adaptation
- *     recompilation intent
- *     respecialization
- *     other future adaptation semantics
+ * This file owns only the expression form.
  *
  * ============================================================================
  * DEPENDENCY CONTRACT
@@ -242,193 +205,151 @@
  * DEPENDS_ON
  * ----------
  *
- *     canonical Zamani lexer
- *     canonical expression-core boundary
- *
- * The expression operands are deliberately represented through:
- *
+ *     ZamaniLexer
  *     expressionCore
  *
- * This follows the same architectural boundary already used by the
- * repository's reasoning-expression grammar.
+ * `expressionCore` is supplied by the canonical expression composition.
  *
- * This grammar MUST NOT import:
+ * This grammar MUST NOT import the complete `Expressions` grammar because
+ * `Expressions` imports this grammar.
  *
+ * That would create a circular dependency.
+ *
+ * ============================================================================
+ * INTEGRATION CONTRACT
+ * ============================================================================
+ *
+ * The canonical integration direction is:
+ *
+ *     AdaptiveExpressions
+ *             |
+ *             v
  *     Expressions
+ *             |
+ *             v
+ *     ZamaniParser
  *
- * when Expressions imports AdaptiveExpressions.
+ * Therefore:
  *
- * Doing so would create a circular parser-grammar dependency.
+ *     grammar/expressions/expressions.g4
  *
- * ============================================================================
- * EXPRESSION-CORE CONTRACT
- * ============================================================================
+ * must import:
  *
- * `expressionCore` is an integration boundary.
+ *     AdaptiveExpressions
  *
- * It represents the canonical expression hierarchy supplied by the assembled
- * parser.
+ * exactly once.
  *
- * This grammar MUST NOT reproduce:
+ * The expression composition must expose `adaptiveExpression` through its
+ * primary-expression/value-expression layer.
  *
- *     assignment precedence
- *     conditional precedence
- *     logical precedence
- *     comparison precedence
- *     arithmetic precedence
- *     bitwise precedence
- *     unary precedence
- *     postfix precedence
- *     primary-expression precedence
+ * No parent grammar should independently recreate:
  *
- * The repository's canonical expression composition remains the sole owner
- * of those concerns.
+ *     adapt(...)
  *
  * ============================================================================
  * LEXER CONTRACT
  * ============================================================================
  *
- * This grammar consumes:
- *
- *     tokenVocab = ZamaniLexer
- *
- * The canonical keyword already established by the repository is:
+ * The canonical lexer supplies:
  *
  *     ADAPT
+ *     LPAREN
+ *     RPAREN
+ *     COMMA
  *
- * This file MUST NOT define:
+ * This grammar creates NO lexer rules.
  *
- *     ADAPT
+ * `adapt` remains one canonical lexical token:
  *
- * or any other lexer rule.
+ *     ADAPT : 'adapt' ;
  *
- * No new keyword such as:
+ * No additional universal keywords such as:
  *
  *     ADAPTIVE
- *     ADAPTATION_EXPRESSION
  *     EVOLVE
  *     MODIFY
- *     ADJUST
  *     CHANGE
+ *     SELF_MODIFY
  *
- * is introduced merely to create expression syntax.
- *
- * The same `adapt` vocabulary is intentionally shared between the statement
- * and expression forms.
+ * are required.
  *
  * ============================================================================
- * WHY THE EXPRESSION FORM USES PARENTHESES
+ * EXPRESSION CONTRACT
  * ============================================================================
  *
- * Statement form:
+ * The expression form is:
  *
- *     adapt strategy from feedback;
+ *     ADAPT LPAREN adaptiveArgumentList RPAREN
  *
- * Expression form:
+ * At least one argument is required.
  *
- *     adapt(strategy, feedback)
+ * The first argument is the adaptation target.
  *
- * This distinction is deliberate.
+ * Every subsequent argument is an ordinary expression.
  *
- * It prevents the expression grammar from duplicating the statement's
- * `from` / `with` clause structure while allowing adaptation to participate
- * naturally anywhere an expression is accepted.
+ * The grammar deliberately does NOT assign fixed meanings to argument
+ * positions after the target.
  *
- * It also provides an unambiguous boundary for the parser:
+ * Consequently:
  *
- *     ADAPT LPAREN ...
+ *     adapt(target, feedback)
  *
- * therefore denotes the expression form.
+ *     adapt(target, evidence)
  *
- * ============================================================================
- * CANONICAL EXPRESSION FORMS
- * ============================================================================
+ *     adapt(target, policy)
  *
- * Minimal:
+ *     adapt(target, observation, evidence)
  *
- *     adapt(target)
+ *     adapt(target, learned_result, constraint, provenance)
  *
- * Target plus source:
+ * are all syntactically valid.
  *
- *     adapt(target, source)
- *
- * Target plus one context value:
- *
- *     adapt(target, context)
- *
- * Target plus source and context:
- *
- *     adapt(target, source, context)
- *
- * Multiple context values:
- *
- *     adapt(target, source, context_a, context_b, context_c)
- *
- * Because the expression form is intentionally positional, semantic analysis
- * determines whether the additional operands represent:
- *
- *     source
- *     policy
- *     evidence
- *     feedback
- *     observation
- *     provenance
- *     configuration
- *     constraint
- *     resource information
- *     capability information
- *     model information
- *     strategy information
- *     other future context
- *
- * No finite vocabulary is encoded here.
+ * Their semantic interpretation belongs downstream.
  *
  * ============================================================================
- * ARGUMENT MODEL
+ * WHY GENERIC CONTEXT IS REQUIRED
  * ============================================================================
  *
- * The first argument is always the adaptation target.
+ * Adaptation can occur in many domains:
  *
- * All remaining arguments are ordered adaptation inputs/context values.
+ *     classical
+ *     quantum
+ *     hybrid
+ *     HDL
+ *     hardware
+ *     AI/ML
+ *     data
+ *     distributed
+ *     networking
+ *     simulation
+ *     compilation
+ *     execution
+ *     future computational domains
  *
- * The grammar deliberately does not assign a fixed semantic meaning to
- * positions after the first argument.
+ * A universal grammar MUST NOT require a new keyword for every new adaptation
+ * source.
  *
- * Semantic analysis may interpret:
+ * Therefore the grammar uses:
  *
- *     adapt(target)
+ *     expressionCore
  *
- * as a minimal adaptation request.
- *
- * It may interpret:
- *
- *     adapt(target, source)
- *
- * as target + source.
- *
- * It may interpret:
- *
- *     adapt(target, source, policy)
- *
- * as target + source + policy.
- *
- * Such interpretation belongs to semantic analysis.
+ * as the universal context boundary.
  *
  * ============================================================================
- * NO KEYWORD EXPLOSION
+ * OPEN-WORLD RULE
  * ============================================================================
  *
- * This grammar MUST NOT enumerate:
+ * This grammar MUST NOT enumerate adaptation algorithms or strategies.
+ *
+ * It must NOT contain grammar alternatives for:
  *
  *     gradient
  *     reinforcement
  *     Bayesian
  *     evolutionary
- *     heuristic
  *     genetic
+ *     heuristic
  *     predictive
- *     online
- *     offline
  *     transfer
  *     fine_tune
  *     reroute
@@ -438,13 +359,15 @@
  *     specialize
  *     optimize
  *
- * as adaptation-expression alternatives.
+ * Such concepts belong to:
  *
- * Those are algorithms, strategies, execution mechanisms, libraries,
- * capabilities, dialects or semantic policies.
- *
- * Future adaptation mechanisms MUST NOT require a new universal grammar rule
- * merely because the mechanism is new.
+ *     libraries
+ *     semantic capabilities
+ *     dialects
+ *     policies
+ *     execution strategies
+ *     optimization systems
+ *     domain-specific implementations
  *
  * ============================================================================
  * LEARNING INTEGRATION
@@ -452,29 +375,25 @@
  *
  * Learning remains owned by:
  *
- *     grammar/ai/learning.g4
- *     grammar/statements/learn.g4
+ *     grammar/ai/
+ *     grammar/statements/
  *
- * An adaptive expression may consume a learning result:
+ * Adaptive expressions can consume learning results naturally:
  *
- *     adapt(model, training_result)
+ *     adapt(model, learning_result)
  *
- * or:
+ * The adaptation grammar does not need to know that the second operand is a
+ * learning result.
  *
- *     adapt(strategy, learned_policy)
- *
- * The expression grammar does not know that the second argument came from
- * learning.
- *
- * Semantic analysis resolves that relationship.
- *
- * Learning does not automatically authorize adaptation.
+ * Semantic analysis establishes that relationship.
  *
  * ============================================================================
  * REASONING INTEGRATION
  * ============================================================================
  *
- * Adaptive expressions may consume reasoning results:
+ * Reasoning remains independently owned.
+ *
+ * Examples:
  *
  *     adapt(strategy, inferred_strategy)
  *
@@ -482,122 +401,102 @@
  *
  *     adapt(model, deduced_configuration)
  *
- * The reasoning grammar remains the owner of:
- *
- *     infer
- *     deduce
- *     reason
- *
  * No reasoning syntax is duplicated here.
  *
  * ============================================================================
  * KNOWLEDGE INTEGRATION
  * ============================================================================
  *
- * Knowledge may supply adaptation input:
+ * Knowledge/query results can become adaptation context:
  *
- *     adapt(strategy, knowledge_result)
+ *     adapt(strategy, query_result)
  *
- *     adapt(model, query_result)
+ *     adapt(model, knowledge_result)
  *
- * Knowledge grammar remains independently owned.
- *
- * This grammar simply accepts the resulting expression as an operand.
+ * Knowledge semantics remain outside this file.
  *
  * ============================================================================
  * UNCERTAINTY INTEGRATION
  * ============================================================================
  *
- * Adaptive expressions may consume:
+ * Any uncertainty-bearing expression may be supplied:
  *
- *     probabilities
- *     confidence
- *     distributions
- *     beliefs
- *     observations
- *     intervals
- *     uncertain values
+ *     adapt(strategy, probability)
+ *     adapt(model, confidence)
+ *     adapt(plan, distribution)
+ *     adapt(state, belief)
  *
- * No probabilistic implementation is encoded here.
- *
- * No fixed precision is encoded here.
- *
- * No fixed number of outcomes is encoded here.
+ * This grammar imposes no fixed precision, representation, or number of
+ * possible outcomes.
  *
  * ============================================================================
- * EVIDENCE AND PROVENANCE
+ * EVIDENCE / PROVENANCE
  * ============================================================================
  *
- * Adaptive expressions may consume evidence and provenance values.
- *
- * Example:
+ * Evidence and provenance may be passed as expressions:
  *
  *     adapt(strategy, evidence, provenance)
  *
- * The grammar records only the expressions.
- *
- * The semantic/provenance layers determine:
+ * The semantic system determines:
  *
  *     evidence validity
- *     evidence origin
+ *     origin
  *     derivation
  *     confidence
  *     verification
  *     authorization
  *     decision provenance
- *     resulting transformation
+ *
+ * This grammar does not create a second provenance language.
  *
  * ============================================================================
  * EFFECT CONTRACT
  * ============================================================================
  *
- * Parsing this expression performs no runtime effect.
+ * Parsing an adaptive expression performs no effect.
  *
- * Semantic analysis may classify the resolved operation with effects such as:
+ * Semantic analysis MAY determine effects such as:
  *
- *     mutation
  *     adaptation
+ *     mutation
  *     learning
  *     randomness
  *     reflection
  *     code_generation
- *     native
- *     foreign
+ *     simulation
+ *     measurement
  *     network
  *     distributed
- *     measurement
- *     simulation
+ *     native
+ *     foreign
  *     runtime_control
  *
- * The grammar MUST NOT hard-code the final effect set.
- *
- * An apparently simple adaptive expression may resolve to different effects
- * depending on the target and context.
+ * The final effect set depends on semantic resolution.
  *
  * ============================================================================
  * CAPABILITY CONTRACT
  * ============================================================================
  *
- * Semantic analysis may require capabilities such as:
+ * Semantic analysis MAY require arbitrary capabilities.
+ *
+ * Examples include:
  *
  *     capability("adaptation")
  *     capability("model.update")
  *     capability("strategy.update")
  *     capability("runtime.adaptation")
- *     capability("learning.update")
- *     capability("knowledge.read")
  *     capability("quantum.measurement")
  *     capability("tensor.compute")
  *
- * These are semantic identifiers, not grammar-level reserved words.
- *
  * Capability names remain open-world.
+ *
+ * No capability name is physically hard-coded into this grammar.
  *
  * ============================================================================
  * RESOURCE CONTRACT
  * ============================================================================
  *
- * Adaptive expressions may require arbitrary resources, including:
+ * Adaptation may require arbitrary resources:
  *
  *     compute
  *     memory
@@ -610,25 +509,25 @@
  *     distributed resources
  *     simulation resources
  *     energy
- *     other future resources
+ *     future resource classes
  *
- * No quantities are encoded here.
+ * Resource quantities are resolved downstream.
  *
- * This grammar MUST NOT introduce:
+ * This file contains no:
  *
- *     maximum adaptation count
- *     maximum context count
- *     maximum model size
- *     maximum strategy size
- *     maximum CPU count
- *     maximum GPU count
- *     maximum FPGA count
- *     maximum QPU count
- *     maximum qubit count
- *     maximum node count
- *     maximum thread count
- *     maximum memory
- *     maximum tensor rank
+ *     MAX_ADAPTATIONS
+ *     MAX_CONTEXT
+ *     MAX_CPUS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_QUBITS
+ *     MAX_NODES
+ *     MAX_MEMORY
+ *     MAX_THREADS
+ *     MAX_TENSOR_RANK
+ *     MAX_REGISTER_WIDTH
+ *     MAX_NETWORK_SIZE
+ *     MAX_DEVICE_COUNT
  *
  * ============================================================================
  * CONTRACT CONTRACT
@@ -636,7 +535,7 @@
  *
  * Adaptive expressions participate in the universal contract system.
  *
- * Applicable contracts may include:
+ * Applicable semantic constructs include:
  *
  *     requires
  *     ensures
@@ -647,64 +546,51 @@
  *
  * This grammar does not duplicate those constructs.
  *
- * A surrounding contract may constrain an adaptive expression.
- *
- * Semantic analysis determines whether the adaptation preserves the relevant
- * guarantees.
- *
  * ============================================================================
  * POLICY CONTRACT
  * ============================================================================
  *
- * Adaptive expressions may be constrained by:
+ * Policies remain owned by the policy subsystem.
  *
- *     security policy
- *     resource policy
- *     execution policy
- *     adaptation policy
- *     model policy
- *     data policy
- *     network policy
- *     quantum policy
- *     deployment policy
+ * Adaptation may be constrained by:
  *
- * Policy syntax remains owned by the policy subsystem.
+ *     security policies
+ *     execution policies
+ *     resource policies
+ *     adaptation policies
+ *     deployment policies
+ *     data policies
+ *     quantum policies
  *
- * The presence of `adapt(...)` does not grant authorization.
+ * `adapt(...)` does NOT grant authorization.
  *
  * ============================================================================
  * SECURITY CONTRACT
  * ============================================================================
  *
- * Parsing is non-executing.
+ * This grammar:
  *
- * This grammar MUST NOT:
- *
- *     execute adaptation;
- *     invoke models;
- *     access files;
- *     access networks;
- *     inspect hardware;
- *     access credentials;
- *     invoke a QPU;
- *     invoke a simulator;
- *     modify compiler state;
- *     modify source code;
- *     modify executable code;
- *     bypass sandbox restrictions;
- *     bypass policy;
- *     bypass capability checks.
- *
- * An adaptive expression is an intent/value expression, not an authorization
- * mechanism.
+ *     does not execute adaptation;
+ *     does not invoke models;
+ *     does not access hardware;
+ *     does not access files;
+ *     does not access networks;
+ *     does not access credentials;
+ *     does not invoke a QPU;
+ *     does not invoke a simulator;
+ *     does not modify source code;
+ *     does not modify generated code;
+ *     does not bypass sandbox rules;
+ *     does not bypass policy;
+ *     does not bypass capability checks.
  *
  * ============================================================================
  * AST CONTRACT
  * ============================================================================
  *
- * This grammar introduces no Rust AST implementation.
+ * The grammar itself creates no Rust AST implementation.
  *
- * The conceptual AST representation is:
+ * The conceptual AST shape is:
  *
  *     AdaptiveExpression {
  *         target,
@@ -712,52 +598,42 @@
  *         source_span
  *     }
  *
- * The implementation may reuse the repository's generic operation/expression
- * representation.
- *
- * If the repository already has a generic semantic operation node, the
- * frontend SHOULD represent:
- *
- *     adapt(...)
- *
- * through that existing abstraction rather than creating an incompatible
- * second hierarchy.
+ * Existing generic operation/expression nodes SHOULD be reused where
+ * appropriate.
  *
  * The AST MUST remain domain-neutral.
  *
  * It MUST NOT contain:
  *
- *     CPU IDs
- *     GPU IDs
- *     FPGA IDs
- *     QPU IDs
+ *     physical CPU IDs
+ *     physical GPU IDs
+ *     physical FPGA IDs
+ *     physical QPU IDs
  *     physical qubit mappings
  *     routing decisions
  *     scheduling decisions
  *     calibration
- *     vendor-specific topology
+ *     vendor topology
  *     QEC layout
  *
  * ============================================================================
  * SEMANTIC CONTRACT
  * ============================================================================
  *
- * Semantic analysis must determine:
+ * Semantic analysis determines:
  *
- *     - whether the target exists;
- *     - whether the target is adaptable;
- *     - whether the operands have valid types;
- *     - whether source/context values are compatible;
- *     - whether adaptation is authorized;
- *     - which effects are required;
- *     - which capabilities are required;
- *     - which resources are required;
- *     - which contracts apply;
- *     - which policies apply;
- *     - which provenance is required;
- *     - whether the result is deterministic;
- *     - whether the adaptation preserves declared semantics;
- *     - whether the result can be realized on a selected target.
+ *     target validity
+ *     target adaptability
+ *     operand compatibility
+ *     result type
+ *     required effects
+ *     required capabilities
+ *     required resources
+ *     applicable contracts
+ *     applicable policies
+ *     provenance requirements
+ *     determinism requirements
+ *     target feasibility
  *
  * Syntax validity is not semantic validity.
  *
@@ -765,48 +641,18 @@
  * TYPE CONTRACT
  * ============================================================================
  *
- * The grammar imposes no universal adaptation type.
+ * No universal result type is encoded here.
  *
- * The type system determines the result type.
+ * Semantic analysis determines whether the result is:
  *
- * Depending on semantic resolution, an adaptive expression may produce:
- *
- *     a value
- *     a model
- *     a strategy
- *     a configuration
- *     an execution plan
- *     a computation
- *     a policy state
- *     a domain object
- *     another semantic value
- *
- * No physical machine type is implied.
- *
- * ============================================================================
- * VALUE / EXPRESSION CONTRACT
- * ============================================================================
- *
- * `adaptiveExpression` MUST remain usable anywhere the canonical expression
- * grammar permits a primary expression.
- *
- * Examples:
- *
- *     let x = adapt(strategy);
- *
- *     call(adapt(model, training_result));
- *
- *     result = adapt(plan, observation);
- *
- *     if adapt(policy, evidence) {
- *         ...
- *     }
- *
- *     match adapt(strategy, feedback) {
- *         ...
- *     }
- *
- * Whether a particular use is type-correct is semantic/type-system behavior.
+ *     value
+ *     model
+ *     strategy
+ *     configuration
+ *     execution plan
+ *     computation
+ *     domain object
+ *     other semantic value
  *
  * ============================================================================
  * IR CONTRACT
@@ -814,200 +660,127 @@
  *
  * This grammar creates NO IR.
  *
- * The canonical lowering path is:
+ * The required lowering path is:
  *
  *     adaptiveExpression
- *          |
- *          v
+ *         |
+ *         v
  *     domain-neutral AST
- *          |
- *          v
+ *         |
+ *         v
  *     semantic adaptation operation
- *          |
- *          v
- *     canonical semantic representation
- *          |
- *          +--------------------+
- *          |                    |
- *          v                    v
+ *         |
+ *         +---------------------+
+ *         |                     |
+ *         v                     v
  *     classical semantics   quantum semantics
- *                               |
- *                               v
- *                          quantum::ir
- *          |
- *          +--------------------+
- *                     |
- *                     v
- *                optimization
- *                     |
- *                 lowering
- *                     |
- *              routing/scheduling
- *                     |
- *                resilience
- *                     |
- *                  ZQN/HAL
- *                     |
- *                     v
- *              target realization
+ *                                 |
+ *                                 v
+ *                             quantum::ir
+ *         |
+ *         v
+ *     target-independent optimization
+ *         |
+ *         v
+ *     lowering
+ *         |
+ *         v
+ *     routing / scheduling
+ *         |
+ *         v
+ *     resilience
+ *         |
+ *         v
+ *     ZQN / HAL
  *
- * If adaptation affects quantum computation, the quantum portion MUST cross:
- *
- *     quantum::ir
- *
- * before quantum optimization, decomposition, routing, scheduling, QEC,
- * resilience or target realization.
+ * If adaptation affects quantum computation, the quantum portion MUST cross
+ * the canonical `quantum::ir` boundary before quantum optimization,
+ * decomposition, routing, scheduling, resilience or physical realization.
  *
  * ============================================================================
  * QUANTUM CONTRACT
  * ============================================================================
  *
- * The expression may consume or produce quantum-related semantic values:
+ * Valid semantic examples include:
  *
- *     adapt(strategy, quantum_result)
+ *     adapt(quantum_strategy, measurement_result)
  *
- *     adapt(hybrid_plan, measurement_result)
+ *     adapt(hybrid_plan, quantum_result)
  *
  *     adapt(classical_control, quantum_observation)
  *
- * The grammar does not define:
- *
- *     H
- *     X
- *     Y
- *     Z
- *     CNOT
- *     physical qubits
- *     coupling maps
- *     calibration
- *     routing
- *     QEC
- *
- * Quantum semantics remain outside this file.
- *
- * ============================================================================
- * HYBRID CONTRACT
- * ============================================================================
- *
- * Adaptive expressions can participate in:
- *
- *     classical -> adaptation
- *     quantum -> adaptation
- *     adaptation -> classical
- *     adaptation -> quantum control
- *     AI -> adaptation
- *     adaptation -> AI
- *     HDL observation -> adaptation
- *     simulation -> adaptation
- *     distributed observation -> adaptation
- *
- * These relationships are semantic.
- *
- * No domain-specific grammar is introduced here.
+ * This grammar does not enumerate quantum gates, physical qubits, coupling
+ * maps, calibration data, routing or QEC.
  *
  * ============================================================================
  * HDL / HARDWARE CONTRACT
  * ============================================================================
  *
- * Adaptive expressions may semantically consume:
+ * Adaptive expressions may consume:
  *
  *     hardware observations
  *     simulation results
  *     verification results
- *     execution telemetry
+ *     telemetry
  *     resource observations
  *
  * The grammar does not encode:
  *
  *     register width
  *     bus width
- *     fixed memory size
- *     device count
- *     node count
- *     topology
+ *     fixed memory capacity
+ *     fixed device count
+ *     fixed topology
  *     physical placement
  *
- * Hardware realization remains downstream.
- *
  * ============================================================================
- * DISTRIBUTED / CONCURRENT CONTRACT
+ * DISTRIBUTED CONTRACT
  * ============================================================================
  *
- * Adaptive expressions may consume distributed observations or results.
- *
- * Examples:
+ * Adaptation may consume distributed results:
  *
  *     adapt(strategy, distributed_result)
  *
- *     adapt(plan, resource_observation)
+ * Actor, channel, task and service syntax remains owned by the concurrency
+ * and distributed subsystems.
  *
- * They may subsequently participate in:
- *
- *     actors
- *     tasks
- *     channels
- *     services
- *     workflows
- *     collective computation
- *
- * Actor and message syntax remains owned by:
- *
- *     grammar/concurrency/
- *     grammar/distributed/
- *
- * This file does not create a second concurrency model.
+ * This grammar creates no second concurrency model.
  *
  * ============================================================================
  * SIMULATION CONTRACT
  * ============================================================================
  *
- * Adaptive expressions may consume simulation results:
+ * Simulation results may be supplied as ordinary expressions:
  *
  *     adapt(strategy, simulation_result)
  *
- * Simulation remains an execution strategy.
- *
- * This grammar does not distinguish:
- *
- *     classical simulation
- *     quantum simulation
- *     hardware simulation
- *     distributed simulation
- *     AI simulation
- *
- * Semantic execution planning resolves the actual mode.
+ * Simulation remains an execution strategy and does not become a second
+ * programming language.
  *
  * ============================================================================
  * METAPROGRAMMING CONTRACT
  * ============================================================================
  *
- * An adaptive expression MUST NOT automatically imply reflection,
- * self-modification or code generation.
- *
- * If adaptation involves:
+ * `adapt(...)` does NOT automatically imply:
  *
  *     reflection
- *     syntax-tree transformation
+ *     self-modification
+ *     source rewriting
  *     code generation
  *     recompilation
  *
- * the semantic system MUST require the appropriate capability/effect/policy.
- *
- * Metaprogramming remains owned by:
- *
- *     grammar/metaprogramming/
+ * If those semantics are selected, the semantic system must require the
+ * corresponding effect, capability and policy.
  *
  * ============================================================================
  * PROVENANCE CONTRACT
  * ============================================================================
  *
- * The frontend must preserve enough source structure for provenance.
- *
  * Downstream provenance may record:
  *
  *     operation
  *     target
- *     operands
+ *     context operands
  *     source location
  *     evidence
  *     reason
@@ -1019,302 +792,37 @@
  *     transformation
  *     resulting state
  *     verification
- *     compiler version
  *     language version
+ *     compiler version
  *     target capability snapshot
  *
- * This grammar does not define a duplicate provenance language.
+ * The grammar preserves the source structure needed to construct that record.
  *
  * ============================================================================
- * COMPATIBILITY WITH STATEMENT-LEVEL ADAPTATION
+ * COMPATIBILITY CONTRACT
  * ============================================================================
  *
- * Statement:
+ * Existing statement-level syntax remains valid:
  *
+ *     adapt strategy;
  *     adapt strategy from feedback;
+ *     adapt strategy with (policy);
  *
- * Expression:
+ * Expression-level syntax is distinct:
  *
+ *     adapt(strategy)
  *     adapt(strategy, feedback)
+ *     adapt(strategy, feedback, policy)
  *
- * These are intentionally different syntactic forms.
+ * Both MUST lower to the same semantic adaptation abstraction.
  *
- * Both MUST map to the same semantic adaptation abstraction.
- *
- * The statement form is appropriate where the operation itself is the
- * statement-level action.
- *
- * The expression form is appropriate where the resulting value participates
- * in another expression.
- *
- * Neither form may silently acquire different fundamental semantics merely
- * because of syntax position.
- *
- * ============================================================================
- * COMPATIBILITY WITH `mind.adapt(...)`
- * ============================================================================
- *
- * The repository already has an open-world expression form through the
- * cognitive expression grammar:
+ * Existing qualified forms such as:
  *
  *     mind.adapt(...)
  *
- * That construct MUST remain valid.
+ * remain valid where their owning grammar permits them.
  *
- * It is NOT duplicated or replaced by this file.
- *
- * Instead:
- *
- *     mind.adapt(...)
- *          |
- *          v
- *     semantic adaptation operation
- *
- * and:
- *
- *     adapt(...)
- *          |
- *          v
- *     semantic adaptation operation
- *
- * should converge downstream when their semantics are equivalent.
- *
- * The two source forms may remain distinct because:
- *
- *     mind.adapt(...)
- *
- * is namespace-qualified/general cognitive composition, while:
- *
- *     adapt(...)
- *
- * is the universal adaptation primitive.
- *
- * ============================================================================
- * AI INTEGRATION
- * ============================================================================
- *
- * AI-specific adaptation remains owned by:
- *
- *     grammar/ai/adaptation.g4
- *
- * That grammar MUST remain an adapter to the universal adaptation operation.
- *
- * It MUST NOT create:
- *
- *     AIAdaptationExpression
- *
- * as a competing universal semantic model.
- *
- * The AI subsystem may consume:
- *
- *     adaptiveExpression
- *
- * when an adaptive expression is semantically associated with:
- *
- *     models
- *     learning
- *     inference
- *     reasoning
- *     agents
- *     knowledge
- *     uncertainty
- *     evidence
- *
- * ============================================================================
- * EFFECT INTEGRATION
- * ============================================================================
- *
- * Existing:
- *
- *     grammar/effects/adaptation.g4
- *
- * remains the effect-side owner of adaptation effects.
- *
- * This grammar MUST NOT redefine the effect taxonomy.
- *
- * Semantic flow:
- *
- *     adaptiveExpression
- *          |
- *          v
- *     effect analysis
- *          |
- *          v
- *     canonical adaptation effect set
- *
- * ============================================================================
- * RESOURCE / CAPABILITY INTEGRATION
- * ============================================================================
- *
- * Adaptive expressions may participate in:
- *
- *     grammar/resources/
- *
- * for:
- *
- *     capability requirements
- *     resource requirements
- *     constraints
- *     budgets
- *     preferences
- *     negotiation
- *     scalability
- *
- * The grammar itself remains independent of actual resource quantities.
- *
- * ============================================================================
- * POLICY INTEGRATION
- * ============================================================================
- *
- * Policy ownership remains outside this file.
- *
- * An adaptive expression can be constrained by:
- *
- *     permissions
- *     prohibitions
- *     requirements
- *     constraints
- *     preferences
- *     fallback policies
- *     security policies
- *     execution policies
- *
- * The parser only records the operands.
- *
- * ============================================================================
- * HARD-CODING AUDIT
- * ============================================================================
- *
- * This file MUST NOT contain:
- *
- *     MAX_ADAPTATIONS
- *     MAX_ADAPTATION_CONTEXT
- *     MAX_MODELS
- *     MAX_STRATEGIES
- *     MAX_RESOURCES
- *     MAX_CPUS
- *     MAX_GPUS
- *     MAX_FPGAS
- *     MAX_NODES
- *     MAX_MEMORY
- *     MAX_THREADS
- *     MAX_TENSOR_RANK
- *     MAX_REGISTER_WIDTH
- *     MAX_NETWORK_SIZE
- *     MAX_DEVICE_COUNT
- *     MAX_QUBITS
- *
- * It MUST NOT enumerate:
- *
- *     hardware providers
- *     physical devices
- *     CPU architectures
- *     GPU models
- *     FPGA families
- *     QPU vendors
- *     fixed topologies
- *
- * It MUST NOT contain resource-sized arrays or grammar alternatives that
- * imply a fixed machine capacity.
- *
- * ============================================================================
- * SCALABILITY CONTRACT
- * ============================================================================
- *
- * The expression supports an open-ended operand sequence after the target.
- *
- * Therefore:
- *
- *     adapt(target)
- *
- *     adapt(target, source)
- *
- *     adapt(target, source, context_a, context_b, ...)
- *
- * are structurally represented without a language-level cardinality ceiling.
- *
- * Practical parser/compiler limits are implementation/resource limits.
- *
- * They MUST NOT become language-level constants.
- *
- * Scaling may occur across:
- *
- *     tiny embedded systems
- *     CPU systems
- *     multicore systems
- *     GPUs
- *     FPGAs
- *     ASICs
- *     accelerators
- *     QPUs
- *     simulators
- *     HPC systems
- *     clusters
- *     distributed systems
- *     cloud environments
- *     future computational targets
- *
- * The source expression remains target-independent.
- *
- * ============================================================================
- * POCO-REAF CONTRACT
- * ============================================================================
- *
- * POCO-REAF is achieved here by keeping adaptation intent independent of
- * realization.
- *
- * The program describes:
- *
- *     WHAT should adapt
- *     WHAT information may influence adaptation
- *
- * It does not prescribe:
- *
- *     WHERE adaptation executes
- *     HOW many processors execute it
- *     WHICH accelerator executes it
- *     WHICH quantum device executes it
- *     WHICH network topology executes it
- *     WHICH memory system executes it
- *
- * Target realization is selected only after:
- *
- *     type analysis
- *     effect analysis
- *     capability analysis
- *     resource analysis
- *     contract analysis
- *     policy analysis
- *     provenance requirements
- *     execution planning
- *
- * ============================================================================
- * DIAGNOSTIC CONTRACT
- * ============================================================================
- *
- * Parser diagnostics:
- *
- *     adapt()
- *     adapt(,)
- *     adapt(target,)
- *     adapt(target,,source)
- *     adapt(target source)
- *     adapt(target, source
- *     adapt(target, source,)
- *
- * Semantic diagnostics:
- *
- *     target is not adaptable
- *     incompatible operand types
- *     unauthorized adaptation
- *     capability unavailable
- *     resources insufficient
- *     policy violation
- *     contract violation
- *     invalid provenance
- *     unsupported target realization
- *
- * A target-feasibility error MUST NOT be reported as a parser error.
+ * They are not replaced by this grammar.
  *
  * ============================================================================
  * DETERMINISM CONTRACT
@@ -1326,17 +834,18 @@
  *     lexer configuration
  *     grammar version
  *     parser configuration
- *     explicitly selected dialect configuration
+ *     selected dialect configuration
  *
- * Parsing MUST NOT depend on:
+ * Parsing MUST NOT inspect:
  *
+ *     hardware
  *     CPU availability
  *     GPU availability
  *     FPGA availability
  *     QPU availability
  *     memory availability
- *     network state
  *     filesystem state
+ *     network state
  *     scheduler state
  *     runtime state
  *     wall-clock time
@@ -1348,20 +857,118 @@
  *
  * This grammar contains:
  *
- *     no embedded Rust
- *     no Rust actions
- *     no semantic predicates
- *     no runtime execution
- *     no filesystem access
- *     no network access
- *     no hardware access
- *     no unsafe Rust
+ *     no embedded Rust actions;
+ *     no semantic predicates;
+ *     no runtime execution;
+ *     no filesystem access;
+ *     no network access;
+ *     no hardware access.
  *
- * Generated parser integration must remain compatible with:
+ * Generated parser integration MUST remain compatible with:
  *
- *     Rust 1.97
- *     Rust 1.97.1
+ *     Rust 1.97+
  *     Rust 2021
+ *     safe Rust only.
+ *
+ * ============================================================================
+ * SCALABILITY CONTRACT
+ * ============================================================================
+ *
+ * The grammar has no language-level finite ceiling on:
+ *
+ *     number of adaptive expressions
+ *     number of context operands
+ *     expression nesting
+ *     program size
+ *     target size
+ *     model size
+ *     strategy size
+ *     tensor rank
+ *     quantum operation count
+ *     qubit count
+ *     processor count
+ *     GPU count
+ *     FPGA count
+ *     accelerator count
+ *     node count
+ *     device count
+ *     memory capacity
+ *     network size
+ *
+ * The argument repetition:
+ *
+ *     (COMMA adaptiveContext)*
+ *
+ * is intentionally open-ended.
+ *
+ * "Infinity" means that the language does not define an artificial universal
+ * finite machine-capacity ceiling. It does not claim physically infinite
+ * hardware or unlimited compiler resources.
+ *
+ * ============================================================================
+ * POCO-REAF CONTRACT
+ * ============================================================================
+ *
+ * The source program expresses adaptation intent without encoding its physical
+ * realization.
+ *
+ * The compiler/runtime may therefore specialize the same source for:
+ *
+ *     tiny systems
+ *     embedded systems
+ *     CPUs
+ *     multicore systems
+ *     GPUs
+ *     FPGAs
+ *     ASICs
+ *     accelerators
+ *     QPUs
+ *     simulators
+ *     HPC systems
+ *     clusters
+ *     distributed systems
+ *     cloud systems
+ *     future computational substrates
+ *
+ * Resource feasibility is determined by:
+ *
+ *     capability analysis
+ *     resource analysis
+ *     policy analysis
+ *     execution planning
+ *     target negotiation
+ *
+ * It is never determined by this grammar.
+ *
+ * ============================================================================
+ * DIAGNOSTIC CONTRACT
+ * ============================================================================
+ *
+ * STRUCTURAL/PARSER ERRORS
+ * ------------------------
+ *
+ *     adapt()
+ *     adapt(,)
+ *     adapt(target,)
+ *     adapt(target,,context)
+ *     adapt(target context)
+ *     adapt(target, context
+ *     adapt(target, context,)
+ *
+ * SEMANTIC ERRORS
+ * ---------------
+ *
+ *     target is not adaptable
+ *     incompatible operand types
+ *     unauthorized adaptation
+ *     unavailable capability
+ *     insufficient resources
+ *     policy violation
+ *     contract violation
+ *     invalid provenance
+ *     unsupported realization
+ *
+ * Target feasibility errors MUST NOT be reported as lexical or parser errors.
  *
  * ============================================================================
  * GRAMMAR
@@ -1377,7 +984,7 @@ options {
 
 /*
  * ============================================================================
- * 1. PUBLIC EXPRESSION ENTRY
+ * PUBLIC ENTRY
  * ============================================================================
  */
 
@@ -1388,20 +995,14 @@ adaptiveExpression
 
 /*
  * ============================================================================
- * 2. ADAPTIVE OPERATION
+ * ADAPTIVE OPERATION
  * ============================================================================
  *
- * The parentheses are mandatory for the expression form.
- *
- * This makes:
+ * Parentheses distinguish the expression form from the statement form.
  *
  *     adapt(...)
  *
- * unambiguously different from:
- *
- *     adapt ...;
- *
- * at the statement boundary.
+ * is therefore unambiguously an expression-level adaptation request.
  */
 
 adaptiveOperation
@@ -1414,15 +1015,14 @@ adaptiveOperation
 
 /*
  * ============================================================================
- * 3. ARGUMENT LIST
+ * ARGUMENT LIST
  * ============================================================================
  *
- * At least one argument is mandatory because the first argument is the
- * adaptation target.
+ * At least one argument is required.
  *
- * The list is intentionally open-ended.
+ * The first argument is the target.
  *
- * No fixed number of context operands is imposed.
+ * Additional arguments are open-ended context.
  */
 
 adaptiveArgumentList
@@ -1436,12 +1036,10 @@ adaptiveArgumentList
 
 /*
  * ============================================================================
- * 4. TARGET
+ * TARGET
  * ============================================================================
  *
  * The target is an ordinary canonical expression.
- *
- * This named boundary exists for AST/semantic tooling.
  */
 
 adaptiveTarget
@@ -1451,26 +1049,26 @@ adaptiveTarget
 
 /*
  * ============================================================================
- * 5. CONTEXT
+ * CONTEXT
  * ============================================================================
  *
- * Every operand after the first is intentionally an ordinary expression.
+ * Context is deliberately an ordinary expression.
  *
- * The semantic layer determines whether an operand is:
+ * Semantic analysis may classify it as:
  *
  *     source
  *     feedback
  *     evidence
  *     policy
  *     constraint
+ *     observation
  *     model
  *     strategy
- *     observation
  *     provenance
  *     configuration
- *     resource information
  *     capability information
- *     learned information
+ *     resource information
+ *     learning result
  *     reasoning result
  *     quantum result
  *     simulation result
@@ -1485,395 +1083,127 @@ adaptiveContext
 
 /*
  * ============================================================================
- * 6. EXPRESSION-CORE BOUNDARY
+ * INTEGRATION INVARIANTS
  * ============================================================================
  *
- * `expressionCore` is supplied by the canonical assembled expression system.
+ * 1. `adaptiveExpression` is the sole universal expression-level adaptation
+ *    boundary.
  *
- * This grammar intentionally does not define it.
+ * 2. `adaptStatement` remains the sole statement-level adaptation boundary.
  *
- * The repository MUST maintain exactly one expression precedence hierarchy.
+ * 3. Both forms converge on one semantic adaptation operation.
  *
- * No local expression implementation is permitted here.
- */
-
-
-/*
+ * 4. This grammar introduces no expression precedence hierarchy.
+ *
+ * 5. This grammar introduces no lexer rules.
+ *
+ * 6. This grammar introduces no physical hardware model.
+ *
+ * 7. This grammar introduces no fixed resource limits.
+ *
+ * 8. This grammar introduces no adaptation algorithm catalogue.
+ *
+ * 9. This grammar performs no runtime operation.
+ *
+ * 10. Future adaptation mechanisms can use ordinary expressions, semantic
+ *     capabilities, policies, dialects and libraries without modifying this
+ *     universal grammar.
+ *
  * ============================================================================
- * 7. NO STATEMENT TERMINATOR
- * ============================================================================
- *
- * `adaptiveExpression` deliberately does not consume:
- *
- *     SEMICOLON
- *
- * The enclosing expression/statement grammar owns statement termination.
- */
-
-
-/*
- * ============================================================================
- * 8. NO CLOSED ADAPTATION VOCABULARY
- * ============================================================================
- *
- * This grammar deliberately does not contain alternatives for:
- *
- *     model
- *     strategy
- *     policy
- *     evidence
- *     feedback
- *     learning
- *     reasoning
- *     quantum
- *     hardware
- *     simulation
- *     distributed
- *
- * Those are values/semantic concepts, not universal syntax categories.
- */
-
-
-/*
- * ============================================================================
- * 9. FINAL INVARIANTS
- * ============================================================================
- *
- * INVARIANT 1
- * ----------
- *
- * `adaptiveExpression` is the sole expression-level universal adaptation
- * boundary.
- *
- * INVARIANT 2
- * ----------
- *
- * `adaptStatement` remains the sole statement-level adaptation boundary.
- *
- * INVARIANT 3
- * ----------
- *
- * Both converge on one semantic adaptation model.
- *
- * INVARIANT 4
- * ----------
- *
- * No second expression precedence hierarchy is introduced.
- *
- * INVARIANT 5
- * ----------
- *
- * No lexer rule is introduced.
- *
- * INVARIANT 6
- * ----------
- *
- * No application-specific adaptation syntax is introduced.
- *
- * INVARIANT 7
- * ----------
- *
- * No hardware target is encoded.
- *
- * INVARIANT 8
- * ----------
- *
- * No physical resource limit is encoded.
- *
- * INVARIANT 9
- * ----------
- *
- * No adaptation algorithm is hard-coded.
- *
- * INVARIANT 10
- * -----------
- *
- * Parsing performs no execution.
- */
-
-
-/*
- * ============================================================================
- * 10. TEST CONTRACT
+ * TEST CONTRACT
  * ============================================================================
  *
  * POSITIVE
  * --------
  *
  *     adapt(strategy)
- *
  *     adapt(model)
- *
  *     adapt(strategy, feedback)
- *
  *     adapt(model, training_result)
- *
  *     adapt(strategy, feedback, policy)
- *
  *     adapt(plan, observation, policy, evidence)
- *
  *     adapt(hybrid_plan, measurement_result, policy)
- *
  *     adapt(quantum_strategy, quantum_result, provenance)
- *
  *     adapt(distributed_strategy, distributed_result, resource_state)
- *
  *     adapt(hardware_plan, simulation_result, verification)
- *
  *     adapt(tensor_strategy, performance_observation)
- *
  *     adapt(strategy, infer(candidate))
- *
  *     adapt(strategy, query_result)
- *
  *     adapt(model, learning_result, confidence)
- *
  *     adapt(plan, evidence, provenance, policy, constraint)
  *
  * NEGATIVE
  * --------
  *
  *     adapt()
- *
  *     adapt(,)
- *
  *     adapt(strategy,)
- *
  *     adapt(strategy,,feedback)
- *
  *     adapt(strategy feedback)
- *
  *     adapt(strategy, feedback
- *
  *     adapt(strategy, feedback,)
  *
  * BOUNDARY
  * --------
  *
- * The expression must work wherever a primary expression is valid:
- *
- *     let x = adapt(strategy);
- *
- *     call(adapt(strategy, feedback));
- *
- *     result = adapt(plan, observation);
- *
- *     outer(adapt(inner(strategy)));
- *
+ *     outer(adapt(strategy))
+ *     call(adapt(model, observation))
  *     match adapt(strategy, evidence) { ... }
- *
- * The exact surrounding syntax is owned by the relevant expression/statement
- * grammars.
+ *     adapt(adapt(strategy), feedback)
  *
  * CROSS-DOMAIN
  * ------------
  *
  *     adapt(classical_strategy, classical_feedback)
- *
  *     adapt(quantum_strategy, measurement_result)
- *
  *     adapt(hybrid_strategy, quantum_result)
- *
  *     adapt(hardware_strategy, simulation_result)
- *
  *     adapt(distributed_strategy, distributed_result)
- *
- *     adapt(ai_strategy, learning_result)
- *
- *     adapt(execution_strategy, resource_observation)
+ *     adapt(tensor_strategy, performance_observation)
  *
  * SCALABILITY
- * ----------
- *
- * Test increasing:
- *
- *     target expression size
- *     context operand count
- *     nesting depth
- *     program size
- *
- * without introducing grammar-level ceilings.
- *
- * DETERMINISM
  * -----------
  *
- * Repeated parsing of identical source under identical configuration must
- * produce equivalent parse structure and source spans.
+ *     adapt(target)
+ *     adapt(target, context_a, context_b, context_c, ...)
  *
- * COMPATIBILITY
- * -------------
- *
- * Verify:
- *
- *     adapt strategy;
- *
- * continues to resolve through Adapt.adaptStatement.
- *
- * Verify:
- *
- *     mind.adapt(...)
- *
- * remains independent and valid through its existing expression grammar.
- *
- * ============================================================================
- * INTEGRATION CONTRACT
- * ============================================================================
- *
- * 1. grammar/expressions/expressions.g4
- *
- *    MUST import:
- *
- *        AdaptiveExpressions
- *
- *    and integrate:
- *
- *        adaptiveExpression
- *
- *    into its canonical primary-expression alternatives.
- *
- * 2. grammar/statements/adapt.g4
- *
- *    REMAINS unchanged as the owner of:
- *
- *        adaptStatement
- *
- *    It must NOT import this grammar merely to obtain expression operands.
- *
- * 3. grammar/ai/adaptation.g4
- *
- *    REMAINS the AI-domain adapter.
- *
- *    It MUST NOT define a second adaptation-expression grammar.
- *
- * 4. grammar/effects/adaptation.g4
- *
- *    Remains the effect-side semantic grammar/specification boundary.
- *
- * 5. grammar/resources/
- *
- *    Owns resource and capability semantics consumed downstream.
- *
- * 6. grammar/validation/
- *
- *    Owns contract semantics consumed downstream.
- *
- * 7. grammar/policies/
- *
- *    Owns policy semantics consumed downstream.
- *
- * 8. grammar/expressions/mind.g4
- *
- *    `mind.adapt(...)` remains valid.
- *
- *    It may converge semantically with `adapt(...)`.
- *
- * 9. grammar/Zamani.g4
- *
- *    Receives the expression through the existing Expressions composition
- *    root. It MUST NOT duplicate `adaptiveExpression` directly.
- *
- * 10. AST
- *
- *    The frontend maps both:
- *
- *        adaptiveExpression
- *        adaptStatement
- *
- *    to the same domain-neutral adaptation semantic representation where
- *    their semantics are equivalent.
- *
- * 11. IR
- *
- *    No adaptation-specific IR is created here.
- *
- *    If the adaptation affects quantum computation, the affected quantum
- *    semantics MUST eventually enter:
- *
- *        quantum::ir
- *
- * 12. Rust
- *
- *    No Rust implementation changes are required merely to parse the grammar,
- *    but the generated parser and frontend integration MUST remain compatible
- *    with Rust 1.97+ and Rust 2021.
+ * The parser imposes no language-level cardinality ceiling.
  *
  * ============================================================================
  * COMPLETION CRITERIA
  * ============================================================================
  *
- * THIS FILE IS DONE WHEN:
+ * This file is DONE when:
  *
- * [ ] `AdaptiveExpressions` is the canonical grammar name.
- *
- * [ ] `adaptiveExpression` is the only public expression-level adaptation
- *     rule.
- *
- * [ ] `adaptiveOperation` owns only the expression form.
- *
- * [ ] `adaptStatement` remains owned by `Adapt`.
- *
- * [ ] Both forms converge semantically.
- *
- * [ ] `expressionCore` resolves through the canonical assembled expression
- *     architecture.
- *
- * [ ] No second expression precedence hierarchy exists.
- *
- * [ ] No lexer rules exist here.
- *
- * [ ] No new keyword is required.
- *
- * [ ] No application-specific feature is hard-coded.
- *
- * [ ] No adaptation algorithm is hard-coded.
- *
- * [ ] No hardware target is hard-coded.
- *
- * [ ] No resource capacity is hard-coded.
- *
- * [ ] No physical topology is hard-coded.
- *
- * [ ] No quantum operation catalogue is hard-coded.
- *
- * [ ] No runtime operation occurs during parsing.
- *
- * [ ] No semantic decision occurs during parsing.
- *
- * [ ] Source spans are preserved by the parser/AST pipeline.
- *
- * [ ] Type analysis remains downstream.
- *
- * [ ] Effect analysis remains downstream.
- *
- * [ ] Capability analysis remains downstream.
- *
- * [ ] Resource analysis remains downstream.
- *
- * [ ] Contract analysis remains downstream.
- *
- * [ ] Policy analysis remains downstream.
- *
- * [ ] Provenance remains downstream.
- *
- * [ ] Quantum semantics ultimately use `quantum::ir`.
- *
- * [ ] `mind.adapt(...)` remains compatible.
- *
- * [ ] Statement-level `adapt ...;` remains compatible.
- *
- * [ ] Positive tests pass.
- *
- * [ ] Negative tests pass.
- *
- * [ ] Boundary tests pass.
- *
- * [ ] Cross-domain tests pass.
- *
- * [ ] Scalability tests pass.
- *
- * [ ] Determinism tests pass.
- *
- * [ ] Compatibility tests pass.
+ *     [ ] canonical ADAPT token is consumed;
+ *     [ ] no lexer rules are duplicated;
+ *     [ ] expressionCore is reused;
+ *     [ ] no competing expression precedence hierarchy exists;
+ *     [ ] expression-level adapt syntax parses;
+ *     [ ] statement-level adapt syntax remains separate;
+ *     [ ] both forms converge semantically;
+ *     [ ] AST remains domain-neutral;
+ *     [ ] type analysis remains downstream;
+ *     [ ] effect analysis remains downstream;
+ *     [ ] capability analysis remains downstream;
+ *     [ ] resource analysis remains downstream;
+ *     [ ] contract analysis remains downstream;
+ *     [ ] policy analysis remains downstream;
+ *     [ ] provenance remains downstream;
+ *     [ ] quantum semantics cross through quantum::ir;
+ *     [ ] no physical hardware is encoded;
+ *     [ ] no finite machine capacity is encoded;
+ *     [ ] no adaptation algorithm is enumerated;
+ *     [ ] parsing is deterministic;
+ *     [ ] parser contains no runtime behavior;
+ *     [ ] Rust 1.97+ compatibility is preserved;
+ *     [ ] safe Rust integration is preserved;
+ *     [ ] positive tests exist;
+ *     [ ] negative tests exist;
+ *     [ ] boundary tests exist;
+ *     [ ] cross-domain tests exist;
+ *     [ ] scalability tests exist;
+ *     [ ] compatibility tests exist.
  *
  * ============================================================================
  * END OF FILE
