@@ -17,10 +17,11 @@
  *
  * LANGUAGE BASELINE
  * -----------------
- * Rust 1.97.1+
+ * Rust 1.97+
  * Rust 2021
  * Safe Rust only
- * No unsafe Rust
+ * No embedded Rust
+ * No unsafe Rust requirement
  *
  * ============================================================================
  * FEATURE CONTRACT
@@ -29,80 +30,61 @@
  * PURPOSE
  * -------
  *
- * This file is the canonical source-grammar composition boundary for
- * multi-agent computation in Zamani.
+ * This grammar is the canonical parser-level composition boundary for
+ * multi-agent computation.
  *
- * It does NOT define a second agent language.
+ * IMPORTANT:
  *
- * It composes the existing canonical:
+ * This file does NOT define another agent language.
+ *
+ * Individual agent syntax remains exclusively owned by:
  *
  *     grammar/ai/agents.g4
+ *
+ * Actor syntax remains exclusively owned by:
+ *
  *     grammar/concurrency/actors.g4
  *
- * with the universal Zamani expression/type/statement model already owned by
- * those grammars.
+ * This grammar composes those existing constructs and provides parser-level
+ * boundaries for:
  *
- * The purpose of this file is to provide a stable parser-facing boundary for
- * computations involving multiple logical agents, including:
- *
- *     - agent groups;
- *     - agent composition;
+ *     - multiple agents;
+ *     - agent/actor participation;
+ *     - groups;
+ *     - compositions;
  *     - delegation;
  *     - coordination;
- *     - communication intent;
- *     - supervision relationships;
- *     - collaboration;
- *     - distributed agent execution;
- *     - actor-backed realization;
- *     - agent lifecycle composition;
- *     - shared goals;
- *     - task distribution;
- *     - agent references;
- *     - agent collections;
- *     - multi-agent blocks;
- *     - multi-agent invocations;
- *     - nested multi-agent composition.
+ *     - communication;
+ *     - supervision;
+ *     - participant analysis;
+ *     - nested composition;
+ *     - source-order preservation;
+ *     - semantic relationship analysis.
  *
- * The grammar deliberately leaves:
- *
- *     - agent identity semantics;
- *     - actor identity;
- *     - message transport;
- *     - networking;
- *     - distributed placement;
- *     - scheduling;
- *     - resource allocation;
- *     - capability resolution;
- *     - policy evaluation;
- *     - authorization;
- *     - model execution;
- *     - learning;
- *     - reasoning;
- *     - adaptation;
- *     - quantum execution;
- *     - hardware realization;
- *     - runtime behavior
- *
- * to their existing owning subsystems.
+ * The semantic layer determines the actual meaning of these constructs.
  *
  *
  * ============================================================================
- * ARCHITECTURAL PRINCIPLE
+ * CORE ARCHITECTURAL RULE
  * ============================================================================
  *
- * Multi-agent computation is a semantic composition of existing Zamani
- * constructs.
+ * Multi-agent computation is a semantic composition of ordinary Zamani
+ * computation participants.
  *
  * It is NOT:
  *
- *     multi-agent language
- *     actor language
- *     distributed language
- *     networking language
- *     AI-only runtime
- *     agent-specific IR
+ *     a second actor language;
+ *     a second distributed language;
+ *     a second networking language;
+ *     a second concurrency language;
+ *     a second AI language;
+ *     a second IR;
+ *     a hardware-placement language.
  *
- * The intended pipeline is:
+ *
+ * ============================================================================
+ * PIPELINE
+ * ============================================================================
  *
  *     source
  *        |
@@ -118,80 +100,84 @@
  *        v
  *     structural validation
  *        |
- *        +-----------------------------+
- *        |                             |
- *        v                             v
- *     agent semantics            actor semantics
- *        |                             |
- *        +-------------+---------------+
- *                      |
- *                      v
- *             semantic multi-agent model
- *                      |
- *          +-----------+-----------+
- *          |           |           |
- *          v           v           v
- *       effects    resources   capabilities
- *          |           |           |
- *          +-----------+-----------+
- *                      |
- *                      v
- *                   policies
- *                      |
- *                      v
- *                 provenance
- *                      |
- *                      v
- *               canonical IR
- *                      |
- *          +-----------+-----------+
- *          |           |           |
- *          v           v           v
- *       classical   quantum::ir   HDL/hardware
- *                      |
- *                      v
- *                 optimization
- *                      |
- *                 scheduling
- *                      |
- *                 routing
- *                      |
- *                 resilience
- *                      |
- *                    ZQN
- *                      |
- *                    HAL
- *                      |
- *               target realization
+ *        +-----------------------+
+ *        |                       |
+ *        v                       v
+ *     agent semantics       actor semantics
+ *        |                       |
+ *        +-----------+-----------+
+ *                    |
+ *                    v
+ *          multi-agent semantic model
+ *                    |
+ *          +---------+---------+
+ *          |         |         |
+ *          v         v         v
+ *       effects   resources capabilities
+ *          |         |         |
+ *          +---------+---------+
+ *                    |
+ *                    v
+ *                 policies
+ *                    |
+ *                    v
+ *                provenance
+ *                    |
+ *                    v
+ *             canonical semantic IR
+ *                    |
+ *          +---------+---------+
+ *          |         |         |
+ *          v         v         v
+ *      classical  quantum::ir HDL/hardware
+ *                    |
+ *                    v
+ *                optimization
+ *                    |
+ *                scheduling
+ *                    |
+ *                  routing
+ *                    |
+ *                resilience
+ *                    |
+ *                   ZQN
+ *                    |
+ *                   HAL
+ *                    |
+ *             target realization
  *
  *
  * ============================================================================
  * OWNS
  * ============================================================================
  *
- * This file owns ONLY the parser-level multi-agent composition boundary.
- *
- * Specifically it owns:
+ * This file owns parser-level multi-agent composition boundaries:
  *
  *     multiAgentConstruct
  *     multiAgentAgentConstruct
  *     multiAgentActorConstruct
+ *     multiAgentGroup
+ *     multiAgentComposition
+ *     multiAgentBody
  *     multiAgentMember
  *     multiAgentMembers
- *     multiAgentBody
- *     multiAgentGroup
- *     multiAgentGroupMember
- *     multiAgentComposition
- *     multiAgentCompositionMember
  *     multiAgentDelegation
  *     multiAgentCoordination
  *     multiAgentCommunication
  *     multiAgentSupervision
+ *     multiAgentRelationship
+ *     multiAgentRelationships
+ *     multiAgentParticipant
+ *     multiAgentParticipants
+ *     multiAgentUnit
+ *     multiAgentUnits
  *     multiAgentReference
  *     multiAgentExpression
  *     multiAgentType
- *
- * These rules are integration adapters and composition boundaries.
+ *     multiAgentArgumentList
+ *     multiAgentOrderedMember
+ *     nestedMultiAgentConstruct
+ *     multiAgentDomainConstruct
  *
  *
  * ============================================================================
@@ -202,32 +188,35 @@
  *
  *     identifiers
  *     qualified names
+ *     lexical tokens
  *     expressions
+ *     expression precedence
  *     types
- *     ordinary statements
+ *     statements
+ *     declarations
  *     agent syntax
  *     actor syntax
  *     channels
  *     futures
+ *     tasks
  *     asynchronous execution
  *     networking
  *     distributed topology
- *     resources
- *     capabilities
- *     effects
- *     contracts
- *     policies
- *     provenance
- *     model syntax
- *     training syntax
- *     inference syntax
- *     reasoning syntax
- *     learning syntax
- *     adaptation syntax
+ *     resource discovery
+ *     capability discovery
+ *     policy enforcement
+ *     authorization
+ *     model execution
+ *     reasoning
+ *     learning
+ *     adaptation
+ *     uncertainty
+ *     provenance semantics
  *     quantum syntax
+ *     quantum operations
+ *     QEC
  *     HDL syntax
- *     hardware syntax
- *     target selection
+ *     hardware topology
  *     scheduling
  *     routing
  *     placement
@@ -235,692 +224,426 @@
  *     agent IR
  *     multi-agent IR
  *     quantum::ir
- *     QEC
  *     ZQN
  *     HAL
  *     runtime execution
  *
  *
  * ============================================================================
- * SINGLE-AUTHORITY RULE
- * ============================================================================
- *
- * Agent syntax is owned exclusively by:
- *
- *     grammar/ai/agents.g4
- *
- * Actor syntax is owned exclusively by:
- *
- *     grammar/concurrency/actors.g4
- *
- * General concurrency composition is owned by:
- *
- *     grammar/concurrency/concurrency.g4
- *
- * Channel syntax is owned by:
- *
- *     grammar/concurrency/channels.g4
- *
- * Networking syntax is owned by:
- *
- *     grammar/networking/
- *
- * Distributed syntax is owned by:
- *
- *     grammar/distributed/
- *
- * This file MUST NOT reproduce those grammars.
- *
- *
- * ============================================================================
- * WHY THIS FILE EXISTS
- * ============================================================================
- *
- * A single agent grammar is sufficient for an individual agent.
- *
- * Multi-agent computation additionally requires a stable semantic boundary
- * through which the compiler can recognize that several agent/actor constructs
- * participate in one higher-level composition.
- *
- * That boundary is important for:
- *
- *     - semantic validation;
- *     - dependency analysis;
- *     - delegation analysis;
- *     - communication analysis;
- *     - coordination analysis;
- *     - resource analysis;
- *     - capability negotiation;
- *     - effect analysis;
- *     - policy enforcement;
- *     - provenance;
- *     - distributed lowering;
- *     - deterministic execution analysis.
- *
- * None of those semantics are implemented in this grammar.
- *
- *
- * ============================================================================
- * OPEN-WORLD DESIGN
- * ============================================================================
- *
- * Zamani must not require a lexer keyword for every future agent concept.
- *
- * Existing agent syntax intentionally supports:
- *
- *     @identifier
- *
- * Therefore future concepts can be represented structurally without expanding
- * the permanent lexical vocabulary.
- *
- * Examples of semantic roles include:
- *
- *     @agent
- *     @group
- *     @delegate
- *     @coordinate
- *     @message
- *     @observe
- *     @act
- *     @goal
- *     @plan
- *     @supervise
- *     @checkpoint
- *     @learn
- *     @adapt
- *     @reason
- *     @explain
- *     @evidence
- *     @provenance
- *     @requires
- *     @policy
- *
- * These are semantic identifiers.
- *
- * This grammar MUST NOT create permanent lexer keywords for them merely because
- * they are useful agent concepts.
- *
- *
- * ============================================================================
- * LEXER CONTRACT
- * ============================================================================
- *
- * The canonical lexer is:
- *
- *     grammar/antlr/ZamaniLexer.g4
- *
- * Required lexical primitives are inherited through the imported grammars.
- *
- * This file MUST NOT declare lexer rules.
- *
- * This file MUST NOT introduce:
- *
- *     AGENT
- *     GROUP
- *     DELEGATE
- *     COORDINATE
- *     MESSAGE
- *     SUPERVISE
- *     MULTI_AGENT
- *
- * as mandatory lexer tokens.
- *
- * The canonical annotation form remains:
- *
- *     AT identifier
- *
- *
- * ============================================================================
  * DEPENDENCY CONTRACT
  * ============================================================================
  *
- * DEPENDS_ON
- * ----------
+ * DEPENDS_ON:
  *
  *     grammar/ai/agents.g4
  *     grammar/concurrency/actors.g4
  *
- * The imported agent grammar provides:
- *
- *     agentConstruct
- *     agentBody
- *     agentMember
- *     agentExpression
- *     agentType
- *     agentReference
- *
- * The imported actor grammar provides:
- *
- *     actorConstruct
- *     actorDeclaration
- *     actorSpawnExpression
- *     actorSendExpression
- *     actorAskExpression
- *     actorForwardExpression
- *     actorLifecycleExpression
- *     actorSupervisionConstruct
- *
- * General expressions/types/statements are inherited through those canonical
- * grammars.
+ * Transitive universal dependencies are provided by those canonical grammars.
  *
  *
- * ============================================================================
- * EXPORT CONTRACT
- * ============================================================================
- *
- * PRIMARY PUBLIC RULE
- * -------------------
+ * EXPORTS:
  *
  *     multiAgentConstruct
- *
- * This is the only rule that the AI composition grammar should normally
- * consume.
- *
- *
- * SECONDARY PUBLIC RULES
- * ----------------------
- *
  *     multiAgentAgentConstruct
  *     multiAgentActorConstruct
  *     multiAgentGroup
  *     multiAgentComposition
+ *     multiAgentBody
+ *     multiAgentMember
+ *     multiAgentMembers
  *     multiAgentDelegation
  *     multiAgentCoordination
  *     multiAgentCommunication
  *     multiAgentSupervision
+ *     multiAgentRelationship
+ *     multiAgentRelationships
+ *     multiAgentParticipant
+ *     multiAgentParticipants
+ *     multiAgentUnit
+ *     multiAgentUnits
  *     multiAgentReference
  *     multiAgentExpression
  *     multiAgentType
+ *     multiAgentArgumentList
+ *     multiAgentOrderedMember
+ *     nestedMultiAgentConstruct
+ *     multiAgentDomainConstruct
  *
- * These rules exist for semantic tooling, conformance tests, and domain
- * adapters.
  *
- *
- * ============================================================================
- * CONSUMED BY
- * ============================================================================
- *
- * Primary consumer:
+ * CONSUMED_BY:
  *
  *     grammar/ai/ai.g4
  *
- * Recommended AI composition:
+ * Future semantic/conformance tooling may consume the secondary boundaries.
  *
- *     import
- *         Types,
- *         Expressions,
- *         Statements,
- *         AIModels,
- *         AIDatasets,
- *         AITensors,
- *         AITraining,
- *         Inference,
- *         MultiAgent,
- *         AIDifferentiable,
- *         AIPipelines,
- *         AIAccelerators,
- *         ModelDeployment
- *     ;
  *
- * AI.g4 should consume:
+ * AST_OWNER:
  *
- *     multiAgentConstruct
+ *     Existing domain-neutral Zamani frontend AST.
  *
- * rather than importing Agents separately in the same composition layer.
  *
- * MultiAgent.g4 owns the composition dependency on Agents.
+ * SEMANTIC_OWNER:
+ *
+ *     AI semantic layer
+ *     concurrency semantic layer
+ *     distributed semantic layer
+ *     policy/resource/effect/provenance layers
+ *
+ *
+ * IR_OWNER:
+ *
+ *     Existing canonical semantic IR/domain IR pipeline.
+ *
+ *     No multi-agent-specific IR is created by this grammar.
+ *
+ *
+ * TEST_OWNER:
+ *
+ *     grammar/tests/ai/
+ *     grammar/tests/concurrency/
+ *     grammar/tests/distributed/
+ *     grammar/tests/boundary/
+ *     grammar/tests/scalability/
+ *
+ *
+ * SPEC_OWNER:
+ *
+ *     grammar/spec/ai.md
+ *     grammar/spec/policies.md
+ *     grammar/spec/resources.md
+ *     grammar/spec/effects.md
+ *     grammar/spec/provenance.md
  *
  *
  * ============================================================================
- * DEPENDENCY-DIRECTION RULE
+ * SINGLE-AUTHORITY RULE
  * ============================================================================
  *
- * Dependency direction is:
+ * Agent syntax:
  *
- *     AI
- *      |
- *      v
- *     MultiAgent
- *      |
- *      +----------------+
- *      |                |
- *      v                v
- *   Agents           Actors
+ *     grammar/ai/agents.g4
  *
- * NOT:
+ * Actor syntax:
  *
- *     AI -> Agents
- *     AI -> MultiAgent
- *     MultiAgent -> Agents
+ *     grammar/concurrency/actors.g4
  *
- * simultaneously.
+ * Multi-agent composition:
  *
- * That would risk duplicate imported rule ownership.
+ *     THIS FILE
  *
- * Therefore the canonical integration is:
+ * Concurrency aggregation:
  *
- *     AI -> MultiAgent -> Agents
- *                        -> Actors
+ *     grammar/concurrency/concurrency.g4
+ *
+ * Distributed execution:
+ *
+ *     grammar/distributed/
+ *
+ * Networking:
+ *
+ *     grammar/networking/
+ *
+ * No file may introduce a competing agent or actor declaration syntax.
+ *
+ *
+ * ============================================================================
+ * CRITICAL CORRECTION
+ * ============================================================================
+ *
+ * The old design attempted to make constructs such as:
+ *
+ *     @group Research { ... }
+ *
+ * and:
+ *
+ *     @composition { ... }
+ *
+ * special multi-agent syntax.
+ *
+ * That is incorrect because `agents.g4` already structurally owns:
+ *
+ *     @ identifier identifier ...
+ *
+ * and:
+ *
+ *     @ identifier ...
+ *
+ * Therefore such constructs can already be parsed by `agentConstruct`.
+ *
+ * Creating another parser alternative for the same syntax would introduce:
+ *
+ *     duplicate ownership;
+ *     ambiguity;
+ *     unstable parse-tree expectations;
+ *     unnecessary semantic adapters;
+ *     future compatibility problems.
+ *
+ * This production grammar therefore treats agent syntax as authoritative and
+ * exposes multi-agent semantics through composition boundaries instead.
+ *
+ *
+ * ============================================================================
+ * OPEN-WORLD RULE
+ * ============================================================================
+ *
+ * No permanent lexer keyword is introduced for:
+ *
+ *     group
+ *     delegate
+ *     coordinate
+ *     communicate
+ *     supervise
+ *     consensus
+ *     negotiate
+ *     swarm
+ *     federation
+ *     collaboration
+ *     planner
+ *     worker
+ *     coordinator
+ *     leader
+ *     participant
+ *
+ * These are semantic concepts.
+ *
+ * The existing open-world annotation mechanism from `agents.g4` remains
+ * authoritative.
+ *
+ * This allows future coordination strategies, protocols and organizational
+ * models to be introduced through semantic registries, libraries, dialects,
+ * capabilities and policies without changing the universal parser merely
+ * because a new concept appears.
+ *
+ *
+ * ============================================================================
+ * SCALABILITY CONTRACT
+ * ============================================================================
+ *
+ * The grammar imposes no universal upper bound on:
+ *
+ *     agents
+ *     actors
+ *     groups
+ *     relationships
+ *     messages
+ *     participants
+ *     tasks
+ *     goals
+ *     delegation chains
+ *     coordination relationships
+ *     nesting depth
+ *     source size
+ *     resource quantities
+ *     nodes
+ *     CPUs
+ *     GPUs
+ *     FPGAs
+ *     QPUs
+ *     accelerators
+ *     memory
+ *     network size
+ *
+ * Repetition uses ordinary grammar constructs such as:
+ *
+ *     *
+ *     +
+ *
+ * rather than fixed cardinalities.
+ *
+ * Physical limits are implementation/runtime constraints, never language
+ * ceilings.
+ *
+ *
+ * ============================================================================
+ * POCO-REAF CONTRACT
+ * ============================================================================
+ *
+ * A multi-agent program expresses portable computational intent.
+ *
+ * It does not encode:
+ *
+ *     a fixed number of machines;
+ *     a fixed number of agents;
+ *     a fixed number of processes;
+ *     a fixed number of threads;
+ *     a fixed number of network nodes;
+ *     a fixed actor placement;
+ *     a fixed accelerator;
+ *     a fixed QPU;
+ *     a fixed topology.
+ *
+ * Resource and capability requirements are resolved downstream.
+ *
+ * Therefore the same source structure can be considered for:
+ *
+ *     tiny embedded execution;
+ *     single-process execution;
+ *     multicore execution;
+ *     GPU-backed execution;
+ *     accelerator execution;
+ *     FPGA/ASIC realization;
+ *     quantum-assisted execution;
+ *     simulator execution;
+ *     HPC execution;
+ *     cluster execution;
+ *     distributed execution;
+ *     cloud execution;
+ *     future execution substrates.
  *
  *
  * ============================================================================
  * AST CONTRACT
  * ============================================================================
  *
- * This grammar creates parser contexts only.
+ * Parser contexts are converted by the existing frontend into the
+ * domain-neutral AST.
  *
- * The frontend AST remains domain-neutral.
+ * The AST must preserve, where present:
  *
- * The AST should preserve enough source structure for semantic analysis to
- * distinguish:
- *
- *     agent membership
- *     actor participation
- *     group membership
+ *     source span
+ *     participant order
+ *     participant identity/reference
+ *     agent/actor origin
  *     composition nesting
- *     delegation relationship
- *     coordination relationship
- *     communication relationship
- *     supervision relationship
- *     expressions
- *     types
- *     source locations
+ *     relationship kind
+ *     relationship target
+ *     relationship arguments
+ *     expression structure
+ *     type structure
  *
- * The AST MUST NOT contain:
+ * The AST MUST NOT introduce:
  *
+ *     PhysicalAgent
  *     AgentCPU
  *     AgentGPU
  *     AgentQPU
  *     AgentNode
- *     AgentDevice
  *     AgentThread
- *     PhysicalAgent
+ *     AgentDevice
  *     PhysicalMailbox
- *     PhysicalAgentAddress
+ *     PhysicalTopology
  *
- * or equivalent target-specific structures.
+ * or equivalent target-specific nodes.
  *
  *
  * ============================================================================
  * SEMANTIC CONTRACT
  * ============================================================================
  *
- * Semantic analysis is responsible for determining:
+ * Semantic analysis determines:
  *
- *     - whether a collection actually represents multiple agents;
- *     - whether referenced agents exist;
+ *     - whether participants resolve;
  *     - whether references are valid;
- *     - whether delegation is permitted;
+ *     - whether a relationship is legal;
+ *     - whether delegation is authorized;
  *     - whether coordination is valid;
- *     - whether communication is legal;
- *     - whether actor-backed communication is legal;
- *     - whether supervision relationships are valid;
- *     - whether cycles are permitted;
+ *     - whether communication is permitted;
+ *     - whether supervision is valid;
+ *     - whether cycles are legal;
  *     - whether ordering constraints are satisfied;
  *     - whether policies permit the operation;
- *     - whether capabilities exist;
- *     - whether resources satisfy requirements;
+ *     - whether required capabilities exist;
+ *     - whether resource requirements are satisfiable;
  *     - whether effects are permitted;
- *     - whether adaptation is authorized;
  *     - whether provenance requirements are satisfied;
- *     - whether distributed execution is feasible;
- *     - whether the resulting computation is portable.
+ *     - whether execution is deterministic where required;
+ *     - whether distributed realization is feasible.
  *
- * The parser MUST NOT make these decisions.
- *
- *
- * ============================================================================
- * AGENT SEMANTICS
- * ============================================================================
- *
- * Individual agents remain owned by Agents.
- *
- * This file therefore uses:
- *
- *     agentConstruct
- *
- * rather than redefining:
- *
- *     @agent
- *     @goal
- *     @model
- *     @tool
- *     @memory
- *     @plan
- *     @observe
- *     @act
- *
- * This preserves a single agent syntax authority.
+ * None of those decisions belong in this parser.
  *
  *
  * ============================================================================
- * ACTOR SEMANTICS
+ * TYPE CONTRACT
  * ============================================================================
  *
- * Actors remain owned by Actors.
+ * Types remain owned by the canonical type grammar.
  *
- * This file therefore consumes:
+ * `multiAgentType` is only an integration alias for `typeExpression`.
  *
- *     actorConstruct
+ * No second:
  *
- * rather than defining another:
+ *     AgentType
+ *     ActorType
+ *     MultiAgentType
  *
- *     actor
- *     mailbox
- *     send
- *     receive
- *     spawn
- *     supervise
- *
- * language.
- *
- * An agent MAY be realized by an actor, but:
- *
- *     agent != actor
- *
- * An actor is a concurrency realization model.
- *
- * An agent is a semantic computation participant.
- *
- * Semantic analysis determines whether and how they correspond.
- *
- *
- * ============================================================================
- * MULTI-AGENT CONSTRUCT
- * ============================================================================
- *
- * The primary boundary accepts:
- *
- *     individual agent constructs;
- *     actor constructs;
- *     multi-agent groups;
- *     multi-agent compositions.
- *
- * It does not force every agent to use an actor runtime.
- *
- * This permits implementations such as:
- *
- *     sequential agents
- *     asynchronous agents
- *     actor-backed agents
- *     distributed agents
- *     accelerator-backed agents
- *     quantum-assisted agents
- *     simulator-backed agents
- *     heterogeneous agents
- *     future execution substrates
- *
- * without changing the source grammar.
- *
- *
- * ============================================================================
- * GROUP MODEL
- * ============================================================================
- *
- * A group is a logical collection of agent constructs.
- *
- * The grammar does not assign:
- *
- *     CPU
- *     GPU
- *     QPU
- *     node
- *     process
- *     thread
- *     physical address
- *
- * to any member.
- *
- * Example conceptual structure:
- *
- *     @group Research {
- *         @agent Analyst {
- *             ...
- *         }
- *
- *         @agent Planner {
- *             ...
- *         }
- *     }
- *
- * The actual meaning of `group`, `Research`, `Analyst`, and `Planner` is
- * determined by semantic analysis.
- *
- * Because the base agent grammar is open-world, no new lexer keyword is
- * required for `group`.
- *
- *
- * ============================================================================
- * COMPOSITION MODEL
- * ============================================================================
- *
- * Multi-agent composition is intentionally generic.
- *
- * A composition may contain:
- *
- *     agents
- *     actors
- *     ordinary statements
- *     nested groups
- *     expressions
- *
- * This permits a group to contain computation rather than being a static
- * metadata-only declaration.
- *
- *
- * ============================================================================
- * DELEGATION
- * ============================================================================
- *
- * Delegation is a semantic relationship between computation participants.
- *
- * The grammar exposes:
- *
- *     multiAgentDelegation
- *
- * as a stable parser-facing boundary.
- *
- * It does not define:
- *
- *     task scheduling
- *     load balancing
- *     worker allocation
- *     resource assignment
- *     network transport
- *     authorization
- *
- * Those are downstream concerns.
- *
- * Conceptual form:
- *
- *     @delegate target(task);
- *
- * or:
- *
- *     @delegate target {
- *         ...
- *     }
- *
- * The generic annotation structure remains open-world.
- *
- *
- * ============================================================================
- * COORDINATION
- * ============================================================================
- *
- * Coordination is a semantic relationship among multiple computation
- * participants.
- *
- * The grammar exposes:
- *
- *     multiAgentCoordination
- *
- * without enumerating coordination algorithms.
- *
- * Therefore the language does NOT require grammar additions for:
- *
- *     consensus
- *     voting
- *     leader election
- *     bargaining
- *     negotiation
- *     planning
- *     distributed search
- *     swarm algorithms
- *     future coordination algorithms
- *
- * Those algorithms belong to semantic libraries, dialects, capabilities,
- * policies, or runtime systems.
- *
- *
- * ============================================================================
- * COMMUNICATION
- * ============================================================================
- *
- * Multi-agent communication must reuse the existing communication model.
- *
- * The grammar does not define a new message language.
- *
- * Agent communication may ultimately use:
- *
- *     actor messages
- *     channels
- *     asynchronous communication
- *     networking
- *     distributed messaging
- *     service calls
- *     future communication substrates
- *
- * This file exposes a semantic composition boundary only.
- *
- *
- * ============================================================================
- * SUPERVISION
- * ============================================================================
- *
- * Supervision may be realized through:
- *
- *     actor supervision
- *     distributed supervision
- *     policy-controlled recovery
- *     resilience management
- *     execution recovery
- *
- * The parser does not decide which implementation is used.
- *
- * Existing actor supervision remains authoritative.
- *
- *
- * ============================================================================
- * RESOURCE CONTRACT
- * ============================================================================
- *
- * Multi-agent syntax MUST NOT encode physical capacities.
- *
- * Forbidden universal constructs include:
- *
- *     run_on_8_agents
- *     use_4_workers
- *     agent_cpu_0
- *     agent_gpu_0
- *     agent_qpu_0
- *     run_on_16_nodes
- *     max_agents = 100
- *     max_workers = 1000
- *
- * These are not language architecture.
- *
- * Resource intent belongs to:
- *
- *     grammar/resources/
- *
- * For example, semantic resource requirements may express:
- *
- *     requires capability("distributed.compute");
- *
- *     requires capability("agent.coordination");
- *
- *     requires memory >= required_memory;
- *
- *     requires nodes >= required_nodes;
- *
- *     requires topology(required_topology);
- *
- * without fixing the physical realization.
- *
- *
- * ============================================================================
- * CAPABILITY CONTRACT
- * ============================================================================
- *
- * Agent capabilities remain open-world.
- *
- * Examples:
- *
- *     capability("agent.reasoning")
- *     capability("agent.learning")
- *     capability("agent.coordination")
- *     capability("distributed.compute")
- *     capability("network.messaging")
- *     capability("quantum.compute")
- *     capability("tensor.compute")
- *
- * These are capability identities, not grammar keywords.
- *
- * Capability declaration and resolution remain owned by:
- *
- *     grammar/resources/
+ * hierarchy is created here.
  *
  *
  * ============================================================================
  * EFFECT CONTRACT
  * ============================================================================
  *
- * Multi-agent computation may produce or require effects such as:
+ * Multi-agent constructs may semantically carry effects such as:
  *
- *     io
- *     network
+ *     concurrency
  *     distributed
+ *     network
  *     mutation
+ *     communication
+ *     foreign
+ *     native
  *     randomness
  *     learning
  *     adaptation
- *     measurement
- *     foreign
- *     native
  *     reflection
+ *     quantum
  *     simulation
  *
- * Effects are owned by:
+ * Effect classification belongs to the existing effects subsystem.
  *
- *     grammar/effects/
- *
- * This file does not enumerate or enforce them.
+ * This grammar does not invent a second effect vocabulary.
  *
  *
  * ============================================================================
- * POLICY CONTRACT
+ * CAPABILITY CONTRACT
  * ============================================================================
  *
- * Multi-agent computation may be governed by:
+ * Capability requirements remain open-world.
  *
- *     authorization
- *     resource policy
- *     communication policy
- *     delegation policy
- *     adaptation policy
- *     security policy
- *     deployment policy
- *     fallback policy
+ * Examples of semantic capabilities may include:
  *
- * Policy ownership remains outside this grammar.
+ *     communication
+ *     distributed.compute
+ *     actor.execute
+ *     quantum.compute
+ *     tensor.compute
+ *     model.inference
+ *
+ * No fixed capability list is encoded here.
  *
  *
  * ============================================================================
- * CONTRACTS
+ * RESOURCE CONTRACT
  * ============================================================================
  *
- * Multi-agent constructs may participate in:
+ * Multi-agent computation may require resources, but this grammar does not
+ * select or limit resources.
+ *
+ * Requirements are represented through the existing resource model.
+ *
+ * Examples:
+ *
+ *     requires capability("distributed.compute");
+ *     requires memory >= required_memory;
+ *     requires topology(required_topology);
+ *
+ * remain semantic/resource constructs.
+ *
+ * No:
+ *
+ *     MAX_AGENTS
+ *     MAX_NODES
+ *     MAX_MESSAGES
+ *     MAX_THREADS
+ *
+ * or equivalent universal limit is permitted.
+ *
+ *
+ * ============================================================================
+ * CONTRACT CONTRACT
+ * ============================================================================
+ *
+ * Multi-agent operations may participate in:
  *
  *     requires
  *     ensures
@@ -928,311 +651,188 @@
  *     assume
  *     guarantee
  *     property
+ *     evidence
  *
- * The contract subsystem remains authoritative.
+ * Contract syntax remains owned by the validation subsystem.
  *
- * This grammar MUST NOT reproduce contract syntax.
+ * This grammar only provides composition boundaries.
+ *
+ *
+ * ============================================================================
+ * POLICY CONTRACT
+ * ============================================================================
+ *
+ * Multi-agent computation may be constrained by policies controlling:
+ *
+ *     communication
+ *     delegation
+ *     resource usage
+ *     capabilities
+ *     security
+ *     adaptation
+ *     execution
+ *     deployment
+ *     provenance
+ *
+ * Policy syntax and enforcement remain outside this grammar.
  *
  *
  * ============================================================================
  * PROVENANCE CONTRACT
  * ============================================================================
  *
- * Multi-agent operations must remain source-traceable.
+ * Semantic analysis may record:
  *
- * Downstream provenance may record:
+ *     participant origin
+ *     delegation reason
+ *     coordination decision
+ *     communication decision
+ *     policy decision
+ *     resource decision
+ *     transformation
+ *     generated artifact
+ *     verification
+ *
+ * Provenance semantics remain owned by the provenance subsystem.
+ *
+ *
+ * ============================================================================
+ * QUANTUM BOUNDARY
+ * ============================================================================
+ *
+ * This grammar contains no quantum operation syntax.
+ *
+ * An agent may semantically invoke quantum computation through ordinary
+ * Zamani expressions/statements.
+ *
+ * The quantum path remains:
  *
  *     source
- *     agent
- *     relationship
- *     delegation
- *     coordination
- *     communication
- *     decision
- *     evidence
- *     transformation
- *     policy
- *     execution context
- *     version
- *
- * The grammar only preserves source structure.
- *
- *
- * ============================================================================
- * KNOWLEDGE / REASONING / LEARNING / ADAPTATION
- * ============================================================================
- *
- * Multi-agent computation may use the existing generic semantic capabilities
- * for:
- *
- *     reasoning
- *     inference
- *     deduction
- *     knowledge
- *     querying
- *     learning
- *     adaptation
- *     explanation
- *     evidence
- *     uncertainty
- *
- * This file MUST NOT create:
- *
- *     AgentReasoningIR
- *     AgentLearningIR
- *     AgentKnowledgeIR
- *
- * The same semantic facilities must remain usable by ordinary programs,
- * classical computation, quantum computation, hybrid computation, distributed
- * computation, and other domains.
- *
- *
- * ============================================================================
- * QUANTUM INTEGRATION
- * ============================================================================
- *
- * A multi-agent computation may contain or invoke quantum computation.
- *
- * This file does NOT define:
- *
- *     qubits
- *     gates
- *     circuits
- *     measurements
- *     topology
- *     calibration
- *     routing
- *     QEC
- *
- * Those remain owned by:
- *
- *     grammar/quantum/
- *
- * Quantum semantics must eventually reach:
- *
+ *       |
+ *       v
+ *     domain-neutral AST
+ *       |
+ *       v
+ *     semantic quantum model
+ *       |
+ *       v
  *     quantum::ir
+ *       |
+ *       v
+ *     optimization
+ *       |
+ *       v
+ *     decomposition
+ *       |
+ *       v
+ *     routing
+ *       |
+ *       v
+ *     scheduling
+ *       |
+ *       v
+ *     resilience/QEC
+ *       |
+ *       v
+ *     ZQN
+ *       |
+ *       v
+ *     HAL
  *
- * through the ordinary semantic pipeline.
- *
- * There is no:
- *
- *     MultiAgentQuantumIR
+ * No physical qubit, gate catalog, calibration value, QPU identity or topology
+ * is encoded here.
  *
  *
  * ============================================================================
- * HYBRID INTEGRATION
+ * HDL / HARDWARE BOUNDARY
  * ============================================================================
  *
- * Multi-agent computation may coordinate:
+ * Multi-agent constructs may coordinate hardware-oriented computation.
  *
- *     classical computation
- *     quantum computation
- *     tensor computation
- *     accelerator computation
- *     HDL/hardware intent
- *     distributed computation
+ * Hardware realization remains owned by:
  *
- * The multi-agent grammar remains domain-neutral.
- *
- *
- * ============================================================================
- * HDL / HARDWARE INTEGRATION
- * ============================================================================
- *
- * Agents may coordinate hardware-oriented computation, but this grammar does
- * not define hardware syntax.
- *
- * It must not encode:
- *
- *     fixed register widths
- *     fixed wire widths
- *     fixed device counts
- *     fixed accelerator counts
- *     fixed FPGA sizes
- *     fixed ASIC resources
- *     fixed memory sizes
- *
- * Hardware intent remains owned by:
- *
- *     grammar/hdl/
  *     grammar/hardware/
- *
- *
- * ============================================================================
- * DISTRIBUTED INTEGRATION
- * ============================================================================
- *
- * Multi-agent execution may be distributed.
+ *     grammar/hdl/
  *
  * This grammar does not define:
  *
- *     node IDs
- *     node counts
- *     network topology
- *     placement
- *     routing
- *     consensus implementation
- *     distributed storage
- *
- * Those concerns belong to:
- *
- *     grammar/distributed/
- *     grammar/networking/
- *     grammar/resources/
- *
- * A multi-agent source program therefore describes semantic relationships,
- * not physical deployment.
+ *     wires
+ *     fixed-width buses
+ *     registers
+ *     physical devices
+ *     board identifiers
+ *     FPGA resources
+ *     ASIC cells
+ *     clock topology
+ *     physical placement
  *
  *
  * ============================================================================
- * DETERMINISM CONTRACT
+ * BACKEND BOUNDARY
  * ============================================================================
  *
- * Parsing MUST depend only on:
+ * This grammar produces parser structure only.
+ *
+ * Backends consume semantic information after:
+ *
+ *     type checking
+ *     effect checking
+ *     capability resolution
+ *     resource analysis
+ *     policy analysis
+ *     provenance
+ *     canonical semantic lowering
+ *
+ * No backend is selected here.
+ *
+ *
+ * ============================================================================
+ * DETERMINISM
+ * ============================================================================
+ *
+ * Parsing depends only on:
  *
  *     source text
+ *     selected grammar
  *     lexer vocabulary
- *     grammar version
+ *     parser rules
  *
- * Parsing MUST NOT depend on:
+ * Parsing must not depend on:
  *
  *     hardware
- *     number of agents available at runtime
- *     number of CPUs
- *     number of GPUs
- *     number of QPUs
+ *     runtime state
  *     network state
+ *     wall clock
+ *     random values
  *     resource availability
- *     filesystem state
  *     environment variables
- *     wall-clock time
- *     randomness
- *     runtime agent state
  *
  *
  * ============================================================================
- * POCO-REAF / SCALABILITY CONTRACT
+ * SAFETY
  * ============================================================================
  *
- * This grammar contains NO universal limits on:
+ * This grammar contains:
  *
- *     agents
- *     groups
- *     nested groups
- *     relationships
- *     messages
- *     goals
- *     tasks
- *     delegations
- *     coordination relationships
- *     supervisors
- *     actors
- *     nodes
- *     devices
- *     CPUs
- *     GPUs
- *     FPGAs
- *     ASICs
- *     QPUs
- *     qubits
- *     memory
- *     threads
- *     tensor dimensions
- *     network size
+ *     no embedded Rust;
+ *     no actions;
+ *     no semantic predicates;
+ *     no filesystem access;
+ *     no network access;
+ *     no hardware access;
+ *     no runtime execution.
  *
- * There must be no language constants such as:
+ * Generated Rust integration must remain compatible with:
  *
- *     MAX_AGENTS
- *     MAX_GROUPS
- *     MAX_DELEGATIONS
- *     MAX_MESSAGES
- *     MAX_WORKERS
- *     MAX_NODES
- *     MAX_DEVICES
- *     MAX_QUBITS
- *     MAX_CPUS
- *     MAX_GPUS
- *     MAX_MEMORY
+ *     Rust 1.97+
+ *     Rust 2021
+ *     safe Rust
  *
- * Repetition is represented structurally by grammar repetition.
- *
- * Actual implementation limits are compiler/runtime/environment concerns and
- * must never be silently presented as language-level semantic limits.
+ * The grammar itself introduces no unsafe requirement.
  *
  *
  * ============================================================================
- * INDEPENDENT FILE COMPLETION
- * ============================================================================
- *
- * This file is independently complete when:
- *
- *     1. `MultiAgent` generates successfully.
- *
- *     2. `multiAgentConstruct` is stable.
- *
- *     3. Agent syntax is owned by Agents.
- *
- *     4. Actor syntax is owned by Actors.
- *
- *     5. No second actor system exists.
- *
- *     6. No second message system exists.
- *
- *     7. No second distributed system exists.
- *
- *     8. No multi-agent-specific IR exists.
- *
- *     9. General expressions come from the canonical expression grammar.
- *
- *    10. General types come from the canonical type grammar.
- *
- *    11. Resource semantics remain target-independent.
- *
- *    12. Capability semantics remain open-world.
- *
- *    13. Effects remain owned by the effects subsystem.
- *
- *    14. Policies remain owned by the policy subsystem.
- *
- *    15. Contracts remain owned by validation/contracts.
- *
- *    16. Provenance remains owned by provenance.
- *
- *    17. Quantum constructs can eventually reach quantum::ir.
- *
- *    18. Hardware realization is not encoded.
- *
- *    19. Distributed realization is not encoded.
- *
- *    20. No physical machine is selected by parsing.
- *
- *    21. No universal capacity ceiling is encoded.
- *
- *    22. The grammar is deterministic.
- *
- *    23. The grammar contains no actions.
- *
- *    24. The grammar contains no semantic predicates.
- *
- *    25. The grammar contains no Rust code.
- *
- *    26. No unsafe Rust is required.
- *
- *    27. Positive tests exist.
- *
- *    28. Negative tests exist.
- *
- *    29. Boundary tests exist.
- *
- *    30. Scalability tests exist.
- *
- *    31. Cross-domain tests exist.
- *
- *    32. Compatibility tests exist.
- *
- *    33. Determinism tests exist.
- *
- *
+ * GRAMMAR
  * ============================================================================
  */
 
@@ -1242,28 +842,17 @@ options {
     tokenVocab = ZamaniLexer;
 }
 
+
 /*
  * ============================================================================
  * IMPORTS
  * ============================================================================
  *
- * Agents owns agent syntax.
+ * Agents is the source syntax authority for agents.
  *
- * Actors owns actor syntax.
+ * Actors is the source syntax authority for actors.
  *
- * No rules are copied from either grammar.
- *
- * The dependency graph is deliberately:
- *
- *     MultiAgent
- *        |
- *        +----> Agents
- *        |
- *        +----> Actors
- *
- * The AI composition grammar should import MultiAgent rather than importing
- * Agents independently in the same composition layer.
- *
+ * Do not copy their rules into this grammar.
  * ============================================================================
  */
 
@@ -1278,27 +867,31 @@ import
  * 1. PUBLIC MULTI-AGENT CONSTRUCT
  * ============================================================================
  *
- * This is the canonical entry point for all multi-agent grammar consumers.
+ * This is the only rule that `ai.g4` should normally consume.
  *
- * It intentionally composes existing agent and actor constructs.
+ * It deliberately does not add another spelling of agent syntax.
+ *
+ * An individual agent is included because a single participant is a valid
+ * member of a larger semantic composition and because the same parser boundary
+ * is useful to tooling.
+ *
+ * Multi-agent cardinality is determined semantically by composition analysis.
+ * ============================================================================
  */
 
 multiAgentConstruct
     : multiAgentAgentConstruct
     | multiAgentActorConstruct
-    | multiAgentGroup
-    | multiAgentComposition
     ;
 
 
 /*
  * ============================================================================
- * 2. INDIVIDUAL AGENT CONSTRUCT
+ * 2. AGENT CONSTRUCT ADAPTER
  * ============================================================================
  *
- * Alias boundary.
- *
- * The actual syntax remains owned by Agents.
+ * `agentConstruct` remains exclusively owned by Agents.
+ * ============================================================================
  */
 
 multiAgentAgentConstruct
@@ -1308,12 +901,11 @@ multiAgentAgentConstruct
 
 /*
  * ============================================================================
- * 3. ACTOR-BACKED CONSTRUCT
+ * 3. ACTOR CONSTRUCT ADAPTER
  * ============================================================================
  *
- * Alias boundary.
- *
- * The actual syntax remains owned by Actors.
+ * `actorConstruct` remains exclusively owned by Actors.
+ * ============================================================================
  */
 
 multiAgentActorConstruct
@@ -1323,175 +915,44 @@ multiAgentActorConstruct
 
 /*
  * ============================================================================
- * 4. MULTI-AGENT GROUP
+ * 4. MULTI-AGENT BODY
  * ============================================================================
  *
- * Generic structural group.
+ * This is a semantic composition boundary, not a new top-level declaration
+ * syntax.
  *
- * Example:
+ * It represents an ordered collection of multi-agent members.
  *
- *     @group Research {
- *         @agent Analyst {
- *             ...
- *         }
- *
- *         @agent Planner {
- *             ...
- *         }
- *     }
- *
- * `group` is deliberately an identifier, not a lexer keyword.
- *
- * Semantic analysis determines whether the annotation identifies a group
- * construct and what its policy/meaning is.
- *
- * The grammar therefore remains open-world.
- */
-
-multiAgentGroup
-    : AT
-      identifier
-      identifier
-      multiAgentGroupTail
-    ;
-
-
-/*
+ * The surrounding owner determines whether such a body is legal.
  * ============================================================================
- * 5. GROUP TAIL
- * ============================================================================
- *
- * A group can have:
- *
- *     a block;
- *     a typed declaration;
- *     an initializer;
- *     an invocation;
- *     an empty declaration.
- *
- * The semantic layer determines which structural form is valid for the
- * registered group construct.
- */
-
-multiAgentGroupTail
-    : multiAgentBody
-    | multiAgentGroupInvocation
-    | multiAgentGroupInitializer
-    | SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * 6. GROUP INVOCATION
- * ============================================================================
- */
-
-multiAgentGroupInvocation
-    : LPAREN
-      multiAgentArgumentList?
-      RPAREN
-      multiAgentInvocationTail
-    ;
-
-
-multiAgentInvocationTail
-    : multiAgentBody
-    | SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * 7. GROUP INITIALIZER
- * ============================================================================
- */
-
-multiAgentGroupInitializer
-    : ASSIGN
-      expression
-      SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * 8. MULTI-AGENT COMPOSITION
- * ============================================================================
- *
- * Composition is intentionally structural.
- *
- * A composition can contain:
- *
- *     agents
- *     actors
- *     nested groups
- *     ordinary statements
- *
- * This permits multi-agent computation to remain ordinary Zamani computation
- * rather than creating a closed AI-only language.
- */
-
-multiAgentComposition
-    : AT
-      identifier
-      multiAgentCompositionTail
-    ;
-
-
-multiAgentCompositionTail
-    : multiAgentCompositionInvocation
-    | multiAgentBody
-    | SEMICOLON
-    ;
-
-
-multiAgentCompositionInvocation
-    : LPAREN
-      multiAgentArgumentList?
-      RPAREN
-      multiAgentInvocationTail
-    ;
-
-
-/*
- * ============================================================================
- * 9. MULTI-AGENT BODY
- * ============================================================================
- *
- * Recursive by design.
- *
- * There is no fixed nesting depth encoded in the grammar.
- *
- * The implementation must nevertheless provide controlled resource-exhaustion
- * diagnostics when finite parser/runtime resources are exhausted.
  */
 
 multiAgentBody
     : LBRACE
-      multiAgentMember*
+      multiAgentMembers
       RBRACE
     ;
 
 
 /*
  * ============================================================================
- * 10. MULTI-AGENT MEMBER
+ * 5. MULTI-AGENT MEMBER
  * ============================================================================
  *
- * Members may be:
+ * A member may be:
  *
- *     agents
- *     actors
- *     nested groups
- *     nested compositions
- *     ordinary Zamani statements
+ *     agent
+ *     actor
+ *     nested composition
+ *     ordinary statement
  *
- * This permits future domain integration without changing this grammar.
+ * Ordinary statements remain owned by Statements.
+ * ============================================================================
  */
 
 multiAgentMember
     : multiAgentConstruct
+    | nestedMultiAgentConstruct
     | statement
     ;
 
@@ -1503,10 +964,40 @@ multiAgentMembers
 
 /*
  * ============================================================================
- * 11. ARGUMENT LIST
+ * 6. MULTI-AGENT COMPOSITION
  * ============================================================================
  *
- * Expressions remain owned by the canonical expression grammar.
+ * This rule intentionally has NO new keyword.
+ *
+ * It is a parser-level semantic boundary for a body containing multiple
+ * participants.
+ *
+ * The semantic layer determines whether the body represents:
+ *
+ *     collaboration
+ *     delegation
+ *     coordination
+ *     supervision
+ *     orchestration
+ *     another registered composition
+ *
+ * ============================================================================
+ */
+
+multiAgentComposition
+    : multiAgentBody
+    ;
+
+
+/*
+ * ============================================================================
+ * 7. ARGUMENT LIST
+ * ============================================================================
+ *
+ * Expressions remain owned by Expressions.
+ *
+ * No second expression language is introduced.
+ * ============================================================================
  */
 
 multiAgentArgumentList
@@ -1520,19 +1011,21 @@ multiAgentArgumentList
 
 /*
  * ============================================================================
- * 12. MULTI-AGENT REFERENCE
+ * 8. REFERENCE
  * ============================================================================
  *
- * Semantic tooling may use this boundary when resolving:
+ * A reference is semantically resolved.
  *
- *     agent references
- *     actor references
- *     group references
- *     delegation targets
- *     coordination participants
- *     communication participants
+ * The parser deliberately does not decide whether an expression refers to:
  *
- * The actual expression syntax remains canonical.
+ *     an agent
+ *     an actor
+ *     a group
+ *     a task
+ *     a service
+ *     a model
+ *     another participant
+ * ============================================================================
  */
 
 multiAgentReference
@@ -1542,10 +1035,8 @@ multiAgentReference
 
 /*
  * ============================================================================
- * 13. MULTI-AGENT EXPRESSION
+ * 9. EXPRESSION BRIDGE
  * ============================================================================
- *
- * Stable expression bridge.
  */
 
 multiAgentExpression
@@ -1555,16 +1046,8 @@ multiAgentExpression
 
 /*
  * ============================================================================
- * 14. MULTI-AGENT TYPE
+ * 10. TYPE BRIDGE
  * ============================================================================
- *
- * Stable type bridge.
- *
- * There is deliberately no:
- *
- *     MultiAgentType
- *
- * competing with the Zamani type system.
  */
 
 multiAgentType
@@ -1574,176 +1057,95 @@ multiAgentType
 
 /*
  * ============================================================================
- * 15. DELEGATION SEMANTIC BOUNDARY
+ * 11. DELEGATION
  * ============================================================================
  *
- * Delegation uses the existing open-world annotation model.
+ * IMPORTANT:
  *
- * Example conceptual forms:
+ * The syntax is intentionally delegated to the existing annotation-based
+ * agent construct.
  *
- *     @delegate worker(task);
+ * This rule is a semantic parser boundary for tools that need to classify a
+ * construct as delegation.
  *
- *     @delegate worker {
- *         ...
- *     }
+ * It does NOT reserve the identifier `delegate`.
  *
- * The parser exposes a stable boundary while semantic analysis verifies that
- * the annotation actually represents delegation.
+ * It does NOT decide whether an annotation means delegation.
  *
- * No delegation keyword is required in the lexer.
+ * Semantic analysis performs that classification.
+ *
+ * Structurally, it accepts the canonical agent construct.
+ * ============================================================================
  */
 
 multiAgentDelegation
-    : AT
-      identifier
-      multiAgentDelegationTail
-    ;
-
-
-multiAgentDelegationTail
-    : identifier
-      multiAgentDelegationTargetTail
-    | multiAgentBody
-    | SEMICOLON
-    ;
-
-
-multiAgentDelegationTargetTail
-    : LPAREN
-      multiAgentArgumentList?
-      RPAREN
-      multiAgentInvocationTail
-    | ASSIGN
-      expression
-      SEMICOLON
-    | multiAgentBody
-    | SEMICOLON
+    : agentConstruct
     ;
 
 
 /*
  * ============================================================================
- * 16. COORDINATION SEMANTIC BOUNDARY
+ * 12. COORDINATION
  * ============================================================================
  *
- * This boundary deliberately does not enumerate algorithms.
+ * Coordination is similarly an open semantic concept.
  *
- * Coordination algorithms remain semantic/library/runtime concepts.
+ * No coordination algorithm is encoded here.
+ * ============================================================================
  */
 
 multiAgentCoordination
-    : AT
-      identifier
-      multiAgentCoordinationTail
-    ;
-
-
-multiAgentCoordinationTail
-    : identifier
-      multiAgentCoordinationTargetTail
-    | multiAgentBody
-    | SEMICOLON
-    ;
-
-
-multiAgentCoordinationTargetTail
-    : LPAREN
-      multiAgentArgumentList?
-      RPAREN
-      multiAgentInvocationTail
-    | ASSIGN
-      expression
-      SEMICOLON
-    | multiAgentBody
-    | SEMICOLON
+    : agentConstruct
     ;
 
 
 /*
  * ============================================================================
- * 17. COMMUNICATION SEMANTIC BOUNDARY
+ * 13. COMMUNICATION
  * ============================================================================
  *
- * Communication is deliberately represented as an integration boundary.
+ * Communication syntax remains owned by the existing agent/concurrency/
+ * networking systems.
  *
- * Actual message syntax remains owned by concurrency/networking/distributed
- * subsystems.
- *
- * This prevents creation of a third message model.
+ * This boundary allows semantic tooling to classify an existing construct
+ * without creating another message grammar.
+ * ============================================================================
  */
 
 multiAgentCommunication
-    : AT
-      identifier
-      multiAgentCommunicationTail
-    ;
-
-
-multiAgentCommunicationTail
-    : expression
-      multiAgentCommunicationSuffix
-    | multiAgentBody
-    | SEMICOLON
-    ;
-
-
-multiAgentCommunicationSuffix
-    : LPAREN
-      multiAgentArgumentList?
-      RPAREN
-      multiAgentInvocationTail
-    | SEMICOLON
+    : agentConstruct
+    | actorSendExpression
+    | actorAskExpression
+    | actorForwardExpression
     ;
 
 
 /*
  * ============================================================================
- * 18. SUPERVISION SEMANTIC BOUNDARY
+ * 14. SUPERVISION
  * ============================================================================
  *
- * Existing actor supervision remains authoritative.
+ * Actor supervision remains owned by Actors.
  *
- * This rule exists so semantic tooling can recognize supervision-oriented
- * multi-agent composition without duplicating actor supervision grammar.
+ * Agent-oriented supervision may use the canonical annotation structure.
+ * ============================================================================
  */
 
 multiAgentSupervision
     : actorSupervisionConstruct
-    | AT
-      identifier
-      multiAgentSupervisionTail
-    ;
-
-
-multiAgentSupervisionTail
-    : identifier
-      multiAgentSupervisionTargetTail
-    | multiAgentBody
-    | SEMICOLON
-    ;
-
-
-multiAgentSupervisionTargetTail
-    : LPAREN
-      multiAgentArgumentList?
-      RPAREN
-      multiAgentInvocationTail
-    | ASSIGN
-      expression
-      SEMICOLON
-    | multiAgentBody
-    | SEMICOLON
+    | agentConstruct
     ;
 
 
 /*
  * ============================================================================
- * 19. RELATIONSHIP COMPOSITION
+ * 15. RELATIONSHIP
  * ============================================================================
  *
- * Stable umbrella boundary for semantic tooling.
+ * These are semantic classification boundaries.
  *
- * The concrete operation remains structurally open-world.
+ * They deliberately do not introduce new syntax.
+ * ============================================================================
  */
 
 multiAgentRelationship
@@ -1754,14 +1156,6 @@ multiAgentRelationship
     ;
 
 
-/*
- * ============================================================================
- * 20. RELATIONSHIP COLLECTION
- * ============================================================================
- *
- * No fixed number of relationships is encoded.
- */
-
 multiAgentRelationships
     : multiAgentRelationship*
     ;
@@ -1769,10 +1163,17 @@ multiAgentRelationships
 
 /*
  * ============================================================================
- * 21. PARTICIPANT COLLECTION
+ * 16. PARTICIPANT
  * ============================================================================
  *
- * Stable semantic boundary for participant analysis.
+ * A participant is either:
+ *
+ *     an agent;
+ *     an actor;
+ *     a resolvable reference.
+ *
+ * The semantic layer determines participant identity and validity.
+ * ============================================================================
  */
 
 multiAgentParticipant
@@ -1789,24 +1190,22 @@ multiAgentParticipants
 
 /*
  * ============================================================================
- * 22. SEMANTIC COMPOSITION UNIT
+ * 17. SEMANTIC COMPOSITION UNIT
  * ============================================================================
  *
- * This boundary is useful for semantic analysis without introducing a new IR.
+ * This is intentionally broader than `multiAgentConstruct`.
+ *
+ * It is useful for semantic tooling and conformance analysis.
+ * ============================================================================
  */
 
 multiAgentUnit
     : multiAgentConstruct
     | multiAgentRelationship
+    | multiAgentComposition
     | statement
     ;
 
-
-/*
- * ============================================================================
- * 23. SEMANTIC COMPOSITION UNITS
- * ============================================================================
- */
 
 multiAgentUnits
     : multiAgentUnit*
@@ -1815,70 +1214,14 @@ multiAgentUnits
 
 /*
  * ============================================================================
- * 24. INTEGRATION ALIASES
+ * 18. SOURCE-ORDER PRESERVATION
  * ============================================================================
  *
- * These aliases intentionally contain no new syntax.
+ * The AST must preserve source order.
  *
- * They give downstream semantic tooling stable names while keeping syntax
- * ownership in the existing canonical grammars.
- */
-
-agentMultiAgentConstruct
-    : multiAgentAgentConstruct
-    ;
-
-
-actorMultiAgentConstruct
-    : multiAgentActorConstruct
-    ;
-
-
-groupMultiAgentConstruct
-    : multiAgentGroup
-    ;
-
-
-relationshipMultiAgentConstruct
-    : multiAgentRelationship
-    ;
-
-
-/*
+ * This rule exists as a stable parser boundary for consumers that explicitly
+ * require ordered member analysis.
  * ============================================================================
- * 25. DOMAIN-NEUTRAL TARGET BOUNDARY
- * ============================================================================
- *
- * Multi-agent syntax must never select:
- *
- *     CPU
- *     GPU
- *     FPGA
- *     ASIC
- *     QPU
- *     node
- *     process
- *     thread
- *     physical device
- *
- * Target selection occurs after semantic analysis.
- *
- * This rule exists solely as an explicit architecture marker for tooling.
- */
-
-multiAgentTargetIndependentConstruct
-    : multiAgentConstruct
-    ;
-
-
-/*
- * ============================================================================
- * 26. SOURCE-ORDER PRESERVATION
- * ============================================================================
- *
- * Parser consumers must preserve source ordering in the resulting AST.
- *
- * This rule is intentionally simple and does not perform ordering analysis.
  */
 
 multiAgentOrderedMember
@@ -1888,29 +1231,293 @@ multiAgentOrderedMember
 
 /*
  * ============================================================================
- * 27. NESTED COMPOSITION
+ * 19. NESTED COMPOSITION
  * ============================================================================
  *
- * Explicit named boundary for recursive composition.
+ * Recursive nesting is intentional.
+ *
+ * No universal nesting depth is encoded here.
+ *
+ * Finite parser-stack/resource exhaustion is an implementation concern and
+ * must be diagnosed rather than converted into a language-level limit.
+ * ============================================================================
  */
 
 nestedMultiAgentConstruct
     : multiAgentConstruct
-    | multiAgentBody
+    | multiAgentComposition
     ;
 
 
 /*
  * ============================================================================
- * 28. FINAL PUBLIC AGGREGATION
+ * 20. TARGET-INDEPENDENT CONSTRUCT
  * ============================================================================
  *
- * This rule is useful to conformance tooling and should not normally be
- * consumed directly by ZamaniParser.
+ * This adapter explicitly communicates that multi-agent syntax is independent
+ * of physical realization.
+ * ============================================================================
+ */
+
+multiAgentTargetIndependentConstruct
+    : multiAgentConstruct
+    | multiAgentComposition
+    | multiAgentRelationship
+    ;
+
+
+/*
+ * ============================================================================
+ * 21. FINAL DOMAIN AGGREGATION
+ * ============================================================================
+ *
+ * Conformance tooling may consume this rule.
+ *
+ * The universal AI composition grammar should normally consume only:
+ *
+ *     multiAgentConstruct
+ *
+ * ============================================================================
  */
 
 multiAgentDomainConstruct
     : multiAgentConstruct
+    | multiAgentComposition
     | multiAgentRelationship
     | multiAgentSupervision
     ;
+
+
+/*
+ * ============================================================================
+ * FEATURE CONTRACT — COMPLETION CRITERIA
+ * ============================================================================
+ *
+ * This file is DONE when:
+ *
+ * [x] Agents owns agent syntax.
+ *
+ * [x] Actors owns actor syntax.
+ *
+ * [x] No duplicate agent declaration syntax exists here.
+ *
+ * [x] No duplicate actor declaration syntax exists here.
+ *
+ * [x] No new mandatory multi-agent lexer keyword exists.
+ *
+ * [x] No fixed participant count exists.
+ *
+ * [x] No fixed agent count exists.
+ *
+ * [x] No fixed group count exists.
+ *
+ * [x] No fixed relationship count exists.
+ *
+ * [x] No hardware capacity is encoded.
+ *
+ * [x] No target is selected by parsing.
+ *
+ * [x] No physical topology is encoded.
+ *
+ * [x] No multi-agent-specific IR exists.
+ *
+ * [x] General expressions remain owned by Expressions.
+ *
+ * [x] General types remain owned by Types.
+ *
+ * [x] General statements remain owned by Statements.
+ *
+ * [x] Actor communication remains owned by Actors/Concurrency.
+ *
+ * [x] Distributed realization remains downstream.
+ *
+ * [x] Resource analysis remains downstream.
+ *
+ * [x] Capability analysis remains downstream.
+ *
+ * [x] Effect analysis remains downstream.
+ *
+ * [x] Policy analysis remains downstream.
+ *
+ * [x] Provenance remains downstream.
+ *
+ * [x] Quantum lowering remains downstream through quantum::ir.
+ *
+ * [x] HDL/hardware lowering remains downstream.
+ *
+ * [x] No embedded Rust exists.
+ *
+ * [x] No unsafe Rust is required.
+ *
+ * [x] Positive tests exist.
+ *
+ * [x] Negative tests exist.
+ *
+ * [x] Boundary tests exist.
+ *
+ * [x] Scalability tests exist.
+ *
+ * [x] Determinism tests exist.
+ *
+ * [x] Cross-domain tests exist.
+ *
+ * [x] Compatibility tests exist.
+ *
+ *
+ * ============================================================================
+ * TEST CONTRACT
+ * ============================================================================
+ *
+ * POSITIVE
+ * --------
+ *
+ * Individual agent:
+ *
+ *     @agent Worker {
+ *         ...
+ *     }
+ *
+ * Actor:
+ *
+ *     actor Worker {
+ *         ...
+ *     }
+ *
+ * Agent composition body:
+ *
+ *     {
+ *         @agent A {
+ *             ...
+ *         }
+ *
+ *         @agent B {
+ *             ...
+ *         }
+ *     }
+ *
+ * Nested composition:
+ *
+ *     {
+ *         {
+ *             @agent A {
+ *                 ...
+ *             }
+ *
+ *             @agent B {
+ *                 ...
+ *             }
+ *         }
+ *     }
+ *
+ * Actor communication:
+ *
+ *     actor A {
+ *         receive work(value: Value) {
+ *             ...
+ *         }
+ *     }
+ *
+ * Relationship annotations:
+ *
+ *     @delegate worker(task);
+ *
+ *     @coordinate group;
+ *
+ *     @message(recipient, payload);
+ *
+ *     @supervise worker;
+ *
+ *
+ * NEGATIVE
+ * --------
+ *
+ * Must reject malformed:
+ *
+ *     incomplete annotation
+ *     incomplete actor declaration
+ *     incomplete group body
+ *     malformed argument list
+ *     malformed relationship expression
+ *     malformed nested composition
+ *
+ *
+ * BOUNDARY
+ * --------
+ *
+ * Test combinations of:
+ *
+ *     agent + actor
+ *     agent + quantum expression
+ *     agent + classical computation
+ *     agent + distributed operation
+ *     agent + networking operation
+ *     agent + resource requirement
+ *     agent + capability requirement
+ *     agent + contract
+ *     agent + policy
+ *     agent + provenance
+ *     agent + learning
+ *     agent + adaptation
+ *
+ *
+ * SCALABILITY
+ * ----------
+ *
+ * Test symbolically large source structures without changing the grammar:
+ *
+ *     many agents
+ *     many actors
+ *     many relationships
+ *     deeply nested compositions
+ *     large participant collections
+ *     large expression arguments
+ *
+ * The test suite must NOT define a universal maximum merely to satisfy a
+ * grammar test.
+ *
+ * Resource-exhaustion testing belongs to the parser/runtime safety tests.
+ *
+ *
+ * DETERMINISM
+ * -----------
+ *
+ * The same source and grammar configuration must produce the same parse tree.
+ *
+ * Parsing must not depend on:
+ *
+ *     hardware
+ *     resource availability
+ *     runtime state
+ *     network state
+ *     randomness
+ *     wall-clock time
+ *
+ *
+ * CROSS-DOMAIN
+ * ------------
+ *
+ * At minimum test:
+ *
+ *     AI + concurrency
+ *     AI + distributed
+ *     AI + quantum
+ *     AI + classical
+ *     AI + resources
+ *     AI + effects
+ *     AI + contracts
+ *     AI + policies
+ *     AI + provenance
+ *
+ *
+ * COMPATIBILITY
+ * ------------
+ *
+ * Existing valid `agentConstruct` input must remain valid.
+ *
+ * Existing valid `actorConstruct` input must remain valid.
+ *
+ * No existing agent or actor syntax may acquire a different parse meaning
+ * merely because this grammar is imported.
+ *
+ * ============================================================================
+ */
