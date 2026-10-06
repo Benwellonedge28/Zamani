@@ -12,8 +12,8 @@
  * Status:
  *     CANONICAL / PRODUCTION QUANTUM OPERATION INVOCATION GRAMMAR
  *
- * Compiler baseline:
- *     Rust 1.97 / Rust 1.97.1
+ * Implementation baseline:
+ *     Rust 1.97+
  *     Rust 2021
  *     safe Rust only
  *     no unsafe Rust
@@ -22,21 +22,39 @@
  * PURPOSE
  * ============================================================================
  *
- * This file is the canonical parser owner for SOURCE-LEVEL QUANTUM OPERATION
- * APPLICATION SYNTAX.
+ * This file is the canonical SOURCE-SYNTAX owner for invoking quantum
+ * operations.
  *
- * It defines the structural syntax for:
+ * It defines the language-independent structure of a quantum operation
+ * invocation without defining the finite universe of quantum operations.
  *
- *     apply operation(targets);
- *     apply operation(parameters)(targets);
- *     apply namespace::operation(targets);
- *     apply namespace::operation(parameters)(targets);
- *     apply control(operation)(controls, targets);
- *     apply adjoint(operation)(targets);
- *     apply inverse(operation)(targets);
- *     apply control(adjoint(operation))(controls, targets);
+ * Canonical source forms include:
  *
- * Operation names remain OPEN-ENDED source names.
+ *     apply operation(q);
+ *
+ *     apply operation()(q);
+ *
+ *     apply operation(parameter)(q);
+ *
+ *     apply operation(p0, p1)(q0, q1);
+ *
+ *     apply namespace::operation(q);
+ *
+ *     apply namespace::operation(parameter)(q);
+ *
+ *     apply operation::<T>(parameter)(q);
+ *
+ *     apply control(operation)(control, target);
+ *
+ *     apply adjoint(operation)(target);
+ *
+ *     apply inverse(operation)(target);
+ *
+ *     apply control(adjoint(operation))(control, target);
+ *
+ *     apply inverse(control(operation))(control, target);
+ *
+ * Operation identity is OPEN-WORLD.
  *
  * The grammar deliberately does NOT enumerate:
  *
@@ -44,70 +62,124 @@
  *     X
  *     Y
  *     Z
+ *     S
+ *     T
  *     CNOT
+ *     CX
+ *     CZ
  *     SWAP
  *     RX
  *     RY
  *     RZ
+ *     U
  *     vendor operations
  *     simulator operations
  *     future operations
+ *     user-defined operations
  *
- * Those names are ordinary source-level names whose meaning is resolved by
- * semantic analysis.
+ * Those remain ordinary source-level names.
+ *
+ * Their meaning is resolved by semantic analysis.
  *
  * ============================================================================
- * OWNERSHIP
+ * ARCHITECTURAL OWNERSHIP
  * ============================================================================
  *
  * THIS FILE OWNS:
  *
- *     - quantumOperationStatement
- *     - quantumOperationApplication
- *     - quantumOperationInvocation
- *     - quantumOperationDesignator
- *     - quantumOperationParameterClause
- *     - quantumOperationTargetClause
- *     - quantumOperationTargetList
- *     - quantumOperationModifier
- *     - quantumOperationModifierOperand
- *     - quantumOperationReference
- *     - quantumOperationTargets
+ *     quantumOperationStatement
+ *     quantumOperation
+ *     quantumOperationApplication
+ *     quantumOperationSpecifier
+ *     quantumOperationDesignator
+ *     quantumOperationReference
+ *     quantumOperationInvocation
+ *     quantumOperationTargetClause
+ *     quantumOperationTargetList
+ *     quantumOperationTarget
+ *     quantumOperationTargets
+ *     quantumOperationModifier
+ *     quantumOperationModifierOperand
+ *     quantumControlledOperation
+ *     quantumAdjointOperation
+ *     quantumInverseOperation
+ *     quantumExtendedOperationInvocation
+ *     quantumOperationExpressionReference
  *
  * THIS FILE DOES NOT OWN:
  *
- *     - lexical tokens;
- *     - identifiers;
- *     - qualified-name syntax;
- *     - general expressions;
- *     - general types;
- *     - qubit declarations;
- *     - register declarations;
- *     - logical-qubit declarations;
- *     - physical-qubit declarations;
- *     - quantum-state expressions;
- *     - measurements;
- *     - reset;
- *     - observables;
- *     - dynamic-circuit control;
- *     - quantum/classical control-flow;
- *     - gate definitions;
- *     - gate matrices;
- *     - operation implementation;
- *     - resource allocation;
- *     - capability discovery;
- *     - routing;
- *     - scheduling;
- *     - optimization;
- *     - QEC;
- *     - ZQN;
- *     - resilience;
- *     - calibration;
- *     - hardware topology;
- *     - physical qubit assignment;
- *     - HAL;
- *     - runtime execution;
- *     - canonical quantum::ir.
+ *     lexical tokens
+ *     identifiers
+ *     qualified-name syntax
+ *     generic argument syntax
+ *     general expressions
+ *     general types
+ *     quantum parameter declarations
+ *     quantum parameter argument syntax
+ *     qubit declarations
+ *     register declarations
+ *     logical qubits
+ *     physical qubits
+ *     quantum states
+ *     measurements
+ *     reset
+ *     observables
+ *     barriers
+ *     noise
+ *     error correction
+ *     dynamic-circuit control
+ *     classical feed-forward
+ *     gate definitions
+ *     gate bodies
+ *     gate matrices
+ *     resource allocation
+ *     capability discovery
+ *     hardware selection
+ *     routing
+ *     scheduling
+ *     optimization
+ *     calibration
+ *     resilience
+ *     ZQN
+ *     HAL
+ *     runtime execution
+ *     quantum::ir implementation
+ *
+ * ============================================================================
+ * SINGLE-OWNER RULE
+ * ============================================================================
+ *
+ * Quantum operation invocation is owned here.
+ *
+ * Parameter syntax is owned by:
+ *
+ *     grammar/quantum/parameters.g4
+ *
+ * Therefore this file MUST consume:
+ *
+ *     QuantumParameters
+ *
+ * rather than redefine:
+ *
+ *     quantumOperationArgumentList
+ *     quantumOperationArguments
+ *     quantumOperationArgument
+ *     quantumOperationNamedArgument
+ *     quantumOperationPositionalArgument
+ *     quantumOperationPackArgument
+ *     quantumParameterExpression
+ *
+ * This prevents parameter syntax from being implemented twice.
+ *
+ * Operation declaration syntax belongs to the appropriate declaration/gate
+ * grammar.
+ *
+ * Controlled-operation extensions belong to:
+ *
+ *     grammar/quantum/controlled-operations.g4
+ *
+ * but the fundamental operation modifier boundary remains available here so
+ * operation invocation can remain composable.
  *
  * ============================================================================
  * ARCHITECTURAL PIPELINE
@@ -121,7 +193,8 @@
  *          v
  *     ZamaniParser
  *          |
- *          +--> QuantumOperations
+ *          v
+ *     QuantumOperations
  *          |
  *          v
  *     domain-neutral frontend AST
@@ -133,14 +206,18 @@
  *     semantic analysis
  *          |
  *          +--> name resolution
+ *          +--> generic resolution
+ *          +--> parameter binding
  *          +--> type checking
  *          +--> effect analysis
  *          +--> capability analysis
  *          +--> resource analysis
- *          +--> quantum semantic validation
+ *          +--> contract analysis
+ *          +--> policy analysis
+ *          +--> provenance
  *          |
  *          v
- *     canonical semantic representation
+ *     canonical quantum semantic representation
  *          |
  *          v
  *     quantum::ir
@@ -158,52 +235,114 @@
  *     target lowering
  *          |
  *          v
- *     runtime
+ *     execution
  *
- * This grammar MUST NOT bypass the AST/semantic/IR boundaries.
+ * This grammar MUST NOT bypass the AST or semantic model.
  *
  * ============================================================================
  * POCO-REAF CONTRACT
  * ============================================================================
  *
- * Zamani operations describe PORTABLE COMPUTATIONAL INTENT.
+ * A quantum operation expresses PORTABLE COMPUTATIONAL INTENT.
  *
- * They do not select:
+ * It does not select:
  *
  *     CPU
  *     GPU
  *     FPGA
  *     ASIC
+ *     accelerator
  *     QPU
+ *     simulator
  *     physical qubit
  *     physical register
- *     memory bank
- *     device ID
- *     topology
+ *     device identifier
  *     coupling map
- *     pulse
+ *     topology
  *     calibration
+ *     pulse
  *     scheduler
  *     router
  *     vendor instruction
  *
- * This grammar therefore contains NO language-level maximum for:
+ * Those are resolved downstream.
+ *
+ * ============================================================================
+ * OPEN-WORLD OPERATION MODEL
+ * ============================================================================
+ *
+ * The operation namespace is intentionally open.
+ *
+ * Any valid operation name may be represented structurally:
+ *
+ *     operation
+ *     namespace::operation
+ *     vendor::operation
+ *     library::operation
+ *     future::operation
+ *     user::defined::operation
+ *
+ * The parser does not need to change when a new quantum operation is added.
+ *
+ * New operations are introduced through:
+ *
+ *     semantic registration
+ *     declarations
+ *     libraries
+ *     dialects
+ *     imported modules
+ *     capability providers
+ *     future language extensions
+ *
+ * They are NOT added as lexer keywords.
+ *
+ * ============================================================================
+ * NO GATE CATALOG
+ * ============================================================================
+ *
+ * This grammar intentionally contains no rules such as:
+ *
+ *     quantumGate
+ *         : H
+ *         | X
+ *         | Y
+ *         | Z
+ *         | CNOT
+ *         | ...
+ *
+ * Such a grammar would create an artificial language ceiling and would force
+ * every future operation to modify the universal parser.
+ *
+ * Operation identity is data.
+ *
+ * Operation semantics are semantic information.
+ *
+ * Operation realization is downstream information.
+ *
+ * ============================================================================
+ * SCALABILITY CONTRACT
+ * ============================================================================
+ *
+ * This grammar introduces no fixed maximum for:
  *
  *     operations
  *     parameters
  *     targets
  *     controls
- *     nesting
- *     circuit depth
+ *     namespace depth
+ *     generic arguments
+ *     modifier nesting
+ *     circuit size
+ *     program size
+ *     quantum registers
  *     qubits
- *     registers
  *     devices
  *     nodes
+ *     processors
  *     memory
- *     threads
  *     accelerators
  *
- * There are intentionally no:
+ * There are deliberately no constants such as:
  *
  *     MAX_QUBITS
  *     MAX_TARGETS
@@ -213,79 +352,133 @@
  *     MAX_CIRCUIT_DEPTH
  *     MAX_DEVICES
  *
- * or equivalent constants.
+ * Repetition is represented structurally using ANTLR repetition operators.
  *
- * Repetition and cardinality are represented with ordinary ANTLR repetition
- * constructs such as `*` and `+`.
+ * Actual feasibility is determined downstream from available resources,
+ * capabilities, policies and execution context.
  *
- * Actual resource availability is resolved after parsing.
+ * ============================================================================
+ * IMPORTANT DISTINCTION: LANGUAGE SCALE VS RESOURCE SCALE
+ * ============================================================================
+ *
+ * "Tiny to infinity" means the language grammar does not artificially cap
+ * computational scale.
+ *
+ * It does NOT claim that a physical machine has infinite resources.
+ *
+ * Therefore:
+ *
+ *     parsing
+ *
+ * is independent from:
+ *
+ *     resource feasibility.
+ *
+ * For example:
+ *
+ *     apply operation(q0, q1, q2, ...)(...);
+ *
+ * may be syntactically representable regardless of eventual machine size.
+ *
+ * Whether the program can actually execute is determined by:
+ *
+ *     semantic analysis
+ *     resource analysis
+ *     capability negotiation
+ *     compilation
+ *     routing
+ *     scheduling
+ *     runtime
+ *     HAL
  *
  * ============================================================================
  * LEXICAL AUTHORITY
  * ============================================================================
  *
- * The canonical production lexer is:
+ * The canonical lexer boundary is:
  *
  *     grammar/antlr/ZamaniLexer.g4
  *
- * whose lexical composition is:
+ * Parser grammars consume:
  *
- *     grammar/lexer/tokens.g4
+ *     tokenVocab = ZamaniLexer;
  *
- * Existing canonical tokens consumed here include:
+ * This grammar MUST NOT declare lexer rules.
  *
- *     APPLY
- *     CONTROL
- *     ADJOINT
- *     INVERSE
- *     LPAREN
- *     RPAREN
- *     COMMA
- *     SEMICOLON
- *
- * Names are supplied by the canonical Names grammar.
- *
- * Expressions are supplied by the canonical Expressions grammar.
- *
- * Generic type syntax is supplied through the canonical expression/type
- * integration rather than by defining another generic grammar here.
- *
- * This file MUST NOT define lexer rules.
- *
- * ============================================================================
- * IMPORTANT DESIGN DECISION
- * ============================================================================
- *
- * Operation names are NOT lexer keywords.
- *
- * Therefore all of the following can remain ordinary source-level names:
+ * Quantum operation names such as:
  *
  *     H
  *     X
  *     CNOT
- *     SWAP
  *     RX
- *     custom_gate
- *     vendor::operation
- *     library::operation
- *     future::operation
+ *     custom_operation
  *
- * The semantic layer decides whether a name denotes:
+ * MUST remain identifiers.
  *
- *     a primitive operation;
- *     a library operation;
- *     a user-defined operation;
- *     a dialect operation;
- *     a capability-backed operation;
- *     an intrinsic;
- *     an imported operation;
- *     or an unresolved name.
+ * Language-level quantum vocabulary such as:
+ *
+ *     apply
+ *     control
+ *     adjoint
+ *     inverse
+ *
+ * is supplied by the canonical lexer.
+ *
+ * ============================================================================
+ * PARSER DEPENDENCIES
+ * ============================================================================
+ *
+ * Names:
+ *
+ *     qualifiedName
+ *     identifier
+ *
+ * are owned by the canonical Names grammar.
+ *
+ * Expressions:
+ *
+ *     expression
+ *
+ * are owned by the canonical Expressions grammar.
+ *
+ * Generic operation arguments:
+ *
+ *     genericArgumentSuffix
+ *
+ * are consumed from the canonical expression/type system.
+ *
+ * Quantum parameter syntax is owned by:
+ *
+ *     QuantumParameters
+ *
+ * ============================================================================
+ * GENERIC OPERATION SUPPORT
+ * ============================================================================
+ *
+ * The operation grammar must not create a second generic type/argument system.
+ *
+ * Generic operation identity is represented by the existing generic suffix:
+ *
+ *     operation::<T>
+ *
+ * or the canonical equivalent accepted by the universal expression grammar.
+ *
+ * Semantic analysis determines:
+ *
+ *     generic parameter count
+ *     generic parameter kinds
+ *     type compatibility
+ *     specialization
+ *     inference
  *
  * ============================================================================
  * PARAMETER / TARGET SEPARATION
  * ============================================================================
  *
- * The canonical invocation forms are:
+ * Quantum operation parameters and quantum operation targets are structurally
+ * distinct.
+ *
+ * Examples:
  *
  *     apply H(q);
  *
@@ -293,187 +486,362 @@
  *
  *     apply U(theta, phi, lambda)(q0, q1);
  *
- * The first parenthesized clause after the operation designator is optional
- * operation-parameter syntax.
+ *     apply operation(parameter)(target);
  *
- * The final parenthesized clause is the operation-target syntax.
+ * The operation parameter clause is supplied by QuantumParameters.
  *
- * This permits the parser to distinguish:
+ * The operation target clause is owned here.
  *
- *     apply H(q);
+ * This distinction is important because:
  *
- * from:
+ *     parameters
  *
- *     apply RX(theta)(q);
+ * describe values controlling operation behavior, while:
  *
- * without knowing what H, RX, theta, or q mean.
+ *     targets
+ *
+ * identify values/resources on which the operation acts.
+ *
+ * Semantic analysis determines their actual types and roles.
  *
  * ============================================================================
- * MODIFIERS
+ * EMPTY PARAMETER CLAUSE
  * ============================================================================
  *
- * Modifiers are structural operation transformations.
+ * The grammar permits:
  *
- * Supported core forms:
+ *     apply operation()(q);
+ *
+ * even where an operation ultimately has no parameters.
+ *
+ * Whether an empty parameter clause is semantically meaningful for a particular
+ * operation is a semantic question.
+ *
+ * This allows syntax to remain generic and open-world.
+ *
+ * ============================================================================
+ * TARGET MODEL
+ * ============================================================================
+ *
+ * Targets are ordinary expressions.
+ *
+ * This deliberately permits source forms such as:
+ *
+ *     q
+ *     q[0]
+ *     register
+ *     register[i]
+ *     selection
+ *     expression
+ *
+ * without embedding a second target-reference language here.
+ *
+ * Semantic analysis determines whether the expression is a valid quantum
+ * operand and determines:
+ *
+ *     operand type
+ *     operand role
+ *     arity
+ *     aliasing
+ *     overlap
+ *     ordering
+ *     dimensionality
+ *     mutability/ownership rules
+ *     logical/physical meaning
+ *
+ * ============================================================================
+ * CONTROL / ADJOINT / INVERSE
+ * ============================================================================
+ *
+ * These are operation modifiers.
+ *
+ * Canonical structural forms:
  *
  *     control(operation)
  *     adjoint(operation)
  *     inverse(operation)
  *
- * Modifiers are recursively composable:
+ * Modifiers may be nested:
  *
- *     control(adjoint(U))
+ *     control(adjoint(operation))
  *
- *     inverse(control(U))
+ *     inverse(control(operation))
  *
- *     control(inverse(adjoint(U)))
+ *     control(inverse(adjoint(operation)))
  *
- * There is no grammar-imposed modifier nesting limit.
+ * No finite nesting depth is imposed.
  *
- * Semantic analysis determines whether a particular composition is valid.
+ * Whether a modifier is mathematically or semantically valid for a particular
+ * operation is determined by semantic analysis.
  *
  * ============================================================================
  * CONTROL OPERANDS
  * ============================================================================
  *
- * Controls and operation targets are represented as ordinary expressions.
+ * The base operation grammar deliberately does not impose a fixed control
+ * count.
  *
  * Example:
  *
- *     apply control(X)(control, target);
+ *     apply control(operation)(c, q);
  *
- *     apply control(X)(c0, c1, target);
+ *     apply control(operation)(c0, c1, q);
  *
- *     apply control(operation)(control_register, target_register);
+ *     apply control(operation)(controls, targets);
  *
- * The grammar deliberately does not decide how many operands are controls.
+ * Semantic analysis determines:
  *
- * The semantic operation signature determines:
+ *     control roles
+ *     target roles
+ *     operand partition
+ *     control polarity
+ *     operation signature
+ *     type compatibility
  *
- *     control operands;
- *     target operands;
- *     operand roles;
- *     operand types;
- *     arity;
- *     dimensional compatibility.
+ * More specialized control syntax belongs to:
  *
- * ============================================================================
- * GENERIC OPERATION REFERENCES
- * ============================================================================
+ *     controlled-operations.g4
  *
- * Generic operation references use the existing universal generic invocation
- * syntax supplied by the expression grammar.
+ * and:
  *
- * For example:
- *
- *     operation::<T>(q)
- *
- * The operation grammar does not create a second generic-argument grammar.
+ *     controls.g4
  *
  * ============================================================================
- * SEMANTIC RESPONSIBILITY
+ * OPERATION SPECIFIER
  * ============================================================================
  *
- * Parsing establishes only structural validity.
+ * `quantumOperationSpecifier` is the stable boundary between:
  *
- * Semantic analysis must determine:
+ *     WHAT operation is being invoked
  *
- *     whether the operation exists;
- *     whether the operation is callable;
- *     whether its parameters are valid;
- *     whether its targets have compatible quantum types;
- *     whether control operands are valid;
- *     whether adjoint is defined;
- *     whether inverse is defined;
- *     whether the operation has the required capabilities;
- *     whether the required resources exist;
- *     whether the operation is supported by a target;
- *     whether decomposition is necessary.
+ * and:
  *
- * None of these decisions belong in this grammar.
+ *     HOW it is being applied.
  *
- * ============================================================================
- * IR CONTRACT
- * ============================================================================
+ * It may identify:
  *
- * A successfully validated operation maps conceptually to:
+ *     an ordinary operation
+ *     a qualified operation
+ *     a generic operation
+ *     a modified operation
  *
- *     generic operation intent
- *             |
- *             v
- *     semantic quantum operation
- *             |
- *             v
- *     quantum::ir
+ * The specifier does not contain target operands.
  *
- * The grammar MUST NOT create:
+ * It does not perform name resolution.
  *
- *     QuantumGate
- *     PhysicalGate
- *     VendorGate
- *     HardwareOperation
- *
- * as a closed grammar enumeration.
- *
- * The canonical IR remains the existing:
- *
- *     quantum::ir
+ * It does not select a backend.
  *
  * ============================================================================
  * AST CONTRACT
  * ============================================================================
  *
- * The parser must preserve enough source structure for the frontend AST to
+ * The grammar must preserve enough structure for the domain-neutral AST to
  * represent:
  *
- *     operation name;
- *     namespace/path;
- *     generic arguments;
- *     operation parameters;
- *     operation targets;
- *     modifier nesting;
- *     source spans;
- *     argument ordering;
- *     target ordering.
+ *     operation designator
+ *     namespace/path
+ *     generic arguments
+ *     parameter arguments
+ *     target expressions
+ *     modifier nesting
+ *     source ordering
+ *     source spans
  *
- * A representative semantic shape is:
+ * Conceptual semantic shape:
  *
- *     Operation {
- *         designator,
- *         generic_arguments,
+ *     QuantumOperation {
+ *         specifier,
  *         parameters,
  *         targets,
- *         modifiers,
  *         source_span
  *     }
  *
- * The exact Rust AST type remains owned by:
+ * The actual Rust AST remains owned by the repository frontend.
  *
- *     src/frontend/ast/
- *
- * This grammar must not introduce a competing AST type.
+ * This grammar MUST NOT define Rust AST structures.
  *
  * ============================================================================
- * ERROR MODEL
+ * SEMANTIC CONTRACT
  * ============================================================================
  *
- * The grammar should reject structurally incomplete forms such as:
+ * Semantic analysis must determine:
  *
- *     apply;
- *     apply H;
- *     apply H(;
- *     apply H);
- *     apply control;
- *     apply control(X;
- *     apply adjoint;
+ *     operation existence
+ *     operation visibility
+ *     operation overload resolution
+ *     generic argument validity
+ *     parameter binding
+ *     target validity
+ *     operand roles
+ *     arity
+ *     type compatibility
+ *     modifier validity
+ *     effect requirements
+ *     capability requirements
+ *     resource requirements
+ *     contracts
+ *     policies
+ *     provenance
+ *     target support
+ *     decomposition requirements
  *
- * Semantic analysis, rather than parsing, should reject constructs such as:
+ * None of these belong in parser syntax.
  *
- *     apply unknown_operation(q);
+ * ============================================================================
+ * EFFECT CONTRACT
+ * ============================================================================
  *
- * when `unknown_operation` cannot be resolved.
+ * A quantum operation may eventually carry semantic effects such as:
  *
- * Likewise, resource failures must not be turned into syntax failures.
+ *     quantum
+ *     measurement
+ *     randomness
+ *     native
+ *     foreign
+ *     simulation
+ *     distributed
+ *
+ * This grammar does not hard-code those effects.
+ *
+ * Effects are determined from the resolved operation semantics.
+ *
+ * ============================================================================
+ * CAPABILITY CONTRACT
+ * ============================================================================
+ *
+ * An operation may require capabilities such as:
+ *
+ *     quantum.operation
+ *     quantum.dynamic_control
+ *     quantum.measurement
+ *     quantum.parameterized_operation
+ *     quantum.custom_operation
+ *
+ * Capability names remain open-world.
+ *
+ * This grammar does not test capability availability.
+ *
+ * Capability negotiation belongs downstream.
+ *
+ * ============================================================================
+ * RESOURCE CONTRACT
+ * ============================================================================
+ *
+ * Operation syntax does not allocate resources.
+ *
+ * Resource requirements may be inferred from semantic operation definitions
+ * and operation operands.
+ *
+ * The resource layer may determine requirements involving:
+ *
+ *     qubits
+ *     logical qubits
+ *     quantum memory
+ *     execution time
+ *     measurement capacity
+ *     communication
+ *     accelerator capacity
+ *     resilience
+ *     other future resources
+ *
+ * No resource quantity is hard-coded here.
+ *
+ * ============================================================================
+ * CONTRACT / POLICY CONTRACT
+ * ============================================================================
+ *
+ * Operations may participate in universal:
+ *
+ *     requires
+ *     ensures
+ *     invariant
+ *     assume
+ *     guarantee
+ *     property
+ *     policy
+ *
+ * systems.
+ *
+ * Those systems remain outside this grammar.
+ *
+ * An operation invocation can be associated with such information by the
+ * surrounding semantic/attribute/contract layers.
+ *
+ * ============================================================================
+ * PROVENANCE CONTRACT
+ * ============================================================================
+ *
+ * The operation source structure must remain traceable through the frontend.
+ *
+ * Provenance may later record:
+ *
+ *     source span
+ *     operation identity
+ *     parameter bindings
+ *     target expressions
+ *     semantic resolution
+ *     transformations
+ *     decomposition
+ *     routing
+ *     scheduling
+ *     optimization
+ *     lowering
+ *
+ * This grammar itself records no runtime provenance.
+ *
+ * ============================================================================
+ * QUANTUM::IR CONTRACT
+ * ============================================================================
+ *
+ * The parser does NOT produce `quantum::ir`.
+ *
+ * The required path is:
+ *
+ *     source
+ *       |
+ *       v
+ *     parse tree
+ *       |
+ *       v
+ *     domain-neutral AST
+ *       |
+ *       v
+ *     semantic quantum operation
+ *       |
+ *       v
+ *     canonical quantum::ir
+ *
+ * There must be exactly one canonical quantum IR boundary.
+ *
+ * This grammar must not define:
+ *
+ *     QuantumOperationIR
+ *     QuantumGateIR
+ *     QuantumCircuitIR
+ *     PhysicalQuantumOperation
+ *     VendorQuantumOperation
+ *     HardwareQuantumOperation
+ *
+ * as competing IRs.
+ *
+ * ============================================================================
+ * TARGET LOWERING CONTRACT
+ * ============================================================================
+ *
+ * Target-specific realization occurs after semantic quantum representation.
+ *
+ * The operation may eventually be transformed through:
+ *
+ *     optimization
+ *     decomposition
+ *     routing
+ *     scheduling
+ *     resilience
+ *     QEC
+ *     ZQN
+ *     HAL
+ *
+ * The source operation does not prescribe any of these transformations.
  *
  * ============================================================================
  * DETERMINISM
@@ -481,27 +849,168 @@
  *
  * This grammar contains:
  *
- *     no embedded Rust actions;
- *     no semantic predicates;
- *     no filesystem access;
- *     no network access;
- *     no runtime calls;
- *     no hardware discovery;
- *     no randomness.
+ *     no embedded Rust
+ *     no actions
+ *     no semantic predicates
+ *     no filesystem access
+ *     no network access
+ *     no hardware discovery
+ *     no runtime calls
+ *     no randomness
  *
- * Parse results therefore depend only on:
+ * Parsing depends only on:
  *
- *     source text;
- *     canonical token vocabulary;
- *     canonical imported grammar definitions.
+ *     source text
+ *     selected grammar
+ *     canonical lexer vocabulary
+ *     imported parser grammars
  *
  * ============================================================================
- */
-
-
-/*
+ * ERROR MODEL
  * ============================================================================
- * PARSER DECLARATION
+ *
+ * Syntax errors belong here.
+ *
+ * Examples of structurally invalid forms:
+ *
+ *     apply;
+ *     apply operation;
+ *     apply operation(;
+ *     apply operation);
+ *     apply control;
+ *     apply control(;
+ *     apply adjoint;
+ *     apply inverse;
+ *
+ * Semantic errors do NOT belong here.
+ *
+ * Examples:
+ *
+ *     apply nonexistent_operation(q);
+ *
+ *     apply operation(invalid_parameter)(q);
+ *
+ *     apply operation(invalid_target);
+ *
+ *     apply inverse(non_invertible_operation)(q);
+ *
+ * These are parsed structurally and rejected during semantic analysis.
+ *
+ * Resource failure is also not a syntax failure.
+ *
+ * ============================================================================
+ * COMPATIBILITY CONTRACT
+ * ============================================================================
+ *
+ * Existing valid forms must remain representable:
+ *
+ *     apply H(q);
+ *     apply X(q);
+ *     apply CNOT(control, target);
+ *     apply RX(theta)(q);
+ *     apply U(theta, phi, lambda)(q0, q1);
+ *     apply library::operation(q);
+ *     apply vendor::operation(parameter)(q);
+ *     apply control(X)(control, target);
+ *     apply adjoint(U)(q);
+ *     apply inverse(U)(q);
+ *
+ * The grammar does not reserve those operation names.
+ *
+ * ============================================================================
+ * INTEGRATION CONTRACT
+ * ============================================================================
+ *
+ * UPSTREAM:
+ *
+ *     grammar/antlr/ZamaniLexer.g4
+ *     grammar/core/names.g4 / canonical Names grammar
+ *     grammar/expressions/*
+ *     grammar/quantum/parameters.g4
+ *
+ * THIS FILE:
+ *
+ *     grammar/quantum/operations.g4
+ *
+ * DOWNSTREAM:
+ *
+ *     grammar/quantum/quantum.g4
+ *     frontend parser
+ *     domain-neutral AST
+ *     structural validation
+ *     semantic quantum operation resolution
+ *     capability analysis
+ *     resource analysis
+ *     effect analysis
+ *     contract/policy analysis
+ *     provenance
+ *     canonical quantum::ir
+ *
+ * RELATED OWNERS:
+ *
+ *     parameters.g4
+ *         parameter syntax
+ *
+ *     controlled-operations.g4
+ *         advanced control syntax
+ *
+ *     controls.g4
+ *         control semantics/syntax extensions
+ *
+ *     adjoints.g4
+ *         adjoint-specific syntax/extensions
+ *
+ *     gates.g4
+ *         operation/gate declarations where applicable
+ *
+ *     circuits.g4
+ *         circuit structure
+ *
+ *     measurement.g4
+ *         measurement
+ *
+ *     reset.g4
+ *         reset
+ *
+ *     quantum-capabilities.g4
+ *         quantum capability declarations/references
+ *
+ *     quantum-resources.g4
+ *         quantum resource intent
+ *
+ *     resource-requirements.g4
+ *         resource requirement integration
+ *
+ * ============================================================================
+ * COMPLETION CRITERIA
+ * ============================================================================
+ *
+ * This file is complete when:
+ *
+ *     [ ] all operation invocations have one canonical entry point;
+ *     [ ] operation names remain open-world identifiers;
+ *     [ ] no finite gate catalogue exists here;
+ *     [ ] parameter syntax is delegated to QuantumParameters;
+ *     [ ] target syntax is owned here;
+ *     [ ] generic operation identity is supported;
+ *     [ ] modifiers are recursively representable;
+ *     [ ] no fixed operation/target/control/parameter limit exists;
+ *     [ ] no hardware-specific syntax exists;
+ *     [ ] no physical qubit syntax exists;
+ *     [ ] no routing/scheduling syntax exists;
+ *     [ ] no QEC/ZQN/HAL logic exists;
+ *     [ ] no second quantum IR exists;
+ *     [ ] parser remains deterministic;
+ *     [ ] parser remains free of embedded Rust;
+ *     [ ] generated Rust remains safe;
+ *     [ ] Rust 1.97+ remains supported;
+ *     [ ] Quantum root can import this grammar;
+ *     [ ] semantic layer can map the result to canonical quantum::ir;
+ *     [ ] positive tests cover generic operations;
+ *     [ ] negative tests cover structural failures;
+ *     [ ] boundary tests cover modifiers and parameter/target separation;
+ *     [ ] scalability tests contain no artificial size assumptions.
+ *
  * ============================================================================
  */
 
@@ -511,63 +1020,21 @@ options {
     tokenVocab = ZamaniLexer;
 }
 
-
-/*
- * ============================================================================
- * CANONICAL DEPENDENCIES
- * ============================================================================
- *
- * Names:
- *     qualifiedName
- *     identifier
- *
- * Expressions:
- *     expression
- *     argumentList
- *     genericArgumentSuffix
- *
- * Types:
- *     generic type arguments remain part of the universal type/expression
- *     integration and are not duplicated here.
- *
- * Attributes are intentionally NOT imported here.
- *
- * Attribute attachment belongs to the surrounding quantum composition grammar.
- *
- * ============================================================================
- */
-
 import
     Names,
     Expressions,
-    Types
+    QuantumParameters
 ;
 
 
 /*
  * ============================================================================
- * 1. CANONICAL QUANTUM OPERATION STATEMENT
+ * 1. CANONICAL OPERATION STATEMENT
  * ============================================================================
  *
- * Examples:
+ * The statement owns the terminating semicolon.
  *
- *     apply H(q);
- *
- *     apply X(q);
- *
- *     apply CNOT(control, target);
- *
- *     apply RX(theta)(q);
- *
- *     apply library::operation(q);
- *
- *     apply vendor::operation(parameter)(q);
- *
- *     apply control(X)(control, target);
- *
- *     apply adjoint(U)(q);
- *
- *     apply inverse(U)(q);
+ * The operation itself remains reusable without the statement terminator.
  */
 
 quantumOperationStatement
@@ -577,29 +1044,16 @@ quantumOperationStatement
 
 /*
  * ============================================================================
- * 2. OPERATION APPLICATION
+ * 2. CANONICAL QUANTUM OPERATION
  * ============================================================================
  *
- * The semicolon is intentionally owned by quantumOperationStatement.
+ * This is the principal reusable operation-invocation rule.
  *
- * This rule can therefore be reused by quantum block/domain composition.
- */
-
-quantumOperationApplication
-    : APPLY quantumOperationInvocation
-    ;
-
-
-/*
- * ============================================================================
- * 3. OPERATION INVOCATION
- * ============================================================================
+ * Conceptually:
  *
- * An operation consists of:
- *
- *     operation designator
- *     optional parameter clause
- *     target clause
+ *     operation specifier
+ *     + optional parameter arguments
+ *     + target operands
  *
  * Examples:
  *
@@ -607,37 +1061,55 @@ quantumOperationApplication
  *
  *     RX(theta)(q)
  *
- *     U(theta, phi, lambda)(q0, q1)
+ *     operation(a, b)(q0, q1)
  *
  *     control(X)(c, q)
- *
- *     control(RX(theta))(c, q)
  */
 
-quantumOperationInvocation
-    : quantumOperationCallee
-      quantumOperationParameterClause?
+quantumOperation
+    : quantumOperationSpecifier
+      quantumOperationParameterArguments?
       quantumOperationTargetClause
     ;
 
 
 /*
  * ============================================================================
- * 4. OPERATION CALLEE
+ * 3. OPERATION APPLICATION
  * ============================================================================
  *
- * A callee is either:
+ * Canonical source-level statement:
  *
- *     ordinary operation designator
+ *     apply operation(...);
  *
- * or:
+ * `apply` is lexical language vocabulary.
  *
- *     recursively modified operation.
- *
- * This prevents a second closed gate grammar from being necessary.
+ * It does not imply a particular hardware execution mechanism.
  */
 
-quantumOperationCallee
+quantumOperationApplication
+    : APPLY quantumOperation
+    ;
+
+
+/*
+ * ============================================================================
+ * 4. OPERATION SPECIFIER
+ * ============================================================================
+ *
+ * The operation specifier identifies what operation is being invoked.
+ *
+ * It intentionally excludes target operands.
+ *
+ * It may be:
+ *
+ *     an ordinary operation designator
+ *     a recursively modified operation
+ *
+ * The semantic layer resolves the resulting operation identity.
+ */
+
+quantumOperationSpecifier
     : quantumOperationDesignator
     | quantumOperationModifier
     ;
@@ -648,23 +1120,20 @@ quantumOperationCallee
  * 5. OPERATION DESIGNATOR
  * ============================================================================
  *
- * The operation name is a canonical qualified source name.
+ * Operation names are canonical qualified names.
  *
  * Examples:
  *
  *     H
- *     custom_gate
+ *     custom_operation
  *     quantum::operation
  *     library::quantum::operation
+ *     vendor::operation
  *
- * Generic operation invocation is supported by the existing expression
- * generic-argument suffix.
+ * Generic operation specialization may follow through the canonical generic
+ * argument suffix.
  *
- * Example:
- *
- *     operation::<T>
- *
- * No vendor or hardware operation list is encoded here.
+ * No operation catalog is encoded.
  */
 
 quantumOperationDesignator
@@ -675,77 +1144,69 @@ quantumOperationDesignator
 
 /*
  * ============================================================================
- * 6. OPERATION PARAMETER CLAUSE
+ * 6. PARAMETER ARGUMENTS
  * ============================================================================
+ *
+ * Parameter syntax is owned by QuantumParameters.
+ *
+ * This wrapper exists so that operations.g4 owns the integration boundary
+ * without duplicating the parameter grammar.
  *
  * Examples:
  *
- *     RX(theta)
- *
- *     U(theta, phi, lambda)
- *
- *     operation(parameter_expression)
- *
- * Parameters are ordinary Zamani expressions.
- *
- * Parameter cardinality is not bounded by this grammar.
+ *     ()
+ *     (theta)
+ *     (theta, phi)
+ *     (theta = value)
+ *     (theta, phi = value)
+ *     (...parameters)
  */
 
-quantumOperationParameterClause
-    : LPAREN argumentList? RPAREN
+quantumOperationParameterArguments
+    : quantumOperationArgumentList
     ;
 
 
 /*
  * ============================================================================
- * 7. OPERATION TARGET CLAUSE
+ * 7. TARGET CLAUSE
  * ============================================================================
+ *
+ * Targets are structurally distinct from parameter arguments.
  *
  * Examples:
  *
  *     (q)
- *
  *     (q0, q1)
- *
  *     (register)
- *
  *     (register[i], register[j])
  *
- *     (selection)
- *
- * Targets are ordinary expressions.
- *
- * Semantic analysis determines whether an expression is a legal quantum
- * operand.
+ * Semantic analysis decides whether the expressions are legal quantum
+ * operands.
  */
 
 quantumOperationTargetClause
-    : LPAREN quantumOperationTargetList? RPAREN
+    : LPAREN
+      quantumOperationTargetList?
+      RPAREN
     ;
 
 
 /*
  * ============================================================================
- * 8. OPERATION TARGET LIST
+ * 8. TARGET LIST
  * ============================================================================
  *
- * There is deliberately no finite target count.
+ * No fixed target cardinality exists.
  *
- * The semantic layer determines:
- *
- *     target roles;
- *     target types;
- *     operation arity;
- *     aliasing rules;
- *     overlap rules;
- *     dimensional compatibility.
+ * A semantic operation signature determines the legal target structure.
  */
 
 quantumOperationTargetList
-    : expression
+    : quantumOperationTarget
       (
           COMMA
-          expression
+          quantumOperationTarget
       )*
       COMMA?
     ;
@@ -753,12 +1214,13 @@ quantumOperationTargetList
 
 /*
  * ============================================================================
- * 9. OPERATION TARGET
+ * 9. SINGLE TARGET
  * ============================================================================
  *
- * Named wrapper for downstream grammar consumers.
+ * The target is a canonical Zamani expression.
  *
- * This does not create a quantum-specific target-reference grammar.
+ * This allows target selection to evolve independently from the operation
+ * grammar.
  */
 
 quantumOperationTarget
@@ -771,8 +1233,7 @@ quantumOperationTarget
  * 10. REUSABLE TARGET LIST
  * ============================================================================
  *
- * This rule exists for consumers that need an explicitly named target-list
- * production without reimplementing the list syntax.
+ * Named reusable boundary for quantum grammar consumers.
  */
 
 quantumOperationTargets
@@ -790,13 +1251,22 @@ quantumOperationTargets
  * 11. OPERATION MODIFIER
  * ============================================================================
  *
- * Core modifier forms:
+ * Core modifiers:
  *
  *     control(operation)
  *     adjoint(operation)
  *     inverse(operation)
  *
- * Modifiers are recursively nestable.
+ * Recursive composition is intentional.
+ *
+ * Examples:
+ *
+ *     control(X)
+ *     adjoint(U)
+ *     inverse(U)
+ *     control(adjoint(U))
+ *     inverse(control(U))
+ *     control(inverse(adjoint(U)))
  *
  * No finite nesting depth is encoded.
  */
@@ -826,24 +1296,27 @@ quantumOperationModifier
  *
  * A modifier may wrap:
  *
- *     an operation designator;
- *     another modifier;
+ *     operation designator
+ *     recursively modified operation
  *
- * An optional parameter clause is allowed on a directly named operation.
+ * A parameter argument list may be attached to a directly named operation.
  *
- * Therefore these forms are structurally valid:
+ * Examples:
  *
  *     control(X)
+ *
  *     control(RX(theta))
- *     adjoint(U)
- *     inverse(U)
- *     control(adjoint(U))
- *     inverse(control(RX(theta)))
+ *
+ *     adjoint(U(theta))
+ *
+ *     inverse(operation(parameter))
+ *
+ * Nested modifiers remain recursively composable.
  */
 
 quantumOperationModifierOperand
     : quantumOperationDesignator
-      quantumOperationParameterClause?
+      quantumOperationParameterArguments?
 
     | quantumOperationModifier
     ;
@@ -854,8 +1327,7 @@ quantumOperationModifierOperand
  * 13. OPERATION REFERENCE
  * ============================================================================
  *
- * This rule exposes the reusable operation identity independently from an
- * invocation.
+ * Reusable operation identity without target operands.
  */
 
 quantumOperationReference
@@ -868,9 +1340,9 @@ quantumOperationReference
  * 14. CONTROLLED OPERATION REFERENCE
  * ============================================================================
  *
- * This represents the modifier portion only.
+ * This exposes the control modifier as a reusable semantic boundary.
  *
- * Operand interpretation remains semantic.
+ * Detailed control operand semantics remain downstream.
  */
 
 quantumControlledOperation
@@ -914,11 +1386,12 @@ quantumInverseOperation
  * 17. EXTENDED INVOCATION
  * ============================================================================
  *
- * Canonical reusable alias for downstream quantum composition.
+ * Reusable alias for consumers that require an explicitly named operation
+ * invocation boundary.
  */
 
 quantumExtendedOperationInvocation
-    : quantumOperationInvocation
+    : quantumOperation
     ;
 
 
@@ -927,14 +1400,11 @@ quantumExtendedOperationInvocation
  * 18. OPERATION EXPRESSION REFERENCE
  * ============================================================================
  *
- * This is intentionally an operation-reference abstraction rather than a
- * second universal expression hierarchy.
+ * This is intentionally a reference to the operation identity rather than a
+ * second expression hierarchy.
  *
- * Expression-level quantum semantics belong to:
- *
- *     grammar/expressions/quantum.g4
- *
- * when an operation must participate directly in a general expression.
+ * General expression-level quantum semantics remain owned by the expression
+ * subsystem.
  */
 
 quantumOperationExpressionReference
@@ -944,488 +1414,431 @@ quantumOperationExpressionReference
 
 /*
  * ============================================================================
- * 19. SCALABILITY CONTRACT
+ * 19. OPERATION DESIGNATOR LIST
  * ============================================================================
  *
- * The following constructs are intentionally unbounded by language grammar:
+ * Reusable open-world list.
+ *
+ * No finite number of operations is encoded.
+ */
+
+quantumOperationDesignatorList
+    : quantumOperationDesignator
+      (
+          COMMA
+          quantumOperationDesignator
+      )*
+      COMMA?
+    ;
+
+
+/*
+ * ============================================================================
+ * 20. OPERATION SPECIFIER REFERENCE
+ * ============================================================================
+ *
+ * Reusable boundary for grammars that need an operation identity or modifier
+ * without invoking it.
+ */
+
+quantumOperationSpecifierReference
+    : quantumOperationSpecifier
+    ;
+
+
+/*
+ * ============================================================================
+ * 21. SCALABILITY / CARDINALITY CONTRACT
+ * ============================================================================
+ *
+ * The following are intentionally open-ended:
  *
  *     operation count
- *     target count
  *     parameter count
+ *     target count
  *     control count
- *     modifier nesting
+ *     modifier depth
  *     namespace depth
  *     generic argument count
  *
- * Examples of structurally valid scalable forms include:
+ * Examples:
  *
  *     apply operation(q);
  *
- *     apply operation(q0, q1, q2, q3, ...);
+ *     apply operation(p0, p1)(q0, q1);
  *
- *     apply operation(p0, p1, p2, ...)(q0, q1, q2, ...);
- *
- *     apply control(operation)(c0, c1, c2, ..., target);
+ *     apply control(operation)(c0, c1, target);
  *
  *     apply control(adjoint(inverse(operation)))(...);
  *
- * The actual resource feasibility of these programs is deliberately deferred
- * to semantic/resource/capability analysis and later compilation stages.
+ * Actual resource limits are external to this grammar.
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 20. HARD-CODING AUDIT
+ * 22. SEMANTIC NON-RESPONSIBILITIES
  * ============================================================================
  *
- * Forbidden universal limits:
+ * The parser MUST NOT determine:
  *
- *     MAX_QUBITS
- *     MAX_CPUS
- *     MAX_GPUS
- *     MAX_FPGAS
- *     MAX_NODES
- *     MAX_MEMORY
- *     MAX_THREADS
- *     MAX_TENSOR_RANK
- *     MAX_REGISTER_WIDTH
- *     MAX_NETWORK_SIZE
- *     MAX_DEVICE_COUNT
+ *     whether an operation exists;
+ *     whether an operation is callable;
+ *     whether an operation is unitary;
+ *     whether an operation has an adjoint;
+ *     whether an operation has an inverse;
+ *     whether a target is a qubit;
+ *     whether a target is logical;
+ *     whether a target is physical;
+ *     whether an operation is supported by a backend;
+ *     whether a capability exists;
+ *     whether resources are sufficient;
+ *     whether routing is required;
+ *     whether decomposition is required;
+ *     whether QEC is required;
+ *     whether a pulse implementation exists;
+ *     whether calibration exists.
  *
- * No such limits are represented in this grammar.
- *
- * Also forbidden:
- *
- *     physical qubit numbers;
- *     vendor gate inventories;
- *     native gate assumptions;
- *     fixed topology;
- *     fixed register width;
- *     fixed device identifiers;
- *     backend-specific scheduling;
- *     calibration data.
+ * These belong to downstream semantic/compiler/runtime layers.
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 21. SEMANTIC RESOURCE SEPARATION
+ * 23. SEMANTIC OPERATION SHAPE
  * ============================================================================
  *
- * The following concepts remain downstream:
+ * The frontend should conceptually be able to derive:
  *
- * REQUIREMENT
- *     e.g. requires qubits >= n
+ *     operation
+ *       ├── specifier
+ *       │    ├── designator
+ *       │    └── modifiers
+ *       ├── parameters
+ *       └── targets
  *
- * CAPABILITY
- *     e.g. requires capability("quantum.mid_circuit_measurement")
- *
- * PREFERENCE
- *     e.g. prefer accelerator("quantum")
- *
- * IMPLEMENTATION DECISION
- *     e.g. physical placement / routing / target mapping
- *
- * `operations.g4` must not collapse these categories into operation syntax.
+ * This is a semantic shape, not a Rust structure defined here.
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 22. QUANTUM IR CONTRACT
+ * 24. QUANTUM::IR BOUNDARY
  * ============================================================================
  *
- * The complete lowering chain remains:
+ * A successfully resolved operation follows:
  *
- *     quantumOperationStatement
- *             |
- *             v
- *     frontend AST operation
- *             |
- *             v
- *     semantic quantum operation
- *             |
- *             v
+ *     QuantumOperations
+ *          |
+ *          v
+ *     frontend AST
+ *          |
+ *          v
+ *     semantic operation
+ *          |
+ *          v
  *     quantum::ir
- *             |
- *             +--> optimization
- *             +--> decomposition
- *             +--> routing
- *             +--> scheduling
- *             +--> QEC
- *             +--> resilience
- *             +--> ZQN
- *             +--> HAL
  *
- * No operation grammar production may instantiate or encode a physical
- * operation.
+ * The grammar MUST NOT construct or reference:
  *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 23. DIAGNOSTIC CONTRACT
- * ============================================================================
+ *     QubitId
+ *     PhysicalQubitId
+ *     GateKind
+ *     QuantumGate
+ *     QuantumOperationIR
+ *     PhysicalGate
+ *     VendorInstruction
  *
- * Parser-level diagnostics should identify structural failures with source
- * spans.
- *
- * Examples:
- *
- *     missing operation name
- *     missing parameter close delimiter
- *     missing target close delimiter
- *     missing target expression
- *     missing modifier operand
- *     malformed modifier nesting
- *     malformed qualified operation name
- *
- * Semantic diagnostics handle:
- *
- *     unknown operation;
- *     invalid operation parameters;
- *     invalid target type;
- *     invalid control operand;
- *     unsupported adjoint;
- *     unsupported inverse;
- *     insufficient capability;
- *     insufficient resources;
- *     unsupported target realization.
- *
- * Resource/capability failures MUST NOT be reported as parser syntax errors.
+ * The parser remains independent of Rust quantum IR implementation details.
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 24. SECURITY CONTRACT
+ * 25. TARGET-INDEPENDENCE
  * ============================================================================
  *
- * This grammar contains no:
+ * Nothing in this file identifies:
  *
- *     filesystem operations;
- *     network operations;
- *     environment inspection;
- *     target probing;
- *     runtime execution;
- *     embedded Rust actions;
- *     semantic predicates;
- *     dynamic code execution.
+ *     a CPU
+ *     a GPU
+ *     an FPGA
+ *     an ASIC
+ *     a QPU
+ *     a simulator
+ *     a vendor
+ *     a physical device
+ *     a physical qubit
+ *     a topology
+ *     a coupling map
+ *     a pulse channel
+ *     a calibration
  *
- * Any untrusted-input resource limits required by the parser implementation
- * are implementation-level protections and MUST NOT become language semantics.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 25. PERFORMANCE CONTRACT
- * ============================================================================
- *
- * Operation syntax is intentionally regular and compositional.
- *
- * Unbounded source cardinality is represented with ordinary parser repetition
- * rather than manually enumerated alternatives.
- *
- * Implementations should preserve parser progress on malformed input.
- *
- * No recursive rule here is required merely to count resources.
- *
- * Modifier recursion is structural and naturally bounded by the actual source
- * nesting depth rather than an artificial language constant.
+ * The same source operation can therefore participate in target-independent
+ * compilation.
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 26. POSITIVE CONFORMANCE EXAMPLES
+ * 26. DETERMINISTIC PARSING
  * ============================================================================
  *
- * These must parse:
+ * This grammar contains:
  *
- *     apply H(q);
+ *     no actions
+ *     no semantic predicates
+ *     no embedded Rust
+ *     no filesystem access
+ *     no network access
+ *     no hardware access
+ *     no runtime calls
+ *     no randomness
  *
- *     apply X(q);
- *
- *     apply CNOT(q0, q1);
- *
- *     apply RX(theta)(q);
- *
- *     apply U(theta, phi, lambda)(q0, q1);
- *
- *     apply custom_gate(q);
- *
- *     apply vendor::operation(q);
- *
- *     apply library::operation(parameter)(q);
- *
- *     apply operation::<T>(q);
- *
- *     apply control(X)(control, target);
- *
- *     apply control(X)(c0, c1, target);
- *
- *     apply adjoint(U)(q);
- *
- *     apply inverse(U)(q);
- *
- *     apply control(adjoint(U))(control, target);
- *
- *     apply inverse(control(RX(theta)))(control, target);
- *
- *     apply operation(q0, q1, q2, q3, q4);
+ * Parsing is therefore determined by source text and the selected grammar/
+ * lexical configuration.
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 27. NEGATIVE CONFORMANCE EXAMPLES
+ * 27. SAFE RUST CONTRACT
  * ============================================================================
  *
- * These must NOT parse as complete operation statements:
+ * This grammar generates no Rust source itself beyond normal ANTLR-generated
+ * parser artifacts.
  *
- *     apply;
+ * The Rust frontend consuming the parser must remain:
  *
- *     apply H
+ *     Rust 2021
+ *     Rust 1.97+
+ *     safe Rust
+ *     no unsafe
  *
- *     apply H(
- *
- *     apply H);
- *
- *     apply control;
- *
- *     apply control(
- *
- *     apply control(X;
- *
- *     apply adjoint;
- *
- *     apply inverse;
- *
- *     apply H(q
- *
- *     apply H(q);
- *     <missing closing source delimiter>
- *
- * The final case is intentionally structural; semantic validity of H(q)
- * belongs downstream.
+ * This file contains no target-language actions that could require unsafe
+ * Rust.
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 28. SEMANTICALLY INVALID BUT SYNTACTICALLY STRUCTURED EXAMPLES
+ * 28. INTEGRATION CONTRACT
  * ============================================================================
  *
- * These may parse structurally and must be rejected later when invalid:
+ * UPSTREAM:
  *
- *     apply operation_that_does_not_exist(q);
+ *     grammar/antlr/ZamaniLexer.g4
+ *     Names
+ *     Expressions
+ *     QuantumParameters
  *
- *     apply operation(incompatible_parameter)(q);
+ * DIRECT COMPOSITION:
  *
- *     apply operation(invalid_target);
+ *     grammar/quantum/quantum.g4
  *
- *     apply adjoint(non_unitary_operation)(q);
+ * RELATED QUANTUM OWNERS:
  *
- *     apply inverse(non_invertible_operation)(q);
+ *     parameters.g4
+ *         parameter declarations and argument syntax
  *
- *     apply control(operation)(invalid_control, target);
+ *     parameterized-operations.g4
+ *         compatibility/reference material for parameterized operation
+ *         constructs; it must not become a second operation-invocation
+ *         authority
  *
- * The parser must not attempt to resolve these meanings.
+ *     controlled-operations.g4
+ *         extended control syntax
  *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 29. BOUNDARY / SCALABILITY TEST CONTRACT
- * ============================================================================
+ *     controls.g4
+ *         control-specific syntax/semantics
  *
- * Tests must cover:
+ *     adjoints.g4
+ *         adjoint-specific syntax/semantics
  *
- *     one target;
- *     multiple targets;
- *     one parameter;
- *     many parameters;
- *     one control;
- *     many controls;
- *     nested modifiers;
- *     qualified names;
- *     generic operation references;
- *     indexed targets;
- *     sliced/register-view targets;
- *     expression-derived targets;
- *     empty target clauses where the semantic operation permits them;
- *     very deep but valid modifier nesting;
- *     very long operation argument lists;
- *     very long target lists.
+ *     gates.g4
+ *         operation/gate declaration syntax
  *
- * No test may define a universal maximum.
+ *     circuits.g4
+ *         circuit structure
  *
- * The purpose of scalability tests is to demonstrate that grammar cardinality
- * is not artificially capped.
+ *     measurement.g4
+ *         measurement syntax
  *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 30. CROSS-DOMAIN INTEGRATION
- * ============================================================================
+ *     reset.g4
+ *         reset syntax
  *
- * This grammar can be used from:
+ *     quantum-capabilities.g4
+ *         capability contracts
  *
- *     quantum.g4
- *     hybrid quantum/classical composition
- *     circuit grammar
- *     dynamic quantum constructs
- *     interoperability adapters
- *     dialect composition
+ *     quantum-resources.g4
+ *         resource contracts
  *
- * It must NOT directly depend on:
+ *     resource-requirements.g4
+ *         resource requirement integration
  *
- *     hardware.g4
- *     resources.g4
- *     execution.g4
+ * DOWNSTREAM:
+ *
+ *     domain-neutral AST
+ *     structural validation
+ *     semantic analysis
+ *     type checking
+ *     effect analysis
+ *     capability analysis
+ *     resource analysis
+ *     contract/policy analysis
+ *     provenance
+ *     canonical quantum::ir
+ *     optimization
+ *     decomposition
  *     routing
  *     scheduling
+ *     resilience
  *     QEC
  *     ZQN
  *     HAL
  *
- * Those dependencies flow downstream from semantic analysis.
- *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 31. COMPATIBILITY CONTRACT
+ * 29. ROOT-GRAMMAR INTEGRATION
  * ============================================================================
  *
- * Existing canonical source forms remain structurally supported:
+ * Quantum root:
+ *
+ *     grammar/quantum/quantum.g4
+ *
+ * imports:
+ *
+ *     QuantumOperations
+ *
+ * Therefore this grammar's public entry points are available to Quantum.
+ *
+ * The universal Zamani root must ultimately dispatch quantum operation
+ * statements through the canonical quantum declaration/block composition.
+ *
+ * No second operation dispatcher should be introduced elsewhere.
+ *
+ * ============================================================================
+ * 30. TEST CONTRACT
+ * ============================================================================
+ *
+ * Positive syntax tests must include:
  *
  *     apply H(q);
  *     apply X(q);
- *     apply CNOT(q0, q1);
+ *     apply CNOT(c, q);
+ *     apply RX(theta)(q);
+ *     apply U(theta, phi, lambda)(q0, q1);
+ *     apply operation(q);
+ *     apply namespace::operation(q);
+ *     apply operation::<T>(theta)(q);
+ *     apply operation()(q);
+ *     apply control(operation)(c, q);
+ *     apply control(operation)(c0, c1, q);
+ *     apply adjoint(operation)(q);
+ *     apply inverse(operation)(q);
+ *     apply control(adjoint(operation))(c, q);
+ *     apply inverse(control(operation))(c, q);
  *
- * Generic operation names remain extensible.
+ * Open-world tests must include operation names that are not part of any
+ * built-in catalogue.
  *
- * This grammar intentionally does not require changes to the lexical spelling
- * of operation names.
+ * Parameter/target separation tests must verify:
  *
- * Any change to:
+ *     apply operation(theta)(q);
  *
- *     apply
- *     control
- *     adjoint
- *     inverse
- *     parentheses
- *     comma
- *     semicolon
+ * is structurally different from:
  *
- * must be coordinated through the canonical lexer/specification authority.
+ *     apply operation(q);
  *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 32. COMPLETION CRITERIA
- * ============================================================================
+ * and:
  *
- * operations.g4 is complete when:
+ *     apply operation(theta, phi)(q0, q1);
  *
- * [x] It has one canonical parser grammar declaration.
- * [x] It consumes the canonical ZamaniLexer vocabulary.
- * [x] It owns one canonical quantum operation statement.
- * [x] Operation names remain open-ended.
- * [x] Qualified names are delegated to Names.
- * [x] Expressions are delegated to Expressions.
- * [x] Generic syntax is delegated to existing generic grammar.
- * [x] Parameters are structurally distinct from targets.
- * [x] Target lists are unbounded by grammar.
- * [x] Modifier nesting is unbounded by grammar.
- * [x] Control count is unbounded by grammar.
- * [x] No fixed quantum gate enumeration exists.
- * [x] No physical qubit mapping exists.
- * [x] No hardware topology exists.
- * [x] No machine-size limits exist.
- * [x] No resource limits exist.
- * [x] No QEC implementation exists.
- * [x] No ZQN implementation exists.
- * [x] No routing exists.
- * [x] No scheduling exists.
- * [x] No calibration exists.
- * [x] No second quantum IR exists.
- * [x] No embedded Rust exists.
- * [x] No unsafe Rust is required.
+ * Negative syntax tests must include:
  *
- * Repository-level completion additionally requires:
+ *     apply;
+ *     apply operation;
+ *     apply operation(;
+ *     apply operation);
+ *     apply control;
+ *     apply control(;
+ *     apply adjoint;
+ *     apply inverse;
  *
- * [ ] QuantumOperations is imported by the canonical Quantum composition
- *     grammar.
+ * Semantic-negative tests must remain outside this grammar and verify:
  *
- * [ ] quantumOperationElement delegates only to
- *     quantumOperationStatement.
- *
- * [ ] No competing grammar defines another canonical
- *     quantumOperationStatement.
- *
- * [ ] controlled-operations.g4 no longer competes for ordinary operation
- *     invocation ownership.
- *
- * [ ] parameterized-operations.g4 no longer competes for ordinary parameter
- *     invocation ownership.
- *
- * [ ] gates.g4 does not enumerate a closed application gate set.
- *
- * [ ] Frontend AST has a generic operation representation.
- *
- * [ ] Semantic analysis resolves operation names and operand roles.
- *
- * [ ] Lowering reaches canonical quantum::ir.
- *
- * [ ] Positive tests exist.
- *
- * [ ] Negative tests exist.
- *
- * [ ] Boundary tests exist.
- *
- * [ ] Scalability tests exist.
- *
- * [ ] Determinism tests exist.
- *
- * [ ] Compatibility tests exist.
- *
- * [ ] Cross-domain tests exist.
- *
- * [ ] Round-trip tests exist where the formatter/printer supports them.
+ *     unknown operation
+ *     invalid parameter
+ *     invalid target
+ *     invalid modifier
+ *     insufficient capability
+ *     insufficient resource
  *
  * ============================================================================
- * END OF FILE
+ * 31. SCALABILITY TEST CONTRACT
+ * ============================================================================
+ *
+ * Tests must NOT use artificial repository constants such as:
+ *
+ *     MAX_QUBITS
+ *     MAX_TARGETS
+ *     MAX_CONTROLS
+ *     MAX_PARAMETERS
+ *
+ * Instead, scalability tests should construct operation structures whose
+ * cardinality is determined by the test/resource environment.
+ *
+ * The grammar remains valid as cardinality increases until an external
+ * implementation/resource constraint is reached.
+ *
+ * ============================================================================
+ * 32. HARD-CODING AUDIT
+ * ============================================================================
+ *
+ * This file MUST contain:
+ *
+ *     no finite operation catalogue
+ *     no hardware catalogue
+ *     no vendor catalogue
+ *     no physical topology
+ *     no machine-size constants
+ *     no fixed qubit count
+ *     no fixed control count
+ *     no fixed parameter count
+ *     no fixed target count
+ *     no fixed circuit depth
+ *     no backend selection
+ *     no runtime discovery
+ *     no hardware probing
+ *     no embedded Rust
+ *     no unsafe code
+ *
+ * ============================================================================
+ * 33. DEFINITION OF DONE
+ * ============================================================================
+ *
+ * This file is DONE when:
+ *
+ *     1. QuantumOperations is the only canonical operation-invocation
+ *        parser grammar.
+ *
+ *     2. `quantumOperation` is the canonical reusable operation rule.
+ *
+ *     3. `quantumOperationSpecifier` is the canonical operation-identity
+ *        boundary.
+ *
+ *     4. Parameter syntax comes exclusively from QuantumParameters.
+ *
+ *     5. Target syntax comes exclusively from this file.
+ *
+ *     6. Operation names remain open-world identifiers.
+ *
+ *     7. No built-in gate list exists.
+ *
+ *     8. Generic operation identity remains extensible.
+ *
+ *     9. Recursive modifiers remain supported.
+ *
+ *     10. No finite hardware/resource limits are encoded.
+ *
+ *     11. The grammar remains independent of physical qubits and devices.
+ *
+ *     12. The grammar remains independent of routing and scheduling.
+ *
+ *     13. The grammar remains independent of QEC, ZQN and HAL.
+ *
+ *     14. The frontend can map the structure into the domain-neutral AST.
+ *
+ *     15. Semantic analysis can resolve it into the canonical quantum model.
+ *
+ *     16. The semantic model can lower to the existing quantum::ir.
+ *
+ *     17. Quantum root can import it without another operation authority.
+ *
+ *     18. Generated Rust remains compatible with Rust 1.97+ and safe Rust.
+ *
+ *     19. Positive, negative, boundary and scalability tests pass.
+ *
+ *     20. No subsequent modification is required merely because another
+ *         downstream implementation adds a new quantum operation.
+ *
  * ============================================================================
  */
