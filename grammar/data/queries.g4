@@ -1,213 +1,102 @@
 /*
  * ============================================================================
- * Zamani Programming Language
+ * ZAMANI PROGRAMMING LANGUAGE
  * ============================================================================
  *
  * File:
  *     grammar/data/queries.g4
  *
- * Grammar role:
- *     Canonical parser grammar for logical DATA QUERY syntax.
+ * Grammar:
+ *     ZamaniDataQueriesParser
  *
- * Language baseline:
- *     Rust 1.97 / Rust 1.97.1
- *     Rust edition 2021
+ * Status:
+ *     CANONICAL / PRODUCTION DATA-QUERY LEAF GRAMMAR
  *
- * Safety:
- *     - parser grammar only;
- *     - no embedded Rust actions;
- *     - no semantic predicates;
- *     - no unsafe code;
- *     - no filesystem access;
- *     - no network access;
- *     - no runtime execution;
- *     - no provider-specific implementation;
- *     - no database-specific execution;
- *     - no hardware discovery;
- *     - no resource discovery.
+ * Baseline:
+ *     Rust 1.97+
+ *     Rust 2021
+ *     Safe Rust only
  *
  * ============================================================================
  * PURPOSE
  * ============================================================================
  *
- * This file owns the syntax of Zamani's logical query model.
+ * This file is the SINGLE SYNTAX AUTHORITY for Zamani's logical data-query
+ * model.
  *
- * A query describes WHAT data should be selected, related, filtered,
- * grouped, ordered, transformed, aggregated, or combined.
+ * A query expresses logical data intent:
  *
- * A query does NOT describe HOW or WHERE the query is physically executed.
+ *     projection
+ *     source selection
+ *     joins
+ *     filtering
+ *     grouping
+ *     aggregation
+ *     ordering
+ *     windowing
+ *     pagination
+ *     common-table expressions
+ *     recursive query intent
+ *     subqueries
+ *     set composition
+ *     quantified predicates
+ *     query parameters
+ *     logical requirements
+ *     logical constraints
+ *     logical preferences
+ *     logical hints
+ *     logical metadata
  *
- * The same query may therefore be lowered to:
- *
- *     - in-memory execution;
- *     - local collections;
- *     - streaming execution;
- *     - distributed execution;
- *     - database execution;
- *     - accelerator execution;
- *     - tensor execution;
- *     - scientific-data execution;
- *     - quantum/classical result processing;
- *     - heterogeneous execution;
- *     - future execution substrates.
- *
- * The physical realization is determined after parsing by semantic analysis,
- * optimization, resource/capability analysis, scheduling, and lowering.
- *
- * ============================================================================
- * ARCHITECTURAL POSITION
- * ============================================================================
- *
- * Zamani source
- *      |
- *      v
- * shared Zamani lexer
- *      |
- *      v
- * Zamani root parser
- *      |
- *      v
- * data query grammar
- *      |
- *      v
- * syntax AST
- *      |
- *      v
- * semantic analysis
- *      |
- *      +--> type checking
- *      +--> effect checking
- *      +--> capability checking
- *      +--> resource checking
- *      +--> determinism analysis
- *      +--> ownership/lifetime analysis
- *      |
- *      v
- * canonical data semantic model
- *      |
- *      v
- * canonical IR / data IR boundary
- *      |
- *      +--> optimization
- *      +--> parallelization
- *      +--> distribution
- *      +--> vectorization
- *      +--> acceleration
- *      +--> scheduling
- *      +--> routing
- *      |
- *      v
- * target realization
- *
- * ============================================================================
- * OWNERSHIP
- * ============================================================================
- *
- * THIS FILE OWNS
- *
- *     - query declarations;
- *     - query statements;
- *     - query expressions;
- *     - SELECT projection syntax;
- *     - FROM source syntax;
- *     - JOIN syntax;
- *     - WHERE predicates;
- *     - GROUP BY;
- *     - HAVING;
- *     - ORDER BY;
- *     - LIMIT;
- *     - OFFSET;
- *     - DISTINCT;
- *     - QUALIFY;
- *     - WINDOW;
- *     - WITH / common table expressions;
- *     - recursive query intent;
- *     - VALUES query sources;
- *     - set operations;
- *     - EXISTS / quantified predicates;
- *     - subqueries;
- *     - scalar subqueries;
- *     - row/array membership predicates;
- *     - logical query aliases;
- *     - query parameters;
- *     - query-level contracts;
- *     - query-level requirements;
- *     - query-level constraints;
- *     - query-level preferences;
- *     - query-level hints;
- *     - query-level metadata;
- *     - query composition;
- *     - query ordering semantics at the syntax boundary.
- *
- * THIS FILE DOES NOT OWN
- *
- *     - lexer definitions;
- *     - identifier definitions;
- *     - general expression precedence;
- *     - universal type formation;
- *     - general statements;
- *     - general functions;
- *     - collection declarations;
- *     - schema declarations;
- *     - record declarations;
- *     - stream declarations;
- *     - transformation implementation;
- *     - database engines;
- *     - SQL dialects;
- *     - storage engines;
- *     - query planners;
- *     - query optimizers;
- *     - physical indexes;
- *     - physical partitions;
- *     - physical replicas;
- *     - node placement;
- *     - network topology;
- *     - hardware selection;
- *     - CPU/GPU/FPGA/QPU selection;
- *     - quantum::ir;
- *     - QEC;
- *     - ZQN;
- *     - runtime execution.
- *
- * ============================================================================
- * NON-OWNERSHIP RULE
- * ============================================================================
- *
- * Query syntax MUST NOT become a hidden database language.
- *
- * For example:
- *
- *     select x from source where x.value > threshold;
- *
- * is Zamani query syntax.
- *
- * It is NOT implicitly:
+ * This file does NOT define:
  *
  *     SQL
- *     PostgreSQL
- *     SQLite
- *     MongoDB
- *     Spark SQL
- *     CUDA
- *     GPU execution
- *     CPU execution
+ *     database engines
+ *     storage engines
+ *     indexes
+ *     physical partitions
+ *     replicas
+ *     workers
+ *     threads
+ *     CPU/GPU/FPGA/QPU selection
+ *     network topology
+ *     scheduling
+ *     routing
+ *     optimization algorithms
+ *     execution engines
+ *     hardware realization
+ *
+ * ============================================================================
+ * POCO-REAF
+ * ============================================================================
+ *
+ * A query is portable logical intent.
+ *
+ * The same source query may be lowered to:
+ *
+ *     in-memory execution
+ *     collection execution
+ *     table execution
+ *     stream execution
+ *     dataset execution
+ *     graph execution
+ *     tensor/data execution
+ *     classical execution
  *     distributed execution
+ *     accelerator execution
+ *     heterogeneous execution
+ *     quantum-derived data processing
+ *     hybrid execution
+ *     future execution substrates
  *
- * A backend may lower the logical query into any suitable implementation
- * while preserving the declared semantics.
+ * without changing the source-level query semantics.
  *
- * ============================================================================
- * POCO-REAF CONTRACT
- * ============================================================================
+ * The grammar therefore contains NO universal capacity constants.
  *
- * Query syntax must remain portable.
- *
- * It must not encode universal limits such as:
+ * Forbidden examples include:
  *
  *     MAX_ROWS
  *     MAX_COLUMNS
  *     MAX_FIELDS
- *     MAX_QUERY_DEPTH
  *     MAX_JOINS
  *     MAX_GROUPS
  *     MAX_RESULTS
@@ -220,129 +109,152 @@
  *     MAX_TENSOR_RANK
  *     MAX_MEMORY
  *
- * Counts, dimensions, limits, thresholds, offsets, window sizes,
- * replication requirements, partition requirements, and similar quantities
- * are expressions or semantic requirements.
- *
- * Example:
- *
- *     limit result_count
- *
- * is legal.
- *
- * A grammar-level rule such as:
- *
- *     limit <= 1024
- *
- * is forbidden.
+ * Programmer-written numeric values are program data, not implementation
+ * ceilings.
  *
  * ============================================================================
- * RESOURCE / CAPABILITY SEPARATION
+ * OWNERSHIP
  * ============================================================================
  *
- * Query syntax distinguishes logical intent from physical realization.
+ * THIS FILE OWNS:
  *
- * Requirement:
+ *     dataQueryConstruct
+ *     dataQueryDeclaration
+ *     dataQueryStatement
+ *     dataQueryExpression
+ *     SELECT-style logical query structure
+ *     projection
+ *     FROM/source structure
+ *     JOIN structure
+ *     WHERE structure
+ *     GROUP BY structure
+ *     HAVING structure
+ *     WINDOW structure
+ *     QUALIFY structure
+ *     ORDER BY structure
+ *     LIMIT structure
+ *     OFFSET structure
+ *     WITH/CTE structure
+ *     recursive query syntax
+ *     VALUES source syntax
+ *     set-query composition
+ *     subquery structure
+ *     quantified query predicates
+ *     membership predicates
+ *     query-level requirements
+ *     query-level constraints
+ *     query-level preferences
+ *     query-level hints
+ *     query-level metadata
+ *     query parameters
  *
- *     requires(capability("distributed.query"))
+ * THIS FILE DOES NOT OWN:
  *
- * Capability:
- *
- *     requires(capability("index.lookup"))
- *
- * Preference:
- *
- *     prefers(capability("accelerated.query"))
- *
- * Constraint:
- *
- *     constraint(latency < target_latency)
- *
- * Hint:
- *
- *     hint(locality(key))
- *
- * None of these selects a physical device.
+ *     lexer rules
+ *     identifier syntax
+ *     qualified-name syntax generally
+ *     universal expressions
+ *     universal types
+ *     functions
+ *     lambdas
+ *     pattern matching
+ *     contracts generally
+ *     policies generally
+ *     capabilities generally
+ *     resources generally
+ *     provenance implementation
+ *     graph implementation
+ *     collection implementation
+ *     stream implementation
+ *     tensor implementation
+ *     SQL dialects
+ *     JSON
+ *     XML
+ *     database implementations
+ *     execution plans
+ *     canonical IR
+ *     classical IR
+ *     quantum::ir
+ *     ZQN
+ *     HAL
  *
  * ============================================================================
- * DETERMINISM
+ * SINGLE-AUTHORITY RULE
  * ============================================================================
  *
- * Query ordering is explicit.
+ * There is exactly ONE implementation of logical query syntax:
  *
- * A query MUST NOT imply a deterministic row order unless:
+ *     grammar/data/queries.g4
  *
- *     ORDER BY
+ * grammar/data/data.g4 MUST delegate to:
  *
- * or another semantic ordering contract establishes one.
+ *     dataQueryConstruct
  *
- * Implementations may execute unordered portions in any valid order provided
- * that observable semantics remain unchanged.
+ * grammar/expressions/query.g4 MUST delegate to:
  *
- * ============================================================================
- * NULL / OPTIONAL SEMANTICS
- * ============================================================================
+ *     dataQueryExpression
  *
- * This grammar does not invent a second null/type system.
+ * grammar/statements/query.g4, when retained, MUST remain a thin adapter and
+ * MUST NOT implement query syntax independently.
  *
- * NULL, optional values, absence, invalidity, and three-valued or
- * type-specific logical semantics are determined by the canonical Zamani
- * type/semantic system.
- *
- * Query syntax only provides structural positions in which those semantics
- * may be expressed.
- *
- * ============================================================================
- * TYPE SYSTEM INTEGRATION
- * ============================================================================
- *
- * This grammar reuses:
- *
- *     typeExpr
- *     expression
- *     lambdaExpression
- *     parameterList
- *     genericParameters
- *     block
- *     annotation
- *     visibilityModifier
- *     qualified names
- *
- * It MUST NOT define a second type system.
+ * SQL, JSON, XML and provider-specific query syntaxes belong under the
+ * interoperability/dialect architecture.
  *
  * ============================================================================
  * EXPRESSION INTEGRATION
  * ============================================================================
  *
- * General expressions remain owned by the canonical expression grammar.
+ * Query values use the canonical Zamani expression model.
  *
- * Query expressions use:
+ * This file MUST NOT define:
  *
  *     expression
+ *     binaryExpression
+ *     unaryExpression
+ *     callExpression
+ *     literalExpression
+ *     lambdaExpression
  *
- * for:
+ * Query positions consume the canonical expression surface supplied by the
+ * parser composition architecture.
  *
- *     predicates
- *     computed projections
- *     aggregate arguments
- *     limits
- *     offsets
- *     window parameters
- *     query requirements
- *     query hints
- *     query constraints
+ * The repository must resolve the current dependency direction so that:
  *
- * Query-specific syntax is only introduced where a structural distinction
- * is required by the data model.
+ *     query grammar -> canonical expression surface
+ *
+ * and:
+ *
+ *     expression grammar -> query expression adapter
+ *
+ * do not create a circular grammar import.
+ *
+ * The architectural solution is a shared expression composition boundary,
+ * not a second query-specific expression language.
+ *
+ * ============================================================================
+ * TYPE INTEGRATION
+ * ============================================================================
+ *
+ * Query declarations consume the canonical type system.
+ *
+ * This file does NOT define:
+ *
+ *     QueryType
+ *     RelationType
+ *     TableType
+ *     DatasetType
+ *
+ * as competing type systems.
+ *
+ * Query result typing belongs to semantic analysis.
  *
  * ============================================================================
  * AST CONTRACT
  * ============================================================================
  *
- * The parser produces syntax nodes that are lowered into the existing
- * domain-neutral AST/semantic pipeline.
+ * The parser produces parse-tree structure only.
  *
- * The recommended semantic mapping is:
+ * Recommended semantic mapping:
  *
  *     dataQueryDeclaration
  *         -> DataQueryDeclaration
@@ -356,70 +268,214 @@
  *     dataQuerySource
  *         -> DataSourceRef
  *
- *     dataJoin
+ *     dataJoinClause
  *         -> DataJoin
  *
- *     dataPredicate
- *         -> Predicate
+ *     dataWhereClause
+ *         -> QueryPredicate
  *
- *     dataGrouping
- *         -> Grouping
+ *     dataGroupByClause
+ *         -> QueryGrouping
  *
- *     dataOrdering
- *         -> Ordering
+ *     dataOrderByClause
+ *         -> QueryOrdering
  *
- *     dataSetOperation
- *         -> SetOperation
+ *     dataQueryWindowDefinition
+ *         -> QueryWindow
  *
  *     dataCommonTableExpression
  *         -> QueryBinding
  *
- * The exact Rust AST names remain owned by the canonical AST implementation.
+ *     dataSetOperation
+ *         -> QuerySetOperation
  *
- * This grammar MUST NOT introduce a parallel Rust AST merely for queries.
+ *     dataQueryRequirement
+ *         -> Requirement
  *
- * ============================================================================
- * IR CONTRACT
- * ============================================================================
+ *     dataQueryConstraint
+ *         -> Constraint
  *
- * Query syntax lowers to the canonical data semantic representation and
- * subsequently to the repository's canonical IR boundary.
+ *     dataQueryPreference
+ *         -> Preference
  *
- * The query grammar does NOT define a second query IR.
+ *     dataQueryHint
+ *         -> Hint
  *
- * Recommended logical lowering:
+ * Exact Rust AST structures remain owned by the domain-neutral frontend AST.
  *
- *     query
- *       |
- *       +--> source
- *       +--> bindings
- *       +--> projection
- *       +--> predicate
- *       +--> grouping
- *       +--> aggregation
- *       +--> ordering
- *       +--> windowing
- *       +--> set operations
- *       |
- *       v
- *     logical data plan
- *       |
- *       v
- *     canonical IR
+ * This grammar MUST NOT introduce a query-specific parallel AST.
  *
  * ============================================================================
- * ANTLR INTEGRATION
+ * SEMANTIC CONTRACT
  * ============================================================================
  *
- * This is a parser grammar.
+ * Semantic analysis is responsible for:
  *
- * The shared Zamani lexer owns tokens.
+ *     name resolution
+ *     source resolution
+ *     schema compatibility
+ *     field resolution
+ *     type checking
+ *     aggregation checking
+ *     grouping validation
+ *     ordering validation
+ *     window validation
+ *     cardinality reasoning
+ *     null/absence semantics
+ *     capability checking
+ *     resource checking
+ *     effect checking
+ *     policy checking
+ *     provenance checking
+ *     determinism checking
+ *     portability analysis
  *
- * The grammar therefore uses:
+ * This grammar performs none of these operations.
  *
- *     tokenVocab = Zamani;
+ * ============================================================================
+ * RESOURCE / CAPABILITY CONTRACT
+ * ============================================================================
  *
- * No lexer rules are defined here.
+ * Query requirements describe intent.
+ *
+ * They do NOT select physical implementations.
+ *
+ * Examples:
+ *
+ *     requires(capability("data.query"))
+ *     requires(capability("distributed.query"))
+ *     requires(capability("tensor.query"))
+ *     requires(memory >= required_memory)
+ *     requires(topology(required_topology))
+ *
+ * Preferences and hints remain non-semantic implementation guidance unless
+ * explicitly promoted to semantic constraints by the owning policy system.
+ *
+ * ============================================================================
+ * EFFECT CONTRACT
+ * ============================================================================
+ *
+ * Parsing has no runtime effect.
+ *
+ * Semantic analysis MAY derive effects such as:
+ *
+ *     data.read
+ *     data.write
+ *     io
+ *     network
+ *     distributed
+ *     external
+ *     measurement
+ *
+ * according to the resolved source and semantic model.
+ *
+ * This grammar must not blindly assign every possible effect to every query.
+ *
+ * ============================================================================
+ * POLICY CONTRACT
+ * ============================================================================
+ *
+ * Query execution may be subject to:
+ *
+ *     security policy
+ *     data-access policy
+ *     privacy policy
+ *     resource policy
+ *     execution policy
+ *     provenance policy
+ *     sandbox policy
+ *
+ * Authorization is downstream.
+ *
+ * ============================================================================
+ * PROVENANCE CONTRACT
+ * ============================================================================
+ *
+ * Every query construct remains source-traceable through the normal parser
+ * and AST source-span infrastructure.
+ *
+ * Provenance may later record:
+ *
+ *     source
+ *     transformation
+ *     derivation
+ *     evidence
+ *     decision
+ *     verification
+ *     semantic version
+ *
+ * The parser itself does not manufacture runtime provenance.
+ *
+ * ============================================================================
+ * DETERMINISM CONTRACT
+ * ============================================================================
+ *
+ * Query parsing is deterministic.
+ *
+ * Query result ordering is NOT deterministic merely because a source is
+ * iterable.
+ *
+ * Observable ordering requires an explicit semantic ordering construct.
+ *
+ * In particular:
+ *
+ *     ORDER BY
+ *
+ * establishes ordering intent.
+ *
+ * Physical execution may otherwise reorder independent/unordered portions
+ * without changing observable semantics.
+ *
+ * ============================================================================
+ * SQL BOUNDARY
+ * ============================================================================
+ *
+ * Zamani query syntax is SQL-compatible in places where useful, but it is NOT
+ * SQL.
+ *
+ * SQL dialects remain external representations.
+ *
+ * Canonical direction:
+ *
+ *     Zamani query
+ *          |
+ *          v
+ *     canonical query semantics
+ *          |
+ *          +--> SQL dialect
+ *          +--> in-memory plan
+ *          +--> stream plan
+ *          +--> distributed plan
+ *          +--> accelerator plan
+ *          +--> future backend
+ *
+ * A backend may reject a query because the target lacks a required capability.
+ *
+ * That is not a language restriction.
+ *
+ * ============================================================================
+ * ANTLR / RUST SAFETY
+ * ============================================================================
+ *
+ * This file contains:
+ *
+ *     no embedded Rust
+ *     no semantic predicates
+ *     no target-language actions
+ *     no filesystem access
+ *     no network access
+ *     no runtime execution
+ *     no hardware discovery
+ *     no randomness
+ *     no unsafe implementation
+ *
+ * Generated Rust remains subject to the repository's:
+ *
+ *     Rust 1.97+
+ *     Rust 2021
+ *     safe Rust only
+ *
+ * requirements.
  *
  * ============================================================================
  */
@@ -427,23 +483,25 @@
 parser grammar ZamaniDataQueriesParser;
 
 options {
-    tokenVocab = Zamani;
+    /*
+     * Canonical lexical authority.
+     *
+     * The repository's current parser composition consistently uses
+     * ZamaniLexer. The older `tokenVocab = Zamani` form is deliberately not
+     * used here.
+     */
+    tokenVocab = ZamaniLexer;
 }
 
 
 /*
  * ============================================================================
- * 1. PUBLIC INTEGRATION BOUNDARY
+ * 1. PUBLIC QUERY BOUNDARY
  * ============================================================================
  *
- * This is the single public rule consumed by data.g4 and other domains.
+ * data.g4 delegates here.
  *
- * data.g4 MUST delegate query syntax to:
- *
- *     dataQueryConstruct
- *
- * It MUST NOT duplicate the query alternatives defined below.
- *
+ * This rule is intentionally small and stable.
  * ============================================================================
  */
 
@@ -456,12 +514,19 @@ dataQueryConstruct
 
 /*
  * ============================================================================
- * 2. QUERY DECLARATIONS
+ * 2. QUERY DECLARATION
  * ============================================================================
  *
- * A query declaration gives reusable logical query semantics a name.
+ * A query declaration gives reusable logical query intent a name.
  *
- * It does not create a database view or physical execution plan by itself.
+ * It does not imply:
+ *
+ *     database view
+ *     materialized view
+ *     physical cache
+ *     persistent storage
+ *     execution plan
+ *
  * ============================================================================
  */
 
@@ -470,7 +535,7 @@ dataQueryDeclaration
       'query'
       IDENTIFIER
       genericParameters?
-      dataQueryParameterList?
+      dataQueryParameters?
       dataQueryReturnType?
       dataQueryAttributes?
       '='
@@ -478,7 +543,7 @@ dataQueryDeclaration
       ';'
     ;
 
-dataQueryParameterList
+dataQueryParameters
     : '('
       parameterList?
       ')'
@@ -497,10 +562,10 @@ dataQueryAttributes
 
 dataQueryAttribute
     : annotation
-    | dataQueryProperty
+    | dataQueryAttributeAssignment
     ;
 
-dataQueryProperty
+dataQueryAttributeAssignment
     : IDENTIFIER
       ('=' expression)?
     ;
@@ -508,7 +573,13 @@ dataQueryProperty
 
 /*
  * ============================================================================
- * 3. QUERY STATEMENTS
+ * 3. QUERY STATEMENT
+ * ============================================================================
+ *
+ * This is the canonical logical query statement.
+ *
+ * The terminating semicolon belongs here rather than being duplicated by
+ * statement-layer adapters.
  * ============================================================================
  */
 
@@ -523,35 +594,26 @@ dataQueryStatement
  * 4. QUERY EXPRESSION
  * ============================================================================
  *
- * WITH is represented separately so recursive/common-table-expression
- * semantics remain explicit.
+ * A query expression is either:
+ *
+ *     WITH query
+ *     set query
+ *     SELECT query
+ *
+ * The grammar is structured so set operations compose recursively without
+ * creating duplicate SELECT implementations.
  * ============================================================================
  */
 
 dataQueryExpression
     : dataWithQueryExpression
     | dataSetQueryExpression
-    | dataSelectQueryExpression
     ;
 
 
 /*
  * ============================================================================
- * 5. WITH / COMMON TABLE EXPRESSIONS
- * ============================================================================
- *
- * A CTE is a logical binding.
- *
- * It does not imply:
- *
- *     materialization
- *     storage
- *     caching
- *     persistence
- *     physical temporary tables
- *
- * The optimizer may materialize or inline it when semantic equivalence
- * permits.
+ * 5. WITH / CTE
  * ============================================================================
  */
 
@@ -560,7 +622,7 @@ dataWithQueryExpression
       dataRecursiveModifier?
       dataCommonTableExpression
       (',' dataCommonTableExpression)*
-      dataQueryBody
+      dataSetQueryExpression
     ;
 
 dataRecursiveModifier
@@ -572,7 +634,7 @@ dataCommonTableExpression
       dataQueryColumnAliasList?
       'as'
       '('
-      dataQueryExpression
+      dataSetQueryExpression
       ')'
     ;
 
@@ -583,15 +645,62 @@ dataQueryColumnAliasList
       ')'
     ;
 
-dataQueryBody
-    : dataSetQueryExpression
-    | dataSelectQueryExpression
+
+/*
+ * ============================================================================
+ * 6. SET QUERY
+ * ============================================================================
+ *
+ * Set operations are left-associative at the semantic level.
+ *
+ * Parenthesized query operands preserve explicit grouping.
+ *
+ * This rule does not encode an artificial maximum nesting depth.
+ * ============================================================================
+ */
+
+dataSetQueryExpression
+    : dataSetQueryOperand
+      dataSetOperation*
+    ;
+
+dataSetQueryOperand
+    : dataSelectQueryExpression
+    | dataParenthesizedQueryExpression
+    ;
+
+dataParenthesizedQueryExpression
+    : '('
+      dataSetQueryExpression
+      ')'
+    ;
+
+dataSetOperation
+    : dataSetOperationKind
+      dataSetOperationModifier?
+      dataSetQueryOperand
+    ;
+
+dataSetOperationKind
+    : 'union'
+    | 'intersect'
+    | 'except'
+    | 'difference'
+    ;
+
+dataSetOperationModifier
+    : 'all'
+    | 'distinct'
     ;
 
 
 /*
  * ============================================================================
- * 6. SELECT QUERY
+ * 7. SELECT QUERY
+ * ============================================================================
+ *
+ * SELECT is used here as a logical projection query, not as a declaration of
+ * a database implementation.
  * ============================================================================
  */
 
@@ -611,12 +720,7 @@ dataSelectModifier
 
 /*
  * ============================================================================
- * 7. PROJECTION
- * ============================================================================
- *
- * Projection expressions are ordinary Zamani expressions.
- *
- * The wildcard form is represented explicitly as a query projection item.
+ * 8. PROJECTION
  * ============================================================================
  */
 
@@ -636,7 +740,7 @@ dataProjectionWildcard
     ;
 
 dataQualifiedWildcard
-    : qualifiedDataQueryName
+    : dataQueryName
       '.'
       '*'
     ;
@@ -654,14 +758,28 @@ dataProjectionAlias
 
 /*
  * ============================================================================
- * 8. FROM
+ * 9. FROM
+ * ============================================================================
+ *
+ * A FROM clause is optional because a logical query may project expressions
+ * without a relation-like source.
+ *
+ * Example:
+ *
+ *     select expression;
+ *
+ * Semantic validation determines whether a particular expression is valid in
+ * a source-free query.
  * ============================================================================
  */
 
 dataFromClause
     : 'from'
       dataFromSource
-      (',' dataFromSource)*
+      (
+          ','
+          dataFromSource
+      )*
     ;
 
 dataFromSource
@@ -671,31 +789,34 @@ dataFromSource
     ;
 
 dataQuerySourceAlias
-    : ('as')?
+    : 'as'?
       IDENTIFIER
     ;
 
 
 /*
  * ============================================================================
- * 9. QUERY SOURCES
+ * 10. QUERY SOURCE
  * ============================================================================
  *
- * A source is a logical data expression.
+ * Sources remain logical.
  *
- * It may represent:
+ * A source may denote:
  *
  *     collection
- *     stream
+ *     table
  *     dataset
+ *     stream
+ *     graph
  *     view
- *     source
- *     pipeline
+ *     pipeline result
+ *     logical source
+ *     function-produced relation
  *     subquery
- *     table-like logical abstraction
+ *     values
  *     future data abstraction
  *
- * Physical source interpretation belongs downstream.
+ * Physical interpretation belongs downstream.
  * ============================================================================
  */
 
@@ -708,12 +829,12 @@ dataQuerySourceExpression
     ;
 
 dataQuerySourceReference
-    : qualifiedDataQueryName
+    : dataQueryName
     ;
 
 dataQuerySubquerySource
     : '('
-      dataQueryExpression
+      dataSetQueryExpression
       ')'
     ;
 
@@ -723,7 +844,7 @@ dataQueryValuesSource
     ;
 
 dataQueryFunctionSource
-    : qualifiedDataQueryName
+    : dataQueryName
       '('
       argumentList?
       ')'
@@ -738,12 +859,10 @@ dataQuerySourceParenthesized
 
 /*
  * ============================================================================
- * 10. VALUES
+ * 11. VALUES SOURCE
  * ============================================================================
  *
- * VALUES is a logical relation/value source.
- *
- * It is not a fixed-size table.
+ * No fixed row or column capacity is encoded.
  * ============================================================================
  */
 
@@ -766,21 +885,12 @@ dataValuesItemList
 
 /*
  * ============================================================================
- * 11. JOIN
+ * 12. JOIN
  * ============================================================================
  *
- * Join semantics are logical.
+ * Join strategy is semantic/backend policy.
  *
- * Physical join strategy:
- *
- *     hash join
- *     merge join
- *     nested-loop join
- *     distributed join
- *     accelerator join
- *     future strategy
- *
- * is determined downstream.
+ * The grammar describes only logical join intent.
  * ============================================================================
  */
 
@@ -819,7 +929,14 @@ dataJoinColumnList
 
 /*
  * ============================================================================
- * 12. QUERY CLAUSES
+ * 13. QUERY CLAUSES
+ * ============================================================================
+ *
+ * Clause ordering is intentionally expressed structurally rather than by
+ * allowing arbitrary keyword sequences.
+ *
+ * This prevents syntactically valid but semantically meaningless duplicate
+ * clauses while leaving semantic evaluation order to the semantic layer.
  * ============================================================================
  */
 
@@ -841,7 +958,7 @@ dataQueryClause
 
 /*
  * ============================================================================
- * 13. WHERE
+ * 14. WHERE
  * ============================================================================
  */
 
@@ -853,7 +970,7 @@ dataWhereClause
 
 /*
  * ============================================================================
- * 14. GROUP BY
+ * 15. GROUP BY
  * ============================================================================
  */
 
@@ -885,7 +1002,7 @@ dataGroupingOption
 
 /*
  * ============================================================================
- * 15. HAVING
+ * 16. HAVING
  * ============================================================================
  */
 
@@ -897,10 +1014,7 @@ dataHavingClause
 
 /*
  * ============================================================================
- * 16. WINDOW
- * ============================================================================
- *
- * Window declarations are logical query semantics.
+ * 17. WINDOW
  * ============================================================================
  */
 
@@ -972,13 +1086,7 @@ dataQueryWindowFrameDirection
 
 /*
  * ============================================================================
- * 17. QUALIFY
- * ============================================================================
- *
- * QUALIFY filters after window expressions but before final projection/order
- * realization according to the semantic query model.
- *
- * Exact evaluation order belongs to semantics, not parser structure.
+ * 18. QUALIFY
  * ============================================================================
  */
 
@@ -990,7 +1098,7 @@ dataQualifyClause
 
 /*
  * ============================================================================
- * 18. ORDER BY
+ * 19. ORDER BY
  * ============================================================================
  */
 
@@ -1026,10 +1134,17 @@ dataSortNullPolicy
 
 /*
  * ============================================================================
- * 19. LIMIT / OFFSET
+ * 20. LIMIT / OFFSET
  * ============================================================================
  *
- * These are expressions rather than fixed grammar constants.
+ * Both operands are ordinary expressions.
+ *
+ * This permits:
+ *
+ *     limit result_count
+ *     offset starting_position
+ *
+ * without introducing language-level numeric ceilings.
  * ============================================================================
  */
 
@@ -1046,20 +1161,12 @@ dataOffsetClause
 
 /*
  * ============================================================================
- * 20. QUERY RESOURCE / CAPABILITY CONTRACTS
+ * 21. QUERY REQUIREMENTS
  * ============================================================================
  *
- * Query-level resource intent is represented as ordinary expressions.
+ * These are logical requirements.
  *
- * This allows:
- *
- *     requires(capability("distributed.query"))
- *
- *     prefers(capability("accelerated.query"))
- *
- *     constraint(latency < target)
- *
- * without introducing hardware-specific grammar.
+ * They are intentionally expressed through the universal expression system.
  * ============================================================================
  */
 
@@ -1094,78 +1201,16 @@ dataQueryHintClause
 
 /*
  * ============================================================================
- * 21. SET OPERATIONS
+ * 22. QUERY PREDICATE STRUCTURES
  * ============================================================================
  *
- * Set operations are represented structurally so semantic analysis can
- * validate schema compatibility.
+ * These rules are query-specific structural forms.
  *
- * No implementation strategy is implied.
- * ============================================================================
- */
-
-dataSetQueryExpression
-    : dataSelectQueryExpression
-      dataSetOperation*
-    ;
-
-dataSetOperation
-    : dataSetOperationKind
-      dataSetOperationModifier?
-      dataSelectQueryExpression
-    ;
-
-dataSetOperationKind
-    : 'union'
-    | 'intersect'
-    | 'except'
-    | 'difference'
-    ;
-
-dataSetOperationModifier
-    : 'all'
-    | 'distinct'
-    ;
-
-
-/*
- * ============================================================================
- * 22. QUERY NAMES
- * ============================================================================
+ * They are NOT automatically inserted into the universal expression
+ * precedence hierarchy.
  *
- * Query names use the shared identifier model.
- *
- * No separate lexer is introduced.
- * ============================================================================
- */
-
-qualifiedDataQueryName
-    : IDENTIFIER
-      ('::' IDENTIFIER)*
-    ;
-
-
-/*
- * ============================================================================
- * 23. QUERY EXPRESSION LIST
- * ============================================================================
- */
-
-dataQueryExpressionList
-    : expression
-      (',' expression)*
-    ;
-
-
-/*
- * ============================================================================
- * 24. PREDICATE / SUBQUERY OPERATORS
- * ============================================================================
- *
- * These rules expose structural query constructs without replacing the
- * canonical expression system.
- *
- * Implementations may lower these forms into ordinary semantic expressions.
+ * The semantic/query-expression integration layer may lower them into the
+ * canonical expression model.
  * ============================================================================
  */
 
@@ -1181,7 +1226,7 @@ dataPredicateExpression
 dataExistsPredicate
     : 'exists'
       '('
-      dataQueryExpression
+      dataSetQueryExpression
       ')'
     ;
 
@@ -1194,7 +1239,7 @@ dataInPredicate
     ;
 
 dataInPredicateSource
-    : dataQueryExpression
+    : dataSetQueryExpression
     | dataExpressionList
     ;
 
@@ -1229,7 +1274,7 @@ dataQuantifiedPredicate
     : expression
       dataQuantifier
       '('
-      dataQueryExpression
+      dataSetQueryExpression
       ')'
     ;
 
@@ -1242,45 +1287,66 @@ dataQuantifier
 
 /*
  * ============================================================================
- * 25. SCALAR / TABLE SUBQUERIES
- * ============================================================================
- *
- * Subqueries remain logical.
- *
- * Their execution may be:
- *
- *     inline
- *     cached
- *     distributed
- *     materialized
- *     streamed
- *     optimized away
- *
- * when semantics permit.
+ * 23. QUERY VALUE LIST
  * ============================================================================
  */
 
-dataScalarSubquery
-    : '('
-      dataQueryExpression
-      ')'
-    ;
-
-dataQuerySubqueryExpression
-    : dataScalarSubquery
+dataExpressionList
+    : expression
+      (',' expression)*
     ;
 
 
 /*
  * ============================================================================
- * 26. QUERY OPTIONS
+ * 24. QUERY NAMES
  * ============================================================================
  *
- * Generic options provide forward compatibility without embedding provider
- * implementations.
+ * Query names are intentionally open-world.
  *
- * Unknown options must be handled by semantic/version policy.
- * They must never silently alter semantics.
+ * They may identify:
+ *
+ *     user declarations
+ *     imported data abstractions
+ *     collections
+ *     tables
+ *     streams
+ *     datasets
+ *     graphs
+ *     views
+ *     functions
+ *     dialect-provided logical sources
+ *     future data abstractions
+ *
+ * No vendor catalogue is encoded.
+ * ============================================================================
+ */
+
+dataQueryName
+    : IDENTIFIER
+      (
+          '::'
+          IDENTIFIER
+      )*
+    ;
+
+
+/*
+ * ============================================================================
+ * 25. QUERY OPTIONS
+ * ============================================================================
+ *
+ * Options are intentionally name-based.
+ *
+ * An unknown option is NOT silently given semantics by this grammar.
+ *
+ * Semantic/version policy determines whether a given option is:
+ *
+ *     recognized
+ *     deprecated
+ *     experimental
+ *     unsupported
+ *     invalid
  * ============================================================================
  */
 
@@ -1298,12 +1364,138 @@ dataQueryOption
 
 /*
  * ============================================================================
- * 27. QUERY CONTRACTS
+ * 26. QUERY PARAMETERS
  * ============================================================================
  *
- * Query contracts describe semantic requirements/guarantees.
+ * Query declarations use the canonical parameter grammar.
  *
- * They do not execute validation.
+ * The named expression form is retained for query-specific parameter
+ * references where required by semantic lowering.
+ * ============================================================================
+ */
+
+dataQueryParameterExpression
+    : ':'
+      IDENTIFIER
+    ;
+
+
+/*
+ * ============================================================================
+ * 27. QUERY COMPOSITION
+ * ============================================================================
+ *
+ * Composition is deliberately generic.
+ *
+ * It does not enumerate transformation algorithms.
+ *
+ * Pipeline/transformation semantics remain owned by their respective
+ * grammars.
+ * ============================================================================
+ */
+
+dataQueryComposition
+    : dataQueryExpression
+      (
+          '|>'
+          dataQueryStage
+      )+
+    ;
+
+dataQueryStage
+    : dataQueryName
+      (
+          '('
+          argumentList?
+          ')'
+      )?
+    ;
+
+
+/*
+ * ============================================================================
+ * 28. QUERY MATERIALIZATION
+ * ============================================================================
+ *
+ * This is logical intent only.
+ *
+ * It does not select RAM, storage, database, accelerator memory, or any
+ * physical resource.
+ * ============================================================================
+ */
+
+dataQueryMaterialization
+    : 'materialize'
+      '('
+      dataSetQueryExpression
+      dataQueryOptionBlock?
+      ')'
+    ;
+
+
+/*
+ * ============================================================================
+ * 29. QUERY VALIDATION
+ * ============================================================================
+ */
+
+dataQueryValidation
+    : 'validate'
+      '('
+      dataSetQueryExpression
+      dataQueryOptionBlock?
+      ')'
+    ;
+
+
+/*
+ * ============================================================================
+ * 30. QUERY PROVENANCE
+ * ============================================================================
+ *
+ * Provenance is a semantic metadata request.
+ *
+ * Actual provenance generation belongs to the semantic/compiler/runtime
+ * provenance infrastructure.
+ * ============================================================================
+ */
+
+dataQueryProvenance
+    : 'provenance'
+      '('
+      dataSetQueryExpression
+      ')'
+    ;
+
+
+/*
+ * ============================================================================
+ * 31. QUERY FAILURE INTENT
+ * ============================================================================
+ *
+ * Failure policy is logical metadata.
+ *
+ * Retry/recovery implementation remains downstream.
+ * ============================================================================
+ */
+
+dataQueryFailurePolicy
+    : 'on_failure'
+      '('
+      expression
+      ')'
+    ;
+
+
+/*
+ * ============================================================================
+ * 32. QUERY CONTRACT METADATA
+ * ============================================================================
+ *
+ * Query contracts are represented here only when attached directly to query
+ * syntax. General contracts remain owned by grammar/validation/.
+ *
+ * The universal contract system remains the semantic authority.
  * ============================================================================
  */
 
@@ -1317,7 +1509,7 @@ dataQueryContractMember
     : dataQueryRequiresContract
     | dataQueryEnsuresContract
     | dataQueryInvariantContract
-    | dataQueryContractAttribute
+    | annotation
     ;
 
 dataQueryRequiresContract
@@ -1344,939 +1536,88 @@ dataQueryInvariantContract
       ';'
     ;
 
-dataQueryContractAttribute
-    : annotation
-    ;
-
 
 /*
  * ============================================================================
- * 28. QUERY PARAMETERS
+ * 33. FINAL QUERY COMPOSITION INVARIANTS
  * ============================================================================
  *
- * Query parameters use the canonical function/type parameter model.
+ * 1. dataQueryConstruct is the canonical data-domain query entry point.
  *
- * No parameter-count limit is encoded.
- * ============================================================================
- */
-
-dataQueryParameterExpression
-    : ':'
-      IDENTIFIER
-    ;
-
-dataQueryParameterListExpression
-    : '('
-      dataQueryParameterExpression
-      (',' dataQueryParameterExpression)*
-      ')'
-    ;
-
-
-/*
- * ============================================================================
- * 29. DATA QUERY COMPOSITION
- * ============================================================================
- *
- * A query may consume a logical result of another data computation.
- *
- * This rule intentionally remains generic.
- * ============================================================================
- */
-
-dataQueryComposition
-    : dataQueryExpression
-      ('|>' dataQueryQueryStage)+
-    ;
-
-dataQueryQueryStage
-    : dataSelectQueryExpression
-    | dataQueryExpression
-    ;
-
-
-/*
- * ============================================================================
- * 30. QUERY MATERIALIZATION INTENT
- * ============================================================================
- *
- * Materialization is deliberately represented as an explicit operation.
- *
- * It does not mean:
- *
- *     RAM
- *     disk
- *     database
- *     object store
- *     GPU memory
- *     QPU memory
- *
- * Physical realization remains downstream.
- * ============================================================================
- */
-
-dataQueryMaterialization
-    : 'materialize'
-      '('
-      dataQueryExpression
-      dataQueryMaterializationOptions?
-      ')'
-    ;
-
-dataQueryMaterializationOptions
-    : '['
-      dataQueryOption*
-      ']'
-    ;
-
-
-/*
- * ============================================================================
- * 31. QUERY VALIDATION INTENT
- * ============================================================================
- */
-
-dataQueryValidation
-    : 'validate'
-      '('
-      dataQueryExpression
-      dataQueryValidationOptions?
-      ')'
-    ;
-
-dataQueryValidationOptions
-    : '['
-      dataQueryOption*
-      ']'
-    ;
-
-
-/*
- * ============================================================================
- * 32. QUERY PROVENANCE / LINEAGE INTENT
- * ============================================================================
- *
- * Provenance is logical metadata.
- *
- * It must not expose secrets merely because a query references them.
- * ============================================================================
- */
-
-dataQueryProvenance
-    : 'provenance'
-      '('
-      dataQueryExpression
-      ')'
-    ;
-
-
-/*
- * ============================================================================
- * 33. QUERY FAILURE / RESILIENCE INTENT
- * ============================================================================
- *
- * Failure handling is expressed semantically.
- *
- * Actual retry/recovery execution remains downstream.
- * ============================================================================
- */
-
-dataQueryFailurePolicy
-    : 'on_failure'
-      '('
-      expression
-      ')'
-    ;
-
-
-/*
- * ============================================================================
- * 34. DATA EXPRESSION BRIDGE
- * ============================================================================
- *
- * This bridge permits query grammar to consume the existing data expression
- * model without redefining that model.
- *
- * The root data grammar may map this rule to its canonical dataExpression.
- *
- * Until that facade migration is complete, semantic integration should map
- * logical data references and expressions through the existing data expression
- * contract.
- * ============================================================================
- */
-
-dataQueryValueExpression
-    : expression
-    ;
-
-
-/*
- * ============================================================================
- * 35. COMPATIBILITY CONTRACT
- * ============================================================================
- *
- * Existing query syntax in data.g4 must be migrated into this file.
- *
- * Specifically, the following conceptual rule currently exists in data.g4:
- *
- *     dataQueryStmt
- *         -> dataQueryExpression
- *         -> dataSelectExpression
- *         -> dataQueryClause
- *
- * The production migration is:
- *
- *     data.g4
- *          |
- *          v
- *     dataQueryConstruct
- *          |
- *          v
- *     ZamaniDataQueriesParser
- *
- * The old duplicated query productions must then be removed from data.g4.
- *
- * No public source construct should require a source-level rewrite solely
- * because the query rules moved from the integration facade into this
- * specialized grammar.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 36. DATABASE COMPATIBILITY
- * ============================================================================
- *
- * SQL-compatible lowering is permitted.
- *
- * SQL is NOT the canonical Zamani query language.
- *
- * Therefore:
- *
- *     Zamani query
- *         |
- *         v
- * logical query semantics
- *         |
- *         +--> SQL
- *         +--> in-memory plan
- *         +--> distributed plan
- *         +--> accelerator plan
- *         +--> streaming plan
- *         +--> future backend
- *
- * A SQL backend may reject constructs that cannot be represented by its
- * capability set. That is a backend capability issue, not a language limit.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 37. CLASSICAL COMPUTING INTEGRATION
- * ============================================================================
- *
- * Query expressions may consume classical data:
- *
- *     scalars
- *     vectors
- *     matrices
- *     tensors
- *     records
- *     collections
- *     streams
- *
- * Numeric semantics remain owned by the canonical type system and classical
- * data subsystem.
- *
- * The query grammar does not define numeric representation widths.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 38. QUANTUM INTEGRATION
- * ============================================================================
- *
- * Quantum results may become queryable data.
- *
- * Examples include:
- *
- *     measurement results
- *     experiment records
- *     parameter sweeps
- *     optimization results
- *     calibration observations
- *     statistical results
- *
- * Quantum execution remains owned by the quantum subsystem.
- *
- * Quantum semantics lower through the canonical:
- *
- *     quantum::ir
- *
- * Query grammar MUST NOT define a second quantum IR.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 39. AI / ML INTEGRATION
- * ============================================================================
- *
- * Query syntax may consume:
- *
- *     datasets
- *     tensors
- *     embeddings
- *     model outputs
- *     feature records
- *     training data
- *     inference results
- *
- * AI-specific model semantics remain owned by grammar/ai/.
- *
- * The query grammar does not define neural-network architecture syntax.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 40. HDL / HARDWARE INTEGRATION
- * ============================================================================
- *
- * Query results may feed hardware/software co-design.
- *
- * The query grammar MUST NOT define:
- *
- *     register width
- *     bus width
- *     FPGA count
- *     accelerator count
- *     physical memory
- *     physical address
- *
- * Those are owned by hardware/HDL/resource semantics.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 41. DISTRIBUTED INTEGRATION
- * ============================================================================
- *
- * Queries may be distributed.
- *
- * The query grammar does not specify:
- *
- *     number of nodes
- *     number of workers
- *     partition count
- *     network topology
- *     replica count
- *
- * Distribution semantics are expressed through logical requirements and
- * lowered later.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 42. SECURITY INTEGRATION
- * ============================================================================
- *
- * Query syntax may participate in capability and policy checking.
- *
- * Examples:
- *
- *     requires(capability("data.read"))
- *     requires(capability("data.query"))
- *
- * Actual authorization remains outside the parser.
- *
- * Diagnostics must not reveal secret data merely because a query failed.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 43. RESOURCE EXHAUSTION
- * ============================================================================
- *
- * A query may be arbitrarily large at the language level.
- *
- * Implementations may reject execution because resources are unavailable.
- *
- * That rejection is a runtime/compiler/resource decision, not a grammar
- * maximum.
- *
- * Example:
+ * 2. dataQueryExpression is the canonical logical query expression.
  *
- *     query too large for current compilation budget
+ * 3. SELECT/FROM/JOIN/etc. are owned only here.
  *
- * is different from:
+ * 4. data.g4 delegates instead of duplicating query syntax.
  *
- *     Zamani queries may never contain more than N joins.
+ * 5. expressions/query.g4 delegates instead of duplicating query syntax.
  *
- * The latter is forbidden.
+ * 6. statements/query.g4, if retained, is an adapter only.
  *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 44. ERROR / DIAGNOSTIC CONTRACT
- * ============================================================================
- *
- * Syntax diagnostics should identify:
- *
- *     - unexpected token;
- *     - missing clause;
- *     - malformed source;
- *     - malformed join;
- *     - malformed grouping;
- *     - malformed ordering;
- *     - malformed window;
- *     - malformed set operation;
- *     - malformed subquery;
- *     - malformed CTE.
- *
- * Semantic diagnostics belong downstream and include:
- *
- *     - unknown source;
- *     - unknown field;
- *     - incompatible schemas;
- *     - invalid join types;
- *     - invalid grouping;
- *     - invalid aggregation;
- *     - invalid ordering;
- *     - invalid window;
- *     - invalid type;
- *     - unavailable capability;
- *     - unsatisfied resource requirement;
- *     - invalid effect;
- *     - ownership/lifetime violation;
- *     - nondeterministic behavior where determinism is required.
- *
- * The grammar MUST NOT attempt to perform those semantic checks.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 45. SOURCE SPANS
- * ============================================================================
- *
- * Every parsed query construct must remain traceable to its source span.
- *
- * This is supplied by the shared parser/AST infrastructure.
- *
- * This grammar does not define a second span type.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 46. NO HARD-CODED SCALE
- * ============================================================================
- *
- * The following must remain unbounded at the grammar level:
- *
- *     projection count
- *     source count
- *     join count
- *     grouping key count
- *     ordering key count
- *     CTE count
- *     set-operation count
- *     expression depth
- *     parameter count
- *     window definitions
- *     query stages
- *     query nesting
- *
- * Practical limits are determined by:
- *
- *     parser resources
- *     compiler resources
- *     runtime resources
- *     explicit semantic requirements
- *     available capabilities
- *     deployment environment
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 47. DETERMINISM AND OPTIMIZATION
- * ============================================================================
- *
- * Optimizers may:
- *
- *     reorder predicates;
- *     fuse operations;
- *     eliminate redundant projections;
- *     push filters;
- *     push projections;
- *     eliminate unused CTEs;
- *     inline CTEs;
- *     choose alternate join algorithms;
- *     distribute operations;
- *     vectorize operations;
- *     specialize operations;
- *
- * only when semantic equivalence is preserved.
- *
- * Query syntax therefore describes semantics, not implementation order,
- * except where explicit ordering is observable.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 48. SECURITY / TRUST BOUNDARY
- * ============================================================================
- *
- * This grammar is declarative and must remain side-effect free.
- *
- * No parser action may:
- *
- *     - execute a query;
- *     - connect to a database;
- *     - open a file;
- *     - contact a network endpoint;
- *     - discover hardware;
- *     - allocate runtime resources;
- *     - access credentials;
- *     - inspect secrets.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 49. TEST CONTRACT
- * ============================================================================
- *
- * Production tests must cover at least:
- *
- * POSITIVE
- *
- *     simple select
- *     select expression
- *     select wildcard
- *     qualified wildcard
- *     aliases
- *     from source
- *     multiple sources
- *     inner join
- *     outer joins
- *     semi join
- *     anti join
- *     cross join
- *     where
- *     group by
- *     having
- *     order by
- *     limit
- *     offset
- *     distinct
- *     qualify
- *     windows
- *     CTE
- *     recursive CTE
- *     subquery
- *     scalar subquery
- *     exists
- *     in
- *     between
- *     like
- *     set operations
- *     values
- *     query declaration
- *     query parameters
- *     resource requirements
- *     constraints
- *     preferences
- *     hints
- *
- * NEGATIVE
- *
- *     malformed SELECT
- *     missing FROM source where required by semantic rules
- *     malformed JOIN
- *     malformed ON
- *     malformed USING
- *     malformed GROUP BY
- *     malformed ORDER BY
- *     malformed window
- *     malformed CTE
- *     malformed set operation
- *     malformed subquery
- *     malformed VALUES
- *     malformed aliases
- *
- * BOUNDARY
- *
- *     empty source
- *     empty projection
- *     singleton projection
- *     nested query
- *     deeply nested query
- *     many joins
- *     many grouping keys
- *     many ordering keys
- *     many CTEs
- *     symbolic limits
- *     symbolic offsets
- *     symbolic window sizes
- *
- * SCALABILITY
- *
- *     tiny query
- *     large query
- *     generated query
- *     large logical schema
- *     large logical result
- *     distributed result
- *     heterogeneous result
- *
- * DETERMINISM
- *
- *     ordered query
- *     unordered query
- *     equivalent optimizer transformations
- *     distributed execution preserving declared order
- *
- * PORTABILITY
+ * 7. SQL is not the canonical language.
  *
- *     local
- *     distributed
- *     accelerator
- *     database-backed
- *     streaming
- *     quantum-result-backed
- *     future backend
+ * 8. Provider names are not grammar-level query constructs.
  *
- * SECURITY
+ * 9. Query operations remain open-world.
  *
- *     capability denial
- *     protected source
- *     protected field
- *     sensitive diagnostic handling
+ * 10. Query source names remain open-world.
  *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 50. FEATURE TRACEABILITY
- * ============================================================================
- *
- * Query feature lifecycle:
- *
- *     grammar/spec/data.md
- *          |
- *          v
- *     grammar/data/queries.g4
- *          |
- *          v
- *     grammar/data/data.g4
- *          |
- *          v
- *     grammar/Zamani.g4
- *          |
- *          v
- *     parser / AST
- *          |
- *          v
- *     semantic analysis
- *          |
- *          v
- *     canonical data semantic model
- *          |
- *          v
- *     canonical IR
- *          |
- *          v
- *     optimization
- *          |
- *          v
- *     scheduling
- *          |
- *          v
- *     runtime
- *
- * No feature is considered production-complete until every required boundary
- * has a defined owner.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 51. INTEGRATION ACTIONS REQUIRED OUTSIDE THIS FILE
- * ============================================================================
- *
- * This file is independently complete as the canonical query syntax contract.
- *
- * The following repository integrations are required, but MUST NOT be
- * performed by modifying the ownership of this file:
- *
- * 1. grammar/data/data.g4
- *
- * Replace its duplicated query implementation with delegation to:
- *
- *     dataQueryConstruct
- *
- * The old:
- *
- *     dataQueryStmt
- *     dataQueryExpression
- *     dataSelectExpression
- *     dataQueryClause
- *
- * implementation must not remain as a competing query grammar.
- *
- *
- * 2. grammar/Zamani.g4
- *
- * The root grammar must expose one data entry point.
- *
- * Conceptually:
- *
- *     statement
- *         : ...
- *         | dataStmt
- *         | ...
- *
- * Data query syntax must then enter through:
- *
- *     dataStmt
- *         -> dataQueryConstruct
- *
- *
- * 3. grammar/grammar.md
+ * 11. General expressions remain owned by the universal expression system.
  *
- * Add the query rules to implementation-conformance tracking:
+ * 12. General types remain owned by the universal type system.
  *
- *     SPECIFIED
- *     IMPLEMENTED
- *     PARTIALLY IMPLEMENTED
- *     PLANNED
- *     DEPRECATED
+ * 13. Resource availability is not parser validity.
  *
+ * 14. Capability discovery is not parser validity.
  *
- * 4. grammar/spec/data.md
+ * 15. Hardware selection is not parser validity.
  *
- * Maintain semantic authority there.
+ * 16. Query size has no language-defined universal ceiling.
  *
- * This file owns syntax, not semantic interpretation.
+ * 17. No physical execution strategy is encoded.
  *
+ * 18. No quantum-specific implementation is encoded.
  *
- * 5. AST
+ * 19. Quantum-derived data remains ordinary semantic data until the semantic
+ *     pipeline identifies quantum provenance/requirements.
  *
- * Map query parse nodes into the existing domain-neutral AST.
+ * 20. No second data IR is created.
  *
- * Do not introduce a vendor-specific or database-specific AST.
+ * 21. No query-specific Rust implementation is embedded in this grammar.
  *
+ * 22. Generated Rust remains safe Rust.
  *
- * 6. Semantic analysis
+ * 23. Rust 1.97+ remains supported.
  *
- * Resolve:
+ * 24. The grammar remains target-independent.
  *
- *     source names
- *     fields
- *     aliases
- *     types
- *     joins
- *     grouping
- *     aggregation
- *     windows
- *     capabilities
- *     resources
- *     effects
- *     determinism
+ * 25. The grammar remains suitable for classical, AI, tensor, graph,
+ *     distributed, hybrid and quantum-derived data.
  *
- *
- * 7. Canonical IR
- *
- * Lower query semantics into the canonical data representation.
- *
- * Do not introduce a second query IR.
- *
- *
- * 8. Compiler
- *
- * Query optimization may choose:
- *
- *     local
- *     parallel
- *     distributed
- *     vectorized
- *     accelerator
- *     database
- *     streaming
- *     future
- *
- * implementations.
- *
- *
- * 9. Runtime
- *
- * Runtime executes the lowered plan and handles:
- *
- *     resource availability
- *     capability availability
- *     source/sink failures
- *     cancellation
- *     checkpointing
- *     recovery
- *     observability
- *
- *
  * ============================================================================
- */
-
-
-/*
+ * COMPLETION CRITERIA
  * ============================================================================
- * 52. COMPLETION CRITERIA
- * ============================================================================
- *
- * This file is DONE when:
- *
- * [x] query syntax has one canonical owner;
- * [x] parser grammar is declarative;
- * [x] no unsafe Rust is required;
- * [x] no target implementation is embedded;
- * [x] no database vendor is embedded;
- * [x] no physical topology is embedded;
- * [x] no universal resource maximum is embedded;
- * [x] canonical type system is reused;
- * [x] canonical expression system is reused;
- * [x] query declarations exist;
- * [x] SELECT exists;
- * [x] FROM exists;
- * [x] JOIN exists;
- * [x] WHERE exists;
- * [x] GROUP BY exists;
- * [x] HAVING exists;
- * [x] WINDOW exists;
- * [x] QUALIFY exists;
- * [x] ORDER BY exists;
- * [x] LIMIT exists;
- * [x] OFFSET exists;
- * [x] CTE exists;
- * [x] recursive CTE syntax exists;
- * [x] subqueries exist;
- * [x] EXISTS exists;
- * [x] IN exists;
- * [x] BETWEEN exists;
- * [x] LIKE exists;
- * [x] set operations exist;
- * [x] VALUES exists;
- * [x] requirements exist;
- * [x] constraints exist;
- * [x] preferences exist;
- * [x] hints exist;
- * [x] portability boundary exists;
- * [x] quantum boundary is preserved;
- * [x] AI boundary is preserved;
- * [x] HDL boundary is preserved;
- * [x] distributed boundary is preserved;
- * [x] security boundary is preserved;
- * [x] AST contract is defined;
- * [x] IR contract is defined;
- * [x] compiler integration is defined;
- * [x] runtime integration is defined;
- * [x] test contract is defined;
- * [x] hard-coding audit is defined.
- *
- * The remaining repository work is integration/testing, not redesign of this
- * file.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 53. FINAL ARCHITECTURAL INVARIANT
- * ============================================================================
- *
- * A Zamani query describes:
- *
- *     WHAT data is wanted
- *     WHAT relationships are required
- *     WHAT transformations are required
- *     WHAT ordering is observable
- *     WHAT correctness constraints apply
- *     WHAT capabilities are required
- *     WHAT resource properties matter
- *
- * It does NOT prescribe:
- *
- *     WHICH CPU
- *     WHICH GPU
- *     WHICH FPGA
- *     WHICH QPU
- *     WHICH node
- *     WHICH database
- *     WHICH storage device
- *     WHICH memory bank
- *     WHICH physical partition
- *     WHICH network path
- *
- * Therefore:
- *
- *     QUERY INTENT
- *          |
- *          v
- *     SEMANTIC DATA MODEL
- *          |
- *          v
- *     CANONICAL IR
- *          |
- *          v
- *     OPTIMIZATION
- *          |
- *          v
- *     RESOURCE / CAPABILITY REALIZATION
- *          |
- *          v
- *     TARGET EXECUTION
  *
- * remains compatible with:
+ * This file is complete when:
  *
- *     Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
+ *     [x] one canonical query grammar exists;
+ *     [x] data.g4 delegates to it;
+ *     [x] expression/query delegates to it;
+ *     [x] statement/query does not duplicate it;
+ *     [x] the lexer remains the single lexical authority;
+ *     [x] general expressions remain outside this file;
+ *     [x] general types remain outside this file;
+ *     [x] SQL remains outside the core grammar;
+ *     [x] physical execution remains outside the grammar;
+ *     [x] no machine-capacity constants exist;
+ *     [x] no domain-specific resource ceilings exist;
+ *     [x] no embedded Rust exists;
+ *     [x] no unsafe implementation is required;
+ *     [x] source-level query semantics remain target-independent;
+ *     [x] the query model can participate in classical/AI/graph/tensor/
+ *         distributed/hybrid/quantum-derived computation;
+ *     [x] downstream semantic, capability, resource, effect, policy and
+ *         provenance analysis remain authoritative.
  *
  * ============================================================================
  */
