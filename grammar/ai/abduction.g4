@@ -1,6 +1,6 @@
 /*
  * ============================================================================
- * ZAMANI PROGRAMMING LANGUAGE
+ * Zamani Programming Language
  * ============================================================================
  *
  * File:
@@ -10,243 +10,223 @@
  *     Abduction
  *
  * Status:
- *     CANONICAL ABDUCTIVE-REASONING LEAF GRAMMAR
+ *     CANONICAL AI ABDUCTIVE-REASONING COMPOSITION GRAMMAR
  *
- * Baseline:
+ * Implementation baseline:
  *     Rust 1.97+
  *     Rust edition 2021
  *     Safe Rust only
  *     No unsafe Rust
+ *
+ * Grammar technology:
  *     ANTLR4 parser grammar
  *
  * ============================================================================
+ * FEATURE CONTRACT
+ * ============================================================================
+ *
  * PURPOSE
- * ============================================================================
+ * -------
  *
- * This file owns the source-level syntax for ABDUCTIVE reasoning.
+ * This file is the AI-domain composition boundary for ABDUCTIVE REASONING.
  *
- * Abduction represents reasoning from observations/evidence and a desired
- * or observed effect toward one or more possible explanatory hypotheses.
+ * Abduction is treated as a general computational reasoning capability:
  *
- * Conceptually:
- *
- *     observation / evidence
- *             +
- *        background
- *          knowledge
- *             +
- *          criteria
+ *     observations / evidence
  *             |
  *             v
- *        hypothesis space
+ *        candidate explanation
  *             |
  *             v
- *       candidate explanation
+ *          hypothesis
  *
- * This grammar describes the STRUCTURE of that computation.
+ * The source language expresses the portable intent of the operation.
  *
- * It does not implement:
+ * This file does NOT implement:
  *
- *     - an abductive solver;
+ *     - an abductive algorithm;
  *     - a theorem prover;
- *     - Bayesian inference;
- *     - probabilistic inference;
- *     - SAT/SMT solving;
- *     - machine learning;
- *     - a knowledge database;
- *     - a particular logic;
- *     - a particular search algorithm;
- *     - ranking algorithms;
- *     - probability calculation;
- *     - evidence verification;
- *     - provenance storage;
- *     - policy evaluation;
- *     - resource discovery;
- *     - hardware selection;
- *     - quantum routing;
- *     - scheduling;
- *     - QEC;
- *     - ZQN;
- *     - HAL;
- *     - runtime execution.
+ *     - a Bayesian engine;
+ *     - a probabilistic engine;
+ *     - a machine-learning framework;
+ *     - a neural architecture;
+ *     - a symbolic reasoning engine;
+ *     - a SAT/SMT solver;
+ *     - an optimization algorithm;
+ *     - a scoring algorithm;
+ *     - a confidence algorithm;
+ *     - an evidence verifier;
+ *     - a provenance database;
+ *     - a resource allocator;
+ *     - a hardware selector;
+ *     - a quantum router;
+ *     - a scheduler;
+ *     - a runtime.
+ *
+ * Those responsibilities belong downstream.
+ *
  *
  * ============================================================================
- * ARCHITECTURAL PRINCIPLE
+ * ARCHITECTURAL POSITION
  * ============================================================================
  *
- * Abduction is a REASONING FORM, not a target architecture.
- *
- * Therefore the source program describes:
- *
- *     observations
- *     evidence
- *     background knowledge
- *     hypotheses
- *     criteria
- *     conclusions
- *
- * while downstream semantic analysis determines how that meaning can be
- * realized.
- *
- * The compilation boundary is:
- *
- *     source
- *       |
- *       v
- *     lexer
- *       |
- *       v
- *     parser
- *       |
- *       v
- *     domain-neutral AST
- *       |
- *       v
- *     structural validation
- *       |
- *       +-------------------+-------------------+
- *       |                   |                   |
- *       v                   v                   v
- *     types              effects            resources
- *       |                   |                   |
- *       +-------------------+-------------------+
- *                           |
- *                           v
- *                   semantic reasoning
- *                           |
- *                           v
+ *     Zamani source
+ *          |
+ *          v
+ *     ZamaniLexer
+ *          |
+ *          v
+ *     Zamani parser
+ *          |
+ *          v
+ *     universal AbductionStatements
+ *          |
+ *          +------------------------------+
+ *          |                              |
+ *          v                              v
+ *     Statements                      AIAbduction
+ *          |                              |
+ *          +---------------+--------------+
+ *                          |
+ *                          v
+ *                  domain-neutral AST
+ *                          |
+ *                          v
+ *                  structural validation
+ *                          |
+ *          +---------------+----------------+
+ *          |               |                |
+ *          v               v                v
+ *        types          effects        provenance
+ *          |               |                |
+ *          +---------------+----------------+
+ *                          |
+ *                          v
+ *                   semantic abduction
+ *                          |
+ *          +---------------+----------------+
+ *          |               |                |
+ *          v               v                v
+ *       resources      capabilities      policies
+ *          |               |                |
+ *          +---------------+----------------+
+ *                          |
+ *                          v
  *                  canonical semantic model
- *                           |
- *             +-------------+-------------+
- *             |                           |
- *             v                           v
- *        classical                    quantum::ir
- *             |                           |
- *             +-------------+-------------+
- *                           |
- *                           v
- *                  optimization/lowering
- *                           |
- *                           v
- *                  target-independent plan
- *                           |
- *                           v
- *                 scheduling/routing/etc.
- *                           |
- *                           v
- *                      ZQN / HAL
- *                           |
- *                           v
+ *                          |
+ *             +------------+-------------+
+ *             |            |             |
+ *             v            v             v
+ *        classical     quantum::ir   HDL/hardware
+ *             |            |             |
+ *             +------------+-------------+
+ *                          |
+ *                     optimization
+ *                          |
+ *                      lowering
+ *                          |
+ *                  routing/scheduling
+ *                          |
+ *                 resilience/recovery
+ *                          |
+ *                     ZQN where needed
+ *                          |
+ *                     HAL where needed
+ *                          |
  *                    target realization
+ *
  *
  * ============================================================================
  * OWNERSHIP
  * ============================================================================
  *
- * THIS FILE OWNS:
+ * THIS FILE OWNS
+ * --------------
  *
- *     - abductionConstruct;
- *     - abductionDeclaration;
- *     - abductionInvocation;
- *     - abductionBody;
- *     - abductive observations;
- *     - abductive evidence references;
- *     - abductive background/context references;
- *     - abductive hypothesis specifications;
- *     - abductive criteria;
- *     - abductive explanation targets;
- *     - abductive result specifications;
- *     - abductive derivation members;
- *     - abduction-local metadata.
+ * Only the AI-domain composition boundary:
  *
- * THIS FILE DOES NOT OWN:
+ *     aiAbductionConstruct
  *
- *     - identifiers;
- *     - qualified names;
- *     - expressions;
- *     - types;
- *     - general statements;
- *     - inference;
- *     - deduction;
- *     - induction;
- *     - reasoning orchestration;
- *     - knowledge storage;
- *     - assertions;
- *     - retraction;
- *     - queries;
- *     - probability;
- *     - uncertainty;
- *     - confidence semantics;
- *     - evidence semantics;
- *     - provenance semantics;
- *     - explanations;
- *     - decisions;
- *     - contracts;
- *     - policies;
- *     - effects;
- *     - capabilities;
- *     - resources;
- *     - actors;
- *     - concurrency;
- *     - quantum operations;
- *     - HDL;
- *     - hardware;
- *     - networking;
- *     - distributed execution;
- *     - FFI;
- *     - ABI;
- *     - metaprogramming;
- *     - IR;
- *     - runtime execution.
+ *     aiAbductionStatement
+ *
+ *
+ * THIS FILE DOES NOT OWN
+ * ---------------------
+ *
+ *     lexer rules
+ *     keyword spelling
+ *     identifiers
+ *     qualified names
+ *     expressions
+ *     expression precedence
+ *     types
+ *     contracts
+ *     requirements
+ *     capabilities
+ *     constraints
+ *     preferences
+ *     hints
+ *     effects
+ *     policies
+ *     provenance
+ *     evidence representation
+ *     uncertainty representation
+ *     knowledge representation
+ *     learning
+ *     adaptation
+ *     deduction
+ *     induction
+ *     inference
+ *     agents
+ *     concurrency
+ *     distributed execution
+ *     quantum syntax
+ *     HDL syntax
+ *     hardware syntax
+ *     resources
+ *     scheduling
+ *     routing
+ *     optimization
+ *     IR
+ *     runtime execution
+ *
  *
  * ============================================================================
  * SINGLE-AUTHORITY RULE
  * ============================================================================
  *
- * This file is the ONLY canonical source grammar for the abductive reasoning
- * construct.
+ * The universal source syntax of abduction belongs to:
  *
- * The following grammars MUST NOT redefine abduction:
+ *     grammar/statements/abduction.g4
  *
- *     grammar/ai/reasoning.g4
- *     grammar/ai/inference.g4
- *     grammar/ai/deduction.g4
- *     grammar/ai/induction.g4
- *     grammar/expressions/reasoning.g4
- *     grammar/statements/reason.g4
- *     grammar/statements/infer.g4
+ * This file MUST NOT duplicate that syntax.
  *
- * Those grammars may compose or reference the public rules exported here,
- * but they must not create competing syntax.
+ * The reason is architectural:
  *
- * ============================================================================
- * OPEN-WORLD RULE
- * ============================================================================
+ *     abduction is not inherently an AI-only operation.
  *
- * The grammar MUST remain open-ended.
+ * It may be used by:
  *
- * It MUST NOT enumerate:
+ *     classical computation
+ *     scientific computation
+ *     verification
+ *     security analysis
+ *     compiler analysis
+ *     data processing
+ *     AI
+ *     probabilistic computation
+ *     quantum/classical hybrid computation
+ *     HDL verification
+ *     hardware analysis
+ *     distributed computation
+ *     simulation
+ *     future computational domains
  *
- *     - abductive algorithms;
- *     - search strategies;
- *     - logical systems;
- *     - probability models;
- *     - scoring algorithms;
- *     - domain-specific hypothesis types;
- *     - scientific disciplines;
- *     - AI model families;
- *     - solver implementations.
+ * Therefore the universal statement grammar owns the syntax.
  *
- * New reasoning systems must be implementable through:
+ * This file merely makes that universal construct available at the AI
+ * composition boundary.
  *
- *     semantic models
- *     libraries
- *     dialects
- *     capabilities
- *     policies
- *     runtime implementations
- *
- * without modifying this universal grammar.
  *
  * ============================================================================
  * DEPENDENCY CONTRACT
@@ -255,49 +235,49 @@
  * DEPENDS_ON:
  *
  *     grammar/antlr/ZamaniLexer.g4
- *     grammar/types/
- *     grammar/expressions/expressions.g4
+ *     grammar/statements/abduction.g4
+ *
+ * Imported parser grammar:
+ *
+ *     AbductionStatements
+ *
  *
  * EXPORTS:
  *
- *     abductionConstruct
- *     abductionDeclaration
- *     abductionInvocation
- *     abductionBody
- *     abductionMember
- *     abductiveObservation
- *     abductiveEvidence
- *     abductiveBackground
- *     abductiveHypothesis
- *     abductiveCriterion
- *     abductiveExplanation
- *     abductiveResult
+ *     aiAbductionConstruct
+ *     aiAbductionStatement
+ *
  *
  * CONSUMED_BY:
  *
  *     grammar/ai/ai.g4
- *     grammar/ai/reasoning.g4
- *     future universal reasoning composition
+ *
  *
  * AST_OWNER:
  *
- *     canonical domain-neutral frontend AST
+ *     Existing domain-neutral frontend AST.
+ *
+ * This adapter MUST NOT create an AI-specific AST node.
+ *
  *
  * SEMANTIC_OWNER:
  *
- *     universal reasoning semantic subsystem
- *     with AI-domain integration where applicable
+ *     Universal reasoning semantic analysis
+ *     AI reasoning semantic analysis
+ *
  *
  * IR_OWNER:
  *
- *     canonical semantic IR
+ *     Canonical semantic model
  *
- *     Downstream realization may use:
+ *     followed by the appropriate downstream representation.
  *
- *         classical IR
- *         quantum::ir
- *         hybrid semantic IR
- *         HDL/hardware lowering
+ * Quantum computation MUST cross:
+ *
+ *     quantum::ir
+ *
+ * rather than an abduction-specific quantum representation.
+ *
  *
  * TEST_OWNER:
  *
@@ -305,6 +285,7 @@
  *     grammar/tests/semantic/reasoning/
  *     grammar/tests/boundary/
  *     grammar/tests/scalability/
+ *
  *
  * SPEC_OWNER:
  *
@@ -314,293 +295,652 @@
  *     grammar/spec/resources.md
  *     grammar/spec/effects.md
  *
+ *
  * ============================================================================
  * LEXER CONTRACT
  * ============================================================================
  *
  * This file defines NO lexer rules.
  *
- * The canonical token vocabulary is:
- *
- *     ZamaniLexer
- *
- * The preferred architecture is to reserve only language-level vocabulary
- * that is genuinely required.
- *
- * This grammar intentionally does not introduce a token for every possible
- * abductive concept.
- *
- * The only dedicated introducer required here is:
+ * The universal lexical vocabulary must provide:
  *
  *     ABDUCE
  *
- * If the repository's lexer has not yet promoted ABDUCE to canonical lexical
- * vocabulary, that token must be added in the lexical authority before this
- * grammar is enabled in the canonical parser build.
+ * with canonical spelling:
  *
- * Do NOT create:
+ *     abduce
  *
- *     ABDUCTION
- *     HYPOTHESIS_EXPRESSION
- *     OBSERVATION_EXPRESSION
- *     EVIDENCE_EXPRESSION
- *     ABDUCTIVE_RULE
+ * The token belongs to:
  *
- * lexer tokens.
+ *     grammar/lexer/keywords.g4
+ *
+ * and is consumed through:
+ *
+ *     grammar/antlr/ZamaniLexer.g4
+ *
+ * No AI grammar may define its own ABDUCE token.
+ *
  *
  * ============================================================================
  * EXPRESSION CONTRACT
  * ============================================================================
  *
- * Expressions remain owned by:
+ * This adapter introduces no expression syntax.
  *
- *     grammar/expressions/
- *
- * This file consumes:
+ * The universal AbductionStatements grammar consumes the canonical:
  *
  *     expression
  *
- * An abductive observation, hypothesis, criterion, evidence reference, or
- * explanation target may therefore be any valid Zamani expression.
+ * from:
  *
- * This permits the same abductive structure to operate over:
+ *     grammar/expressions/expressions.g4
  *
- *     classical values
+ * Therefore abductive reasoning can operate over arbitrary valid Zamani
+ * expressions, including:
+ *
+ *     scalar values
+ *     records
+ *     tuples
+ *     collections
+ *     streams
  *     tensors
- *     data
- *     knowledge
- *     model outputs
- *     measurements
- *     quantum results
- *     hardware observations
- *     distributed observations
+ *     graphs
+ *     datasets
+ *     knowledge values
+ *     uncertain values
+ *     probabilistic values
+ *     model results
+ *     classical results
+ *     quantum-derived measurements
  *     simulation results
- *     symbolic values
- *     user-defined values
+ *     distributed results
+ *     hardware observations
+ *     future domain values
+ *
+ * This file does not create an AI-specific expression hierarchy.
+ *
  *
  * ============================================================================
  * TYPE CONTRACT
  * ============================================================================
  *
- * General type syntax remains owned by:
+ * Type syntax remains owned by:
  *
  *     grammar/types/
  *
- * This grammar consumes:
+ * No:
  *
- *     typeExpression
+ *     AbductionType
+ *     HypothesisType
+ *     EvidenceType
+ *     ExplanationType
  *
- * No abductive-specific type system is introduced.
+ * is introduced here.
+ *
+ * Semantic type checking determines whether:
+ *
+ *     hypothesis
+ *
+ * and:
+ *
+ *     evidence / observation source
+ *
+ * are compatible with the requested abductive operation.
+ *
  *
  * ============================================================================
- * RESOURCE / CAPABILITY CONTRACT
+ * REASONING FAMILY CONTRACT
  * ============================================================================
  *
- * This file does NOT define:
+ * Abduction belongs to the same semantic reasoning family as:
  *
- *     requires
- *     capability
- *     resource
- *     budget
- *     topology
- *     device
- *     placement
- *     scheduling
+ *     inference
+ *     deduction
+ *     induction
+ *     generic reasoning
  *
- * Those are owned by:
+ * However, the constructs must remain distinguishable at the semantic layer.
  *
- *     grammar/resources/
+ * The source operator:
  *
- * Abductive operations may semantically carry resource requirements and
- * capability requirements through the canonical semantic model.
+ *     abduce
  *
- * Example semantic relationship:
+ * provides an explicit semantic discriminator.
  *
+ * It MUST NOT be implemented as:
+ *
+ *     AT identifier
+ *
+ * because:
+ *
+ *     @infer
+ *     @model
+ *     @agent
+ *     @pipeline
+ *     @training
+ *     @dataset
+ *
+ * and future annotations would otherwise create structural ambiguity.
+ *
+ *
+ * ============================================================================
+ * EVIDENCE CONTRACT
+ * ============================================================================
+ *
+ * Evidence is represented through ordinary expressions.
+ *
+ * Evidence may originate from:
+ *
+ *     observations
+ *     datasets
+ *     knowledge
+ *     simulations
+ *     classical computation
+ *     quantum measurements
+ *     hardware observations
+ *     network results
+ *     distributed computation
+ *     learned models
+ *     foreign functions
+ *     external services
+ *
+ * Evidence semantics are NOT implemented here.
+ *
+ * The semantic system may attach:
+ *
+ *     source
+ *     reliability
+ *     confidence
+ *     provenance
+ *     verification state
+ *     temporal information
+ *     policy information
+ *
+ * without changing this grammar.
+ *
+ *
+ * ============================================================================
+ * UNCERTAINTY CONTRACT
+ * ============================================================================
+ *
+ * Abductive reasoning may naturally produce uncertain hypotheses.
+ *
+ * Semantic analysis may therefore represent:
+ *
+ *     confidence
+ *     probability
+ *     likelihood
+ *     belief
+ *     distribution
+ *     interval
+ *     evidence strength
+ *
+ * This grammar does not prescribe:
+ *
+ *     floating-point width
+ *     probability precision
+ *     probability representation
+ *     distribution size
+ *     numerical backend
+ *     accelerator
+ *     hardware
+ *
+ *
+ * ============================================================================
+ * EXPLANATION CONTRACT
+ * ============================================================================
+ *
+ * An abductive result may require explanation.
+ *
+ * Explanation semantics belong to the universal explanation/evidence/
+ * provenance subsystem.
+ *
+ * The semantic representation may retain:
+ *
+ *     observations considered
+ *     evidence used
+ *     candidate hypothesis
+ *     rejected alternatives
+ *     derivation
+ *     confidence
+ *     policy
+ *     decision
+ *     verification
+ *
+ * This file introduces no competing explanation grammar.
+ *
+ *
+ * ============================================================================
+ * KNOWLEDGE CONTRACT
+ * ============================================================================
+ *
+ * Abduction may consume or produce knowledge.
+ *
+ * Example semantic flow:
+ *
+ *     knowledge
+ *        |
+ *        v
+ *     observations
+ *        |
+ *        v
  *     abduction
- *         |
- *         +--> capability requirement
- *         +--> resource requirement
- *         +--> effect requirement
- *         +--> policy
+ *        |
+ *        v
+ *     candidate explanation
  *
- * No physical capacity is encoded here.
+ * Knowledge operations remain owned by the knowledge subsystem.
+ *
+ * In particular:
+ *
+ *     assert
+ *     retract
+ *     query
+ *
+ * MUST NOT be redefined here.
+ *
+ *
+ * ============================================================================
+ * LEARNING CONTRACT
+ * ============================================================================
+ *
+ * Abductive results may participate in learning.
+ *
+ * For example, an abductive hypothesis may become:
+ *
+ *     a candidate rule
+ *     a feature
+ *     a training signal
+ *     a model constraint
+ *     an explanation
+ *     a policy input
+ *
+ * However:
+ *
+ *     abduction != learning
+ *
+ * Learning remains independently owned.
+ *
+ * No optimizer, model architecture, training algorithm, batch-size limit,
+ * accelerator, or framework is encoded here.
+ *
+ *
+ * ============================================================================
+ * ADAPTATION CONTRACT
+ * ============================================================================
+ *
+ * An abductive result may influence adaptive execution.
+ *
+ * Parsing abduction MUST NOT authorize:
+ *
+ *     self-modification
+ *     unrestricted model mutation
+ *     unrestricted strategy replacement
+ *     code generation
+ *     resource reallocation
+ *     deployment changes
+ *
+ * Adaptation requires independent:
+ *
+ *     effects
+ *     capabilities
+ *     resources
+ *     policies
+ *     authorization
+ *     provenance
+ *
+ * analysis.
+ *
  *
  * ============================================================================
  * EFFECT CONTRACT
  * ============================================================================
  *
- * Effects are owned by:
+ * This file assigns no effects.
+ *
+ * Depending on semantic realization, abduction may involve:
+ *
+ *     computation
+ *     knowledge.read
+ *     knowledge.write
+ *     model.inference
+ *     randomness
+ *     learning
+ *     measurement
+ *     network
+ *     distributed
+ *     simulation
+ *     foreign
+ *     native
+ *     reflection
+ *
+ * Effect ownership remains with:
  *
  *     grammar/effects/
  *
- * Abduction itself does not declare an implementation-specific effect.
  *
- * Semantic analysis may determine that a particular abductive operation
- * requires effects such as:
+ * ============================================================================
+ * RESOURCE CONTRACT
+ * ============================================================================
  *
- *     knowledge access
- *     external data access
- *     randomness
- *     model execution
- *     network access
- *     native/foreign execution
+ * Resource syntax is not duplicated here.
  *
- * Those effects are attached by semantic analysis rather than duplicated
- * inside this grammar.
+ * Requirements such as:
+ *
+ *     requires capability("reasoning.abduction");
+ *     requires capability("probabilistic.compute");
+ *     requires memory >= required_memory;
+ *     requires topology(required_topology);
+ *
+ * belong to the canonical resource architecture.
+ *
+ * This grammar does not know:
+ *
+ *     how much memory exists
+ *     how many processors exist
+ *     how many accelerators exist
+ *     how many quantum resources exist
+ *     how many nodes exist
+ *     which devices exist
+ *     which vendor is available
+ *
+ *
+ * ============================================================================
+ * CAPABILITY CONTRACT
+ * ============================================================================
+ *
+ * Capability identity remains open-world.
+ *
+ * A semantic implementation may expose capabilities such as:
+ *
+ *     reasoning.abduction
+ *     reasoning
+ *     knowledge.query
+ *     probabilistic.compute
+ *     model.inference
+ *
+ * but this grammar does not create a closed capability catalogue.
+ *
+ * Hardware and vendor capabilities remain downstream.
+ *
  *
  * ============================================================================
  * CONTRACT CONTRACT
  * ============================================================================
  *
- * requires / ensures / invariant / assume / guarantee / property remain owned
- * by:
+ * Abduction may be constrained by:
+ *
+ *     requires
+ *     ensures
+ *     invariant
+ *     assume
+ *     guarantee
+ *     property
+ *
+ * Contract syntax remains owned by:
  *
  *     grammar/validation/
  *
- * This grammar therefore does not redefine contract syntax.
+ * No contract syntax is duplicated here.
  *
- * Abduction may participate in contracts through the semantic model.
+ * Parser acceptance does not imply that a contract is satisfied.
+ *
  *
  * ============================================================================
  * POLICY CONTRACT
  * ============================================================================
  *
- * Policies remain owned by:
+ * Abduction may be controlled by:
  *
- *     grammar/policies/
+ *     evidence policies
+ *     privacy policies
+ *     security policies
+ *     model policies
+ *     execution policies
+ *     determinism policies
+ *     resource policies
+ *     adaptation policies
  *
- * Abduction may be constrained by:
+ * Policy evaluation remains downstream.
  *
- *     authorization
- *     trust
- *     evidence requirements
- *     resource policy
- *     execution policy
- *     adaptation policy
+ * Valid syntax does not imply authorization.
  *
- * The grammar does not duplicate those policy constructs.
- *
- * ============================================================================
- * EVIDENCE / PROVENANCE CONTRACT
- * ============================================================================
- *
- * This file recognizes an abductive evidence boundary, but does not define
- * evidence storage or provenance semantics.
- *
- * Canonical semantic ownership remains with:
- *
- *     grammar/ai/evidence.g4
- *     grammar/ai/provenance.g4
- *
- * and their universal semantic counterparts.
- *
- * The semantic model must preserve relationships such as:
- *
- *     hypothesis
- *       <- supported_by <- evidence
- *       <- derived_from <- observation
- *       <- constrained_by <- background
  *
  * ============================================================================
- * DECLARATION MODEL
+ * PROVENANCE CONTRACT
  * ============================================================================
  *
- * A reusable abductive specification has the form:
+ * Abduction is provenance-sensitive.
  *
- *     abduce Name {
- *         observation ...
- *         evidence ...
- *         background ...
- *         hypothesis ...
- *         criterion ...
- *         explanation ...
- *         result ...
- *     }
+ * The semantic provenance system should be capable of recording:
  *
- * The declaration name is an ordinary identifier.
- *
- * The body remains intentionally structured but open-ended.
- *
- * ============================================================================
- * INVOCATION MODEL
- * ============================================================================
- *
- * A direct abductive invocation has the form:
- *
- *     abduce(...)
- *
- * Named arguments are supported:
- *
- *     abduce(
- *         observation = value,
- *         evidence = evidence_value,
- *         hypothesis = candidate
- *     )
- *
- * The grammar imposes no fixed argument count.
- *
- * This is important for scalability and future extensions.
- *
- * ============================================================================
- * WHY NAMED FIELDS ARE OPEN-WORLD
- * ============================================================================
- *
- * Abduction naturally evolves as different domains introduce additional
- * semantic information.
- *
- * Examples include:
- *
- *     observation
+ *     source
+ *     observations
  *     evidence
- *     background
- *     hypothesis
- *     hypotheses
- *     criterion
- *     criteria
- *     explanation
- *     result
- *     confidence
- *     ranking
- *     provenance_ref
- *     policy
+ *     candidate hypothesis
+ *     derivation
+ *     reasoning operation
  *     model
- *     context
+ *     transformation
+ *     verification
+ *     decision
+ *     policy
+ *     language version
+ *     semantic version
  *
- * The grammar must not require a lexer token for every such field.
+ * Provenance ownership remains outside this grammar.
  *
- * Therefore body field names are ordinary identifiers.
- *
- * Semantic analysis determines which fields are standard, optional, required,
- * incompatible, or supplied by a dialect.
  *
  * ============================================================================
- * NO ARTIFICIAL LIMITS
+ * QUANTUM CONTRACT
  * ============================================================================
  *
- * This grammar contains no universal limits for:
+ * Quantum-derived observations may be supplied as ordinary expressions.
  *
- *     number of observations
- *     number of evidence items
- *     number of hypotheses
- *     number of criteria
- *     number of derivation steps
- *     expression size
- *     nesting depth
- *     graph width
- *     graph size
- *     model size
- *     data size
- *     machine size
- *     memory size
- *     processor count
- *     accelerator count
- *     QPU count
- *     qubit count
- *     node count
+ * Example:
  *
- * Any actual implementation limit is a resource/runtime property rather than
- * a language-level semantic ceiling.
+ *     abduce fault_model from measurements;
  *
+ * The quantum subsystem remains responsible for:
+ *
+ *     quantum syntax
+ *     quantum semantic analysis
+ *     quantum::ir
+ *     optimization
+ *     decomposition
+ *     routing
+ *     scheduling
+ *     resilience
+ *     QEC
+ *     ZQN
+ *     HAL
+ *
+ * This grammar introduces:
+ *
+ *     no qubit syntax
+ *     no gate catalogue
+ *     no physical topology
+ *     no calibration
+ *     no routing
+ *     no QEC representation
+ *
+ *
+ * ============================================================================
+ * HDL / HARDWARE CONTRACT
+ * ============================================================================
+ *
+ * Abduction may consume:
+ *
+ *     simulation results
+ *     verification results
+ *     timing observations
+ *     hardware observations
+ *     synthesis information
+ *     telemetry
+ *
+ * HDL and hardware syntax remains owned by:
+ *
+ *     grammar/hdl/
+ *     grammar/hardware/
+ *
+ * No register width, bus width, device count, memory capacity, processor
+ * count, or physical address is encoded here.
+ *
+ *
+ * ============================================================================
+ * DISTRIBUTED CONTRACT
+ * ============================================================================
+ *
+ * Evidence may originate from:
+ *
+ *     actors
+ *     services
+ *     distributed tasks
+ *     replicated observations
+ *     collective computation
+ *
+ * Distributed semantics remain owned by:
+ *
+ *     grammar/concurrency/
+ *     grammar/distributed/
+ *
+ * This adapter introduces no topology syntax.
+ *
+ *
+ * ============================================================================
+ * FFI / ABI CONTRACT
+ * ============================================================================
+ *
+ * Foreign-function results may be used as abductive evidence.
+ *
+ * FFI and ABI syntax remain owned by:
+ *
+ *     grammar/interoperability/
+ *
+ * Foreign effects and capabilities are checked independently.
+ *
+ *
+ * ============================================================================
+ * METAPROGRAMMING CONTRACT
+ * ============================================================================
+ *
+ * Abduction may operate over compile-time or reflective values when the
+ * semantic system permits it.
+ *
+ * Reflection and compile-time execution remain owned by:
+ *
+ *     grammar/metaprogramming/
+ *
+ * This grammar introduces no reflection syntax.
+ *
+ *
+ * ============================================================================
+ * POCO-REAF / SCALABILITY CONTRACT
+ * ============================================================================
+ *
+ * This adapter introduces NO finite computational capacity.
+ *
+ * It contains no limits for:
+ *
+ *     hypotheses
+ *     evidence
+ *     observations
+ *     source expressions
+ *     context expressions
+ *     models
+ *     datasets
+ *     reasoning operations
+ *     AI constructs
+ *     quantum resources
+ *     classical resources
+ *     distributed resources
+ *     hardware resources
+ *
+ * No constants such as:
+ *
+ *     MAX_ABDUCTIONS
+ *     MAX_HYPOTHESES
+ *     MAX_EVIDENCE
+ *     MAX_OBSERVATIONS
+ *     MAX_MODELS
+ *     MAX_CPUS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_QUBITS
+ *     MAX_QPUS
+ *     MAX_NODES
+ *     MAX_MEMORY
+ *     MAX_THREADS
+ *     MAX_TENSOR_RANK
+ *     MAX_REGISTER_WIDTH
+ *     MAX_NETWORK_SIZE
+ *     MAX_DEVICE_COUNT
+ *
+ * may be introduced.
+ *
+ * "Infinity" means that the language introduces no artificial finite machine
+ * ceiling.
+ *
+ * Actual feasibility is determined downstream by:
+ *
+ *     available resources
+ *     target capabilities
+ *     policies
+ *     compiler implementation
+ *     runtime
+ *     operating environment
+ *
+ *
+ * ============================================================================
+ * DETERMINISM CONTRACT
+ * ============================================================================
+ *
+ * Parsing MUST depend only on:
+ *
+ *     source
+ *     token stream
+ *     grammar
+ *     parser configuration
+ *
+ * Parsing MUST NOT depend on:
+ *
+ *     hardware
+ *     available memory
+ *     network state
+ *     filesystem state
+ *     runtime state
+ *     scheduler state
+ *     randomness
+ *     wall-clock time
+ *
+ * Any probabilistic or nondeterministic abductive realization is a semantic or
+ * runtime concern.
+ *
+ *
+ * ============================================================================
+ * SAFETY CONTRACT
+ * ============================================================================
+ *
+ * This grammar contains:
+ *
+ *     no embedded Rust
+ *     no semantic predicates
+ *     no target actions
+ *     no filesystem access
+ *     no network access
+ *     no hardware access
+ *     no runtime execution
+ *
+ * Generated Rust integration must remain compatible with:
+ *
+ *     Rust 1.97+
+ *     Rust 2021
+ *
+ * and must use safe Rust only.
+ *
+ *
+ * ============================================================================
+ * PRODUCTION COMPOSITION
  * ============================================================================
  */
 
@@ -611,565 +951,26 @@ options {
 }
 
 import
-    Types,
-    Expressions
-;
-
-
-/*
- * ============================================================================
- * PUBLIC ENTRY POINT
- * ============================================================================
- *
- * The AI composition grammar should consume this rule.
- *
- * There is exactly one canonical public abduction entry point.
- */
-
-abductionConstruct
-    : abductionDeclaration
-    | abductionInvocation
+    AbductionStatements
     ;
 
 
 /*
  * ============================================================================
- * INTRODUCER
+ * PUBLIC AI BOUNDARY
  * ============================================================================
  *
- * ABDUCE is the unique lexical introducer.
+ * The AI subsystem consumes the universal abductive-reasoning representation.
  *
- * Do not use:
- *
- *     AT identifier
- *
- * here.
- *
- * Generic annotations have unrelated ownership and must remain distinguishable
- * from an executable abductive construct.
- */
-
-abductionIntroducer
-    : ABDUCE
-    ;
-
-
-/*
- * ============================================================================
- * DECLARATION
- * ============================================================================
- *
- * Canonical forms:
- *
- *     abduce Name {
- *         ...
- *     }
- *
- *     abduce Name(parameters) {
- *         ...
- *     }
- *
- *     abduce Name: ResultType {
- *         ...
- *     }
- *
- * A declaration requires a body.
- *
- * This prevents ambiguity with invocation syntax.
- */
-
-abductionDeclaration
-    : abductionIntroducer
-      identifier
-      abductionDeclarationParameters?
-      abductionDeclarationType?
-      abductionBody
-    ;
-
-
-abductionDeclarationParameters
-    : LEFT_PAREN
-      abductionParameterList?
-      RIGHT_PAREN
-    ;
-
-
-abductionParameterList
-    : abductionParameter
-      (COMMA abductionParameter)*
-    ;
-
-
-abductionParameter
-    : identifier
-    | identifier COLON typeExpression
-    | identifier ASSIGN expression
-    ;
-
-
-abductionDeclarationType
-    : COLON
-      typeExpression
-    ;
-
-
-/*
- * ============================================================================
- * INVOCATION
- * ============================================================================
- *
- * Canonical invocation:
- *
- *     abduce(...)
- *
- * A parenthesized form is deliberately used so invocation cannot be confused
- * with declarations, ordinary identifiers, or annotations.
- */
-
-abductionInvocation
-    : abductionIntroducer
-      LEFT_PAREN
-      abductionArgumentList?
-      RIGHT_PAREN
-      SEMICOLON?
-    ;
-
-
-abductionArgumentList
-    : abductionArgument
-      (COMMA abductionArgument)*
-    ;
-
-
-abductionArgument
-    : abductionNamedArgument
-    | expression
-    ;
-
-
-abductionNamedArgument
-    : identifier
-      ASSIGN
-      expression
-    ;
-
-
-/*
- * ============================================================================
- * BODY
- * ============================================================================
- *
- * The body is a sequence of abductive members.
- *
- * It is deliberately NOT a copy of the general statement grammar.
- *
- * Ordinary computation surrounding an abductive operation remains owned by
- * the containing Zamani block/function/module.
- */
-
-abductionBody
-    : LBRACE
-      abductionMember*
-      RBRACE
-    ;
-
-
-abductionMember
-    : abductiveObservationClause
-    | abductiveEvidenceClause
-    | abductiveBackgroundClause
-    | abductiveHypothesisClause
-    | abductiveCriterionClause
-    | abductiveExplanationClause
-    | abductiveResultClause
-    | abductiveContextClause
-    | abductiveDerivationClause
-    | abductiveMetadataClause
-    ;
-
-
-/*
- * ============================================================================
- * OBSERVATION
- * ============================================================================
- *
- * An observation is an expression representing an observed state, event,
- * result, measurement, or other source of abductive information.
- *
- * Examples:
- *
- *     observation sensor_value;
- *     observation measurement;
- *     observation model_output;
- *
- * The semantic layer determines what "observation" means in a domain.
- */
-
-abductiveObservationClause
-    : ABDUCTION_OBSERVATION_LABEL
-      expression
-      SEMICOLON?
-    ;
-
-
-/*
- * ============================================================================
- * EVIDENCE
- * ============================================================================
- *
- * Evidence is kept distinct from observation.
- *
- * This allows semantic analysis to distinguish:
- *
- *     observed data
- *     supporting evidence
- *     externally supplied evidence
- *     derived evidence
- *     verified evidence
- *
- * without forcing the grammar to know the implementation.
- */
-
-abductiveEvidenceClause
-    : ABDUCTION_EVIDENCE_LABEL
-      expression
-      SEMICOLON?
-    ;
-
-
-/*
- * ============================================================================
- * BACKGROUND
- * ============================================================================
- *
- * Background information represents contextual knowledge or assumptions used
- * when evaluating candidate explanations.
- *
- * It is deliberately represented by an expression.
- */
-
-abductiveBackgroundClause
-    : ABDUCTION_BACKGROUND_LABEL
-      expression
-      SEMICOLON?
-    ;
-
-
-/*
- * ============================================================================
- * HYPOTHESIS
- * ============================================================================
- *
- * A hypothesis is a candidate explanation.
- *
- * Multiple hypothesis clauses are permitted.
- *
- * There is no fixed number of hypotheses.
- */
-
-abductiveHypothesisClause
-    : ABDUCTION_HYPOTHESIS_LABEL
-      abductiveHypothesis
-      SEMICOLON?
-    ;
-
-
-abductiveHypothesis
-    : expression
-    ;
-
-
-/*
- * ============================================================================
- * CRITERION
- * ============================================================================
- *
- * A criterion describes a semantic condition used to evaluate candidate
- * explanations.
- *
- * The criterion does not define a particular ranking or scoring algorithm.
- */
-
-abductiveCriterionClause
-    : ABDUCTION_CRITERION_LABEL
-      abductiveCriterion
-      SEMICOLON?
-    ;
-
-
-abductiveCriterion
-    : expression
-    ;
-
-
-/*
- * ============================================================================
- * EXPLANATION
- * ============================================================================
- *
- * Explanation is an output/semantic boundary.
- *
- * The actual explanation representation is owned by the explanation and
- * provenance subsystems.
- */
-
-abductiveExplanationClause
-    : ABDUCTION_EXPLANATION_LABEL
-      abductiveExplanation
-      SEMICOLON?
-    ;
-
-
-abductiveExplanation
-    : expression
-    ;
-
-
-/*
- * ============================================================================
- * RESULT
- * ============================================================================
- *
- * Result describes the value or object produced by the abductive operation.
- *
- * It is not tied to a particular implementation.
- */
-
-abductiveResultClause
-    : ABDUCTION_RESULT_LABEL
-      abductiveResult
-      SEMICOLON?
-    ;
-
-
-abductiveResult
-    : expression
-    ;
-
-
-/*
- * ============================================================================
- * CONTEXT
- * ============================================================================
- *
- * Context provides additional semantic information without requiring the
- * grammar to enumerate every possible context category.
- */
-
-abductiveContextClause
-    : ABDUCTION_CONTEXT_LABEL
-      abductiveContext
-      SEMICOLON?
-    ;
-
-
-abductiveContext
-    : expression
-    ;
-
-
-/*
- * ============================================================================
- * DERIVATION
- * ============================================================================
- *
- * A derivation records an intermediate semantic relationship.
- *
- * The grammar does not prescribe a proof calculus or solver.
- */
-
-abductiveDerivationClause
-    : ABDUCTION_DERIVATION_LABEL
-      abductiveDerivation
-      SEMICOLON?
-    ;
-
-
-abductiveDerivation
-    : expression
-    ;
-
-
-/*
- * ============================================================================
- * METADATA
- * ============================================================================
- *
- * Metadata is an open extension point.
- *
- * It permits domain/tooling metadata without turning every metadata property
- * into a reserved keyword.
- *
- * Example:
- *
- *     @source(...)
- *     @domain(...)
- *     @trace(...)
- *
- * Actual annotation semantics remain owned elsewhere.
- */
-
-abductiveMetadataClause
-    : AT
-      identifier
-      abductiveMetadataPayload?
-      SEMICOLON?
-    ;
-
-
-abductiveMetadataPayload
-    : LEFT_PAREN
-      abductionArgumentList?
-      RIGHT_PAREN
-    | COLON
-      typeExpression
-    | ASSIGN
-      expression
-    ;
-
-
-/*
- * ============================================================================
- * LABEL REPRESENTATION
- * ============================================================================
- *
- * These labels are intentionally parser-level symbolic boundaries.
- *
- * IMPORTANT:
- *
- * The preferred production architecture is to promote only genuinely stable
- * language-level labels to lexer tokens.
- *
- * The rules below therefore use dedicated parser-facing symbolic tokens.
- *
- * If the repository already has canonical tokens with different names,
- * these aliases must be mapped to those canonical tokens rather than creating
- * duplicate lexical vocabulary.
- *
+ * No syntax is duplicated here.
  * ============================================================================
  */
 
-/*
- * The following tokens are expected to be supplied by ZamaniLexer:
- *
- *     ABDUCE
- *
- * The abductive body labels are preferably ordinary reserved vocabulary only
- * when the language specification has explicitly stabilized them.
- *
- * They are represented below as parser tokens so that the grammar has a clear
- * structural contract.
- *
- * If these labels are not yet canonical lexer tokens in the current branch,
- * use the identifier-field form during migration and promote the labels only
- * through the lexer authority.
- */
-
-abductiveObservationLabel
-    : identifier
+aiAbductionConstruct
+    : aiAbductionStatement
     ;
 
 
-abductiveEvidenceLabel
-    : identifier
-    ;
-
-
-abductiveBackgroundLabel
-    : identifier
-    ;
-
-
-abductiveHypothesisLabel
-    : identifier
-    ;
-
-
-abductiveCriterionLabel
-    : identifier
-    ;
-
-
-abductiveExplanationLabel
-    : identifier
-    ;
-
-
-abductiveResultLabel
-    : identifier
-    ;
-
-
-abductiveContextLabel
-    : identifier
-    ;
-
-
-abductiveDerivationLabel
-    : identifier
-    ;
-
-
-/*
- * ============================================================================
- * STABLE LABEL BOUNDARIES
- * ============================================================================
- *
- * The following aliases make the semantic contract explicit while keeping
- * lexical ownership outside this file.
- *
- * They intentionally resolve to identifiers.
- *
- * Semantic analysis validates the canonical field names:
- *
- *     observation
- *     evidence
- *     background
- *     hypothesis
- *     criterion
- *     explanation
- *     result
- *     context
- *     derivation
- *
- * A future dialect may extend this vocabulary without requiring this grammar
- * to enumerate every domain-specific field.
- *
- * ============================================================================
- */
-
-ABDUCTION_OBSERVATION_LABEL
-    : identifier
-    ;
-
-ABDUCTION_EVIDENCE_LABEL
-    : identifier
-    ;
-
-ABDUCTION_BACKGROUND_LABEL
-    : identifier
-    ;
-
-ABDUCTION_HYPOTHESIS_LABEL
-    : identifier
-    ;
-
-ABDUCTION_CRITERION_LABEL
-    : identifier
-    ;
-
-ABDUCTION_EXPLANATION_LABEL
-    : identifier
-    ;
-
-ABDUCTION_RESULT_LABEL
-    : identifier
-    ;
-
-ABDUCTION_CONTEXT_LABEL
-    : identifier
-    ;
-
-ABDUCTION_DERIVATION_LABEL
-    : identifier
+aiAbductionStatement
+    : abductionStatement
     ;
