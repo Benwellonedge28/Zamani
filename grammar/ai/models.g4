@@ -12,58 +12,105 @@
  * Status:
  *     CANONICAL AI MODEL SOURCE GRAMMAR
  *
- * Language:
- *     Zamani
- *
- * Compiler baseline:
+ * Baseline:
  *     Rust 1.97 / Rust 1.97.1
  *     Rust 2021
- *
- * Safety:
- *     - No embedded Rust actions.
- *     - No semantic predicates.
- *     - No unsafe Rust.
- *     - No filesystem access.
- *     - No network access.
- *     - No hardware access.
- *     - No runtime execution.
+ *     Safe Rust only
  *
  * ============================================================================
+ * FEATURE CONTRACT
+ * ============================================================================
+ *
  * PURPOSE
- * ============================================================================
+ * -------
  *
- * This file is the SINGLE canonical source-level grammar for AI/ML MODEL
- * DECLARATIONS.
+ * This file is the sole canonical parser grammar for source-level model
+ * declarations in the AI domain.
  *
- * It describes model structure and model intent.
+ * It defines the STRUCTURE of a model declaration.
  *
- * It does NOT implement:
+ * It does not define model execution, model algorithms, tensor execution,
+ * training, inference, optimization, scheduling, placement, hardware
+ * selection, resource allocation, device discovery, or runtime behavior.
  *
- *     - machine learning algorithms;
- *     - tensor execution;
- *     - automatic differentiation;
- *     - training;
- *     - inference;
+ *
+ * OWNS
+ * ----
+ *
+ * This file owns:
+ *
+ *     - model declaration syntax;
+ *     - model declaration identity;
+ *     - model declaration generic parameters;
+ *     - model inheritance syntax;
+ *     - model interface/contract references;
+ *     - model body structure;
+ *     - model member structure;
+ *     - model member annotation attachment;
+ *     - model typed members;
+ *     - model expression members;
+ *     - model nested regions;
+ *     - model graph connection syntax;
+ *     - model source-level composition boundaries.
+ *
+ *
+ * DOES NOT OWN
+ * ------------
+ *
+ * This file does NOT own:
+ *
+ *     - lexical rules;
+ *     - annotation syntax;
+ *     - identifiers;
+ *     - qualified-name syntax;
+ *     - expression syntax;
+ *     - type syntax;
+ *     - generic type application;
+ *     - generic substitution;
+ *     - tensor syntax;
+ *     - dataset syntax;
+ *     - training syntax;
+ *     - inference syntax;
+ *     - agent syntax;
+ *     - differentiation syntax;
+ *     - pipeline syntax;
+ *     - accelerator syntax;
+ *     - deployment syntax;
+ *     - reasoning syntax;
+ *     - knowledge syntax;
+ *     - uncertainty syntax;
+ *     - learning semantics;
+ *     - adaptation semantics;
+ *     - effect semantics;
+ *     - resource resolution;
+ *     - capability resolution;
+ *     - policy evaluation;
+ *     - security authorization;
+ *     - provenance semantics;
+ *     - classical IR;
+ *     - AI-specific IR;
+ *     - quantum IR;
+ *     - quantum::ir;
+ *     - HDL IR;
+ *     - routing;
  *     - scheduling;
- *     - placement;
- *     - resource allocation;
- *     - hardware discovery;
- *     - accelerator selection;
- *     - distributed execution;
- *     - quantum execution;
+ *     - resilience;
  *     - QEC;
  *     - ZQN;
  *     - HAL;
- *     - runtime behavior.
+ *     - runtime execution.
+ *
  *
  * ============================================================================
  * ARCHITECTURAL POSITION
  * ============================================================================
  *
+ * The required direction is:
+ *
  *     Zamani source
  *          |
  *          v
- *     ZamaniLexer
+ *     canonical lexer
  *          |
  *          v
  *     ZamaniParser
@@ -78,17 +125,24 @@
  *     domain-neutral frontend AST
  *          |
  *          v
+ *     structural validation
+ *          |
+ *          v
  *     semantic analysis
  *          |
- *          +--> type analysis
  *          +--> name resolution
+ *          +--> type analysis
+ *          +--> generic analysis
  *          +--> effect analysis
  *          +--> capability analysis
  *          +--> resource analysis
- *          +--> portability analysis
+ *          +--> contract analysis
+ *          +--> policy analysis
+ *          +--> provenance
+ *          +--> portability
  *          |
  *          v
- *     canonical semantic representation
+ *     canonical semantic model
  *          |
  *          +--> classical semantics
  *          +--> quantum semantics
@@ -96,107 +150,132 @@
  *          +--> distributed semantics
  *          +--> accelerator semantics
  *          |
- *          v
- *     canonical IR
- *          |
- *          v
- *     optimization
- *          |
- *          +--> routing
- *          +--> scheduling
- *          +--> resilience
- *          +--> QEC where applicable
- *          +--> ZQN where applicable
- *          |
- *          v
- *     HAL / target realization
- *          |
- *          v
- *     runtime
+ *          +-------------------------------+
+ *                                          |
+ *                                          v
+ *                               target-independent IR
+ *                                          |
+ *                          +---------------+---------------+
+ *                          |               |               |
+ *                          v               v               v
+ *                      classical       quantum::ir     HDL/hardware
+ *                          |               |               |
+ *                          +---------------+---------------+
+ *                                          |
+ *                                          v
+ *                                  optimization
+ *                                          |
+ *                                  specialization
+ *                                          |
+ *                                    lowering
+ *                                          |
+ *                              routing / scheduling
+ *                                          |
+ *                              resilience / recovery
+ *                                          |
+ *                                  ZQN / HAL
+ *                                          |
+ *                                  target realization
  *
- * This grammar MUST NOT create an IR.
  *
- * ============================================================================
- * OWNERSHIP
- * ============================================================================
+ * IMPORTANT
+ * ---------
  *
- * THIS FILE OWNS:
+ * This grammar creates no IR.
  *
- *     - model declaration syntax;
- *     - model identity;
- *     - model generic declaration parameters;
- *     - model inheritance syntax;
- *     - model interface/contract syntax;
- *     - model body structure;
- *     - model member structure;
- *     - model graph connection syntax;
- *     - model typed members;
- *     - model expression members;
- *     - model nested regions;
- *     - model annotation boundaries;
- *     - model source-level extensibility.
+ * Quantum computation remains subject to the canonical:
  *
- * THIS FILE DOES NOT OWN:
+ *     quantum::ir
  *
- *     - identifiers;
- *     - lexer rules;
- *     - operators;
- *     - literals;
- *     - expression precedence;
- *     - type syntax;
- *     - generic type application;
- *     - generic substitution;
- *     - type inference;
- *     - tensor semantics;
- *     - dataset semantics;
- *     - training semantics;
- *     - inference semantics;
- *     - agent semantics;
- *     - accelerator implementation;
- *     - hardware discovery;
- *     - resource discovery;
- *     - scheduling;
- *     - routing;
- *     - distributed placement;
- *     - quantum semantics;
- *     - QEC;
- *     - ZQN;
- *     - HAL;
- *     - runtime execution.
+ * semantic boundary.
+ *
  *
  * ============================================================================
  * SINGLE-AUTHORITY RULE
  * ============================================================================
  *
- * `grammar/ai/models.g4` is the sole canonical AI model grammar.
+ * `grammar/ai/models.g4` is the canonical source grammar for model
+ * declarations.
  *
- * `grammar/ai/model.g4` MUST NOT be imported into the production ANTLR
- * composition because it previously declared the same `AIModels` grammar
- * identity and therefore created a competing grammar authority.
+ * The repository also contains:
  *
- * The repository should retain `model.g4` only as a compatibility/deprecation
- * artifact until it is removed by the repository's normal compatibility
- * policy. It MUST NOT contain independent canonical productions.
+ *     grammar/ai/model.g4
+ *
+ * That file historically declares the same `AIModels` grammar identity.
+ *
+ * It MUST NOT participate in the canonical ANTLR composition.
+ *
+ * `grammar/ai/ai.g4` MUST import:
+ *
+ *     AIModels
+ *
+ * from this file only.
+ *
+ * `grammar/ai/model.g4` must remain a deprecated/compatibility artifact until
+ * it is removed through the repository compatibility process.
+ *
+ * It MUST NOT become a second production grammar.
+ *
  *
  * ============================================================================
  * LEXER CONTRACT
  * ============================================================================
  *
- * Parser vocabulary:
+ * This parser grammar consumes:
  *
  *     tokenVocab = ZamaniLexer;
  *
- * AI concepts are intentionally not added as dedicated lexer keywords.
+ * It defines no lexer rules.
  *
- * The canonical annotation token:
+ * Annotation syntax is NOT implemented locally.
+ *
+ * The canonical annotation system is:
+ *
+ *     grammar/core/annotations.g4
+ *
+ * whose public rule is:
+ *
+ *     annotation
+ *
+ * and whose lexical marker is:
+ *
+ *     AT
+ *
+ * Therefore this file MUST NOT use:
  *
  *     NANO_ANNOTATION
  *
- * supplies the annotation boundary.
+ * and MUST NOT define:
+ *
+ *     MODEL_ANNOTATION
+ *     INPUT_ANNOTATION
+ *     OUTPUT_ANNOTATION
+ *     COMPONENT_ANNOTATION
+ *
+ * as lexer tokens.
+ *
+ * Annotation identity is semantic.
+ *
+ *
+ * ============================================================================
+ * ANNOTATION CONTRACT
+ * ============================================================================
+ *
+ * Model declarations use the canonical annotation grammar.
  *
  * Examples:
  *
- *     @model
+ *     @model Encoder {
+ *     }
+ *
+ *     @model(name = "Encoder") Encoder {
+ *     }
+ *
+ *     @model Encoder<T> {
+ *     }
+ *
+ * Model member annotations use the same canonical annotation system:
+ *
  *     @input
  *     @output
  *     @parameter
@@ -204,49 +283,60 @@
  *     @component
  *     @layer
  *     @submodel
- *     @connect
- *     @bind
+ *     @operation
  *     @config
  *     @metadata
- *     @requires
- *     @capability
- *     @constraint
- *     @preference
- *     @operation
- *     @compose
+ *     @requires(...)
+ *     @capability(...)
+ *     @constraint(...)
+ *     @preference(...)
  *
- * The parser treats the annotation structurally.
+ * This grammar parses their structure.
  *
- * Semantic analysis determines whether the normalized annotation is a
- * registered model role.
+ * Semantic analysis determines whether an annotation is legal for the
+ * particular model or member context.
  *
- * No semantic predicate or target-language action is required.
  *
  * ============================================================================
  * TYPE CONTRACT
  * ============================================================================
  *
- * Canonical type syntax belongs to:
+ * The repository's canonical type grammar is:
  *
  *     grammar/types/types.g4
  *
- * This grammar therefore consumes:
+ * Its actual parser grammar identity is:
+ *
+ *     Type
+ *
+ * and its public type rule is:
  *
  *     typeExpression
  *
- * and never redefines it.
+ * Therefore this grammar imports:
  *
- * Model types may consequently refer to future and existing domains through
- * the canonical type system, including:
+ *     Type
  *
- *     classical types;
- *     tensor types;
- *     quantum types;
- *     hardware types;
- *     resource types;
- *     distributed types;
- *     user-defined types;
- *     future domain types.
+ * and consumes:
+ *
+ *     typeExpression
+ *
+ * It does not redefine any type constructor.
+ *
+ * Model members can therefore use:
+ *
+ *     classical types
+ *     tensor types
+ *     quantum types
+ *     hardware types
+ *     resource types
+ *     capability types
+ *     distributed types
+ *     user-defined types
+ *     future domain types
+ *
+ * without creating an AI-specific type system.
+ *
  *
  * ============================================================================
  * EXPRESSION CONTRACT
@@ -256,23 +346,31 @@
  *
  *     grammar/expressions/expressions.g4
  *
- * This grammar consumes:
+ * Public expression rule:
  *
  *     expression
- *     argumentList
  *
- * and never redefines:
+ * This file consumes `expression` and does not redefine:
  *
- *     arithmetic;
- *     calls;
- *     indexing;
- *     member access;
- *     assignment;
- *     literals;
- *     operators;
- *     lambdas;
- *     ranges;
- *     conditional expressions.
+ *     arithmetic
+ *     calls
+ *     indexing
+ *     member access
+ *     assignment
+ *     literals
+ *     lambdas
+ *     closures
+ *     ranges
+ *     conditionals
+ *     patterns
+ *     guards
+ *     queries
+ *     reasoning
+ *     uncertainty
+ *     policy expressions
+ *     quantum expressions
+ *     compile-time expressions
+ *
  *
  * ============================================================================
  * GENERIC CONTRACT
@@ -282,39 +380,1185 @@
  *
  *     grammar/functions/generics.g4
  *
- * This grammar therefore reuses:
+ * Public rule:
  *
  *     functionGenericParameters
  *
- * Model generic declarations are declaration parameters.
+ * This grammar reuses that rule for model declaration parameters.
  *
  * Generic type application remains owned by the canonical type grammar.
  *
- * Example:
+ * Therefore:
  *
  *     @model Network<T extends Numeric> {
+ *     }
+ *
+ * uses `functionGenericParameters` for declaration syntax, while:
+ *
+ *     Tensor<T>
+ *
+ * remains a type-expression concern.
+ *
+ * This distinction MUST remain intact.
+ *
+ *
+ * ============================================================================
+ * MODEL SEMANTIC IDENTITY
+ * ============================================================================
+ *
+ * The parser does not hard-code the semantic spelling of the model annotation
+ * into a lexer token.
+ *
+ * Instead:
+ *
+ *     annotation
+ *
+ * is parsed structurally.
+ *
+ * Semantic analysis recognizes the model declaration role.
+ *
+ * This permits the language to retain an extensible annotation system without
+ * creating a closed keyword catalogue for every possible model feature.
+ *
+ *
+ * ============================================================================
+ * MODEL DECLARATION
+ * ============================================================================
+ *
+ * Canonical structural form:
+ *
+ *     @model Name {
  *         ...
  *     }
  *
- * The `<T ...>` portion is a declaration generic list.
+ * Generic form:
  *
- * Example:
+ *     @model Name<T> {
+ *         ...
+ *     }
  *
- *     @input x: Tensor<T>;
+ * Inheritance form:
  *
- * The `Tensor<T>` portion is a type application.
+ *     @model Name<T> extends Base {
+ *         ...
+ *     }
  *
- * These concepts MUST remain distinct.
+ * Interface form:
+ *
+ *     @model Name implements Trainable {
+ *         ...
+ *     }
+ *
+ * Combined form:
+ *
+ *     @model Name<T>
+ *         extends Base
+ *         implements Trainable, Serializable
+ *     {
+ *         ...
+ *     }
+ *
+ * The parser preserves source ordering.
+ *
+ * Semantic analysis determines whether inheritance/interface composition is
+ * legal.
+ *
  *
  * ============================================================================
- * POCO-REAF
+ * MODEL GENERIC PARAMETERS
  * ============================================================================
  *
- * Model declarations describe portable computation.
+ * Generic arity is not language-limited.
  *
- * They MUST NOT encode universal hardware limits.
+ * Generic bounds are not language-limited.
  *
- * This grammar contains no:
+ * Examples:
+ *
+ *     <T>
+ *
+ *     <T, U>
+ *
+ *     <T extends Numeric>
+ *
+ *     <T extends Numeric + Ordered>
+ *
+ *     <T extends Numeric, U extends Serializable>
+ *
+ * The generic grammar owns the details.
+ *
+ * This file only establishes the model declaration boundary.
+ *
+ *
+ * ============================================================================
+ * INHERITANCE CONTRACT
+ * ============================================================================
+ *
+ * Model inheritance is source-level composition.
+ *
+ * It does NOT imply:
+ *
+ *     hardware inheritance
+ *     device inheritance
+ *     accelerator inheritance
+ *     physical topology inheritance
+ *     quantum topology inheritance
+ *     resource allocation
+ *
+ * Semantic analysis determines whether a referenced model is a valid parent.
+ *
+ *
+ * ============================================================================
+ * INTERFACE / CONTRACT CONTRACT
+ * ============================================================================
+ *
+ * `implements` identifies source-level interfaces/contracts.
+ *
+ * It does not itself establish:
+ *
+ *     runtime authorization
+ *     resource availability
+ *     hardware compatibility
+ *     target support
+ *
+ * Those properties are checked by semantic analysis.
+ *
+ *
+ * ============================================================================
+ * MODEL BODY CONTRACT
+ * ============================================================================
+ *
+ * A model body contains zero or more model members.
+ *
+ * Repetition is intentionally unbounded by language-level constants.
+ *
+ * There is no:
+ *
+ *     MAX_MODEL_MEMBERS
+ *     MAX_MODEL_DEPTH
+ *     MAX_MODEL_COMPONENTS
+ *     MAX_MODEL_PORTS
+ *     MAX_MODEL_CONNECTIONS
+ *
+ * Parser/compiler resource exhaustion remains an implementation concern, not
+ * a language semantic ceiling.
+ *
+ *
+ * ============================================================================
+ * MODEL MEMBER CONTRACT
+ * ============================================================================
+ *
+ * Every model-specific member begins with one canonical annotation.
+ *
+ * Structural payload then determines its syntactic form.
+ *
+ * Examples:
+ *
+ *     @input x: Tensor<Float>;
+ *
+ *     @output y: Tensor<Float>;
+ *
+ *     @parameter weights: Tensor<Float>;
+ *
+ *     @state running: Tensor<Float>;
+ *
+ *     @component encoder: Encoder;
+ *
+ *     @layer attention: Attention;
+ *
+ *     @submodel encoder: Encoder;
+ *
+ *     @operation forward = forward_function;
+ *
+ *     @config precision = "portable";
+ *
+ *     @metadata family = "transformer";
+ *
+ *     @requires capability("tensor.compute");
+ *
+ *     @capability tensor.compute;
+ *
+ *     @constraint latency <= latency_budget;
+ *
+ *     @preference accelerator.tensor;
+ *
+ *     @connect encoder.output -> classifier.input;
+ *
+ * The annotation determines semantic role.
+ *
+ * This grammar does not maintain a closed enumeration of those roles.
+ *
+ *
+ * ============================================================================
+ * MEMBER STRUCTURAL FORMS
+ * ============================================================================
+ *
+ * The payload forms are:
+ *
+ *     connection
+ *     typed declaration
+ *     nested block
+ *     expression member
+ *
+ * They are structurally distinguishable by:
+ *
+ *     ->
+ *     :
+ *     {
+ *     expression terminator
+ *
+ * respectively.
+ *
+ *
+ * ============================================================================
+ * TYPED MODEL MEMBERS
+ * ============================================================================
+ *
+ * Canonical:
+ *
+ *     @input x: Tensor<Float>;
+ *
+ *     @output result: Tensor<Float>;
+ *
+ *     @parameter weight: Tensor<Float> = initialWeight;
+ *
+ *     @state state: QuantumState;
+ *
+ *     @component encoder: Encoder;
+ *
+ *     @layer attention: Attention;
+ *
+ * A member initializer is an ordinary canonical expression.
+ *
+ * No model-specific expression language is introduced.
+ *
+ *
+ * ============================================================================
+ * NESTED MODEL MEMBERS
+ * ============================================================================
+ *
+ * Nested structural composition is supported:
+ *
+ *     @component outer {
+ *         @component inner {
+ *             @input value: Tensor<Float>;
+ *         }
+ *     }
+ *
+ * Nesting is not bounded by a language-level constant.
+ *
+ * Semantic analysis may impose implementation/resource policies where
+ * necessary, but such policies MUST NOT become universal grammar constants.
+ *
+ *
+ * ============================================================================
+ * MODEL GRAPH CONTRACT
+ * ============================================================================
+ *
+ * A model connection:
+ *
+ *     @connect encoder.output -> classifier.input;
+ *
+ * represents a SOURCE-LEVEL MODEL GRAPH EDGE.
+ *
+ * It does not represent:
+ *
+ *     network topology
+ *     hardware wiring
+ *     GPU interconnect
+ *     QPU coupling
+ *     physical route
+ *     scheduler dependency
+ *     memory-bank topology
+ *
+ * Physical realization belongs downstream.
+ *
+ *
+ * ============================================================================
+ * GRAPH ENDPOINT CONTRACT
+ * ============================================================================
+ *
+ * An endpoint is a qualified source reference:
+ *
+ *     encoder.output
+ *
+ *     encoder.block.output
+ *
+ *     classifier.input
+ *
+ * The grammar does not resolve the endpoint.
+ *
+ * Semantic analysis determines:
+ *
+ *     whether the source exists;
+ *     whether the destination exists;
+ *     whether both belong to the model;
+ *     whether the connection is legal;
+ *     whether the source type is compatible with the destination type;
+ *     whether effects/capabilities/resources are compatible;
+ *     whether the connection is portable.
+ *
+ *
+ * ============================================================================
+ * RESOURCE CONTRACT
+ * ============================================================================
+ *
+ * Model declarations may carry resource intent through ordinary model-member
+ * annotations and expressions.
+ *
+ * Examples:
+ *
+ *     @requires memory >= required_memory;
+ *
+ *     @requires qubits >= required_qubits;
+ *
+ *     @requires capability("tensor.compute");
+ *
+ *     @requires capability("quantum.measurement");
+ *
+ *     @constraint latency <= latency_budget;
+ *
+ *     @preference accelerator.tensor;
+ *
+ * These constructs express SOURCE INTENT.
+ *
+ * They do not allocate resources.
+ *
+ * They do not select:
+ *
+ *     GPU 0
+ *     CPU 3
+ *     QPU 7
+ *     device 2
+ *
+ * Capability resolution, resource analysis, placement and scheduling are
+ * downstream responsibilities.
+ *
+ *
+ * ============================================================================
+ * EFFECT CONTRACT
+ * ============================================================================
+ *
+ * Model members may refer semantically to operations that have effects.
+ *
+ * Examples include:
+ *
+ *     learning
+ *     adaptation
+ *     measurement
+ *     network
+ *     foreign
+ *     native
+ *     distributed
+ *     randomness
+ *     mutation
+ *     simulation
+ *     reflection
+ *
+ * The grammar does not validate or grant those effects.
+ *
+ * The semantic effect subsystem remains authoritative.
+ *
+ *
+ * ============================================================================
+ * CONTRACT / VALIDATION INTEGRATION
+ * ============================================================================
+ *
+ * Model members may carry annotations describing:
+ *
+ *     requires
+ *     ensures
+ *     invariant
+ *     assume
+ *     guarantee
+ *     property
+ *
+ * This grammar parses the annotation structurally.
+ *
+ * Contract semantics remain owned by:
+ *
+ *     grammar/validation/
+ *
+ * and its semantic consumers.
+ *
+ *
+ * ============================================================================
+ * POLICY INTEGRATION
+ * ============================================================================
+ *
+ * Model declarations may be subject to policies such as:
+ *
+ *     portability
+ *     security
+ *     execution
+ *     resource
+ *     adaptation
+ *     deployment
+ *     simulation
+ *
+ * Policy syntax is not duplicated here.
+ *
+ * Model annotations and expressions provide the structural bridge.
+ *
+ * Policy evaluation occurs downstream.
+ *
+ *
+ * ============================================================================
+ * PROVENANCE INTEGRATION
+ * ============================================================================
+ *
+ * The parser must preserve:
+ *
+ *     declaration span
+ *     annotation span
+ *     declaration name
+ *     generic parameter order
+ *     inheritance order
+ *     interface order
+ *     member order
+ *     endpoint order
+ *     source expression structure
+ *
+ * so that semantic provenance can record:
+ *
+ *     source
+ *     interpretation
+ *     derivation
+ *     transformation
+ *     decision
+ *     verification
+ *
+ * Provenance semantics remain outside this grammar.
+ *
+ *
+ * ============================================================================
+ * QUANTUM INTEGRATION
+ * ============================================================================
+ *
+ * A model may contain or reference quantum values through canonical types,
+ * expressions and semantic capabilities.
+ *
+ * Examples:
+ *
+ *     @input state: QuantumState;
+ *
+ *     @requires capability("quantum.measurement");
+ *
+ *     @operation measure = measure_state;
+ *
+ * This grammar does not define:
+ *
+ *     H
+ *     X
+ *     Y
+ *     Z
+ *     CNOT
+ *     physical qubits
+ *     QubitId
+ *     coupling maps
+ *     routing
+ *     scheduling
+ *     calibration
+ *     QEC
+ *     ZQN
+ *
+ * Quantum operations remain owned by the quantum subsystem.
+ *
+ * The semantic pipeline is:
+ *
+ *     model source
+ *          |
+ *          v
+ *     domain-neutral AST
+ *          |
+ *          v
+ *     semantic analysis
+ *          |
+ *          v
+ *     quantum::ir
+ *          |
+ *          v
+ *     optimization
+ *          |
+ *          v
+ *     decomposition
+ *          |
+ *          v
+ *     routing
+ *          |
+ *          v
+ *     scheduling
+ *          |
+ *          v
+ *     resilience / QEC
+ *          |
+ *          v
+ *     ZQN
+ *          |
+ *          v
+ *     HAL
+ *
+ *
+ * ============================================================================
+ * HDL / HARDWARE INTEGRATION
+ * ============================================================================
+ *
+ * Model declarations may reference:
+ *
+ *     hardware types
+ *     abstract resources
+ *     capabilities
+ *     execution requirements
+ *     hardware intent
+ *
+ * This grammar does not encode:
+ *
+ *     fixed signal widths
+ *     fixed memory sizes
+ *     fixed register widths
+ *     fixed FPGA resources
+ *     fixed ASIC technology
+ *     physical addresses
+ *     physical device IDs
+ *     physical wiring
+ *
+ * HDL/hardware realization remains downstream.
+ *
+ *
+ * ============================================================================
+ * DISTRIBUTED / CONCURRENT INTEGRATION
+ * ============================================================================
+ *
+ * Model structure can participate semantically in:
+ *
+ *     tasks
+ *     actors
+ *     pipelines
+ *     channels
+ *     distributed computation
+ *     collective operations
+ *
+ * Model syntax does not create another concurrency system.
+ *
+ * Existing concurrency/distributed grammars remain authoritative.
+ *
+ *
+ * ============================================================================
+ * AI DOMAIN INTEGRATION
+ * ============================================================================
+ *
+ * `models.g4` intentionally does not own:
+ *
+ *     datasets
+ *     tensors
+ *     training
+ *     inference
+ *     agents
+ *     differentiation
+ *     pipelines
+ *     accelerators
+ *     deployment
+ *
+ * Those remain independent AI grammar components.
+ *
+ * Their source-level constructs can reference model declarations through
+ * ordinary canonical names, types and expressions.
+ *
+ *
+ * ============================================================================
+ * DIALECT / FRAMEWORK / VENDOR CONTRACT
+ * ============================================================================
+ *
+ * The core model grammar is framework-neutral.
+ *
+ * It does not reserve syntax for:
+ *
+ *     CUDA
+ *     ROCm
+ *     TensorFlow
+ *     PyTorch
+ *     JAX
+ *     ONNX
+ *     OpenVINO
+ *     vendor-specific accelerators
+ *     cloud platforms
+ *     model-family names
+ *     runtime-specific execution systems
+ *
+ * External integrations belong to:
+ *
+ *     grammar/interoperability/
+ *     grammar/dialects/
+ *     grammar/hardware/
+ *     grammar/compile/
+ *     grammar/execution/
+ *
+ * A framework or vendor extension must not silently redefine the core model
+ * grammar.
+ *
+ *
+ * ============================================================================
+ * POCO-REAF / SCALABILITY CONTRACT
+ * ============================================================================
+ *
+ * Model syntax is independent of machine scale.
+ *
+ * The grammar imposes NO universal maximum on:
+ *
+ *     model declarations
+ *     generic parameters
+ *     generic bounds
+ *     model members
+ *     nested members
+ *     graph connections
+ *     model depth
+ *     model composition
+ *     input count
+ *     output count
+ *     parameter count
+ *     tensor rank
+ *     tensor dimensions
+ *     dataset size
+ *     workers
+ *     processors
+ *     accelerators
+ *     nodes
+ *     devices
+ *     qubits
+ *     memory
+ *     network size
+ *
+ * The following MUST NOT appear as language constants:
+ *
+ *     MAX_MODELS
+ *     MAX_MODEL_MEMBERS
+ *     MAX_MODEL_DEPTH
+ *     MAX_MODEL_COMPONENTS
+ *     MAX_MODEL_PARAMETERS
+ *     MAX_INPUTS
+ *     MAX_OUTPUTS
+ *     MAX_TENSOR_RANK
+ *     MAX_QUBITS
+ *     MAX_CPUS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_NODES
+ *     MAX_MEMORY
+ *     MAX_THREADS
+ *     MAX_REGISTER_WIDTH
+ *     MAX_NETWORK_SIZE
+ *     MAX_DEVICE_COUNT
+ *
+ * Repetition is represented with ANTLR repetition operators.
+ *
+ * Practical parser/compiler/runtime limits are implementation/resource
+ * constraints and must not become source-language ceilings.
+ *
+ *
+ * ============================================================================
+ * AST CONTRACT
+ * ============================================================================
+ *
+ * This grammar creates parser contexts only.
+ *
+ * The frontend AST remains domain-neutral.
+ *
+ * A model AST representation must preserve at least:
+ *
+ *     declaration source span
+ *     model annotation
+ *     model name
+ *     generic parameter ordering
+ *     generic parameter spans
+ *     inheritance ordering
+ *     implementation ordering
+ *     member ordering
+ *     member annotation structure
+ *     member names
+ *     member types
+ *     member initializers
+ *     nested member structure
+ *     connection endpoints
+ *     source ordering
+ *     source spans
+ *
+ * No AI-specific parallel AST is permitted merely because this grammar is in
+ * the AI directory.
+ *
+ *
+ * ============================================================================
+ * SEMANTIC CONTRACT
+ * ============================================================================
+ *
+ * Semantic analysis is responsible for:
+ *
+ *     annotation identity
+ *     annotation validity
+ *     name resolution
+ *     model resolution
+ *     generic resolution
+ *     generic bound validation
+ *     inheritance validation
+ *     interface validation
+ *     member-role validation
+ *     duplicate member validation
+ *     endpoint resolution
+ *     graph validation
+ *     type compatibility
+ *     effect analysis
+ *     capability analysis
+ *     resource analysis
+ *     contract analysis
+ *     policy analysis
+ *     portability analysis
+ *     provenance
+ *     dialect validation
+ *     lowering
+ *
+ * This parser performs none of those semantic operations.
+ *
+ *
+ * ============================================================================
+ * DETERMINISM CONTRACT
+ * ============================================================================
+ *
+ * For identical:
+ *
+ *     source token stream
+ *     grammar version
+ *     parser configuration
+ *
+ * parsing must produce equivalent parse structure.
+ *
+ * This grammar contains:
+ *
+ *     no actions
+ *     no semantic predicates
+ *     no runtime callbacks
+ *     no filesystem access
+ *     no network access
+ *     no hardware access
+ *     no environment inspection
+ *     no randomness
+ *     no scheduler interaction
+ *
+ *
+ * ============================================================================
+ * DIAGNOSTIC CONTRACT
+ * ============================================================================
+ *
+ * Parser diagnostics should identify structural failures such as:
+ *
+ *     missing model annotation
+ *     missing model name
+ *     malformed generic parameter list
+ *     malformed inheritance clause
+ *     malformed implementation clause
+ *     missing model body
+ *     malformed typed member
+ *     malformed connection
+ *     missing expression terminator
+ *     malformed nested member
+ *
+ * Semantic diagnostics belong downstream and include:
+ *
+ *     unknown model
+ *     duplicate model
+ *     duplicate member
+ *     unknown annotation
+ *     invalid annotation context
+ *     unresolved model reference
+ *     invalid inheritance
+ *     invalid implementation
+ *     incompatible endpoint types
+ *     unavailable capability
+ *     unsatisfied resource requirement
+ *     invalid policy
+ *     invalid effect
+ *     non-portable target requirement
+ *
+ *
+ * ============================================================================
+ * COMPATIBILITY CONTRACT
+ * ============================================================================
+ *
+ * Existing canonical model source forms remain structurally supported:
+ *
+ *     @model Name {
+ *     }
+ *
+ *     @model Name<T> {
+ *     }
+ *
+ *     @model Name<T extends Numeric> {
+ *     }
+ *
+ *     @model Name extends Base {
+ *     }
+ *
+ *     @model Name implements Interface {
+ *     }
+ *
+ *     @model Name {
+ *         @input value: Tensor<Float>;
+ *     }
+ *
+ *     @model Name {
+ *         @connect encoder.output -> classifier.input;
+ *     }
+ *
+ * The transition away from the obsolete `NANO_ANNOTATION` representation is
+ * a grammar-architecture correction, not a semantic expansion of the model
+ * language.
+ *
+ *
+ * ============================================================================
+ * IMPORT CONTRACT
+ * ============================================================================
+ *
+ * This grammar imports only canonical authorities needed for model syntax:
+ *
+ *     Annotations
+ *         -> canonical annotation structure
+ *
+ *     Type
+ *         -> canonical typeExpression
+ *
+ *     Expressions
+ *         -> canonical expression
+ *
+ *     FunctionGenerics
+ *         -> canonical generic declaration syntax
+ *
+ * The dependency direction is:
+ *
+ *     AIModels
+ *        |
+ *        +--> Annotations
+ *        +--> Type
+ *        +--> Expressions
+ *        +--> FunctionGenerics
+ *
+ * AIModels does not modify or redefine any imported authority.
+ *
+ *
+ * ============================================================================
+ * INTEGRATION WITH AI.G4
+ * ============================================================================
+ *
+ * `grammar/ai/ai.g4` is the AI composition facade.
+ *
+ * It imports:
+ *
+ *     AIModels
+ *
+ * and dispatches:
+ *
+ *     aiModelConstruct
+ *
+ * through:
+ *
+ *     aiConstruct
+ *
+ * `ai.g4` MUST NOT duplicate:
+ *
+ *     aiModelDeclaration
+ *     modelBody
+ *     modelMember
+ *     modelConnectionPayload
+ *
+ * or any other model production owned here.
+ *
+ *
+ * ============================================================================
+ * INTEGRATION WITH ZAMANI.G4
+ * ============================================================================
+ *
+ * The root grammar must reach the AI domain through the canonical AI
+ * composition boundary.
+ *
+ * The intended direction is:
+ *
+ *     Zamani.g4
+ *          |
+ *          v
+ *     AI
+ *          |
+ *          v
+ *     AIModels
+ *
+ * `Zamani.g4` must not duplicate model syntax.
+ *
+ *
+ * ============================================================================
+ * INTEGRATION WITH AST
+ * ============================================================================
+ *
+ * The AST layer consumes the parser contexts produced by this grammar.
+ *
+ * The model AST builder must map:
+ *
+ *     aiModelDeclaration
+ *         -> domain-neutral declaration/model node
+ *
+ *     modelMember
+ *         -> domain-neutral member/attribute node
+ *
+ *     modelConnectionPayload
+ *         -> domain-neutral graph/relationship node
+ *
+ * The AST builder must preserve source spans.
+ *
+ * No parser rule should require modification merely because a downstream
+ * target changes.
+ *
+ *
+ * ============================================================================
+ * INTEGRATION WITH SEMANTIC MODEL
+ * ============================================================================
+ *
+ * Semantic analysis consumes the AST and resolves:
+ *
+ *     annotations
+ *     names
+ *     types
+ *     generic bounds
+ *     interfaces
+ *     graph endpoints
+ *     resources
+ *     capabilities
+ *     effects
+ *     policies
+ *     contracts
+ *     provenance
+ *
+ * This grammar remains independent of those implementations.
+ *
+ *
+ * ============================================================================
+ * IR INTEGRATION
+ * ============================================================================
+ *
+ * Model declarations do not lower directly to a model-specific IR merely
+ * because they were parsed by this grammar.
+ *
+ * The semantic model determines the required canonical operations.
+ *
+ * Lowering may eventually produce:
+ *
+ *     classical semantic operations
+ *     tensor operations
+ *     distributed operations
+ *     hardware intent
+ *     quantum operations
+ *
+ * When quantum computation is involved, the canonical boundary remains:
+ *
+ *     quantum::ir
+ *
+ * This grammar MUST NOT define another quantum IR.
+ *
+ *
+ * ============================================================================
+ * RUST INTEGRATION
+ * ============================================================================
+ *
+ * This file contains no Rust actions.
+ *
+ * It requires:
+ *
+ *     Rust 1.97
+ *     Rust 1.97.1
+ *     Rust 2021
+ *
+ * in the consuming frontend/toolchain.
+ *
+ * Generated parser integration must use safe Rust only.
+ *
+ * This grammar requires no `unsafe`.
+ *
+ *
+ * ============================================================================
+ * TEST CONTRACT
+ * ============================================================================
+ *
+ * Recommended test location:
+ *
+ *     grammar/tests/ai/models/
+ *
+ *
+ * POSITIVE TESTS
+ * --------------
+ *
+ *     @model Empty {}
+ *
+ *     @model Linear {
+ *         @input x: Tensor<Float>;
+ *         @output y: Tensor<Float>;
+ *     }
+ *
+ *     @model Generic<T> {
+ *         @input x: Tensor<T>;
+ *     }
+ *
+ *     @model Bounded<T extends Numeric> {
+ *         @input x: Tensor<T>;
+ *     }
+ *
+ *     @model MultiBound<T extends Numeric + Ordered> {
+ *         @input x: Tensor<T>;
+ *     }
+ *
+ *     @model Inherited<T>
+ *         extends BaseModel
+ *     {
+ *         @input x: Tensor<T>;
+ *     }
+ *
+ *     @model Contracted
+ *         implements Trainable, Serializable
+ *     {
+ *         @input x: Tensor<Float>;
+ *     }
+ *
+ *     @model Pipeline {
+ *         @component encoder: Encoder;
+ *         @component classifier: Classifier;
+ *         @connect encoder.output -> classifier.input;
+ *     }
+ *
+ *     @model Nested {
+ *         @component outer {
+ *             @component inner {
+ *                 @input value: Tensor<Float>;
+ *             }
+ *         }
+ *     }
+ *
+ *     @model Hybrid {
+ *         @input state: QuantumState;
+ *         @output result: Tensor<Float>;
+ *         @requires(memory >= required_memory);
+ *         @requires(capability("quantum.measurement"));
+ *     }
+ *
+ *     @model Portable {
+ *         @requires(memory >= required_memory);
+ *         @requires(capability("tensor.compute"));
+ *         @constraint(latency <= latency_budget);
+ *         @preference(accelerator.tensor);
+ *     }
+ *
+ *     @model Annotated(
+ *         family = "portable",
+ *         domain = classical::numeric,
+ *     ) {
+ *         @metadata(tags = ["portable", "deterministic"]);
+ *     }
+ *
+ *
+ * ============================================================================
+ * NEGATIVE SYNTAX TESTS
+ * ============================================================================
+ *
+ *     @model
+ *
+ *     @model Name
+ *
+ *     @model Name <
+ *
+ *     @model Name {}
+ *         trailing_invalid_member_syntax
+ *
+ *     @model Name {
+ *         @input x:
+ *     }
+ *
+ *     @model Name {
+ *         @connect a ->
+ *     }
+ *
+ *     @model Name {
+ *         @input x Tensor<Float>;
+ *     }
+ *
+ *     @model Name {
+ *         @input x: ;
+ *     }
+ *
+ *
+ * ============================================================================
+ * SEMANTIC-ONLY FAILURE TESTS
+ * ============================================================================
+ *
+ * These must NOT be rejected merely by this grammar:
+ *
+ *     duplicate model names
+ *     duplicate member names
+ *     unknown model parents
+ *     unknown interfaces
+ *     invalid generic bounds
+ *     incompatible graph endpoints
+ *     unavailable capabilities
+ *     unsatisfied resource requirements
+ *     invalid policies
+ *     invalid effects
+ *     target-specific incompatibility
+ *
+ * These belong to semantic analysis.
+ *
+ *
+ * ============================================================================
+ * BOUNDARY TESTS
+ * ============================================================================
+ *
+ * Test combinations of:
+ *
+ *     model + generic
+ *     model + inheritance
+ *     model + interfaces
+ *     model + annotations
+ *     model + nested members
+ *     model + expressions
+ *     model + resources
+ *     model + capabilities
+ *     model + contracts
+ *     model + policies
+ *     model + provenance
+ *     model + classical types
+ *     model + tensor types
+ *     model + quantum types
+ *     model + hardware types
+ *     model + distributed types
+ *     model + foreign/interoperability values
+ *
+ *
+ * ============================================================================
+ * SCALABILITY TESTS
+ * ============================================================================
+ *
+ * The test suite must demonstrate that the grammar has no artificial
+ * language-level ceiling on:
+ *
+ *     model declarations
+ *     member count
+ *     generic parameter count
+ *     generic bound count
+ *     nesting
+ *     graph connections
+ *     qualified endpoint depth
+ *     expression complexity
+ *     annotation arguments
+ *
+ * Test sizes are constrained only by actual test-harness resources.
+ *
+ * Those test limits MUST NOT become grammar constants.
+ *
+ *
+ * ============================================================================
+ * HARD-CODING AUDIT
+ * ============================================================================
+ *
+ * This file contains no:
  *
  *     MAX_QUBITS
  *     MAX_CPUS
@@ -328,221 +1572,186 @@
  *     MAX_NETWORK_SIZE
  *     MAX_DEVICE_COUNT
  *     MAX_MODEL_SIZE
- *     MAX_LAYER_COUNT
+ *     MAX_MODEL_MEMBERS
+ *     MAX_MODEL_DEPTH
  *     MAX_PARAMETER_COUNT
- *     MAX_INPUT_COUNT
- *     MAX_OUTPUT_COUNT
  *
- * Nor does it enumerate:
+ * It contains no:
  *
- *     GPU 0
- *     CPU 0
- *     QPU 0
- *     FPGA 0
+ *     device identifiers
+ *     physical addresses
  *     physical qubit identifiers
+ *     vendor identifiers
+ *     accelerator identifiers
+ *     fixed topology
  *     fixed memory banks
- *     fixed accelerator counts.
  *
- * Source-level values such as:
- *
- *     1024
- *
- * remain valid program data.
- *
- * The distinction is:
- *
- *     program value
- *         !=
- *     compiler-imposed universal limit
- *
- * Practical limits belong to:
- *
- *     parser resource policy;
- *     compiler resources;
- *     runtime resources;
- *     target resources;
- *     deployment policy.
  *
  * ============================================================================
- * MODEL GRAPH CONTRACT
+ * COMPLETION CRITERIA
  * ============================================================================
  *
- * A connection:
+ * This file is DONE when:
  *
- *     @connect encoder.output -> classifier.input;
+ *     [ ] AIModels is the only canonical model grammar identity.
  *
- * represents a source-level model graph edge.
+ *     [ ] model.g4 is not part of canonical ANTLR composition.
  *
- * It does NOT represent:
+ *     [ ] Canonical ZamaniLexer is consumed.
  *
- *     - a network link;
- *     - a hardware wire;
- *     - a GPU interconnect;
- *     - a QPU coupling edge;
- *     - a physical route;
- *     - a scheduler dependency.
+ *     [ ] Canonical annotation syntax is consumed.
  *
- * Physical realization is downstream.
+ *     [ ] NANO_ANNOTATION is not used.
  *
- * ============================================================================
- * QUANTUM CONTRACT
- * ============================================================================
+ *     [ ] Canonical typeExpression is consumed.
  *
- * AI models may reference quantum semantics through:
+ *     [ ] Canonical expression is consumed.
  *
- *     canonical types;
- *     canonical expressions;
- *     model bindings;
- *     model operations;
- *     capabilities;
- *     resource requirements.
+ *     [ ] Canonical generic declaration syntax is consumed.
  *
- * This grammar MUST NOT define:
+ *     [ ] No type grammar is duplicated.
  *
- *     - quantum gates;
- *     - physical qubits;
- *     - QubitId;
- *     - topology;
- *     - routing;
- *     - scheduling;
- *     - calibration;
- *     - QEC;
- *     - ZQN.
+ *     [ ] No expression grammar is duplicated.
  *
- * Quantum semantics continue through:
+ *     [ ] No annotation grammar is duplicated.
  *
- *     semantic analysis
- *          |
- *          v
- *     quantum::ir
+ *     [ ] No identifier grammar is duplicated.
  *
- * `quantum::ir` remains the canonical quantum semantic boundary.
+ *     [ ] Model declarations have an explicit syntactic boundary.
  *
- * ============================================================================
- * HDL / HARDWARE CONTRACT
- * ============================================================================
+ *     [ ] Model members have an explicit syntactic boundary.
  *
- * Model syntax may refer to hardware-oriented types and capabilities through
- * canonical types, expressions and annotations.
+ *     [ ] Typed members are supported.
  *
- * This grammar MUST NOT encode:
+ *     [ ] Initializers are supported.
  *
- *     wire [31:0]
- *     fixed register widths
- *     fixed RAM capacity
- *     fixed VRAM capacity
- *     fixed FPGA resource counts
- *     fixed ASIC technology
- *     physical wiring
- *     device identifiers.
+ *     [ ] Nested model members are supported.
  *
- * Hardware realization belongs downstream.
+ *     [ ] Model graph edges are supported.
  *
- * ============================================================================
- * RESOURCE / CAPABILITY CONTRACT
- * ============================================================================
+ *     [ ] Inheritance is supported.
  *
- * Model declarations may express source intent such as:
+ *     [ ] Interface/contract references are supported.
  *
- *     @requires memory >= required_memory;
- *     @capability tensor.compute;
- *     @constraint latency <= latency_budget;
- *     @preference accelerator.tensor;
+ *     [ ] Generic declarations are supported.
  *
- * These are declarative source contracts.
+ *     [ ] Generic arity is not artificially bounded.
  *
- * They do not allocate hardware.
+ *     [ ] Model member count is not artificially bounded.
  *
- * They do not imply:
+ *     [ ] Model nesting is not artificially bounded.
  *
- *     use_gpu_0
- *     use_cpu_3
- *     use_qpu_7
- *     use_device_2
+ *     [ ] Graph size is not artificially bounded.
  *
- * Resource discovery, capability matching, placement and scheduling remain
- * downstream responsibilities.
+ *     [ ] Hardware capacity is not encoded.
  *
- * ============================================================================
- * AST CONTRACT
- * ============================================================================
+ *     [ ] Quantum physical topology is not encoded.
  *
- * The grammar maps to the existing domain-neutral frontend AST.
+ *     [ ] Vendor syntax is not encoded.
  *
- * It MUST NOT create an AI-specific parallel AST solely because this grammar
- * exists.
+ *     [ ] Framework syntax is not encoded.
  *
- * The AST must preserve:
+ *     [ ] No AI-specific IR is introduced.
  *
- *     - complete source span;
- *     - declaration span;
- *     - annotation span;
- *     - declaration name;
- *     - generic parameter ordering;
- *     - generic parameter spans;
- *     - inheritance/interface references;
- *     - model member ordering;
- *     - member annotation;
- *     - member name where present;
- *     - member type where present;
- *     - initializer expression where present;
- *     - connection endpoints where present;
- *     - nested member structure;
- *     - source provenance.
+ *     [ ] quantum::ir remains the canonical quantum boundary.
  *
- * Semantic classification occurs after parsing.
+ *     [ ] No Rust actions are embedded.
+ *
+ *     [ ] No semantic predicates are embedded.
+ *
+ *     [ ] No filesystem access exists.
+ *
+ *     [ ] No network access exists.
+ *
+ *     [ ] No hardware access exists.
+ *
+ *     [ ] Parsing is deterministic.
+ *
+ *     [ ] Source ordering is preserved.
+ *
+ *     [ ] Source spans can be preserved.
+ *
+ *     [ ] Positive tests exist.
+ *
+ *     [ ] Negative tests exist.
+ *
+ *     [ ] Semantic-negative tests exist.
+ *
+ *     [ ] Boundary tests exist.
+ *
+ *     [ ] Scalability tests exist.
+ *
+ *     [ ] Cross-domain tests exist.
+ *
+ *     [ ] Compatibility tests exist.
+ *
+ *     [ ] Rust 1.97 / 1.97.1 integration passes.
+ *
+ *     [ ] Safe-Rust requirements remain satisfied.
+ *
  *
  * ============================================================================
- * SEMANTIC CONTRACT
+ * FINAL ARCHITECTURAL RULE
  * ============================================================================
  *
- * Semantic analysis owns:
+ * This file defines the syntax of MODEL DECLARATIONS.
  *
- *     - recognition of @model;
- *     - model annotation validity;
- *     - member-role validation;
- *     - name resolution;
- *     - type resolution;
- *     - generic bound validation;
- *     - inheritance validation;
- *     - interface/contract validation;
- *     - duplicate-name diagnostics;
- *     - graph endpoint resolution;
- *     - graph type compatibility;
- *     - capability validation;
- *     - resource validation;
- *     - constraint validation;
- *     - preference validation;
- *     - portability analysis;
- *     - dialect validation;
- *     - model lowering.
+ * It does not define model implementation.
  *
- * The parser performs none of these semantic operations.
+ * It does not define AI algorithms.
+ *
+ * It does not define tensor execution.
+ *
+ * It does not define hardware.
+ *
+ * It does not define resources.
+ *
+ * It does not define capabilities.
+ *
+ * It does not define security authorization.
+ *
+ * It does not define policies.
+ *
+ * It does not define runtime behavior.
+ *
+ * It does not define quantum hardware.
+ *
+ * It does not define quantum topology.
+ *
+ * It does not define QEC.
+ *
+ * It does not define ZQN.
+ *
+ * It does not define HAL.
+ *
+ * It therefore remains compatible with:
+ *
+ *     tiny systems
+ *     embedded systems
+ *     CPUs
+ *     multicore systems
+ *     GPUs
+ *     FPGAs
+ *     ASICs
+ *     accelerators
+ *     quantum simulators
+ *     QPUs
+ *     heterogeneous systems
+ *     clusters
+ *     supercomputers
+ *     distributed systems
+ *     cloud systems
+ *     future computational targets
+ *
+ * without making today's hardware characteristics part of the language.
  *
  * ============================================================================
- * DETERMINISM
+ */
+
+
+/*
  * ============================================================================
- *
- * For identical:
- *
- *     source text;
- *     lexical configuration;
- *     grammar version;
- *     dialect configuration;
- *
- * the parser must produce structurally equivalent parse trees.
- *
- * This grammar contains:
- *
- *     - no actions;
- *     - no semantic predicates;
- *     - no mutable global state;
- *     - no I/O;
- *     - no hardware inspection;
- *     - no environment inspection;
- *     - no randomness;
- *     - no runtime callbacks.
- *
+ * GRAMMAR IDENTITY
  * ============================================================================
  */
 
@@ -552,56 +1761,52 @@ options {
     tokenVocab = ZamaniLexer;
 }
 
-import Types,
-       Expressions,
-       FunctionGenerics;
 
-
-/* ============================================================================
- * PUBLIC ENTRY POINT
+/*
+ * ============================================================================
+ * CANONICAL IMPORTS
  * ============================================================================
  *
- * Only an explicit model declaration crosses this boundary.
+ * IMPORTANT:
  *
- * Ordinary expressions are NOT model constructs.
+ * `Type` is the actual canonical parser grammar identity of
+ * grammar/types/types.g4.
  *
- * This is important for deterministic composition with the wider AI grammar.
- * ============================================================================
+ * Do not replace it with `Types`.
  */
+import
+    Annotations,
+    Type,
+    Expressions,
+    FunctionGenerics
+;
 
+
+/*
+ * ============================================================================
+ * PUBLIC MODEL COMPOSITION ENTRY
+ * ============================================================================
+ *
+ * This is the only public AI model-domain entry point.
+ */
 aiModelConstruct
     : aiModelDeclaration
     ;
 
 
-/* ============================================================================
+/*
+ * ============================================================================
  * MODEL DECLARATION
  * ============================================================================
  *
- * Canonical forms:
+ * The annotation itself is canonical annotation syntax.
  *
- *     @model MyModel {
- *     }
- *
- *     @model MyModel<T> {
- *     }
- *
- *     @model MyModel<T extends Numeric> {
- *     }
- *
- *     @model MyModel<T> extends BaseModel {
- *     }
- *
- *     @model MyModel<T> implements Trainable {
- *     }
- *
- * The exact semantic interpretation of the annotation is owned downstream.
- * ============================================================================
+ * Semantic analysis determines that the annotation identifies a model
+ * declaration.
  */
-
 aiModelDeclaration
     : modelAnnotation
-      identifier
+      IDENTIFIER
       modelGenericParameters?
       modelExtendsClause?
       modelImplementsClause*
@@ -609,49 +1814,52 @@ aiModelDeclaration
     ;
 
 
-/* ============================================================================
+/*
+ * ============================================================================
  * MODEL ANNOTATION
  * ============================================================================
  *
- * NANO_ANNOTATION contains the annotation spelling.
+ * Canonical annotation syntax is owned by grammar/core/annotations.g4.
  *
- * Semantic analysis must validate that this is the model declaration role.
+ * The semantic layer must validate that the annotation is appropriate for a
+ * model declaration.
  *
- * The parser deliberately does not inspect annotation text.
- * ============================================================================
+ * This intentionally permits annotation arguments without creating a second
+ * annotation grammar.
  */
-
 modelAnnotation
-    : NANO_ANNOTATION
+    : annotation
     ;
 
 
-/* ============================================================================
- * MODEL GENERICS
+/*
+ * ============================================================================
+ * MODEL GENERIC PARAMETERS
  * ============================================================================
  *
- * Declaration generics are reused from the repository's canonical generic
- * grammar.
- * ============================================================================
+ * Declaration generic syntax is owned by FunctionGenerics.
  */
-
 modelGenericParameters
     : functionGenericParameters
     ;
 
 
-/* ============================================================================
+/*
+ * ============================================================================
  * MODEL INHERITANCE
  * ============================================================================
+ *
+ * Inheritance uses the canonical language keyword and canonical qualified-name
+ * structure supplied through the imported name/annotation grammar.
  */
-
 modelExtendsClause
     : EXTENDS
       modelQualifiedNameList
     ;
 
 
-/* ============================================================================
+/*
+ * ============================================================================
  * MODEL IMPLEMENTATION / INTERFACE CONTRACTS
  * ============================================================================
  */
@@ -663,29 +1871,18 @@ modelImplementsClause
 
 
 modelQualifiedNameList
-    : modelQualifiedName
+    : qualifiedName
       (
           COMMA
-          modelQualifiedName
+          qualifiedName
       )*
       COMMA?
     ;
 
 
-modelQualifiedName
-    : identifier
-      (
-          DOUBLE_COLON
-          identifier
-      )*
-    ;
-
-
-/* ============================================================================
- * MODEL BODY
+/*
  * ============================================================================
- *
- * The body is intentionally unbounded by language-level cardinality.
+ * MODEL BODY
  * ============================================================================
  */
 
@@ -696,57 +1893,36 @@ modelBody
     ;
 
 
-/* ============================================================================
+/*
+ * ============================================================================
  * MODEL MEMBER
  * ============================================================================
  *
- * Every model-specific member begins with the generic annotation boundary.
+ * Every model-specific member begins with exactly one canonical annotation.
  *
- * Structural payload determines parsing.
- * Annotation spelling determines semantic role.
+ * Example:
  *
- * This gives Zamani future extensibility without adding an ever-growing list
- * of AI lexer keywords.
- * ============================================================================
+ *     @input x: Tensor<Float>;
+ *
+ *     @component encoder {
+ *         ...
+ *     }
  */
-
 modelMember
-    : NANO_ANNOTATION
+    : annotation
       modelMemberPayload
     ;
 
 
-/* ============================================================================
+/*
+ * ============================================================================
  * MODEL MEMBER PAYLOAD
  * ============================================================================
  *
- * The alternatives are structurally distinguished:
+ * Structural alternatives are deliberately kept small.
  *
- *     connection -> ARROW
- *     typed member -> COLON
- *     block member -> LBRACE
- *     general member -> expression
- *
- * Invocation syntax is intentionally handled by the canonical expression
- * grammar rather than duplicated here.
- *
- * For example:
- *
- *     @operation forward(x);
- *
- * is represented by the general expression payload.
- *
- * This avoids ambiguity between:
- *
- *     identifier(argument-list)
- *
- * and:
- *
- *     expression
- *
- * ============================================================================
+ * Domain meaning comes from the annotation and semantic analysis.
  */
-
 modelMemberPayload
     : modelConnectionPayload
     | modelTypedMemberPayload
@@ -755,17 +1931,15 @@ modelMemberPayload
     ;
 
 
-/* ============================================================================
- * CONNECTION
+/*
+ * ============================================================================
+ * MODEL CONNECTION
  * ============================================================================
  *
  * Example:
  *
  *     @connect encoder.output -> classifier.input;
- *
- * ============================================================================
  */
-
 modelConnectionPayload
     : modelEndpoint
       ARROW
@@ -780,34 +1954,33 @@ modelEndpoint
 
 
 modelQualifiedReference
-    : identifier
+    : IDENTIFIER
       (
           DOT
-          identifier
+          IDENTIFIER
       )*
     ;
 
 
-/* ============================================================================
- * TYPED MEMBER
+/*
+ * ============================================================================
+ * MODEL TYPED MEMBER
  * ============================================================================
  *
  * Examples:
  *
- *     @input features: Tensor<Float>;
- *     @output result: Tensor<Float>;
- *     @parameter weights: Tensor<Float>;
- *     @state running_mean: Tensor<Float>;
- *     @component encoder: Encoder;
- *     @layer attention: Attention;
- *     @submodel encoder: EncoderModel;
+ *     @input x: Tensor<Float>;
  *
- * The annotation determines the semantic role.
- * ============================================================================
+ *     @output y: Tensor<Float>;
+ *
+ *     @component encoder: Encoder;
+ *
+ *     @state state: QuantumState;
+ *
+ *     @parameter weights: Tensor<Float> = initialWeights;
  */
-
 modelTypedMemberPayload
-    : identifier
+    : IDENTIFIER
       COLON
       typeExpression
       modelMemberInitializer?
@@ -821,8 +1994,9 @@ modelMemberInitializer
     ;
 
 
-/* ============================================================================
- * BLOCK MEMBER
+/*
+ * ============================================================================
+ * MODEL BLOCK MEMBER
  * ============================================================================
  *
  * Examples:
@@ -839,77 +2013,73 @@ modelMemberInitializer
  *         ...
  *     }
  *
- * Nested model members remain structurally recursive and are not bounded by
- * a language-level depth constant.
- * ============================================================================
+ * Nested model regions are structurally recursive and are not bounded by a
+ * language-level nesting constant.
  */
-
 modelBlockMemberPayload
-    : identifier
+    : IDENTIFIER
       modelBody
     ;
 
 
-/* ============================================================================
- * GENERAL EXPRESSION MEMBER
+/*
  * ============================================================================
- *
- * This is the extensibility boundary.
+ * MODEL EXPRESSION MEMBER
+ * ============================================================================
  *
  * Examples:
  *
- *     @bind activation = relu;
- *     @config precision = "bf16";
- *     @metadata family = "transformer";
  *     @operation forward = forward_function;
- *     @compose classifier = compose(encoder, head);
- *     @requires memory >= required_memory;
- *     @capability tensor.compute;
+ *
+ *     @bind activation = relu;
+ *
+ *     @config precision = "portable";
+ *
+ *     @metadata family = "transformer";
+ *
+ *     @requires capability("tensor.compute");
+ *
  *     @constraint latency <= latency_budget;
+ *
  *     @preference accelerator.tensor;
  *
- * Semantic interpretation belongs downstream.
- * ============================================================================
+ * The expression itself remains owned by Expressions.
  */
-
 modelExpressionMemberPayload
     : expression
       SEMICOLON
     ;
 
 
-/* ============================================================================
- * MODEL PORT BRIDGE
+/*
+ * ============================================================================
+ * REUSABLE MODEL PORT
  * ============================================================================
  *
- * A reusable model port representation.
+ * This rule is a structural bridge for downstream model-oriented grammars.
  *
- * This rule is intentionally not a second port grammar.
- *
- * The surrounding annotation supplies the semantic role.
- * ============================================================================
+ * It deliberately does not introduce a second port type system.
  */
-
 modelPort
-    : identifier
+    : IDENTIFIER
       COLON
       typeExpression
       modelMemberInitializer?
     ;
 
 
-/* ============================================================================
- * MODEL REFERENCES
+/*
+ * ============================================================================
+ * MODEL REFERENCE
  * ============================================================================
  *
- * Model references are ordinary source references.
+ * These are structural bridge rules for consumers that need an explicit model
+ * reference boundary.
  *
- * They are NOT public model constructs.
- * ============================================================================
+ * They do not create another reference system.
  */
-
 modelReference
-    : modelQualifiedReference
+    : qualifiedName
     ;
 
 
@@ -923,6 +2093,15 @@ modelExpression
     ;
 
 
+/*
+ * ============================================================================
+ * MODEL CONFIGURATION / METADATA BRIDGES
+ * ============================================================================
+ *
+ * These rules are intentionally ordinary expressions.
+ *
+ * They do not create an AI-specific value language.
+ */
 modelConfigurationValue
     : expression
     ;
@@ -933,79 +2112,88 @@ modelMetadataValue
     ;
 
 
-/* ============================================================================
- * SEMANTIC CONTRACT BRIDGES
+/*
+ * ============================================================================
+ * MODEL RESOURCE / CAPABILITY / CONSTRAINT / PREFERENCE BRIDGES
  * ============================================================================
  *
- * These rules provide stable names for semantic consumers without creating
- * duplicate resource/capability/constraint grammars.
- * ============================================================================
+ * These rules are semantic integration boundaries.
+ *
+ * They intentionally do not duplicate:
+ *
+ *     resources/*
+ *     capabilities/*
+ *     validation/*
+ *     policies/*
+ *
+ * They merely provide stable model-oriented parser entry points for downstream
+ * composition where required.
  */
-
 modelRequirement
-    : NANO_ANNOTATION
+    : annotation
       expression
       SEMICOLON
     ;
 
 
 modelCapability
-    : NANO_ANNOTATION
+    : annotation
       expression
       SEMICOLON
     ;
 
 
 modelConstraint
-    : NANO_ANNOTATION
+    : annotation
       expression
       SEMICOLON
     ;
 
 
 modelPreference
-    : NANO_ANNOTATION
+    : annotation
       expression
       SEMICOLON
     ;
 
 
-/* ============================================================================
+/*
+ * ============================================================================
  * MODEL OPERATION BRIDGE
  * ============================================================================
  *
- * The operation body/value is deliberately represented by the canonical
- * expression grammar.
+ * Operation implementation syntax remains an ordinary expression.
  *
- * Algorithm names are semantic/library concepts rather than grammar keywords.
- * ============================================================================
+ * Algorithm names remain semantic/library concepts rather than parser-level
+ * keyword inventories.
  */
-
 modelOperation
-    : NANO_ANNOTATION
-      identifier
+    : annotation
+      IDENTIFIER
       ASSIGN
       expression
       SEMICOLON
     ;
 
 
-/* ============================================================================
+/*
+ * ============================================================================
  * MODEL COMPOSITION BRIDGE
  * ============================================================================
  */
 
 modelComposition
-    : NANO_ANNOTATION
-      identifier
+    : annotation
+      IDENTIFIER
       ASSIGN
       expression
       SEMICOLON
     ;
 
 
-/* ============================================================================
- * RESOURCE / CAPABILITY / CONSTRAINT / PORTABILITY EXPRESSION BRIDGES
+/*
+ * ============================================================================
+ * RESOURCE / CAPABILITY / PORTABILITY EXPRESSION BRIDGES
  * ============================================================================
  */
 
@@ -1029,20 +2217,17 @@ modelPortabilityExpression
     ;
 
 
-/* ============================================================================
+/*
+ * ============================================================================
  * EXTENSION BOUNDARY
  * ============================================================================
  *
- * Future AI dialects may reuse the existing structural model-member forms.
+ * Future model-domain extensions may reuse these structural forms.
  *
- * They MUST register semantic meaning separately.
- *
- * They MUST NOT silently change the meaning of an existing annotation.
- * ============================================================================
+ * They must register their semantic meaning outside this grammar.
  */
-
 modelExtensionMember
-    : NANO_ANNOTATION
+    : annotation
       modelExtensionPayload
     ;
 
@@ -1055,229 +2240,378 @@ modelExtensionPayload
     ;
 
 
-/* ============================================================================
- * COMPLETION CONTRACT
+/*
+ * ============================================================================
+ * INTEGRATION CHECKLIST
  * ============================================================================
  *
- * This grammar is complete when:
- *
- *     [x] models.g4 remains the canonical model grammar filename.
- *     [x] AIModels is the sole canonical model grammar identity.
- *     [x] ZamaniLexer is the parser-facing vocabulary.
- *     [x] Types is the canonical type authority.
- *     [x] Expressions is the canonical expression authority.
- *     [x] FunctionGenerics is the canonical declaration-generic authority.
- *     [x] No duplicate type grammar exists here.
- *     [x] No duplicate expression grammar exists here.
- *     [x] No duplicate lexer rules exist here.
- *     [x] Model declarations have an explicit syntactic boundary.
- *     [x] Model members have an explicit syntactic boundary.
- *     [x] Model graph edges are structurally represented.
- *     [x] Nested model regions are supported.
- *     [x] Model generic arity is not artificially bounded.
- *     [x] Model member count is not artificially bounded.
- *     [x] Model nesting is not artificially bounded.
- *     [x] Model graph size is not artificially bounded.
- *     [x] No hardware limits are encoded.
- *     [x] No device identifiers are encoded.
- *     [x] No vendor is encoded.
- *     [x] No AI framework is encoded.
- *     [x] No quantum gate list is encoded.
- *     [x] No physical quantum resources are encoded.
- *     [x] quantum::ir remains downstream and canonical.
- *     [x] No AI-specific parallel IR is introduced.
- *     [x] No Rust actions are embedded.
- *     [x] No unsafe Rust is required.
- *     [x] Source order can be preserved.
- *     [x] Source spans can be preserved.
- *     [x] Semantic interpretation remains downstream.
- *
- * ============================================================================
- * TEST CONTRACT
- * ============================================================================
- *
- * Positive syntax:
- *
- *     @model Empty {}
- *
- *     @model Linear {
- *         @input x: Tensor<Float>;
- *         @output y: Tensor<Float>;
- *     }
- *
- *     @model Network<T extends Numeric> {
- *         @input x: Tensor<T>;
- *         @output y: Tensor<T>;
- *     }
- *
- *     @model Pipeline {
- *         @component encoder: Encoder;
- *         @component classifier: Classifier;
- *         @connect encoder.output -> classifier.input;
- *     }
- *
- *     @model Hybrid {
- *         @input state: QuantumState;
- *         @output result: Tensor<Float>;
- *         @requires memory >= required_memory;
- *         @capability quantum.measurement;
- *     }
- *
- *     @model Portable {
- *         @requires qubits >= required_qubits;
- *         @requires memory >= required_memory;
- *         @capability tensor.compute;
- *         @constraint latency <= latency_budget;
- *         @preference accelerator.tensor;
- *     }
- *
- *     @model Nested {
- *         @component outer {
- *             @component inner {
- *                 @input value: Tensor<Float>;
- *             }
- *         }
- *     }
- *
- * Negative syntax:
- *
- *     @model
- *
- *     @model Name
- *
- *     @model Name <
- *
- *     @model Name<T,> // accepted only if FunctionGenerics accepts trailing comma
- *                     // according to its canonical contract
- *
- *     @model Name {
- *         @input x:
- *     }
- *
- *     @model Name {
- *         @connect a ->
- *     }
- *
- *     @model Name {
- *         @input x Tensor<Float>;
- *     }
- *
- * Semantic-only failures, which MUST remain outside this grammar:
- *
- *     duplicate member names;
- *     unknown model references;
- *     unknown generic bounds;
- *     incompatible graph endpoints;
- *     unsatisfied resources;
- *     unavailable capabilities;
- *     invalid portability requirements;
- *     invalid framework/dialect registrations.
- *
- * ============================================================================
- * SCALABILITY TEST CONTRACT
- * ============================================================================
- *
- * Tests MUST demonstrate that the grammar imposes no artificial language
- * ceiling on:
- *
- *     - model members;
- *     - nested model members;
- *     - generic parameters;
- *     - generic bounds;
- *     - graph connections;
- *     - model declarations;
- *     - expression complexity.
- *
- * Tests may use progressively larger generated programs subject only to the
- * actual parser/compiler test harness resources.
- *
- * ============================================================================
- * INTEGRATION CONTRACT
- * ============================================================================
- *
- * UPSTREAM:
+ * UPSTREAM
+ * --------
  *
  *     grammar/antlr/ZamaniLexer.g4
- *              |
- *              v
- *         tokenVocab
- *              |
- *              v
- *           AIModels
+ *          |
+ *          v
+ *     tokenVocab = ZamaniLexer
+ *          |
+ *          v
+ *     AIModels
+ *
+ *     grammar/core/annotations.g4
+ *          |
+ *          v
+ *     annotation
  *
  *     grammar/types/types.g4
- *              |
- *              v
- *       typeExpression
+ *          |
+ *          v
+ *     Type
+ *          |
+ *          v
+ *     typeExpression
  *
  *     grammar/expressions/expressions.g4
- *              |
- *              v
- *          expression
+ *          |
+ *          v
+ *     expression
  *
  *     grammar/functions/generics.g4
- *              |
- *              v
- *    functionGenericParameters
+ *          |
+ *          v
+ *     functionGenericParameters
  *
- * DOWNSTREAM:
+ *
+ * DOWNSTREAM
+ * ----------
  *
  *     AIModels
- *         |
- *         v
+ *          |
+ *          v
  *     frontend AST
- *         |
- *         v
+ *          |
+ *          v
  *     structural validation
- *         |
- *         v
- *     semantic model analysis
- *         |
- *         +--> types
- *         +--> effects
- *         +--> resources
- *         +--> capabilities
- *         +--> portability
- *         +--> AI semantics
- *         |
- *         v
- *     canonical semantic model
- *         |
- *         +--> classical lowering
- *         +--> quantum lowering
- *         +--> HDL/hardware lowering
- *         +--> distributed lowering
- *         +--> accelerator lowering
- *         |
- *         v
- *     canonical IR
- *
- * QUANTUM:
- *
- *     AI model
  *          |
  *          v
- *     semantic quantum operation
+ *     semantic model
+ *          |
+ *          +--> type analysis
+ *          +--> generic analysis
+ *          +--> effects
+ *          +--> capabilities
+ *          +--> resources
+ *          +--> contracts
+ *          +--> policies
+ *          +--> provenance
+ *          +--> portability
  *          |
  *          v
- *     quantum::ir
- *
- * This grammar does not introduce another quantum representation.
- *
- * HARDWARE:
- *
- *     AI model
+ *     canonical semantic representation
+ *          |
+ *          +--> classical
+ *          +--> quantum::ir
+ *          +--> HDL/hardware
+ *          +--> distributed
+ *          +--> accelerator
  *          |
  *          v
- *     capability/resource semantics
+ *     target-independent optimization
  *          |
  *          v
- *     hardware/resource analysis
+ *     lowering
+ *          |
+ *          v
+ *     routing / scheduling
+ *          |
+ *          v
+ *     resilience / recovery
+ *          |
+ *          v
+ *     ZQN / HAL
  *          |
  *          v
  *     target realization
  *
- * The model grammar remains target-independent.
+ *
+ * ============================================================================
+ * AI.G4 INTEGRATION
+ * ============================================================================
+ *
+ * grammar/ai/ai.g4 must:
+ *
+ *     import AIModels
+ *
+ * and dispatch:
+ *
+ *     aiModelConstruct
+ *
+ * through:
+ *
+ *     aiConstruct
+ *
+ * It must not duplicate any model production.
+ *
+ *
+ * ============================================================================
+ * ROOT GRAMMAR INTEGRATION
+ * ============================================================================
+ *
+ * The canonical root composition must reach AI through AI.g4.
+ *
+ * No root grammar should independently reproduce:
+ *
+ *     aiModelDeclaration
+ *     modelMember
+ *     modelBody
+ *     modelConnectionPayload
+ *
+ *
+ * ============================================================================
+ * LEGACY FILE INTEGRATION
+ * ============================================================================
+ *
+ * grammar/ai/model.g4
+ *
+ * is NOT a canonical source.
+ *
+ * It must not be imported by:
+ *
+ *     ai.g4
+ *     Zamani.g4
+ *     any production AI composition root
+ *
+ * until it is converted into a distinct compatibility façade or removed.
+ *
+ *
+ * ============================================================================
+ * AST INTEGRATION
+ * ============================================================================
+ *
+ * The AST builder must consume the parser contexts from this grammar and map
+ * them into the existing domain-neutral AST.
+ *
+ * No AI-specific universal AST is introduced.
+ *
+ * The AST must preserve:
+ *
+ *     source spans
+ *     source ordering
+ *     annotation structure
+ *     model name
+ *     generic parameters
+ *     inheritance
+ *     interfaces
+ *     member structure
+ *     endpoints
+ *     types
+ *     expressions
+ *
+ *
+ * ============================================================================
+ * SEMANTIC INTEGRATION
+ * ============================================================================
+ *
+ * Semantic analysis must resolve:
+ *
+ *     model annotation identity
+ *     names
+ *     generic parameters
+ *     generic bounds
+ *     model inheritance
+ *     interface contracts
+ *     member roles
+ *     member names
+ *     graph endpoints
+ *     graph type compatibility
+ *     resources
+ *     capabilities
+ *     effects
+ *     policies
+ *     contracts
+ *     provenance
+ *     portability
+ *
+ *
+ * ============================================================================
+ * IR INTEGRATION
+ * ============================================================================
+ *
+ * No AI-specific IR is defined here.
+ *
+ * A model can semantically lower to canonical operations for:
+ *
+ *     classical execution
+ *     tensor execution
+ *     accelerator execution
+ *     distributed execution
+ *     hardware intent
+ *     quantum execution
+ *
+ * Quantum operations MUST continue through:
+ *
+ *     quantum::ir
+ *
+ * as the canonical quantum semantic boundary.
+ *
+ *
+ * ============================================================================
+ * TEST INTEGRATION
+ * ============================================================================
+ *
+ * Recommended location:
+ *
+ *     grammar/tests/ai/models/
+ *
+ * Required categories:
+ *
+ *     positive
+ *     negative
+ *     semantic-negative
+ *     boundary
+ *     scalability
+ *     determinism
+ *     compatibility
+ *     cross-domain
+ *     source-span preservation
+ *
+ *
+ * ============================================================================
+ * HARD-CODING AUDIT
+ * ============================================================================
+ *
+ * No machine-capacity constants occur in this grammar.
+ *
+ * No fixed:
+ *
+ *     CPU count
+ *     GPU count
+ *     FPGA count
+ *     ASIC count
+ *     QPU count
+ *     node count
+ *     device count
+ *     memory capacity
+ *     register width
+ *     network size
+ *     tensor rank
+ *     model depth
+ *     parameter count
+ *
+ * are encoded.
+ *
+ *
+ * ============================================================================
+ * COMPLETION CRITERIA
+ * ============================================================================
+ *
+ * `models.g4` is complete when:
+ *
+ *     [ ] AIModels is the sole canonical model grammar identity.
+ *
+ *     [ ] Canonical ZamaniLexer is consumed.
+ *
+ *     [ ] Canonical annotation grammar is consumed.
+ *
+ *     [ ] NANO_ANNOTATION is absent.
+ *
+ *     [ ] Canonical Type grammar is consumed.
+ *
+ *     [ ] Canonical expression grammar is consumed.
+ *
+ *     [ ] Canonical generic declaration grammar is consumed.
+ *
+ *     [ ] No annotation syntax is duplicated.
+ *
+ *     [ ] No type syntax is duplicated.
+ *
+ *     [ ] No expression syntax is duplicated.
+ *
+ *     [ ] No lexer rules are defined.
+ *
+ *     [ ] Model declaration syntax is explicit.
+ *
+ *     [ ] Model members are structurally extensible.
+ *
+ *     [ ] Typed members are supported.
+ *
+ *     [ ] Nested members are supported.
+ *
+ *     [ ] Graph connections are supported.
+ *
+ *     [ ] Generic parameters are supported.
+ *
+ *     [ ] Inheritance is supported.
+ *
+ *     [ ] Interface/contract references are supported.
+ *
+ *     [ ] Annotation arguments remain supported through the canonical
+ *         annotation grammar.
+ *
+ *     [ ] Model graph size is not artificially bounded.
+ *
+ *     [ ] Model nesting is not artificially bounded.
+ *
+ *     [ ] Generic arity is not artificially bounded.
+ *
+ *     [ ] No hardware capacity is encoded.
+ *
+ *     [ ] No device identity is encoded.
+ *
+ *     [ ] No vendor is encoded.
+ *
+ *     [ ] No framework is encoded.
+ *
+ *     [ ] No AI-specific IR is created.
+ *
+ *     [ ] quantum::ir remains canonical.
+ *
+ *     [ ] No Rust actions exist.
+ *
+ *     [ ] No semantic predicates exist.
+ *
+ *     [ ] No filesystem/network/hardware access exists.
+ *
+ *     [ ] Rust 1.97 / 1.97.1 integration succeeds.
+ *
+ *     [ ] Safe-Rust-only policy remains satisfied.
+ *
+ *     [ ] Positive tests pass.
+ *
+ *     [ ] Negative tests pass.
+ *
+ *     [ ] Boundary tests pass.
+ *
+ *     [ ] Scalability tests pass.
+ *
+ *     [ ] Determinism tests pass.
+ *
+ *     [ ] Compatibility tests pass.
+ *
+ *     [ ] Cross-domain tests pass.
+ *
+ *
+ * ============================================================================
+ * FINAL INVARIANT
+ * ============================================================================
+ *
+ * A model declaration describes portable SOURCE INTENT.
+ *
+ * It does not describe a particular machine.
+ *
+ * It does not select a particular device.
+ *
+ * It does not allocate resources.
+ *
+ * It does not select a backend.
+ *
+ * It does not define quantum physical realization.
+ *
+ * It does not define HDL physical realization.
+ *
+ * It does not define runtime execution.
+ *
+ * Therefore the same model source can remain semantically stable while
+ * downstream compilation determines an appropriate realization for the
+ * available resources, capabilities and target characteristics.
  *
  * ============================================================================
  */
