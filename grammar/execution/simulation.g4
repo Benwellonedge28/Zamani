@@ -4,59 +4,49 @@
  * ============================================================================
  *
  * File:
- *     grammar/expressions/simulation.g4
+ *     grammar/execution/simulation.g4
  *
  * Grammar:
  *     SimulationExpressions
  *
  * Status:
- *     PRODUCTION-READY MODULAR EXPRESSION GRAMMAR
+ *     PRODUCTION-READY
  *
  * Implementation baseline:
  *     Rust 1.97+
  *     Rust 2021
- *     Safe Rust only
+ *     Safe Rust implementation
  *
  * ============================================================================
  * PURPOSE
  * ============================================================================
  *
- * This file owns the EXPRESSION form of simulation.
+ * This file owns the EXPRESSION form of source-level simulation intent.
  *
- * It provides a composable source-level simulation expression that can be used
- * wherever a normal Zamani expression is permitted.
+ * It allows simulation to be used anywhere a normal Zamani expression is
+ * permitted.
  *
- * Examples:
+ * Canonical forms:
  *
- *     simulate model
+ *     simulate target
+ *     simulate target from source
+ *     simulate target with (option)
+ *     simulate target from source with (option, option)
  *
- *     simulate model with (scenario)
+ * Simulation is an execution/analysis strategy.
  *
- *     simulate model from source
+ * This grammar does NOT implement:
  *
- *     simulate model from source with (policy, configuration)
- *
- *     simulate quantum_program
- *
- *     simulate hardware_model
- *
- *     simulate ai_model(input)
- *
- *     simulate circuit with (noise_model, execution_policy)
- *
- * Simulation is an EXECUTION / ANALYSIS STRATEGY.
- *
- * It is NOT:
- *
- *     - a second programming language;
- *     - a simulator implementation;
- *     - a classical-only feature;
- *     - a quantum-only feature;
- *     - an HDL-only feature;
- *     - a hardware-specific feature;
- *     - a vendor API;
- *     - a runtime implementation;
- *     - an IR.
+ *     - a simulator;
+ *     - a numerical solver;
+ *     - a quantum simulator;
+ *     - an HDL simulator;
+ *     - an AI runtime;
+ *     - a hardware model;
+ *     - an execution engine;
+ *     - an IR;
+ *     - target selection;
+ *     - resource allocation.
  *
  * ============================================================================
  * ARCHITECTURAL POSITION
@@ -71,9 +61,10 @@
  *     canonical parser
  *          |
  *          v
- *     Expressions
+ *     expression composition
  *          |
- *          +--> simulationExpression
+ *          v
+ *     simulationExpression
  *          |
  *          v
  *     domain-neutral AST
@@ -84,35 +75,30 @@
  *          v
  *     semantic analysis
  *          |
- *          +----------------------+-----------------------+
- *          |                      |                       |
- *          v                      v                       v
- *     classical              quantum                 HDL/hardware
- *     semantics              semantics               semantics
- *                              |
- *                              v
- *                         quantum::ir
- *          |                      |                       |
- *          +----------------------+-----------------------+
- *                                 |
- *                                 v
- *                       canonical semantic model
- *                                 |
- *                       optimization / lowering
- *                                 |
- *                       routing / scheduling
- *                                 |
- *                       resilience / recovery
- *                                 |
- *                       QEC where applicable
- *                                 |
- *                                ZQN
- *                                 |
- *                                HAL
- *                                 |
- *                         target realization
- *
- * This file does NOT create any IR.
+ *     +----+----------+-------------+-------------+
+ *     |               |             |             |
+ *     v               v             v             v
+ * classical        quantum        HDL          hybrid
+ *     |               |             |             |
+ *     |               v             |             |
+ *     |          quantum::ir        |             |
+ *     +---------------+-------------+-------------+
+ *                     |
+ *                     v
+ *              canonical semantic IR
+ *                     |
+ *              optimization
+ *                     |
+ *              lowering
+ *                     |
+ *              routing/scheduling
+ *                     |
+ *              resilience/recovery
+ *                     |
+ *                 ZQN / HAL
+ *                     |
+ *                     v
+ *              target realization
  *
  * ============================================================================
  * OWNERSHIP
@@ -132,78 +118,67 @@
  * THIS FILE DOES NOT OWN:
  *
  *     expression
- *     assignmentExpression
+ *     assignment precedence
  *     conditional precedence
- *     range precedence
- *     logical precedence
  *     arithmetic precedence
+ *     logical precedence
  *     unary precedence
  *     postfix precedence
+ *     identifiers
+ *     names
+ *     literals
  *     calls
  *     indexing
  *     member access
- *     literals
- *     identifiers
- *     names
  *     types
- *     statements
  *     declarations
+ *     statements
  *     simulation statement bodies
- *     simulation blocks
  *     simulation algorithms
- *     numerical solvers
- *     event engines
- *     waveform engines
- *     quantum simulators
- *     HDL simulators
- *     hardware models
- *     AI model runtimes
+ *     simulation engines
+ *     numerical methods
+ *     quantum state simulation
+ *     HDL simulation implementation
+ *     AI model execution
+ *     hardware realization
+ *     target discovery
+ *     capability resolution
  *     resource allocation
- *     target selection
- *     capability discovery
  *     scheduling
  *     routing
+ *     resilience
  *     QEC
  *     ZQN
  *     HAL
- *     runtime execution
  *     AST implementation
  *     semantic implementation
  *     IR implementation
  *
  * ============================================================================
- * CRITICAL SINGLE-AUTHORITY RULE
+ * SINGLE-AUTHORITY RULE
  * ============================================================================
  *
- * There are two intentionally different simulation surfaces:
+ * There are two different simulation surfaces.
  *
- *     grammar/expressions/simulation.g4
- *         |
- *         +--> expression-level simulation
+ * Expression:
  *
- *     grammar/statements/simulate.g4
- *         |
- *         +--> statement-level structured simulation
+ *     grammar/execution/simulation.g4
  *
- * They MUST NOT become competing implementations.
- *
- * Expression simulation:
- *
- *     simulate target
- *     simulate target from source
- *     simulate target with (option)
- *
- * Statement simulation:
- *
- *     simulate target {
- *         ...
- *     }
- *
- * The structured simulation statement remains owned by:
+ * Statement:
  *
  *     grammar/statements/simulate.g4
  *
- * This file MUST NOT reproduce its body/block grammar.
+ * They MUST NOT duplicate one another.
+ *
+ * This file owns:
+ *
+ *     simulate <expression>
+ *
+ * The statement grammar owns:
+ *
+ *     simulate <expression> { ... }
+ *
+ * This file MUST NOT define a simulation block.
  *
  * ============================================================================
  * DEPENDENCY CONTRACT
@@ -212,34 +187,20 @@
  * DEPENDS_ON:
  *
  *     grammar/antlr/ZamaniLexer.g4
- *     grammar/lexer/*
- *     canonical parent expression hierarchy
+ *     grammar/lexer/
+ *     canonical expression composition
  *
- * The parent expression composition grammar supplies:
+ * This grammar consumes the canonical `expression` rule supplied by the
+ * expression composition root.
  *
- *     expression
- *
- * and the normal expression/name/type infrastructure.
- *
- * IMPORTANT:
- *
- * This file deliberately DOES NOT import:
+ * It deliberately does not import the complete Expressions grammar because
+ * that would create an import cycle:
  *
  *     Expressions
- *
- * because:
- *
+ *         ->
+ *     SimulationExpressions
+ *         ->
  *     Expressions
- *          -> SimulationExpressions
- *          -> Expressions
- *
- * would create an unnecessary grammar-import cycle.
- *
- * Instead, `expression` is the canonical integration boundary supplied by
- * the expression composition layer.
- *
- * This follows the same leaf-grammar pattern used by other specialized
- * expression grammars.
  *
  * EXPORTS:
  *
@@ -257,11 +218,11 @@
  *
  * AST_OWNER:
  *
- *     frontend AST subsystem.
+ *     frontend/domain-neutral AST subsystem
  *
  * SEMANTIC_OWNER:
  *
- *     execution/simulation semantic subsystem.
+ *     execution/simulation semantic subsystem
  *
  * EFFECT_OWNER:
  *
@@ -295,18 +256,11 @@
  *
  * IR_OWNER:
  *
- *     canonical semantic IR layers.
+ *     canonical semantic IR
  *
- *     Classical simulation:
- *         canonical classical semantic representation.
+ * Quantum:
  *
- *     Quantum simulation:
- *         canonical quantum semantic representation
- *         ->
- *         quantum::ir
- *
- *     HDL simulation:
- *         HDL semantic representation.
+ *     semantic quantum model -> quantum::ir
  *
  * TEST_OWNER:
  *
@@ -323,11 +277,11 @@
  * LEXICAL CONTRACT
  * ============================================================================
  *
- * Required canonical token:
+ * Required token:
  *
  *     SIMULATE
  *
- * Existing canonical lexical tokens are reused for:
+ * Existing canonical tokens:
  *
  *     FROM
  *     WITH
@@ -335,249 +289,152 @@
  *     RPAREN
  *     COMMA
  *
- * This file MUST NOT define lexer rules.
- *
- * It MUST NOT create:
- *
- *     SIMULATION
- *     SIMULATE_EXPRESSION
- *     K_SIMULATE
- *     K_FROM
- *     K_WITH
- *
- * or any other local token aliases.
- *
- * All lexical authority remains in:
- *
- *     grammar/lexer/
- *     grammar/antlr/ZamaniLexer.g4
+ * This grammar MUST NOT create local lexer rules or aliases.
  *
  * ============================================================================
- * OPEN-WORLD SIMULATION MODEL
+ * OPEN-WORLD PRINCIPLE
  * ============================================================================
  *
- * The grammar deliberately does NOT enumerate simulation technologies.
+ * The grammar does not enumerate simulation technologies.
  *
- * It does not contain alternatives for:
+ * It MUST NOT contain grammar alternatives for:
  *
- *     classicalSimulator
- *     quantumSimulator
- *     hdlSimulator
- *     gpuSimulator
- *     fpgaSimulator
- *     distributedSimulator
- *     eventSimulator
- *     cycleSimulator
- *     waveformSimulator
- *     numericalSolver
- *     MonteCarloSimulator
- *     vendorSimulator
+ *     classical simulator
+ *     quantum simulator
+ *     HDL simulator
+ *     GPU simulator
+ *     FPGA simulator
+ *     distributed simulator
+ *     event simulator
+ *     cycle simulator
+ *     numerical solver
+ *     waveform engine
+ *     vendor simulator
  *     emulator
- *     hardwareModel
  *
- * Such distinctions belong to:
+ * Those are represented downstream through:
  *
  *     semantic models
  *     capabilities
+ *     resources
+ *     policies
  *     dialects
  *     libraries
- *     policies
  *     execution strategies
  *     backend implementations
  *
- * This is essential for long-term language extensibility.
- *
  * ============================================================================
- * UNIVERSAL SIMULATION TARGET
+ * TARGET CONTRACT
  * ============================================================================
  *
- * The target is a normal Zamani expression.
+ * The simulation target is a normal Zamani expression.
  *
- * Therefore it can represent:
+ * Therefore it may represent:
  *
  *     classical computation
  *     numerical computation
  *     tensor computation
- *     AI/ML models
- *     knowledge systems
- *     quantum programs
- *     quantum circuits
+ *     AI/ML computation
+ *     knowledge computation
+ *     quantum computation
  *     hybrid computation
- *     HDL designs
- *     hardware models
+ *     HDL intent
+ *     hardware intent
  *     accelerator computation
- *     distributed systems
- *     networked systems
+ *     distributed computation
+ *     networking computation
  *     data pipelines
  *     future computational domains
  *
- * Examples:
+ * The parser does not determine the target domain.
  *
- *     simulate model
- *
- *     simulate model(input)
- *
- *     simulate circuit
- *
- *     simulate quantum_program
- *
- *     simulate hardware_model
- *
- *     simulate pipeline(data)
- *
- *     simulate distributed_system
- *
- *     simulate reasoning_result
- *
- * The grammar does not determine the domain.
- *
- * Semantic analysis determines the meaning and applicable simulation strategy.
+ * Semantic analysis determines it.
  *
  * ============================================================================
- * SOURCE / INPUT MODEL
+ * SOURCE CONTRACT
  * ============================================================================
  *
- * An optional `from` clause identifies an input/source expression.
+ * The optional FROM clause supplies a source/input expression.
  *
  * Examples:
  *
  *     simulate model from input
- *
  *     simulate circuit from initial_state
- *
  *     simulate hardware_model from configuration
- *
  *     simulate algorithm from dataset
  *
- * The source expression is intentionally generic.
- *
- * It is NOT assumed to be:
- *
- *     a file
- *     a dataset
- *     a quantum state
- *     a hardware model
- *     a network
- *     a database
- *     a classical value
- *
- * Semantic analysis determines the interpretation.
+ * The source is intentionally domain-neutral.
  *
  * ============================================================================
- * CONTEXT MODEL
+ * CONTEXT CONTRACT
  * ============================================================================
  *
- * An optional `with (...)` clause provides extensible simulation context.
+ * The optional WITH clause supplies an open-ended context.
  *
  * Examples:
  *
  *     simulate model with (scenario)
- *
  *     simulate circuit with (noise_model)
- *
  *     simulate model with (policy, resources)
- *
  *     simulate hardware_model with (timing_model, configuration)
  *
- *     simulate quantum_program with (noise, resilience_policy)
+ * Each option is a normal expression.
  *
- * The option list is intentionally open-ended.
- *
- * No fixed option vocabulary is encoded here.
- *
- * Future semantic concepts can therefore be represented without modifying
- * this grammar merely because a new simulation facility is introduced.
+ * This prevents the grammar from becoming a closed catalogue of simulation
+ * facilities.
  *
  * ============================================================================
- * OPTION MODEL
+ * IMPORTANT CORRECTION
  * ============================================================================
  *
- * Each option is a normal Zamani expression.
+ * The context option list is REQUIRED when WITH is present.
  *
- * This means options can represent:
+ * Therefore:
  *
- *     values
- *     configuration
- *     policies
- *     resources
- *     capabilities
- *     models
- *     datasets
- *     constraints
- *     contracts
- *     provenance
- *     execution strategies
- *     dialect-specific values
+ *     simulate model with (scenario)
  *
- * No special grammar is required for every future simulation option.
+ * is valid.
  *
- * ============================================================================
- * SEMANTIC CONTRACT
- * ============================================================================
+ * But:
  *
- * Parsing answers:
+ *     simulate model with ()
  *
- *     "Is this structurally a simulation expression?"
+ * is invalid.
  *
- * Semantic analysis answers:
- *
- *     "What computation is being simulated?"
- *
- *     "What simulation semantics apply?"
- *
- *     "What effects are produced?"
- *
- *     "What capabilities are required?"
- *
- *     "What resources are required?"
- *
- *     "What policies constrain execution?"
- *
- *     "What contracts must hold?"
- *
- *     "What provenance must be recorded?"
- *
- *     "Which realization is feasible?"
- *
- * This grammar does not answer those questions.
+ * This prevents an empty context from silently passing parser validation.
  *
  * ============================================================================
  * EFFECT CONTRACT
  * ============================================================================
  *
- * Simulation may carry effects such as:
+ * The semantic layer may derive:
  *
  *     simulation
+ *
+ * from simulationExpression.
+ *
+ * Additional effects are derived from the target and context, for example:
+ *
  *     randomness
  *     measurement
  *     IO
  *     network
  *     distributed
- *     native
- *     foreign
  *     quantum
  *     learning
  *     adaptation
+ *     native
+ *     foreign
  *
- * The grammar merely preserves the simulation operation.
- *
- * Effect inference belongs downstream.
- *
- * A semantic implementation may derive:
- *
- *     simulation
- *
- * from the presence of `simulationExpression`.
- *
- * Additional effects come from the simulated target and its context.
+ * This grammar does not encode those effects.
  *
  * ============================================================================
  * CAPABILITY CONTRACT
  * ============================================================================
  *
- * The grammar does not enumerate simulator capabilities.
+ * Capability requirements are semantic.
  *
- * Semantic analysis may derive requirements such as:
+ * Possible semantic requirements include:
  *
  *     capability("simulation")
  *     capability("quantum.simulation")
@@ -585,53 +442,52 @@
  *     capability("distributed.simulation")
  *     capability("tensor.compute")
  *
- * These are semantic capability identifiers.
- *
- * They are not grammar-level machine constants.
+ * No capability is hard-coded to a physical device.
  *
  * ============================================================================
  * RESOURCE CONTRACT
  * ============================================================================
  *
- * Resource requirements belong downstream.
+ * Resource requirements are resolved downstream.
  *
- * Simulation may require resources such as:
+ * Possible resources include:
  *
  *     memory
  *     compute
- *     accelerator resources
- *     simulation state storage
+ *     storage
+ *     accelerator capacity
+ *     simulation state
  *     network resources
  *     quantum simulation resources
  *     timing resources
- *     storage
  *
- * The grammar MUST NOT encode a universal capacity.
+ * This grammar imposes no universal physical capacity.
  *
- * In particular, this file contains no limits on:
+ * It contains no language-level maximum for:
  *
- *     simulation size
- *     model size
- *     scenario count
- *     event count
- *     sample count
- *     state count
- *     qubit count
- *     processor count
- *     GPU count
- *     accelerator count
- *     node count
+ *     simulations
+ *     scenarios
+ *     events
+ *     samples
+ *     states
+ *     qubits
+ *     processors
+ *     GPUs
+ *     FPGAs
+ *     accelerators
+ *     nodes
  *     memory
  *     storage
  *     tensor rank
  *     tensor dimensions
+ *     devices
  *     network size
  *
  * ============================================================================
  * CONTRACT INTEGRATION
  * ============================================================================
  *
- * Simulation expressions may participate in:
+ * Simulation expressions may appear inside:
  *
  *     requires
  *     ensures
@@ -640,13 +496,8 @@
  *     guarantee
  *     property
  *
- * The grammar does not evaluate these contracts.
- *
- * Structural contract syntax remains owned by:
- *
- *     grammar/validation/
- *
- * Simulation semantics consume the resulting contract model.
+ * Contract interpretation remains owned by grammar/validation/ and the
+ * semantic contract subsystem.
  *
  * ============================================================================
  * POLICY INTEGRATION
@@ -654,37 +505,22 @@
  *
  * Simulation may be constrained by:
  *
- *     execution policies
- *     resource policies
- *     security policies
- *     adaptation policies
- *     deployment policies
- *     reproducibility policies
- *     simulation policies
+ *     execution policy
+ *     resource policy
+ *     security policy
+ *     reproducibility policy
+ *     deployment policy
+ *     simulation policy
  *
- * The grammar does not enumerate those policies.
- *
- * Policy ownership remains downstream.
+ * Policy semantics remain outside this grammar.
  *
  * ============================================================================
  * PROVENANCE INTEGRATION
  * ============================================================================
  *
- * Simulation can affect provenance because a simulation may be used to:
+ * Simulation can produce or consume evidence and provenance.
  *
- *     validate
- *     predict
- *     compare
- *     test
- *     verify
- *     reproduce
- *     derive
- *     explain
- *     optimize
- *
- * The parser preserves source structure.
- *
- * Semantic analysis attaches provenance such as:
+ * The semantic/compiler layers may record:
  *
  *     source
  *     derived_from
@@ -697,24 +533,70 @@
  *     version
  *     timestamp
  *
- * Provenance semantics do not belong in this grammar.
+ * ============================================================================
+ * QUANTUM BOUNDARY
+ * ============================================================================
+ *
+ * This grammar does not define quantum operations.
+ *
+ * If the simulation target is quantum:
+ *
+ *     simulationExpression
+ *         ->
+ *     semantic simulation model
+ *         ->
+ *     quantum semantic model
+ *         ->
+ *     quantum::ir
+ *
+ * There is no separate simulation-specific quantum IR.
+ *
+ * ============================================================================
+ * HDL BOUNDARY
+ * ============================================================================
+ *
+ * If the target represents HDL:
+ *
+ *     simulationExpression
+ *         ->
+ *     HDL semantic model
+ *         ->
+ *     HDL simulation/synthesis analysis
+ *
+ * Physical widths, devices, timing resources and implementation details remain
+ * downstream.
+ *
+ * ============================================================================
+ * POCO-REAF CONTRACT
+ * ============================================================================
+ *
+ * The same source-level simulation expression remains valid independently of
+ * target scale.
+ *
+ * Target realization may range from:
+ *
+ *     tiny embedded execution
+ *     CPU
+ *     multicore
+ *     GPU
+ *     FPGA
+ *     accelerator
+ *     QPU simulator
+ *     HPC
+ *     cluster
+ *     distributed environment
+ *     cloud
+ *     future computational substrate
+ *
+ * The grammar does not need to change as available resources change.
  *
  * ============================================================================
  * DETERMINISM
  * ============================================================================
  *
- * Parsing must be deterministic.
+ * Parsing is deterministic.
  *
- * Identical:
- *
- *     source
- *     lexer version
- *     grammar version
- *     parser configuration
- *
- * must produce equivalent structural parse trees.
- *
- * Parsing MUST NOT inspect:
+ * The parser must not inspect:
  *
  *     hardware
  *     memory availability
@@ -724,801 +606,194 @@
  *     filesystem state
  *     network state
  *     wall-clock time
- *     random state
  *     runtime state
  *     deployment state
+ *     random state
  *
  * ============================================================================
- * SAFETY
+ * IMPLEMENTATION CONTRACT
  * ============================================================================
  *
- * This grammar contains:
+ * The grammar contains:
  *
- *     no Rust actions
- *     no semantic predicates
- *     no filesystem access
- *     no network access
- *     no hardware access
+ *     no embedded Rust actions
  *     no runtime execution
+ *     no hardware calls
+ *     no filesystem calls
+ *     no network calls
  *     no environment inspection
- *     no randomness
+ *     no target discovery
  *
- * The generated parser is consumed by the Zamani Rust implementation, which
- * remains compatible with:
+ * Generated parser integration remains compatible with:
  *
  *     Rust 1.97+
  *     Rust 2021
  *     safe Rust
  *
- * No unsafe implementation is required.
- *
  * ============================================================================
- * SCALABILITY CONTRACT
+ * DIAGNOSTICS
  * ============================================================================
  *
- * This grammar imposes no artificial finite language-level ceiling on:
- *
- *     expression nesting
- *     simulation nesting
- *     option count
- *     source complexity
- *     target complexity
- *     model complexity
- *     simulation context complexity
- *     argument count
- *     data size
- *     state size
- *     scenario complexity
- *
- * Repetition is represented structurally using ANTLR repetition operators.
- *
- * For example:
- *
- *     simulationOptionList
- *         : simulationOption (COMMA simulationOption)* COMMA?
- *         ;
- *
- * means:
- *
- *     zero/one/many according to syntax,
- *
- * not:
- *
- *     a fixed implementation capacity.
- *
- * Actual limits arise only from:
- *
- *     compiler resources
- *     parser implementation resources
- *     memory
- *     runtime resources
- *     target capabilities
- *     deployment constraints
- *     explicitly declared program requirements
- *
- * ============================================================================
- * POCO-REAF CONTRACT
- * ============================================================================
- *
- * Simulation is source intent.
- *
- * The same simulation expression may therefore be considered for:
- *
- *     tiny embedded systems
- *     CPUs
- *     multicore CPUs
- *     GPUs
- *     FPGAs
- *     ASIC-associated environments
- *     accelerators
- *     quantum simulators
- *     QPUs through simulation workflows
- *     HPC systems
- *     clusters
- *     distributed systems
- *     cloud systems
- *     future computational substrates
- *
- * without changing this grammar merely because the available realization
- * changes.
- *
- * Program portability is separated from physical feasibility.
- *
- * If a target cannot satisfy the semantic requirements, the compiler/runtime
- * reports that fact rather than changing the meaning of the source program.
- *
- * ============================================================================
- * QUANTUM BOUNDARY
- * ============================================================================
- *
- * A simulation target may contain quantum computation.
- *
- * This grammar does NOT:
- *
- *     enumerate quantum gates;
- *     enumerate qubits;
- *     select physical qubits;
- *     describe coupling maps;
- *     perform routing;
- *     perform scheduling;
- *     select calibration;
- *     implement QEC;
- *     implement ZQN;
- *     implement HAL.
- *
- * The required semantic boundary remains:
- *
- *     simulationExpression
- *          |
- *          v
- *     domain-neutral AST
- *          |
- *          v
- *     semantic quantum model
- *          |
- *          v
- *     quantum::ir
- *          |
- *          v
- *     optimization
- *          |
- *          v
- *     decomposition
- *          |
- *          v
- *     routing
- *          |
- *          v
- *     scheduling
- *          |
- *          v
- *     resilience / QEC
- *          |
- *          v
- *     ZQN
- *          |
- *          v
- *     HAL
- *
- * ============================================================================
- * HDL / HARDWARE BOUNDARY
- * ============================================================================
- *
- * A simulation target may contain HDL or hardware intent.
- *
- * This file does not define:
- *
- *     bus widths
- *     register widths
- *     device counts
- *     memory sizes
- *     topology sizes
- *     clock limits
- *     pipeline limits
- *     hardware models
- *
- * HDL/hardware semantic grammars remain the owners of their respective
- * structures.
- *
- * ============================================================================
- * AI / REASONING / LEARNING BOUNDARY
- * ============================================================================
- *
- * A simulation target may be:
- *
- *     a learned model
- *     a reasoning operation
- *     a knowledge system
- *     an adaptive computation
- *     a probabilistic computation
- *     a neural-symbolic computation
- *     an agent
- *
- * No AI-specific simulation keyword catalogue is introduced here.
- *
- * Those concepts remain composable through the normal expression system.
- *
- * ============================================================================
- * REPRODUCIBILITY
- * ============================================================================
- *
- * Deterministic/reproducible simulation is a semantic concern.
- *
- * The grammar therefore does not hard-code:
- *
- *     seed syntax
- *     random algorithm
- *     simulator implementation
- *     reproducibility mechanism
- *
- * A program may supply reproducibility configuration through ordinary
- * simulation options.
- *
- * Example:
- *
- *     simulate model with (reproducibility_policy)
- *
- * The semantic layer determines how that policy is realized.
- *
- * ============================================================================
- * ADAPTIVE EXECUTION
- * ============================================================================
- *
- * Simulation may participate in adaptive execution.
- *
- * Examples of downstream decisions include:
- *
- *     detect
- *     evaluate
- *     select
- *     retry
- *     recover
- *     fallback
- *     adapt
- *
- * Those are not implemented by this grammar.
- *
- * They belong to:
- *
- *     grammar/execution/
- *     grammar/policies/
- *     semantic execution planning
- *
- * ============================================================================
- * AST CONTRACT
- * ============================================================================
- *
- * The frontend AST should represent this structure as one canonical
- * simulation-expression node, for example conceptually:
- *
- *     SimulationExpression {
- *         target,
- *         source,
- *         options,
- *         source_span
- *     }
- *
- * The exact Rust AST type name remains owned by the AST subsystem.
- *
- * The AST MUST preserve:
- *
- *     operation kind
- *     target expression
- *     optional source expression
- *     ordered options
- *     source locations
- *
- * It MUST NOT contain:
- *
- *     physical simulator handles
- *     backend instances
- *     machine identifiers
- *     hardware allocation
- *     runtime state
- *
- * ============================================================================
- * SEMANTIC MODEL CONTRACT
- * ============================================================================
- *
- * Semantic analysis should transform the AST into a simulation intent model
- * containing, as applicable:
- *
- *     target meaning
- *     simulation strategy
- *     source/input
- *     options
- *     effects
- *     capabilities
- *     resource requirements
- *     contracts
- *     policies
- *     provenance
- *     reproducibility requirements
- *     domain classification
- *
- * The semantic model remains target-independent.
- *
- * ============================================================================
- * IR CONTRACT
- * ============================================================================
- *
- * This grammar creates NO IR.
- *
- * The downstream path is:
- *
- *     SimulationExpression
- *          |
- *          v
- *     frontend AST
- *          |
- *          v
- *     semantic simulation intent
- *          |
- *          +--------------------+
- *          |                    |
- *          v                    v
- *     classical semantics   quantum semantics
- *          |                    |
- *          |                    v
- *          |                quantum::ir
- *          |                    |
- *          +----------+---------+
- *                     |
- *                     v
- *             canonical semantic model
- *                     |
- *             optimization/lowering
- *                     |
- *             target realization
- *
- * HDL and hardware domains use their canonical semantic boundaries rather than
- * introducing another simulation IR here.
- *
- * ============================================================================
- * STATEMENT INTEGRATION
- * ============================================================================
- *
- * The existing:
- *
- *     grammar/statements/simulate.g4
- *
- * remains the owner of:
- *
- *     simulate target;
- *
- * and:
- *
- *     simulate target {
- *         ...
- *     }
- *
- * It MUST NOT be replaced by this file.
- *
- * This file supplies the expression form:
- *
- *     simulate target
- *
- * and therefore allows simulation intent to occur inside larger expressions.
- *
- * Statement composition must prefer the dedicated simulation statement before
- * the generic expression statement where the source form is ambiguous.
- *
- * This ensures that structured simulation blocks remain owned by
- * statements/simulate.g4.
- *
- * ============================================================================
- * EXPRESSIONS INTEGRATION
- * ============================================================================
- *
- * `grammar/expressions/expressions.g4` must:
- *
- * 1. import:
- *
- *        SimulationExpressions
- *
- * 2. add:
- *
- *        simulationExpression
- *
- *    to the canonical `primaryExpression` alternatives.
- *
- * The required conceptual composition is:
- *
- *     primaryExpression
- *         :
- *             ...
- *           | quantumExpression
- *           | reasoningExpression
- *           | knowledgeExpression
- *           | uncertaintyExpression
- *           | simulationExpression
- *           | queryExpression
- *           | ...
- *
- * The exact ordering should remain stable and should not create a second
- * precedence hierarchy.
- *
- * ============================================================================
- * ROOT PARSER INTEGRATION
- * ============================================================================
- *
- * No direct change is required to:
- *
- *     grammar/Zamani.g4
- *
- * because it imports:
- *
- *     ZamaniParser
- *     ZamaniLexer
- *
- * and ZamaniParser already imports:
- *
- *     Expressions
- *
- * Therefore the dependency chain becomes:
- *
- *     Zamani.g4
- *          |
- *          v
- *     ZamaniParser
- *          |
- *          v
- *     Expressions
- *          |
- *          v
- *     SimulationExpressions
- *
- * ============================================================================
- * STATEMENT DISPATCH INTEGRATION
- * ============================================================================
- *
- * The repository currently has:
- *
- *     grammar/statements/simulate.g4
- *
- * but the universal statement dispatcher must compose it.
- *
- * `grammar/statements/statements.g4` therefore needs:
- *
- *     import StatementsSimulation
- *
- * and:
- *
- *     statement
- *         :
- *             ...
- *           | simulationStatement
- *           | ...
- *         ;
- *
- * This is a separate integration change from this expression file.
- *
- * It prevents the structured simulation statement from being swallowed by the
- * generic expression-statement path.
- *
- * ============================================================================
- * EFFECT INTEGRATION
- * ============================================================================
- *
- * No change to the effect grammar is required merely to parse this expression.
- *
- * Semantic analysis should classify simulation as an effect where the language
- * effect model requires it.
- *
- * Additional effects come from the target and context.
- *
- * ============================================================================
- * RESOURCE / CAPABILITY INTEGRATION
- * ============================================================================
- *
- * No simulator catalogue belongs in this grammar.
- *
- * Resource and capability requirements are resolved through:
- *
- *     grammar/resources/
- *     semantic capability analysis
- *     semantic resource analysis
- *
- * ============================================================================
- * POLICY INTEGRATION
- * ============================================================================
- *
- * Simulation options may carry policy expressions.
- *
- * Policy interpretation belongs to:
- *
- *     grammar/policies/
- *     grammar/security/
- *     execution policy semantics
- *
- * ============================================================================
- * CONTRACT INTEGRATION
- * ============================================================================
- *
- * The expression may appear inside contract conditions.
- *
- * Example conceptual usage:
- *
- *     requires capability("simulation");
- *
- *     ensures simulate(model);
- *
- * Contract validation remains owned by:
- *
- *     grammar/validation/
- *
- * ============================================================================
- * PROVENANCE INTEGRATION
- * ============================================================================
- *
- * Simulation results and transformations can contribute evidence and
- * provenance.
- *
- * Provenance is not encoded as parser state.
- *
- * The semantic/compiler layers attach:
- *
- *     source
- *     derived_from
- *     generated_by
- *     transformed_by
- *     verified_by
- *     reason
- *     evidence
- *     decision
- *     version
- *     timestamp
- *
- * ============================================================================
- * NEGATIVE / DIAGNOSTIC CONTRACT
- * ============================================================================
- *
- * Parser-level failures include:
- *
- *     missing simulation target
- *     malformed `from` clause
- *     malformed `with` clause
+ * Parser errors:
+ *
+ *     missing target
+ *     malformed FROM clause
+ *     missing source after FROM
+ *     malformed WITH clause
+ *     empty WITH option list
  *     missing closing parenthesis
  *     malformed option list
  *
- * Semantic failures include:
+ * Semantic errors:
  *
  *     invalid simulation target
- *     unsupported simulation strategy
- *     missing capability
+ *     unsupported simulation realization
+ *     unavailable capability
  *     insufficient resources
  *     prohibited effect
  *     violated policy
- *     invalid contract
- *     unsupported target realization
+ *     violated contract
  *
- * A target/resource/capability failure MUST NOT be reported as a syntax error.
+ * Resource/capability failures MUST NOT be reported as syntax failures.
  *
  * ============================================================================
- * COMPATIBILITY CONTRACT
+ * COMPATIBILITY
  * ============================================================================
  *
- * This file introduces one new expression category:
+ * This is an additive expression capability.
  *
- *     simulationExpression
+ * Existing statement syntax remains owned by:
  *
- * It does not rename or remove:
+ *     grammar/statements/simulate.g4
  *
- *     expression
- *     primaryExpression
- *     simulationStatement
- *
- * Existing statement-level simulation syntax remains compatible.
- *
- * Existing programs containing:
+ * Existing:
  *
  *     simulate target;
  *
- * remain owned by:
+ * remains a statement.
  *
- *     statements/simulate.g4
- *
- * The expression form is an additive capability.
+ * Expression simulation is consumed where an expression is required.
  *
  * ============================================================================
  * HARD-CODING AUDIT
  * ============================================================================
  *
- * This file contains no:
+ * This grammar contains no fixed capacity constants.
  *
- *     MAX_SIMULATIONS
- *     MAX_SIMULATION_DEPTH
- *     MAX_SCENARIOS
- *     MAX_EVENTS
- *     MAX_SAMPLES
- *     MAX_STATES
- *     MAX_MODELS
- *     MAX_RESOURCES
- *     MAX_QUBITS
- *     MAX_CPUS
- *     MAX_GPUS
- *     MAX_FPGAS
- *     MAX_NODES
- *     MAX_MEMORY
- *     MAX_THREADS
- *     MAX_TENSOR_RANK
- *     MAX_REGISTER_WIDTH
- *     MAX_NETWORK_SIZE
- *     MAX_DEVICE_COUNT
+ * In particular, it contains no universal limit on:
  *
- * No equivalent hidden capacity constant may be introduced.
+ *     simulation count
+ *     nesting depth
+ *     scenario count
+ *     event count
+ *     sample count
+ *     state count
+ *     model count
+ *     resource quantity
+ *     qubits
+ *     CPUs
+ *     GPUs
+ *     FPGAs
+ *     nodes
+ *     memory
+ *     threads
+ *     tensor rank
+ *     register width
+ *     network size
+ *     device count
  *
  * ============================================================================
  * TEST CONTRACT
  * ============================================================================
  *
- * REQUIRED POSITIVE TESTS
+ * POSITIVE:
  *
  *     simulate model
- *
  *     simulate model from input
- *
  *     simulate model with (scenario)
- *
  *     simulate model from input with (scenario, policy)
- *
  *     simulate quantum_program
- *
  *     simulate hardware_model
- *
  *     simulate model(input)
- *
  *     simulate pipeline(data)
- *
- *     simulate model with (requires_capability)
- *
  *     simulate model with (resource_requirement)
- *
  *     simulate model with (reproducibility_policy)
- *
  *     simulate model with (uncertainty_model)
  *
- *     simulate model with (provenance_context)
- *
- * REQUIRED COMPOSITION TESTS
+ * COMPOSITION:
  *
  *     outer(simulate model)
- *
- *     simulate model + other_value
- *
- *     condition ? simulate model : fallback
- *
  *     collection(simulate model)
- *
  *     function(simulate model)
- *
  *     requires simulate model
- *
  *     ensures simulate model
- *
  *     property(simulate model)
  *
- * REQUIRED CROSS-DOMAIN TESTS
+ * CROSS-DOMAIN:
  *
  *     simulate classical_model
- *
  *     simulate quantum_program
- *
  *     simulate hdl_model
- *
  *     simulate hardware_model
- *
  *     simulate ai_model(input)
- *
  *     simulate distributed_system
- *
  *     simulate hybrid_program
  *
- * REQUIRED NEGATIVE TESTS
+ * NEGATIVE:
  *
  *     simulate
- *
  *     simulate from input
- *
  *     simulate model from
- *
  *     simulate model with
- *
+ *     simulate model with ()
  *     simulate model with (
- *
  *     simulate model with (a,)
- *
  *     simulate model from input with (
  *
- * REQUIRED SCALABILITY TESTS
+ * SCALABILITY:
  *
- *     deeply nested expressions;
- *     large option lists;
- *     large source expressions;
- *     large target expressions;
- *     nested simulation expressions;
- *     simulation embedded in generic expressions;
- *     cross-domain expressions.
+ *     deeply nested target expressions
+ *     deeply nested option expressions
+ *     large option lists
+ *     large source expressions
+ *     large target expressions
+ *     nested simulation expressions
+ *     simulation inside generic expressions
+ *     cross-domain simulation expressions
  *
- * The tests must verify that no grammar-level capacity constant exists.
+ * DETERMINISM:
  *
- * REQUIRED DETERMINISM TEST
- *
- * Parsing the same source with the same grammar and lexer configuration must
- * produce equivalent parse-tree structure.
+ *     identical source + identical lexer/parser configuration
+ *     => equivalent parse structure
  *
  * ============================================================================
  * COMPLETION CRITERIA
  * ============================================================================
  *
- * This file is DONE when:
+ * DONE when:
  *
- * [ ] `SimulationExpressions` is the sole grammar identity.
- *
- * [ ] `simulationExpression` is the sole public expression entry point.
- *
+ * [ ] SimulationExpressions is the grammar identity.
+ * [ ] simulationExpression is the public entry point.
  * [ ] No lexer rules exist here.
- *
- * [ ] `Expressions` is NOT imported here.
- *
- * [ ] The canonical `expression` rule is reused as the operand boundary.
- *
- * [ ] `simulate` supports an expression target.
- *
- * [ ] optional `from` source is supported.
- *
- * [ ] optional `with (...)` context is supported.
- *
- * [ ] options are open-ended expressions.
- *
- * [ ] no simulation algorithm is enumerated.
- *
- * [ ] no simulator implementation is enumerated.
- *
- * [ ] no hardware capacity is encoded.
- *
- * [ ] no quantum gate catalogue is encoded.
- *
- * [ ] no physical target is encoded.
- *
- * [ ] no IR is created.
- *
- * [ ] no runtime execution exists.
- *
- * [ ] no semantic predicates exist.
- *
- * [ ] deterministic parsing is preserved.
- *
- * [ ] AST integration is defined.
- *
- * [ ] semantic integration is defined.
- *
- * [ ] effect integration is defined.
- *
- * [ ] capability integration is defined.
- *
- * [ ] resource integration is defined.
- *
- * [ ] contract integration is defined.
- *
- * [ ] policy integration is defined.
- *
- * [ ] provenance integration is defined.
- *
- * [ ] statement-level simulation remains owned by
- *     `grammar/statements/simulate.g4`.
- *
- * [ ] `expressions.g4` imports this grammar.
- *
- * [ ] `expressions.g4` adds `simulationExpression` to `primaryExpression`.
- *
- * [ ] `statements.g4` composes `StatementsSimulation`.
- *
- * [ ] `ZamaniParser.g4` continues to compose `Expressions` and `Statements`.
- *
- * [ ] `Zamani.g4` requires no direct modification.
- *
- * [ ] positive tests exist.
- *
- * [ ] negative tests exist.
- *
- * [ ] cross-domain tests exist.
- *
- * [ ] scalability tests exist.
- *
- * [ ] determinism tests exist.
- *
- * [ ] compatibility tests exist.
+ * [ ] Expressions is not imported here.
+ * [ ] Canonical expression is reused as the operand boundary.
+ * [ ] Target is open-world.
+ * [ ] FROM is optional.
+ * [ ] WITH is optional.
+ * [ ] WITH requires at least one option.
+ * [ ] Trailing comma policy is explicit.
+ * [ ] No simulation technology is enumerated.
+ * [ ] No machine capacity is encoded.
+ * [ ] No simulator implementation is encoded.
+ * [ ] No IR is created.
+ * [ ] No runtime behavior is embedded.
+ * [ ] Statement-level simulation remains separate.
+ * [ ] Expressions imports SimulationExpressions.
+ * [ ] primaryExpression includes simulationExpression.
+ * [ ] tests exist for positive/negative/boundary/scalability cases.
  *
  * ============================================================================
- * END OF FILE
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * GRAMMAR DECLARATION
+ * GRAMMAR
  * ============================================================================
  */
 
@@ -1531,14 +806,8 @@ options {
 
 /*
  * ============================================================================
- * 1. PUBLIC EXPRESSION
+ * PUBLIC EXPRESSION
  * ============================================================================
- *
- * The expression-level simulation construct.
- *
- * No semicolon is consumed here.
- *
- * Statement-level termination remains owned by statement grammars.
  */
 
 simulationExpression
@@ -1548,22 +817,18 @@ simulationExpression
 
 /*
  * ============================================================================
- * 2. SIMULATION OPERATION
+ * SIMULATION OPERATION
  * ============================================================================
  *
- * Canonical forms:
+ * Forms:
  *
  *     simulate target
- *
  *     simulate target from source
- *
  *     simulate target with (option)
- *
  *     simulate target from source with (option, option)
  *
- * `from` and `with` are explicit structural delimiters, so the canonical
- * expression parser can determine where the target ends without introducing a
- * second precedence hierarchy.
+ * FROM precedes WITH deliberately so that the source form has one canonical
+ * ordering and does not introduce multiple equivalent parse structures.
  */
 
 simulationOperation
@@ -1576,14 +841,14 @@ simulationOperation
 
 /*
  * ============================================================================
- * 3. TARGET
+ * TARGET
  * ============================================================================
  *
- * The target is the canonical Zamani expression.
+ * The target is a canonical expression.
  *
- * This rule deliberately references the parent expression hierarchy.
- *
- * It does not reproduce expression precedence.
+ * The leading SIMULATE token has already been consumed before this rule is
+ * entered, so recursive expression composition does not create an ambiguous
+ * alternative at the simulation operator itself.
  */
 
 simulationTarget
@@ -1593,7 +858,7 @@ simulationTarget
 
 /*
  * ============================================================================
- * 4. SOURCE
+ * SOURCE
  * ============================================================================
  */
 
@@ -1605,24 +870,43 @@ simulationSourceClause
 
 /*
  * ============================================================================
- * 5. CONTEXT
+ * CONTEXT
  * ============================================================================
+ *
+ * An explicit option is mandatory when WITH is present.
+ *
+ * Therefore:
+ *
+ *     simulate target with ()
+ *
+ * is rejected.
  */
 
 simulationContextClause
     : WITH
       LPAREN
-      simulationOptionList?
+      simulationOptionList
       RPAREN
     ;
 
 
 /*
  * ============================================================================
- * 6. OPTION LIST
+ * OPTION LIST
  * ============================================================================
  *
- * There is no fixed number of options.
+ * One or more options.
+ *
+ * A trailing comma is permitted for consistency with extensible list syntax.
+ *
+ * Therefore both are valid:
+ *
+ *     with (a)
+ *     with (a, b,)
+ *
+ * but this is invalid:
+ *
+ *     with ()
  */
 
 simulationOptionList
@@ -1637,10 +921,12 @@ simulationOptionList
 
 /*
  * ============================================================================
- * 7. OPTION
+ * OPTION
  * ============================================================================
  *
- * Every option is an ordinary Zamani expression.
+ * Options remain ordinary expressions.
+ *
+ * This permits future semantic options without modifying this grammar.
  */
 
 simulationOption
@@ -1650,34 +936,24 @@ simulationOption
 
 /*
  * ============================================================================
- * 8. CANONICAL EXPRESSION INTEGRATION BOUNDARY
+ * EXPRESSION INTEGRATION BOUNDARY
  * ============================================================================
  *
- * This is intentionally an alias boundary.
+ * The canonical expression rule belongs to the expression composition root.
  *
- * The expression-composition root supplies the canonical `expression` rule.
+ * This grammar deliberately does not import Expressions.
  *
- * This grammar does not import `Expressions`.
+ * This permits:
  *
- * This avoids:
+ *     simulate model
+ *     simulate model(input)
+ *     simulate function(simulate model)
+ *     simulate simulate model
  *
- *     Expressions -> SimulationExpressions -> Expressions
+ * subject to the normal expression semantics and precedence rules.
  *
- * while still allowing:
- *
- *     expression
- *         ->
- *     primaryExpression
- *         ->
- *     simulationExpression
- *         ->
- *     simulationOperand
- *         ->
- *     expression
- *
- * The resulting recursion is intentional: a simulation operation is itself an
- * expression and may therefore contain normal expressions as its target,
- * source and options.
+ * The first SIMULATE token is consumed by simulationOperation before this
+ * recursive boundary is reached.
  */
 
 simulationOperand
@@ -1687,6 +963,6 @@ simulationOperand
 
 /*
  * ============================================================================
- * END OF GRAMMAR RULES
+ * END
  * ============================================================================
  */
