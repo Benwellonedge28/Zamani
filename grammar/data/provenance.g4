@@ -9,440 +9,314 @@
  *
  * STATUS
  * ------
- * PRODUCTION DATA-DOMAIN LEAF GRAMMAR
+ * PRODUCTION-READY DATA PROVENANCE / LINEAGE GRAMMAR
  *
  * PURPOSE
  * -------
- * This file defines the canonical SOURCE-LEVEL PROVENANCE / LINEAGE syntax
- * for Zamani.
+ * This grammar owns DATA-DOMAIN provenance declarations and lineage metadata.
  *
- * Provenance describes the semantic history, origin, derivation, transformation,
- * consumption, production, identity, version, and declared metadata associated
- * with logical data.
+ * It describes the logical origin, derivation, transformation, production,
+ * consumption, identity metadata, version metadata, schema association,
+ * evidence association, and extensible lineage properties of data values.
  *
- * It describes WHAT provenance information exists or is requested.
+ * This grammar is intentionally OPEN-WORLD.
  *
- * It does NOT implement:
- *
- *   - provenance databases;
- *   - audit-log storage;
- *   - distributed tracing;
- *   - filesystem metadata;
- *   - blockchain/ledger implementations;
- *   - cryptographic implementations;
- *   - hashing implementations;
- *   - signatures;
- *   - identity providers;
- *   - authentication;
- *   - authorization;
- *   - networking;
- *   - scheduling;
- *   - runtime tracing;
- *   - compiler internals;
- *   - hardware discovery;
- *   - physical device identity;
- *   - quantum::ir;
- *   - QEC;
- *   - ZQN;
- *   - HAL.
+ * It does not enumerate every possible provenance system, storage provider,
+ * tracing system, database, ledger, cloud provider, vendor, hash algorithm,
+ * signature algorithm, hardware target, quantum device, or future computing
+ * technology.
  *
  * ============================================================================
- * ARCHITECTURAL OWNERSHIP
+ * OWNERSHIP
  * ============================================================================
  *
  * THIS FILE OWNS
- * --------------
  *
- *   - provenance declarations;
- *   - provenance statement syntax;
- *   - lineage relationships;
- *   - derivation relationships;
- *   - origin declarations;
- *   - producer relationships;
- *   - consumer relationships;
- *   - transformation relationships;
- *   - provenance identity;
- *   - provenance version;
- *   - provenance schema references;
- *   - provenance contracts;
+ *   - data provenance declarations;
+ *   - data provenance members;
+ *   - data lineage relationships;
+ *   - data origin metadata;
+ *   - data derivation metadata;
+ *   - data transformation metadata;
+ *   - producer/consumer metadata;
+ *   - provenance metadata properties;
  *   - provenance requirements;
  *   - provenance constraints;
  *   - provenance preferences;
  *   - provenance hints;
- *   - extensible provenance properties;
- *   - provenance scopes;
- *   - provenance expressions;
- *   - provenance metadata structure.
+ *   - provenance schema references;
+ *   - provenance evidence references;
+ *   - data provenance attachment syntax.
  *
  * THIS FILE DOES NOT OWN
- * ----------------------
  *
- *   - general expressions;
- *   - general types;
+ *   - ordinary expressions;
+ *   - expression-level provenance invocation;
+ *   - types;
  *   - schemas;
- *   - records;
- *   - collections;
- *   - streams;
- *   - transformations;
- *   - persistence;
  *   - serialization;
- *   - deserialization;
- *   - networking;
- *   - security implementation;
+ *   - persistence;
  *   - cryptography;
- *   - storage;
- *   - distributed execution;
- *   - AI/ML semantics;
+ *   - authentication;
+ *   - authorization;
+ *   - audit implementation;
+ *   - distributed tracing implementation;
+ *   - runtime event collection;
+ *   - AI semantics;
  *   - quantum semantics;
  *   - HDL semantics;
  *   - hardware realization;
+ *   - resource discovery;
+ *   - scheduling;
  *   - canonical IR definitions.
  *
  * ============================================================================
  * SINGLE-OWNER RULE
  * ============================================================================
  *
- * This file is the canonical grammar owner for provenance/lineage syntax.
+ * Expression-level provenance:
  *
- * The existing data.g4 rule:
+ *     provenance(...)
  *
- *     dataProvenanceDecl
+ * is owned exclusively by:
  *
- * MUST eventually delegate to this grammar rather than implement an
- * independent provenance grammar.
+ *     grammar/expressions/provenance.g4
  *
- * No second provenance grammar may be introduced under:
+ * This file MUST NOT define another provenanceExpression rule.
  *
- *     data/
- *     interoperability/
- *     security/
- *     persistence/
- *     networking/
+ * Data provenance declarations are owned here.
  *
- * Provenance is a cross-domain DATA concern.
+ * Therefore:
  *
- * ============================================================================
- * COMPOSITION
- * ============================================================================
+ *     expression provenance
+ *          -> expressions/provenance.g4
  *
- * Canonical architecture:
+ *     data provenance declaration
+ *          -> data/provenance.g4
  *
- *     grammar/Zamani.g4
- *             |
- *             v
- *     grammar/antlr/ZamaniParser.g4
- *             |
- *             v
- *          dataStmt
- *             |
- *             v
- *       provenanceStmt
- *             |
- *             v
- *     domain-neutral AST
- *             |
- *             v
- *     semantic provenance model
- *             |
- *             v
- *     canonical semantic model / IR
- *             |
- *       +-----+------+----------------+
- *       |            |                |
- *       v            v                v
- *    storage      auditing         runtime
- *       |            |                |
- *       +------------+----------------+
- *                    |
- *                    v
- *               target system
- *
- * Provenance MUST remain a semantic concern.
+ * Both normalize downstream into the common semantic provenance model.
  *
  * ============================================================================
- * CROSS-DOMAIN INTEGRATION
+ * REPOSITORY INTEGRATION
  * ============================================================================
  *
- * Provenance may describe data originating from:
+ * DATA FRONTEND:
  *
- *   - classical computation;
- *   - quantum computation;
- *   - hybrid computation;
- *   - AI/ML;
- *   - tensors;
- *   - datasets;
- *   - streams;
- *   - distributed computation;
- *   - networking;
- *   - HDL/hardware co-design;
- *   - persistence;
- *   - external/interoperability formats;
- *   - future computing domains.
- *
- * The provenance grammar does not need to know how those domains implement
- * their computation.
- *
- * For quantum programs in particular:
- *
- *     provenance
+ *     grammar/data/data.g4
  *          |
- *          v
- *     generic AST
- *          |
- *          v
- *     semantic analysis
- *          |
- *          +--> data provenance
- *          |
- *          +--> quantum semantics
+ *          +--> dataProvenanceConstruct
  *                  |
  *                  v
- *              quantum::ir
+ *              provenance.g4
  *
- * Provenance MUST NOT create or modify a second quantum IR.
+ * EXPRESSION FRONTEND:
+ *
+ *     grammar/expressions/provenance.g4
+ *          |
+ *          v
+ *     provenance(...)
+ *
+ * SEMANTIC:
+ *
+ *     data provenance
+ *          |
+ *          v
+ *     common semantic provenance model
+ *
+ * CANONICAL IR:
+ *
+ *     semantic provenance
+ *          |
+ *          +--> canonical data/semantic IR
+ *          |
+ *          +--> applicable domain IR
+ *
+ * Quantum data continues to lower through:
+ *
+ *     quantum::ir
+ *
+ * This grammar MUST NOT introduce a provenance-specific quantum IR.
  *
  * ============================================================================
  * POCO-REAF
  * ============================================================================
  *
- * Zamani's portability objective is:
+ * Provenance describes logical meaning and lineage.
  *
- *     Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
+ * It does not describe the finite capacity of today's machines.
  *
- * Provenance syntax therefore MUST NOT depend on:
+ * No grammar-level limits exist for:
  *
- *   - CPU count;
- *   - core count;
- *   - thread count;
- *   - GPU count;
- *   - FPGA count;
- *   - accelerator count;
- *   - QPU count;
- *   - qubit count;
- *   - node count;
- *   - device count;
- *   - memory capacity;
- *   - storage capacity;
- *   - network capacity;
- *   - register width;
- *   - tensor rank;
+ *   - provenance records;
+ *   - lineage relations;
+ *   - sources;
+ *   - producers;
+ *   - consumers;
+ *   - transformations;
+ *   - evidence items;
+ *   - data objects;
+ *   - distributed participants;
+ *   - quantum results;
  *   - tensor dimensions;
- *   - replica count;
- *   - partition count;
- *   - timeline count.
+ *   - nodes;
+ *   - devices;
+ *   - memory;
+ *   - threads;
+ *   - processors;
+ *   - accelerators.
  *
- * The following MUST NEVER become grammar-level limits:
+ * Repetition is represented through grammar repetition.
  *
- *     MAX_QUBITS
- *     MAX_CPUS
- *     MAX_GPUS
- *     MAX_FPGAS
- *     MAX_NODES
- *     MAX_MEMORY
- *     MAX_THREADS
- *     MAX_TENSOR_RANK
- *     MAX_REGISTER_WIDTH
- *     MAX_NETWORK_SIZE
- *     MAX_DEVICE_COUNT
- *
- * Numeric quantities occurring in source remain program semantics.
+ * Physical and implementation limits belong to resource negotiation and
+ * execution, not to the source-language grammar.
  *
  * ============================================================================
- * REQUIREMENT / PREFERENCE / HINT SEPARATION
+ * OPEN-WORLD RULE
  * ============================================================================
  *
- * Provenance syntax preserves the difference between:
+ * Provenance concepts that are not universal language primitives must normally
+ * be represented by:
  *
- *     requires
- *     constraint
- *     prefer
- *     hint
- *     implementation decision
+ *   - qualified names;
+ *   - ordinary expressions;
+ *   - properties;
+ *   - evidence values;
+ *   - metadata;
+ *   - dialect extensions.
  *
- * Example:
- *
- *     requires capability("provenance.integrity")
- *
- * is a semantic requirement.
- *
- * It does NOT mean:
- *
- *     use provider X
- *
- * Likewise:
- *
- *     prefer provenance.storage.local
- *
- * is a preference, not a mandatory implementation decision.
- *
- * ============================================================================
- * OPEN-WORLD DESIGN
- * ============================================================================
- *
- * Provenance properties, identities, policies, capabilities, and metadata are
- * OPEN-WORLD semantic identifiers.
- *
- * The grammar MUST NOT enumerate:
- *
- *     git
- *     blockchain
- *     database
- *     cloud-provider
- *     vendor
- *     tracing-system
- *     ledger
- *     specific hash algorithm
- *     specific signature algorithm
- *
- * as the complete universe of provenance implementations.
- *
- * Future systems are represented through:
- *
- *     qualifiedName
- *
- * and semantic registries/dialects.
- *
- * ============================================================================
- * SERIALIZATION / PERSISTENCE BOUNDARY
- * ============================================================================
- *
- * Provenance is related to persistence and serialization but does not own
- * either implementation.
- *
- * Serialization answers:
- *
- *     How is a value represented?
- *
- * Persistence answers:
- *
- *     How is a value retained/recovered?
- *
- * Provenance answers:
- *
- *     Where did the logical value come from and how was it transformed?
- *
- * Therefore:
- *
- *     provenance.g4
- *          |
- *          +--> serialization.g4
- *          |
- *          +--> persistence.g4
- *          |
- *          +--> semantic data model
- *
- * must remain separate ownership domains.
- *
- * ============================================================================
- * SCHEMA BOUNDARY
- * ============================================================================
- *
- * Schema declarations belong to schema/data schema ownership.
- *
- * This file may reference schemas but MUST NOT redefine the schema language.
+ * The grammar must therefore remain stable as new provenance technologies
+ * appear.
  *
  * ============================================================================
  * AST CONTRACT
  * ============================================================================
  *
- * The grammar maps to domain-neutral AST structures.
+ * Downstream AST construction must preserve the following logical structure:
  *
- * Required semantic information:
+ *     DataProvenanceDeclaration
+ *         name
+ *         subject
+ *         members
+ *         source span
  *
- *   ProvenanceDeclaration
- *       name
- *       subject
- *       members
- *       source span
+ *     DataProvenanceRelation
+ *         relation kind
+ *         subject/value
+ *         related expressions
+ *         source span
  *
- *   ProvenanceRelation
- *       relation kind
- *       subject
- *       related values
- *       metadata
- *       source span
+ *     DataProvenanceProperty
+ *         qualified name
+ *         value
+ *         source span
  *
- *   ProvenanceProperty
- *       qualified name
- *       value
- *       source span
+ *     DataProvenanceRequirement
+ *         expression
+ *         source span
  *
- *   ProvenanceContract
- *       requirements
- *       constraints
- *       preferences
- *       hints
- *       source span
+ *     DataProvenanceConstraint
+ *         expression
+ *         source span
  *
- * The AST MUST NOT contain:
+ *     DataProvenancePreference
+ *         expression
+ *         source span
  *
- *   - storage implementation objects;
- *   - vendor objects;
+ *     DataProvenanceHint
+ *         expression
+ *         source span
+ *
+ * The AST must remain domain-neutral.
+ *
+ * It must not contain:
+ *
  *   - database connections;
  *   - network clients;
- *   - physical device IDs;
+ *   - filesystem handles;
+ *   - cryptographic objects;
+ *   - physical device handles;
  *   - quantum hardware state;
- *   - runtime handles.
+ *   - scheduler state;
+ *   - runtime pointers.
  *
  * ============================================================================
  * SEMANTIC CONTRACT
  * ============================================================================
  *
- * Semantic analysis resolves:
+ * Semantic analysis is responsible for:
  *
- *   - provenance subject identity;
- *   - relationship direction;
- *   - data dependency;
- *   - provenance scope;
- *   - schema compatibility;
- *   - version compatibility;
- *   - capability requirements;
- *   - integrity requirements;
- *   - security requirements;
- *   - retention requirements;
- *   - policy compatibility;
- *   - dialect-specific properties.
+ *   - resolving the provenance subject;
+ *   - resolving referenced values;
+ *   - determining relation direction;
+ *   - validating relation meaning;
+ *   - checking schema compatibility;
+ *   - checking version semantics;
+ *   - validating evidence references;
+ *   - validating requirements;
+ *   - validating constraints;
+ *   - validating policies;
+ *   - validating capabilities;
+ *   - preserving provenance through transformations.
  *
- * Semantic analysis determines whether relationships are meaningful.
- *
- * The parser only establishes their syntactic structure.
+ * The parser establishes structure only.
  *
  * ============================================================================
- * IR CONTRACT
+ * EFFECT CONTRACT
  * ============================================================================
  *
- * This file DOES NOT define a provenance-specific competing IR.
+ * Declaring provenance does not inherently perform runtime I/O.
  *
- * Provenance information must lower into the repository's canonical semantic
- * model / data IR boundary.
+ * Runtime recording/querying may introduce effects such as:
  *
- * If a dedicated provenance semantic representation is required downstream,
- * it MUST be owned by the semantic/IR layer rather than this grammar.
+ *   provenance
+ *   audit
+ *   storage
+ *   network
  *
- * Quantum data remains governed by:
- *
- *     quantum::ir
- *
- * and provenance MUST NOT replace, duplicate, or fork that representation.
+ * Those effects are determined by semantic analysis and execution policy.
  *
  * ============================================================================
- * SOURCE-SPAN CONTRACT
+ * CAPABILITY CONTRACT
  * ============================================================================
  *
- * Every provenance construct must remain traceable to source locations.
+ * Provenance may require capabilities expressed through ordinary Zamani
+ * requirement expressions, for example:
  *
- * At minimum, downstream AST/semantic structures must preserve source spans
- * for:
+ *     requires capability("provenance.record");
  *
- *   - declaration;
- *   - subject;
- *   - relationship;
- *   - related expression;
- *   - property;
- *   - requirement;
- *   - constraint;
- *   - preference;
- *   - hint.
+ *     requires capability("provenance.verify");
+ *
+ *     requires capability("provenance.integrity");
+ *
+ * The grammar does not enumerate the capability universe.
+ *
+ * ============================================================================
+ * RESOURCE CONTRACT
+ * ============================================================================
+ *
+ * Provenance introduces no fixed resource requirements.
+ *
+ * Resource requirements remain ordinary semantic expressions.
+ *
+ * Any implementation budget is external to the language's universal grammar.
+ *
+ * ============================================================================
+ * POLICY CONTRACT
+ * ============================================================================
+ *
+ * Provenance may be constrained by policies through ordinary expressions and
+ * policy semantics.
+ *
+ * This grammar does not implement policy evaluation.
+ *
+ * ============================================================================
+ * PROVENANCE CONTRACT
+ * ============================================================================
+ *
+ * Provenance itself is part of the semantic history of a value.
+ *
+ * Transformations of provenance metadata must remain distinguishable from
+ * transformations of the data value being described.
  *
  * ============================================================================
  * DETERMINISM
@@ -452,43 +326,39 @@
  *
  *   - source text;
  *   - grammar version;
- *   - canonical lexer;
+ *   - lexer version;
+ *   - parser configuration;
  *   - explicitly selected dialect configuration.
  *
- * Parsing MUST NOT depend on:
+ * Parsing must not depend on:
  *
  *   - hardware;
- *   - storage availability;
- *   - filesystem state;
- *   - network state;
  *   - wall-clock time;
  *   - randomness;
- *   - environment variables;
+ *   - filesystem state;
+ *   - network state;
  *   - runtime state.
  *
  * ============================================================================
  * RUST CONTRACT
  * ============================================================================
  *
- * This is an ANTLR parser grammar.
+ * This file contains no Rust actions.
  *
- * It contains:
+ * Generated parser integration must remain compatible with:
  *
- *   - no Rust code;
- *   - no target-language actions;
- *   - no semantic predicates;
- *   - no filesystem access;
- *   - no network access;
- *   - no runtime execution.
+ *   Rust 1.97+
+ *   Rust 2021+
  *
- * Generated/compiler integration MUST remain compatible with:
+ * Zamani implementation code must not require unsafe Rust.
  *
- *     Rust 1.97
- *     Rust 1.97.1
- *     Rust 2021
- *
- * and must not require unsafe Rust.
- *
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * GRAMMAR HEADER
  * ============================================================================
  */
 
@@ -501,48 +371,33 @@ options {
 
 /*
  * ============================================================================
- * PUBLIC ENTRY POINT
+ * PUBLIC DATA PROVENANCE UNIT
  * ============================================================================
  *
- * This entry point is intentionally isolated from the complete Zamani program
- * entry point.
+ * This rule is intended for isolated grammar conformance testing.
  *
- * It is useful for:
- *
- *   - grammar conformance tests;
- *   - parser unit tests;
- *   - tooling;
- *   - data-domain composition.
- *
+ * The complete Zamani parser must enter through its canonical root rather than
+ * through this rule.
  * ============================================================================
  */
 
 provenanceUnit
-    : provenanceConstruct* EOF
+    : dataProvenanceConstruct* EOF
     ;
 
 
 /*
  * ============================================================================
- * PUBLIC INTEGRATION FACADE
+ * PUBLIC INTEGRATION RULE
  * ============================================================================
  *
- * data.g4 should delegate to provenanceStmt.
- *
- * Existing dataProvenanceDecl should become a compatibility façade rather
- * than a second implementation.
+ * data.g4 must consume this rule rather than reproduce provenance syntax.
  * ============================================================================
  */
 
-provenanceStmt
-    : provenanceDeclaration
-    | provenanceAttachStatement
-    ;
-
-provenanceConstruct
-    : provenanceStmt
-    | provenanceExpression
-    | provenanceContract
+dataProvenanceConstruct
+    : dataProvenanceDeclaration
+    | dataProvenanceAttach
     ;
 
 
@@ -551,41 +406,29 @@ provenanceConstruct
  * PROVENANCE DECLARATION
  * ============================================================================
  *
- * Canonical form:
+ * Canonical structure:
  *
- *     provenance Event for value {
- *         derived_from source;
- *         transformed_by transform;
- *         produced_by producer;
+ *     provenance name {
+ *         source input;
+ *         derivation transformation;
+ *         generated producer;
+ *         verified evidence;
  *         property = value;
+ *         requires capability("...");
  *     }
  *
- * The subject remains a general expression.
+ * The declaration name identifies the provenance declaration itself.
  *
- * Therefore provenance may describe:
- *
- *   variables
- *   records
- *   collections
- *   streams
- *   tensors
- *   datasets
- *   models
- *   computation results
- *   hybrid values
- *   future data-domain values.
- *
+ * The subject may be introduced through a source/metadata member rather than
+ * through a hardware-specific identity.
  * ============================================================================
  */
 
-provenanceDeclaration
-    : PROVENANCE provenanceName
-      FOR provenanceSubject
-      provenanceDeclarationBody
-    ;
-
-provenanceDeclarationBody
-    : LBRACE provenanceMember* RBRACE
+dataProvenanceDeclaration
+    : PROVENANCE IDENTIFIER
+      LBRACE
+      dataProvenanceMember*
+      RBRACE
     ;
 
 
@@ -594,58 +437,29 @@ provenanceDeclarationBody
  * PROVENANCE ATTACHMENT
  * ============================================================================
  *
- * This form allows provenance to be attached to an already existing logical
- * value without requiring a named provenance declaration.
+ * Attaches data provenance metadata to an existing expression.
  *
  * Example:
  *
- *     provenance value with {
- *         derived_from input;
+ *     provenance result {
+ *         source input;
  *     };
  *
+ * The expression-level form:
+ *
+ *     provenance(result)
+ *
+ * remains owned by expressions/provenance.g4.
+ *
  * ============================================================================
  */
 
-provenanceAttachStatement
-    : PROVENANCE provenanceSubject
-      WITH
-      LBRACE provenanceMember* RBRACE
-      SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * SUBJECTS
- * ============================================================================
- *
- * Provenance subjects reuse the canonical expression system.
- *
- * This is intentional.
- *
- * Do NOT create:
- *
- *     provenanceIdentifier
- *     provenanceLiteral
- *     provenanceType
- *
- * when the existing language already has those concepts.
- * ============================================================================
- */
-
-provenanceSubject
-    : expression
-    ;
-
-
-/*
- * ============================================================================
- * NAMES
- * ============================================================================
- */
-
-provenanceName
-    : qualifiedName
+dataProvenanceAttach
+    : PROVENANCE expression
+      LBRACE
+      dataProvenanceMember*
+      RBRACE
+      SEMICOLON?
     ;
 
 
@@ -655,23 +469,46 @@ provenanceName
  * ============================================================================
  */
 
-provenanceMember
-    : provenanceDerivedFrom
-    | provenanceOrigin
-    | provenanceProducedBy
-    | provenanceConsumedBy
-    | provenanceTransformedBy
-    | provenanceLineage
-    | provenanceIdentity
-    | provenanceVersion
-    | provenanceSchema
-    | provenanceScope
-    | provenanceContractClause
-    | provenanceProperty
-    | provenanceRequirement
-    | provenanceConstraint
-    | provenancePreference
-    | provenanceHint
+dataProvenanceMember
+    : dataProvenanceSource
+    | dataProvenanceDerivation
+    | dataProvenanceGenerated
+    | dataProvenanceTransformed
+    | dataProvenanceVerified
+    | dataProvenanceDecision
+    | dataProvenanceEvidence
+    | dataProvenanceProperty
+    | dataProvenanceSchema
+    | dataProvenanceContract
+    | dataProvenanceAnnotation
+    ;
+
+
+/*
+ * ============================================================================
+ * SOURCE
+ * ============================================================================
+ *
+ * Identifies a logical source of the data.
+ *
+ * It is not a physical address.
+ *
+ * It may refer to:
+ *
+ *   - a value;
+ *   - a dataset;
+ *   - a computation;
+ *   - a module;
+ *   - a service;
+ *   - a model;
+ *   - another logical artifact.
+ * ============================================================================
+ */
+
+dataProvenanceSource
+    : SOURCE
+      expression
+      SEMICOLON
     ;
 
 
@@ -680,178 +517,107 @@ provenanceMember
  * DERIVATION
  * ============================================================================
  *
- * Indicates logical input values from which the subject was derived.
+ * Describes logical derivation information.
  *
- * Example:
+ * The referenced expression may identify the source, transformation, or
+ * derivation artifact.
  *
- *     derived_from input_a, input_b;
- *
- * This describes semantic dependency, not execution scheduling.
  * ============================================================================
  */
 
-provenanceDerivedFrom
-    : DERIVED_FROM
-      provenanceExpressionList
+dataProvenanceDerivation
+    : DERIVATION
+      expression
       SEMICOLON
     ;
 
 
 /*
  * ============================================================================
- * ORIGIN
+ * GENERATED
  * ============================================================================
  *
- * Identifies the logical origin of a value.
+ * Identifies a logical producer or generation event.
  *
- * The origin is an expression rather than a hard-coded storage technology.
+ * No physical process, CPU, node, device, or scheduler identity is implied.
  * ============================================================================
  */
 
-provenanceOrigin
-    : ORIGIN
-      provenanceExpressionList
+dataProvenanceGenerated
+    : GENERATED
+      expression
       SEMICOLON
     ;
 
 
 /*
  * ============================================================================
- * PRODUCER
+ * TRANSFORMED
  * ============================================================================
  *
- * Describes the logical producer of a value.
+ * Describes a transformation associated with the data.
  *
- * The producer may be:
- *
- *   function
- *   module
- *   pipeline
- *   service
- *   model
- *   computation
- *   symbolic resource
- *   future domain construct.
- *
- * It is NOT a physical process identifier.
+ * The transformation itself remains owned by the transformation subsystem.
  * ============================================================================
  */
 
-provenanceProducedBy
-    : PRODUCED_BY
-      provenanceExpressionList
+dataProvenanceTransformed
+    : TRANSFORMED
+      expression
       SEMICOLON
     ;
 
 
 /*
  * ============================================================================
- * CONSUMER
+ * VERIFIED
+ * ============================================================================
+ *
+ * Associates verification evidence or a verification result.
+ *
+ * Verification semantics remain downstream.
  * ============================================================================
  */
 
-provenanceConsumedBy
-    : CONSUMED_BY
-      provenanceExpressionList
+dataProvenanceVerified
+    : VERIFIED
+      expression
       SEMICOLON
     ;
 
 
 /*
  * ============================================================================
- * TRANSFORMATION
+ * DECISION
  * ============================================================================
  *
- * Indicates a logical transformation associated with the subject.
+ * Associates a decision record or decision value with the data lineage.
  *
- * This grammar does not define the transformation itself.
- *
- * Transformation semantics remain owned by transformations.g4 and the
- * semantic/data pipeline.
+ * The decision model is not redefined here.
  * ============================================================================
  */
 
-provenanceTransformedBy
-    : TRANSFORMED_BY
-      provenanceExpressionList
+dataProvenanceDecision
+    : DECISION
+      expression
       SEMICOLON
     ;
 
 
 /*
  * ============================================================================
- * GENERIC LINEAGE
+ * EVIDENCE
  * ============================================================================
  *
- * LINEAGE provides an extensible relationship category.
+ * Associates an evidence value with the provenance record.
  *
- * The relation name is open-world.
- *
- * Example:
- *
- *     lineage custom::relationship(input, output);
- *
- * Future relation types therefore do not require a grammar rewrite.
+ * Evidence syntax/semantics remain owned by the canonical evidence subsystem.
  * ============================================================================
  */
 
-provenanceLineage
-    : LINEAGE
-      provenanceRelation
-      SEMICOLON
-    ;
-
-provenanceRelation
-    : qualifiedName
-      provenanceArgumentList?
-    ;
-
-provenanceArgumentList
-    : LPAREN provenanceArgumentListItems? RPAREN
-    ;
-
-provenanceArgumentListItems
-    : provenanceExpression
-      (COMMA provenanceExpression)*
-    ;
-
-provenanceArgument
-    : provenanceExpression
-    ;
-
-
-/*
- * ============================================================================
- * IDENTITY
- * ============================================================================
- *
- * Identity is semantic data.
- *
- * It must not be interpreted by the parser as:
- *
- *   physical device identity;
- *   storage address;
- *   database row ID;
- *   network address.
- * ============================================================================
- */
-
-provenanceIdentity
-    : IDENTITY
-      provenanceExpression
-      SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * VERSION
- * ============================================================================
- */
-
-provenanceVersion
-    : VERSION
-      provenanceExpression
+dataProvenanceEvidence
+    : EVIDENCE
+      expression
       SEMICOLON
     ;
 
@@ -861,13 +627,13 @@ provenanceVersion
  * SCHEMA
  * ============================================================================
  *
- * Schema ownership remains outside this file.
+ * Associates the logical data with a schema reference.
  *
- * This rule only references a schema contract.
+ * This does not redefine schema syntax.
  * ============================================================================
  */
 
-provenanceSchema
+dataProvenanceSchema
     : SCHEMA
       qualifiedName
       SEMICOLON
@@ -876,304 +642,148 @@ provenanceSchema
 
 /*
  * ============================================================================
- * SCOPE
+ * EXTENSIBLE PROPERTY
  * ============================================================================
  *
- * Scope is semantic metadata.
+ * Property names are open-world qualified names.
  *
- * It can describe the logical boundary over which provenance applies.
- * ============================================================================
- */
-
-provenanceScope
-    : SCOPE
-      provenanceExpression
-      SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * CONTRACT
- * ============================================================================
+ * This avoids a finite grammar catalogue of provenance concepts.
  *
- * Provenance contracts describe semantic expectations.
+ * Examples:
  *
- * They do not execute verification.
- * ============================================================================
- */
-
-provenanceContractClause
-    : CONTRACT
-      provenanceContract
-    ;
-
-provenanceContract
-    : CONTRACT
-      LBRACE
-      provenanceContractItem*
-      RBRACE
-    ;
-
-provenanceContractItem
-    : provenanceRequirement
-    | provenanceConstraint
-    | provenancePreference
-    | provenanceHint
-    | provenanceProperty
-    ;
-
-
-/*
- * ============================================================================
- * REQUIREMENTS
- * ============================================================================
- *
- * Requirement means semantically necessary.
- *
- * Example:
- *
- *     requires capability("provenance.integrity");
- *
- * No hardware limits are implied.
- * ============================================================================
- */
-
-provenanceRequirement
-    : REQUIRES
-      provenanceExpression
-      SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * CONSTRAINTS
- * ============================================================================
- */
-
-provenanceConstraint
-    : CONSTRAINT
-      provenanceExpression
-      SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * PREFERENCES
- * ============================================================================
- *
- * A preference MUST NOT be interpreted as a requirement.
- * ============================================================================
- */
-
-provenancePreference
-    : PREFER
-      provenanceExpression
-      SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * HINTS
- * ============================================================================
- *
- * Hints provide implementation guidance.
- *
- * They do not establish semantic correctness requirements unless the semantic
- * specification explicitly defines them as such.
- * ============================================================================
- */
-
-provenanceHint
-    : HINT
-      provenanceExpression
-      SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * GENERIC PROPERTIES
- * ============================================================================
- *
- * Properties are open-world.
- *
- * Example:
- *
- *     retention = policy::long_term;
- *
- *     integrity = capability("hash");
- *
- *     source_system = "example";
- *
+ *     source_system = system;
+ *     retention_policy = policy;
+ *     integrity = capability("provenance.integrity");
  *     custom::property = value;
  *
- * Property names are not a finite grammar registry.
  * ============================================================================
  */
 
-provenanceProperty
+dataProvenanceProperty
     : qualifiedName
       ASSIGN
-      provenanceExpression
+      expression
       SEMICOLON
     ;
 
 
 /*
  * ============================================================================
- * EXPRESSIONS
+ * CONTRACT / REQUIREMENT / CONSTRAINT / PREFERENCE / HINT
  * ============================================================================
  *
- * Provenance does not define a private expression language.
+ * These are expressed using the repository's universal semantic vocabulary.
  *
- * It reuses the canonical Zamani expression grammar.
+ * The grammar does not create a second contract system.
  * ============================================================================
  */
 
-provenanceExpression
-    : expression
-    ;
-
-provenanceExpressionList
-    : provenanceExpression
-      (COMMA provenanceExpression)*
+dataProvenanceContract
+    : REQUIRES
+      expression
+      SEMICOLON
+    | CONSTRAINT
+      expression
+      SEMICOLON
+    | PREFER
+      expression
+      SEMICOLON
+    | HINT
+      expression
+      SEMICOLON
     ;
 
 
 /*
  * ============================================================================
- * EXPRESSION-LEVEL PROVENANCE
+ * ANNOTATIONS
  * ============================================================================
  *
- * This provides an expression form for provenance queries/metadata.
+ * Existing annotation ownership remains elsewhere.
  *
- * The semantic layer determines the exact operation.
- *
- * Example conceptual usage:
- *
- *     provenance(value)
- *
- * or:
- *
- *     provenance(value, relation)
- *
+ * This rule is deliberately a compatibility boundary.
  * ============================================================================
  */
 
-provenanceExpression
-    : PROVENANCE
-      LPAREN
-      provenanceExpressionList?
-      RPAREN
-    | expression
+dataProvenanceAnnotation
+    : annotation
     ;
 
 
 /*
  * ============================================================================
- * CONTRACT REFERENCE
+ * SEMANTIC NORMALIZATION CONTRACT
  * ============================================================================
  *
- * Named contracts may be referenced without defining a second contract
- * language.
- * ============================================================================
- */
-
-provenanceContractReference
-    : qualifiedName
-    ;
-
-
-/*
- * ============================================================================
- * NORMALIZED SEMANTIC RELATIONS
- * ============================================================================
+ * The parser-level spellings above normalize to the common provenance model.
  *
- * The semantic layer should normalize all syntactic relationships into a
- * common representation.
+ * Conceptual normalized relations:
  *
- * Example normalized relation kinds:
+ *     SOURCE
+ *     DERIVATION
+ *     GENERATED
+ *     TRANSFORMED
+ *     VERIFIED
+ *     DECISION
+ *     EVIDENCE
+ *     PROPERTY
+ *     SCHEMA
  *
- *     DERIVED_FROM
- *     ORIGIN
- *     PRODUCED_BY
- *     CONSUMED_BY
- *     TRANSFORMED_BY
- *     CUSTOM
+ * This is not a parser-level closed enumeration.
  *
- * The grammar does not define this enum as an implementation type.
+ * Additional provenance relationships should normally use properties or
+ * qualified semantic extensions instead of requiring a new universal keyword.
  *
- * This list is an architectural contract, not a parser-level closed-world
- * enumeration.
  * ============================================================================
  */
 
 
 /*
  * ============================================================================
- * DATA / PERSISTENCE INTEGRATION
+ * CROSS-DOMAIN INTEGRATION
  * ============================================================================
  *
- * Provenance may be attached to persisted data:
+ * DATA
  *
- *     provenance
+ *     data/provenance.g4
  *          |
- *          +--> persistence.g4
+ *          v
+ *     semantic provenance
  *
- * Persistence determines retention/recovery semantics.
+ * AI
  *
- * Provenance determines lineage/history semantics.
+ *     ai/provenance.g4
+ *          |
+ *          v
+ *     semantic provenance
  *
- * Neither grammar is allowed to absorb the other's implementation.
+ * QUANTUM
  *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * SERIALIZATION INTEGRATION
- * ============================================================================
+ *     quantum provenance
+ *          |
+ *          v
+ *     semantic provenance
+ *          |
+ *          v
+ *     quantum::ir
  *
- * Provenance metadata may be serialized.
+ * HDL / HARDWARE
  *
- * However:
+ *     hardware artifact provenance
+ *          |
+ *          v
+ *     semantic provenance
  *
- *     provenance.g4
+ * DISTRIBUTED
  *
- * does not define representation formats.
+ *     distributed lineage
+ *          |
+ *          v
+ *     semantic provenance
  *
- *     serialization.g4
+ * All domains therefore share one provenance semantic model.
  *
- * remains responsible for serialization intent.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * SECURITY INTEGRATION
- * ============================================================================
- *
- * Provenance MAY express requirements such as:
- *
- *     requires capability("provenance.integrity");
- *     requires capability("provenance.authenticated");
- *
- * The grammar does not implement:
- *
- *     hashes
- *     signatures
- *     encryption
- *     key management
- *     identity providers
- *
- * Security semantics remain downstream.
+ * No domain creates a competing provenance IR.
  *
  * ============================================================================
  */
@@ -1181,89 +791,85 @@ provenanceContractReference
 
 /*
  * ============================================================================
- * DISTRIBUTED INTEGRATION
+ * SERIALIZATION BOUNDARY
  * ============================================================================
  *
- * Provenance can span distributed computations.
+ * Provenance values may later be serialized.
  *
- * It must therefore permit arbitrary numbers of:
+ * Serialization format ownership remains outside this grammar.
+ *
+ * This file does not define JSON, XML, binary, database, ledger, or vendor
+ * serialization syntax.
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * PERSISTENCE BOUNDARY
+ * ============================================================================
+ *
+ * Provenance may describe persistent data.
+ *
+ * Persistence determines:
+ *
+ *     retention
+ *     storage
+ *     recovery
+ *
+ * Provenance determines:
+ *
+ *     logical lineage
+ *     origin
+ *     derivation
+ *     transformation history
+ *
+ * The two concerns remain separate.
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * SECURITY BOUNDARY
+ * ============================================================================
+ *
+ * This grammar may carry expressions requiring integrity, authentication,
+ * authorization, or audit capabilities.
+ *
+ * It does not implement any of them.
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * SCALABILITY
+ * ============================================================================
+ *
+ * These constructs deliberately use:
+ *
+ *     *
+ *
+ * for arbitrary member counts.
+ *
+ * There is no grammar-level maximum for:
  *
  *     sources
  *     transformations
  *     producers
  *     consumers
- *     relations
+ *     evidence
+ *     decisions
+ *     properties
+ *     provenance declarations
  *
- * through grammar repetition rather than fixed alternatives.
- *
- * No node count is encoded.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * QUANTUM INTEGRATION
- * ============================================================================
- *
- * Provenance may describe data produced by quantum computation.
- *
- * It MUST NOT describe physical quantum implementation through this grammar.
- *
- * In particular, provenance syntax must not require:
- *
- *     physical qubit IDs
- *     fixed QPU topology
- *     fixed gate sets
- *     calibration data
- *     routing decisions
- *     QEC implementation
- *
- * Those remain downstream responsibilities.
- *
- * The canonical quantum semantic boundary remains:
- *
- *     quantum::ir
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * HDL / HARDWARE INTEGRATION
- * ============================================================================
- *
- * Provenance may describe hardware/software co-design artifacts.
- *
- * It must not hard-code:
- *
- *     FPGA width
- *     register width
- *     memory size
- *     device count
- *     bus count
- *     pipeline depth
- *
- * unless those are explicitly program-defined semantic values.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * OPEN-WORLD RELATION EXTENSION
- * ============================================================================
- *
- * New provenance relations MUST normally be represented through:
- *
- *     lineage qualifiedName(...)
- *
- * rather than by adding another keyword for every future concept.
- *
- * This keeps the grammar extensible while preserving semantic validation.
+ * Actual parser/compiler resource exhaustion is handled through implementation
+ * resource management and diagnostics, not through artificial language
+ * ceilings.
  *
  * ============================================================================
  */
@@ -1274,174 +880,260 @@ provenanceContractReference
  * HARD-CODING AUDIT
  * ============================================================================
  *
- * This grammar intentionally contains no:
+ * This grammar contains no universal capacity constants.
  *
- *     MAX_PROVENANCE_RECORDS
- *     MAX_LINEAGE_DEPTH
- *     MAX_SOURCES
- *     MAX_RELATIONS
- *     MAX_PRODUCERS
- *     MAX_CONSUMERS
- *     MAX_DATASETS
- *     MAX_NODES
- *     MAX_STORAGE
- *     MAX_MEMORY
- *     MAX_THREADS
- *     MAX_GPUS
- *     MAX_FPGAS
- *     MAX_QUBITS
- *     MAX_DEVICES
+ * It does not encode:
  *
- * Repetition is expressed with:
+ *     processor counts
+ *     GPU counts
+ *     FPGA counts
+ *     QPU counts
+ *     qubit counts
+ *     node counts
+ *     device counts
+ *     memory limits
+ *     thread limits
+ *     tensor limits
+ *     network limits
+ *     provenance record limits
+ *     lineage depth limits
  *
- *     *
- *     +
- *
- * and values are delegated to semantic expressions.
+ * A target's finite capacity remains target/resource information.
  *
  * ============================================================================
- * SECURITY AUDIT
+ */
+
+
+/*
+ * ============================================================================
+ * DETERMINISM AUDIT
  * ============================================================================
  *
- * This grammar:
+ * Parsing does not depend on:
  *
- *   - does not access secrets;
- *   - does not access credentials;
- *   - does not access filesystem state;
- *   - does not access network state;
- *   - does not execute code;
- *   - does not create authentication sessions;
- *   - does not implement cryptography.
+ *     hardware
+ *     runtime state
+ *     network state
+ *     filesystem state
+ *     current time
+ *     randomness
+ *
+ * The same source and grammar configuration must produce the same syntactic
+ * structure.
  *
  * ============================================================================
- * PERFORMANCE AUDIT
- * ============================================================================
- *
- * The grammar avoids:
- *
- *   - target-dependent semantic predicates;
- *   - filesystem lookups;
- *   - network lookups;
- *   - runtime discovery;
- *   - unbounded lexical backtracking;
- *   - embedded target-language actions.
- *
- * Lists are represented using normal ANTLR repetition constructs.
- *
- * Very large provenance graphs remain subject to actual parser/compiler
- * resources rather than artificial grammar limits.
- *
+ */
+
+
+/*
  * ============================================================================
  * DIAGNOSTIC CONTRACT
  * ============================================================================
  *
- * The parser should report syntax errors with source spans.
+ * Parser diagnostics must cover:
  *
- * Semantic diagnostics should distinguish:
+ *     missing provenance name
+ *     missing provenance body
+ *     missing member expression
+ *     malformed property
+ *     malformed schema reference
+ *     missing semicolon
+ *     malformed attachment
  *
- *   - unknown provenance relation;
- *   - invalid subject;
- *   - invalid provenance property;
- *   - incompatible schema;
- *   - invalid requirement;
- *   - unsatisfied capability;
- *   - invalid provenance scope;
- *   - invalid version;
- *   - invalid dialect extension.
+ * Semantic diagnostics belong downstream and include:
  *
- * Syntax diagnostics belong to the parser.
+ *     invalid provenance subject
+ *     invalid lineage relation
+ *     incompatible schema
+ *     invalid evidence
+ *     unsatisfied provenance capability
+ *     incompatible provenance policy
+ *     invalid provenance requirement
  *
- * Semantic diagnostics belong downstream.
+ * Diagnostics must retain source spans.
  *
+ * ============================================================================
+ */
+
+
+/*
  * ============================================================================
  * TEST CONTRACT
  * ============================================================================
  *
- * Positive tests MUST include:
+ * POSITIVE:
  *
- *   provenance p for value {
- *       derived_from input;
- *   }
+ *     provenance result {
+ *         source input;
+ *         derivation transform;
+ *         generated compute;
+ *         transformed normalize;
+ *         verified evidence_record;
+ *         evidence evidence_record;
+ *         decision decision_record;
+ *         schema data::Schema;
+ *         custom::property = value;
+ *     }
  *
- *   provenance p for result {
- *       origin source;
- *       produced_by compute;
- *       transformed_by transform;
- *   }
+ *     provenance result {
+ *         requires capability("provenance.record");
+ *         constraint policy::retention;
+ *         prefer storage::durable;
+ *         hint execution::batched;
+ *     }
  *
- *   provenance p for dataset {
- *       lineage custom::relation(source, transform);
- *   }
+ *     provenance result {
+ *         source input_a;
+ *         source input_b;
+ *         source input_c;
+ *     }
  *
- *   provenance p for value {
- *       identity key;
- *       version version_value;
- *       schema data::Schema;
- *   }
+ * NEGATIVE:
  *
- *   provenance value with {
- *       derived_from input;
- *   };
+ *     provenance {
+ *     }
  *
- * Negative tests MUST include:
+ *     provenance result {
+ *         custom::property;
+ *     }
  *
- *   - missing provenance name;
- *   - missing subject;
- *   - missing body;
- *   - malformed relation;
- *   - malformed property;
- *   - missing semicolon;
- *   - malformed argument list;
- *   - invalid contract structure.
+ *     provenance result {
+ *         source;
+ *     }
  *
- * Boundary tests MUST include:
+ *     provenance result {
+ *         schema;
+ *     }
  *
- *   - one source;
- *   - many sources;
- *   - one relationship;
- *   - many relationships;
- *   - nested expressions;
- *   - deeply qualified relation names;
- *   - large property lists.
+ * BOUNDARY:
  *
- * Scalability tests MUST verify that the grammar does not impose a fixed:
+ *     one member
+ *     many members
+ *     nested expressions
+ *     qualified names
+ *     arbitrary property names
+ *     large declaration bodies
+ *     distributed data references
+ *     quantum result references
+ *     tensor result references
+ *     hardware artifact references
  *
- *   - relation count;
- *   - source count;
- *   - producer count;
- *   - consumer count;
- *   - lineage depth;
- *   - provenance declaration count.
+ * CROSS-DOMAIN:
  *
- * Determinism tests MUST verify identical source text produces identical parse
- * structure regardless of target hardware or runtime availability.
+ *     classical result provenance
+ *     quantum measurement provenance
+ *     hybrid computation provenance
+ *     tensor provenance
+ *     AI inference provenance
+ *     HDL artifact provenance
+ *     distributed lineage
  *
+ * DETERMINISM:
+ *
+ *     identical source + identical grammar configuration
+ *         -> identical parse structure
+ *
+ * SCALABILITY:
+ *
+ *     increasing logical provenance graph size must not require a grammar
+ *     change or a new fixed language constant.
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * DEPENDENCY CONTRACT
+ * ============================================================================
+ *
+ * DEPENDS_ON:
+ *
+ *     grammar/lexer/tokens.g4
+ *     grammar/antlr/ZamaniLexer.g4
+ *     canonical expression grammar
+ *     canonical qualified-name grammar
+ *     canonical annotation grammar
+ *
+ * EXPORTS:
+ *
+ *     provenanceUnit
+ *     dataProvenanceConstruct
+ *     dataProvenanceDeclaration
+ *     dataProvenanceAttach
+ *
+ * CONSUMED_BY:
+ *
+ *     grammar/data/data.g4
+ *     canonical parser composition
+ *     data conformance tests
+ *
+ * AST_OWNER:
+ *
+ *     existing domain-neutral frontend AST
+ *
+ * SEMANTIC_OWNER:
+ *
+ *     semantic data/provenance analysis
+ *
+ * IR_OWNER:
+ *
+ *     canonical semantic/data IR
+ *
+ *     quantum::ir where provenance accompanies quantum semantics
+ *
+ * SPEC_OWNER:
+ *
+ *     grammar/spec/provenance.md
+ *     grammar/specification/ provenance specification
+ *
+ * TEST_OWNER:
+ *
+ *     grammar/tests/provenance/
+ *
+ * COMPATIBILITY_OWNER:
+ *
+ *     grammar/compatibility/
+ *
+ * ============================================================================
+ */
+
+
+/*
  * ============================================================================
  * COMPLETION CRITERIA
  * ============================================================================
  *
- * This file is complete when:
+ * This file is DONE when:
  *
- *   [x] provenance has one parser ownership surface;
- *   [x] data source/target values reuse canonical expressions;
- *   [x] provenance relationships are open-world;
- *   [x] schema definitions are not duplicated;
- *   [x] persistence is not duplicated;
- *   [x] serialization is not duplicated;
- *   [x] security implementation is not duplicated;
- *   [x] requirement/preference/hint semantics remain distinct;
- *   [x] no physical hardware assumptions exist;
- *   [x] no universal capacity limits exist;
- *   [x] no second provenance IR is introduced;
- *   [x] source spans are predetermined;
- *   [x] semantic normalization is predetermined;
- *   [x] quantum::ir remains canonical;
- *   [x] QEC/ZQN/HAL remain downstream;
- *   [x] distributed provenance is scalable;
- *   [x] parsing is deterministic;
- *   [x] generated Rust requires no unsafe code;
- *   [x] Rust 1.97 / 1.97.1 compatibility is preserved;
- *   [x] positive/negative/boundary/scalability tests are defined.
+ *   [x] data provenance has one grammar owner;
+ *   [x] expression provenance remains owned by expressions/provenance.g4;
+ *   [x] no duplicate provenanceExpression rule exists here;
+ *   [x] no private expression language exists here;
+ *   [x] existing expression rules are reused;
+ *   [x] existing qualified names are reused;
+ *   [x] existing annotations are reused;
+ *   [x] current canonical lexer vocabulary is used;
+ *   [x] no missing invented lexer tokens are referenced;
+ *   [x] provenance relations remain extensible;
+ *   [x] no universal hardware limits are encoded;
+ *   [x] arbitrary member counts are supported;
+ *   [x] requirements remain separate from preferences and hints;
+ *   [x] provenance does not implement persistence;
+ *   [x] provenance does not implement serialization;
+ *   [x] provenance does not implement cryptography;
+ *   [x] provenance does not implement networking;
+ *   [x] provenance does not implement runtime tracing;
+ *   [x] provenance does not introduce another IR;
+ *   [x] quantum provenance reaches quantum::ir downstream;
+ *   [x] Rust integration requires no unsafe;
+ *   [x] Rust 1.97+ compatibility is preserved;
+ *   [x] positive tests are defined;
+ *   [x] negative tests are defined;
+ *   [x] boundary tests are defined;
+ *   [x] cross-domain tests are defined;
+ *   [x] scalability tests are defined;
+ *   [x] determinism tests are defined.
  *
  * ============================================================================
  */
