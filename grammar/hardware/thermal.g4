@@ -10,266 +10,246 @@
  *     ZamaniHardwareThermalParser
  *
  * Status:
- *     CANONICAL HARDWARE-CONTRACT THERMAL INTENT GRAMMAR
+ *     CANONICAL / PRODUCTION THERMAL-INTENT GRAMMAR
  *
  * Rust baseline:
- *     Rust 1.97 / Rust 1.97.1
+ *     Rust 1.97+
  *     Rust edition 2021
  *
  * Safety:
- *     Action-free ANTLR parser grammar.
+ *     Pure ANTLR4 parser grammar.
  *     No embedded Rust.
  *     No semantic predicates.
  *     No I/O.
  *     No hardware discovery.
  *     No runtime execution.
- *     No unsafe implementation requirement.
  *
  * ============================================================================
- * 1. PURPOSE
+ * FEATURE CONTRACT
  * ============================================================================
  *
- * This file defines source-level, target-independent thermal intent.
- *
- * Thermal intent may describe:
- *
- *     - thermal requirements;
- *     - thermal constraints;
- *     - thermal preferences;
- *     - thermal hints;
- *     - thermal properties;
- *     - temperature relationships;
- *     - thermal budgets;
- *     - thermal envelopes;
- *     - thermal profiles;
- *     - logical thermal domains;
- *     - logical thermal states;
- *     - thermal transitions;
- *     - thermal measurements/contracts;
- *     - thermal scaling relationships;
- *     - cooling requirements;
- *     - thermal capability requirements;
- *     - thermal resource requirements;
- *     - thermal assertions;
- *     - extensible thermal metadata.
- *
- * The grammar expresses WHAT thermal property is required or preferred.
- *
- * It does not prescribe HOW a particular target realizes that property.
- *
- * ============================================================================
- * 2. ARCHITECTURAL POSITION
- * ============================================================================
- *
- * The intended pipeline is:
- *
- *     Zamani source
- *          |
- *          v
- *     canonical ZamaniLexer
- *          |
- *          v
- *     ZamaniParser
- *          |
- *          v
- *     domain-neutral frontend AST
- *          |
- *          v
- *     semantic analysis
- *          |
- *          +--> type analysis
- *          +--> dimensional/unit analysis
- *          +--> resource analysis
- *          +--> capability analysis
- *          +--> thermal-contract validation
- *          +--> portability analysis
- *          |
- *          v
- *     canonical semantic representation
- *          |
- *          v
- *     canonical compiler IR
- *          |
- *          +--> optimization
- *          +--> scheduling
- *          +--> placement
- *          +--> routing
- *          +--> synthesis
- *          +--> resilience
- *          |
- *          v
- *     HAL / target realization
- *          |
- *          v
- *     runtime / deployment
- *
- * This grammar therefore remains above physical realization.
- *
- * ============================================================================
- * 3. OWNERSHIP
- * ============================================================================
- *
- * THIS FILE OWNS:
- *
- *     - hardware thermal declarations;
- *     - thermal contracts;
- *     - thermal requirements;
- *     - thermal constraints;
- *     - thermal preferences;
- *     - thermal hints;
- *     - thermal properties;
- *     - thermal profiles;
- *     - thermal logical domains;
- *     - thermal logical states;
- *     - thermal transitions;
- *     - thermal measurement contracts;
- *     - thermal scaling contracts;
- *     - thermal capability requirements;
- *     - thermal resource requirements;
- *     - thermal assertions;
- *     - thermal metadata;
- *     - target-independent thermal intent.
- *
- * THIS FILE DOES NOT OWN:
- *
- *     - lexical definitions;
- *     - the THERMAL token;
- *     - identifiers;
- *     - qualified names;
- *     - numeric literals;
- *     - unit lexical syntax;
- *     - general expression syntax;
- *     - general type syntax;
- *     - universal resource declarations;
- *     - universal capability declarations;
- *     - power semantics;
- *     - energy semantics;
- *     - timing semantics;
- *     - clock semantics;
- *     - cooling-device implementation;
- *     - sensors;
- *     - physical thermal zones;
- *     - physical device IDs;
- *     - physical placement;
- *     - routing;
- *     - scheduling algorithms;
- *     - optimization algorithms;
- *     - calibration;
- *     - hardware discovery;
- *     - device drivers;
- *     - runtime thermal enforcement;
- *     - quantum::ir;
- *     - QEC;
- *     - ZQN.
- *
- * ============================================================================
- * 4. CRITICAL OWNERSHIP BOUNDARIES
- * ============================================================================
- *
- * POWER
- * -----
- *
- * Power intent remains owned by:
- *
- *     grammar/hardware/power.g4
- *
- * Thermal grammar may reference power as a property or expression, but must
- * not redefine power contracts.
- *
- *
- * TIMING
- * ------
- *
- * Timing intent remains owned by:
- *
- *     grammar/hardware/timing.g4
- *
- * Thermal grammar may express time-dependent thermal relationships through
- * normal expressions, but it does not create a second timing grammar.
- *
- *
- * RESOURCES
- * ---------
- *
- * Universal resource semantics remain owned by:
- *
- *     grammar/resources/
- *
- * Hardware resource integration remains owned by:
- *
- *     grammar/hardware/resources.g4
- *
- * This file only consumes the resource/capability concepts.
- *
- *
- * CAPABILITIES
- * ------------
- *
- * Capability identity remains owned by the canonical capability model.
- *
- * This file may require capabilities such as:
- *
- *     capability("thermal.management")
- *     capability("thermal.monitoring")
- *     capability("thermal.cooling")
- *
- * but does not define their implementation.
- *
- *
- * HDL
- * ---
- *
- * HDL thermal intent remains owned by:
- *
- *     grammar/hdl/physical-intent.g4
- *
- * HDL thermal syntax may lower into the same semantic thermal/resource model.
- *
- *
- * QUANTUM
+ * PURPOSE
  * -------
  *
- * Quantum thermal/noise semantics remain downstream.
+ * This file owns source-level thermal intent for hardware-independent
+ * computation.
  *
- * Quantum source ultimately continues through:
+ * Thermal intent describes requirements, constraints, preferences, hints,
+ * properties, capabilities, resources, profiles, states, transitions,
+ * measurements, scaling relationships, and other thermal metadata.
  *
+ * The grammar describes WHAT is required or preferred.
+ *
+ * It does not describe HOW a target realizes that intent.
+ *
+ *
+ * OWNS
+ * ----
+ *
+ * This file owns:
+ *
+ *     hardwareThermalDeclaration
+ *     hardwareThermalBody
+ *     hardwareThermalItem
+ *     thermal requirements
+ *     thermal constraints
+ *     thermal preferences
+ *     thermal hints
+ *     thermal capability references
+ *     thermal resource references
+ *     thermal target references
+ *     thermal properties
+ *     thermal assertions
+ *     thermal named sections
+ *     thermal transitions
+ *
+ *
+ * DOES NOT OWN
+ * ------------
+ *
+ * This file does NOT own:
+ *
+ *     lexer tokens
+ *     identifiers
+ *     qualified names
+ *     expressions
+ *     types
+ *     generic constraint semantics
+ *     generic resource semantics
+ *     generic capability semantics
+ *     power semantics
+ *     energy semantics
+ *     timing semantics
+ *     reliability semantics
+ *     placement
+ *     topology
+ *     scheduling
+ *     optimization
+ *     hardware discovery
+ *     device IDs
+ *     device drivers
+ *     runtime thermal control
+ *     physical sensors
+ *     cooling-device implementation
  *     quantum::ir
- *          |
- *          v
- *     ZQN / resilience / scheduling
+ *     QEC
+ *     ZQN
+ *     HAL
  *
- * This grammar MUST NOT create a second quantum IR.
  *
  * ============================================================================
- * 5. LEXICAL CONTRACT
+ * ARCHITECTURAL POSITION
  * ============================================================================
  *
- * This is a parser grammar.
+ *     source
+ *       |
+ *       v
+ *     ZamaniLexer
+ *       |
+ *       v
+ *     ZamaniParser
+ *       |
+ *       v
+ *     Hardware
+ *       |
+ *       +--> ZamaniHardwareThermalParser
+ *       |
+ *       v
+ *     domain-neutral AST
+ *       |
+ *       v
+ *     structural validation
+ *       |
+ *       +--> type analysis
+ *       +--> resource analysis
+ *       +--> capability analysis
+ *       +--> constraint analysis
+ *       +--> policy analysis
+ *       +--> provenance
+ *       |
+ *       v
+ *     canonical semantic model
+ *       |
+ *       +--> classical IR
+ *       +--> quantum::ir
+ *       +--> HDL/hardware representation
+ *       |
+ *       v
+ *     optimization
+ *       |
+ *       v
+ *     lowering
+ *       |
+ *       +--> placement
+ *       +--> routing
+ *       +--> scheduling
+ *       +--> resilience
+ *       |
+ *       v
+ *     ZQN / HAL where applicable
+ *       |
+ *       v
+ *     target realization
  *
- * It MUST NOT define lexer rules.
  *
- * The canonical parser dependency is:
+ * ============================================================================
+ * POCO-REAF CONTRACT
+ * ============================================================================
  *
- *     options {
- *         tokenVocab = ZamaniLexer;
- *     }
+ * Thermal syntax expresses portable intent.
  *
- * `ZamaniLexer` is the production lexer.
+ * It MUST NOT select:
  *
- * `ZamaniTokens` is the lexical composition vocabulary and is not the parser's
- * direct token source.
+ *     a physical CPU
+ *     a physical core
+ *     a physical GPU
+ *     a physical FPGA
+ *     a physical ASIC
+ *     a physical QPU
+ *     a physical sensor
+ *     a physical cooling device
+ *     a physical node
+ *     a physical machine
  *
- * The required lexical addition for this grammar is:
+ * The same source must remain representable across:
  *
- *     THERMAL : 'thermal' ;
+ *     tiny systems
+ *     embedded systems
+ *     CPUs
+ *     multicore systems
+ *     GPUs
+ *     FPGAs
+ *     ASICs
+ *     accelerators
+ *     QPUs
+ *     simulators
+ *     HPC systems
+ *     clusters
+ *     distributed systems
+ *     cloud systems
+ *     heterogeneous systems
+ *     future computational substrates
  *
- * in:
+ * Target feasibility is determined downstream.
  *
- *     grammar/lexer/keywords.g4
  *
- * That token is intentionally the only new thermal-specific reserved word.
+ * ============================================================================
+ * SCALABILITY CONTRACT
+ * ============================================================================
  *
- * Property names such as:
+ * This grammar has NO language-level finite thermal limits.
+ *
+ * It MUST NOT define:
+ *
+ *     MAX_TEMPERATURE
+ *     MAX_THERMAL_DOMAINS
+ *     MAX_THERMAL_STATES
+ *     MAX_THERMAL_PROFILES
+ *     MAX_THERMAL_SENSORS
+ *     MAX_THERMAL_TRANSITIONS
+ *     MAX_COOLING_DEVICES
+ *     MAX_POWER
+ *     MAX_ENERGY
+ *     MAX_DEVICES
+ *     MAX_CPUS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_QPUS
+ *     MAX_NODES
+ *     MAX_MEMORY
+ *     MAX_THREADS
+ *     MAX_TENSOR_RANK
+ *     MAX_REGISTER_WIDTH
+ *
+ * Repetition uses ANTLR repetition operators.
+ *
+ * Quantities are expressions.
+ *
+ * Therefore quantities may be:
+ *
+ *     literals
+ *     variables
+ *     constants
+ *     parameters
+ *     functions
+ *     symbolic expressions
+ *     derived values
+ *     runtime-provided values
+ *     target-provided values
+ *
+ * Practical implementation limits belong to the compiler/runtime environment,
+ * not the language grammar.
+ *
+ *
+ * ============================================================================
+ * OPEN-WORLD CONTRACT
+ * ============================================================================
+ *
+ * Thermal property names remain extensible.
+ *
+ * The grammar deliberately does NOT enumerate every possible thermal concept.
+ *
+ * Examples that remain ordinary identifiers:
  *
  *     temperature
  *     ambient
@@ -280,21 +260,213 @@
  *     dissipation
  *     resistance
  *     conductivity
+ *     emissivity
+ *     heat_flux
+ *     thermal_margin
+ *     cryogenic_margin
+ *     thermal_stability
+ *     thermal_noise
+ *     thermal_load
  *
- * remain identifiers.
+ * New thermal concepts therefore do not require new language keywords.
  *
- * This prevents keyword proliferation.
  *
  * ============================================================================
- * 6. PUBLIC ENTRY POINT
+ * LEXICAL CONTRACT
  * ============================================================================
  *
- * `hardwareThermalDeclaration` is the only public declaration entry point
- * exported by this grammar.
+ * This is a parser grammar.
  *
- * The hardware composition grammar must delegate to it rather than copying
- * thermal rules.
+ * It consumes:
  *
+ *     grammar/antlr/ZamaniLexer.g4
+ *
+ * through:
+ *
+ *     tokenVocab = ZamaniLexer
+ *
+ * The thermal declaration keyword is:
+ *
+ *     THERMAL
+ *
+ * `THERMAL` is a canonical lexical token and must be emitted by the production
+ * lexer.
+ *
+ * Other thermal vocabulary remains contextual identifiers unless the language
+ * already reserves the spelling for another universal construct.
+ *
+ *
+ * ============================================================================
+ * EXPRESSION CONTRACT
+ * ============================================================================
+ *
+ * All expressions are delegated to the canonical expression composition root:
+ *
+ *     grammar/expressions/expressions.g4
+ *
+ * This file MUST NOT define:
+ *
+ *     arithmetic precedence
+ *     logical precedence
+ *     calls
+ *     indexing
+ *     member access
+ *     literals
+ *     unary operators
+ *     conditional expressions
+ *     collection expressions
+ *
+ * ============================================================================
+ * NAME CONTRACT
+ * ============================================================================
+ *
+ * Names are delegated through the canonical expression/name architecture.
+ *
+ * This file MUST NOT redefine:
+ *
+ *     identifier
+ *     qualifiedName
+ *     nameSegment
+ *
+ *
+ * ============================================================================
+ * POWER BOUNDARY
+ * ============================================================================
+ *
+ * Power remains owned by:
+ *
+ *     grammar/hardware/power.g4
+ *
+ * Thermal syntax may reference power through expressions or thermal properties,
+ * but must not redefine power budgets, power states, or power transitions.
+ *
+ *
+ * ============================================================================
+ * TIMING BOUNDARY
+ * ============================================================================
+ *
+ * Timing remains owned by:
+ *
+ *     grammar/hardware/timing.g4
+ *
+ * Thermal expressions may depend on time, workload, frequency, or other
+ * symbolic timing values through normal expressions.
+ *
+ * This file does not define a second timing model.
+ *
+ *
+ * ============================================================================
+ * RESOURCE BOUNDARY
+ * ============================================================================
+ *
+ * Resource semantics remain owned by:
+ *
+ *     grammar/resources/
+ *     grammar/hardware/resources.g4
+ *
+ * Thermal resource references express intent only.
+ *
+ * Example:
+ *
+ *     resource thermal.capacity >= required_capacity;
+ *
+ * The semantic layer determines whether such a resource exists and whether
+ * it can satisfy the requirement.
+ *
+ *
+ * ============================================================================
+ * CAPABILITY BOUNDARY
+ * ============================================================================
+ *
+ * Capability semantics remain owned by the canonical capability subsystem.
+ *
+ * Example:
+ *
+ *     capability thermal.monitoring;
+ *
+ * or:
+ *
+ *     requires capability("thermal.cooling");
+ *
+ * This grammar does not decide whether a capability is available.
+ *
+ *
+ * ============================================================================
+ * CONTRACT / POLICY BOUNDARY
+ * ============================================================================
+ *
+ * `requires`, `constraint`, `prefer`, `hint`, and `assert` are source-level
+ * thermal intent.
+ *
+ * Generic contract semantics remain downstream.
+ *
+ * Policies may later:
+ *
+ *     permit
+ *     prohibit
+ *     prioritize
+ *     restrict
+ *     condition
+ *     select
+ *     fallback
+ *
+ * thermal realization.
+ *
+ * This grammar does not perform policy evaluation.
+ *
+ *
+ * ============================================================================
+ * PROVENANCE CONTRACT
+ * ============================================================================
+ *
+ * Every thermal construct must remain traceable through the frontend.
+ *
+ * Downstream semantic representation should preserve:
+ *
+ *     source span
+ *     declaration name
+ *     declaration kind
+ *     property name
+ *     operator
+ *     expression
+ *     resource reference
+ *     capability reference
+ *     target reference
+ *     section name
+ *     transition source
+ *     transition target
+ *
+ * Provenance implementation belongs outside this grammar.
+ *
+ *
+ * ============================================================================
+ * IR CONTRACT
+ * ============================================================================
+ *
+ * This file owns NO thermal-specific IR.
+ *
+ * Do NOT create:
+ *
+ *     ThermalIR
+ *     HardwareThermalIR
+ *     ThermalDeviceIR
+ *     ThermalControlIR
+ *
+ * merely because thermal syntax exists.
+ *
+ * Thermal intent is lowered through the canonical semantic/IR architecture.
+ *
+ * Quantum computation continues through:
+ *
+ *     quantum::ir
+ *
+ * Thermal requirements may influence quantum resource analysis, scheduling,
+ * resilience, or HAL realization, but this grammar never constructs or owns
+ * quantum::ir.
+ *
+ *
+ * ============================================================================
+ * PUBLIC ENTRY POINT
  * ============================================================================
  */
 
@@ -304,30 +476,33 @@ options {
     tokenVocab = ZamaniLexer;
 }
 
+import Expressions;
+
 
 /* ============================================================================
- * 7. PUBLIC DECLARATION
+ * 1. THERMAL DECLARATION
  * ============================================================================
  *
- * Examples:
+ * Canonical forms:
  *
- *     thermal contract compute_thermal {
- *         temperature <= maximum_temperature;
+ *     thermal name {
+ *         ...
  *     }
  *
- *     thermal compute_thermal {
- *         temperature <= maximum_temperature;
+ *     thermal contract name {
+ *         ...
  *     }
  *
- *     thermal profile operating_profile {
- *         ambient = ambient_temperature;
+ *     thermal profile name {
+ *         ...
  *     }
  *
- * The declaration name is symbolic.
+ * `contract` and `profile` are declaration kinds.
  *
- * It is never interpreted as a physical device identifier by this grammar.
- * ============================================================================
- */
+ * They are not implemented as separate nested grammars.
+ *
+ * This prevents duplicated declaration ownership.
+ * ========================================================================== */
 
 hardwareThermalDeclaration
     : hardwareThermalAttribute*
@@ -343,14 +518,8 @@ hardwareThermalDeclaration
 
 
 /* ============================================================================
- * 8. DECLARATION KIND
- * ============================================================================
- *
- * Only stable structural kinds are reserved here.
- *
- * Additional thermal concepts remain contextual/open-world constructs.
- * ============================================================================
- */
+ * 2. DECLARATION KIND
+ * ========================================================================== */
 
 hardwareThermalDeclarationKind
     : CONTRACT
@@ -359,9 +528,8 @@ hardwareThermalDeclarationKind
 
 
 /* ============================================================================
- * 9. VISIBILITY
- * ============================================================================
- */
+ * 3. DECLARATION VISIBILITY
+ * ========================================================================= */
 
 hardwareThermalVisibility
     : PUBLIC
@@ -372,9 +540,8 @@ hardwareThermalVisibility
 
 
 /* ============================================================================
- * 10. MODIFIERS
- * ============================================================================
- */
+ * 4. DECLARATION MODIFIERS
+ * ========================================================================= */
 
 hardwareThermalModifier
     : STATIC
@@ -388,15 +555,17 @@ hardwareThermalModifier
 
 
 /* ============================================================================
- * 11. ATTRIBUTES
+ * 5. ATTRIBUTES
  * ============================================================================
  *
- * Attribute names remain qualified names.
+ * Attributes use the canonical name and expression systems.
  *
- * Vendor-specific or technology-specific thermal metadata therefore does not
- * require permanent global keywords.
- * ============================================================================
- */
+ * Example:
+ *
+ *     @vendor::thermal(expression)
+ *
+ * The attribute itself has no runtime meaning at grammar level.
+ * ========================================================================== */
 
 hardwareThermalAttribute
     : AT
@@ -410,20 +579,13 @@ hardwareThermalAttribute
 
 
 /* ============================================================================
- * 12. GENERIC PARAMETERS
+ * 6. GENERIC PARAMETERS
  * ============================================================================
  *
- * Thermal contracts may depend on arbitrary symbolic program parameters.
+ * Thermal intent can depend on arbitrary symbolic parameters.
  *
- * Example:
- *
- *     thermal contract thermal_policy<limit, workload> {
- *         temperature <= limit;
- *     }
- *
- * No finite hardware scale is encoded.
- * ============================================================================
- */
+ * No finite machine scale is represented here.
+ * ========================================================================== */
 
 hardwareThermalGenericParameters
     : LESS
@@ -441,7 +603,7 @@ hardwareThermalGenericParameter
     : identifier
       (
           COLON
-          hardwareThermalGenericBound
+          qualifiedName
       )?
       (
           ASSIGN
@@ -450,21 +612,14 @@ hardwareThermalGenericParameter
     ;
 
 
-hardwareThermalGenericBound
-    : qualifiedName
-    ;
-
-
 /* ============================================================================
- * 13. ABSTRACT TARGET
+ * 7. ABSTRACT TARGET REFERENCE
  * ============================================================================
  *
- * A target is symbolic.
+ * This is a symbolic target reference only.
  *
- * It does not identify a physical machine, device, socket, board, sensor,
- * thermal zone, GPU, QPU, FPGA, CPU, or node.
- * ============================================================================
- */
+ * It does not identify a physical machine or device.
+ * ========================================================================== */
 
 hardwareThermalTargetClause
     : TARGET
@@ -474,9 +629,8 @@ hardwareThermalTargetClause
 
 
 /* ============================================================================
- * 14. THERMAL BODY
- * ============================================================================
- */
+ * 8. THERMAL BODY
+ * ========================================================================== */
 
 hardwareThermalBody
     : LBRACE
@@ -486,112 +640,107 @@ hardwareThermalBody
 
 
 /* ============================================================================
- * 15. THERMAL ITEM DISPATCH
+ * 9. THERMAL ITEM DISPATCH
  * ============================================================================
  *
- * Every thermal-specific construct enters through this single dispatcher.
+ * Every thermal body element has one owner.
  *
- * The hardware composition grammar must not duplicate these alternatives.
- * ============================================================================
- */
+ * The ordering is deliberate:
+ *
+ *     transition
+ *     requirement
+ *     constraint
+ *     preference
+ *     hint
+ *     capability
+ *     resource
+ *     target
+ *     assertion
+ *     property
+ *     named section
+ *
+ * Generic named sections are last so that dedicated constructs remain
+ * structurally recognizable.
+ * ========================================================================== */
 
 hardwareThermalItem
     : hardwareThermalAttribute*
       (
-          hardwareThermalRequirement
+          hardwareThermalTransition
+        | hardwareThermalRequirement
         | hardwareThermalConstraint
         | hardwareThermalPreference
         | hardwareThermalHint
         | hardwareThermalCapabilityRequirement
         | hardwareThermalResourceRequirement
         | hardwareThermalTargetReference
-        | hardwareThermalProperty
         | hardwareThermalAssertion
-        | hardwareThermalProfile
-        | hardwareThermalContract
+        | hardwareThermalProperty
         | hardwareThermalNamedSection
-        | hardwareThermalTransition
       )
     ;
 
 
 /* ============================================================================
- * 16. REQUIREMENTS
+ * 10. REQUIREMENT
  * ============================================================================
- *
- * A requirement is mandatory semantic intent.
  *
  * Example:
  *
- *     requires temperature <= maximum_temperature;
- *
- * or:
+ *     requires temperature <= thermal_limit;
  *
  *     requires capability("thermal.monitoring");
  *
- * The grammar does not determine whether a target satisfies it.
- * ============================================================================
- */
+ * Requirement satisfaction is semantic, not syntactic.
+ * ========================================================================== */
 
 hardwareThermalRequirement
     : REQUIRES
-      hardwareThermalRequirementExpression
+      expression
       SEMICOLON
     ;
 
 
-hardwareThermalRequirementExpression
-    : expression
-    ;
-
-
 /* ============================================================================
- * 17. CONSTRAINT
+ * 11. CONSTRAINT
  * ============================================================================
  *
- * A constraint is mandatory for a legal realization.
- * ============================================================================
- */
+ * Example:
+ *
+ *     constraint temperature <= thermal_limit;
+ *
+ * The generic expression system remains authoritative.
+ * ========================================================================== */
 
 hardwareThermalConstraint
     : CONSTRAINT
-      hardwareThermalConstraintExpression
+      expression
       SEMICOLON
     ;
 
 
-hardwareThermalConstraintExpression
-    : expression
-    ;
-
-
 /* ============================================================================
- * 18. PREFERENCE
+ * 12. PREFERENCE
  * ============================================================================
  *
- * A preference is non-mandatory optimization guidance.
- * ============================================================================
- */
+ * Preferences are advisory optimization intent.
+ *
+ * They MUST NOT be treated as mandatory constraints by the parser.
+ * ========================================================================== */
 
 hardwareThermalPreference
     : PREFER
-      hardwareThermalPreferenceExpression
+      expression
       SEMICOLON
     ;
 
 
-hardwareThermalPreferenceExpression
-    : expression
-    ;
-
-
 /* ============================================================================
- * 19. HINT
+ * 13. HINT
  * ============================================================================
  *
- * A hint is advisory and must not be treated as a semantic requirement.
- * ============================================================================
- */
+ * Hints are advisory information.
+ * ========================================================================== */
 
 hardwareThermalHint
     : HINT
@@ -601,18 +750,17 @@ hardwareThermalHint
 
 
 /* ============================================================================
- * 20. CAPABILITY REQUIREMENT
+ * 14. CAPABILITY REQUIREMENT
  * ============================================================================
  *
- * Example:
+ * Examples:
  *
  *     capability thermal.monitoring;
  *
  *     capability thermal.cooling = required_cooling;
  *
- * Capability satisfaction is downstream.
- * ============================================================================
- */
+ * Capability resolution is downstream.
+ * ========================================================================== */
 
 hardwareThermalCapabilityRequirement
     : CAPABILITY
@@ -626,39 +774,33 @@ hardwareThermalCapabilityRequirement
 
 
 /* ============================================================================
- * 21. RESOURCE REQUIREMENT
+ * 15. RESOURCE REQUIREMENT
  * ============================================================================
  *
- * This references the canonical resource model.
- *
- * Examples:
+ * Example:
  *
  *     resource thermal.capacity >= required_capacity;
  *
- *     resource cooling.capacity >= required_cooling;
+ * The resource itself is not declared here.
  *
- * No resource maximum is encoded.
- * ============================================================================
- */
+ * Resource ownership remains in the resource subsystem.
+ * ========================================================================== */
 
 hardwareThermalResourceRequirement
     : RESOURCE
       qualifiedName
-      (
-          hardwareThermalComparisonOperator
-          expression
-      )?
+      hardwareThermalComparisonOperator
+      expression
       SEMICOLON
     ;
 
 
 /* ============================================================================
- * 22. TARGET REFERENCE
+ * 16. TARGET REFERENCE
  * ============================================================================
  *
- * This references an abstract target only.
- * ============================================================================
- */
+ * A target is referenced symbolically only.
+ * ========================================================================== */
 
 hardwareThermalTargetReference
     : TARGET
@@ -668,27 +810,28 @@ hardwareThermalTargetReference
 
 
 /* ============================================================================
- * 23. THERMAL PROPERTY
+ * 17. THERMAL PROPERTY
  * ============================================================================
  *
- * Property names remain open.
- *
- * This is the primary extensibility mechanism for thermal technology.
+ * Property names remain open-world.
  *
  * Examples:
  *
- *     temperature <= maximum_temperature;
+ *     temperature <= thermal_limit;
+ *
  *     ambient = ambient_temperature;
+ *
  *     junction <= junction_limit;
+ *
  *     hotspot <= hotspot_limit;
- *     gradient <= allowed_gradient;
+ *
  *     cooling >= required_cooling;
+ *
  *     dissipation <= thermal_budget;
  *
- * Reserved lexical words already meaningful to the language may also appear
- * as thermal property names through `hardwareThermalPropertyName`.
- * ============================================================================
- */
+ * Known universal resource words may also appear as thermal property names
+ * where they are already reserved by the language.
+ * ========================================================================== */
 
 hardwareThermalProperty
     : hardwareThermalPropertyName
@@ -714,8 +857,19 @@ hardwareThermalPropertyName
     ;
 
 
+/* ============================================================================
+ * 18. PROPERTY OPERATOR
+ * ============================================================================
+ *
+ * Assignment and relational operators are sufficient for thermal properties.
+ *
+ * Semantic interpretation is downstream.
+ * ========================================================================== */
+
 hardwareThermalPropertyOperator
     : ASSIGN
+    | EQUAL_EQUAL
+    | NOT_EQUAL
     | LESS
     | LESS_EQUAL
     | GREATER
@@ -724,158 +878,7 @@ hardwareThermalPropertyOperator
 
 
 /* ============================================================================
- * 24. ASSERTIONS
- * ============================================================================
- *
- * Assertions are source-level contracts.
- *
- * They do not execute thermal management.
- * ============================================================================
- */
-
-hardwareThermalAssertion
-    : ASSERT
-      expression
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 25. THERMAL PROFILE
- * ============================================================================
- *
- * Profiles are named collections of thermal intent.
- *
- * Examples:
- *
- *     profile nominal {
- *         temperature <= nominal_limit;
- *     }
- *
- *     profile safe {
- *         temperature <= safe_limit;
- *     }
- *
- * Profile semantics remain downstream.
- * ============================================================================
- */
-
-hardwareThermalProfile
-    : PROFILE
-      identifier
-      hardwareThermalBody
-    ;
-
-
-/* ============================================================================
- * 26. NESTED THERMAL CONTRACT
- * ============================================================================
- *
- * Allows compositional thermal contracts.
- * ============================================================================
- */
-
-hardwareThermalContract
-    : CONTRACT
-      identifier
-      hardwareThermalGenericParameters?
-      hardwareThermalBody
-    ;
-
-
-/* ============================================================================
- * 27. CONTEXTUAL THERMAL SECTIONS
- * ============================================================================
- *
- * Thermal technology evolves.
- *
- * Instead of making every future thermal concept a global keyword, the
- * grammar permits named thermal sections.
- *
- * Examples:
- *
- *     domain package {
- *         temperature <= package_limit;
- *     }
- *
- *     state nominal {
- *         temperature <= nominal_limit;
- *     }
- *
- *     measurement junction {
- *         property temperature <= sensor_limit;
- *     }
- *
- *     scaling workload {
- *         temperature = thermal_model(workload);
- *     }
- *
- * The first identifier is interpreted semantically.
- *
- * Stable semantic section kinds may include:
- *
- *     domain
- *     state
- *     measurement
- *     scaling
- *     envelope
- *     cooling
- *     sensor
- *     hotspot
- *     junction
- *     ambient
- *     custom.domain
- *
- * New concepts can therefore be added without continually expanding the
- * global keyword registry.
- *
- * Semantic validation MUST reject unsupported section kinds when appropriate.
- * ============================================================================
- */
-
-hardwareThermalNamedSection
-    : identifier
-      identifier
-      hardwareThermalBody
-    ;
-
-
-/* ============================================================================
- * 28. THERMAL TRANSITION
- * ============================================================================
- *
- * Thermal state transitions are logical relationships.
- *
- * Example:
- *
- *     transition nominal -> throttled {
- *         temperature >= throttle_threshold;
- *     }
- *
- * `transition` is deliberately contextual rather than a global keyword.
- *
- * `->` is the canonical THIN_ARROW operator.
- *
- * This grammar does not implement a thermal controller.
- * ============================================================================
- */
-
-hardwareThermalTransition
-    : identifier
-      identifier
-      THIN_ARROW
-      identifier
-      hardwareThermalBody
-    ;
-
-
-/* ============================================================================
- * 29. COMPARISON OPERATORS
- * ============================================================================
- *
- * These are canonical lexer tokens.
- *
- * No thermal-specific operators are introduced.
+ * 19. COMPARISON OPERATOR
  * ============================================================================
  */
 
@@ -890,346 +893,123 @@ hardwareThermalComparisonOperator
 
 
 /* ============================================================================
- * 30. EXPRESSION BOUNDARY
+ * 20. ASSERTION
  * ============================================================================
  *
- * Thermal grammar delegates all expression semantics to the canonical
- * expression grammar.
+ * Example:
  *
- * This means the following may be represented symbolically:
+ *     assert temperature <= thermal_limit;
  *
- *     fixed values;
- *     variables;
- *     generic parameters;
- *     functions;
- *     derived values;
- *     configuration values;
- *     resource-derived values;
- *     runtime observations;
- *     negotiated values;
- *     mathematical expressions;
- *     conditional expressions;
- *     domain-specific semantic expressions.
+ * This is a source-level assertion.
  *
- * The thermal grammar does not create another expression language.
- * ============================================================================
- */
+ * It does not perform hardware control.
+ * ========================================================================== */
 
-hardwareThermalExpression
-    : expression
+hardwareThermalAssertion
+    : ASSERT
+      expression
+      SEMICOLON
     ;
 
 
 /* ============================================================================
- * 31. SEMANTIC CONTRACT
+ * 21. NAMED THERMAL SECTION
  * ============================================================================
  *
- * Semantic analysis MUST:
+ * Thermal concepts evolve over time.
  *
- *     1. Resolve thermal declaration names.
- *
- *     2. Resolve thermal property names.
- *
- *     3. Resolve capability references.
- *
- *     4. Resolve resource references.
- *
- *     5. Resolve target references.
- *
- *     6. Validate expression types.
- *
- *     7. Validate physical dimensions where the semantic type system supports
- *        dimensional analysis.
- *
- *     8. Validate temperature quantities.
- *
- *     9. Validate thermal rates and gradients.
- *
- *    10. Validate energy/power relationships where explicitly expressed.
- *
- *    11. Distinguish requirement from constraint.
- *
- *    12. Distinguish preference from requirement.
- *
- *    13. Distinguish hint from preference.
- *
- *    14. Detect contradictory thermal constraints.
- *
- *    15. Preserve unresolved symbolic requirements when target information
- *        is unavailable.
- *
- *    16. Determine target feasibility downstream.
- *
- *    17. Never convert a source value into a compiler-wide maximum.
- *
- *    18. Never infer hardware limits from grammar constructs.
- *
- *    19. Preserve portability metadata.
- *
- *    20. Preserve source spans.
- *
- * ============================================================================
- * 32. DIMENSIONAL SEMANTICS
- * ============================================================================
- *
- * The grammar intentionally does not enumerate units.
- *
- * Thermal expressions may therefore eventually support whatever quantity/unit
- * system the canonical Zamani type/literal system establishes.
- *
- * Examples may include:
- *
- *     temperature <= limit;
- *     temperature <= 300 K;
- *     temperature <= 27 C;
- *     thermal_rate <= rate;
- *     heat <= energy;
- *
- * Unit compatibility is a semantic/type-system responsibility.
- *
- * This file MUST NOT hard-code a finite unit list.
- *
- * ============================================================================
- * 33. POWER / ENERGY RELATIONSHIP
- * ============================================================================
- *
- * Thermal and power semantics are related but not identical.
+ * Instead of adding a permanent keyword for every possible thermal concept,
+ * named sections remain open-world.
  *
  * Examples:
  *
- *     power <= power_budget;
- *     energy <= energy_budget;
- *     temperature <= thermal_limit;
+ *     state nominal {
+ *         temperature <= nominal_limit;
+ *     }
  *
- * Power syntax belongs to:
+ *     domain processor {
+ *         temperature <= processor_limit;
+ *     }
  *
- *     grammar/hardware/power.g4
+ *     scaling workload {
+ *         temperature = thermal_model(workload);
+ *     }
  *
- * Energy/resource syntax belongs to the corresponding resource model.
+ *     measurement telemetry {
+ *         temperature = measured_temperature;
+ *     }
  *
- * Thermal syntax may reference those semantic values without redefining them.
+ * The first identifier is interpreted semantically.
  *
- * ============================================================================
- * 34. THERMAL DOMAIN MODEL
- * ============================================================================
- *
- * Thermal domains are logical semantic regions.
- *
- * They may represent:
- *
- *     package
- *     die
- *     subsystem
- *     module
- *     accelerator
- *     memory
- *     interconnect
- *     quantum subsystem
- *     cooling region
- *     logical partition
- *     future thermal abstraction
- *
- * They do NOT imply:
- *
- *     physical coordinates;
- *     physical sensor IDs;
- *     physical heat-sink IDs;
- *     fixed chip topology;
- *     fixed number of domains.
- *
- * ============================================================================
- * 35. THERMAL STATE MODEL
+ * The grammar does not create a fixed catalogue of thermal section kinds.
+ * ========================================================================== */
+
+hardwareThermalNamedSection
+    : identifier
+      identifier?
+      hardwareThermalBody
+    ;
+
+
+/* ============================================================================
+ * 22. THERMAL TRANSITION
  * ============================================================================
  *
- * State names remain symbolic.
+ * Example:
  *
- * The grammar intentionally does not enumerate:
+ *     transition nominal -> throttled {
+ *         temperature >= throttle_limit;
+ *     }
  *
- *     NORMAL
- *     HOT
- *     CRITICAL
- *     COLD
- *     THROTTLED
- *     EMERGENCY
+ * `transition` remains contextual rather than becoming a permanent global
+ * keyword.
  *
- * as universal language states.
- *
- * A target or dialect may define semantic state vocabularies downstream.
- *
- * ============================================================================
- * 36. THERMAL MEASUREMENT MODEL
- * ============================================================================
- *
- * Measurement sections describe observable contracts.
- *
- * They do not perform measurements.
- *
- * Measurement providers, sensors, sampling rates, telemetry transport, and
- * hardware interfaces remain runtime/HAL responsibilities.
- *
- * ============================================================================
- * 37. THERMAL SCALING MODEL
+ * The semantic layer determines whether the leading identifier denotes a
+ * transition construct in the current thermal context.
+ * ========================================================================== */
+
+hardwareThermalTransition
+    : identifier
+      identifier
+      THIN_ARROW
+      identifier
+      hardwareThermalBody
+    ;
+
+
+/* ============================================================================
+ * 23. DETERMINISM
  * ============================================================================
  *
- * Thermal behavior may depend on arbitrary program/resource scale.
+ * Parsing is purely syntactic.
  *
- * Examples:
+ * It MUST NOT depend on:
  *
- *     temperature = f(workload);
+ *     hardware availability
+ *     target temperature
+ *     runtime state
+ *     wall-clock time
+ *     network state
+ *     filesystem state
+ *     random state
+ *     scheduler state
+ *     device discovery
  *
- *     heat <= available_cooling(workload);
+ * Identical source and identical lexical/parser configuration must produce
+ * identical parser structure.
  *
- *     cooling >= required_cooling(load);
- *
- * The grammar imposes no finite number of scaling points.
- *
- * ============================================================================
- * 38. COOLING
- * ============================================================================
- *
- * Cooling is represented as semantic intent.
- *
- * Examples:
- *
- *     cooling >= required_cooling;
- *
- *     requires capability("thermal.cooling");
- *
- *     prefer cooling_efficiency >= desired_efficiency;
- *
- * The grammar does not select:
- *
- *     fan;
- *     pump;
- *     heatsink;
- *     liquid loop;
- *     cryogenic system;
- *     Peltier device;
- *     physical cooling controller.
- *
- * Such realization belongs downstream.
  *
  * ============================================================================
- * 39. HARDWARE INDEPENDENCE
+ * 24. SEMANTIC INTEGRATION
  * ============================================================================
  *
- * Thermal intent must remain valid across:
+ * The frontend must normalize thermal constructs into the existing
+ * domain-neutral semantic model.
  *
- *     atom-scale systems;
- *     embedded systems;
- *     microcontrollers;
- *     CPUs;
- *     multicore CPUs;
- *     GPUs;
- *     FPGAs;
- *     ASICs;
- *     accelerators;
- *     QPUs;
- *     simulators;
- *     HPC;
- *     clusters;
- *     distributed systems;
- *     cloud systems;
- *     edge systems;
- *     future architectures.
- *
- * The source describes requirements.
- *
- * The compiler/runtime discovers the realization.
- *
- * ============================================================================
- * 40. POCO-REAF
- * ============================================================================
- *
- * Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
- *
- * Thermal syntax MUST preserve this property.
- *
- * The same program may declare:
- *
- *     requires temperature <= thermal_limit;
- *
- * and allow different implementations to satisfy the contract using
- * different:
- *
- *     schedules;
- *     mappings;
- *     frequencies;
- *     workloads;
- *     parallelism;
- *     accelerators;
- *     cooling strategies;
- *     target devices.
- *
- * No physical device is selected by this grammar.
- *
- * ============================================================================
- * 41. ABSOLUTE SCALABILITY RULE
- * ============================================================================
- *
- * This grammar MUST NOT define:
- *
- *     MAX_TEMPERATURE
- *     MAX_THERMAL_DOMAINS
- *     MAX_THERMAL_STATES
- *     MAX_THERMAL_PROFILES
- *     MAX_THERMAL_SENSORS
- *     MAX_THERMAL_TRANSITIONS
- *     MAX_COOLING_DEVICES
- *     MAX_POWER
- *     MAX_ENERGY
- *     MAX_DEVICES
- *     MAX_CPUS
- *     MAX_GPUS
- *     MAX_FPGAS
- *     MAX_QPUS
- *     MAX_NODES
- *     MAX_MEMORY
- *     MAX_THREADS
- *     MAX_TENSOR_RANK
- *     MAX_REGISTER_WIDTH
- *
- * It must also not encode equivalent finite bounds through parser
- * alternatives.
- *
- * Collections therefore use:
- *
- *     *
- *     +
- *
- * and quantities use expressions.
- *
- * ============================================================================
- * 42. NO PHYSICAL DEVICE IDENTIFIERS
- * ============================================================================
- *
- * This grammar must not establish universal syntax requiring:
- *
- *     cpu0
- *     gpu0
- *     fpga0
- *     qpu0
- *     node0
- *     sensor0
- *     thermal_zone0
- *
- * as physical identities.
- *
- * If a target-dependent interoperability dialect intentionally exposes a
- * physical identifier, that construct must be explicitly governed by the
- * target/dialect compatibility model.
- *
- * ============================================================================
- * 43. AST CONTRACT
- * ============================================================================
- *
- * The grammar lowers into the existing domain-neutral frontend AST.
- *
- * Conceptual mapping:
+ * Conceptual mappings:
  *
  *     hardwareThermalDeclaration
- *         -> Declaration
- *         -> HardwareThermalContract
+ *         -> HardwareThermalDeclaration
  *
  *     hardwareThermalRequirement
  *         -> Requirement
@@ -1249,368 +1029,232 @@ hardwareThermalExpression
  *     hardwareThermalResourceRequirement
  *         -> ResourceRequirement
  *
+ *     hardwareThermalTargetReference
+ *         -> TargetReference
+ *
  *     hardwareThermalProperty
  *         -> Property
  *
- *     hardwareThermalProfile
- *         -> Profile
+ *     hardwareThermalAssertion
+ *         -> Assertion
  *
  *     hardwareThermalNamedSection
- *         -> NamedThermalSection
+ *         -> NamedSection
  *
  *     hardwareThermalTransition
- *         -> ThermalTransition
+ *         -> Transition
  *
- * Every AST representation must preserve:
+ * The grammar MUST NOT require a thermal-specific Rust AST hierarchy unless
+ * the existing AST architecture already has an appropriate generic
+ * declaration/property/constraint representation.
  *
- *     source span;
- *     declaration identity;
- *     semantic category;
- *     expression identity;
- *     attributes;
- *     generic parameters;
- *     target reference.
- *
- * The grammar MUST NOT require a new Rust AST hierarchy solely because this
- * file exists.
  *
  * ============================================================================
- * 44. SEMANTIC MODEL CONTRACT
+ * 25. TYPE INTEGRATION
  * ============================================================================
  *
- * The semantic representation should preserve:
+ * Thermal quantities are expressions.
  *
- *     requirement
- *     constraint
- *     preference
- *     hint
- *     capability
- *     resource
- *     target
- *     property
- *     profile
- *     state
- *     domain
- *     transition
- *     measurement
- *     scaling
+ * Dimensional correctness belongs to semantic/type analysis.
  *
- * These categories MUST remain distinguishable.
+ * Examples:
  *
- * In particular:
+ *     temperature <= thermal_limit
  *
- *     requirement != preference
- *     preference != hint
- *     constraint != implementation decision
+ *     cooling >= required_cooling
+ *
+ *     dissipation <= thermal_budget
+ *
+ * The grammar does not decide whether the operands have compatible units.
+ *
  *
  * ============================================================================
- * 45. IR CONTRACT
+ * 26. RESOURCE INTEGRATION
  * ============================================================================
  *
- * This grammar creates NO thermal-specific IR.
+ * Thermal resource requirements feed:
  *
- * It must not introduce:
+ *     resource analysis
+ *         ->
+ *     capability negotiation
+ *         ->
+ *     execution planning
  *
- *     ThermalIR
- *     HardwareThermalIR
- *     ThermalControlIR
- *     ThermalDeviceIR
+ * The grammar never performs resource discovery.
  *
- * merely because thermal syntax exists.
- *
- * Thermal intent lowers through the repository's canonical semantic/IR
- * boundary and is consumed by the appropriate hardware/resource/compiler
- * representations.
  *
  * ============================================================================
- * 46. COMPILER INTEGRATION
+ * 27. POWER INTEGRATION
  * ============================================================================
  *
- * Compiler stages may consume thermal intent for:
- *
- *     resource negotiation;
- *     capability resolution;
- *     optimization;
- *     workload shaping;
- *     parallelism decisions;
- *     frequency selection;
- *     scheduling;
- *     placement;
- *     routing;
- *     accelerator selection;
- *     synthesis;
- *     deployment.
- *
- * The grammar itself makes none of these decisions.
- *
- * An unresolved thermal requirement must remain representable until sufficient
- * target information exists.
- *
- * ============================================================================
- * 47. SCHEDULING INTEGRATION
- * ============================================================================
- *
- * Scheduling may use thermal contracts to choose among valid schedules.
- *
- * For example:
- *
- *     schedule A
- *     schedule B
- *     schedule C
- *
- * may have different thermal consequences.
- *
- * The source grammar does not choose among them.
- *
- * Scheduling remains a downstream responsibility.
- *
- * ============================================================================
- * 48. POWER INTEGRATION
- * ============================================================================
- *
- * Power and thermal contracts may be jointly analyzed.
- *
- * Example:
+ * Power and thermal intent may coexist:
  *
  *     power <= power_budget;
+ *
  *     temperature <= thermal_limit;
  *
- * A compiler may discover that:
+ * The semantic/compiler layers may jointly analyze them.
  *
- *     lower power
- *     lower utilization
- *     different scheduling
- *     different placement
- *     different cooling
+ * This grammar does not duplicate power semantics.
  *
- * satisfy the joint contract.
- *
- * The thermal grammar does not duplicate the power grammar.
  *
  * ============================================================================
- * 49. QUANTUM INTEGRATION
+ * 28. QUANTUM INTEGRATION
  * ============================================================================
  *
- * Quantum programs may carry thermal intent because real quantum systems can
- * have thermal constraints.
+ * Thermal intent can constrain quantum execution:
  *
- * The flow remains:
+ *     requires capability("quantum.measurement");
  *
- *     quantum source
- *          |
- *          v
- *     domain-neutral AST
- *          |
- *          v
- *     semantic quantum operation
- *          |
- *          v
+ *     temperature <= thermal_limit;
+ *
+ *     resource thermal.capacity >= required_capacity;
+ *
+ * The pipeline remains:
+ *
+ *     source
+ *       ->
+ *     AST
+ *       ->
+ *     semantic model
+ *       ->
  *     quantum::ir
- *          |
- *          +--> routing
- *          +--> scheduling
- *          +--> QEC/resilience
- *          +--> ZQN
- *          |
- *          v
+ *       ->
+ *     optimization
+ *       ->
+ *     routing
+ *       ->
+ *     scheduling
+ *       ->
+ *     resilience / QEC
+ *       ->
+ *     ZQN
+ *       ->
  *     HAL
  *
- * Thermal intent participates as a resource/capability constraint.
+ * Thermal grammar does not create a quantum representation.
  *
- * It does not create a quantum thermal IR.
  *
  * ============================================================================
- * 50. HDL INTEGRATION
+ * 29. HDL INTEGRATION
  * ============================================================================
  *
- * HDL physical intent may express thermal requirements.
- *
- * HDL syntax must lower into the same semantic hardware/resource contract
- * model rather than creating an incompatible thermal language.
+ * HDL physical intent may ultimately consume the same semantic thermal
+ * representation.
  *
  * The relationship is:
  *
  *     HDL thermal intent
- *          |
- *          v
+ *         ->
  *     semantic thermal/resource contract
- *          |
- *          v
- *     hardware compiler
+ *         ->
+ *     hardware compilation
+ *
+ * This prevents incompatible thermal models from being created for HDL and
+ * general hardware source.
+ *
  *
  * ============================================================================
- * 51. RUNTIME / HAL INTEGRATION
+ * 30. EXECUTION / HAL INTEGRATION
  * ============================================================================
  *
- * Runtime/HAL may use thermal intent to:
+ * Runtime and HAL layers may use semantic thermal intent to:
  *
- *     inspect capabilities;
- *     inspect available resources;
- *     monitor target state;
- *     select valid execution policies;
- *     throttle;
- *     migrate;
- *     reschedule;
- *     recover;
- *     reject an unsatisfied realization.
+ *     inspect capabilities
+ *     inspect resources
+ *     evaluate thermal state
+ *     select schedules
+ *     throttle
+ *     migrate
+ *     reschedule
+ *     recover
+ *     reject an infeasible realization
  *
- * Runtime enforcement is NOT parser behavior.
+ * None of these are parser operations.
  *
- * ============================================================================
- * 52. DETERMINISM
- * ============================================================================
- *
- * Parsing must be deterministic.
- *
- * Given identical:
- *
- *     source;
- *     language version;
- *     dialect set;
- *     lexical configuration;
- *
- * the grammar must produce the same parse structure.
- *
- * Parsing must not depend on:
- *
- *     CPU availability;
- *     GPU availability;
- *     QPU availability;
- *     temperature;
- *     wall-clock time;
- *     runtime state;
- *     environment variables;
- *     network state;
- *     random state;
- *     target discovery.
  *
  * ============================================================================
- * 53. DIAGNOSTICS
+ * 31. ADAPTIVE EXECUTION
  * ============================================================================
  *
- * Parser diagnostics must preserve:
+ * Thermal constraints may participate downstream in:
  *
- *     source span;
- *     offending token;
- *     expected syntax;
- *     language version;
- *     dialect context.
+ *     fallback
+ *     retry
+ *     recovery
+ *     adaptive scheduling
+ *     workload shaping
+ *     placement selection
+ *     target selection
  *
- * Semantic diagnostics are downstream and include:
+ * The grammar remains unchanged as targets and execution strategies evolve.
  *
- *     invalid thermal dimension;
- *     incompatible units;
- *     contradictory constraints;
- *     unsatisfied thermal requirement;
- *     unavailable thermal capability;
- *     invalid thermal resource;
- *     invalid target relationship;
- *     unsupported semantic section;
- *     impossible realization.
  *
  * ============================================================================
- * 54. SECURITY
+ * 32. PROVENANCE
  * ============================================================================
  *
- * Thermal syntax does not grant access to:
+ * Semantic thermal analysis should preserve:
  *
- *     sensors;
- *     cooling devices;
- *     power controllers;
- *     physical hardware;
- *     operating-system thermal interfaces.
+ *     source declaration
+ *     source property
+ *     source expression
+ *     normalized expression
+ *     resource resolution
+ *     capability resolution
+ *     policy decision
+ *     target evaluation
+ *     selected realization
  *
- * Authorization and device access remain downstream security/runtime
- * responsibilities.
+ * This grammar only preserves syntactic structure needed for that process.
  *
- * Attributes and named thermal sections must not provide a parser-level escape
- * into backend execution.
- *
- * ============================================================================
- * 55. PERFORMANCE
- * ============================================================================
- *
- * The grammar uses:
- *
- *     unbounded repetition;
- *     symbolic expressions;
- *     open-world property names;
- *     open-world contextual sections.
- *
- * It contains no machine-size constants.
- *
- * Parser implementation must remain safe Rust under:
- *
- *     Rust 1.97
- *     Rust 1.97.1
- *
- * No unsafe Rust is required.
  *
  * ============================================================================
- * 56. COMPATIBILITY
+ * 33. SECURITY
  * ============================================================================
  *
- * This grammar is additive to the existing hardware architecture.
+ * Thermal syntax does not authorize access to:
  *
- * Existing:
+ *     sensors
+ *     cooling controllers
+ *     power controllers
+ *     operating-system thermal interfaces
+ *     physical hardware
  *
- *     grammar/hardware/hardware.g4
- *     grammar/hardware/power.g4
- *     grammar/hardware/timing.g4
- *     grammar/hardware/resources.g4
- *     grammar/hardware/capabilities.g4
- *     grammar/hardware/targets.g4
+ * Authorization belongs to the security/runtime/HAL layers.
  *
- * remain separate ownership domains.
- *
- * No existing major filename is renamed.
- *
- * Thermal-specific syntax is introduced through:
- *
- *     THERMAL
- *
- * while most thermal vocabulary remains contextual identifiers.
  *
  * ============================================================================
- * 57. HARD-CODING AUDIT
+ * 34. HARD-CODING AUDIT
  * ============================================================================
  *
- * This grammar contains:
+ * No fixed thermal capacities are encoded.
  *
- *     no maximum thermal temperature;
- *     no maximum number of thermal domains;
- *     no maximum number of thermal states;
- *     no maximum number of sensors;
- *     no maximum number of transitions;
- *     no maximum number of cooling devices;
- *     no maximum power;
- *     no maximum energy;
- *     no maximum CPUs;
- *     no maximum GPUs;
- *     no maximum FPGAs;
- *     no maximum QPUs;
- *     no maximum nodes;
- *     no maximum memory;
- *     no maximum threads;
- *     no maximum tensor rank;
- *     no maximum register width;
- *     no fixed topology;
- *     no fixed device IDs.
+ * No fixed hardware capacities are encoded.
  *
- * Any finite numeric value in source is program/contract data.
+ * No physical device catalogue is encoded.
+ *
+ * No physical IDs are encoded.
+ *
+ * No finite list of thermal states is encoded.
+ *
+ * No finite list of thermal profiles is encoded.
+ *
+ * No finite list of thermal properties is encoded.
+ *
+ * No finite number of thermal domains is encoded.
+ *
+ * No fixed machine size is encoded.
+ *
  *
  * ============================================================================
- * 58. TEST CONTRACT
+ * 35. POSITIVE TEST CONTRACT
  * ============================================================================
  *
- * Required positive tests:
+ * These forms must parse:
  *
  *     thermal contract basic {
  *         temperature <= thermal_limit;
- *     }
- *
- *     thermal contract symbolic<limit> {
- *         requires temperature <= limit;
  *     }
  *
  *     thermal profile nominal {
@@ -1618,182 +1262,274 @@ hardwareThermalExpression
  *         junction <= junction_limit;
  *     }
  *
- *     thermal contract capability {
+ *     thermal symbolic<limit> {
+ *         requires temperature <= limit;
+ *     }
+ *
+ *     thermal capabilities {
  *         capability thermal.monitoring;
+ *         requires capability("thermal.cooling");
  *     }
  *
- *     thermal contract resource {
- *         resource cooling.capacity >= required_cooling;
+ *     thermal resources {
+ *         resource thermal.capacity >= required_capacity;
  *     }
  *
- *     thermal contract stateful {
+ *     thermal states {
  *         state nominal {
  *             temperature <= nominal_limit;
  *         }
- *     }
  *
- *     thermal contract transition {
+ *         state throttled {
+ *             temperature <= throttled_limit;
+ *         }
+ *
  *         transition nominal -> throttled {
  *             temperature >= throttle_limit;
  *         }
  *     }
  *
- *     thermal contract scaling {
+ *     thermal scaling {
  *         scaling workload {
  *             temperature = thermal_model(workload);
  *         }
  *     }
  *
- * Required negative tests:
+ *     thermal measurement {
+ *         measurement telemetry {
+ *             temperature = measured_temperature;
+ *         }
+ *     }
  *
- *     thermal contract bad {
+ *     thermal joint {
+ *         power <= power_budget;
+ *         temperature <= thermal_limit;
+ *         resource thermal.capacity >= required_capacity;
+ *         capability thermal.monitoring;
+ *     }
+ *
+ *
+ * ============================================================================
+ * 36. NEGATIVE TEST CONTRACT
+ * ============================================================================
+ *
+ * These must be rejected syntactically:
+ *
+ *     thermal contract broken {
  *         requires;
  *     }
  *
- *     thermal contract bad {
+ *     thermal contract broken {
  *         temperature <= ;
  *     }
  *
- *     thermal contract bad {
+ *     thermal contract broken {
  *         resource;
  *     }
  *
- * Required boundary tests:
+ *     thermal contract broken {
+ *         capability;
+ *     }
  *
- *     one thermal property;
- *     many thermal properties;
- *     many profiles;
- *     many domains;
- *     many states;
- *     many transitions;
- *     nested contracts;
- *     deeply nested semantic structures;
- *     symbolic quantities;
- *     arbitrary expression complexity.
+ *     thermal contract broken {
+ *         transition -> state {
+ *         }
+ *     }
  *
- * Required scalability tests:
- *
- *     symbolic thermal limits;
- *     very large numeric values;
- *     very small numeric values;
- *     many thermal sections;
- *     many thermal properties;
- *     many resource references;
- *     many capability references.
- *
- * Required determinism tests:
- *
- *     identical source -> identical token stream;
- *     identical source -> identical parse structure.
  *
  * ============================================================================
- * 59. INTEGRATION COMPLETION CRITERIA
+ * 37. SEMANTIC-NEGATIVE TEST CONTRACT
  * ============================================================================
  *
- * THIS FILE is complete when:
+ * These should parse but may be rejected by semantic analysis:
  *
- * [x] Canonical parser grammar is used.
- * [x] Canonical ZamaniLexer token vocabulary is consumed.
- * [x] No lexer rules exist here.
- * [x] Thermal declaration entry point exists.
- * [x] Thermal contracts exist.
- * [x] Requirements exist.
- * [x] Constraints exist.
- * [x] Preferences exist.
- * [x] Hints exist.
- * [x] Capability requirements exist.
- * [x] Resource requirements exist.
- * [x] Target references exist.
- * [x] Thermal properties are extensible.
- * [x] Thermal profiles exist.
- * [x] Thermal domains/states can be represented contextually.
- * [x] Thermal transitions exist.
- * [x] Measurement/scaling sections can be represented contextually.
- * [x] Assertions exist.
- * [x] Generic parameters exist.
- * [x] Attributes exist.
- * [x] Expressions are delegated to the canonical expression grammar.
- * [x] No duplicate expression grammar exists.
- * [x] No duplicate resource grammar exists.
- * [x] No duplicate capability grammar exists.
- * [x] No duplicate timing grammar exists.
- * [x] No duplicate power grammar exists.
- * [x] No quantum IR is created.
- * [x] No physical device is selected.
- * [x] No fixed hardware capacity is encoded.
- * [x] No fixed thermal capacity is encoded.
- * [x] No MAX_* constants are encoded.
- * [x] No semantic predicates are used.
- * [x] No embedded Rust is used.
- * [x] No unsafe Rust is required.
- * [x] POCO-REAF is preserved.
+ *     thermal contract semantic {
+ *         temperature <= memory;
+ *     }
  *
- * Downstream completion additionally requires:
+ *     thermal contract semantic {
+ *         cooling >= required_temperature;
+ *     }
  *
- *     AST implementation;
- *     semantic implementation;
- *     resource/capability implementation;
- *     compiler consumers;
- *     runtime/HAL consumers;
- *     conformance tests.
+ *     thermal contract semantic {
+ *         resource thermal.unknown >= value;
+ *     }
+ *
+ *     thermal contract semantic {
+ *         capability thermal.unknown;
+ *     }
+ *
+ *     thermal contract semantic {
+ *         temperature <= target.unsupported_limit;
+ *     }
+ *
+ * Parsing must not confuse semantic infeasibility with syntax failure.
+ *
  *
  * ============================================================================
- * 60. FINAL OWNERSHIP INVARIANT
+ * 38. BOUNDARY TEST CONTRACT
  * ============================================================================
  *
- *     grammar/lexer/
- *          |
- *          v
- *     canonical ZamaniLexer
- *          |
- *          v
- *     ZamaniParser
- *          |
- *          v
+ * Test:
+ *
+ *     symbolic quantities
+ *     computed quantities
+ *     very large numeric values
+ *     very small numeric values
+ *     zero values
+ *     negative expressions where semantically meaningful
+ *     deeply qualified names
+ *     deeply nested expressions
+ *     many properties
+ *     many declarations
+ *     many sections
+ *     many transitions
+ *     mixed power/thermal constraints
+ *     mixed thermal/resource/capability constraints
+ *     classical + quantum + HDL thermal intent
+ *
+ *
+ * ============================================================================
+ * 39. SCALABILITY TEST CONTRACT
+ * ============================================================================
+ *
+ * The test suite must increase:
+ *
+ *     source size
+ *     declaration count
+ *     property count
+ *     section count
+ *     transition count
+ *     expression complexity
+ *
+ * without changing this grammar.
+ *
+ * Test size is a test parameter, not a grammar constant.
+ *
+ *
+ * ============================================================================
+ * 40. COMPATIBILITY
+ * ============================================================================
+ *
+ * Existing hardware grammar files remain independently owned:
+ *
  *     hardware.g4
- *          |
- *          +--> thermal.g4
- *          +--> power.g4
- *          +--> timing.g4
- *          +--> resources.g4
- *          +--> capabilities.g4
- *          +--> targets.g4
- *          |
- *          v
- *     domain-neutral AST
- *          |
- *          v
- *     semantic thermal/resource/capability model
- *          |
- *          v
- *     canonical compiler IR
- *          |
- *          +--> optimization
- *          +--> scheduling
- *          +--> placement
- *          +--> routing
- *          +--> synthesis
- *          +--> resilience
- *          |
- *          v
- *     HAL
- *          |
- *          v
- *     target realization
+ *     power.g4
+ *     timing.g4
+ *     resources.g4
+ *     capabilities.g4
+ *     constraints.g4
+ *     target-related grammars
  *
- * The fundamental separation is:
+ * This file introduces one canonical thermal declaration boundary:
  *
- *     THERMAL SYNTAX
- *          !=
- *     THERMAL ANALYSIS
- *          !=
- *     THERMAL MEASUREMENT
- *          !=
- *     THERMAL CONTROL
- *          !=
- *     THERMAL SCHEDULING
- *          !=
- *     PHYSICAL THERMAL REALIZATION
+ *     hardwareThermalDeclaration
+ *
+ * Hardware composition must delegate to this rule.
+ *
+ * No existing major filename needs to be renamed.
+ *
+ *
+ * ============================================================================
+ * 41. BUILD / RUST CONTRACT
+ * ============================================================================
+ *
+ * This grammar contains no Rust.
+ *
+ * Generated Rust integration must remain compatible with:
+ *
+ *     Rust 1.97+
+ *     Rust 2021
+ *
+ * The surrounding parser/compiler implementation must use safe Rust.
+ *
+ * This grammar does not require target-specific Rust behavior.
+ *
+ *
+ * ============================================================================
+ * 42. COMPLETION CRITERIA
+ * ============================================================================
+ *
+ * This file is DONE when:
+ *
+ *     [ ] It imports Expressions.
+ *
+ *     [ ] It consumes only ZamaniLexer tokens.
+ *
+ *     [ ] It defines exactly one public thermal declaration entry point.
+ *
+ *     [ ] Thermal declarations are composed through hardware.g4.
+ *
+ *     [ ] No local expression grammar exists.
+ *
+ *     [ ] No local identifier grammar exists.
+ *
+ *     [ ] No local qualified-name grammar exists.
+ *
+ *     [ ] No duplicate power grammar exists.
+ *
+ *     [ ] No duplicate timing grammar exists.
+ *
+ *     [ ] No duplicate resource grammar exists.
+ *
+ *     [ ] No duplicate capability grammar exists.
+ *
+ *     [ ] No physical hardware identity is encoded.
+ *
+ *     [ ] No hardware capacity ceiling is encoded.
+ *
+ *     [ ] Thermal property names remain extensible.
+ *
+ *     [ ] Thermal section names remain extensible.
+ *
+ *     [ ] Thermal quantities remain symbolic expressions.
+ *
+ *     [ ] Thermal semantics remain downstream.
+ *
+ *     [ ] No thermal-specific IR is introduced.
+ *
+ *     [ ] quantum::ir remains the quantum boundary.
+ *
+ *     [ ] Positive tests exist.
+ *
+ *     [ ] Negative tests exist.
+ *
+ *     [ ] Semantic-negative tests exist.
+ *
+ *     [ ] Boundary tests exist.
+ *
+ *     [ ] Scalability tests exist.
+ *
+ *     [ ] Determinism tests exist.
+ *
+ *     [ ] Compatibility tests exist.
+ *
+ *     [ ] Generated Rust integration works with Rust 1.97+.
+ *
+ *
+ * ============================================================================
+ * FINAL OWNERSHIP INVARIANT
+ * ============================================================================
+ *
+ *     thermal.g4
+ *         owns thermal SOURCE SYNTAX
+ *
+ *     semantic layer
+ *         owns thermal MEANING
+ *
+ *     resource/capability subsystem
+ *         owns thermal FEASIBILITY INPUTS
+ *
+ *     compiler
+ *         owns thermal-AWARE REALIZATION
+ *
+ *     runtime/HAL
+ *         owns thermal OBSERVATION/ENFORCEMENT
+ *
+ *     target
+ *         owns PHYSICAL THERMAL REALIZATION
+ *
+ * These responsibilities must never be collapsed into this grammar.
  *
  * ============================================================================
  * END OF FILE
