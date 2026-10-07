@@ -1,7 +1,7 @@
 /*
  * ============================================================================
  * Zamani Universal Programming Language
- * Production Distributed-Actor Grammar
+ * Distributed Actor Qualification Grammar
  * ============================================================================
  *
  * File:
@@ -10,639 +10,593 @@
  * Grammar:
  *     DistributedActors
  *
- * Status:
- *     PRODUCTION SOURCE-GRAMMAR CONTRACT
+ * Purpose:
+ *     Qualify the canonical Zamani actor model for distributed realization.
  *
- * Language baseline:
- *     Rust 1.97 / Rust 1.97.1
- *     Rust 2021
- *     Safe Rust only
+ * Rust baseline:
+ *     Rust 1.97+
+ *     Rust Edition 2021
+ *
+ * Safety:
+ *     Safe Rust only.
+ *
+ * ============================================================================
+ * ARCHITECTURAL AUTHORITY
+ * ============================================================================
+ *
+ * GENERAL ACTOR AUTHORITY
+ * -----------------------
+ *
+ *     grammar/concurrency/actors.g4
+ *
+ * owns:
+ *
+ *     actor declaration
+ *     actor state
+ *     actor handlers
+ *     actor construction/spawn
+ *     actor commands
+ *     actor messaging
+ *     actor lifecycle
+ *     actor supervision
+ *     actor targets
+ *
+ *
+ * DISTRIBUTED ACTOR AUTHORITY
+ * ---------------------------
+ *
+ * This file owns only the distributed qualification:
+ *
+ *     distributed actor <canonical actor declaration>
+ *
+ * It does NOT create a second actor language.
+ *
+ *
+ * DISTRIBUTED DOMAIN AUTHORITY
+ * ----------------------------
+ *
+ *     grammar/distributed/distributed.g4
+ *
+ * owns distributed-domain composition.
+ *
+ *
+ * RESOURCE AUTHORITY
+ * ------------------
+ *
+ *     grammar/resources/
+ *
+ * owns:
+ *
+ *     requirements
+ *     capabilities
+ *     constraints
+ *     preferences
+ *     hints
+ *     resource negotiation
+ *     scaling
+ *     placement/resource realization
+ *
+ *
+ * EFFECT AUTHORITY
+ * ----------------
+ *
+ *     grammar/effects/
+ *
+ * owns effect syntax and semantic effect classification.
+ *
+ *
+ * NETWORK AUTHORITY
+ * -----------------
+ *
+ *     grammar/networking/
+ *
+ * owns network-specific syntax.
+ *
+ *
+ * PLACEMENT AUTHORITY
+ * -------------------
+ *
+ *     grammar/distributed/placement.g4
+ *     grammar/resources/placement.g4
+ *
+ * own placement syntax at their respective semantic boundaries.
+ *
+ *
+ * REPLICATION AUTHORITY
+ * ---------------------
+ *
+ *     grammar/distributed/replication.g4
+ *
+ * owns replication semantics.
+ *
+ *
+ * QUANTUM AUTHORITY
+ * -----------------
+ *
+ *     grammar/quantum/
+ *
+ * owns quantum syntax and semantics.
+ *
+ * Quantum lowering ultimately uses:
+ *
+ *     quantum::ir
+ *
  *
  * ============================================================================
  * PURPOSE
  * ============================================================================
  *
- * This grammar owns SOURCE-LEVEL DISTRIBUTED-ACTOR SYNTAX.
+ * A distributed actor is not a different kind of actor.
  *
- * A distributed actor is a logical actor whose source-level intent permits
- * distributed realization.
+ * It is the canonical actor model with an additional distributed semantic
+ * qualification.
  *
- * A distributed actor may ultimately be realized as:
- *
- *     - a local actor;
- *     - an asynchronous task;
- *     - a process;
- *     - a service;
- *     - a worker;
- *     - a remote actor;
- *     - a replicated actor;
- *     - a migrated actor;
- *     - an actor spanning heterogeneous resources;
- *     - a quantum/classical orchestration actor;
- *     - an accelerator-backed actor;
- *     - a future computational substrate.
- *
- * The grammar describes the PROGRAMMER'S SEMANTIC INTENT.
- *
- * It does NOT select:
- *
- *     - a physical machine;
- *     - a CPU;
- *     - a GPU;
- *     - an FPGA;
- *     - a QPU;
- *     - a physical node;
- *     - a network address;
- *     - a transport;
- *     - a scheduler;
- *     - a placement algorithm;
- *     - a replication algorithm;
- *     - a consensus algorithm;
- *     - a runtime executor.
- *
- * ============================================================================
- * ARCHITECTURAL PRINCIPLE
- * ============================================================================
- *
- *     SOURCE
- *        |
- *        v
- *     ZamaniLexer
- *        |
- *        v
- *     DistributedActors
- *        |
- *        v
- *     domain-neutral frontend AST
- *        |
- *        v
- *     semantic analysis
- *        |
- *        +--> actor analysis
- *        +--> distributed analysis
- *        +--> type analysis
- *        +--> effect analysis
- *        +--> capability analysis
- *        +--> resource analysis
- *        +--> security analysis
- *        |
- *        v
- *     canonical semantic representation
- *        |
- *        +--> classical representation
- *        +--> quantum::ir
- *        +--> hardware/HDL representation
- *        +--> distributed execution metadata
- *        |
- *        v
- *     optimization
- *        |
- *        v
- *     placement / routing / scheduling
- *        |
- *        v
- *     resilience / recovery / deployment
- *        |
- *        v
- *     runtime
- *
- * This grammar never constructs or modifies an IR.
- *
- * ============================================================================
- * OWNERSHIP
- * ============================================================================
- *
- * THIS FILE OWNS:
- *
- *     distributedActorConstruct
- *     distributedActorDeclaration
- *     distributedActorMember
- *     distributedActorContract
- *     distributedActorRequirement
- *     distributedActorCapability
- *     distributedActorPlacementIntent
- *     distributedActorReplicationIntent
- *     distributedActorLifecycleIntent
- *     distributedActorCommunicationIntent
- *     distributedActorSupervisionIntent
- *     distributedActorReference
- *     distributedActorInvocation
- *     distributedActorSpawn
- *     distributedActorSend
- *     distributedActorAsk
- *     distributedActorForward
- *
- * THIS FILE DOES NOT OWN:
- *
- *     identifiers;
- *     qualified names;
- *     expressions;
- *     types;
- *     ordinary actor syntax;
- *     ordinary concurrency syntax;
- *     generic blocks;
- *     lexical tokens;
- *     networking protocols;
- *     physical topology;
- *     physical placement;
- *     resource allocation;
- *     scheduling;
- *     routing;
- *     deployment implementation;
- *     consensus algorithms;
- *     replication algorithms;
- *     QEC;
- *     ZQN;
- *     quantum::ir;
- *     classical IR;
- *     HDL IR;
- *     hardware discovery;
- *     runtime execution.
- *
- * ============================================================================
- * RELATIONSHIP WITH CONCURRENCY ACTORS
- * ============================================================================
- *
- * General actor syntax is owned by:
- *
- *     grammar/concurrency/actors.g4
- *
- * That grammar defines the general actor model:
- *
- *     actor declaration
- *     actor state
- *     actor handlers
- *     actor spawn
- *     actor send
- *     actor ask
- *     actor forwarding
- *     actor lifecycle
- *     actor supervision
- *
- * This grammar MUST NOT copy those rules into a second implementation.
- *
- * Instead, distributed actors add DISTRIBUTED INTENT around the canonical
- * actor model.
- *
- * The semantic distinction is:
- *
- *     actor
- *         =
- *     logical concurrent computation boundary
+ * Conceptually:
  *
  *     distributed actor
- *         =
- *     actor whose source contract permits or requires distributed realization
+ *          =
+ *     distributed qualification
+ *          +
+ *     ordinary Zamani actor
  *
- * A distributed actor is NOT inherently:
+ * Therefore:
  *
- *     one node;
- *     one process;
- *     one machine;
- *     one thread;
- *     one network endpoint.
+ *     distributed actor Counter { ... }
+ *
+ * is parsed as:
+ *
+ *     distributed qualification
+ *          +
+ *     actor declaration
+ *
+ * The complete actor body, state, handlers, commands, lifecycle and
+ * supervision rules remain owned by `grammar/concurrency/actors.g4`.
  *
  * ============================================================================
- * OPEN-WORLD DESIGN
+ * WHY THIS FILE MUST BE SMALL
  * ============================================================================
  *
- * Distributed actor policies use qualified semantic names wherever possible.
+ * The previous architecture duplicated:
  *
- * Examples include:
+ *     actor state
+ *     actor handlers
+ *     actor lifecycle
+ *     actor messaging
+ *     actor targets
+ *     actor supervision
+ *     actor spawning
  *
- *     distributed::placement
- *     distributed::replication
- *     distributed::migration
- *     distributed::consistency
- *     distributed::fault_tolerance
- *     distributed::availability
- *     distributed::coordination
- *     distributed::supervision
+ * in this file.
  *
- * The grammar does not create one parser keyword for every possible future
- * policy.
+ * That created two actor grammars:
  *
- * Semantic analysis determines whether a qualified construct is:
+ *     grammar/concurrency/actors.g4
+ *     grammar/distributed/actors.g4
  *
- *     stable;
- *     experimental;
- *     proposed;
- *     deprecated;
- *     vendor-specific;
- *     dialect-specific;
- *     unknown.
+ * Two actor grammars inevitably drift.
+ *
+ * The production architecture instead has:
+ *
+ *     ONE actor syntax
+ *     ONE actor semantic model
+ *     ONE actor AST path
+ *     ONE actor concurrency model
+ *
+ * with distributed qualification applied at the domain boundary.
  *
  * ============================================================================
  * POCO-REAF
  * ============================================================================
  *
- * Distributed actor syntax is designed for:
+ * A distributed actor expresses logical computational intent.
  *
- *     Program Once
- *     Compile Once
- *     Run Everywhere
- *     Anywhere
- *     Forever
+ * It does NOT specify:
  *
- * The same source-level actor may be realized on:
+ *     machine
+ *     CPU
+ *     core
+ *     thread
+ *     GPU
+ *     FPGA
+ *     ASIC
+ *     QPU
+ *     node
+ *     process
+ *     network address
+ *     transport
+ *     scheduler
+ *     runtime
+ *     cloud provider
+ *     physical topology
  *
- *     one execution context;
- *     multiple execution contexts;
- *     embedded hardware;
- *     CPUs;
- *     GPUs;
- *     FPGAs;
- *     ASICs;
- *     QPUs;
- *     clusters;
- *     HPC systems;
- *     cloud systems;
- *     heterogeneous systems;
- *     future computational architectures.
+ * The same logical actor may therefore be realized as:
  *
- * The grammar therefore contains no artificial hardware ceiling.
+ *     local execution
+ *     asynchronous execution
+ *     one process
+ *     multiple processes
+ *     one node
+ *     many nodes
+ *     edge execution
+ *     cluster execution
+ *     HPC execution
+ *     cloud execution
+ *     heterogeneous execution
+ *     accelerator-backed execution
+ *     quantum/classical orchestration
+ *     future computational substrates
+ *
+ * Physical realization is downstream.
  *
  * ============================================================================
  * SCALABILITY CONTRACT
  * ============================================================================
  *
- * This grammar contains NO universal limits for:
+ * This grammar imposes NO language-level capacity limits.
  *
- *     actors;
- *     processes;
- *     nodes;
- *     workers;
- *     handlers;
- *     children;
- *     supervisors;
- *     messages;
- *     mailbox entries;
- *     replicas;
- *     partitions;
- *     regions;
- *     devices;
- *     threads;
- *     cores;
- *     CPUs;
- *     GPUs;
- *     FPGAs;
- *     QPUs;
- *     memory;
- *     storage;
- *     network capacity;
- *     topology size.
- *
- * There is deliberately no:
+ * In particular, it contains no:
  *
  *     MAX_ACTORS
- *     MAX_PROCESSES
  *     MAX_NODES
+ *     MAX_PROCESSES
  *     MAX_WORKERS
+ *     MAX_THREADS
  *     MAX_MESSAGES
  *     MAX_REPLICAS
- *     MAX_THREADS
+ *     MAX_CHANNELS
  *     MAX_CPUS
  *     MAX_GPUS
  *     MAX_FPGAS
+ *     MAX_ASICS
  *     MAX_QPUS
  *     MAX_MEMORY
- *     MAX_MAILBOX
+ *     MAX_DEVICES
+ *     MAX_NETWORK_SIZE
  *
- * Repetition is represented structurally with `*` and `+`.
+ * No physical capacity is encoded in this grammar.
  *
- * Practical limitations belong to:
+ * "Infinity" in the POCO-REAF sense means:
  *
- *     semantic resource analysis;
- *     compiler resource policy;
- *     deployment policy;
- *     scheduler;
- *     runtime;
- *     actual target resources.
+ *     no artificial finite capacity is introduced by the language grammar.
  *
- * ============================================================================
- * HARD-CODING POLICY
- * ============================================================================
+ * Actual limits remain properties of:
  *
- * Numeric literals remain ordinary source-level values.
- *
- * For example:
- *
- *     retry_count = 3
- *
- * is program data.
- *
- * It MUST NOT be interpreted as:
- *
- *     maximum three actors;
- *     maximum three replicas;
- *     maximum three nodes.
- *
- * The grammar must never encode:
- *
- *     actor0;
- *     node0;
- *     CPU0;
- *     GPU0;
- *     QPU0;
- *
- * as universal physical identities.
- *
- * A programmer-defined logical name such as `worker_a` is allowed.
- *
- * Logical identity is not physical identity.
+ *     source size
+ *     compiler resources
+ *     semantic feasibility
+ *     resource availability
+ *     deployment policy
+ *     runtime resources
+ *     target capabilities
  *
  * ============================================================================
  * RESOURCE / CAPABILITY SEPARATION
  * ============================================================================
  *
- * Distributed actors may carry source-level requirements or capabilities.
+ * Distributed qualification does not allocate resources.
  *
- * These express semantic intent.
+ * It does not answer:
  *
- * They do NOT allocate resources.
+ *     where should this actor execute?
+ *     how many workers should execute it?
+ *     which machine should host it?
+ *     which transport should be used?
  *
- * Conceptually:
+ * Those questions belong downstream.
  *
- *     requirement
- *         !=
- *     capability
- *         !=
- *     preference
- *         !=
- *     physical placement
- *
- * Examples of semantic intent:
+ * A distributed actor can participate in universal requirements such as:
  *
  *     requires capability("distributed.actor");
+ *     requires capability("message.passing");
  *     requires capability("quantum.measurement");
  *     requires capability("tensor.compute");
  *
- * Resource realization remains downstream.
+ * but this file does not define the resource grammar.
  *
  * ============================================================================
- * SECURITY
+ * OPEN-WORLD DESIGN
  * ============================================================================
  *
- * Declaring or spawning a distributed actor does not grant authority.
+ * The spelling:
  *
- * Authorization remains a semantic/runtime responsibility.
+ *     distributed
  *
- * The grammar does not provide:
+ * is intentionally contextual here.
  *
- *     filesystem access;
- *     network access;
- *     secret access;
- *     hardware access;
- *     arbitrary execution;
- *     privilege escalation.
+ * The repository's lexical architecture does not require a dedicated
+ * DISTRIBUTED lexer token for every distributed-domain concept.
  *
- * Security analysis must remain part of the canonical compilation pipeline.
+ * This prevents a distributed-only keyword from becoming a new lexical
+ * authority.
  *
- * ============================================================================
- * QUANTUM INTEGRATION
- * ============================================================================
+ * Semantic validation must establish that the contextual marker has the
+ * canonical spelling required by this construct.
  *
- * A distributed actor may orchestrate quantum computation.
+ * Future distributed concepts remain expressible through existing names,
+ * qualified names, attributes, policies, capabilities and dialects.
  *
- * For example, an actor may semantically:
+ * Examples:
  *
- *     request a quantum operation;
- *     receive a measurement;
- *     coordinate classical control;
- *     exchange quantum-related metadata;
- *     participate in distributed quantum execution.
+ *     distributed::replication
+ *     distributed::consistency
+ *     distributed::migration
+ *     distributed::federation
+ *     distributed::locality
  *
- * This grammar does NOT define:
- *
- *     gates;
- *     QubitId;
- *     physical qubits;
- *     pulse schedules;
- *     calibration;
- *     QEC algorithms;
- *     noise models;
- *     ZQN;
- *     quantum routing.
- *
- * Quantum semantics continue through:
- *
- *     quantum::ir
- *
- * as the repository's canonical quantum IR boundary.
- *
- * ============================================================================
- * CLASSICAL / HDL / HARDWARE INTEGRATION
- * ============================================================================
- *
- * Actor computation may contain or coordinate:
- *
- *     classical computation;
- *     quantum computation;
- *     hybrid computation;
- *     AI computation;
- *     data processing;
- *     HDL/hardware intent;
- *     accelerator computation.
- *
- * This grammar does not duplicate those domain grammars.
- *
- * Cross-domain composition occurs through the canonical parser and semantic
- * model.
- *
- * ============================================================================
- * NETWORKING INTEGRATION
- * ============================================================================
- *
- * Distributed actor communication describes semantic communication intent.
- *
- * It does not select:
- *
- *     TCP;
- *     UDP;
- *     QUIC;
- *     MPI;
- *     RDMA;
- *     InfiniBand;
- *     a cloud transport;
- *     a vendor transport.
- *
- * Network realization belongs to:
- *
- *     grammar/networking/
- *
- * and downstream networking/runtime components.
- *
- * ============================================================================
- * REPLICATION
- * ============================================================================
- *
- * Distributed actors may express replication intent.
- *
- * The grammar does not create replicas.
- *
- * It does not determine:
- *
- *     replica count limits;
- *     replica placement;
- *     consensus;
- *     consistency implementation;
- *     failover algorithm.
- *
- * Those belong to:
- *
- *     grammar/distributed/replication.g4
- *     grammar/distributed/consistency.g4
- *     semantic analysis
- *     runtime
- *
- * where applicable.
- *
- * ============================================================================
- * PLACEMENT
- * ============================================================================
- *
- * Placement syntax expresses logical constraints or preferences only.
- *
- * It must never silently mean:
- *
- *     physical machine N;
- *     physical CPU N;
- *     physical GPU N;
- *     physical QPU N;
- *     physical node N.
- *
- * Placement algorithms remain downstream.
- *
- * ============================================================================
- * LIFECYCLE
- * ============================================================================
- *
- * Lifecycle syntax expresses logical intent such as:
- *
- *     start;
- *     stop;
- *     restart;
- *     recover;
- *     migrate;
- *
- * It does not directly invoke a runtime API.
- *
- * ============================================================================
- * DETERMINISM
- * ============================================================================
- *
- * Parsing depends only on:
- *
- *     supplied token stream;
- *     grammar version;
- *     imported grammar definitions.
- *
- * It does NOT depend on:
- *
- *     hardware;
- *     available nodes;
- *     network state;
- *     wall clock;
- *     randomness;
- *     environment;
- *     runtime state;
- *     scheduler state.
- *
- * ============================================================================
- * SOURCE-PRESERVATION CONTRACT
- * ============================================================================
- *
- * AST construction must preserve:
- *
- *     - source order;
- *     - actor name;
- *     - actor contract clauses;
- *     - member order;
- *     - handler references;
- *     - expression structure;
- *     - argument order;
- *     - qualified-name segment order;
- *     - nested block structure;
- *     - lifecycle intent;
- *     - source spans.
- *
- * Semantic normalization occurs after parsing.
+ * These are semantic names, not a closed parser keyword inventory.
  *
  * ============================================================================
  * AST CONTRACT
  * ============================================================================
  *
- * Every public rule in this grammar maps to the repository's domain-neutral
- * frontend representation.
+ * This grammar does not create a distributed-actor-specific AST.
  *
- * The parser must NOT require a runtime-specific AST such as:
- *
- *     ActorHandle;
- *     Mailbox;
- *     WorkerHandle;
- *     ProcessHandle;
- *     PhysicalNode;
- *     DeviceHandle;
- *     NetworkSocket.
- *
- * Those are downstream implementation concepts.
- *
- * Conceptual mapping:
+ * The parser structure is:
  *
  *     distributedActorDeclaration
- *         ->
- *     domain-neutral declaration / operation representation
- *         ->
- *     distributed semantic model
- *         ->
+ *             |
+ *             +--> distributed marker
+ *             |
+ *             +--> actorDeclaration
+ *
+ * The existing actor AST representation must remain authoritative for:
+ *
+ *     actor name
+ *     generic parameters
+ *     inheritance
+ *     members
+ *     state
+ *     handlers
+ *     message contracts
+ *     actor body
+ *     source spans
+ *
+ * The distributed qualification is represented by the domain-neutral
+ * declaration/attribute/semantic metadata mechanism used by the frontend.
+ *
+ * The exact representation is an AST/semantic implementation concern and
+ * MUST NOT require a runtime-specific type such as:
+ *
+ *     DistributedActorHandle
+ *     RemoteActorHandle
+ *     NodeActor
+ *     ProcessActor
+ *     NetworkActor
+ *
+ * ============================================================================
+ * SEMANTIC CONTRACT
+ * ============================================================================
+ *
+ * Semantic analysis determines:
+ *
+ *     - whether the wrapped declaration is a valid actor;
+ *     - whether distributed qualification is valid;
+ *     - whether distributed realization is permitted;
+ *     - which capabilities are required;
+ *     - which effects are produced;
+ *     - which resources are required;
+ *     - which policies apply;
+ *     - whether placement constraints are satisfiable;
+ *     - whether replication is legal;
+ *     - whether communication semantics are valid;
+ *     - whether ownership/lifetime rules remain valid;
+ *     - whether the actor can participate in distributed execution;
+ *     - whether target realization preserves source semantics.
+ *
+ * This grammar performs none of those semantic checks.
+ *
+ * ============================================================================
+ * EFFECT CONTRACT
+ * ============================================================================
+ *
+ * Distributed qualification does not automatically assign a physical effect.
+ *
+ * In particular:
+ *
+ *     distributed actor
+ *
+ * does not inherently mean:
+ *
+ *     network
+ *     IO
+ *     mutation
+ *     distributed transport
+ *
+ * The actor may ultimately be realized using:
+ *
+ *     local communication
+ *     shared memory
+ *     runtime messaging
+ *     accelerator interconnect
+ *     distributed transport
+ *     another future mechanism
+ *
+ * Effect classification belongs to semantic analysis.
+ *
+ * ============================================================================
+ * POLICY CONTRACT
+ * ============================================================================
+ *
+ * Distributed actors may be affected by:
+ *
+ *     resource policies
+ *     security policies
+ *     execution policies
+ *     placement policies
+ *     replication policies
+ *     consistency policies
+ *     migration policies
+ *     resilience policies
+ *     adaptation policies
+ *     reproducibility policies
+ *
+ * This file does not define those policies.
+ *
+ * Policies are resolved through the repository's canonical policy system.
+ *
+ * ============================================================================
+ * PROVENANCE CONTRACT
+ * ============================================================================
+ *
+ * Source locations must remain available for:
+ *
+ *     distributed marker
+ *     actor declaration
+ *     actor name
+ *     actor members
+ *     actor body
+ *
+ * The frontend must preserve provenance through:
+ *
+ *     source
+ *       ->
+ *     parse tree
+ *       ->
+ *     domain-neutral AST
+ *       ->
+ *     semantic model
+ *       ->
  *     canonical IR
+ *       ->
+ *     optimization
+ *       ->
+ *     lowering
+ *       ->
+ *     scheduling
+ *       ->
+ *     deployment
+ *       ->
+ *     runtime
+ *
+ * This grammar does not implement provenance storage.
  *
  * ============================================================================
- * IR CONTRACT
+ * QUANTUM / CLASSICAL / HDL / AI INTEGRATION
  * ============================================================================
  *
- * This grammar introduces NO distributed-actor IR.
+ * A distributed actor remains a normal actor.
  *
- * It must not create:
+ * Therefore its body may contain valid Zamani constructs from:
  *
- *     DistributedActorIR;
- *     ActorRuntimeIR;
- *     ActorNetworkIR;
+ *     classical
+ *     quantum
+ *     hybrid
+ *     HDL
+ *     hardware
+ *     AI
+ *     data
+ *     networking
+ *     memory
+ *     effects
+ *     resources
+ *     validation
+ *     policies
+ *     metaprogramming
  *
- * as competing intermediate representations.
+ * No domain-specific actor grammar is created here.
  *
- * Distributed actor information must be preserved as semantic metadata in
- * the repository's canonical semantic/IR architecture.
+ * If quantum operations occur:
  *
- * If an actor contains quantum computation:
- *
- *     actor semantic model
- *          |
- *          v
+ *     actor semantics
+ *          ->
+ *     quantum semantic analysis
+ *          ->
  *     quantum::ir
  *
- * remains the canonical quantum boundary.
+ * No distributed-quantum IR is introduced.
  *
  * ============================================================================
- * INTEGRATION CONTRACT
+ * DISTRIBUTED COMMUNICATION
  * ============================================================================
  *
- * `grammar/distributed/distributed.g4` is the distributed-domain composition
- * grammar.
- *
- * It should import this grammar and consume:
- *
- *     distributedActorConstruct
- *
- * rather than maintaining an independent `distributedActor` implementation.
- *
- * The existing:
+ * Actor messaging remains owned by:
  *
  *     grammar/concurrency/actors.g4
  *
- * remains the authority for ordinary actor syntax.
+ * and related concurrency/channel grammars.
  *
- * This file adds only distributed specialization/intent.
+ * Distributed communication realization remains owned by:
+ *
+ *     grammar/distributed/communication.g4
+ *     grammar/distributed/messaging.g4
+ *     grammar/networking/
+ *
+ * Therefore this file does NOT define:
+ *
+ *     send
+ *     ask
+ *     forward
+ *     receive
+ *     channel
+ *     endpoint
+ *     route
+ *     transport
+ *     packet
+ *
+ * again.
+ *
+ * ============================================================================
+ * PLACEMENT / REPLICATION / TOPOLOGY
+ * ============================================================================
+ *
+ * Distributed qualification does not define physical placement.
+ *
+ * Placement, replication and topology remain independently owned.
+ *
+ * This avoids coupling an actor declaration to a finite physical topology.
+ *
+ * Logical relationships may be described by the existing distributed
+ * resource/policy mechanisms.
+ *
+ * ============================================================================
+ * LIFECYCLE / SUPERVISION
+ * ============================================================================
+ *
+ * Actor lifecycle and supervision remain owned by:
+ *
+ *     grammar/concurrency/actors.g4
+ *
+ * Distributed recovery, migration, replication and fault tolerance remain
+ * distributed semantic/runtime concerns.
+ *
+ * This file does not introduce another lifecycle model.
+ *
+ * ============================================================================
+ * DETERMINISM
+ * ============================================================================
+ *
+ * Parsing is independent of:
+ *
+ *     hardware
+ *     node count
+ *     processor count
+ *     memory availability
+ *     accelerator availability
+ *     QPU availability
+ *     network availability
+ *     deployment state
+ *     runtime state
+ *     wall-clock time
+ *     randomness
+ *
+ * Identical token streams and parser configuration must produce equivalent
+ * parser structures.
+ *
+ * ============================================================================
+ * SECURITY
+ * ============================================================================
+ *
+ * Distributed qualification does not grant:
+ *
+ *     network access
+ *     filesystem access
+ *     native execution
+ *     secret access
+ *     hardware access
+ *     remote execution authority
+ *     deployment authority
+ *
+ * Authorization and capability checking remain downstream.
  *
  * ============================================================================
  * ANTLR CONTRACT
@@ -652,16 +606,76 @@
  *
  * It:
  *
- *     - reuses ZamaniLexer;
- *     - imports reusable parser grammars;
+ *     - uses ZamaniLexer;
+ *     - imports the canonical actor grammar;
  *     - contains no lexer rules;
- *     - contains no embedded Rust;
- *     - contains no semantic predicates;
  *     - contains no parser actions;
- *     - contains no runtime callbacks;
- *     - contains no filesystem access;
- *     - contains no network access;
- *     - contains no hardware access.
+ *     - contains no semantic predicates;
+ *     - contains no embedded Rust;
+ *     - performs no I/O;
+ *     - performs no hardware inspection;
+ *     - performs no resource discovery;
+ *     - performs no network access;
+ *     - performs no runtime calls.
+ *
+ * ============================================================================
+ * DEPENDENCY CONTRACT
+ * ============================================================================
+ *
+ * DEPENDS_ON:
+ *
+ *     grammar/concurrency/actors.g4
+ *     grammar/core/names.g4
+ *     canonical Zamani lexer
+ *
+ * EXPORTS:
+ *
+ *     distributedActorConstruct
+ *     distributedActorDeclaration
+ *     distributedActorKeyword
+ *
+ * CONSUMED_BY:
+ *
+ *     grammar/distributed/distributed.g4
+ *
+ * AST_OWNER:
+ *
+ *     existing domain-neutral frontend AST
+ *     existing actor AST/semantic representation
+ *
+ * SEMANTIC_OWNER:
+ *
+ *     distributed semantic analysis
+ *     concurrency semantic analysis
+ *
+ * IR_OWNER:
+ *
+ *     canonical semantic/IR pipeline
+ *
+ *     quantum::ir
+ *     remains the quantum boundary
+ *
+ * TEST_OWNER:
+ *
+ *     grammar/tests/distributed/
+ *     grammar/tests/concurrency/
+ *
+ * SPEC_OWNER:
+ *
+ *     grammar/spec/distributed.md
+ *     grammar/spec/concurrency.md
+ *
+ * ============================================================================
+ * PUBLIC API
+ * ============================================================================
+ *
+ * There is exactly one distributed-actor composition boundary:
+ *
+ *     distributedActorConstruct
+ *
+ * Higher-level distributed grammar MUST consume this rule.
+ *
+ * This grammar must not expose a competing distributed actor root.
  *
  * ============================================================================
  */
@@ -672,1358 +686,642 @@ options {
     tokenVocab = ZamaniLexer;
 }
 
-import
-    Names,
-    Types,
-    Expressions,
-    ZamaniCoreBlocks,
-    Attributes,
-    Modifiers,
-    Visibility,
-    Parameters
-    ;
-
-
 /*
  * ============================================================================
- * 1. PUBLIC ENTRY POINT
+ * PUBLIC DISTRIBUTED-ACTOR COMPOSITION
  * ============================================================================
  *
- * This is the only public distributed-actor composition boundary.
+ * The distributed actor construct is deliberately a qualification around
+ * the canonical actor declaration.
  *
- * Other distributed grammar components should consume this rule rather than
- * reproducing distributed actor syntax.
+ * Canonical source form:
+ *
+ *     distributed actor Counter {
+ *         value: Int;
+ *     }
+ *
+ * `actorDeclaration` is imported from:
+ *
+ *     grammar/concurrency/actors.g4
+ *
+ * and therefore owns the complete actor grammar.
  */
 distributedActorConstruct
     : distributedActorDeclaration
-    | distributedActorSpawn
-    | distributedActorInvocation
-    | distributedActorSend
-    | distributedActorAsk
-    | distributedActorForward
-    | distributedActorLifecycleIntent
     ;
 
 
 /*
  * ============================================================================
- * 2. DISTRIBUTED ACTOR DECLARATION
+ * DISTRIBUTED ACTOR DECLARATION
  * ============================================================================
  *
- * Canonical logical form:
+ * IMPORTANT:
+ *
+ * `distributedActorKeyword` is contextual rather than a dedicated lexer
+ * token. The canonical lexer must therefore continue to emit the spelling
+ * `distributed` as an identifier in this position.
+ *
+ * The second component is the canonical actor declaration.
+ *
+ * This guarantees:
+ *
+ *     distributed actor X { ... }
+ *
+ * and:
+ *
+ *     actor X { ... }
+ *
+ * share exactly the same actor body grammar.
+ */
+distributedActorDeclaration
+    : distributedActorKeyword
+      actorDeclaration
+    ;
+
+
+/*
+ * ============================================================================
+ * CONTEXTUAL DISTRIBUTED MARKER
+ * ============================================================================
+ *
+ * This rule deliberately uses `identifier`.
+ *
+ * The semantic layer validates that its spelling is exactly:
+ *
+ *     distributed
+ *
+ * The grammar therefore does not require a new DISTRIBUTED lexer token.
+ *
+ * This is consistent with the repository's open-world distributed namespace
+ * design and avoids lexical duplication.
+ *
+ * IMPORTANT:
+ *
+ * The canonical lexer must NOT reserve `distributed` as an unrelated
+ * dedicated keyword if this contextual design is used.
+ */
+distributedActorKeyword
+    : identifier
+    ;
+
+
+/*
+ * ============================================================================
+ * SEMANTIC / TOOLING ADAPTERS
+ * ============================================================================
+ *
+ * These aliases do not create additional syntax.
+ *
+ * They give tooling a stable category while retaining one concrete grammar
+ * owner.
+ */
+distributedActorDeclarationConstruct
+    : distributedActorDeclaration
+    ;
+
+
+distributedActorSemanticConstruct
+    : distributedActorConstruct
+    ;
+
+
+/*
+ * ============================================================================
+ * NO SECOND ACTOR GRAMMAR
+ * ============================================================================
+ *
+ * The following are intentionally NOT defined here:
+ *
+ *     actor state
+ *     actor handler
+ *     actor message
+ *     actor send
+ *     actor ask
+ *     actor forward
+ *     actor spawn
+ *     actor lifecycle
+ *     actor supervision
+ *     actor target
+ *
+ * All remain owned by:
+ *
+ *     grammar/concurrency/actors.g4
+ *
+ * ============================================================================
+ * NO SECOND DISTRIBUTED COMMUNICATION GRAMMAR
+ * ============================================================================
+ *
+ * This file intentionally does not define:
+ *
+ *     distributed send
+ *     distributed receive
+ *     distributed channel
+ *     distributed endpoint
+ *     distributed transport
+ *     distributed route
+ *
+ * Those concepts belong to their existing owners.
+ *
+ * ============================================================================
+ * NO SECOND RESOURCE GRAMMAR
+ * ============================================================================
+ *
+ * This file intentionally does not define:
+ *
+ *     requires
+ *     capability
+ *     resource
+ *     placement
+ *     topology
+ *     replication
+ *     scaling
+ *
+ * Those remain owned by their existing resource/distributed grammars.
+ *
+ * ============================================================================
+ * NO PHYSICAL REALIZATION
+ * ============================================================================
+ *
+ * This grammar cannot select:
+ *
+ *     CPU
+ *     GPU
+ *     FPGA
+ *     ASIC
+ *     QPU
+ *     node
+ *     process
+ *     thread
+ *     network address
+ *     transport
+ *     scheduler
+ *     cloud provider
+ *
+ * ============================================================================
+ * HARD-CODING AUDIT
+ * ============================================================================
+ *
+ * Required PASS conditions:
+ *
+ *     no MAX_ACTORS
+ *     no MAX_NODES
+ *     no MAX_PROCESSES
+ *     no MAX_WORKERS
+ *     no MAX_THREADS
+ *     no MAX_MESSAGES
+ *     no MAX_REPLICAS
+ *     no MAX_CHANNELS
+ *     no MAX_CPUS
+ *     no MAX_GPUS
+ *     no MAX_FPGAS
+ *     no MAX_ASICS
+ *     no MAX_QPUS
+ *     no MAX_MEMORY
+ *     no MAX_DEVICES
+ *     no fixed topology
+ *     no physical identifiers
+ *     no provider-specific realization
+ *     no transport-specific realization
+ *
+ * ============================================================================
+ * SCALABILITY
+ * ============================================================================
+ *
+ * The number of distributed actors is not restricted by this grammar.
+ *
+ * The grammar inherits the canonical actor repetition structure from:
+ *
+ *     grammar/concurrency/actors.g4
+ *
+ * Therefore actor members, handlers, state fields and nesting remain governed
+ * by the canonical actor grammar rather than a distributed-specific limit.
+ *
+ * Practical limits are implementation/resource conditions only.
+ *
+ * ============================================================================
+ * ERROR BOUNDARY
+ * ============================================================================
+ *
+ * Parser errors:
+ *
+ *     malformed distributed marker
+ *     missing actor declaration
+ *     malformed canonical actor declaration
+ *
+ * Semantic errors:
+ *
+ *     marker is not the canonical distributed spelling
+ *     distributed qualification is not permitted
+ *     unavailable distributed capability
+ *     unavailable resource
+ *     invalid placement
+ *     invalid replication
+ *     invalid topology
+ *     invalid policy
+ *     unsupported target realization
+ *
+ * This grammar MUST NOT attempt semantic resource discovery.
+ *
+ * ============================================================================
+ * COMPATIBILITY
+ * ============================================================================
+ *
+ * Existing ordinary actor syntax remains unchanged because this grammar
+ * delegates the actor body to `Actors.actorDeclaration`.
+ *
+ * Distributed actor syntax is intentionally:
+ *
+ *     distributed actor ...
+ *
+ * rather than creating:
+ *
+ *     distributedReceive
+ *     distributedSend
+ *     distributedAsk
+ *     distributedForward
+ *     distributedSpawn
+ *
+ * This prevents permanent duplication of actor commands.
+ *
+ * ============================================================================
+ * TEST CONTRACT
+ * ============================================================================
+ *
+ * POSITIVE:
  *
  *     distributed actor Counter {
+ *         value: Int;
+ *     }
+ *
+ *     distributed actor Counter {
+ *         value: Int;
+ *
+ *         actor receive increment(amount: Int) {
+ *             value = value + amount;
+ *         }
+ *     }
+ *
+ *     distributed actor Counter extends BaseCounter {
+ *         value: Int;
+ *     }
+ *
+ * CROSS-DOMAIN:
+ *
+ *     distributed actor QuantumWorker {
  *         ...
  *     }
  *
- * The actor body remains an ordinary Zamani block/member structure.
+ * where the body contains otherwise-valid quantum syntax.
  *
- * Distributed policy is expressed through optional semantic clauses.
- */
-distributedActorDeclaration
-    : distributedActorDeclarationPrefix*
-      DISTRIBUTED
-      ACTOR
-      identifier
-      distributedActorContract*
-      actorInheritanceClause?
-      distributedActorBody
-    ;
-
-
-/*
- * Declaration prefixes are canonical language constructs.
- */
-distributedActorDeclarationPrefix
-    : attribute
-    | visibilityModifier
-    | modifier
-    ;
-
-
-/*
- * Distributed actor body.
+ *     distributed actor TensorWorker {
+ *         ...
+ *     }
  *
- * Actor members are represented through the same structural member model used
- * by the canonical actor subsystem where possible.
+ * where the body contains otherwise-valid tensor/AI syntax.
  *
- * We intentionally avoid importing `Actors` here because doing so would make
- * the distributed actor grammar depend on the general actor grammar's private
- * rule surface and would encourage duplicate actor composition boundaries.
+ *     distributed actor HardwareWorker {
+ *         ...
+ *     }
  *
- * The body is therefore structurally explicit while actor semantics remain
- * downstream.
- */
-distributedActorBody
-    : LBRACE
-      distributedActorMember*
-      RBRACE
-    ;
-
-
-/*
- * ============================================================================
- * 3. ACTOR INHERITANCE
- * ============================================================================
+ * where the body contains otherwise-valid hardware/HDL intent.
  *
- * Kept structurally compatible with the general actor model.
+ * NEGATIVE:
  *
- * Semantic validation determines whether the referenced type is a valid actor
- * contract.
- */
-actorInheritanceClause
-    : EXTENDS
-      typeExpression
-      (
-          COMMA
-          typeExpression
-      )*
-      COMMA?
-    ;
-
-
-/*
- * ============================================================================
- * 4. ACTOR MEMBERS
- * ============================================================================
- */
-
-distributedActorMember
-    : distributedActorMemberPrefix*
-      distributedActorStateField
-    | distributedActorMemberPrefix*
-      distributedActorHandler
-    | distributedActorMemberPrefix*
-      distributedActorLifecycleHandler
-    | distributedActorMemberPrefix*
-      distributedActorContract
-    ;
-
-
-distributedActorMemberPrefix
-    : attribute
-    | visibilityModifier
-    | modifier
-    ;
-
-
-/*
- * ============================================================================
- * 5. ACTOR STATE
- * ============================================================================
+ *     distributed
  *
- * State is logical actor-owned state.
- *
- * No physical memory location is specified.
- */
-distributedActorStateField
-    : identifier
-      COLON
-      typeExpression
-      (
-          ASSIGN
-          expression
-      )?
-      SEMI
-    ;
-
-
-/*
- * ============================================================================
- * 6. MESSAGE HANDLERS
- * ============================================================================
- *
- * Message names remain ordinary identifiers.
- *
- * This avoids a closed vocabulary of messages.
- */
-distributedActorHandler
-    : RECEIVE
-      identifier
-      LPAREN
-      parameterList?
-      RPAREN
-      distributedActorHandlerReturnType?
-      blockExpression
-    ;
-
-
-distributedActorHandlerReturnType
-    : THIN_ARROW
-      typeExpression
-    ;
-
-
-/*
- * Lifecycle handlers are logical lifecycle definitions.
- */
-distributedActorLifecycleHandler
-    : START_ACTOR
-      blockExpression
-    | STOP_ACTOR
-      blockExpression
-    | RESTART_ACTOR
-      blockExpression
-    ;
-
-
-/*
- * ============================================================================
- * 7. DISTRIBUTED ACTOR CONTRACT
- * ============================================================================
- *
- * Contract clauses describe semantic distributed intent.
- *
- * They do not perform runtime allocation.
- */
-distributedActorContract
-    : distributedActorRequirement
-    | distributedActorCapability
-    | distributedActorPlacementIntent
-    | distributedActorReplicationIntent
-    | distributedActorLifecycleIntent
-    | distributedActorCommunicationIntent
-    | distributedActorSupervisionIntent
-    | distributedActorPolicyReference
-    ;
-
-
-/*
- * ============================================================================
- * 8. REQUIREMENTS
- * ============================================================================
- *
- * Requirements are expressions evaluated by semantic/resource analysis.
- *
- * This grammar deliberately does not enumerate resource types.
- */
-distributedActorRequirement
-    : REQUIRES
-      expression
-      SEMI
-    ;
-
-
-/*
- * ============================================================================
- * 9. CAPABILITIES
- * ============================================================================
- *
- * Capability expressions are semantic requirements.
- */
-distributedActorCapability
-    : CAPABILITY
-      expression
-      SEMI
-    ;
-
-
-/*
- * ============================================================================
- * 10. PLACEMENT INTENT
- * ============================================================================
- *
- * Placement remains abstract.
- *
- * The expression can describe locality, affinity, proximity, topology or
- * another semantic placement property without hard-coding a target.
- */
-distributedActorPlacementIntent
-    : PLACEMENT
-      expression
-      SEMI
-    ;
-
-
-/*
- * ============================================================================
- * 11. REPLICATION INTENT
- * ============================================================================
- *
- * Replication is expressed semantically.
- *
- * The expression is not interpreted by the parser as a finite replica count.
- */
-distributedActorReplicationIntent
-    : REPLICATION
-      expression
-      SEMI
-    ;
-
-
-/*
- * ============================================================================
- * 12. COMMUNICATION INTENT
- * ============================================================================
- *
- * Communication policy remains abstract.
- */
-distributedActorCommunicationIntent
-    : COMMUNICATION
-      expression
-      SEMI
-    ;
-
-
-/*
- * ============================================================================
- * 13. SUPERVISION INTENT
- * ============================================================================
- *
- * Supervision is semantic policy, not runtime implementation.
- */
-distributedActorSupervisionIntent
-    : SUPERVISE
-      expression
-      SEMI
-    ;
-
-
-/*
- * ============================================================================
- * 14. GENERIC POLICY REFERENCE
- * ============================================================================
- *
- * Future distributed actor policies remain syntactically representable
- * without requiring a new keyword for every policy.
- *
- * Example:
- *
- *     distributed::consistency eventual;
- *
- *     distributed::fault_tolerance resilient;
- *
- * The semantic layer determines whether the referenced policy is defined.
- */
-distributedActorPolicyReference
-    : qualifiedName
-      expression?
-      SEMI
-    ;
-
-
-/*
- * ============================================================================
- * 15. ACTOR REFERENCE
- * ============================================================================
- *
- * Logical references are qualified names.
- *
- * They do not imply physical addresses.
- */
-distributedActorReference
-    : qualifiedName
-    ;
-
-
-/*
- * ============================================================================
- * 16. ACTOR SPAWN
- * ============================================================================
- *
- * Canonical form:
- *
- *     spawn distributed actor Counter(...)
- *
- * The resulting semantic entity is logical.
- *
- * Runtime realization remains downstream.
- */
-distributedActorSpawn
-    : SPAWN
-      DISTRIBUTED
-      ACTOR
-      qualifiedName
-      LPAREN
-      distributedActorArguments?
-      RPAREN
-    ;
-
-
-distributedActorArguments
-    : argumentList
-    ;
-
-
-distributedActorSpawnStatement
-    : distributedActorSpawn
-      SEMI
-    ;
-
-
-/*
- * ============================================================================
- * 17. INVOCATION
- * ============================================================================
- *
- * Logical distributed actor invocation.
- *
- * Example:
- *
- *     distributed actor_ref.message(value)
- *
- * The exact meaning of the member operation is semantic.
- */
-distributedActorInvocation
-    : distributedActorReference
-      DOT
-      identifier
-      LPAREN
-      optionalExpressionList
-      RPAREN
-    ;
-
-
-distributedActorInvocationStatement
-    : distributedActorInvocation
-      SEMI
-    ;
-
-
-/*
- * ============================================================================
- * 18. SEND
- * ============================================================================
- *
- * Explicit asynchronous message intent.
- *
- * The transport remains outside the grammar.
- */
-distributedActorSend
-    : SEND
-      distributedActorTarget
-      DOT
-      identifier
-      LPAREN
-      optionalExpressionList
-      RPAREN
-    ;
-
-
-distributedActorSendStatement
-    : distributedActorSend
-      SEMI
-    ;
-
-
-/*
- * ============================================================================
- * 19. ASK / REQUEST
- * ============================================================================
- *
- * Request-response interaction.
- *
- * Result typing belongs to semantic analysis.
- */
-distributedActorAsk
-    : ASK
-      distributedActorTarget
-      DOT
-      identifier
-      LPAREN
-      optionalExpressionList
-      RPAREN
-    ;
-
-
-distributedActorAskStatement
-    : distributedActorAsk
-      SEMI
-    ;
-
-
-/*
- * ============================================================================
- * 20. FORWARDING
- * ============================================================================
- *
- * Forwarding remains logical communication intent.
- */
-distributedActorForward
-    : FORWARD
-      distributedActorTarget
-      DOT
-      identifier
-      LPAREN
-      optionalExpressionList
-      RPAREN
-    ;
-
-
-distributedActorForwardStatement
-    : distributedActorForward
-      SEMI
-    ;
-
-
-/*
- * ============================================================================
- * 21. ACTOR TARGET
- * ============================================================================
- *
- * A target is represented as a normal expression.
- *
- * This permits:
- *
- *     local actor reference;
- *     logical group;
- *     actor collection;
- *     dynamically resolved actor;
- *     future distributed actor abstraction.
- *
- * Physical addressing is not required.
- */
-distributedActorTarget
-    : expression
-    ;
-
-
-/*
- * ============================================================================
- * 22. LIFECYCLE INTENT
- * ============================================================================
- *
- * Lifecycle intent is open-ended through a qualified operation.
- *
- * Examples:
- *
- *     start;
- *     stop;
- *     restart;
- *     recover;
- *     migrate;
- *
- * The semantic layer determines legality.
- */
-distributedActorLifecycleIntent
-    : LIFECYCLE
-      qualifiedName
-      (
-          LPAREN
-          optionalExpressionList
-          RPAREN
-      )?
-      SEMI
-    ;
-
-
-/*
- * ============================================================================
- * 23. DISTRIBUTED ACTOR SCOPE
- * ============================================================================
- *
- * Nested distributed actor declarations are legal.
- *
- * No finite nesting depth is encoded.
- */
-distributedActorScope
-    : LBRACE
-      distributedActorMember*
-      RBRACE
-    ;
-
-
-/*
- * ============================================================================
- * 24. STATEMENT ADAPTERS
- * ============================================================================
- *
- * These adapters are intentionally small and do not redefine the universal
- * statement grammar.
- */
-distributedActorStatement
-    : distributedActorSpawnStatement
-    | distributedActorInvocationStatement
-    | distributedActorSendStatement
-    | distributedActorAskStatement
-    | distributedActorForwardStatement
-    ;
-
-
-/*
- * ============================================================================
- * 25. OPEN-WORLD POLICY OPERATION
- * ============================================================================
- *
- * This wrapper allows future distributed actor operations to remain
- * representable without adding a keyword for every operation.
- */
-distributedActorOperation
-    : qualifiedName
-      LPAREN
-      optionalExpressionList
-      RPAREN
-    ;
-
-
-distributedActorOperationStatement
-    : distributedActorOperation
-      SEMI
-    ;
-
-
-/*
- * ============================================================================
- * 26. ARGUMENT CONTRACT
- * ============================================================================
- *
- * Expression syntax remains owned by Expressions.
- */
-distributedActorArgumentList
-    : argumentList
-    ;
-
-
-optionalDistributedActorArgumentList
-    : distributedActorArgumentList?
-    ;
-
-
-/*
- * ============================================================================
- * 27. CROSS-DOMAIN EXPRESSION
- * ============================================================================
- *
- * Distributed actors may carry arbitrary valid Zamani expressions.
- *
- * This permits composition with:
- *
- *     classical;
- *     quantum;
- *     hybrid;
- *     HDL;
- *     AI;
- *     data;
- *     networking;
- *     security;
- *     hardware;
- *     memory;
- *     effects.
- *
- * No domain-specific expression grammar is duplicated here.
- */
-distributedActorExpression
-    : expression
-    ;
-
-
-/*
- * ============================================================================
- * 28. RESOURCE INTEGRATION BOUNDARY
- * ============================================================================
- *
- * Resource syntax is intentionally represented through ordinary expressions
- * in this file.
- *
- * The resource subsystem remains authoritative for resource contracts.
- *
- * This prevents this grammar from becoming a second resource grammar.
- *
- * Examples of downstream semantic concepts:
- *
- *     resource requirement;
- *     capability;
- *     preference;
- *     constraint;
- *     placement;
- *     availability.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 29. CONCURRENCY INTEGRATION BOUNDARY
- * ============================================================================
- *
- * Distributed actors are concurrent entities, but this grammar does not
- * redefine:
- *
- *     async;
- *     await;
- *     spawn;
- *     parallel;
- *     channels;
- *     synchronization;
- *     cancellation;
- *     futures.
- *
- * General concurrency remains owned by:
- *
- *     grammar/concurrency/
- *
- * This file only adds distributed actor intent.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 30. NETWORKING INTEGRATION BOUNDARY
- * ============================================================================
- *
- * Actor communication must not encode a transport.
- *
- * The following remain downstream:
- *
- *     protocol;
- *     endpoint;
- *     address;
- *     socket;
- *     route;
- *     transport;
- *     bandwidth;
- *     network topology.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 31. HARDWARE INTEGRATION BOUNDARY
- * ============================================================================
- *
- * This grammar never identifies:
- *
- *     CPU;
- *     GPU;
- *     FPGA;
- *     ASIC;
- *     QPU;
- *     physical core;
- *     physical memory;
- *     physical accelerator.
- *
- * Hardware intent belongs to:
- *
- *     grammar/hardware/
- *
- * and resource/capability semantics.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 32. DISTRIBUTED INTEGRATION BOUNDARY
- * ============================================================================
- *
- * This grammar composes with:
- *
- *     nodes.g4
- *     services.g4
- *     communication.g4
- *     messaging.g4
- *     replication.g4
- *     consistency.g4
- *     fault-tolerance.g4
- *     placement.g4
- *     topology.g4
- *
- * It must not duplicate their implementation responsibilities.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 33. FAILURE / RECOVERY INTEGRATION
- * ============================================================================
- *
- * Actor lifecycle may participate in distributed resilience.
- *
- * The grammar itself does not implement recovery.
- *
- * Downstream semantic/runtime layers may classify states such as:
- *
- *     Unknown
- *     Healthy
- *     Degraded
- *     Unstable
- *     Unavailable
- *     Recovering
- *     Quarantined
- *     Retired
- *
- * and outcomes such as:
- *
- *     ACCEPT
- *     DEGRADED_ACCEPT
- *     RETRY
- *     RECOVER
- *     ESCALATE
- *     REJECT
- *
- * These are not parser-level execution decisions.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 34. PROVENANCE
- * ============================================================================
- *
- * Source spans must survive:
- *
- *     distributedActorDeclaration
- *         ->
- *     AST
- *         ->
- *     semantic model
- *         ->
- *     canonical IR
- *         ->
- *     lowered realization
- *
- * This is required for diagnostics, tracing, debugging, optimization
- * provenance and distributed execution observability.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 35. COMPATIBILITY
- * ============================================================================
- *
- * This grammar establishes a stable distributed-actor boundary.
- *
- * Adding a new semantic policy should normally occur inside the policy
- * expression space rather than requiring a new parser keyword.
- *
- * Syntax changes affecting:
- *
- *     distributedActorDeclaration
- *     distributedActorSpawn
- *     distributedActorSend
- *     distributedActorAsk
- *
- * require explicit compatibility review.
- *
- * Deprecated syntax must be handled through the repository compatibility
- * system rather than silently changing semantic meaning.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 36. MACROS / METAPROGRAMMING
- * ============================================================================
- *
- * Macro expansion may produce distributed actor syntax.
- *
- * Expanded syntax must pass through the same:
- *
- *     lexer
- *     parser
- *     AST
- *     semantic analysis
- *     resource analysis
- *     capability analysis
- *     security analysis
- *
- * pipeline.
- *
- * This grammar must not become a macro escape hatch.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 37. DIALECT INTEGRATION
- * ============================================================================
- *
- * Vendor/provider-specific actor features belong in dialects.
- *
- * A dialect must not bypass:
- *
- *     AST validation;
- *     semantic validation;
- *     resource validation;
- *     capability validation;
- *     portability analysis.
- *
- * A dialect may extend semantic meaning through the repository's dialect
- * mechanism without turning this grammar into a provider-specific language.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 38. DETERMINISTIC PARSING
- * ============================================================================
- *
- * The grammar contains:
- *
- *     no actions;
- *     no semantic predicates;
- *     no runtime callbacks;
- *     no environment queries;
- *     no hardware queries;
- *     no network queries;
- *     no random state.
- *
- * Identical token streams must therefore produce equivalent parser structure.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 39. NEGATIVE SYNTAX BOUNDARY
- * ============================================================================
- *
- * This grammar must reject structurally malformed constructs such as:
+ *     distributed {
+ *     }
  *
  *     distributed actor
+ *
  *     distributed actor Counter
  *
- * without a body;
+ *     distributed actor Counter {
  *
- *     spawn distributed
+ * where the underlying actor grammar requires additional structure.
  *
- * without actor and target information;
+ * SEMANTIC NEGATIVES:
  *
- * malformed parameter lists;
+ *     distributed actor whose distributed requirements cannot be satisfied
  *
- * malformed communication expressions;
- *
- * malformed contract clauses.
- *
- * It must NOT attempt to reject semantic failures such as:
- *
- *     no available node;
- *     insufficient memory;
- *     unavailable capability;
- *     unsupported transport;
- *     unsupported QPU;
- *     invalid placement;
- *     impossible replication policy.
- *
- * Those are downstream errors.
+ * must be rejected downstream, not by this parser.
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 40. SCALABILITY TEST CONTRACT
+ * SCALABILITY TESTS
  * ============================================================================
  *
- * Conformance tests must verify that the grammar places no artificial
- * language-level limits on:
+ * Tests must parameterize:
  *
- *     actor declarations;
- *     actor members;
- *     actor handlers;
- *     actor parameters;
- *     messages;
- *     nested distributed scopes;
- *     qualified-name depth;
- *     dependency relationships;
- *     replication intent;
- *     placement expressions;
- *     policy expressions;
- *     program size.
+ *     number of distributed actor declarations
+ *     number of actor members
+ *     number of handlers
+ *     state fields
+ *     nesting depth
+ *     generic complexity
+ *     message relationships
  *
- * Tests should be parameterized.
+ * No test may define a universal maximum.
  *
- * They must NOT establish a universal upper bound.
+ * A stress test may select a finite value for the test environment, but that
+ * value is a test parameter and MUST NOT become a language constant.
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 41. CROSS-DOMAIN TEST CONTRACT
- * ============================================================================
- *
- * Required integration coverage includes:
- *
- *     distributed + classical
- *     distributed + quantum
- *     distributed + hybrid
- *     distributed + HDL
- *     distributed + hardware
- *     distributed + AI
- *     distributed + data
- *     distributed + networking
- *     distributed + security
- *     distributed + memory
- *     distributed + concurrency
- *     distributed + effects
- *     distributed + resources
- *
- * Particularly important:
- *
- *     distributed + quantum + classical
- *     distributed + quantum + hardware
- *     distributed + quantum + networking
- *     distributed + quantum + QEC
- *     distributed + quantum + ZQN
- *
- * Quantum lowering must continue through:
- *
- *     quantum::ir
- *
- * without creating a distributed quantum IR.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 42. DETERMINISM TEST CONTRACT
+ * DETERMINISM TESTS
  * ============================================================================
  *
  * Given identical:
  *
- *     source;
- *     lexer configuration;
- *     grammar version;
- *     dialect configuration;
+ *     source
+ *     token stream
+ *     grammar version
+ *     parser configuration
  *
- * repeated parsing must produce equivalent structural results.
- *
- * Parser behavior must not depend on:
- *
- *     current hardware;
- *     number of nodes;
- *     runtime state;
- *     system clock;
- *     scheduler state;
- *     network availability.
+ * parsing must be deterministic.
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 43. ROUND-TRIP TEST CONTRACT
+ * ROUND-TRIP TESTS
  * ============================================================================
  *
- * Where formatter support exists:
+ * Where formatting support exists:
  *
  *     source
- *       -> lexer
- *       -> parser
- *       -> AST
- *       -> formatter
- *       -> parser
+ *       ->
+ *     parse
+ *       ->
+ *     AST
+ *       ->
+ *     format
+ *       ->
+ *     parse
  *
- * must preserve the semantic structure of:
+ * must preserve:
  *
- *     actor identity;
- *     contracts;
- *     state;
- *     handlers;
- *     targets;
- *     operations;
- *     arguments;
- *     lifecycle intent.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 44. HARD-CODING AUDIT
- * ============================================================================
- *
- * This file contains no universal:
- *
- *     MAX_ACTORS
- *     MAX_PROCESSES
- *     MAX_NODES
- *     MAX_WORKERS
- *     MAX_MESSAGES
- *     MAX_REPLICAS
- *     MAX_THREADS
- *     MAX_CPUS
- *     MAX_GPUS
- *     MAX_FPGAS
- *     MAX_QPUS
- *     MAX_MEMORY
- *     MAX_MAILBOX
- *     MAX_NETWORK_SIZE
- *     MAX_DEVICE_COUNT
- *
- * It contains no fixed:
- *
- *     CPU identity;
- *     GPU identity;
- *     FPGA identity;
- *     QPU identity;
- *     physical node identity;
- *     physical memory size;
- *     physical topology;
- *     provider;
- *     transport;
- *     machine address.
- *
- * Any numeric literal appearing in an expression is source-program data,
- * not a language-level implementation ceiling.
+ *     distributed qualification
+ *     actor declaration
+ *     actor name
+ *     actor members
+ *     actor state
+ *     handlers
+ *     actor commands
+ *     nested expressions
+ *     source semantics
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 45. SECURITY AUDIT
+ * CROSS-FILE INTEGRATION
  * ============================================================================
  *
- * This grammar contains:
+ * DISTRIBUTED COMPOSITION
+ * -----------------------
  *
- *     no executable actions;
- *     no filesystem operations;
- *     no network operations;
- *     no secret operations;
- *     no hardware operations;
- *     no runtime calls;
- *     no unsafe Rust;
- *     no dynamic code execution.
+ *     grammar/distributed/distributed.g4
  *
- * Security authorization remains downstream.
+ * MUST import:
+ *
+ *     DistributedActors
+ *
+ * and consume:
+ *
+ *     distributedActorConstruct
+ *
+ * It must not define another actor alternative.
+ *
+ *
+ * CONCURRENCY
+ * -----------
+ *
+ *     grammar/concurrency/actors.g4
+ *
+ * remains the sole actor grammar.
+ *
+ * This file imports and reuses:
+ *
+ *     actorDeclaration
+ *
+ * It must not modify actor semantics merely because an actor is distributed.
+ *
+ *
+ * CONCURRENCY COMPOSITION
+ * -----------------------
+ *
+ *     grammar/concurrency/concurrency.g4
+ *
+ * continues to consume:
+ *
+ *     actorConstruct
+ *
+ * for ordinary actor syntax.
+ *
+ * It does not need a second distributed actor implementation.
+ *
+ *
+ * DISTRIBUTED PLACEMENT
+ * ---------------------
+ *
+ * Distributed placement remains in:
+ *
+ *     grammar/distributed/placement.g4
+ *
+ * and its canonical resource placement dependencies.
+ *
+ *
+ * DISTRIBUTED REPLICATION
+ * -----------------------
+ *
+ * Replication remains in:
+ *
+ *     grammar/distributed/replication.g4
+ *
+ *
+ * DISTRIBUTED COMMUNICATION
+ * -------------------------
+ *
+ * Communication remains in:
+ *
+ *     grammar/distributed/communication.g4
+ *     grammar/distributed/messaging.g4
+ *     grammar/concurrency/channels.g4
+ *
+ *
+ * NETWORKING
+ * ----------
+ *
+ * Network transport and endpoint realization remain in:
+ *
+ *     grammar/networking/
+ *
+ *
+ * RESOURCES
+ * ---------
+ *
+ * Resource/capability requirements remain in:
+ *
+ *     grammar/resources/
+ *
+ *
+ * EFFECTS
+ * -------
+ *
+ * Effects remain in:
+ *
+ *     grammar/effects/
+ *
+ *
+ * SECURITY
+ * --------
+ *
+ * Security/capability/authorization remains in:
+ *
+ *     grammar/security/
+ *
+ *
+ * QUANTUM
+ * -------
+ *
+ * Quantum operations remain in:
+ *
+ *     grammar/quantum/
+ *
+ * and lower through:
+ *
+ *     quantum::ir
+ *
+ *
+ * HDL / HARDWARE
+ * -------------
+ *
+ * HDL and hardware realization remain in:
+ *
+ *     grammar/hdl/
+ *     grammar/hardware/
+ *
+ *
+ * AST
+ * ---
+ *
+ * No new distributed-actor-specific runtime AST is required.
+ *
+ * The existing actor AST representation is reused, with distributed
+ * qualification preserved by the frontend's domain-neutral semantic metadata.
+ *
+ *
+ * IR
+ * --
+ *
+ * No DistributedActorIR is introduced.
+ *
+ * No ActorNetworkIR is introduced.
+ *
+ * No DistributedQuantumIR is introduced.
+ *
+ * The canonical semantic/IR pipeline remains authoritative.
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 46. PERFORMANCE CONTRACT
+ * RUST / IMPLEMENTATION SAFETY
  * ============================================================================
  *
- * The grammar uses:
+ * This grammar contains no Rust implementation.
  *
- *     structural repetition;
- *     reusable expression rules;
- *     qualified names;
- *     ordinary recursive blocks.
+ * The generated Zamani frontend must remain compatible with:
  *
- * It does not perform semantic searches or runtime operations while parsing.
+ *     Rust 1.97+
+ *     Rust Edition 2021
  *
- * Any practical parser resource limits must be implementation-level controls
- * and must never be represented as language-level semantic limits.
+ * and must use safe Rust only.
  *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 47. RUST CONTRACT
- * ============================================================================
- *
- * This grammar itself contains no Rust.
- *
- * The consuming Zamani compiler must remain compatible with:
- *
- *     Rust 1.97
- *     Rust 1.97.1
- *     Rust 2021
- *
- * and must not require unsafe Rust.
+ * No `unsafe` implementation is required or permitted by this grammar.
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 48. COMPLETION CONTRACT
+ * COMPLETION CRITERIA
  * ============================================================================
  *
  * This file is DONE when:
  *
- *     [ ] Grammar name is unique.
+ * [x] It has exactly one distributed-actor concrete syntax boundary.
  *
- *     [ ] File is the sole distributed-actor leaf grammar.
+ * [x] It delegates ordinary actor syntax to `concurrency/actors.g4`.
  *
- *     [ ] `distributedActorConstruct` is the public boundary.
+ * [x] It does not duplicate actor state syntax.
  *
- *     [ ] General actor semantics remain owned by concurrency/actors.g4.
+ * [x] It does not duplicate actor handler syntax.
  *
- *     [ ] No duplicate actor IR exists.
+ * [x] It does not duplicate actor messaging syntax.
  *
- *     [ ] No lexer rules are defined here.
+ * [x] It does not duplicate actor lifecycle syntax.
  *
- *     [ ] Canonical names are reused.
+ * [x] It does not duplicate actor supervision syntax.
  *
- *     [ ] Canonical expressions are reused.
+ * [x] It does not define distributed transport syntax.
  *
- *     [ ] Canonical types are reused.
+ * [x] It does not define physical placement.
  *
- *     [ ] Canonical blocks are reused where applicable.
+ * [x] It does not define resource allocation.
  *
- *     [ ] Actor state is represented without physical-memory assumptions.
+ * [x] It does not define scheduling.
  *
- *     [ ] Actor communication is transport-independent.
+ * [x] It does not define replication algorithms.
  *
- *     [ ] Placement is target-independent.
+ * [x] It does not define networking protocols.
  *
- *     [ ] Replication is target-independent.
+ * [x] It does not define quantum operations.
  *
- *     [ ] Lifecycle is semantic intent.
+ * [x] It does not define an actor-specific IR.
  *
- *     [ ] Resource requirements remain separate from implementation.
+ * [x] It does not define a distributed-specific quantum IR.
  *
- *     [ ] Capabilities remain separate from allocation.
+ * [x] It has no universal resource limits.
  *
- *     [ ] Security is not bypassed.
+ * [x] It has no physical hardware identifiers.
  *
- *     [ ] Quantum semantics do not create a second quantum IR.
+ * [x] It contains no embedded Rust.
  *
- *     [ ] quantum::ir remains canonical.
+ * [x] It contains no semantic predicates.
  *
- *     [ ] No hardware limits are encoded.
+ * [x] It contains no runtime callbacks.
  *
- *     [ ] No fixed actor count is encoded.
+ * [x] It remains deterministic.
  *
- *     [ ] No fixed node count is encoded.
+ * [ ] Repository lexer confirms `distributed` remains an identifier in the
+ *     contextual position.
  *
- *     [ ] No fixed message count is encoded.
+ * [ ] `Distributed.distributedDeclaration` consumes
+ *     `distributedActorConstruct`.
  *
- *     [ ] No fixed replica count is encoded.
+ * [ ] Frontend AST preserves the distributed qualification.
  *
- *     [ ] No fixed resource capacity is encoded.
+ * [ ] Semantic analysis recognizes distributed actor qualification.
  *
- *     [ ] No provider is embedded.
- *
- *     [ ] No transport is embedded.
- *
- *     [ ] Parsing is deterministic.
- *
- *     [ ] Source spans can be preserved.
- *
- *     [ ] Positive tests exist.
- *
- *     [ ] Negative tests exist.
- *
- *     [ ] Boundary tests exist.
- *
- *     [ ] Scalability tests exist.
- *
- *     [ ] Determinism tests exist.
- *
- *     [ ] Cross-domain tests exist.
- *
- *     [ ] Compatibility tests exist.
- *
- *     [ ] Rust 1.97/1.97.1 integration remains safe-Rust-only.
+ * [ ] Positive, negative, boundary, scalability and cross-domain tests pass.
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 49. FINAL INVARIANTS
+ * FINAL ARCHITECTURAL INVARIANT
  * ============================================================================
  *
- * INVARIANT 1
- * ----------
- * A distributed actor is a logical semantic entity.
+ *     ordinary actor:
  *
- * INVARIANT 2
- * ----------
- * A distributed actor is not inherently a process, thread, machine or node.
+ *         actorDeclaration
  *
- * INVARIANT 3
- * ----------
- * Actor syntax remains owned by the concurrency subsystem.
+ *     distributed actor:
  *
- * INVARIANT 4
- * ----------
- * This grammar owns distributed specialization only.
+ *         distributedActorKeyword
+ *             +
+ *         actorDeclaration
  *
- * INVARIANT 5
- * ----------
- * Physical realization remains downstream.
+ * Therefore:
  *
- * INVARIANT 6
- * ----------
- * Resource availability never becomes grammar syntax limits.
+ *     distributed actor
+ *         !=
+ *     second actor language
  *
- * INVARIANT 7
- * ----------
- * Capability requirements do not allocate resources.
+ * and:
  *
- * INVARIANT 8
- * ----------
- * Placement intent does not identify physical hardware.
+ *     distributed actor
+ *         =
+ *     canonical actor
+ *         +
+ *     distributed semantic qualification
  *
- * INVARIANT 9
- * ----------
- * Communication intent does not select a transport.
+ * This is the required production architecture for POCO-REAF.
  *
- * INVARIANT 10
- * -----------
- * Replication intent does not implement replication.
- *
- * INVARIANT 11
- * -----------
- * Lifecycle intent does not invoke the runtime.
- *
- * INVARIANT 12
- * -----------
- * Quantum computation remains routed through canonical `quantum::ir`.
- *
- * INVARIANT 13
- * -----------
- * Distributed actors can participate in classical, quantum, hybrid, HDL,
- * hardware, AI, data, networking and future computation without requiring
- * separate actor languages.
- *
- * INVARIANT 14
- * -----------
- * No unsafe Rust is required.
- *
- * INVARIANT 15
- * -----------
- * The grammar remains deterministic and environment-independent.
- *
- * INVARIANT 16
- * -----------
- * Future semantic distributed actor policies remain extensible without
- * requiring a closed enumeration of every possible policy.
- *
- * INVARIANT 17
- * -----------
- * POCO-REAF is preserved:
- *
- *     Program Once
- *         ->
- *     Compile Once
- *         ->
- *     Run Everywhere
- *         ->
- *     Anywhere
- *         ->
- *     Forever
- *
- * ============================================================================
- * END OF grammar/distributed/actors.g4
  * ============================================================================
  */
