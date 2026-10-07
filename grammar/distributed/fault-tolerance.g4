@@ -10,79 +10,57 @@
  *     FaultTolerance
  *
  * Status:
- *     Production distributed fault-tolerance parser component.
+ *     Production distributed fault-tolerance grammar
  *
- * Language baseline:
- *     Rust 1.97 / Rust 1.97.1
+ * Rust baseline:
+ *     Rust 1.97+
  *     Rust Edition 2021
  *
  * Safety:
- *     Safe Rust only.
- *     No embedded Rust actions.
- *     No unsafe code.
- *     No semantic predicates.
- *     No filesystem access.
- *     No network access.
- *     No hardware access.
- *     No runtime callbacks.
- *     No randomness.
+ *     - Grammar only.
+ *     - No embedded Rust actions.
+ *     - No semantic predicates.
+ *     - No unsafe Rust.
+ *     - No filesystem access.
+ *     - No network access.
+ *     - No hardware access.
+ *     - No runtime callbacks.
+ *     - No randomness.
  *
  * ============================================================================
  * PURPOSE
  * ============================================================================
  *
- * This grammar owns SOURCE-LEVEL DISTRIBUTED FAULT-TOLERANCE INTENT.
+ * This file owns the SOURCE-LEVEL SYNTAX for distributed fault-tolerance
+ * intent.
  *
- * It provides syntax for declaring:
+ * Fault tolerance expresses what failures a computation may tolerate and what
+ * recovery/degradation behavior is acceptable.
  *
- *     - fault-tolerance policies;
- *     - failure models;
- *     - detection intent;
- *     - recovery intent;
- *     - retry/restart/failover intent;
- *     - checkpoint intent;
- *     - degradation intent;
- *     - escalation intent;
- *     - availability/durability requirements;
- *     - recovery stages;
- *     - recovery conditions;
- *     - recovery actions;
- *     - dependencies;
- *     - requirements;
- *     - constraints;
- *     - preferences;
- *     - hints;
- *     - extensible nested policy data.
+ * It does NOT implement fault tolerance.
  *
- * This grammar does NOT implement fault tolerance.
+ * This grammar does not:
  *
- * It does not implement:
+ *     - detect failures;
+ *     - monitor health;
+ *     - restart processes;
+ *     - perform failover;
+ *     - select machines;
+ *     - allocate replicas;
+ *     - choose consensus algorithms;
+ *     - choose consistency algorithms;
+ *     - choose storage engines;
+ *     - choose network transports;
+ *     - schedule work;
+ *     - route work;
+ *     - allocate hardware;
+ *     - execute recovery;
+ *     - implement checkpoint storage;
+ *     - implement QEC;
+ *     - implement ZQN;
+ *     - implement HAL behavior.
  *
- *     - failure detection;
- *     - health monitoring;
- *     - retry engines;
- *     - restart engines;
- *     - failover engines;
- *     - recovery orchestration;
- *     - checkpoint storage;
- *     - checkpoint restoration;
- *     - replica repair;
- *     - consensus;
- *     - consistency;
- *     - replication;
- *     - placement;
- *     - scheduling;
- *     - routing;
- *     - networking;
- *     - resource discovery;
- *     - hardware discovery;
- *     - QEC;
- *     - ZQN;
- *     - quantum::ir;
- *     - classical IR;
- *     - runtime execution.
- *
- * Those responsibilities belong to downstream subsystems.
+ * Those decisions belong downstream.
  *
  * ============================================================================
  * ARCHITECTURAL POSITION
@@ -91,30 +69,32 @@
  *     Zamani source
  *          |
  *          v
- *     lexer
+ *     canonical lexer
  *          |
  *          v
- *     parser
+ *     FaultTolerance parser
  *          |
  *          v
- *     domain-neutral frontend AST
+ *     domain-neutral AST
  *          |
  *          +--> name resolution
  *          +--> type analysis
  *          +--> effect analysis
- *          +--> resource analysis
  *          +--> capability analysis
- *          +--> security analysis
- *          +--> distributed semantic analysis
- *          +--> fault-tolerance semantic analysis
+ *          +--> resource analysis
+ *          +--> contract analysis
+ *          +--> policy analysis
+ *          +--> provenance
+ *          +--> distributed semantics
+ *          +--> resilience semantics
  *          |
  *          v
  *     canonical semantic representation
  *          |
- *          +--> classical representation / IR
+ *          +--> classical IR
  *          +--> quantum::ir
- *          +--> HDL / hardware representation
- *          +--> distributed execution metadata
+ *          +--> HDL / hardware semantics
+ *          +--> distributed metadata
  *          +--> resilience metadata
  *          |
  *          v
@@ -124,65 +104,67 @@
  *          +--> routing
  *          +--> scheduling
  *          +--> resilience
+ *          +--> QEC where applicable
  *          |
  *          v
- *     target realization
- *          |
- *          v
- *     runtime
- *
- * This grammar is strictly upstream of implementation decisions.
+ *     ZQN / HAL / target realization
  *
  * ============================================================================
  * POCO-REAF
  * ============================================================================
  *
- * Zamani's portability objective is:
+ * Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever.
  *
- *     Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
+ * Fault-tolerance syntax describes portable intent.
  *
- * Fault-tolerance syntax therefore describes semantic guarantees and
- * policies rather than physical deployment.
+ * The same source must be able to describe a computation intended for:
  *
- * The grammar must not require a source rewrite merely because a program
- * moves between:
- *
- *     - one execution context;
- *     - many execution contexts;
+ *     - tiny systems;
  *     - embedded systems;
+ *     - CPUs;
  *     - multicore systems;
- *     - GPU systems;
- *     - FPGA systems;
- *     - accelerator systems;
- *     - clusters;
+ *     - GPUs;
+ *     - FPGAs;
+ *     - ASICs;
+ *     - accelerators;
+ *     - QPUs;
+ *     - simulators;
  *     - HPC systems;
- *     - clouds;
+ *     - clusters;
+ *     - federated systems;
+ *     - cloud systems;
  *     - heterogeneous systems;
- *     - quantum/classical systems;
  *     - future computational substrates.
+ *
+ * The grammar therefore contains no physical deployment assumptions.
  *
  * ============================================================================
  * SCALABILITY
  * ============================================================================
  *
- * This grammar imposes no language-level finite limits on:
+ * This grammar imposes NO language-level finite limit on:
  *
- *     - fault-tolerance declarations;
- *     - policies;
+ *     - declarations;
+ *     - targets;
  *     - failure models;
+ *     - failure domains;
+ *     - recovery policies;
  *     - recovery stages;
  *     - recovery actions;
+ *     - alternatives;
+ *     - dependencies;
  *     - requirements;
+ *     - capabilities;
  *     - constraints;
  *     - preferences;
- *     - hints;
- *     - nested policy objects;
- *     - expression lists;
- *     - qualified-name depth.
+ *     - policies;
+ *     - evidence;
+ *     - provenance;
+ *     - nested objects;
+ *     - list elements;
+ *     - expression arguments.
  *
- * Repetition is represented using ANTLR '*' and '+'.
- *
- * This grammar contains no:
+ * There is deliberately no:
  *
  *     MAX_NODES
  *     MAX_REPLICAS
@@ -201,17 +183,17 @@
  *     MAX_DEVICES
  *     MAX_NETWORK_SIZE
  *
- * Practical limits belong to compiler, runtime, operating-system, deployment,
- * and target resource policies.
+ * Any finite implementation limit belongs to the parser implementation,
+ * compiler resources, runtime resources, deployment policy, or target
+ * capabilities. Such a limit is never a language semantic limit.
  *
  * ============================================================================
- * OPEN-WORLD DESIGN
+ * OPEN-WORLD FAILURE MODEL
  * ============================================================================
  *
- * Fault-tolerance vocabulary is intentionally NOT a closed parser
- * enumeration.
+ * Failure-model names remain semantic names.
  *
- * Semantic names may include:
+ * Examples:
  *
  *     transient
  *     permanent
@@ -226,42 +208,45 @@
  *     cancellation
  *     unknown
  *
- * and future names such as:
+ * Future names remain representable:
  *
  *     vendor::failure_model
  *     domain::custom_failure
+ *     future::failure::class
  *
- * These names remain semantic data.
- *
- * A new failure model, recovery policy, detector, or resilience mechanism
- * should not require a lexer change merely because a new semantic name was
- * introduced.
+ * Adding a new failure model must NOT require a parser rewrite.
  *
  * ============================================================================
- * LEXICAL AUTHORITY
+ * OPEN-WORLD RECOVERY MODEL
  * ============================================================================
  *
- * This file introduces NO lexer rules.
+ * Recovery strategies are also semantic names.
  *
- * It introduces NO global keywords for:
+ * Examples:
  *
- *     fault
- *     failure
  *     retry
  *     restart
  *     failover
- *     recovery
+ *     reconstruct
+ *     resume
+ *     rollback
  *     checkpoint
  *     degrade
+ *     compensate
  *     escalate
- *     availability
- *     durability
  *
- * The repository's existing lexer remains the lexical authority.
+ * These names are not closed parser enumerations.
  *
- * In particular, this grammar does not invent a CONTRACT, FAULT, FAILURE,
- * RETRY, or RECOVER token that does not already exist in the canonical
- * lexical vocabulary.
+ * The semantic layer determines whether a named strategy is:
+ *
+ *     - built-in;
+ *     - library-defined;
+ *     - dialect-defined;
+ *     - vendor-defined;
+ *     - experimental;
+ *     - deprecated;
+ *     - unavailable;
+ *     - unsupported.
  *
  * ============================================================================
  * OWNERSHIP
@@ -270,335 +255,668 @@
  * THIS FILE OWNS:
  *
  *     - fault-tolerance declaration framing;
- *     - fault-tolerance property syntax;
+ *     - fault-tolerance invocation arguments;
+ *     - fault-tolerance body structure;
+ *     - fault-tolerance clause structure;
  *     - fault-tolerance nested scopes;
- *     - fault-tolerance lists and objects;
- *     - fault-tolerance semantic property names;
- *     - fault-tolerance extension structure.
+ *     - fault-tolerance lists/objects;
+ *     - fault-tolerance extension calls;
+ *     - fault-tolerance parser integration points.
  *
  * THIS FILE DOES NOT OWN:
  *
+ *     - lexer vocabulary;
  *     - identifiers;
  *     - qualified names;
- *     - expressions;
+ *     - general expressions;
  *     - types;
- *     - lexical tokens;
+ *     - resources;
+ *     - capabilities;
+ *     - effects;
+ *     - contracts;
+ *     - policies;
+ *     - provenance;
+ *     - nodes;
+ *     - processes;
+ *     - actors;
+ *     - services;
+ *     - channels;
  *     - replication;
  *     - consistency;
- *     - networking;
- *     - messaging;
+ *     - partitioning;
+ *     - topology;
  *     - placement;
+ *     - networking;
+ *     - transactions;
  *     - scheduling;
- *     - resources;
- *     - hardware;
  *     - quantum operations;
- *     - quantum state;
  *     - QEC;
  *     - ZQN;
- *     - resilience implementation;
- *     - runtime execution.
+ *     - HAL;
+ *     - runtime implementation.
  *
  * ============================================================================
  * DOMAIN SEPARATION
  * ============================================================================
  *
- * Fault tolerance is distinct from:
+ * Replication:
+ *     grammar/distributed/replication.g4
  *
- *     replication
- *     consistency
- *     consensus
- *     resilience orchestration
- *     resource management
- *     placement
- *     scheduling
- *     networking
+ * Consistency:
+ *     grammar/distributed/consistency.g4
  *
- * Therefore:
+ * Partitioning:
+ *     grammar/distributed/partitioning.g4
  *
- * replication.g4
- *     owns replication syntax.
+ * Topology:
+ *     grammar/distributed/topology.g4
  *
- * consistency.g4
- *     owns consistency syntax.
+ * Placement:
+ *     grammar/distributed/placement.g4
  *
- * fault-tolerance.g4
- *     owns fault-tolerance syntax.
+ * Transactions:
+ *     grammar/distributed/transactions.g4
  *
- * resilience subsystem
- *     owns recovery orchestration and execution policy.
+ * Fault tolerance:
+ *     THIS FILE
  *
- * resource subsystem
- *     owns resource/capability feasibility.
+ * Resilience execution:
+ *     grammar/execution/resilience.g4
  *
- * networking subsystem
- *     owns communication realization.
+ * Resources/capabilities:
+ *     grammar/resources/
  *
- * scheduling subsystem
- *     owns executable ordering and scheduling.
+ * Policies:
+ *     grammar/policies/
+ *
+ * Networking:
+ *     grammar/networking/
+ *
+ * The fault-tolerance grammar may reference the semantics of these systems
+ * through expressions and qualified names, but does not duplicate their
+ * syntax.
  *
  * ============================================================================
- * CANONICAL SOURCE FORM
+ * PUBLIC INTEGRATION CONTRACT
  * ============================================================================
  *
- * To avoid collision with the generic distributed container grammar, the
- * canonical structured form is:
+ * The stable public rule is:
  *
- *     fault_tolerance(target) {
+ *     distributedFaultToleranceDeclaration
+ *
+ * `grammar/distributed/distributed.g4` already consumes this rule.
+ *
+ * That rule MUST remain stable.
+ *
+ * ============================================================================
+ * LEXICAL CONTRACT
+ * ============================================================================
+ *
+ * The declaration marker is deliberately reserved:
+ *
+ *     FAULT_TOLERANCE
+ *
+ * spelling:
+ *
+ *     fault_tolerance
+ *
+ * This is necessary because the distributed composition root contains several
+ * distributed constructs. Using an arbitrary `identifier` as the declaration
+ * marker makes declarations structurally indistinguishable from other
+ * identifier-led distributed constructs.
+ *
+ * Only the construct marker is reserved.
+ *
+ * Failure-model names, recovery-policy names, vendor names, implementation
+ * names, domain names and future semantic names remain identifiers.
+ *
+ * Do NOT reserve:
+ *
+ *     transient
+ *     permanent
+ *     node_failure
+ *     process_failure
+ *     retry_policy
+ *     failover_policy
+ *     checkpoint_strategy
+ *     vendor-specific names
+ *     physical device names
+ *
+ * ============================================================================
+ * CANONICAL SOURCE FORMS
+ * ============================================================================
+ *
+ * Targeted policy:
+ *
+ *     fault_tolerance(workload) {
  *         failure: transient;
- *         retry: adaptive;
- *         recovery: reconstructible;
+ *         recovery: retry_policy;
  *     }
  *
- * or:
+ * Untargeted policy:
  *
- *     distributed::fault_tolerance(target) {
- *         failure: distributed::transient;
- *         recovery: custom::recovery_policy;
+ *     fault_tolerance {
+ *         failure: transient;
+ *         recovery: retry_policy;
  *     }
  *
- * A declaration name and its target are therefore separated structurally
- * from the generic:
+ * Multiple source-level arguments are permitted:
  *
- *     distributed_kind identifier { ... }
+ *     fault_tolerance(workload, execution_scope) {
+ *         recovery: recoverable;
+ *     }
  *
- * container form.
+ * Resource/capability intent:
  *
- * A simple invocation remains representable by the generic distributed
- * operation grammar:
+ *     fault_tolerance(workload) {
+ *         requires: capability("fault.recovery");
+ *         requires: memory >= recovery_memory;
+ *         prefer: local_recovery;
+ *         constrain: preserve_semantics;
+ *     }
  *
- *     distributed::fault_tolerance(policy);
+ * Nested policy:
  *
- * Such generic invocations do not belong to this component's specialized
- * structured declaration rule.
+ *     fault_tolerance(workload) {
+ *         recovery {
+ *             strategy: custom::recovery;
+ *             condition: recoverable;
+ *         }
+ *     }
+ *
+ * Extension:
+ *
+ *     fault_tolerance(workload) {
+ *         vendor::extension: configuration;
+ *     }
+ *
+ * The parser records structure. Semantic analysis decides meaning.
  *
  * ============================================================================
  * AST CONTRACT
  * ============================================================================
  *
- * The frontend AST must preserve:
+ * The frontend AST must preserve, at minimum:
  *
- *     - declaration source span;
- *     - declaration name;
- *     - target expression;
- *     - member ordering;
- *     - property names;
- *     - property values;
- *     - nested scopes;
- *     - list ordering;
- *     - object structure;
- *     - source expressions;
- *     - source spans for every syntactic element.
+ *     FaultToleranceDeclaration {
+ *         arguments
+ *         clauses
+ *         source_span
+ *     }
  *
- * The AST must not resolve:
+ * Each clause must preserve:
  *
- *     - physical machines;
- *     - physical nodes;
- *     - hardware identifiers;
- *     - network addresses;
- *     - transport protocols;
- *     - physical replica locations;
- *     - physical topology;
- *     - provider-specific implementation choices.
+ *     - key;
+ *     - value;
+ *     - nested structure where applicable;
+ *     - source span;
+ *     - source ordering.
+ *
+ * The AST must NOT manufacture:
+ *
+ *     PhysicalNodeId
+ *     PhysicalCpuId
+ *     PhysicalGpuId
+ *     PhysicalFpgaId
+ *     PhysicalQpuId
+ *     PhysicalQubitId
+ *     NetworkAddress
+ *     TransportSelection
+ *     SchedulerAssignment
+ *     PlacementDecision
+ *     RuntimeRecoveryPlan
+ *     QecPlan
  *
  * ============================================================================
  * SEMANTIC CONTRACT
  * ============================================================================
  *
- * Semantic analysis must determine:
+ * Semantic analysis classifies clauses into concepts such as:
  *
- *     - whether the declaration is valid;
- *     - whether the target exists;
- *     - whether the referenced failure model exists;
- *     - whether the requested policy exists;
- *     - whether an action is supported;
- *     - whether recovery is semantically possible;
- *     - whether retry conditions are valid;
- *     - whether checkpointing is legal;
- *     - whether durability requirements are achievable;
- *     * whether availability requirements are achievable;
- *     * whether requirements conflict;
- *     * whether capabilities exist;
- *     * whether resource requirements are satisfiable;
- *     * whether recovery dependencies are valid.
+ *     - failure model;
+ *     - detection intent;
+ *     - recovery policy;
+ *     - retry policy;
+ *     - restart policy;
+ *     - failover policy;
+ *     - checkpoint policy;
+ *     - degradation policy;
+ *     - escalation policy;
+ *     - availability requirement;
+ *     - durability requirement;
+ *     - resource requirement;
+ *     - capability requirement;
+ *     - constraint;
+ *     - preference;
+ *     - hint;
+ *     - policy;
+ *     - contract;
+ *     - evidence;
+ *     - provenance;
+ *     - extension.
  *
- * Syntax alone must never imply that a policy is implementable.
+ * Syntax validity does not imply semantic validity.
  *
  * ============================================================================
- * QUANTUM INTEGRATION
+ * REQUIREMENT / CAPABILITY / CONSTRAINT / PREFERENCE SEPARATION
  * ============================================================================
  *
- * Fault-tolerance declarations may surround distributed quantum computation.
+ * REQUIREMENT:
  *
- * They MUST NOT define:
+ *     A condition that must hold for a valid realization.
  *
- *     QubitId
- *     PhysicalQubitId
- *     Gate
- *     QuantumOperation
- *     QuantumState
- *     QuantumCircuit
- *     QEC code
- *     QEC decoder
- *     calibration
- *     pulse
- *     topology
- *     ZQN
+ * CAPABILITY:
  *
- * The canonical quantum semantic boundary remains:
+ *     Something the realization environment must provide.
+ *
+ * CONSTRAINT:
+ *
+ *     A condition imposed on an otherwise valid realization.
+ *
+ * PREFERENCE:
+ *
+ *     A desired property that may influence selection but is not mandatory.
+ *
+ * HINT:
+ *
+ *     Non-binding implementation guidance.
+ *
+ * POLICY:
+ *
+ *     A rule controlling permitted behavior.
+ *
+ * IMPLEMENTATION DECISION:
+ *
+ *     A concrete backend realization.
+ *
+ * This grammar MUST NOT collapse these concepts.
+ *
+ * ============================================================================
+ * EFFECT CONTRACT
+ * ============================================================================
+ *
+ * Fault-tolerance declarations may cause or require semantic effects such as:
+ *
+ *     distributed
+ *     mutation
+ *     IO
+ *     network
+ *     recovery
+ *     checkpoint
+ *     randomness
+ *     foreign
+ *     simulation
+ *     quantum
+ *
+ * Effect classification belongs to the effect subsystem.
+ *
+ * This grammar does not invent a second effect system.
+ *
+ * ============================================================================
+ * RESOURCE / CAPABILITY CONTRACT
+ * ============================================================================
+ *
+ * Fault tolerance may reference symbolic requirements:
+ *
+ *     requires: capability("fault.recovery");
+ *
+ *     requires: capability("checkpoint.restore");
+ *
+ *     requires: memory >= recovery_memory;
+ *
+ *     requires: storage >= checkpoint_storage;
+ *
+ *     requires: topology(required_topology);
+ *
+ *     prefer: capability("local.recovery");
+ *
+ * These expressions are passed to the resource/capability semantic layer.
+ *
+ * The grammar does not evaluate feasibility.
+ *
+ * ============================================================================
+ * CONTRACT / POLICY CONTRACT
+ * ============================================================================
+ *
+ * Fault-tolerance declarations may participate in the universal contract and
+ * policy systems.
+ *
+ * Examples:
+ *
+ *     requires: recoverable_state;
+ *     ensures: semantic_equivalence;
+ *     invariant: state_consistent;
+ *     assume: failure_model_known;
+ *     guarantee: recovery_preserves_contract;
+ *     property: deterministic_recovery;
+ *
+ * Policy examples:
+ *
+ *     allow: degraded_execution;
+ *     forbid: unsafe_fallback;
+ *     fallback: recovery_policy;
+ *
+ * The parser preserves these as source-level clauses.
+ *
+ * ============================================================================
+ * PROVENANCE CONTRACT
+ * ============================================================================
+ *
+ * Fault-tolerance intent may carry evidence and provenance:
+ *
+ *     evidence: reliability_measurement;
+ *     provenance: analysis_record;
+ *
+ * Nested provenance is also allowed:
+ *
+ *     provenance {
+ *         source: reliability_model;
+ *         reason: validated_policy;
+ *         evidence: test_result;
+ *     }
+ *
+ * Provenance semantics belong to the universal provenance subsystem.
+ *
+ * ============================================================================
+ * QUANTUM BOUNDARY
+ * ============================================================================
+ *
+ * Fault tolerance may apply to distributed quantum or hybrid computation.
+ *
+ * This file MUST NOT define:
+ *
+ *     - gates;
+ *     - physical qubits;
+ *     - physical topology;
+ *     - pulse schedules;
+ *     - calibration;
+ *     - syndrome extraction;
+ *     - decoders;
+ *     - QEC implementations;
+ *     - ZQN instructions.
+ *
+ * Quantum semantic information ultimately crosses:
  *
  *     quantum::ir
  *
- * Fault-tolerance syntax must not imply that arbitrary unknown quantum state
- * can be copied, serialized, checkpointed, or restored.
+ * Recovery feasibility for quantum state is determined by the quantum semantic
+ * layer, QEC layer, resilience layer and target capabilities.
  *
- * Whether recovery is possible is determined by the quantum semantic,
- * execution, QEC, and runtime layers.
+ * A source property such as:
  *
- * ============================================================================
- * RESILIENCE INTEGRATION
- * ============================================================================
+ *     checkpoint: logical_boundary;
  *
- * Fault tolerance describes source-level intent.
- *
- * The resilience subsystem determines:
- *
- *     - when recovery is attempted;
- *     - how recovery is orchestrated;
- *     - whether degradation is entered;
- *     - whether retry occurs;
- *     - whether a backend is changed;
- *     - whether execution is quarantined;
- *     - whether recompilation is required;
- *     - whether execution is rejected.
- *
- * The grammar does not implement these decisions.
+ * does NOT imply that arbitrary unknown quantum state can be copied.
  *
  * ============================================================================
- * FAILURE STATE / OUTCOME INTEGRATION
+ * HDL / HARDWARE BOUNDARY
  * ============================================================================
  *
- * The semantic/resilience layer may map fault-tolerance properties into the
- * repository's established resilience vocabulary:
+ * Fault tolerance can apply to HDL and hardware-aware computation, but this
+ * grammar does not define:
  *
- *     Unknown
- *     Healthy
- *     Degraded
- *     Unstable
- *     Unavailable
- *     Recovering
- *     Quarantined
- *     Retired
+ *     - registers;
+ *     - physical wires;
+ *     - device IDs;
+ *     - machine IDs;
+ *     - fixed hardware capacities;
+ *     - physical recovery circuitry.
  *
- * and outcomes:
+ * Hardware realization belongs to:
  *
- *     ACCEPT
- *     DEGRADED_ACCEPT
- *     RETRY
- *     RECOVER
- *     ESCALATE
- *     REJECT
- *
- * These are semantic/runtime concepts, not lexer-level enumerations owned by
- * this grammar.
+ *     grammar/hardware/
+ *     grammar/hdl/
  *
  * ============================================================================
- * HARDWARE INTEGRATION
+ * IR CONTRACT
  * ============================================================================
  *
- * Hardware realization remains outside this grammar.
+ * This grammar creates NO independent fault-tolerance IR.
  *
- * No syntax here identifies:
+ * The intended path is:
  *
- *     CPU 0
- *     GPU 0
- *     FPGA 0
- *     QPU 0
- *     node 0
- *     physical qubit 0
- *     memory bank 0
+ *     FaultToleranceDeclaration AST
+ *             |
+ *             v
+ *     semantic fault-tolerance intent
+ *             |
+ *       +-----+----------------+
+ *       |                      |
+ *       v                      v
+ * resource/capability     resilience semantic model
+ *       |                      |
+ *       +----------+-----------+
+ *                  |
+ *                  v
+ *          canonical semantic IR
+ *                  |
+ *          +-------+-------+
+ *          |               |
+ *          v               v
+ *     classical IR     quantum::ir
+ *          |               |
+ *          +-------+-------+
+ *                  |
+ *          optimization
+ *                  |
+ *          routing/scheduling
+ *                  |
+ *          resilience/QEC
+ *                  |
+ *                 ZQN
+ *                  |
+ *                 HAL
  *
- * Resource requirements may be represented as expressions and are evaluated
- * by the resource/capability systems.
+ * There must be no separate:
  *
- * ============================================================================
- * NETWORK INTEGRATION
- * ============================================================================
+ *     FaultToleranceIR
+ *     DistributedFaultToleranceIR
  *
- * This grammar does not select:
- *
- *     TCP
- *     UDP
- *     QUIC
- *     HTTP
- *     RPC
- *     MPI
- *     RDMA
- *     InfiniBand
- *     vendor transport
- *
- * A fault-tolerance policy may express communication-related intent, but
- * transport realization belongs to networking/runtime systems.
+ * solely because this syntax belongs to this file.
  *
  * ============================================================================
  * DETERMINISM
  * ============================================================================
  *
- * Parsing depends only on:
+ * Parsing is deterministic.
  *
- *     - source text;
- *     - lexical rules;
- *     - parser rules;
- *     - selected grammar version.
+ * It depends only on:
  *
- * This grammar contains:
+ *     - source characters;
+ *     - selected lexical vocabulary;
+ *     - parser grammar;
+ *     - selected language/compatibility version.
  *
- *     - no actions;
- *     - no semantic predicates;
- *     - no I/O;
- *     - no runtime callbacks;
- *     - no randomness;
- *     - no environment queries;
- *     - no hardware queries.
+ * Parsing MUST NOT depend on:
  *
- * ============================================================================
- * ERROR-RECOVERY CONTRACT
- * ============================================================================
- *
- * The grammar must permit the ANTLR parser to recover from malformed members
- * without embedding semantic recovery logic in parser actions.
- *
- * Semantic diagnostics must be produced downstream with source spans.
- *
- * Unknown property names should remain syntactically representable.
- *
- * An unknown semantic property is therefore a semantic diagnostic, not
- * automatically a parser error.
+ *     - hardware availability;
+ *     - node count;
+ *     - network state;
+ *     - runtime state;
+ *     - wall-clock time;
+ *     - random state;
+ *     - resource availability.
  *
  * ============================================================================
- * COMPATIBILITY CONTRACT
+ * SOURCE ORDER
  * ============================================================================
  *
- * This component introduces no new global lexer token.
+ * Clause order is preserved.
  *
- * Existing programs using generic distributed invocation syntax remain owned
- * by distributed.g4.
+ * Repeated clauses are syntactically representable.
  *
- * Structured fault-tolerance declarations use the explicit call-plus-body
- * form introduced by this component.
+ * Semantic analysis decides whether a particular property is:
  *
- * If the language later promotes `fault_tolerance` to a reserved keyword,
- * that is a repository-wide lexical/compatibility change and must update:
+ *     - singleton;
+ *     - repeatable;
+ *     - additive;
+ *     - overriding;
+ *     - mutually exclusive;
+ *     - invalid when duplicated.
  *
- *     lexer specification
- *     src/lexer.rs
- *     ANTLR lexer
- *     compatibility documentation
- *     parser conformance tests
- *
- * This file must not silently assume such a future token exists.
+ * The parser MUST NOT silently discard repeated clauses.
  *
  * ============================================================================
- * PUBLIC ENTRY POINT
+ * EXTENSIBILITY
+ * ============================================================================
+ *
+ * Unknown semantic property names remain syntactically representable.
+ *
+ * Examples:
+ *
+ *     custom_recovery: policy;
+ *
+ *     vendor::fault_policy: configuration;
+ *
+ *     future::recovery::strategy: expression;
+ *
+ * This permits future semantic expansion without continuously expanding the
+ * core parser.
+ *
+ * ============================================================================
+ * DIAGNOSTICS
+ * ============================================================================
+ *
+ * Parser diagnostics are structural.
+ *
+ * Semantic diagnostics include:
+ *
+ *     - invalid fault-tolerance target;
+ *     - unknown failure model;
+ *     - unknown recovery policy;
+ *     - incompatible recovery policy;
+ *     - invalid retry policy;
+ *     - impossible recovery condition;
+ *     - conflicting requirements;
+ *     - unsatisfied capability;
+ *     - unsatisfied resource requirement;
+ *     - invalid contract;
+ *     - invalid policy;
+ *     - unsupported extension;
+ *     - illegal target-specific implementation detail;
+ *     - invalid quantum recovery assumption.
+ *
+ * Diagnostics must preserve source spans.
+ *
+ * ============================================================================
+ * COMPATIBILITY
+ * ============================================================================
+ *
+ * The previous identifier-led form:
+ *
+ *     fault_tolerance target { ... }
+ *
+ * was structurally ambiguous with other distributed declarations.
+ *
+ * Production syntax therefore uses the reserved construct marker:
+ *
+ *     fault_tolerance(...)
+ *
+ * or:
+ *
+ *     fault_tolerance { ... }
+ *
+ * If compatibility with older source is required, the old spelling belongs
+ * in a compatibility-profile grammar or migration tool. It must not be
+ * reintroduced into the production distributed dispatch as another
+ * identifier-led alternative.
+ *
+ * ============================================================================
+ * TEST CONTRACT
+ * ============================================================================
+ *
+ * Positive tests must cover:
+ *
+ *     fault_tolerance { }
+ *
+ *     fault_tolerance(workload) { }
+ *
+ *     fault_tolerance(workload, scope) {
+ *         failure: transient;
+ *         recovery: retry_policy;
+ *     }
+ *
+ *     fault_tolerance(workload) {
+ *         requires: capability("fault.recovery");
+ *         requires: memory >= recovery_memory;
+ *         prefer: local_recovery;
+ *         constrain: preserve_semantics;
+ *     }
+ *
+ *     fault_tolerance(workload) {
+ *         recovery {
+ *             strategy: custom::recovery;
+ *             condition: recoverable;
+ *         }
+ *     }
+ *
+ *     fault_tolerance(workload) {
+ *         vendor::extension: configuration;
+ *     }
+ *
+ * Negative tests must cover:
+ *
+ *     fault_tolerance(
+ *     fault_tolerance(workload
+ *     fault_tolerance(workload) { recovery:
+ *     fault_tolerance(workload) { recovery { }
+ *
+ * Boundary tests must cover:
+ *
+ *     - one logical execution context;
+ *     - many execution contexts;
+ *     - embedded;
+ *     - CPU;
+ *     - GPU;
+ *     - FPGA;
+ *     - accelerator;
+ *     - QPU;
+ *     - simulator;
+ *     - HPC;
+ *     - cluster;
+ *     - heterogeneous execution;
+ *     - quantum-classical execution.
+ *
+ * Scalability tests must verify that the grammar contains no fixed cardinality
+ * for declarations, clauses, arguments, lists, stages, policies or resources.
+ *
+ * Determinism tests must parse identical source identically regardless of
+ * target availability.
+ *
+ * Compatibility tests must verify that the new explicit declaration marker
+ * cannot be confused with unrelated distributed constructs.
+ *
+ * ============================================================================
+ * COMPLETION CRITERIA
+ * ============================================================================
+ *
+ * This file is DONE when:
+ *
+ *     [1] distributedFaultToleranceDeclaration is stable.
+ *     [2] FaultTolerance has one unambiguous source entry form.
+ *     [3] No identifier-led distributed declaration ambiguity remains here.
+ *     [4] Failure models remain open-world.
+ *     [5] Recovery strategies remain open-world.
+ *     [6] Resource requirements remain symbolic.
+ *     [7] Capabilities remain semantic.
+ *     [8] Preferences remain distinct from requirements.
+ *     [9] Constraints remain distinct from implementation decisions.
+ *    [10] Policies remain distinct from capabilities.
+ *    [11] Provenance can be represented.
+ *    [12] Contracts can be represented.
+ *    [13] Nested recovery structures are representable.
+ *    [14] Extensions are representable.
+ *    [15] No physical hardware is selected.
+ *    [16] No finite hardware capacity is encoded.
+ *    [17] No second IR is introduced.
+ *    [18] Quantum semantics remain outside this grammar.
+ *    [19] Resilience execution remains outside this grammar.
+ *    [20] The distributed composition root requires no internal rewrite.
+ *    [21] Parser behavior is deterministic.
+ *    [22] Source order is preserved.
+ *    [23] Rust implementation remains safe Rust.
+ *    [24] Rust 1.97+ compatibility is maintained.
+ *
  * ============================================================================
  */
 
@@ -613,20 +931,10 @@ import Names, Expressions;
 
 /*
  * ============================================================================
- * 1. PUBLIC ENTRY POINT
+ * PUBLIC ENTRY POINT
  * ============================================================================
  *
- * Structured fault-tolerance declaration:
- *
- *     fault_tolerance(target) {
- *         ...
- *     }
- *
- *     distributed::fault_tolerance(target) {
- *         ...
- *     }
- *
- * The name is intentionally open-world.
+ * This is the rule consumed by grammar/distributed/distributed.g4.
  */
 distributedFaultToleranceDeclaration
     : faultToleranceDeclaration
@@ -635,40 +943,50 @@ distributedFaultToleranceDeclaration
 
 /*
  * ============================================================================
- * 2. DECLARATION
+ * DECLARATION
  * ============================================================================
  *
- * A declaration consists of:
+ * Canonical forms:
  *
- *     qualified name
- *     argument/target list
- *     structured body
+ *     fault_tolerance { ... }
  *
- * This structure is intentionally distinct from:
+ *     fault_tolerance(target) { ... }
  *
- *     distributedKind identifier { ... }
+ *     fault_tolerance(target, scope) { ... }
  *
- * so the distributed aggregate grammar can integrate this component without
- * creating an ambiguous duplicate of distributedContainerDeclaration.
+ * The arguments are ordinary Zamani expressions.
+ *
+ * They identify logical source entities or semantic scopes.
+ * They are NOT physical deployment identifiers.
  */
 faultToleranceDeclaration
-    : qualifiedName
-      LPAREN
-      optionalExpressionList
-      RPAREN
+    : FAULT_TOLERANCE
+      faultToleranceInvocation?
       faultToleranceBody
+      SEMICOLON?
     ;
 
 
 /*
  * ============================================================================
- * 3. BODY
+ * OPTIONAL INVOCATION / TARGET ARGUMENTS
  * ============================================================================
  *
- * Members are generic semantic properties or nested scopes.
- *
- * No closed taxonomy is encoded here.
+ * No finite argument count is imposed.
  */
+faultToleranceInvocation
+    : LPAREN
+      optionalExpressionList
+      RPAREN
+    ;
+
+
+/*
+ * ============================================================================
+ * BODY
+ * ============================================================================
+ */
+
 faultToleranceBody
     : LBRACE
       faultToleranceMember*
@@ -678,37 +996,17 @@ faultToleranceBody
 
 /*
  * ============================================================================
- * 4. MEMBER
+ * MEMBER
  * ============================================================================
  *
- * A member has one of two structural forms:
+ * Three structural forms are supported:
  *
- *     name : value ;
+ *     key: expression;
+ *     key { ... }
+ *     qualified::extension: expression;
  *
- * or:
- *
- *     name { ... }
- *
- * The semantic layer classifies names such as:
- *
- *     failure
- *     detection
- *     retry
- *     restart
- *     failover
- *     recovery
- *     checkpoint
- *     degradation
- *     escalation
- *     availability
- *     durability
- *     requirement
- *     constraint
- *     preference
- *     hint
- *     dependency
- *
- * This avoids dozens of parser alternatives with identical syntax.
+ * Explicit keyword keys are accepted separately because many universal
+ * Zamani semantic words are reserved lexical tokens rather than IDENTIFIER.
  */
 faultToleranceMember
     : faultToleranceProperty
@@ -718,32 +1016,12 @@ faultToleranceMember
 
 /*
  * ============================================================================
- * 5. PROPERTY
+ * PROPERTY
  * ============================================================================
- *
- * Examples:
- *
- *     failure: transient;
- *     detection: health_monitor;
- *     retry: adaptive;
- *     restart: reconstructible;
- *     failover: permitted;
- *     recovery: custom::policy;
- *     checkpoint: logical_boundary;
- *     degradation: allowed;
- *     escalation: recover;
- *     availability: required;
- *     durability: persistent;
- *     requirement: capability("fault.recovery");
- *     constraint: preserve_semantics;
- *     preference: local_recovery;
- *     hint: idempotent;
- *     dependency: checkpoint_state;
- *
- * The parser does not assign special meaning to the property name.
  */
+
 faultToleranceProperty
-    : identifier
+    : faultToleranceKey
       COLON
       faultToleranceValue
       SEMICOLON
@@ -752,40 +1030,130 @@ faultToleranceProperty
 
 /*
  * ============================================================================
- * 6. NESTED SCOPE
+ * PROPERTY KEY
  * ============================================================================
  *
- * Examples:
+ * The key is intentionally open-world.
  *
- *     recovery {
- *         condition: recoverable;
- *         action: restart;
- *     }
+ * Reserved universal semantic words that may legally occur as fault-tolerance
+ * properties are admitted explicitly.
  *
- *     stage {
- *         action: retry;
- *         dependency: checkpoint;
- *     }
- *
- *     failure_domain {
- *         failure: communication_failure;
- *     }
- *
- * The name is semantic data.
+ * Domain-specific failure/recovery names remain ordinary identifiers.
  */
-faultToleranceScope
+faultToleranceKey
     : identifier
-      faultToleranceBody
+    | REQUIRES
+    | ENSURES
+    | INVARIANT
+    | ASSUME
+    | GUARANTEE
+    | PROPERTY
+    | ASSERT
+    | PROVE
+    | VERIFY
+    | VALIDATE
+    | RESOURCE
+    | RESOURCES
+    | CAPABILITY
+    | CAPABILITIES
+    | REQUIREMENT
+    | REQUIREMENTS
+    | CONSTRAINT
+    | CONSTRAINTS
+    | PREFER
+    | PREFERENCE
+    | PREFERENCES
+    | HINT
+    | HINTS
+    | TARGET
+    | TARGETS
+    | AVAILABILITY
+    | RELIABILITY
+    | RESILIENCE
+    | POLICY
+    | POLICIES
+    | ALLOW
+    | FORBID
+    | PERMIT
+    | DENY
+    | FALLBACK
+    | RETRY
+    | RECOVER
+    | ESCALATE
+    | REJECT
+    | SELECT
+    | NEGOTIATE
+    | SANDBOX
+    | SIMULATE
+    | DETERMINISTIC
+    | REPRODUCIBLE
+    | EFFECT
+    | EFFECTS
+    | MEASUREMENT
+    | LEARNING
+    | ADAPTATION
+    | REFLECTION
+    | CODE_GENERATION
+    | DISTRIBUTED
+    | NETWORK
+    | NATIVE
+    | FOREIGN
+    | QUANTUM
+    | HYBRID
+    | CLASSICAL
+    | EVIDENCE
+    | EXPLAIN
+    | EXPLANATION
+    | PROVENANCE
+    | SOURCE
+    | DERIVATION
+    | DECISION
+    | DECISIONS
+    | AUDIT
+    | TRACE
     ;
 
 
 /*
  * ============================================================================
- * 7. VALUES
+ * NESTED SCOPE
  * ============================================================================
  *
- * Values delegate ordinary expression semantics to the canonical expression
- * grammar while adding recursive fault-tolerance objects and lists.
+ * Examples:
+ *
+ *     recovery {
+ *         strategy: retry_policy;
+ *         condition: recoverable;
+ *     }
+ *
+ *     detection {
+ *         strategy: health_monitor;
+ *     }
+ *
+ *     checkpoint {
+ *         policy: logical_boundary;
+ *     }
+ */
+faultToleranceScope
+    : faultToleranceScopeKey
+      faultToleranceBody
+    ;
+
+
+faultToleranceScopeKey
+    : faultToleranceKey
+    ;
+
+
+/*
+ * ============================================================================
+ * VALUE
+ * ============================================================================
+ *
+ * Ordinary expressions remain owned by Expressions.
+ *
+ * Objects and lists are owned structurally by this feature because they are
+ * part of fault-tolerance policy composition.
  */
 faultToleranceValue
     : expression
@@ -796,11 +1164,10 @@ faultToleranceValue
 
 /*
  * ============================================================================
- * 8. OBJECT
+ * OBJECT
  * ============================================================================
- *
- * Objects preserve nested property structure.
  */
+
 faultToleranceObject
     : LBRACE
       faultToleranceMember*
@@ -810,10 +1177,10 @@ faultToleranceObject
 
 /*
  * ============================================================================
- * 9. LIST
+ * LIST
  * ============================================================================
  *
- * No finite list cardinality is imposed.
+ * No fixed cardinality exists.
  */
 faultToleranceList
     : LBRACKET
@@ -824,12 +1191,10 @@ faultToleranceList
 
 /*
  * ============================================================================
- * 10. LIST ELEMENT
+ * LIST ELEMENT
  * ============================================================================
- *
- * Recursive lists and objects allow arbitrary semantic composition subject
- * only to actual parser/compiler resource limits.
  */
+
 faultToleranceListElement
     : expression
     | faultToleranceObject
@@ -839,358 +1204,568 @@ faultToleranceListElement
 
 /*
  * ============================================================================
- * 11. OPTIONAL EXPRESSION LIST
+ * STABLE SEMANTIC ADAPTERS
  * ============================================================================
  *
- * This wrapper keeps the structured declaration independent while reusing
- * canonical expression syntax.
- *
- * `optionalExpressionList` is imported from Expressions.
- *
- * No expression grammar is duplicated here.
+ * These aliases provide stable integration points for AST/semantic code
+ * without introducing another expression language.
  */
 
 
 /*
+ * Logical fault-tolerance target.
+ */
+faultToleranceTarget
+    : expression
+    ;
+
+
+/*
+ * Failure model.
+ */
+faultToleranceFailure
+    : expression
+    ;
+
+
+/*
+ * Failure classification.
+ */
+faultToleranceFailureClassification
+    : expression
+    ;
+
+
+/*
+ * Failure domain.
+ */
+faultToleranceFailureDomain
+    : expression
+    ;
+
+
+/*
+ * Detection policy.
+ */
+faultToleranceDetection
+    : expression
+    ;
+
+
+/*
+ * Recovery strategy.
+ */
+faultToleranceRecovery
+    : expression
+    ;
+
+
+/*
+ * Retry strategy.
+ */
+faultToleranceRetry
+    : expression
+    ;
+
+
+/*
+ * Restart strategy.
+ */
+faultToleranceRestart
+    : expression
+    ;
+
+
+/*
+ * Failover strategy.
+ */
+faultToleranceFailover
+    : expression
+    ;
+
+
+/*
+ * Checkpoint policy.
+ */
+faultToleranceCheckpoint
+    : expression
+    ;
+
+
+/*
+ * Rollback policy.
+ */
+faultToleranceRollback
+    : expression
+    ;
+
+
+/*
+ * Resume policy.
+ */
+faultToleranceResume
+    : expression
+    ;
+
+
+/*
+ * Degradation policy.
+ */
+faultToleranceDegradation
+    : expression
+    ;
+
+
+/*
+ * Escalation policy.
+ */
+faultToleranceEscalation
+    : expression
+    ;
+
+
+/*
+ * Availability requirement.
+ */
+faultToleranceAvailability
+    : expression
+    ;
+
+
+/*
+ * Durability requirement.
+ *
+ * The identifier `durability` remains an open semantic name.
+ */
+faultToleranceDurability
+    : expression
+    ;
+
+
+/*
+ * Recovery condition.
+ */
+faultToleranceCondition
+    : expression
+    ;
+
+
+/*
+ * Recovery action.
+ */
+faultToleranceAction
+    : expression
+    ;
+
+
+/*
+ * Recovery dependency.
+ */
+faultToleranceDependency
+    : expression
+    ;
+
+
+/*
+ * Resource requirement.
+ */
+faultToleranceRequirement
+    : expression
+    ;
+
+
+/*
+ * Capability requirement.
+ */
+faultToleranceCapability
+    : expression
+    ;
+
+
+/*
+ * Resource constraint.
+ */
+faultToleranceConstraint
+    : expression
+    ;
+
+
+/*
+ * Resource preference.
+ */
+faultTolerancePreference
+    : expression
+    ;
+
+
+/*
+ * Implementation hint.
+ */
+faultToleranceHint
+    : expression
+    ;
+
+
+/*
+ * Policy.
+ */
+faultTolerancePolicy
+    : expression
+    ;
+
+
+/*
+ * Evidence.
+ */
+faultToleranceEvidence
+    : expression
+    ;
+
+
+/*
+ * Provenance.
+ */
+faultToleranceProvenance
+    : expression
+    ;
+
+
+/*
+ * Contract.
+ */
+faultToleranceContract
+    : expression
+    ;
+
+
+/*
  * ============================================================================
- * 12. SEMANTIC PROPERTY CATEGORIES
+ * EXTENSION CALL
  * ============================================================================
  *
- * The following names are DOCUMENTED semantic categories, not parser
- * alternatives.
+ * Extension names remain qualified semantic names.
  *
- * FAILURE / DETECTION:
+ * Examples:
+ *
+ *     vendor::fault_policy(...)
+ *     future::recovery_strategy(...)
+ *
+ * These names do not become global keywords.
+ *
+ * The actual extension syntax is represented as a property value or ordinary
+ * expression, keeping extension semantics outside this grammar.
+ *
+ * ============================================================================
+ * ARGUMENT ADAPTER
+ * ============================================================================
+ *
+ * Stable helper for semantic consumers that need the declaration argument
+ * sequence without duplicating the expression-list grammar.
+ */
+faultToleranceArguments
+    : optionalExpressionList
+    ;
+
+
+/*
+ * ============================================================================
+ * SEMANTIC PROPERTY CATEGORIES
+ * ============================================================================
+ *
+ * These names are documentation/semantic vocabulary, not a closed parser
+ * enumeration:
+ *
+ * FAILURE:
  *
  *     failure
  *     failure_model
- *     failure_domain
  *     classification
+ *     failure_domain
  *     detection
  *
  * RECOVERY:
  *
+ *     recovery
  *     retry
  *     restart
  *     failover
- *     recovery
- *     action
- *     condition
- *     stage
  *     checkpoint
  *     rollback
  *     resume
- *
- * AVAILABILITY / DURABILITY:
- *
- *     availability
- *     durability
  *     degradation
- *
- * CONTROL:
- *
- *     dependency
- *     order
- *     barrier
  *     escalation
- *     acceptance
- *
- * PORTABILITY:
- *
- *     requirement
- *     capability
- *     constraint
- *     preference
- *     hint
- *
- * EXTENSIONS:
- *
- *     any implementation-defined semantic property name.
- *
- * These names must remain open-world.
- *
- * ============================================================================
- * 13. SEMANTIC CLASSIFICATION
- * ============================================================================
- *
- * Downstream semantic analysis may classify a property as:
- *
- *     requirement
- *     constraint
- *     preference
- *     hint
- *     capability
- *     policy
  *     action
  *     condition
  *     dependency
- *     extension
  *
- * Classification MUST NOT depend on parser rule identity because this grammar
- * intentionally represents the common structural form once.
+ * REQUIREMENTS:
+ *
+ *     requires
+ *     capability
+ *     resource
+ *     requirement
+ *
+ * REALIZATION GUIDANCE:
+ *
+ *     constraint
+ *     prefer
+ *     hint
+ *
+ * GOVERNANCE:
+ *
+ *     policy
+ *     allow
+ *     forbid
+ *     fallback
+ *
+ * CORRECTNESS:
+ *
+ *     ensures
+ *     invariant
+ *     assume
+ *     guarantee
+ *     property
+ *
+ * ASSURANCE:
+ *
+ *     evidence
+ *     provenance
+ *     explanation
+ *     audit
+ *     trace
+ *
+ * Extensions remain open-world.
  *
  * ============================================================================
- * 14. DUPLICATE PROPERTY POLICY
+ * REPEATED CLAUSE SEMANTICS
  * ============================================================================
  *
- * Repeated properties are syntactically valid and preserved.
- *
- * Example:
+ * Examples:
  *
  *     fault_tolerance(workload) {
- *         requirement: available;
- *         requirement: durable;
+ *         requires: capability("fault.recovery");
+ *         requires: capability("checkpoint.restore");
  *     }
  *
- * The semantic layer decides whether repeated properties:
+ * The parser preserves both clauses.
  *
- *     - compose;
- *     - conflict;
- *     - override;
- *     - duplicate;
- *     - are invalid.
+ * Semantic analysis decides whether repetition:
  *
- * The parser must not silently discard repeated properties.
+ *     - accumulates;
+ *     - merges;
+ *     - overrides;
+ *     - conflicts;
+ *     - violates a singleton rule.
  *
- * ============================================================================
- * 15. ORDER PRESERVATION
- * ============================================================================
- *
- * Source order is semantically observable until the semantic layer explicitly
- * proves that canonicalization is safe.
- *
- * The AST must preserve:
- *
- *     - member order;
- *     - list order;
- *     - argument order;
- *     - nested scope order;
- *     - source spans.
- *
- * The parser must not sort or normalize semantic properties.
+ * The parser never silently discards a repeated property.
  *
  * ============================================================================
- * 16. EXTENSIBILITY
+ * RESOURCE SCALABILITY
  * ============================================================================
  *
- * A future property:
+ * Expressions may represent concrete or symbolic quantities:
  *
- *     adaptive_recovery_budget: expression;
+ *     requires: memory >= recovery_memory;
+ *     requires: storage >= checkpoint_storage;
+ *     requires: replicas >= desired_redundancy;
  *
- * requires no grammar change.
+ * A concrete number is program data, not a universal limit.
  *
- * A future nested structure:
+ * The grammar never interprets:
  *
- *     recovery_strategy {
- *         custom_property: expression;
+ *     3
+ *
+ * as:
+ *
+ *     maximum retries = 3
+ *
+ * unless the enclosing semantic property explicitly gives it that meaning.
+ *
+ * ============================================================================
+ * FAILURE-DOMAIN SEPARATION
+ * ============================================================================
+ *
+ * The grammar may express semantic domains such as:
+ *
+ *     failure: node_failure;
+ *     failure: communication_failure;
+ *     failure: storage_failure;
+ *     failure: process_failure;
+ *
+ * It does not select physical entities.
+ *
+ * For example:
+ *
+ *     node_failure
+ *
+ * does not mean:
+ *
+ *     physical node 0
+ *
+ * and:
+ *
+ *     communication_failure
+ *
+ * does not select TCP, UDP, QUIC, MPI, RDMA or another transport.
+ *
+ * ============================================================================
+ * RECOVERY SEMANTICS
+ * ============================================================================
+ *
+ * Recovery may be represented declaratively:
+ *
+ *     recovery {
+ *         strategy: recover_policy;
+ *         condition: recoverable;
+ *         action: resume;
  *     }
  *
- * also requires no grammar change.
- *
- * New semantic vocabulary therefore remains a semantic/versioning concern
- * rather than a lexer/parser maintenance requirement.
+ * The semantic layer determines whether that strategy can actually be
+ * realized.
  *
  * ============================================================================
- * 17. RESOURCE AND CAPABILITY EXPRESSIONS
+ * ADAPTIVE RECOVERY
  * ============================================================================
  *
- * Fault tolerance may reference the generic resource/capability system:
+ * Adaptive policies remain declarative:
  *
- *     requirement: capability("fault.recovery");
+ *     recovery {
+ *         strategy: adaptive_policy;
+ *         condition: capability("fault.adaptation");
+ *     }
  *
- *     requirement: memory >= required_memory;
+ * Adaptation is not unrestricted self-modification.
  *
- *     requirement: qubits >= required_qubits;
+ * If adaptation changes executable state, model state, strategy or generated
+ * code, the semantic layer must apply the universal:
  *
- *     capability: capability("quantum.measurement");
+ *     effects
+ *     capabilities
+ *     resources
+ *     policies
+ *     authorization
+ *     provenance
  *
- * These are expressions.
- *
- * This grammar does not define:
- *
- *     MAX_MEMORY
- *     MAX_QUBITS
- *     MAX_NODES
- *     MAX_REPLICAS
- *
- * and does not interpret resource feasibility.
- *
- * ============================================================================
- * 18. NO PHYSICAL REALIZATION
- * ============================================================================
- *
- * The following are deliberately outside this grammar:
- *
- *     physical_node
- *     physical_cpu
- *     physical_gpu
- *     physical_qpu
- *     physical_qubit
- *     physical_memory_bank
- *     physical_network_link
- *     host_address
- *     port
- *     machine_id
- *
- * A downstream realization may map logical fault-tolerance requirements onto
- * physical resources.
+ * contracts.
  *
  * ============================================================================
- * 19. QUANTUM RECOVERY RULE
+ * CHECKPOINT SEMANTICS
  * ============================================================================
  *
- * A source expression such as:
+ * A checkpoint declaration expresses logical recovery intent:
  *
- *     recovery: checkpoint;
+ *     checkpoint {
+ *         policy: logical_boundary;
+ *     }
  *
- * does NOT mean arbitrary quantum state may be copied.
+ * It does not guarantee that every state can be serialized.
  *
- * Quantum recovery semantics must be validated against:
+ * This distinction is particularly important for:
  *
- *     quantum::ir
- *     QEC
- *     ZQN
- *     runtime capabilities
- *     backend capabilities
- *
- * The grammar records intent only.
- *
- * ============================================================================
- * 20. CROSS-DOMAIN INTEGRATION
- * ============================================================================
- *
- * A fault-tolerance declaration may apply to computations involving:
- *
- *     classical
  *     quantum
- *     hybrid
- *     HDL
  *     hardware
- *     AI
- *     distributed
- *     networking
- *     data
- *     nano
- *     future domains.
+ *     external resources
+ *     nondeterministic state
+ *     foreign state
  *
- * The grammar does not duplicate the syntax of those domains.
- *
- * Cross-domain meaning is represented by expressions and references.
+ * Semantic analysis determines checkpoint legality.
  *
  * ============================================================================
- * 21. CANONICAL IR CONTRACT
+ * QUANTUM FAULT TOLERANCE
  * ============================================================================
  *
- * This grammar creates NO IR.
+ * Distributed quantum fault tolerance remains compositional:
  *
- * After AST construction, semantic analysis may lower fault-tolerance intent
- * into the repository's canonical semantic representation.
- *
- * Distributed metadata may then feed:
- *
- *     resilience
- *     scheduling
- *     placement
- *     routing
- *     resource analysis
- *     runtime
- *
- * Quantum-related semantics continue through:
- *
+ *     distributed fault-tolerance intent
+ *             |
+ *             v
+ *     quantum semantic analysis
+ *             |
+ *             v
  *     quantum::ir
+ *             |
+ *             v
+ *     QEC / resilience / routing / scheduling
+ *             |
+ *             v
+ *     ZQN
+ *             |
+ *             v
+ *     HAL
  *
- * No fault-tolerance-specific quantum IR may be created here.
- *
- * ============================================================================
- * 22. DETERMINISTIC PARSING CONTRACT
- * ============================================================================
- *
- * The grammar contains:
- *
- *     no actions;
- *     no predicates;
- *     no I/O;
- *     no randomness;
- *     no runtime callbacks;
- *     no hardware discovery;
- *     no environment queries.
- *
- * Identical token streams therefore have identical syntactic interpretations
- * under the same grammar version.
+ * This grammar never creates quantum operations or QEC objects.
  *
  * ============================================================================
- * 23. HARD-CODING AUDIT
+ * HDL / HARDWARE FAULT TOLERANCE
  * ============================================================================
  *
- * Forbidden universal resource limits are absent.
+ * Hardware-aware recovery remains target-independent.
  *
- * In particular this file contains no grammar-level:
+ * The grammar can express:
  *
- *     MAX_NODES
- *     MAX_REPLICAS
- *     MAX_RETRIES
- *     MAX_RECOVERY_STEPS
- *     MAX_FAILURES
- *     MAX_CHECKPOINTS
- *     MAX_CPUS
- *     MAX_GPUS
- *     MAX_FPGAS
- *     MAX_QPUS
- *     MAX_QUBITS
- *     MAX_MEMORY
- *     MAX_THREADS
- *     MAX_DEVICES
- *     MAX_NETWORK_SIZE
+ *     requires: capability("hardware.recovery");
+ *     requires: capability("checkpoint.restore");
  *
- * Repetition is open-ended.
+ * but cannot express a universal physical mapping such as:
  *
- * Numeric literals remain ordinary program expressions.
+ *     use_device(7)
+ *
+ * as a fault-tolerance implementation decision.
  *
  * ============================================================================
- * 24. RUST INTEGRATION
+ * PROVENANCE
  * ============================================================================
  *
- * This is an ANTLR parser grammar.
+ * Fault-tolerance declarations may preserve:
  *
- * Rust-specific implementation requirements are enforced by the generated
- * parser/frontend build:
+ *     source
+ *     evidence
+ *     derivation
+ *     decision
+ *     audit
+ *     trace
  *
- *     Rust 1.97 / Rust 1.97.1
- *     Edition 2021
- *     Safe Rust only
- *
- * This grammar contains no embedded Rust and therefore introduces no unsafe
- * implementation requirement.
+ * This allows later compiler/runtime systems to explain why a recovery plan
+ * was selected without making explanation part of parser execution.
  *
  * ============================================================================
- * 25. PRODUCTION COMPLETION CRITERIA
+ * COMPATIBILITY / MIGRATION
  * ============================================================================
  *
- * This file is complete when all of the following are true:
+ * Old identifier-led distributed fault-tolerance declarations should be
+ * migrated to the explicit marker:
  *
- *     [x] single ownership boundary;
- *     [x] no duplicate fault-tolerance property rules;
- *     [x] no closed failure-model enumeration;
- *     [x] no hard-coded resource limits;
- *     [x] no new lexer keywords;
- *     [x] canonical Names dependency;
- *     [x] canonical Expressions dependency;
- *     [x] deterministic parsing;
- *     [x] source-order preservation contract;
- *     [x] AST contract;
- *     [x] semantic contract;
- *     [x] IR integration contract;
- *     [x] quantum integration contract;
- *     [x] resilience integration contract;
- *     [x] resource/capability integration contract;
- *     [x] compatibility contract;
- *     [x] extensibility contract;
- *     [x] error-recovery contract;
- *     [x] Rust 1.97/1.97.1 compatibility contract;
- *     [x] safe-Rust requirement;
- *     [x] scalability contract.
+ *     fault_tolerance(...)
  *
- * Repository integration tests must additionally pass before the feature is
- * promoted to STABLE.
+ * rather than retained as an ambiguous alternative.
+ *
+ * Compatibility tooling may perform the source rewrite before parsing under
+ * the production grammar.
+ *
+ * ============================================================================
+ * COMPLETION CONTRACT
+ * ============================================================================
+ *
+ * This file is complete when:
+ *
+ *     - distributedFaultToleranceDeclaration remains the stable public rule;
+ *     - FAULT_TOLERANCE is the sole declaration marker;
+ *     - fault-tolerance dispatch is unambiguous;
+ *     - failure vocabulary is open-world;
+ *     - recovery vocabulary is open-world;
+ *     - nested policy structures are supported;
+ *     - resource/capability expressions are supported;
+ *     - contracts are representable;
+ *     - policies are representable;
+ *     - evidence/provenance are representable;
+ *     - no physical deployment is encoded;
+ *     - no finite machine capacity is encoded;
+ *     - no second IR is introduced;
+ *     - quantum semantics remain behind quantum::ir;
+ *     - resilience execution remains downstream;
+ *     - source ordering is preserved;
+ *     - parsing is deterministic;
+ *     - Rust integration remains safe Rust 1.97+.
  *
  * ============================================================================
  */
