@@ -1,6 +1,6 @@
 /*
  * ============================================================================
- * Zamani Universal Programming Language
+ * Zamani Programming Language
  * ============================================================================
  *
  * File:
@@ -10,497 +10,692 @@
  *     Ffi
  *
  * Status:
- *     CANONICAL FFI BOUNDARY GRAMMAR DELEGATE
+ *     CANONICAL SOURCE-LEVEL FOREIGN-INTERFACE BOUNDARY
  *
- * Compiler baseline:
- *     Rust 1.97 / Rust 1.97.1
+ * Rust baseline:
+ *     Rust 1.97+
  *     Rust 2021
- *
- * Safety:
- *     No unsafe Rust.
- *     No embedded Rust actions.
- *     No semantic predicates.
- *     No filesystem access.
- *     No network access.
- *     No process execution.
- *     No runtime execution.
- *     No hardware discovery.
+ *     SAFE RUST ONLY
  *
  * ============================================================================
+ * FEATURE CONTRACT
+ * ============================================================================
+ *
  * PURPOSE
- * ============================================================================
+ * -------
  *
- * This file owns the SOURCE-LEVEL FFI BOUNDARY CONTRACT.
+ * This grammar owns the SOURCE-LEVEL FOREIGN-INTERFACE BOUNDARY.
  *
- * FFI allows Zamani source code to describe an interoperability boundary
- * without making a foreign programming language, ABI, operating system,
- * processor, device, runtime, library implementation, or hardware topology
- * part of Zamani's permanent semantic core.
- *
- * The central rule is:
- *
- *     FFI syntax describes WHAT crosses a boundary and WHAT guarantees
- *     the boundary requires.
- *
- * It does not prescribe HOW a target realizes that boundary.
- *
- * ============================================================================
- * ARCHITECTURAL POSITION
- * ============================================================================
- *
- *     Zamani source
- *          |
- *          v
- *     canonical lexer
- *          |
- *          v
- *     authoritative parser
- *          |
- *          v
- *     FFI syntax
- *          |
- *          v
- *     domain-neutral frontend AST
- *          |
- *          v
- *     semantic analysis
- *          |
- *     +----+---------+---------+---------+
- *     |              |         |         |
- *     v              v         v         v
- *   types           ABI     effects   capabilities
- *     |              |         |         |
- *     +--------------+---------+---------+
- *                    |
- *                    v
- *             canonical semantic model
- *                    |
- *                    v
- *              canonical IR boundary
- *                    |
- *          +---------+----------+
- *          |         |          |
- *          v         v          v
- *      classical quantum::ir hardware/HDL
- *          |         |          |
- *          +---------+----------+
- *                    |
- *                    v
- *          optimization / lowering
- *                    |
- *                    v
- *             ABI realization
- *                    |
- *                    v
- *          linker / runtime / target
- *
- * FFI MUST NOT reverse this dependency direction.
- *
- * ============================================================================
- * SINGLE-AUTHORITY RULE
- * ============================================================================
- *
- * This file owns only FFI-specific boundary syntax.
- *
- * It does NOT redefine:
- *
- *     identifier
- *     qualifiedName
- *     stringLiteral
- *     integerLiteral
- *     expression
- *     argumentList
- *     parameter
- *     parameterList
- *     typeExpr
- *     attribute
- *     annotation
- *     genericParameterClause
- *     genericParameter
- *
- * Those constructs belong to their canonical grammar owners.
- *
- * ABI syntax belongs to:
- *
- *     grammar/interoperability/abi.g4
- *
- * General external declarations belong to:
- *
- *     grammar/interoperability/foreign-functions.g4
- *
- * Interoperability composition belongs to the interoperability composition
- * grammar.
- *
- * Ordinary functions remain owned by grammar/functions/.
- *
- * ============================================================================
- * POCO-REAF
- * ============================================================================
- *
- * Foreign interfaces MUST remain portable.
- *
- * FFI syntax MUST NOT permanently encode:
- *
- *     CPU model
- *     GPU model
- *     FPGA model
- *     ASIC model
- *     QPU model
- *     device identifier
- *     physical address
- *     register identifier
- *     register count
- *     pointer width
- *     word width
- *     node count
- *     core count
- *     thread count
- *     qubit count
- *     memory capacity
- *     machine topology
- *     deployment location
- *
- * A portable FFI declaration describes:
- *
- *     symbolic identity
- *     callable signature
- *     type boundary
- *     conversion policy
- *     ownership policy
- *     lifetime policy
- *     nullability
- *     effects
- *     capabilities
- *     resource requirements
- *     compatibility requirements
- *     security requirements
- *
- * Concrete realization is downstream.
- *
- * ============================================================================
- * SCALABILITY
- * ============================================================================
- *
- * This grammar deliberately imposes no finite source-level limit on:
- *
- *     FFI declarations
- *     interfaces
- *     functions
- *     parameters
- *     arguments
- *     callbacks
- *     contracts
- *     attributes
- *     requirements
- *     effects
- *     resources
- *     adapters
- *     interfaces
- *     targets
- *     devices
- *     nodes
- *     threads
- *     cores
- *     qubits
- *     memory
- *
- * Repetition is represented by ANTLR repetition operators.
- *
- * No language-level MAX_* constants belong here.
- *
- * ============================================================================
- * SECURITY / INERTNESS
- * ============================================================================
- *
- * Parsing FFI syntax MUST NEVER:
- *
- *     load a library;
- *     open a file;
- *     access a network;
- *     resolve a foreign symbol;
- *     invoke a process;
- *     execute foreign code;
- *     inspect hardware;
- *     dereference an address;
- *     allocate native memory;
- *     create a runtime handle.
- *
- * All such behavior belongs downstream to explicitly authorized compiler,
- * linker, runtime, deployment, or security components.
- *
- * ============================================================================
- * DOMAIN NEUTRALITY
- * ============================================================================
- *
- * FFI can describe boundaries involving:
- *
- *     classical computation
- *     quantum computation
- *     hybrid computation
- *     HDL
- *     hardware
- *     accelerators
- *     AI
- *     distributed computation
- *     networking
- *     system interfaces
- *     future computational domains
- *
- * This grammar MUST NOT create separate FFI languages for those domains.
- *
- * ============================================================================
- * QUANTUM INTEGRATION
- * ============================================================================
- *
- * An FFI boundary may expose a quantum or hybrid semantic type:
- *
- *     ffi fn submit(program: QuantumProgram) -> Result;
- *
- * The FFI grammar does NOT define:
- *
- *     QubitId
- *     physical qubits
- *     gates
- *     topology
- *     routing
- *     scheduling
- *     calibration
- *     QEC
- *     ZQN
- *
- * Quantum semantics remain downstream and use the canonical:
- *
- *     quantum::ir
- *
+ * It describes the portable intent of a Zamani program when computation,
+ * values, callbacks, services, or data cross a foreign implementation
  * boundary.
  *
+ * This file describes:
+ *
+ *     - foreign interface declarations;
+ *     - foreign callable bindings;
+ *     - foreign callable references;
+ *     - foreign calls;
+ *     - callback contracts;
+ *     - marshalling intent;
+ *     - ownership intent;
+ *     - borrowing intent;
+ *     - lifetime intent;
+ *     - nullability intent;
+ *     - representation intent;
+ *     - encoding intent;
+ *     - effect references;
+ *     - capability requirements;
+ *     - resource requirements;
+ *     - error-boundary intent;
+ *     - compatibility intent;
+ *     - security intent;
+ *     - execution intent;
+ *     - concurrency intent;
+ *     - determinism intent;
+ *     - provenance metadata;
+ *     - adaptation metadata.
+ *
+ * This grammar DOES NOT implement:
+ *
+ *     - an ABI;
+ *     - a linker;
+ *     - a loader;
+ *     - a dynamic-library resolver;
+ *     - a foreign runtime;
+ *     - a foreign programming language;
+ *     - native memory access;
+ *     - pointer dereferencing;
+ *     - physical address access;
+ *     - machine-register access;
+ *     - hardware discovery;
+ *     - device selection;
+ *     - quantum routing;
+ *     - quantum scheduling;
+ *     - QEC;
+ *     - ZQN;
+ *     - HAL;
+ *     - runtime invocation.
+ *
  * ============================================================================
- * HDL / HARDWARE INTEGRATION
+ * OWNERSHIP
  * ============================================================================
  *
- * FFI may expose abstract hardware/HDL interfaces through types, capabilities,
- * resources, and symbolic interface identities.
+ * THIS FILE OWNS
+ * --------------
  *
- * It MUST NOT encode:
+ *     ffiItem
+ *     ffiForeignDeclaration
+ *     ffiInterfaceDeclaration
+ *     ffiBindingDeclaration
+ *     ffiCallbackDeclaration
+ *     ffiCallExpression
+ *     ffiCallbackCallExpression
+ *     ffiCallableReferenceExpression
+ *     ffiCallStatement
+ *     ffiCallbackCallStatement
+ *     FFI-specific boundary contracts
  *
- *     fixed pin numbers
- *     fixed register addresses
- *     fixed bus widths
- *     fixed FPGA capacities
- *     fixed ASIC capacities
- *     fixed accelerator counts
- *
- * ============================================================================
- * ABI INTEGRATION
- * ============================================================================
- *
- * This grammar may reference ABI identities symbolically.
- *
- * It does NOT implement ABI rules.
- *
- * ABI layout, alignment, calling sequence, register assignment, stack layout,
- * binary encoding, and target compatibility belong to ABI semantic analysis
- * and lowering.
- *
- * ============================================================================
- * COMPOSITION CONTRACT
- * ============================================================================
- *
- * The importing/composition grammar MUST make these canonical rules available:
+ * THIS FILE DOES NOT OWN
+ * ----------------------
  *
  *     identifier
  *     qualifiedName
- *     stringLiteral
- *     expression
- *     typeExpr
- *     argumentList
- *     parameterList
- *     parameter
  *     attribute
+ *     expression
+ *     typeExpression
+ *     literals
+ *     ordinary functions
+ *     ordinary parameters
+ *     ordinary calls
+ *     ABI declarations
+ *     ABI layouts
+ *     calling conventions
+ *     foreign type declarations
+ *     general foreign-function declarations
+ *     effects
+ *     capabilities
+ *     resources
+ *     policies
+ *     security semantics
+ *     provenance semantics
+ *     target selection
+ *     runtime execution
  *
- * The composition grammar may provide these through imported delegates.
+ * Canonical owners:
  *
- * This file MUST NOT duplicate them.
+ *     names
+ *         -> grammar/core/names.g4
+ *
+ *     attributes
+ *         -> grammar/core/attributes.g4
+ *
+ *     expressions
+ *         -> grammar/expressions/expressions.g4
+ *
+ *     types
+ *         -> grammar/types/types.g4
+ *
+ *     ABI
+ *         -> grammar/interoperability/abi.g4
+ *
+ *     foreign callable declarations
+ *         -> grammar/interoperability/foreign-functions.g4
+ *
+ *     foreign types
+ *         -> grammar/interoperability/foreign-types.g4
+ *
+ *     calling conventions
+ *         -> grammar/interoperability/calling-conventions.g4
+ *
+ *     interoperability composition
+ *         -> grammar/interoperability/interoperability.g4
+ *
+ * ============================================================================
+ * DEPENDENCY CONTRACT
+ * ============================================================================
+ *
+ * DEPENDS_ON
+ * ----------
+ *
+ *     ZamaniLexer
+ *     Names
+ *     Attributes
+ *     Expressions
+ *     Type
+ *
+ * EXPORTS
+ * -------
+ *
+ *     ffiItem
+ *     ffiForeignDeclaration
+ *     ffiInterfaceDeclaration
+ *     ffiBindingDeclaration
+ *     ffiCallbackDeclaration
+ *     ffiCallExpression
+ *     ffiCallbackCallExpression
+ *     ffiCallableReferenceExpression
+ *     ffiCallStatement
+ *     ffiCallbackCallStatement
+ *     ffiQualifiedCallExpression
+ *     ffiQualifiedCallbackCallExpression
+ *
+ * CONSUMED_BY
+ * -----------
+ *
+ *     grammar/interoperability/interoperability.g4
+ *     grammar/antlr/ZamaniParser.g4
+ *     interoperability semantic analysis
+ *     AST construction
+ *     effect analysis
+ *     capability analysis
+ *     resource analysis
+ *     policy/security analysis
+ *     canonical semantic model
+ *     compiler/lowering
+ *
+ * AST_OWNER
+ * ---------
+ *
+ *     domain-neutral frontend AST
+ *
+ * FFI syntax MUST NOT create a foreign-specific AST universe.
+ *
+ * SEMANTIC_OWNER
+ * --------------
+ *
+ *     interoperability semantic analysis
+ *
+ * IR_OWNER
+ * --------
+ *
+ *     canonical semantic model
+ *
+ * Foreign calls participating in quantum computation MUST continue through
+ * the canonical quantum::ir boundary where their semantic operation requires
+ * quantum representation.
+ *
+ * TEST_OWNER
+ * ----------
+ *
+ *     grammar/tests/interoperability/
+ *     grammar/tests/negative/
+ *     grammar/tests/boundary/
+ *     grammar/tests/scalability/
+ *
+ * SPEC_OWNER
+ * ----------
+ *
+ *     grammar/spec/interoperability.md
+ *
+ * ============================================================================
+ * POCO-REAF CONTRACT
+ * ============================================================================
+ *
+ * A foreign boundary expresses portable computational intent.
+ *
+ * It MUST NOT impose universal limits on:
+ *
+ *     CPUs
+ *     GPUs
+ *     FPGAs
+ *     ASICs
+ *     accelerators
+ *     QPUs
+ *     qubits
+ *     registers
+ *     memory
+ *     nodes
+ *     threads
+ *     devices
+ *     network endpoints
+ *     tensor dimensions
+ *     interface members
+ *     parameters
+ *     callbacks
+ *     declarations
+ *
+ * There are deliberately no MAX_* constants in this grammar.
+ *
+ * A source program may therefore describe a foreign boundary for:
+ *
+ *     tiny embedded systems
+ *     CPUs
+ *     multicore systems
+ *     GPUs
+ *     FPGAs
+ *     ASICs
+ *     accelerators
+ *     quantum processors
+ *     simulators
+ *     HPC systems
+ *     clusters
+ *     distributed systems
+ *     cloud systems
+ *     future computational targets
+ *
+ * Target feasibility is determined downstream from:
+ *
+ *     requirements
+ *     capabilities
+ *     resources
+ *     policies
+ *     effects
+ *     compatibility
+ *
+ * ============================================================================
+ * SAFETY CONTRACT
+ * ============================================================================
+ *
+ * This grammar contains:
+ *
+ *     - no embedded Rust actions;
+ *     - no semantic predicates;
+ *     - no filesystem access;
+ *     - no network access;
+ *     - no process execution;
+ *     - no foreign-code execution;
+ *     - no hardware inspection;
+ *     - no runtime callbacks;
+ *     - no unsafe implementation requirement.
+ *
+ * Rust code consuming the grammar MUST remain compatible with:
+ *
+ *     Rust 1.97+
+ *     Rust 2021
+ *     safe Rust only
+ *
+ * ============================================================================
+ * LEXICAL CONTRACT
+ * ============================================================================
+ *
+ * The parser-facing lexer is:
+ *
+ *     grammar/antlr/ZamaniLexer.g4
+ *
+ * This grammar MUST consume:
+ *
+ *     tokenVocab = ZamaniLexer;
+ *
+ * It MUST NOT create:
+ *
+ *     - a second lexer;
+ *     - parser-local lexer rules;
+ *     - duplicated token definitions;
+ *     - target-language keyword vocabularies.
+ *
+ * Important:
+ *
+ * The existing canonical lexer already provides:
+ *
+ *     FOREIGN
+ *     EXTERN
+ *     FN
+ *     INTERFACE
+ *     ASYNC
+ *     WITH
+ *     EFFECTS
+ *     REQUIRES
+ *     CAPABILITY
+ *     RESOURCES
+ *     SECURITY
+ *     VERSION
+ *     FROM
+ *     TO
+ *     AS
+ *     IN
+ *     OUT
+ *     TYPE
+ *     RESULT
+ *     THROW
+ *     TRY
+ *     CATCH
+ *
+ * Where a dedicated FFI spelling is not lexically reserved, this grammar
+ * deliberately uses existing canonical tokens rather than inventing an
+ * implicit parser token.
+ *
+ * ============================================================================
+ * NON-DUPLICATION CONTRACT
+ * ============================================================================
+ *
+ * Do NOT add:
+ *
+ *     parameterList
+ *     argumentList
+ *     typeExpr
+ *     stringLiteral
+ *     identifier
+ *     qualifiedName
+ *
+ * to this file.
+ *
+ * FFI-specific wrappers use the canonical rules already imported from:
+ *
+ *     Names
+ *     Attributes
+ *     Expressions
+ *     Type
  *
  * ============================================================================
  */
 
 parser grammar Ffi;
 
+options {
+    tokenVocab = ZamaniLexer;
+}
+
+import
+    Names,
+    Attributes,
+    Expressions,
+    Type
+;
+
 
 /*
  * ============================================================================
- * FFI ITEM
+ * PUBLIC FFI ENTRY POINT
  * ============================================================================
  *
- * This is the reusable integration entry point.
+ * This is a delegate entry point.
  *
- * The composition grammar decides which FFI constructs are legal in a
- * particular source position.
+ * The complete source program remains owned by:
  *
- * It MUST NOT be used as the compilation-unit root.
+ *     grammar/antlr/ZamaniParser.g4
  *
  * ============================================================================
  */
 
 ffiItem
-    : ffiInterfaceDeclaration
-    | ffiBindingDeclaration
-    | ffiCallbackDeclaration
-    | ffiAdapterDeclaration
-    | ffiPolicyDeclaration
+    : ffiForeignDeclaration
+    | ffiCallStatement
+    | ffiCallbackCallStatement
     ;
 
 
 /*
  * ============================================================================
- * FFI INTERFACE
+ * FOREIGN DECLARATION DISPATCH
+ * ============================================================================
+ */
+
+ffiForeignDeclaration
+    : ffiInterfaceDeclaration
+    | ffiBindingDeclaration
+    | ffiCallbackDeclaration
+    ;
+
+
+/*
+ * ============================================================================
+ * FOREIGN INTERFACE
  * ============================================================================
  *
- * Example:
+ * Canonical surface form:
  *
- *     ffi interface math {
- *         ...
+ *     foreign interface Math {
+ *         foreign fn sin(value: Real) -> Real;
  *     }
  *
- * The interface identifier is semantic identity.
+ * The `foreign` keyword is already part of the canonical lexer vocabulary.
  *
- * It is not:
+ * The interface name is symbolic.
+ *
+ * It is NOT interpreted here as:
  *
  *     a library filename
  *     a filesystem path
- *     a device identifier
- *     a network address
+ *     a device
+ *     a runtime
  *     an executable
+ *     a network endpoint
  *
  * ============================================================================
  */
 
 ffiInterfaceDeclaration
     : attribute*
-      'ffi'
-      'interface'
+      FOREIGN
+      INTERFACE
       identifier
-      ffiInterfaceParameterClause?
+      ffiInterfaceGenericParameters?
       ffiInterfaceBody
     ;
 
 
-ffiInterfaceParameterClause
-    : '<'
-      ffiInterfaceParameter
-      (',' ffiInterfaceParameter)*
-      '>'
+ffiInterfaceGenericParameters
+    : LESS
+      ffiGenericParameter
+      (
+          COMMA
+          ffiGenericParameter
+      )*
+      GREATER
     ;
 
 
-ffiInterfaceParameter
+ffiGenericParameter
     : identifier
-      (':' qualifiedName)?
+      (
+          COLON
+          qualifiedName
+      )*
     ;
 
 
 ffiInterfaceBody
-    : '{'
+    : LBRACE
       ffiInterfaceMember*
-      '}'
+      RBRACE
     ;
 
 
 ffiInterfaceMember
-    : attribute* ffiBindingDeclaration
-    | attribute* ffiCallbackDeclaration
-    | attribute* ffiAdapterDeclaration
-    | attribute* ffiPolicyDeclaration
+    : attribute*
+      ffiBindingDeclaration
+    | attribute*
+      ffiCallbackDeclaration
     ;
 
 
 /*
  * ============================================================================
- * FFI BINDING
+ * FOREIGN CALLABLE BINDING
  * ============================================================================
  *
- * Binds a Zamani-visible callable contract to a symbolic foreign identity.
+ * Canonical surface form:
  *
- * Example:
+ *     foreign fn sin(value: Real) -> Real;
  *
- *     ffi fn sin(x: Real) -> Real;
+ *     foreign fn sin(value: Real) -> Real
+ *         with {
+ *             effects { math::pure };
+ *             requires { capability::foreign_call; };
+ *         };
  *
- *     ffi fn sin(x: Real) -> Real
- *         using foreign::math::sin;
+ * This is a declaration only.
  *
- * The declaration does not resolve or execute the target.
+ * It does not resolve, load, link, or execute the foreign symbol.
  *
  * ============================================================================
  */
 
 ffiBindingDeclaration
     : attribute*
-      'ffi'
-      'fn'
+      FOREIGN
+      FN
       identifier
-      ffiGenericParameterClause?
-      '(' parameterList? ')'
-      ffiReturnClause?
+      ffiGenericParameterList?
+      LPAREN
+      ffiParameterList?
+      RPAREN
+      ffiReturnType?
       ffiContractClause?
-      ffiBindingTargetClause?
-      ';'
+      ffiTargetClause?
+      SEMICOLON
     ;
 
 
-ffiGenericParameterClause
-    : '<'
+ffiGenericParameterList
+    : LESS
       ffiGenericParameter
-      (',' ffiGenericParameter)*
-      '>'
+      (
+          COMMA
+          ffiGenericParameter
+      )*
+      GREATER
     ;
 
 
-ffiGenericParameter
-    : identifier
-      (':' qualifiedName)*
+ffiParameterList
+    : ffiParameter
+      (
+          COMMA
+          ffiParameter
+      )*
     ;
 
 
-ffiReturnClause
-    : '->'
-      typeExpr
+ffiParameter
+    : attribute*
+      identifier
+      (
+          COLON
+          typeExpression
+      )?
+      ffiParameterContractClause?
     ;
 
 
-ffiBindingTargetClause
-    : 'using'
-      ffiForeignTarget
+ffiParameterContractClause
+    : ffiBoundaryClause*
     ;
 
 
-ffiForeignTarget
-    : qualifiedName
-    | stringLiteral
-    | stringLiteral
-      '::'
-      qualifiedName
+ffiReturnType
+    : THIN_ARROW
+      typeExpression
     ;
 
 
 /*
  * ============================================================================
- * FFI CONTRACT
+ * CALLBACK CONTRACT
  * ============================================================================
  *
- * This is the principal boundary contract.
+ * A callback is represented as a foreign callable contract with callback
+ * metadata rather than by inventing a second callable type system.
  *
- * All optional FFI semantics are grouped here so the callable declaration
- * remains deterministic and structurally clear.
+ * The semantic layer MUST identify the callback role from the declaration's
+ * attributes/contract metadata.
+ *
+ * This preserves one callable representation while allowing foreign code to
+ * invoke Zamani-owned functionality.
  *
  * ============================================================================
  */
 
+ffiCallbackDeclaration
+    : attribute*
+      FOREIGN
+      FN
+      identifier
+      ffiGenericParameterList?
+      LPAREN
+      ffiParameterList?
+      RPAREN
+      ffiReturnType?
+      ffiCallbackContractClause
+      SEMICOLON
+    ;
+
+
+ffiCallbackContractClause
+    : WITH
+      LBRACE
+      ffiCallbackContractItem*
+      RBRACE
+    ;
+
+
+ffiCallbackContractItem
+    : ffiBoundaryClause
+    | ffiEffectClause
+    | ffiRequirementClause
+    | ffiErrorClause
+    | ffiCompatibilityClause
+    | ffiSecurityClause
+    | ffiConcurrencyClause
+    | ffiDeterminismClause
+    | ffiProvenanceClause
+    | ffiAttributeClause
+    ;
+
+
+/*
+ * ============================================================================
+ * FOREIGN TARGET
+ * ============================================================================
+ *
+ * A target is symbolic.
+ *
+ * Examples:
+ *
+ *     foreign fn sin(...) -> Real with { ... };
+ *
+ *     foreign fn sin(...) -> Real
+ *         with {
+ *             target::symbol = "sin";
+ *         };
+ *
+ * The grammar does not interpret a string as a path or executable.
+ *
+ * ============================================================================
+ */
+
+ffiTargetClause
+    : WITH
+      LBRACE
+      ffiTargetItem*
+      RBRACE
+    ;
+
+
+ffiTargetItem
+    : ffiTargetIdentity
+    | ffiAttributeClause
+    ;
+
+
+ffiTargetIdentity
+    : FOREIGN
+      AS
+      qualifiedName
+      SEMICOLON
+    | AS
+      qualifiedName
+      SEMICOLON
+    ;
+
+
+/*
+ * ============================================================================
+ * CONTRACT
+ * ============================================================================
+ *
+ * The contract groups source-level interoperability metadata.
+ *
+ * Each semantic concern remains independently analyzable downstream.
+ * ============================================================================
+ */
+
 ffiContractClause
-    : 'with'
-      '{'
+    : WITH
+      LBRACE
       ffiContractItem*
-      '}'
+      RBRACE
     ;
 
 
@@ -508,25 +703,22 @@ ffiContractItem
     : ffiBoundaryClause
     | ffiEffectClause
     | ffiRequirementClause
+    | ffiResourceClause
     | ffiErrorClause
     | ffiCompatibilityClause
     | ffiSecurityClause
-    | ffiResourceClause
     | ffiExecutionClause
     | ffiConcurrencyClause
     | ffiDeterminismClause
-    | ffiVersionClause
+    | ffiProvenanceClause
+    | ffiAdaptationClause
     | ffiAttributeClause
     ;
 
 
 /*
  * ============================================================================
- * BOUNDARY SEMANTICS
- * ============================================================================
- *
- * Boundary clauses describe semantic behavior at the FFI crossing.
- *
+ * BOUNDARY CONTRACT
  * ============================================================================
  */
 
@@ -545,7 +737,6 @@ ffiBoundaryClause
     | ffiBlockingClause
     | ffiAsyncClause
     | ffiStreamingClause
-    | ffiCallbackLifetimeClause
     ;
 
 
@@ -554,24 +745,26 @@ ffiBoundaryClause
  * MARSHALLING
  * ============================================================================
  *
- * Describes semantic conversion/marshalling intent.
+ * Marshalling is intent.
  *
- * The implementation of the conversion is downstream.
- *
+ * It does not prescribe the implementation.
  * ============================================================================
  */
 
 ffiMarshalClause
-    : 'marshal'
-      ffiValueSpec
+    : FOREIGN
+      AS
+      ffiMarshalSpecification
+      SEMICOLON
     ;
 
 
-ffiMarshalPairClause
-    : 'marshal'
-      ffiValueSpec
-      'as'
-      ffiValueSpec
+ffiMarshalSpecification
+    : qualifiedName
+    | STRING_LITERAL
+    | LPAREN
+      expression
+      RPAREN
     ;
 
 
@@ -582,38 +775,16 @@ ffiMarshalPairClause
  */
 
 ffiOwnershipClause
-    : 'ownership'
-      '='
-      ffiOwnershipMode
+    : FOREIGN
+      ffiOwnershipSpecification
+      SEMICOLON
     ;
 
 
-ffiOwnershipMode
-    : 'borrowed'
-    | 'owned'
-    | 'shared'
-    | 'transferred'
-    | 'retained'
-    | 'returned'
-    | ffiSymbolicValue
-    ;
-
-
-ffiOwnershipTransferClause
-    : 'ownership'
-      'transfer'
-      ffiOwnershipDirection
-    ;
-
-
-ffiOwnershipDirection
-    : 'in'
-    | 'out'
-    | 'inout'
-    | 'return'
-    | 'borrow'
-    | 'retain'
-    | 'release'
+ffiOwnershipSpecification
+    : qualifiedName
+    | STRING_LITERAL
+    | expression
     ;
 
 
@@ -624,8 +795,16 @@ ffiOwnershipDirection
  */
 
 ffiBorrowClause
-    : 'borrow'
-      ffiValueSpec
+    : FOREIGN
+      ffiBorrowSpecification
+      SEMICOLON
+    ;
+
+
+ffiBorrowSpecification
+    : qualifiedName
+    | STRING_LITERAL
+    | expression
     ;
 
 
@@ -636,182 +815,106 @@ ffiBorrowClause
  */
 
 ffiLifetimeClause
-    : 'lifetime'
-      ffiValueSpec
+    : ffiNamedExpressionClause
     ;
 
-
-ffiCallbackLifetimeClause
-    : 'callback'
-      'lifetime'
-      ffiValueSpec
-    ;
-
-
-/*
- * ============================================================================
- * NULLABILITY
- * ============================================================================
- */
 
 ffiNullabilityClause
-    : 'nullability'
-      '='
-      ffiNullabilityMode
+    : ffiNamedValueClause
     ;
 
-
-ffiNullabilityMode
-    : 'nullable'
-    | 'nonnull'
-    | 'unknown'
-    | ffiSymbolicValue
-    ;
-
-
-/*
- * ============================================================================
- * REPRESENTATION
- * ============================================================================
- */
 
 ffiRepresentationClause
-    : 'representation'
-      '='
-      ffiValueSpec
+    : ffiNamedValueClause
     ;
 
-
-/*
- * ============================================================================
- * ENCODING
- * ============================================================================
- */
 
 ffiEncodingClause
-    : 'encoding'
-      '='
-      ffiValueSpec
+    : ffiNamedValueClause
     ;
 
-
-/*
- * ============================================================================
- * SIZE
- * ============================================================================
- *
- * A size expression is a semantic expression.
- *
- * It does NOT establish a universal maximum or machine representation.
- *
- * ============================================================================
- */
 
 ffiSizeClause
-    : 'size'
-      '='
-      expression
+    : ffiNamedExpressionClause
     ;
 
-
-/*
- * ============================================================================
- * ALIGNMENT
- * ============================================================================
- *
- * Alignment is semantic interoperability metadata.
- *
- * Target-specific realization belongs to ABI lowering.
- * ============================================================================
- */
 
 ffiAlignmentClause
-    : 'alignment'
-      '='
+    : ffiNamedExpressionClause
+    ;
+
+
+ffiPinningClause
+    : ffiNamedValueClause
+    ;
+
+
+ffiBlockingClause
+    : ffiNamedValueClause
+    ;
+
+
+ffiNamedExpressionClause
+    : identifier
+      ASSIGN
       expression
+      SEMICOLON
+    ;
+
+
+ffiNamedValueClause
+    : identifier
+      ASSIGN
+      ffiSymbolicValue
+      SEMICOLON
     ;
 
 
 /*
  * ============================================================================
- * DATA DIRECTION
+ * DIRECTION
  * ============================================================================
  */
 
 ffiDirectionClause
-    : 'direction'
-      '='
+    : identifier
+      ASSIGN
       ffiDirection
+      SEMICOLON
     ;
 
 
 ffiDirection
-    : 'in'
-    | 'out'
-    | 'inout'
+    : IN
+    | OUT
+    | IN
+      OUT
     ;
 
 
 /*
  * ============================================================================
- * PINNING
+ * ASYNCHRONY
  * ============================================================================
  *
- * Pinning is symbolic semantic intent.
+ * ASYNC is an existing canonical lexer token.
  *
- * It does not mean a concrete physical memory address.
- * ============================================================================
- */
-
-ffiPinningClause
-    : 'pinning'
-      '='
-      ffiValueSpec
-    ;
-
-
-/*
- * ============================================================================
- * BLOCKING
- * ============================================================================
- */
-
-ffiBlockingClause
-    : 'blocking'
-      '='
-      ffiBlockingMode
-    ;
-
-
-ffiBlockingMode
-    : 'blocking'
-    | 'nonblocking'
-    | 'unknown'
-    | ffiSymbolicValue
-    ;
-
-
-/*
- * ============================================================================
- * ASYNCHRONOUS EXECUTION
+ * Runtime scheduling remains downstream.
  * ============================================================================
  */
 
 ffiAsyncClause
-    : 'async'
-      ffiValueSpec?
+    : ASYNC
+      ffiSymbolicValue?
+      SEMICOLON
     ;
 
 
-/*
- * ============================================================================
- * STREAMING
- * ============================================================================
- */
-
 ffiStreamingClause
-    : 'streaming'
-      ffiValueSpec?
+    : identifier
+      ASSIGN
+      ffiSymbolicValue
+      SEMICOLON
     ;
 
 
@@ -820,24 +923,26 @@ ffiStreamingClause
  * EFFECTS
  * ============================================================================
  *
- * Effect names are symbolic.
+ * FFI effects are references to the canonical effect system.
  *
- * The canonical effect system remains the authority for effect semantics.
- *
+ * This file does not define effect semantics.
  * ============================================================================
  */
 
 ffiEffectClause
-    : 'effects'
-      '{'
+    : EFFECTS
+      LBRACE
       ffiEffectReferenceList?
-      '}'
+      RBRACE
     ;
 
 
 ffiEffectReferenceList
     : qualifiedName
-      (',' qualifiedName)*
+      (
+          COMMA
+          qualifiedName
+      )*
     ;
 
 
@@ -846,80 +951,57 @@ ffiEffectReferenceList
  * REQUIREMENTS / CAPABILITIES
  * ============================================================================
  *
- * Requirements are semantic predicates.
+ * Requirements are symbolic semantic constraints.
  *
- * They are deliberately not target-selection statements.
- *
- * Examples:
- *
- *     requires { capability::ffi; }
- *     requires { capability::network; }
- *     requires { capability::quantum; }
- *
+ * They do not select a target.
  * ============================================================================
  */
 
 ffiRequirementClause
-    : 'requires'
-      '{'
+    : REQUIRES
+      LBRACE
       ffiRequirement*
-      '}'
+      RBRACE
     ;
 
 
 ffiRequirement
-    : ffiRequirementName
-      ('=' expression)?
-      ';'?
-    ;
-
-
-ffiRequirementName
     : qualifiedName
-    | ffiSymbolicValue
+      (
+          ASSIGN
+          expression
+      )?
+      SEMICOLON?
     ;
 
 
 /*
  * ============================================================================
- * RESOURCE CONTRACT
+ * RESOURCES
  * ============================================================================
  *
- * Requirement, preference, prohibition, and hint remain distinct concepts.
+ * Resource quantities remain expressions.
  *
+ * No fixed capacity is represented here.
  * ============================================================================
  */
 
 ffiResourceClause
-    : 'resources'
-      '{'
+    : RESOURCES
+      LBRACE
       ffiResourceItem*
-      '}'
+      RBRACE
     ;
 
 
 ffiResourceItem
-    : 'requires'
-      '='
+    : REQUIRES
       expression
-      ';'
-    | 'prefers'
-      '='
+      SEMICOLON
+    | identifier
+      ASSIGN
       expression
-      ';'
-    | 'forbids'
-      '='
-      expression
-      ';'
-    | 'hints'
-      '='
-      expression
-      ';'
-    | 'attribute'
-      identifier
-      '='
-      expression
-      ';'
+      SEMICOLON
     ;
 
 
@@ -927,284 +1009,25 @@ ffiResourceItem
  * ============================================================================
  * ERROR BOUNDARY
  * ============================================================================
- *
- * Foreign errors must have an explicit semantic boundary.
- *
- * ============================================================================
  */
 
 ffiErrorClause
-    : 'errors'
-      '{'
+    : identifier
+      LBRACE
       ffiErrorItem*
-      '}'
+      RBRACE
     ;
 
 
 ffiErrorItem
-    : 'mode'
-      '='
-      ffiErrorMode
-      ';'?
-    | 'type'
-      '='
-      typeExpr
-      ';'?
-    | 'map'
-      qualifiedName
-      'to'
-      typeExpr
-      ';'?
-    | 'exception'
-      '='
-      ffiExceptionPolicy
-      ';'?
-    | 'attribute'
-      identifier
-      '='
-      expression
-      ';'?
-    ;
-
-
-ffiErrorMode
-    : 'result'
-    | 'exception'
-    | 'status'
-    | 'sentinel'
-    | 'panic'
-    | 'abort'
-    | 'custom'
-    | ffiSymbolicValue
-    ;
-
-
-ffiExceptionPolicy
-    : 'translate'
-    | 'propagate'
-    | 'catch'
-    | 'forbid'
-    | ffiSymbolicValue
-    ;
-
-
-/*
- * ============================================================================
- * CALLBACKS
- * ============================================================================
- *
- * Callback declarations are contracts for foreign code calling back into
- * Zamani.
- *
- * They do not define native function-pointer representation.
- *
- * ============================================================================
- */
-
-ffiCallbackDeclaration
-    : attribute*
-      'ffi'
-      'callback'
-      identifier
-      ffiGenericParameterClause?
-      '(' parameterList? ')'
-      ffiReturnClause?
-      ffiContractClause?
-      ';'
-    ;
-
-
-/*
- * ============================================================================
- * CALLBACK REFERENCE
- * ============================================================================
- *
- * A callback reference is a symbolic callable boundary.
- * ============================================================================
- */
-
-ffiCallbackReference
-    : 'callback'
-      qualifiedName
-    ;
-
-
-/*
- * ============================================================================
- * CALLBACK INVOCATION
- * ============================================================================
- *
- * Invocation remains declarative at parse time.
- *
- * Runtime invocation occurs only after semantic resolution and lowering.
- * ============================================================================
- */
-
-ffiCallbackCallExpression
-    : 'ffi'
-      'callback'
-      qualifiedName
-      '('
-      argumentList?
-      ')'
-    ;
-
-
-/*
- * ============================================================================
- * FOREIGN CALL
- * ============================================================================
- *
- * Explicit FFI invocation.
- *
- * This rule does not perform lookup or execution.
- * ============================================================================
- */
-
-ffiCallExpression
-    : 'ffi'
-      'call'
-      ffiForeignCallTarget
-      '('
-      argumentList?
-      ')'
-    ;
-
-
-ffiForeignCallTarget
-    : qualifiedName
-    | stringLiteral
-      '::'
-      qualifiedName
-    | stringLiteral
-    ;
-
-
-ffiCallStatement
-    : ffiCallExpression
-      ';'
-    ;
-
-
-ffiCallbackCallStatement
-    : ffiCallbackCallExpression
-      ';'
-    ;
-
-
-/*
- * ============================================================================
- * FOREIGN CALLABLE REFERENCE
- * ============================================================================
- */
-
-ffiCallableReferenceExpression
-    : 'ffi'
-      'ref'
-      ffiForeignTarget
-    ;
-
-
-/*
- * ============================================================================
- * ADAPTER
- * ============================================================================
- *
- * An adapter describes semantic adaptation between two interface contracts.
- *
- * It does not specify whether the implementation is:
- *
- *     generated code
- *     wrapper code
- *     marshaling
- *     serialization
- *     runtime dispatch
- *     compiler lowering
- *     hardware bridge
- *     quantum/classical bridge
- *
- * ============================================================================
- */
-
-ffiAdapterDeclaration
-    : attribute*
-      'ffi'
-      'adapter'
-      identifier
-      ffiAdapterTargetClause?
-      ffiAdapterBody
-    ;
-
-
-ffiAdapterTargetClause
-    : 'from'
-      qualifiedName
-      'to'
-      qualifiedName
-    ;
-
-
-ffiAdapterBody
-    : '{'
-      ffiAdapterItem*
-      '}'
-    ;
-
-
-ffiAdapterItem
-    : 'requires'
-      '='
-      expression
-      ';'
-    | 'using'
-      '='
-      qualifiedName
-      ';'
-    | 'attribute'
-      identifier
-      '='
-      expression
-      ';'
-    ;
-
-
-/*
- * ============================================================================
- * LINKAGE
- * ============================================================================
- *
- * Linkage is deliberately represented as part of an FFI contract rather than
- * as an instruction to load or execute anything.
- *
- * The actual ABI/linker grammar owns detailed ABI declarations.
- *
- * ============================================================================
- */
-
-ffiLinkClause
-    : 'link'
-      ffiLinkItem*
-      ';'?
-    ;
-
-
-ffiLinkItem
-    : 'name'
-      '='
-      stringLiteral
-    | 'kind'
-      '='
-      ffiSymbolicValue
-    | 'version'
-      '='
-      expression
-    | 'interface'
-      '='
-      qualifiedName
-    | 'attribute'
-      identifier
-      '='
-      expression
+    : identifier
+      ASSIGN
+      (
+          typeExpression
+        | expression
+        | ffiSymbolicValue
+      )
+      SEMICOLON
     ;
 
 
@@ -1215,48 +1038,28 @@ ffiLinkItem
  */
 
 ffiCompatibilityClause
-    : 'compatible'
-      'with'
+    : identifier
+      WITH
       ffiCompatibilityTarget
-      ffiCompatibilityBody?
+      (
+          LBRACE
+          ffiCompatibilityItem*
+          RBRACE
+      )?
     ;
 
 
 ffiCompatibilityTarget
     : qualifiedName
-    | stringLiteral
-    ;
-
-
-ffiCompatibilityBody
-    : '{'
-      ffiCompatibilityItem*
-      '}'
+    | STRING_LITERAL
     ;
 
 
 ffiCompatibilityItem
-    : 'version'
-      '='
+    : identifier
+      ASSIGN
       expression
-      ';'
-    | 'feature'
-      '='
-      expression
-      ';'
-    | 'requires'
-      '='
-      expression
-      ';'
-    | 'forbid'
-      '='
-      expression
-      ';'
-    | 'attribute'
-      identifier
-      '='
-      expression
-      ';'
+      SEMICOLON
     ;
 
 
@@ -1264,116 +1067,77 @@ ffiCompatibilityItem
  * ============================================================================
  * SECURITY
  * ============================================================================
- *
- * Security metadata remains symbolic and declarative.
- * ============================================================================
  */
 
 ffiSecurityClause
-    : 'security'
-      '{'
+    : identifier
+      LBRACE
       ffiSecurityItem*
-      '}'
+      RBRACE
     ;
 
 
 ffiSecurityItem
-    : 'capability'
-      '='
-      qualifiedName
-      ';'
-    | 'trust'
-      '='
-      ffiSymbolicValue
-      ';'
-    | 'sandbox'
-      '='
-      ffiSymbolicValue
-      ';'
-    | 'isolation'
-      '='
-      ffiSymbolicValue
-      ';'
-    | 'attribute'
-      identifier
-      '='
-      expression
-      ';'
+    : identifier
+      ASSIGN
+      (
+          qualifiedName
+        | expression
+        | ffiSymbolicValue
+      )
+      SEMICOLON
     ;
 
 
 /*
  * ============================================================================
- * EXECUTION CONTRACT
+ * EXECUTION
  * ============================================================================
  *
- * Execution mode is symbolic.
+ * Execution metadata is descriptive only.
  *
- * The grammar does not enumerate CPU/GPU/FPGA/QPU/etc. as a closed universe.
+ * It must not become physical backend selection.
  * ============================================================================
  */
 
 ffiExecutionClause
-    : 'execution'
-      '{'
+    : identifier
+      LBRACE
       ffiExecutionItem*
-      '}'
+      RBRACE
     ;
 
 
 ffiExecutionItem
-    : 'mode'
-      '='
-      ffiSymbolicValue
-      ';'
-    | 'placement'
-      '='
+    : identifier
+      ASSIGN
       expression
-      ';'
-    | 'availability'
-      '='
-      expression
-      ';'
-    | 'attribute'
-      identifier
-      '='
-      expression
-      ';'
+      SEMICOLON
     ;
 
 
 /*
  * ============================================================================
- * CONCURRENCY / REENTRANCY
+ * CONCURRENCY
  * ============================================================================
  */
 
 ffiConcurrencyClause
-    : 'concurrency'
-      '{'
+    : identifier
+      LBRACE
       ffiConcurrencyItem*
-      '}'
+      RBRACE
     ;
 
 
 ffiConcurrencyItem
-    : 'reentrancy'
-      '='
-      ffiSymbolicValue
-      ';'
-    | 'thread_safety'
-      '='
-      ffiSymbolicValue
-      ';'
-    | 'serialization'
-      '='
-      ffiSymbolicValue
-      ';'
-    | 'attribute'
-      identifier
-      '='
-      expression
-      ';'
+    : identifier
+      ASSIGN
+      (
+          expression
+        | ffiSymbolicValue
+      )
+      SEMICOLON
     ;
 
 
@@ -1381,297 +1145,13 @@ ffiConcurrencyItem
  * ============================================================================
  * DETERMINISM
  * ============================================================================
- *
- * A declaration is a contract/claim for semantic validation.
- *
- * The grammar does not independently establish that a foreign implementation
- * is deterministic.
- * ============================================================================
  */
 
 ffiDeterminismClause
-    : 'determinism'
-      '='
-      ffiSymbolicValue
-    ;
-
-
-/*
- * ============================================================================
- * VERSION
- * ============================================================================
- */
-
-ffiVersionClause
-    : 'version'
-      '='
-      expression
-    ;
-
-
-/*
- * ============================================================================
- * GENERIC FFI POLICY
- * ============================================================================
- *
- * Policies are declarative project/source contracts.
- *
- * They do not execute during parsing.
- * ============================================================================
- */
-
-ffiPolicyDeclaration
-    : attribute*
-      'ffi'
-      'policy'
-      identifier
-      ffiPolicyBody
-    ;
-
-
-ffiPolicyBody
-    : '{'
-      ffiPolicyItem*
-      '}'
-    ;
-
-
-ffiPolicyItem
-    : 'requires'
-      '='
-      expression
-      ';'
-    | 'forbid'
-      '='
-      expression
-      ';'
-    | 'prefer'
-      '='
-      expression
-      ';'
-    | 'allow'
-      '='
-      expression
-      ';'
-    | 'attribute'
-      identifier
-      '='
-      expression
-      ';'
-    ;
-
-
-/*
- * ============================================================================
- * ATTRIBUTES
- * ============================================================================
- *
- * FFI-specific attributes remain deliberately open-ended.
- *
- * The canonical language attribute grammar remains authoritative for general
- * attributes. This local form is used only inside the explicitly-owned FFI
- * contract structures.
- * ============================================================================
- */
-
-ffiAttributeClause
-    : 'attributes'
-      '{'
-      ffiAttributeItem*
-      '}'
-    ;
-
-
-ffiAttributeItem
     : identifier
-      ('=' expression)?
-      ';'?
-    ;
-
-
-/*
- * ============================================================================
- * PARAMETER / RESULT BOUNDARY METADATA
- * ============================================================================
- *
- * These are standalone reusable FFI contracts for tooling and semantic
- * normalization.
- *
- * They do not redefine the canonical parameter or result syntax.
- * ============================================================================
- */
-
-ffiParameterBoundary
-    : 'parameter'
-      identifier
-      ffiBoundaryClause*
-      ffiAttributeClause?
-    ;
-
-
-ffiResultBoundary
-    : 'result'
-      ffiBoundaryClause*
-      ffiAttributeClause?
-    ;
-
-
-/*
- * ============================================================================
- * BUFFER CONTRACT
- * ============================================================================
- *
- * Buffer semantics remain abstract.
- *
- * There is intentionally no fixed:
- *
- *     pointer width
- *     address
- *     buffer capacity
- *     register width
- *     memory-bank identity
- *
- * ============================================================================
- */
-
-ffiBufferBoundary
-    : 'buffer'
-      identifier?
-      ffiBufferBody
-    ;
-
-
-ffiBufferBody
-    : '{'
-      ffiBufferItem*
-      '}'
-    ;
-
-
-ffiBufferItem
-    : 'direction'
-      '='
-      ffiDirection
-      ';'
-    | 'ownership'
-      '='
+      ASSIGN
       ffiSymbolicValue
-      ';'
-    | 'lifetime'
-      '='
-      ffiValueSpec
-      ';'
-    | 'size'
-      '='
-      expression
-      ';'
-    | 'alignment'
-      '='
-      expression
-      ';'
-    | 'representation'
-      '='
-      ffiSymbolicValue
-      ';'
-    | 'attribute'
-      identifier
-      '='
-      expression
-      ';'
-    ;
-
-
-/*
- * ============================================================================
- * FUTURE / ASYNC RESULT CONTRACT
- * ============================================================================
- *
- * No particular runtime future/promise type is assumed.
- * ============================================================================
- */
-
-ffiFutureBoundary
-    : 'future'
-      ffiFutureBody?
-    ;
-
-
-ffiFutureBody
-    : '{'
-      ffiFutureItem*
-      '}'
-    ;
-
-
-ffiFutureItem
-    : 'result'
-      '='
-      typeExpr
-      ';'
-    | 'cancel'
-      '='
-      expression
-      ';'
-    | 'completion'
-      '='
-      expression
-      ';'
-    | 'error'
-      '='
-      typeExpr
-      ';'
-    | 'attribute'
-      identifier
-      '='
-      expression
-      ';'
-    ;
-
-
-/*
- * ============================================================================
- * STREAM CONTRACT
- * ============================================================================
- *
- * The transport remains a downstream semantic/runtime decision.
- * ============================================================================
- */
-
-ffiStreamBoundary
-    : 'stream'
-      ffiStreamBody?
-    ;
-
-
-ffiStreamBody
-    : '{'
-      ffiStreamItem*
-      '}'
-    ;
-
-
-ffiStreamItem
-    : 'item'
-      '='
-      typeExpr
-      ';'
-    | 'error'
-      '='
-      typeExpr
-      ';'
-    | 'close'
-      '='
-      expression
-      ';'
-    | 'backpressure'
-      '='
-      expression
-      ';'
-    | 'attribute'
-      identifier
-      '='
-      expression
-      ';'
+      SEMICOLON
     ;
 
 
@@ -1680,79 +1160,75 @@ ffiStreamItem
  * PROVENANCE
  * ============================================================================
  *
- * Provenance is declarative metadata.
+ * Provenance remains metadata.
+ *
+ * It does not establish trust by itself.
  * ============================================================================
  */
 
 ffiProvenanceClause
-    : 'provenance'
-      '{'
+    : PROVENANCE
+      LBRACE
       ffiProvenanceItem*
-      '}'
+      RBRACE
     ;
 
 
 ffiProvenanceItem
-    : 'source'
-      '='
+    : identifier
+      ASSIGN
       expression
-      ';'
-    | 'version'
-      '='
-      expression
-      ';'
-    | 'hash'
-      '='
-      expression
-      ';'
-    | 'identity'
-      '='
-      expression
-      ';'
-    | 'attribute'
-      identifier
-      '='
-      expression
-      ';'
+      SEMICOLON
     ;
 
 
 /*
  * ============================================================================
- * ADAPTATION CONTRACT
+ * ADAPTATION
+ * ============================================================================
+ *
+ * Adaptation is a semantic contract.
+ *
+ * It does not authorize arbitrary self-modification.
  * ============================================================================
  */
 
 ffiAdaptationClause
-    : 'adapt'
-      '{'
+    : ADAPTATION
+      LBRACE
       ffiAdaptationItem*
-      '}'
+      RBRACE
     ;
 
 
 ffiAdaptationItem
-    : 'from'
-      '='
-      qualifiedName
-      ';'
-    | 'to'
-      '='
-      qualifiedName
-      ';'
-    | 'using'
-      '='
-      qualifiedName
-      ';'
-    | 'requires'
-      '='
+    : identifier
+      ASSIGN
+      (
+          expression
+        | qualifiedName
+      )
+      SEMICOLON
+    ;
+
+
+/*
+ * ============================================================================
+ * ATTRIBUTE METADATA
+ * ============================================================================
+ *
+ * General attributes remain owned by Attributes.
+ *
+ * This local wrapper is only used where an FFI contract needs a sequence of
+ * arbitrary metadata assignments.
+ * ============================================================================
+ */
+
+ffiAttributeClause
+    : identifier
+      ASSIGN
       expression
-      ';'
-    | 'attribute'
-      identifier
-      '='
-      expression
-      ';'
+      SEMICOLON
     ;
 
 
@@ -1761,46 +1237,128 @@ ffiAdaptationItem
  * SYMBOLIC VALUES
  * ============================================================================
  *
- * Open symbolic values are essential for POCO-REAF.
+ * Open symbolic values are intentional.
  *
- * They permit future:
+ * They allow future:
  *
- *     languages
  *     ABIs
- *     calling conventions
  *     runtimes
- *     representations
+ *     languages
  *     execution models
- *     hardware domains
- *     interoperability systems
+ *     representations
+ *     vendors
+ *     accelerators
+ *     quantum systems
+ *     hardware systems
  *
- * without requiring the grammar to enumerate every future possibility.
- *
+ * without adding a new grammar branch for every possibility.
  * ============================================================================
  */
 
 ffiSymbolicValue
     : qualifiedName
-    | stringLiteral
-    | identifier
-    ;
-
-
-ffiValueSpec
-    : ffiSymbolicValue
-    | '(' expression ')'
+    | STRING_LITERAL
     ;
 
 
 /*
  * ============================================================================
- * INTEGRATION ALIASES
+ * CALLBACK INVOCATION
  * ============================================================================
  *
- * These aliases provide stable composition names while keeping the actual
- * syntax owned by the rules above.
+ * Callback invocation uses an explicitly foreign-qualified callable reference.
  *
- * The aliases intentionally do not duplicate grammar.
+ * The runtime performs invocation only after semantic resolution.
+ * ============================================================================
+ */
+
+ffiCallbackCallExpression
+    : FOREIGN
+      ffiCallableTarget
+      LPAREN
+      expressionArgumentList?
+      RPAREN
+    ;
+
+
+ffiCallbackCallStatement
+    : ffiCallbackCallExpression
+      SEMICOLON
+    ;
+
+
+/*
+ * ============================================================================
+ * FOREIGN CALL
+ * ============================================================================
+ *
+ * The canonical call form is:
+ *
+ *     foreign target(...)
+ *
+ * This avoids requiring a separate parser-local `call` keyword.
+ * ============================================================================
+ */
+
+ffiCallExpression
+    : FOREIGN
+      ffiCallableTarget
+      LPAREN
+      expressionArgumentList?
+      RPAREN
+    ;
+
+
+ffiCallStatement
+    : ffiCallExpression
+      SEMICOLON
+    ;
+
+
+ffiCallableTarget
+    : qualifiedName
+    | STRING_LITERAL
+      DOUBLE_COLON
+      qualifiedName
+    | STRING_LITERAL
+    ;
+
+
+/*
+ * ============================================================================
+ * CALLABLE REFERENCE
+ * ============================================================================
+ */
+
+ffiCallableReferenceExpression
+    : FOREIGN
+      qualifiedName
+    ;
+
+
+/*
+ * ============================================================================
+ * EXPRESSION ARGUMENT LIST
+ * ============================================================================
+ *
+ * Expressions remain owned by Expressions.
+ *
+ * This rule only composes the canonical expression rule into an FFI call.
+ * ============================================================================
+ */
+
+expressionArgumentList
+    : expression
+      (
+          COMMA
+          expression
+      )*
+    ;
+
+
+/*
+ * ============================================================================
+ * STABLE COMPOSITION ALIASES
  * ============================================================================
  */
 
@@ -1814,402 +1372,122 @@ ffiQualifiedCallbackCallExpression
     ;
 
 
-ffiForeignDeclaration
-    : ffiInterfaceDeclaration
-    | ffiBindingDeclaration
-    | ffiCallbackDeclaration
-    | ffiAdapterDeclaration
-    | ffiPolicyDeclaration
-    ;
-
-
 /*
  * ============================================================================
- * COMPOSITION CONTRACT
+ * LOCAL INTEGRATION INVARIANTS
  * ============================================================================
  *
- * The interoperability composition grammar should expose only these public
- * integration entry points:
- *
- *     ffiItem
- *     ffiForeignDeclaration
- *     ffiInterfaceDeclaration
- *     ffiBindingDeclaration
- *     ffiCallbackDeclaration
- *     ffiAdapterDeclaration
- *     ffiPolicyDeclaration
- *     ffiCallExpression
- *     ffiCallbackCallExpression
- *     ffiCallableReferenceExpression
- *     ffiCallStatement
- *     ffiCallbackCallStatement
- *
- * Internal helpers remain implementation details of this delegate grammar.
- *
- * The composition grammar must NOT create a second FFI grammar containing
- * overlapping definitions.
- *
- * ============================================================================
- * AST CONTRACT
- * ============================================================================
- *
- * The frontend AST must represent FFI semantically, not as backend objects.
- *
- * Minimum semantic concepts:
- *
- *     FfiInterface
- *     FfiBinding
- *     FfiCallback
- *     FfiAdapter
- *     FfiCall
- *     FfiCallableReference
- *     FfiBoundaryContract
- *     FfiOwnership
- *     FfiLifetime
- *     FfiNullability
- *     FfiMarshalling
- *     FfiEffectRequirement
- *     FfiCapabilityRequirement
- *     FfiResourceRequirement
- *     FfiErrorBoundary
- *     FfiCompatibility
- *     FfiSecurityPolicy
- *
- * Every node must retain source spans.
- *
- * The AST MUST NOT contain:
- *
- *     native library handles
- *     function pointers
- *     device handles
- *     physical addresses
- *     linker state
- *     runtime state
- *     hardware IDs
- *
- * ============================================================================
- * SEMANTIC CONTRACT
- * ============================================================================
- *
- * Semantic analysis owns:
+ * 1. This grammar consumes ZamaniLexer.
  *
- *     name resolution
- *     foreign symbol resolution
- *     type compatibility
- *     ABI compatibility
- *     calling-convention compatibility
- *     representation compatibility
- *     ownership validation
- *     lifetime validation
- *     nullability validation
- *     conversion validation
- *     effect validation
- *     capability validation
- *     resource validation
- *     security validation
- *     error-boundary validation
- *     compatibility validation
- *     target availability
+ * 2. No lexer rule exists here.
  *
- * Unknown symbolic values may remain syntactically valid and are rejected only
- * when semantic policy requires them to be known.
+ * 3. No AST type exists here.
  *
- * ============================================================================
- * ABI INTEGRATION
- * ============================================================================
+ * 4. No semantic implementation exists here.
  *
- * FFI may refer to ABI contracts symbolically.
+ * 5. No ABI implementation exists here.
  *
- * Correct dependency:
+ * 6. No foreign language grammar exists here.
  *
- *     FFI
- *       |
- *       v
- *      ABI
- *       |
- *       v
- *   semantic/lowering
+ * 7. No physical hardware identity exists here.
  *
- * ABI MUST NOT depend on FFI grammar to define its own fundamental syntax.
+ * 8. No fixed machine capacity exists here.
  *
- * The ABI grammar remains the authority for:
+ * 9. No target selection exists here.
  *
- *     ABI identity
- *     calling convention
- *     linkage contract
- *     ABI compatibility
- *     ABI features
+ * 10. No runtime execution exists here.
  *
- * ============================================================================
- * FOREIGN-FUNCTION INTEGRATION
- * ============================================================================
+ * 11. Foreign calls participate downstream in:
  *
- * `foreign-functions.g4` remains the authority for the general `extern`
- * declaration family.
+ *         type checking
+ *         effect checking
+ *         capability checking
+ *         resource checking
+ *         policy checking
+ *         provenance
+ *         compatibility
  *
- * This file MUST NOT silently replace that family.
+ * 12. ABI-specific information is consumed through:
  *
- * If the language accepts both:
+ *         grammar/interoperability/abi.g4
  *
- *     extern fn ...
+ * 13. Foreign types are consumed through:
  *
- * and:
+ *         grammar/interoperability/foreign-types.g4
  *
- *     ffi fn ...
+ * 14. General external callable declarations are consumed through:
  *
- * they must have clearly defined semantic distinctions:
+ *         grammar/interoperability/foreign-functions.g4
  *
- *     extern
- *         -> general external declaration
+ * 15. The interoperability composition grammar owns the public dispatcher.
  *
- *     ffi
- *         -> explicit FFI boundary contract
- *
- * The semantic layer must normalize both into the same canonical
- * interoperability model where their semantics overlap.
- *
- * ============================================================================
- * FUNCTION INTEGRATION
- * ============================================================================
- *
- * FFI declarations MUST reuse canonical parameter and type syntax.
- *
- * They must NOT define:
- *
- *     a second parameter grammar
- *     a second type grammar
- *     a second generic grammar
- *
- * This file therefore uses:
- *
- *     parameterList
- *     typeExpr
- *
- * from the canonical function/type grammar.
- *
- * `ffiGenericParameterClause` is intentionally FFI-specific because the
- * repository already reserves generic-parameter ownership for the canonical
- * function/type grammar and this delegate must not collide with it.
- *
- * ============================================================================
- * EXPRESSION INTEGRATION
- * ============================================================================
- *
- * FFI calls consume canonical:
- *
- *     expression
- *     argumentList
- *
- * No separate FFI expression language is introduced.
- *
- * ============================================================================
- * QUANTUM INTEGRATION
- * ============================================================================
- *
- * FFI may carry quantum types and quantum capability requirements.
- *
- * It MUST NOT define quantum operations.
- *
- * Example semantic flow:
- *
- *     ffi call
- *         |
- *         v
- *     semantic boundary
- *         |
- *         v
- *     quantum semantic model
- *         |
- *         v
- *     quantum::ir
- *         |
- *         v
- *     routing / scheduling / QEC / ZQN / HAL
- *
- * ============================================================================
- * HDL / HARDWARE INTEGRATION
- * ============================================================================
- *
- * Hardware-facing FFI remains symbolic.
- *
- * Hardware-specific realization belongs to:
- *
- *     hardware/
- *     hdl/
- *     resources/
- *     compile/
- *     execution/
- *
- * This file must not duplicate their target/resource models.
- *
- * ============================================================================
- * DISTRIBUTED / NETWORK INTEGRATION
- * ============================================================================
- *
- * A foreign boundary may represent a distributed or networked interface.
- *
- * That does NOT turn an FFI declaration into a network implementation.
- *
- * Network semantics remain owned by networking/distributed domains.
- *
- * ============================================================================
- * SECURITY INTEGRATION
- * ============================================================================
- *
- * Foreign code is an explicit trust boundary.
- *
- * Semantic validation should be capable of rejecting:
- *
- *     missing capability
- *     forbidden effect
- *     incompatible ownership
- *     invalid lifetime
- *     unsafe conversion
- *     incompatible ABI
- *     unsupported exception crossing
- *     unsupported execution mode
- *     prohibited resource access
- *
- * Parsing itself remains inert.
- *
- * ============================================================================
- * DETERMINISM
- * ============================================================================
- *
- * Parsing this grammar is deterministic.
- *
- * No grammar rule depends on:
- *
- *     time
- *     randomness
- *     filesystem state
- *     network state
- *     hardware discovery
- *     environment variables
- *     runtime state
- *
- * ============================================================================
- * DIAGNOSTICS
- * ============================================================================
- *
- * Parser diagnostics must preserve source locations.
- *
- * Semantic diagnostics should identify:
- *
- *     FFI declaration
- *     foreign target
- *     callable
- *     parameter/result boundary
- *     incompatible contract
- *     source span
- *
- * The grammar must never hide an interoperability error merely to recover
- * parsing.
- *
- * ============================================================================
- * COMPATIBILITY
- * ============================================================================
- *
- * New foreign languages, ABIs, runtimes, representations, capabilities,
- * execution models, and resource classes should normally be expressible using
- * the open symbolic forms.
- *
- * Adding a new symbolic value MUST NOT require adding a new parser alternative
- * merely because a new ecosystem appeared.
- *
- * Syntax removal or incompatible syntax changes require the normal Zamani
- * compatibility/migration process.
- *
- * ============================================================================
- * HARD-CODING AUDIT
- * ============================================================================
- *
- * This file MUST NOT introduce:
- *
- *     MAX_QUBITS
- *     MAX_CPUS
- *     MAX_GPUS
- *     MAX_FPGAS
- *     MAX_NODES
- *     MAX_MEMORY
- *     MAX_THREADS
- *     MAX_TENSOR_RANK
- *     MAX_REGISTER_WIDTH
- *     MAX_NETWORK_SIZE
- *     MAX_DEVICE_COUNT
- *
- * It MUST NOT introduce:
- *
- *     cpu0
- *     gpu0
- *     qpu0
- *     fpga0
- *     physical_qubit0
- *     device0
- *     register0
- *     memory_bank0
- *
- * as universal language constructs.
- *
- * ============================================================================
- * NO UNSAFE
- * ============================================================================
- *
- * This grammar contains no Rust implementation code.
- *
- * The downstream Zamani compiler/runtime implementation remains subject to:
- *
- *     Rust 1.97
- *     Rust 1.97.1
- *     Rust 2021
- *     unsafe forbidden
+ * 16. The canonical Zamani parser remains the only complete-program parser.
  *
  * ============================================================================
  * COMPLETION CRITERIA
  * ============================================================================
  *
- * This file is complete when all of the following are true:
+ * This file is DONE when:
  *
- * [ ] No duplicate canonical identifier grammar exists here.
- * [ ] No duplicate canonical type grammar exists here.
- * [ ] No duplicate canonical expression grammar exists here.
- * [ ] No duplicate canonical parameter grammar exists here.
- * [ ] No duplicate ABI grammar exists here.
- * [ ] FFI declarations are syntactically deterministic.
- * [ ] FFI calls are syntactically deterministic.
- * [ ] Callback contracts are representable.
- * [ ] Ownership contracts are representable.
- * [ ] Lifetime contracts are representable.
- * [ ] Nullability contracts are representable.
- * [ ] Marshalling contracts are representable.
- * [ ] Error-boundary contracts are representable.
- * [ ] Effect requirements are representable.
- * [ ] Capability requirements are representable.
- * [ ] Resource requirements are representable.
- * [ ] Security requirements are representable.
- * [ ] Compatibility requirements are representable.
- * [ ] Asynchronous boundaries are representable.
- * [ ] Streaming boundaries are representable.
- * [ ] Adapters are representable.
- * [ ] Symbolic future ecosystems remain representable.
- * [ ] No hardware capacity is hard-coded.
- * [ ] No physical address is hard-coded.
- * [ ] No machine topology is hard-coded.
- * [ ] No runtime action occurs during parsing.
- * [ ] AST mapping is defined.
- * [ ] Semantic mapping is defined.
- * [ ] ABI integration is defined.
- * [ ] Canonical IR integration is defined.
- * [ ] Quantum integration preserves quantum::ir.
- * [ ] HDL/hardware integration remains downstream.
- * [ ] Positive tests exist.
- * [ ] Negative tests exist.
- * [ ] Boundary tests exist.
- * [ ] Scalability tests exist.
- * [ ] Compatibility tests exist.
- * [ ] Determinism tests exist.
+ *     [ ] ANTLR generation succeeds with the canonical ZamaniLexer.
  *
- * ============================================================================
- * END OF FILE
+ *     [ ] No implicit parser token is created.
+ *
+ *     [ ] No duplicate parser grammar name exists.
+ *
+ *     [ ] No duplicate identifier rule exists.
+ *
+ *     [ ] No duplicate qualified-name rule exists.
+ *
+ *     [ ] No duplicate type-expression rule exists.
+ *
+ *     [ ] No duplicate general expression rule exists.
+ *
+ *     [ ] No duplicate ABI grammar exists.
+ *
+ *     [ ] No duplicate foreign-type grammar exists.
+ *
+ *     [ ] No duplicate general foreign-function grammar exists.
+ *
+ *     [ ] FFI declarations parse deterministically.
+ *
+ *     [ ] FFI calls parse deterministically.
+ *
+ *     [ ] Callback contracts parse deterministically.
+ *
+ *     [ ] Effects remain externally owned.
+ *
+ *     [ ] Requirements remain externally owned semantically.
+ *
+ *     [ ] Resources remain externally owned semantically.
+ *
+ *     [ ] Policies remain externally owned semantically.
+ *
+ *     [ ] Provenance remains externally owned semantically.
+ *
+ *     [ ] No machine-size limit exists.
+ *
+ *     [ ] No hardware identity is required.
+ *
+ *     [ ] No runtime behavior occurs during parsing.
+ *
+ *     [ ] Positive tests exist.
+ *
+ *     [ ] Negative tests exist.
+ *
+ *     [ ] Boundary tests exist.
+ *
+ *     [ ] Scalability tests exist.
+ *
+ *     [ ] Determinism tests exist.
+ *
+ *     [ ] Compatibility tests exist.
+ *
+ *     [ ] Foreign calls reach the canonical semantic model.
+ *
+ *     [ ] Quantum-facing foreign operations preserve the quantum::ir boundary.
+ *
+ *     [ ] HDL/hardware-facing foreign operations remain target-independent.
+ *
  * ============================================================================
  */
