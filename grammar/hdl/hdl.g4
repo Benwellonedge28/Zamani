@@ -7,254 +7,229 @@
  * ----
  * grammar/hdl/hdl.g4
  *
- * STATUS
- * ------
- * CANONICAL PRODUCTION HDL COMPOSITION ROOT
+ * ROLE
+ * ----
+ * CANONICAL HDL COMPOSITION ROOT / ORCHESTRATOR
  *
- * LANGUAGE
- * --------
- * Zamani
+ * This file is intentionally a COMPOSITION ROOT.
  *
- * GRAMMAR TECHNOLOGY
- * ------------------
- * ANTLR4 parser grammar
+ * It does not implement individual HDL features.
+ * It assembles the independently-owned HDL grammars and provides the stable
+ * parser boundary consumed by the rest of Zamani.
  *
- * RUST BASELINE
- * -------------
- * Rust 1.97 / Rust 1.97.1
- * Rust edition 2021
+ * ============================================================================
+ * IMPLEMENTATION BASELINE
+ * ============================================================================
  *
- * SAFETY
- * ------
- * This grammar contains:
+ * Language:
+ *     Zamani
  *
- *   - no embedded Rust;
- *   - no semantic actions;
- *   - no semantic predicates;
- *   - no unsafe implementation;
- *   - no hardware discovery;
- *   - no filesystem access;
- *   - no network access;
- *   - no runtime execution.
+ * Grammar:
+ *     ANTLR4 parser grammar
  *
- * The Rust implementation consuming this grammar MUST remain safe Rust.
+ * Rust:
+ *     Rust 1.97 or later
+ *     Rust 2021
+ *     safe Rust only
+ *
+ * Safety:
+ *     No embedded Rust.
+ *     No actions.
+ *     No semantic predicates.
+ *     No unsafe implementation requirement.
+ *     No filesystem access.
+ *     No network access.
+ *     No hardware discovery.
+ *     No target discovery.
+ *     No runtime execution.
  *
  * ============================================================================
  * AUTHORITY
  * ============================================================================
  *
- * Normative architecture:
+ * Architectural authority:
  *
  *     grammar/DESIGN.md
- *          |
- *          v
+ *
+ * Human language specification:
+ *
  *     grammar/specification/
- *          |
- *          v
+ *
+ * Machine contracts:
+ *
+ *     grammar/spec/
+ *
+ * HDL specification:
+ *
  *     grammar/spec/hdl.md
- *          |
- *          v
+ *
+ * This file:
+ *
  *     grammar/hdl/hdl.g4
- *          |
- *          +------------------------------------------------------+
- *          |                                                      |
- *          v                                                      v
- *     HDL subordinate grammars                            canonical lexer
- *          |                                                      |
- *          +--------------------------+---------------------------+
- *                                     |
- *                                     v
- *                              ZamaniParser
- *                                     |
- *                                     v
- *                              domain-neutral AST
- *                                     |
- *                                     v
- *                              semantic analysis
- *                                     |
- *                                     v
- *                         canonical hardware semantic model
- *                                     |
- *                                     v
- *                                canonical IR
- *                                     |
- *                +--------------------+---------------------+
- *                |                    |                     |
- *                v                    v                     v
- *             verify              optimize              schedule
- *                |                    |                     |
- *                +--------------------+---------------------+
- *                                     |
- *                                     v
- *                               placement/routing
- *                                     |
- *                                     v
- *                                  synthesis
- *                                     |
- *                                     v
- *                              target realization
  *
- * ============================================================================
- * SINGLE HDL AUTHORITY
- * ============================================================================
- *
- * This file is the ONE HDL COMPOSITION ROOT.
+ * is the SINGLE HDL COMPOSITION AUTHORITY.
  *
  * It owns:
  *
- *   - HDL parser grammar identity;
- *   - HDL parser imports;
- *   - HDL source-unit composition;
- *   - HDL declaration dispatch;
- *   - HDL statement dispatch;
- *   - HDL expression integration;
- *   - HDL cross-domain integration;
- *   - the public standalone HDL entry point;
- *   - stable integration boundaries for ZamaniParser.
+ *     - HDL grammar identity;
+ *     - HDL grammar imports;
+ *     - HDL source-unit entry point;
+ *     - HDL declaration dispatch;
+ *     - HDL statement dispatch;
+ *     - HDL expression/type integration façades;
+ *     - HDL cross-domain integration façades;
+ *     - standalone HDL parsing boundary.
  *
- * It DOES NOT own the implementation of:
- *
- *   - modules;
- *   - generics;
- *   - parameters;
- *   - interfaces;
- *   - ports;
- *   - signals;
- *   - wires;
- *   - registers;
- *   - memories;
- *   - clocks;
- *   - timing;
- *   - processes;
- *   - combinational logic;
- *   - sequential logic;
- *   - state machines;
- *   - pipelines;
- *   - generation;
- *   - verification;
- *   - hardware resources;
- *   - capabilities;
- *   - target selection;
- *   - placement;
- *   - routing;
- *   - synthesis;
- *   - vendor primitives;
- *   - physical pins;
- *   - physical memories;
- *   - physical clock trees;
- *   - quantum::ir;
- *   - QEC;
- *   - ZQN;
- *   - HAL;
- *   - runtime execution.
- *
- * Those responsibilities belong to their owning subsystem.
+ * It does NOT own concrete HDL feature syntax.
  *
  * ============================================================================
- * POCO-REAF
+ * ARCHITECTURAL PIPELINE
  * ============================================================================
  *
- * Zamani HDL expresses PORTABLE HARDWARE INTENT.
- *
- * A source program describes:
- *
- *   WHAT:
- *
- *     - hardware structure means;
- *     - interfaces exist;
- *     - signals communicate;
- *     - storage exists;
- *     - computation behaves;
- *     - timing relationships exist;
- *     - protocols apply;
- *     - verification properties hold;
- *     - capabilities are required;
- *     - resources are required;
- *     - implementation preferences exist.
- *
- * It does not inherently describe:
- *
- *   WHICH:
- *
- *     - FPGA;
- *     - ASIC;
- *     - CPU;
- *     - GPU;
- *     - QPU;
- *     - accelerator;
- *     - board;
- *     - package;
- *     - physical pin;
- *     - physical register;
- *     - physical memory block;
- *     - routing path;
- *     - clock tree;
- *     - fabrication node;
- *     - vendor primitive.
- *
- * Those are downstream realization decisions.
- *
- * ============================================================================
- * SCALABILITY
- * ============================================================================
- *
- * This composition root imposes NO language-level maximum on:
- *
- *   - modules;
- *   - interfaces;
- *   - ports;
- *   - signals;
- *   - nets;
- *   - registers;
- *   - memories;
- *   - dimensions;
- *   - states;
- *   - transitions;
- *   - pipeline stages;
- *   - instances;
- *   - generated instances;
- *   - processes;
- *   - clock domains;
- *   - timing constraints;
- *   - hierarchy depth;
- *   - generic parameters;
- *   - generic arguments;
- *   - design elements;
- *   - source-unit elements.
- *
- * Repetition is represented by ANTLR repetition operators and by the
- * subordinate grammars.
- *
- * "Infinity" means:
- *
- *     NO ARTIFICIAL LANGUAGE-LEVEL HARDWARE CEILING.
- *
- * It does NOT mean:
- *
- *     infinite physical memory;
- *     infinite compile time;
- *     infinite synthesis capacity;
- *     infinite target resources.
- *
- * Practical resource exhaustion belongs to:
- *
- *     compiler policy
- *     semantic analysis
- *     elaboration
- *     synthesis
- *     scheduling
- *     routing
- *     runtime
- *     deployment
- *     target capabilities
- *
- * and MUST NOT be converted into language grammar limits.
+ *     Zamani source
+ *          |
+ *          v
+ *     canonical lexer
+ *          |
+ *          v
+ *     Zamani parser
+ *          |
+ *          v
+ *     HDL composition root
+ *          |
+ *          +---------------------------------------------+
+ *          |                                             |
+ *          v                                             v
+ *     HDL feature delegates                    other Zamani domains
+ *          |                                             |
+ *          +----------------------+----------------------+
+ *                                 |
+ *                                 v
+ *                         domain-neutral AST
+ *                                 |
+ *                                 v
+ *                         structural validation
+ *                                 |
+ *              +------------------+------------------+
+ *              |                  |                  |
+ *              v                  v                  v
+ *            types             effects           resources
+ *              |                  |                  |
+ *              +------------------+------------------+
+ *                                 |
+ *                                 v
+ *                            capabilities
+ *                                 |
+ *                                 v
+ *                             contracts
+ *                                 |
+ *                                 v
+ *                              policies
+ *                                 |
+ *                                 v
+ *                            provenance
+ *                                 |
+ *                                 v
+ *                     canonical hardware semantics
+ *                                 |
+ *                                 v
+ *                         target-independent IR
+ *                                 |
+ *              +------------------+------------------+
+ *              |                  |                  |
+ *              v                  v                  v
+ *          optimization       verification       simulation
+ *              |                  |                  |
+ *              +------------------+------------------+
+ *                                 |
+ *                                 v
+ *                        scheduling / routing
+ *                                 |
+ *                                 v
+ *                              synthesis
+ *                                 |
+ *                                 v
+ *                          target realization
+ *                                 |
+ *              +------------------+------------------+
+ *              |        |         |         |        |
+ *             CPU      GPU       FPGA      ASIC     QPU
+ *              |        |         |         |        |
+ *              +--------+---------+---------+--------+
+ *                                 |
+ *                                 v
+ *                         future targets
  *
  * ============================================================================
- * HARD-CODING PROHIBITION
+ * POCO-REAF CONTRACT
  * ============================================================================
  *
- * This file MUST NOT define:
+ * HDL syntax expresses LOGICAL HARDWARE INTENT.
+ *
+ * It may describe:
+ *
+ *     - modules;
+ *     - interfaces;
+ *     - ports;
+ *     - signals;
+ *     - nets;
+ *     - registers;
+ *     - memories;
+ *     - clocks;
+ *     - resets;
+ *     - processes;
+ *     - combinational behavior;
+ *     - sequential behavior;
+ *     - state machines;
+ *     - pipelines;
+ *     - protocols;
+ *     - timing intent;
+ *     - verification intent;
+ *     - simulation intent;
+ *     - synthesis intent;
+ *     - generation;
+ *     - hardware/software co-design;
+ *     - physical intent;
+ *     - hardware dialects;
+ *     - parameterization;
+ *     - generic parameterization;
+ *     - parallelism;
+ *     - resource requirements;
+ *     - capabilities;
+ *     - constraints;
+ *     - preferences;
+ *     - contracts;
+ *     - policies;
+ *     - provenance.
+ *
+ * It does NOT inherently select:
+ *
+ *     - a CPU;
+ *     - a GPU;
+ *     - an FPGA;
+ *     - an ASIC;
+ *     - a QPU;
+ *     - a particular accelerator;
+ *     - a board;
+ *     - a package;
+ *     - a physical pin;
+ *     - a physical memory block;
+ *     - a physical register;
+ *     - a routing path;
+ *     - a clock tree;
+ *     - a vendor primitive;
+ *     - a fabrication technology;
+ *     - a fixed machine size.
+ *
+ * Target realization belongs downstream.
+ *
+ * ============================================================================
+ * SCALABILITY CONTRACT
+ * ============================================================================
+ *
+ * This file introduces NO universal hardware capacity.
+ *
+ * It MUST NOT define or imply:
  *
  *     MAX_MODULES
  *     MAX_PORTS
@@ -266,81 +241,55 @@
  *     MAX_TRANSITIONS
  *     MAX_PIPELINE_STAGES
  *     MAX_INSTANCES
+ *     MAX_CLOCKS
+ *     MAX_CHANNELS
  *     MAX_WIDTH
  *     MAX_LANES
- *     MAX_CLOCKS
  *     MAX_DEVICES
+ *     MAX_CPUS
+ *     MAX_GPUS
  *     MAX_FPGAS
  *     MAX_ASICS
- *     MAX_GPUS
- *     MAX_CPUS
  *     MAX_QPUS
  *     MAX_QUBITS
  *     MAX_NODES
  *     MAX_MEMORY
+ *     MAX_NETWORK_SIZE
  *
- * It MUST NOT encode:
+ * It MUST NOT encode universal physical values such as:
  *
  *     wire [31:0]
  *     register<32>
  *     memory<64GB>
- *     FPGA_WITH_100000_LUTS
- *     DEVICE_COUNT == 8
+ *     FPGA_WITH_N_LUTS
  *
- * as language-wide restrictions.
+ * Program-level quantities remain legal values.
  *
- * A source program may legitimately contain:
+ * Physical feasibility is determined by:
  *
- *     width = 32
+ *     semantic analysis
+ *     resource analysis
+ *     capability negotiation
+ *     elaboration
+ *     optimization
+ *     scheduling
+ *     routing
+ *     synthesis
+ *     lowering
+ *     HAL
+ *     deployment
  *
- *     depth = 1024
+ * "Scale from tiny to infinity" therefore means:
  *
- *     lanes = 8
+ *     NO ARTIFICIAL LANGUAGE-LEVEL CEILING.
  *
- * because those are program values.
- *
- * What is forbidden is making those values universal language limits.
- *
- * ============================================================================
- * REQUIREMENT / CAPABILITY / PREFERENCE / HINT / REALIZATION
- * ============================================================================
- *
- * HDL participates in the universal Zamani resource model.
- *
- * The semantic distinction is:
- *
- *     REQUIREMENT
- *         A condition required for successful realization.
- *
- *     CAPABILITY
- *         A capability a target must provide.
- *
- *     PREFERENCE
- *         Non-binding optimization guidance.
- *
- *     HINT
- *         Non-binding implementation information.
- *
- *     REALIZATION
- *         A downstream target-specific implementation decision.
- *
- * Examples:
- *
- *     requires capability("streaming")
- *     requires capability("hardware.pipeline")
- *     requires memory >= required_memory
- *     prefer accelerator("compute")
- *     hint(...)
- *
- * This file merely composes syntax.
- *
- * Whether a target satisfies a requirement belongs downstream.
+ * It does not mean that a physical machine has infinite resources.
  *
  * ============================================================================
- * CANONICAL LEXER
+ * SINGLE LEXER CONTRACT
  * ============================================================================
  *
- * HDL MUST consume:
+ * HDL consumes the repository-wide canonical lexer:
  *
  *     grammar/antlr/ZamaniLexer.g4
  *
@@ -348,207 +297,510 @@
  *
  *     tokenVocab = ZamaniLexer;
  *
- * There MUST NOT be an HDL-specific lexer.
+ * No HDL-specific lexer is permitted.
  *
- * This is especially important because the existing repository has already
- * established one canonical lexer boundary.
+ * No HDL grammar may introduce lexical rules.
  *
- * Hardware domain names remain ordinary lexical names unless explicitly
- * reserved by the language specification.
- *
- * For example:
- *
- *     cpu
- *     gpu
- *     fpga
- *     qpu
- *     accelerator
- *     node
- *     device
- *
- * are semantic names, not automatic physical allocations.
+ * Hardware names remain extensible identifiers unless explicitly reserved by
+ * the canonical language specification.
  *
  * ============================================================================
- * AST CONTRACT
+ * DOMAIN OWNERSHIP
  * ============================================================================
  *
- * Every accepted HDL construct MUST enter the domain-neutral frontend AST.
+ * This file is NOT the owner of:
  *
- * The parser MUST NOT create:
+ *     modules
+ *     generics
+ *     parameters
+ *     interfaces
+ *     ports
+ *     signals
+ *     wires
+ *     nets
+ *     registers
+ *     memories
+ *     arrays
+ *     clocks
+ *     clocking
+ *     reset
+ *     timing
+ *     processes
+ *     combinational logic
+ *     sequential logic
+ *     state machines
+ *     pipelines
+ *     parallelism
+ *     generation
+ *     assertions
+ *     verification
+ *     simulation
+ *     synthesis
+ *     physical intent
+ *     hardware dialects
+ *     co-design
+ *     hardware/software integration
+ *     protocols
  *
- *     FpgaNode
- *     GpuNode
- *     CpuNode
- *     QpuNode
- *     VendorPrimitiveNode
- *     PhysicalPinNode
- *     PhysicalMemoryNode
- *     RoutingNode
- *     PlacementNode
- *     ClockTreeNode
- *     NetlistNode
- *
- * The expected pipeline is:
- *
- *     HDL syntax
- *          |
- *          v
- *     domain-neutral AST
- *          |
- *          v
- *     semantic validation
- *          |
- *          v
- *     canonical hardware semantic model / IR
- *          |
- *          v
- *     target-independent optimization
- *          |
- *          v
- *     target realization
- *
- * ============================================================================
- * QUANTUM INTEGRATION
- * ============================================================================
- *
- * HDL may surround or interact with quantum computation.
- *
- * HDL MUST NOT create a second quantum IR.
- *
- * Quantum meaning remains:
- *
- *     Zamani source
- *          |
- *          v
- *     domain-neutral AST
- *          |
- *          v
- *     semantic quantum model
- *          |
- *          v
- *     quantum::ir
- *
- * HDL may provide:
- *
- *     - control structures;
- *     - interfaces;
- *     - timing intent;
- *     - memory;
- *     - hardware boundaries;
- *     - accelerator structure;
- *     - classical control around quantum computation.
- *
- * Quantum operation semantics remain owned by the quantum subsystem.
- *
- * QEC remains owned by the QEC subsystem.
- *
- * ZQN remains owned by ZQN.
- *
- * Routing remains owned by routing.
- *
- * Scheduling remains owned by scheduling.
- *
- * HAL remains downstream.
+ * Those are owned by the corresponding delegate grammar.
  *
  * ============================================================================
- * CROSS-DOMAIN INTEGRATION
+ * IMPORTANT OWNERSHIP RULE
  * ============================================================================
  *
- * HDL may compose with:
+ * hdl.g4 MUST NEVER reimplement a rule whose semantic ownership belongs to
+ * another file.
  *
- *     classical
- *     quantum
- *     hybrid
- *     hardware
- *     resources
- *     memory
- *     concurrency
- *     distributed
- *     AI
- *     data
- *     networking
- *     security
- *     compile
- *     execution
- *     interoperability
- *     dialects
+ * In particular, this file MUST NOT contain independent implementations of:
  *
- * This grammar does not duplicate those domains.
+ *     hdlModuleDeclaration
+ *     hdlInterfaceDeclaration
+ *     hdlPortDeclaration
+ *     hdlSignalDeclaration
+ *     hdlNetDeclaration
+ *     hdlWireDeclaration
+ *     hdlRegisterDeclaration
+ *     hdlMemoryDeclaration
+ *     hdlClockDeclaration
+ *     hdlResetDeclaration
+ *     hdlProcessDeclaration
+ *     hdlCombinationalDeclaration
+ *     hdlSequentialDeclaration
+ *     hdlStateMachineDeclaration
+ *     hdlPipelineDeclaration
+ *     hdlGenerateDeclaration
+ *     hdlTimingDeclaration
+ *     hdlAssertion
+ *     hdlSimulationDeclaration
+ *     hdlSynthesisDeclaration
+ *     hdlVerificationDeclaration
+ *     hdlPhysicalIntentDeclaration
+ *     hdlCoDesignDeclaration
+ *     hdlProtocolDeclaration
  *
- * It provides integration points through the canonical Zamani parser.
- *
- * ============================================================================
- * DETERMINISM
- * ============================================================================
- *
- * Parsing MUST depend only on:
- *
- *     - source text;
- *     - canonical lexical vocabulary;
- *     - grammar version;
- *     - explicitly selected dialect configuration.
- *
- * Parsing MUST NOT depend on:
- *
- *     - CPU count;
- *     - GPU availability;
- *     - FPGA availability;
- *     - QPU availability;
- *     - target topology;
- *     - filesystem state;
- *     - network state;
- *     - environment variables;
- *     - wall-clock time;
- *     - randomness;
- *     - runtime state.
- *
- * ============================================================================
- * SAFE RUST
- * ============================================================================
- *
- * This file contains no Rust code.
- *
- * The Rust frontend generated/consuming this grammar MUST target:
- *
- *     Rust 1.97 / Rust 1.97.1
- *     Rust 2021
- *
- * and MUST remain safe Rust.
- *
- * Recommended crate-level enforcement:
- *
- *     #![deny(unsafe_code)]
- *
- * No HDL grammar construct requires unsafe Rust.
+ * If a delegate owns a rule, this file only dispatches to it.
  *
  * ============================================================================
  * ANTLR COMPOSITION
  * ============================================================================
  *
- * The subordinate grammars are the actual feature owners.
+ * The HDL directory is intentionally modular.
  *
- * The architecture is:
+ * The composition graph is:
  *
  *     HDL
- *       |
- *       +--> HardwareModules
- *       +--> HardwareGenerics
- *       +--> Ports
- *       +--> Signals
- *       +--> Wires
- *       +--> Registers
- *       +--> Memories
- *       +--> Clocks
- *       +--> Timing
- *       +--> Processes
- *       +--> Combinational
- *       +--> Sequential
- *       +--> StateMachines
- *       +--> Pipelines
- *       +--> Generate
- *       +--> HDL dialect/extension grammars
+ *      |
+ *      +-- hardware-modules
+ *      |     +-- hardware-generics
+ *      |     +-- parameters
+ *      |     +-- interfaces
+ *      |     +-- ports
+ *      |
+ *      +-- signals
+ *      +-- wires / nets
+ *      +-- registers
+ *      +-- memories
+ *      +-- arrays
+ *      +-- clocks
+ *      +-- clocking
+ *      +-- reset
+ *      +-- timing
+ *      +-- processes
+ *      +-- combinational
+ *      +-- sequential
+ *      +-- state-machines
+ *      +-- pipelines
+ *      +-- parallelism
+ *      +-- generate
+ *      +-- assertions
+ *      +-- verification
+ *      +-- simulation
+ *      +-- synthesis
+ *      +-- protocols
+ *      +-- physical intent
+ *      +-- co-design
+ *      +-- hardware/software integration
+ *      +-- hardware dialects
  *
- * This composition root MUST NOT reproduce those grammars.
+ * Each delegate remains independently maintainable.
+ *
+ * ============================================================================
+ * COMPLETE HDL DELEGATE SET
+ * ============================================================================
+ *
+ * The following files exist under grammar/hdl/ and participate in the HDL
+ * architecture:
+ *
+ *     README.md
+ *     arrays.g4
+ *     assertions.g4
+ *     clocking.g4
+ *     clocks.g4
+ *     co-design.g4
+ *     combinational.g4
+ *     generate.g4
+ *     hardware-dialects.g4
+ *     hardware-generics.g4
+ *     hardware-modules.g4
+ *     hardware-software-integration.g4
+ *     hdl.g4
+ *     interfaces.g4
+ *     memories.g4
+ *     nets.g4
+ *     parallelism.g4
+ *     parameters.g4
+ *     physical-intent.g4
+ *     pipelines.g4
+ *     ports.g4
+ *     processes.g4
+ *     protocols.g4
+ *     registers.g4
+ *     reset.g4
+ *     sequential.g4
+ *     signals.g4
+ *     simulation.g4
+ *     state_machines.g4
+ *     synthesis.g4
+ *     timing.g4
+ *     verification.g4
+ *     wires.g4
+ *
+ * Every feature above is reachable from this composition graph either through
+ * a direct import here or through a delegate's import graph.
+ *
+ * The composition root must not create a second copy of any feature.
+ *
+ * ============================================================================
+ * DUPLICATE-AUTHORITY PREVENTION
+ * ============================================================================
+ *
+ * `nets.g4` and `wires.g4` intentionally participate in one logical
+ * connectivity model.
+ *
+ * The canonical semantic declaration is:
+ *
+ *     hdlNetDeclaration
+ *
+ * where the wire grammar may provide wire-specific syntax and normalization.
+ *
+ * hdl.g4 MUST NOT define another net/wire declaration.
+ *
+ * Likewise:
+ *
+ *     assertions.g4
+ *     verification.g4
+ *
+ * participate in one verification/property model.
+ *
+ * The composition root dispatches to the canonical assertion rule rather than
+ * creating another assertion language.
+ *
+ * ============================================================================
+ * RESOURCE / CAPABILITY INTEGRATION
+ * ============================================================================
+ *
+ * HDL constructs may participate in the repository-wide:
+ *
+ *     resources
+ *     capabilities
+ *     requirements
+ *     constraints
+ *     preferences
+ *     hints
+ *     effects
+ *     contracts
+ *     policies
+ *     provenance
+ *
+ * The HDL grammar merely provides the syntactic composition boundary.
+ *
+ * It does not:
+ *
+ *     - inspect target hardware;
+ *     - query resources;
+ *     - discover devices;
+ *     - select a target;
+ *     - perform scheduling;
+ *     - perform placement;
+ *     - perform routing.
+ *
+ * Example semantic intent:
+ *
+ *     requires capability("hardware.pipeline");
+ *     requires capability("streaming");
+ *
+ * is analyzed downstream.
+ *
+ * The source remains portable.
+ *
+ * ============================================================================
+ * CROSS-DOMAIN INTEGRATION
+ * ============================================================================
+ *
+ * HDL can participate in:
+ *
+ *     classical computation
+ *     quantum computation
+ *     hybrid computation
+ *     AI acceleration
+ *     tensor computation
+ *     distributed execution
+ *     networking
+ *     concurrency
+ *     memory systems
+ *     simulation
+ *     security
+ *     interoperability
+ *     metaprogramming
+ *
+ * The composition root does not duplicate those domains.
+ *
+ * Their syntax and semantics remain owned by their respective repository
+ * subsystems.
+ *
+ * ============================================================================
+ * QUANTUM INTEGRATION
+ * ============================================================================
+ *
+ * HDL may surround or control quantum computation.
+ *
+ * It MUST NOT define quantum operation syntax.
+ *
+ * Quantum semantics remain:
+ *
+ *     source
+ *       |
+ *       v
+ *     domain-neutral AST
+ *       |
+ *       v
+ *     quantum semantic model
+ *       |
+ *       v
+ *     quantum::ir
+ *
+ * HDL can provide:
+ *
+ *     - timing;
+ *     - control;
+ *     - interfaces;
+ *     - memory;
+ *     - classical control;
+ *     - accelerator structure;
+ *     - hardware/software boundaries.
+ *
+ * It MUST NOT create:
+ *
+ *     - a second quantum IR;
+ *     - a hardware-specific qubit limit;
+ *     - a fixed QPU topology;
+ *     - a gate enumeration;
+ *     - QEC implementation;
+ *     - routing implementation.
+ *
+ * ============================================================================
+ * VERIFICATION / SIMULATION / SYNTHESIS
+ * ============================================================================
+ *
+ * These are distinct semantic phases even though they are represented in the
+ * same source architecture.
+ *
+ * Verification:
+ *
+ *     describes properties, assertions, assumptions, coverage and related
+ *     correctness intent.
+ *
+ * Simulation:
+ *
+ *     describes execution/simulation intent.
+ *
+ * Synthesis:
+ *
+ *     describes synthesis intent and constraints.
+ *
+ * None of these phases becomes the universal target-selection mechanism.
+ *
+ * ============================================================================
+ * DETERMINISM
+ * ============================================================================
+ *
+ * Parsing through this grammar must depend only on:
+ *
+ *     source text
+ *     canonical token vocabulary
+ *     grammar version
+ *     explicitly selected language/dialect configuration
+ *
+ * It must not depend on:
+ *
+ *     CPU count
+ *     GPU availability
+ *     FPGA availability
+ *     QPU availability
+ *     target topology
+ *     filesystem state
+ *     network state
+ *     environment variables
+ *     wall-clock time
+ *     randomness
+ *     runtime state
+ *     scheduler state
+ *
+ * ============================================================================
+ * AST CONTRACT
+ * ============================================================================
+ *
+ * This file creates NO AST nodes.
+ *
+ * Its rules only establish parser boundaries.
+ *
+ * The frontend must lower accepted syntax into the domain-neutral AST.
+ *
+ * The AST must remain independent of:
+ *
+ *     CPU architecture
+ *     GPU architecture
+ *     FPGA family
+ *     ASIC implementation
+ *     vendor primitive
+ *     board
+ *     physical pin
+ *     routing
+ *     placement
+ *     calibration
+ *     target topology
+ *
+ * ============================================================================
+ * SEMANTIC CONTRACT
+ * ============================================================================
+ *
+ * After parsing, semantic analysis is responsible for:
+ *
+ *     - name resolution;
+ *     - declaration resolution;
+ *     - type checking;
+ *     - width/shape analysis;
+ *     - driver analysis;
+ *     - clock-domain analysis;
+ *     - reset analysis;
+ *     - timing analysis;
+ *     - process classification;
+ *     - combinational completeness;
+ *     - sequential legality;
+ *     - state-machine validity;
+ *     - pipeline validity;
+ *     - protocol consistency;
+ *     - resource analysis;
+ *     - capability analysis;
+ *     - effect analysis;
+ *     - contract validation;
+ *     - policy validation;
+ *     - provenance construction;
+ *     - synthesis eligibility;
+ *     - simulation eligibility;
+ *     - target-independent optimization eligibility.
+ *
+ * None of these are performed by this grammar.
+ *
+ * ============================================================================
+ * IR CONTRACT
+ * ============================================================================
+ *
+ * HDL parsing does not select a backend IR.
+ *
+ * The semantic layer produces the canonical hardware semantic representation.
+ *
+ * Lowering may subsequently produce:
+ *
+ *     - canonical classical IR where appropriate;
+ *     - hardware/HDL IR;
+ *     - quantum::ir for quantum semantics;
+ *     - other explicitly-owned domain IRs.
+ *
+ * This grammar MUST NOT create an IR.
+ *
+ * ============================================================================
+ * BACKEND CONTRACT
+ * ============================================================================
+ *
+ * The following are downstream:
+ *
+ *     optimization
+ *     elaboration
+ *     scheduling
+ *     placement
+ *     routing
+ *     synthesis
+ *     simulation
+ *     lowering
+ *     ZQN where applicable
+ *     HAL
+ *     target realization
+ *
+ * Therefore this grammar contains no:
+ *
+ *     device selection
+ *     board selection
+ *     FPGA selection
+ *     ASIC selection
+ *     QPU selection
+ *     vendor selection
+ *     physical pin allocation
+ *     physical address allocation
+ *     clock-tree construction
+ *
+ * ============================================================================
+ * ERROR CONTRACT
+ * ============================================================================
+ *
+ * Syntax errors are parser errors.
+ *
+ * Semantic errors belong to semantic validation.
+ *
+ * This grammar must not:
+ *
+ *     - silently discard invalid HDL;
+ *     - turn malformed constructs into valid constructs;
+ *     - select target-specific defaults;
+ *     - inspect hardware;
+ *     - execute HDL;
+ *     - print diagnostics;
+ *     - access external state.
+ *
+ * Source spans must remain available to the frontend for diagnostics,
+ * formatting, IDE tooling, provenance and reproducibility.
+ *
+ * ============================================================================
+ * COMPATIBILITY CONTRACT
+ * ============================================================================
+ *
+ * Compatibility belongs to:
+ *
+ *     grammar/compatibility/
+ *
+ * This file must not duplicate historical syntax aliases.
+ *
+ * A historical syntax form must map to the canonical HDL semantic construct
+ * through the compatibility architecture.
+ *
+ * ============================================================================
+ * PUBLIC ENTRY POINTS
+ * ============================================================================
+ *
+ * `hdlDesign` is the standalone HDL entry point.
+ *
+ * It is EOF-bearing so it can be used by:
+ *
+ *     HDL-specific parser tests
+ *     HDL tooling
+ *     conformance tests
+ *     standalone grammar validation
+ *
+ * The repository-wide Zamani parser may instead consume:
+ *
+ *     hdlSourceElement
+ *
+ * as one domain of the universal source language.
  *
  * ============================================================================
  */
@@ -561,47 +813,64 @@ options {
 
 /*
  * ============================================================================
- * CANONICAL HDL SUB-GRAMMAR IMPORTS
+ * HDL FEATURE IMPORTS
  * ============================================================================
  *
- * These imports intentionally follow the repository's existing ownership tree.
+ * Concrete feature ownership remains in the delegate grammars.
  *
- * Each imported grammar is a parser grammar.
+ * IMPORTANT:
  *
- * The imports are composition dependencies, not competing authorities.
+ * The names below are the existing grammar identities used by the HDL tree.
  *
+ * Where a delegate itself imports another HDL grammar, the delegate remains
+ * the transitive owner. The composition root must not duplicate it.
  * ============================================================================
  */
 
 import
-    HardwareModules,
-    HardwareGenerics,
-    Ports,
-    Signals,
-    Wires,
-    Registers,
-    Memories,
+    Arrays,
+    HdlAssertions,
+    HdlClocking,
     Clocks,
-    Timing,
-    Processes,
+    HdlCoDesign,
     Combinational,
-    Sequential,
-    StateMachines,
-    Pipelines,
-    Generate
+    HdlGenerate,
+    HardwareDialects,
+    HardwareGenerics,
+    HardwareModules,
+    HdlHardwareSoftwareIntegration,
+    HdlInterfaces,
+    Memories,
+    nets,
+    HardwareParallelism,
+    HDLParameters,
+    HdlPhysicalIntent,
+    HardwarePipelines,
+    HardwarePorts,
+    processes,
+    HdlProtocols,
+    registers,
+    ZamaniHDLReset,
+    sequential,
+    HardwareSignals,
+    HdlSimulation,
+    HdlStateMachines,
+    HdlSynthesis,
+    HdlTiming,
+    HdlVerification,
+    wires
 ;
 
 /*
  * ============================================================================
- * PUBLIC HDL ENTRY POINT
+ * STANDALONE HDL ENTRY
  * ============================================================================
  *
- * This is the stable standalone HDL parser boundary.
+ * The source unit is intentionally unbounded.
  *
- * grammar/antlr/ZamaniParser.g4 consumes the HDL domain through its HDL
- * composition grammar.
+ * Zero or more HDL source elements are accepted.
  *
- * ============================================================================
+ * No source-count limit exists.
  */
 
 hdlDesign
@@ -610,13 +879,15 @@ hdlDesign
 
 /*
  * ============================================================================
- * HDL SOURCE ELEMENT
+ * UNIVERSAL HDL SOURCE ELEMENT
  * ============================================================================
  *
- * Top-level HDL constructs remain intentionally open-ended through the
- * subordinate grammar ownership model.
+ * This is the principal orchestration rule.
  *
- * No fixed number of elements is imposed.
+ * It does not implement any concrete feature.
+ *
+ * Every alternative delegates to an existing feature owner.
+ *
  * ============================================================================
  */
 
@@ -631,10 +902,9 @@ hdlSourceElement
  * HDL DECLARATION DISPATCH
  * ============================================================================
  *
- * This is the stable integration point used by ZamaniParser.
+ * Declarations are grouped by semantic ownership.
  *
- * Feature syntax remains owned by the subordinate grammar.
- *
+ * No concrete declaration is reimplemented here.
  * ============================================================================
  */
 
@@ -646,6 +916,7 @@ hdlDeclaration
     | hdlParameterDeclaration
     | hdlLocalParameterDeclaration
     | hdlTypeDeclaration
+    | hdlGenericDeclaration
     | hdlPortDeclaration
     | hdlSignalDeclaration
     | hdlNetDeclaration
@@ -662,8 +933,15 @@ hdlDeclaration
     | hdlInstanceDeclaration
     | hdlGenerateDeclaration
     | hdlTimingDeclaration
+    | hdlPhysicalIntentDeclaration
+    | hdlCoDesignDeclaration
+    | hdlProtocolDeclaration
+    | hdlHardwareSoftwareIntegrationDeclaration
+    | hdlSimulationDeclaration
+    | hdlSynthesisDeclaration
     | hdlAssertion
-    | hdlBlockDeclaration
+    | hdlVerificationIntent
+    | hdlParallelismDeclaration
     ;
 
 /*
@@ -671,10 +949,10 @@ hdlDeclaration
  * HDL STATEMENT DISPATCH
  * ============================================================================
  *
- * HDL statements are deliberately structural.
+ * HDL procedural statements remain integrated with the universal Zamani
+ * statement model.
  *
- * General expression semantics remain owned by the canonical expression
- * subsystem.
+ * This grammar does not create a second general-purpose programming language.
  * ============================================================================
  */
 
@@ -690,15 +968,13 @@ hdlStatement
 
 /*
  * ============================================================================
- * HDL EXPRESSION INTEGRATION
+ * EXPRESSION INTEGRATION
  * ============================================================================
  *
- * The HDL domain must not become a second universal expression language.
+ * General expression semantics remain owned by the universal expression
+ * subsystem.
  *
- * The canonical expression subsystem remains the semantic authority.
- *
- * This façade provides a stable HDL integration name.
- *
+ * This façade gives HDL delegates a stable domain-level expression boundary.
  * ============================================================================
  */
 
@@ -708,14 +984,10 @@ hdlExpression
 
 /*
  * ============================================================================
- * HDL TYPE INTEGRATION
+ * TYPE INTEGRATION
  * ============================================================================
  *
- * The canonical type subsystem remains authoritative.
- *
- * HDL-specific width, shape, storage, signal and hardware semantics are
- * represented by ordinary type/value expressions and interpreted downstream.
- *
+ * General type semantics remain owned by the universal type subsystem.
  * ============================================================================
  */
 
@@ -725,13 +997,10 @@ hdlTypeExpression
 
 /*
  * ============================================================================
- * HDL ATTRIBUTE INTEGRATION
+ * ATTRIBUTE INTEGRATION
  * ============================================================================
  *
- * Attributes remain metadata.
- *
- * Vendor-specific attributes must not be hard-coded into this root.
- *
+ * General attribute syntax remains owned by the canonical attribute system.
  * ============================================================================
  */
 
@@ -739,14 +1008,16 @@ hdlAttribute
     : attribute
     ;
 
+hdlAttributeList
+    : attribute*
+    ;
+
 /*
  * ============================================================================
- * HDL BLOCK INTEGRATION
+ * BLOCK INTEGRATION
  * ============================================================================
  *
- * A block is a canonical Zamani block.
- *
- * HDL-specific semantics are assigned downstream.
+ * HDL does not create a second block syntax.
  * ============================================================================
  */
 
@@ -756,18 +1027,16 @@ hdlBlock
 
 /*
  * ============================================================================
- * HDL NAME INTEGRATION
+ * NAME INTEGRATION
  * ============================================================================
  *
- * HDL names remain logical source-level names.
+ * HDL names are logical source-level names.
  *
- * They do not identify physical devices unless a downstream semantic layer
- * explicitly assigns such meaning.
- *
+ * Physical meaning is assigned by semantic analysis and target realization.
  * ============================================================================
  */
 
-hdlIdentifier
+hdlName
     : identifier
     ;
 
@@ -777,773 +1046,455 @@ hdlQualifiedName
 
 /*
  * ============================================================================
- * HDL RANGE INTEGRATION
+ * RESOURCE / CAPABILITY INTEGRATION
  * ============================================================================
  *
- * Ranges are semantic expressions.
+ * These façade rules deliberately delegate to the repository-wide resource
+ * and capability systems.
  *
- * No width limit is imposed.
+ * They do not perform resource negotiation.
  * ============================================================================
  */
 
-hdlRangeExpression
-    : rangeExpression
+hdlRequirement
+    : requirement
+    ;
+
+hdlConstraint
+    : constraint
+    ;
+
+hdlCapability
+    : capability
+    ;
+
+hdlPolicy
+    : policy
+    ;
+
+hdlContract
+    : contract
     ;
 
 /*
  * ============================================================================
- * HDL RESOURCE/CAPABILITY INTEGRATION
+ * PROVENANCE INTEGRATION
  * ============================================================================
  *
- * Resource and capability intent remains owned by grammar/resources/ and
- * grammar/hardware/.
+ * Provenance remains repository-wide.
  *
- * HDL only exposes the integration point.
- *
+ * HDL constructs may participate in it without creating a second provenance
+ * model.
  * ============================================================================
  */
 
-hdlResourceIntent
-    : requiresClause
-    | constraintClause
-    | preferenceClause
-    | hintClause
+hdlProvenance
+    : provenance
     ;
 
 /*
  * ============================================================================
- * RESOURCE REQUIREMENT
+ * EFFECT INTEGRATION
  * ============================================================================
  *
- * The actual resource grammar owns semantic structure.
+ * Effects remain repository-wide.
  *
- * This façade exists so HDL members can consume resource intent without
- * introducing an HDL-specific resource language.
+ * HDL does not define a second effect system.
  * ============================================================================
  */
 
-requiresClause
-    : REQUIRES expression
+hdlEffect
+    : effect
     ;
 
 /*
  * ============================================================================
- * CONSTRAINT
+ * CROSS-DOMAIN EXTENSION POINT
+ * ============================================================================
+ *
+ * HDL can coexist with other Zamani computational domains.
+ *
+ * The semantic layer decides whether a particular construct is legal in a
+ * hardware context.
+ *
+ * The parser therefore remains open to the canonical domain integration point
+ * rather than embedding domain-specific backend logic here.
  * ============================================================================
  */
 
-constraintClause
-    : CONSTRAINT expression
-    ;
-
-/*
- * ============================================================================
- * PREFERENCE
- * ============================================================================
- */
-
-preferenceClause
-    : PREFER expression
-    ;
-
-/*
- * ============================================================================
- * HINT
- * ============================================================================
- */
-
-hintClause
-    : HINT expression
-    ;
-
-/*
- * ============================================================================
- * HDL PORTABLE HARDWARE CONTRACT
- * ============================================================================
- *
- * This rule exists as an explicit architectural boundary.
- *
- * It does not allocate hardware.
- *
- * It expresses source-level intent that may later be analyzed by:
- *
- *     resources
- *     capabilities
- *     compilation
- *     scheduling
- *     placement
- *     routing
- *     synthesis
- *
- * ============================================================================
- */
-
-hdlHardwareIntent
-    : hdlResourceIntent
-    | hdlAttribute
+hdlDomainElement
+    : hdlDeclaration
+    | hdlStatement
     | hdlExpression
     ;
 
 /*
  * ============================================================================
- * CROSS-DOMAIN QUANTUM HARDWARE CONTRACT
+ * HYBRID / QUANTUM BOUNDARY
  * ============================================================================
  *
- * HDL may contain source-level references to quantum constructs through the
- * canonical Zamani expression/declaration system.
+ * This is deliberately a façade rather than a quantum grammar.
  *
- * No quantum gate vocabulary is introduced here.
- *
- * No physical qubit numbering is introduced here.
- *
- * No QEC/ZQN/HAL representation is introduced here.
+ * Quantum constructs remain owned by the quantum subsystem and eventually
+ * cross the canonical quantum::ir boundary.
  * ============================================================================
  */
 
-hdlQuantumHardwareIntent
-    : hdlHardwareIntent
-    ;
-
-/*
- * ============================================================================
- * DIALECT INTEGRATION
- * ============================================================================
- *
- * Hardware dialects remain open-world.
- *
- * This root does not enumerate:
- *
- *     Xilinx
- *     AMD
- *     Intel
- *     NVIDIA
- *     ARM
- *     RISC-V
- *     IBM
- *     Google
- *     Quantinuum
- *     Rigetti
- *     or any other vendor/fabrication family.
- *
- * Such identities remain data/dialect metadata.
- * ============================================================================
- */
-
-hdlDialectDeclaration
-    : DIALECT hdlQualifiedName hdlDialectBody?
-    ;
-
-hdlDialectBody
-    : LBRACE
-      hdlDialectMember*
-      RBRACE
-    ;
-
-hdlDialectMember
-    : hdlAttribute
-    | hdlDialectProperty
-    ;
-
-hdlDialectProperty
-    : hdlIdentifier
-      (
-          ASSIGN hdlExpression
-      )?
-      SEMICOLON
-    ;
-
-/*
- * ============================================================================
- * PACKAGE INTEGRATION
- * ============================================================================
- *
- * HDL packages remain logical namespaces.
- *
- * They do not select target hardware.
- * ============================================================================
- */
-
-hdlPackageDeclaration
-    : PACKAGE hdlQualifiedName hdlPackageBody
-    ;
-
-hdlPackageBody
-    : LBRACE
-      hdlPackageMember*
-      RBRACE
-    ;
-
-hdlPackageMember
-    : hdlAttribute
-      hdlPackageMemberCore
-    | hdlPackageMemberCore
-    ;
-
-hdlPackageMemberCore
-    : hdlTypeDeclaration
-    | hdlParameterDeclaration
-    | hdlLocalParameterDeclaration
-    | hdlInterfaceDeclaration
-    | hdlModuleDeclaration
-    ;
-
-/*
- * ============================================================================
- * SHARED HDL MEMBER COMPOSITION
- * ============================================================================
- *
- * This rule is the critical integration contract between module syntax and the
- * existing HDL feature grammars.
- *
- * It is intentionally located in the composition root.
- *
- * The individual grammars remain feature owners.
- *
- * ============================================================================
- */
-
-hdlModuleMember
-    : hdlAttribute*
-      hdlModuleMemberCore
-    ;
-
-hdlModuleMemberCore
-    : hdlParameterDeclaration
-    | hdlLocalParameterDeclaration
-    | hdlTypeDeclaration
-    | hdlInterfaceDeclaration
-    | hdlPortDeclaration
-    | hdlSignalDeclaration
-    | hdlNetDeclaration
-    | hdlRegisterDeclaration
-    | hdlMemoryDeclaration
-    | hdlClockDeclaration
-    | hdlResetDeclaration
-    | hdlAssignment
-    | hdlProcessDeclaration
-    | hdlAlwaysDeclaration
-    | hdlCombinationalDeclaration
-    | hdlSequentialDeclaration
-    | hdlStateMachineDeclaration
-    | hdlPipelineDeclaration
-    | hdlInstanceDeclaration
-    | hdlGenerateDeclaration
-    | hdlTimingDeclaration
-    | hdlAssertion
-    | hdlBlockDeclaration
-    | hdlExpressionStatement
-    ;
-
-/*
- * ============================================================================
- * HDL BLOCK DECLARATION
- * ============================================================================
- *
- * A generic logical HDL block is not a physical resource.
- * ============================================================================
- */
-
-hdlBlockDeclaration
-    : hdlIdentifier
-      hdlBlock
-    ;
-
-/*
- * ============================================================================
- * EXPRESSION STATEMENT
- * ============================================================================
- */
-
-hdlExpressionStatement
+hdlHybridElement
     : hdlExpression
-      SEMICOLON
+    | hdlStatement
+    | hdlDeclaration
     ;
 
 /*
  * ============================================================================
- * HDL ASSIGNMENT
+ * SIMULATION / VERIFICATION / SYNTHESIS COMPOSITION
  * ============================================================================
  *
- * Assignment semantics are resolved downstream.
+ * These are syntactic integration points only.
  *
- * No target-specific register or net semantics are embedded here.
+ * Their semantic meanings remain owned by their respective delegates.
  * ============================================================================
  */
 
-hdlAssignment
-    : hdlLValue
-      hdlAssignmentOperator
-      hdlExpression
-      SEMICOLON?
-    ;
-
-hdlAssignmentOperator
-    : ASSIGN
-    | PLUS_ASSIGN
-    | MINUS_ASSIGN
-    | STAR_ASSIGN
-    | SLASH_ASSIGN
-    | MODULO_ASSIGN
-    | AMPERSAND_ASSIGN
-    | PIPE_ASSIGN
-    | CARET_ASSIGN
-    ;
-
-hdlLValue
-    : hdlQualifiedName
-      hdlIndexSuffix*
-    ;
-
-/*
- * ============================================================================
- * HDL INDEX
- * ============================================================================
- */
-
-hdlIndexSuffix
-    : LBRACKET
-      hdlExpression
-      RBRACKET
-    ;
-
-/*
- * ============================================================================
- * CONTROL-FLOW INTEGRATION
- * ============================================================================
- *
- * These forms remain source-level procedural syntax.
- *
- * Their hardware interpretation belongs to semantic analysis.
- * ============================================================================
- */
-
-hdlIfStatement
-    : IF
-      hdlExpression
-      hdlBlock
-      (
-          ELSE
-          (
-              IF hdlExpression hdlBlock
-            | hdlBlock
-          )
-      )?
-    ;
-
-hdlCaseStatement
-    : CASE
-      LPAREN hdlExpression RPAREN
-      LBRACE
-      hdlCaseItem*
-      RBRACE
-    ;
-
-hdlCaseItem
-    : DEFAULT
-      COLON
-      hdlBlock
-    | hdlCaseExpressionList
-      COLON
-      hdlBlock
-    ;
-
-hdlCaseExpressionList
-    : hdlExpression
-      (
-          COMMA hdlExpression
-      )*
-    ;
-
-hdlForStatement
-    : FOR
-      LPAREN
-      hdlForInitializer?
-      SEMICOLON
-      hdlExpression?
-      SEMICOLON
-      hdlExpression?
-      RPAREN
-      hdlBlock
-    ;
-
-hdlForInitializer
-    : hdlVariableDeclarationNoTerminator
-    | hdlAssignment
-    ;
-
-hdlVariableDeclarationNoTerminator
-    : LET
-      hdlIdentifier
-      (
-          COLON hdlTypeExpression
-      )?
-      (
-          ASSIGN hdlExpression
-      )?
-    | VAR
-      hdlIdentifier
-      (
-          COLON hdlTypeExpression
-      )?
-      (
-          ASSIGN hdlExpression
-      )?
-    | CONST
-      hdlIdentifier
-      (
-          COLON hdlTypeExpression
-      )?
-      (
-          ASSIGN hdlExpression
-      )?
-    ;
-
-hdlWhileStatement
-    : WHILE
-      hdlExpression
-      hdlBlock
-    ;
-
-hdlRepeatStatement
-    : REPEAT
-      hdlExpression
-      hdlBlock
-    ;
-
-/*
- * ============================================================================
- * SHARED HDL TYPE DECLARATION ADAPTER
- * ============================================================================
- *
- * This façade exists because several existing HDL delegates consume
- * `typeExpression`, while HDL consumers historically referenced
- * `hdlTypeExpression`.
- *
- * No second type system is introduced.
- * ============================================================================
- */
-
-hdlTypeAliasDeclaration
-    : TYPE
-      hdlIdentifier
-      (
-          hardwareGenericParameters
-      )?
-      ASSIGN
-      hdlTypeExpression
-      SEMICOLON
-    ;
-
-/*
- * ============================================================================
- * SOURCE-LEVEL HDL VERIFICATION
- * ============================================================================
- *
- * Verification semantics remain downstream.
- *
- * The grammar intentionally does not encode a finite assertion language.
- * ============================================================================
- */
-
-hdlAssertion
-    : hdlAssertionKind
-      hdlExpression
-      SEMICOLON
-    ;
-
-hdlAssertionKind
-    : ASSERT
-    | ASSUME
-    | COVER
-    ;
-
-/*
- * ============================================================================
- * GENERIC HDL VERIFICATION HOOK
- * ============================================================================
- *
- * This allows future verification dialects to attach through ordinary
- * expressions/attributes without requiring this universal root to enumerate
- * every verification technology.
- * ============================================================================
- */
-
-hdlVerificationIntent
+hdlVerificationElement
     : hdlAssertion
-    | hdlAttribute
+    | hdlVerificationIntent
+    ;
+
+hdlSimulationElement
+    : hdlSimulationDeclaration
+    ;
+
+hdlSynthesisElement
+    : hdlSynthesisDeclaration
     ;
 
 /*
  * ============================================================================
- * HARDWARE CAPABILITY HOOK
+ * RESOURCE-AWARE HDL ELEMENT
  * ============================================================================
  *
- * Capability names are ordinary semantic names.
+ * The actual resource/capability grammar remains outside this file.
  *
- * The grammar does not know whether a target provides them.
+ * This rule exists only to give HDL consumers one stable integration point.
  * ============================================================================
  */
 
-hdlCapabilityReference
-    : hdlIdentifier
-    ;
-
-hdlCapabilityInvocation
-    : hdlCapabilityReference
-      LPAREN
-      argumentList?
-      RPAREN
+hdlResourceElement
+    : hdlRequirement
+    | hdlConstraint
+    | hdlCapability
+    | hdlPolicy
+    | hdlContract
     ;
 
 /*
  * ============================================================================
- * RESOURCE SCALING HOOK
+ * COMPLETION / OWNERSHIP CONTRACT
  * ============================================================================
  *
- * Scaling is expressed symbolically.
+ * THIS FILE IS DONE WHEN:
  *
- * Examples of valid semantic values:
+ * [x] HDL has exactly one composition root.
  *
- *     N
- *     width
- *     depth
- *     lanes
- *     rows * cols
- *     available_capacity
+ * [x] The root uses the canonical Zamani lexer.
  *
- * No maximum is encoded.
- * ============================================================================
- */
-
-hdlScalingExpression
-    : hdlExpression
-    ;
-
-/*
- * ============================================================================
- * RANGE ADAPTER
- * ============================================================================
- */
-
-hdlRange
-    : LBRACKET
-      hdlRangeExpression
-      RBRACKET
-    ;
-
-/*
- * ============================================================================
- * COMPLETION CONTRACT
- * ============================================================================
+ * [x] Concrete HDL features remain in their owning files.
  *
- * This file is complete when:
+ * [x] No hardware capacity is hard-coded.
  *
- * [x] It is the single HDL parser composition root.
+ * [x] No target is selected by parsing.
  *
- * [x] It uses `parser grammar HDL`.
+ * [x] No vendor primitive is enumerated here.
  *
- * [x] It consumes `ZamaniLexer`.
+ * [x] No physical resource is allocated here.
  *
- * [x] It does not define lexer rules.
+ * [x] Quantum operations are not duplicated here.
  *
- * [x] It does not define a second hardware lexer.
+ * [x] quantum::ir remains the canonical quantum IR boundary.
  *
- * [x] It does not enumerate vendors.
+ * [x] Resource/capability semantics remain downstream.
  *
- * [x] It does not enumerate FPGA families.
+ * [x] Effects remain downstream.
  *
- * [x] It does not enumerate ASIC families.
+ * [x] Contracts remain downstream.
  *
- * [x] It does not enumerate CPU/GPU/QPU devices.
+ * [x] Policies remain downstream.
  *
- * [x] It does not encode physical topology.
+ * [x] Provenance remains downstream.
  *
- * [x] It does not encode physical placement.
+ * [x] AST construction remains outside the grammar.
  *
- * [x] It does not encode routing.
+ * [x] IR construction remains outside the grammar.
  *
- * [x] It does not encode synthesis implementation.
+ * [x] Optimization remains outside the grammar.
  *
- * [x] It does not encode QEC.
+ * [x] Routing remains outside the grammar.
  *
- * [x] It does not encode ZQN.
+ * [x] Scheduling remains outside the grammar.
  *
- * [x] It does not create a quantum IR.
+ * [x] Synthesis implementation remains outside the grammar.
  *
- * [x] It does not impose hardware-size limits.
+ * [x] HAL remains outside the grammar.
  *
- * [x] It composes existing HDL feature grammars.
+ * [x] Target realization remains outside the grammar.
  *
- * [x] Module syntax remains owned by HardwareModules.
+ * [x] The grammar contains no Rust.
  *
- * [x] Generic syntax remains owned by HardwareGenerics.
+ * [x] The grammar requires no unsafe Rust.
  *
- * [x] Port syntax remains owned by Ports.
+ * [x] Source cardinality is unbounded by language-level constants.
  *
- * [x] Signal syntax remains owned by Signals.
+ * [x] HDL can participate in classical, quantum, hybrid, distributed,
+ *     accelerator and future computational designs.
  *
- * [x] Net syntax remains owned by Wires.
- *
- * [x] Register syntax remains owned by Registers.
- *
- * [x] Memory syntax remains owned by Memories.
- *
- * [x] Clock syntax remains owned by Clocks.
- *
- * [x] Timing syntax remains owned by Timing.
- *
- * [x] Process syntax remains owned by Processes.
- *
- * [x] Combinational syntax remains owned by Combinational.
- *
- * [x] Sequential syntax remains owned by Sequential.
- *
- * [x] State-machine syntax remains owned by StateMachines.
- *
- * [x] Pipeline syntax remains owned by Pipelines.
- *
- * [x] Generate syntax remains owned by Generate.
- *
- * [x] Expressions remain integrated with the canonical expression subsystem.
- *
- * [x] Types remain integrated with the canonical type subsystem.
- *
- * [x] Attributes remain integrated with the canonical attribute subsystem.
- *
- * [x] Names remain source-level logical names.
- *
- * [x] Resource requirements remain separate from target realization.
- *
- * [x] Capability requirements remain semantic intent.
- *
- * [x] Preferences remain non-binding.
- *
- * [x] Hardware realization remains downstream.
- *
- * [x] Parsing remains deterministic.
- *
- * [x] No embedded Rust exists.
- *
- * [x] No unsafe implementation is required.
- *
- * [x] Rust 1.97 / 1.97.1 integration is preserved.
- *
- * [x] Domain-neutral AST integration is defined.
- *
- * [x] Canonical hardware IR integration is defined.
- *
- * [x] quantum::ir remains the only canonical quantum IR.
+ * [x] HDL syntax can remain unchanged while target realization changes.
  *
  * ============================================================================
- * INTEGRATION REQUIREMENTS FOR OTHER FILES
+ * INTEGRATION REQUIREMENTS FOR THE OTHER HDL FILES
  * ============================================================================
  *
- * The following existing files are the predefined integration contracts:
+ * Every delegate imported by this file must satisfy the following invariant:
  *
- *     grammar/antlr/ZamaniLexer.g4
- *         -> canonical token vocabulary
+ *     ONE FILE
+ *       =
+ *     ONE PRIMARY SYNTAX OWNER
  *
- *     grammar/antlr/ZamaniParser.g4
- *         -> universal parser composition
+ * Each delegate must declare:
  *
- *     grammar/hdl/hardware-modules.g4
- *         -> module ownership
+ *     Purpose
+ *     Owns
+ *     Does Not Own
+ *     Dependencies
+ *     Exported Rules
+ *     AST Contract
+ *     Semantic Contract
+ *     Type Contract
+ *     Effect Contract
+ *     Capability Contract
+ *     Resource Contract
+ *     Contract/Policy Contract
+ *     Provenance Contract
+ *     IR Contract
+ *     Diagnostics
+ *     Positive Tests
+ *     Negative Tests
+ *     Boundary Tests
+ *     Scalability Tests
+ *     Compatibility
+ *     Completion Criteria
  *
- *     grammar/hdl/hardware-generics.g4
- *         -> generic ownership
+ * The parent `hdl.g4` must not need to be edited when an existing delegate
+ * gains internal rules.
  *
- *     grammar/hdl/ports.g4
- *         -> port ownership
+ * The parent only changes when:
  *
- *     grammar/hdl/signals.g4
- *         -> signal ownership
- *
- *     grammar/hdl/wires.g4
- *         -> net/wire ownership
- *
- *     grammar/hdl/registers.g4
- *         -> register ownership
- *
- *     grammar/hdl/memories.g4
- *         -> memory ownership
- *
- *     grammar/hdl/clocks.g4
- *         -> clock ownership
- *
- *     grammar/hdl/timing.g4
- *         -> timing ownership
- *
- *     grammar/hdl/processes.g4
- *         -> process ownership
- *
- *     grammar/hdl/combinational.g4
- *         -> combinational ownership
- *
- *     grammar/hdl/sequential.g4
- *         -> sequential ownership
- *
- *     grammar/hdl/state-machines.g4
- *         -> state-machine ownership
- *
- *     grammar/hdl/pipelines.g4
- *         -> pipeline ownership
- *
- *     grammar/hdl/generate.g4
- *         -> generation ownership
- *
- *     grammar/types/types.g4
- *         -> canonical type syntax
- *
- *     grammar/expressions/expressions.g4
- *         -> canonical expression syntax
- *
- *     grammar/core/*
- *         -> canonical names, attributes, blocks and shared syntax
- *
- *     grammar/resources/*
- *         -> resource/capability intent
- *
- *     grammar/hardware/*
- *         -> target-independent hardware intent
- *
- *     grammar/validation/*
- *         -> grammar validation and conformance
- *
- *     grammar/tests/hdl/*
- *         -> HDL positive/negative/boundary/scalability tests
- *
- * No downstream file should need to modify this file merely because a target
- * has changed.
+ *     - a new top-level HDL feature is introduced;
+ *     - an ownership boundary changes;
+ *     - a public entry rule changes;
+ *     - a new delegate is introduced.
  *
  * ============================================================================
- * FINAL ARCHITECTURAL INVARIANT
+ * DEPENDENCY CONTRACT
  * ============================================================================
  *
- * Zamani HDL therefore follows:
+ * Public HDL composition:
  *
- *     Program Once
- *          |
- *          v
- *     Compile Once
- *          |
- *          v
- *     Run Everywhere
- *          |
- *          v
- *     Run Anywhere
- *          |
- *          v
- *     Forever
+ *     hdl.g4
  *
- * subject to:
+ * owns:
  *
- *     program semantics
- *     explicit requirements
- *     target capabilities
- *     available resources
- *     implementation policies
+ *     hdlDesign
+ *     hdlSourceElement
+ *     hdlDeclaration
+ *     hdlStatement
+ *     HDL integration façades
  *
- * and WITHOUT introducing artificial language-level hardware ceilings.
+ * Concrete ownership:
+ *
+ *     hardware-modules.g4
+ *         -> module / instance structure
+ *
+ *     hardware-generics.g4
+ *         -> hardware generic syntax
+ *
+ *     parameters.g4
+ *         -> HDL parameters
+ *
+ *     interfaces.g4
+ *         -> interfaces
+ *
+ *     ports.g4
+ *         -> ports
+ *
+ *     signals.g4
+ *         -> signals
+ *
+ *     nets.g4 / wires.g4
+ *         -> logical connectivity
+ *
+ *     registers.g4
+ *         -> registers
+ *
+ *     memories.g4
+ *         -> memories
+ *
+ *     arrays.g4
+ *         -> HDL array constructs
+ *
+ *     clocks.g4
+ *         -> clock declarations
+ *
+ *     clocking.g4
+ *         -> clocking relationships
+ *
+ *     reset.g4
+ *         -> reset declarations
+ *
+ *     timing.g4
+ *         -> timing intent
+ *
+ *     processes.g4
+ *         -> processes
+ *
+ *     combinational.g4
+ *         -> combinational behavior
+ *
+ *     sequential.g4
+ *         -> sequential behavior
+ *
+ *     state_machines.g4
+ *         -> state machines
+ *
+ *     pipelines.g4
+ *         -> pipelines
+ *
+ *     parallelism.g4
+ *         -> hardware parallelism
+ *
+ *     generate.g4
+ *         -> elaboration/generation
+ *
+ *     assertions.g4
+ *         -> assertion syntax
+ *
+ *     verification.g4
+ *         -> verification semantics
+ *
+ *     simulation.g4
+ *         -> simulation syntax
+ *
+ *     synthesis.g4
+ *         -> synthesis intent
+ *
+ *     protocols.g4
+ *         -> hardware protocols
+ *
+ *     physical-intent.g4
+ *         -> physical intent
+ *
+ *     co-design.g4
+ *         -> hardware/software co-design
+ *
+ *     hardware-software-integration.g4
+ *         -> HW/SW integration
+ *
+ *     hardware-dialects.g4
+ *         -> open-world hardware dialects
  *
  * ============================================================================
+ * TARGET INDEPENDENCE
+ * ============================================================================
+ *
+ * No rule in this file may inspect or depend on:
+ *
+ *     target CPU
+ *     target GPU
+ *     target FPGA
+ *     target ASIC
+ *     target QPU
+ *     target accelerator
+ *     target node count
+ *     target memory size
+ *     target topology
+ *     target routing
+ *     target calibration
+ *     target clock tree
+ *
+ * The same source syntax must remain meaningful across:
+ *
+ *     tiny
+ *     embedded
+ *     CPU
+ *     multicore
+ *     GPU
+ *     FPGA
+ *     ASIC
+ *     accelerator
+ *     QPU
+ *     simulator
+ *     HPC
+ *     cluster
+ *     distributed
+ *     cloud
+ *     future hardware
+ *
+ * subject to semantic feasibility and available resources.
+ *
+ * ============================================================================
+ * FINAL RULE
+ * ============================================================================
+ *
+ * `hdl.g4` is the ORCHESTRATOR, not the IMPLEMENTATION.
+ *
+ * The desired architecture is:
+ *
+ *                 +----------------+
+ *                 |    hdl.g4      |
+ *                 | composition    |
+ *                 |     root       |
+ *                 +-------+--------+
+ *                         |
+ *        +----------------+----------------+
+ *        |                |                |
+ *        v                v                v
+ *     structure        behavior         intent
+ *        |                |                |
+ *        v                v                v
+ *   modules/ports     processes/...    timing/verification/...
+ *        |                |                |
+ *        +----------------+----------------+
+ *                         |
+ *                         v
+ *                domain-neutral AST
+ *                         |
+ *                         v
+ *                 semantic validation
+ *                         |
+ *        +----------------+----------------+
+ *        |        |       |       |        |
+ *      types   effects resources contracts policies
+ *        |        |       |       |        |
+ *        +----------------+----------------+
+ *                         |
+ *                         v
+ *               canonical hardware model
+ *                         |
+ *                         v
+ *                  target-independent IR
+ *                         |
+ *                         v
+ *              optimize / route / schedule
+ *                         |
+ *                         v
+ *                       ZQN
+ *                         |
+ *                         v
+ *                       HAL
+ *                         |
+ *                         v
+ *                    realization
+ *
+ * This is the HDL architecture required for POCO-REAF.
  */
