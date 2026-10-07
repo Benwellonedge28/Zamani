@@ -7,13 +7,13 @@
  *     grammar/distributed/consistency.g4
  *
  * Grammar:
- *     Consistency
+ *     DistributedConsistency
  *
  * Status:
  *     Production distributed-consistency parser component.
  *
  * Language baseline:
- *     Rust 1.97 / Rust 1.97.1
+ *     Rust 1.97+
  *     Rust Edition 2021
  *     Safe Rust only
  *
@@ -21,33 +21,83 @@
  * PURPOSE
  * ============================================================================
  *
- * This grammar owns SOURCE-LEVEL SYNTAX for distributed consistency intent.
+ * This grammar owns the SOURCE-LEVEL SYNTAX for distributed consistency
+ * intent.
  *
- * It describes WHAT consistency properties a program requires, declares,
- * prefers, constrains, or references.
+ * Consistency describes semantic guarantees concerning visibility, ordering,
+ * freshness, convergence, session behavior, read/write relationships, and
+ * other consistency properties.
  *
- * It does NOT implement a consistency algorithm.
+ * This grammar expresses WHAT a program requires or declares.
  *
- * It does NOT select:
+ * It does NOT determine HOW that requirement is implemented.
  *
- *     - Raft;
- *     - Paxos;
- *     - PBFT;
- *     - CRDT implementation;
- *     - quorum algorithm;
- *     - lock implementation;
- *     - database;
- *     - storage engine;
- *     - network transport;
- *     - scheduler;
+ * It therefore does not select or implement:
+ *
+ *     - consensus algorithms;
+ *     - replication algorithms;
+ *     - quorum algorithms;
+ *     - locking algorithms;
+ *     - conflict-resolution algorithms;
+ *     - databases;
+ *     - storage engines;
+ *     - network transports;
+ *     - schedulers;
  *     - placement;
- *     - node;
- *     - replica;
+ *     - deployment;
  *     - hardware;
- *     - cloud provider.
+ *     - cloud providers;
+ *     - runtime implementations.
  *
- * Those concerns belong to semantic analysis, resource/capability analysis,
- * distributed compilation, scheduling, placement, runtime, and deployment.
+ * Those concerns belong to downstream semantic, compiler, runtime, resource,
+ * capability, placement, routing, scheduling, resilience, and deployment
+ * layers.
+ *
+ * ============================================================================
+ * ARCHITECTURAL POSITION
+ * ============================================================================
+ *
+ *     Zamani source
+ *          |
+ *          v
+ *     canonical Zamani lexer
+ *          |
+ *          v
+ *     DistributedConsistency parser
+ *          |
+ *          v
+ *     domain-neutral AST
+ *          |
+ *          +--> name resolution
+ *          +--> type analysis
+ *          +--> effect analysis
+ *          +--> capability analysis
+ *          +--> resource analysis
+ *          +--> contract analysis
+ *          +--> policy analysis
+ *          +--> provenance
+ *          +--> distributed consistency semantics
+ *          |
+ *          v
+ *     canonical semantic representation
+ *          |
+ *          +--> classical IR
+ *          +--> quantum::ir
+ *          +--> HDL / hardware representation
+ *          +--> distributed execution metadata
+ *          |
+ *          v
+ *     optimization
+ *          |
+ *          +--> placement
+ *          +--> routing
+ *          +--> scheduling
+ *          +--> resilience
+ *          |
+ *          v
+ *     ZQN / HAL / target realization
+ *
+ * This grammar is upstream of all implementation decisions.
  *
  * ============================================================================
  * OWNERSHIP
@@ -55,59 +105,167 @@
  *
  * THIS FILE OWNS:
  *
- *     - consistency constructs;
  *     - consistency declarations;
- *     - consistency invocations;
+ *     - consistency invocation syntax;
  *     - consistency bodies;
+ *     - consistency members;
  *     - consistency properties;
- *     - consistency property values;
- *     - nested consistency objects;
+ *     - consistency sections;
+ *     - consistency values;
  *     - consistency lists;
- *     - consistency references;
- *     - consistency extension syntax.
+ *     - consistency extension calls;
+ *     - consistency references as syntax.
  *
  * THIS FILE DOES NOT OWN:
  *
- *     - lexical tokens;
+ *     - lexer vocabulary;
  *     - identifiers;
  *     - qualified names;
  *     - general expressions;
  *     - types;
  *     - resources;
  *     - capabilities;
+ *     - effects;
+ *     - policies;
+ *     - contracts;
  *     - nodes;
- *     - replicas;
+ *     - processes;
+ *     - actors;
+ *     - channels;
+ *     - messages;
+ *     - services;
  *     - replication;
  *     - partitioning;
  *     - transactions;
- *     - consensus;
  *     - fault tolerance;
- *     - resilience;
- *     - placement;
  *     - topology;
+ *     - placement;
  *     - networking;
- *     - messaging;
  *     - storage;
  *     - scheduling;
  *     - deployment;
  *     - quantum operations;
- *     - quantum IR;
+ *     - quantum state;
  *     - QEC;
  *     - ZQN;
+ *     - HAL;
  *     - runtime implementation.
  *
  * ============================================================================
- * ARCHITECTURAL PRINCIPLE
+ * PUBLIC INTEGRATION CONTRACT
  * ============================================================================
  *
- * Consistency is semantic intent.
+ * The stable public parser rule is:
  *
- * The grammar therefore uses an OPEN-WORLD property model.
+ *     distributedConsistencyConstruct
  *
- * It deliberately does not enumerate every known consistency model as a
- * grammar alternative.
+ * `grammar/distributed/distributed.g4` already consumes this rule.
  *
- * Examples of semantic values that may be represented include:
+ * That composition boundary MUST remain stable.
+ *
+ * The distributed composition root MUST NOT duplicate the rules below.
+ *
+ * ============================================================================
+ * DEPENDENCIES
+ * ============================================================================
+ *
+ * Lexer:
+ *
+ *     grammar/antlr/ZamaniLexer.g4
+ *         -> grammar/lexer/lexer.g4
+ *             -> grammar/lexer/tokens.g4
+ *                 -> grammar/lexer/keywords.g4
+ *
+ * Names:
+ *
+ *     grammar/core/names.g4
+ *
+ * Expressions:
+ *
+ *     grammar/expressions/
+ *
+ * Canonical distributed composition:
+ *
+ *     grammar/distributed/distributed.g4
+ *
+ * Related distributed ownership:
+ *
+ *     grammar/distributed/replication.g4
+ *     grammar/distributed/partitioning.g4
+ *     grammar/distributed/transactions.g4
+ *     grammar/distributed/fault-tolerance.g4
+ *     grammar/distributed/topology.g4
+ *     grammar/distributed/placement.g4
+ *     grammar/distributed/services.g4
+ *     grammar/distributed/processes.g4
+ *     grammar/distributed/actors.g4
+ *     grammar/distributed/channels.g4
+ *     grammar/distributed/communication.g4
+ *     grammar/distributed/messaging.g4
+ *
+ * Resource/capability ownership:
+ *
+ *     grammar/resources/
+ *
+ * Effect ownership:
+ *
+ *     grammar/effects/
+ *
+ * Policy ownership:
+ *
+ *     grammar/policies/
+ *
+ * Contract ownership:
+ *
+ *     grammar/validation/
+ *     grammar/distributed/contracts.g4
+ *
+ * Provenance ownership:
+ *
+ *     grammar/spec/provenance.md
+ *     grammar/specification/
+ *
+ * ============================================================================
+ * LEXER DECISION
+ * ============================================================================
+ *
+ * `consistency` is a language-level distributed semantic construct.
+ *
+ * Unlike arbitrary consistency-model names, which remain ordinary identifiers,
+ * the declaration marker itself is reserved.
+ *
+ * Therefore the canonical lexer vocabulary must expose:
+ *
+ *     CONSISTENCY : 'consistency'
+ *
+ * in:
+ *
+ *     grammar/lexer/keywords.g4
+ *
+ * This is intentionally different from reserving:
+ *
+ *     strong
+ *     linearizable
+ *     sequential
+ *     causal
+ *     eventual
+ *     session
+ *     monotonic_read
+ *     monotonic_write
+ *     read_your_writes
+ *     bounded_staleness
+ *
+ * Those remain semantic names/identifiers.
+ *
+ * This distinction keeps the grammar open-world.
+ *
+ * ============================================================================
+ * OPEN-WORLD CONSISTENCY MODEL
+ * ============================================================================
+ *
+ * The grammar MUST NOT enumerate every consistency model.
+ *
+ * Examples of semantic names that remain ordinary identifiers include:
  *
  *     strong
  *     linearizable
@@ -120,320 +278,614 @@
  *     read_your_writes
  *     consistent_prefix
  *     bounded_staleness
- *     custom
+ *     conflict_free
+ *     application_defined
+ *     vendor_model
+ *     future_model
  *
- * These are semantic names, not permanently reserved grammar keywords.
+ * A new consistency model therefore does not require a parser grammar change.
  *
- * A future consistency model can therefore be introduced by semantic
- * validation without requiring the parser grammar to become a catalogue of
- * algorithms or databases.
+ * Semantic analysis determines whether a referenced model is:
  *
- * ============================================================================
- * CANONICAL STRUCTURE
- * ============================================================================
- *
- * Two source forms are supported:
- *
- *     1. Declarative consistency:
- *
- *        consistency state {
- *            requirement: strong;
- *            ordering: causal;
- *        }
- *
- *     2. Consistency invocation:
- *
- *        consistency.policy(state, strong);
- *
- * The first form expresses named consistency intent.
- *
- * The second form provides an extensible invocation mechanism for semantic
- * libraries, dialects, or higher-level constructs.
- *
- * The grammar intentionally does not require the invocation name to refer to
- * a particular implementation.
+ *     - standard;
+ *     - library-defined;
+ *     - dialect-defined;
+ *     - vendor-defined;
+ *     - experimental;
+ *     - deprecated;
+ *     - unsupported;
+ *     - unknown.
  *
  * ============================================================================
- * OPEN WORLD
+ * POCO-REAF
  * ============================================================================
  *
- * No closed enumeration exists for:
+ * Consistency syntax is target-independent.
  *
- *     consistency levels
- *     algorithms
- *     protocols
- *     databases
- *     transports
- *     conflict resolvers
- *     convergence mechanisms
+ * The same source can express consistency intent for:
  *
- * New semantic models can be introduced without expanding this grammar.
+ *     - a tiny embedded realization;
+ *     - a single CPU;
+ *     - multicore execution;
+ *     - GPU-assisted execution;
+ *     - FPGA execution;
+ *     - ASIC execution;
+ *     - accelerator execution;
+ *     - QPU-assisted execution;
+ *     - simulation;
+ *     - HPC;
+ *     - clusters;
+ *     - federated systems;
+ *     - cloud systems;
+ *     - heterogeneous systems;
+ *     - future computational substrates.
+ *
+ * Source syntax MUST NOT encode a physical machine count.
  *
  * ============================================================================
- * SCALABILITY
+ * SCALABILITY CONTRACT
  * ============================================================================
  *
  * There is NO grammar-level maximum for:
  *
  *     - consistency declarations;
+ *     - consistency members;
  *     - properties;
- *     - nested objects;
+ *     - nested sections;
  *     - list elements;
- *     - requirements;
- *     - policy expressions;
- *     - consistency scopes;
+ *     - extension arguments;
+ *     - expression depth;
+ *     - qualified-name depth;
  *     - distributed entities;
  *     - nodes;
+ *     - processes;
+ *     - actors;
  *     - replicas;
  *     - partitions;
- *     - resources.
- *
- * Repetition is represented using ANTLR repetition operators.
+ *     - resources;
+ *     - devices;
+ *     - machines.
  *
  * This grammar MUST NOT introduce:
  *
  *     MAX_NODES
  *     MAX_REPLICAS
  *     MAX_PROPERTIES
- *     MAX_REQUIREMENTS
  *     MAX_PARTITIONS
  *     MAX_CONSISTENCY_LEVELS
+ *     MAX_CONSISTENCY_RULES
+ *     MAX_RESOURCES
+ *     MAX_DEVICES
  *
- * or equivalent artificial limits.
+ * or equivalent limits.
  *
- * ============================================================================
- * POCO-REAF
- * ============================================================================
+ * "Infinity" means that the language imposes no artificial semantic ceiling.
  *
- * Consistency syntax must remain portable across target environments.
+ * Actual execution remains bounded by available:
  *
- * A source program may describe:
+ *     memory;
+ *     storage;
+ *     compute;
+ *     network capacity;
+ *     compiler resources;
+ *     runtime resources;
+ *     target capabilities;
+ *     time;
+ *     deployment resources.
  *
- *     what consistency guarantee is required;
- *     what consistency properties are preferred;
- *     what ordering is required;
- *     what freshness is acceptable;
- *     what read/write guarantees are required;
- *     what conflicts must satisfy;
- *
- * It does not directly describe:
- *
- *     which CPU;
- *     which GPU;
- *     which node;
- *     which replica;
- *     which database;
- *     which network;
- *     which storage device.
- *
- * Target realization occurs downstream.
+ * Those are not language-level limits.
  *
  * ============================================================================
- * RESOURCE SEPARATION
+ * REQUIREMENT / CONSTRAINT / PREFERENCE SEPARATION
  * ============================================================================
  *
- * Consistency properties are not hardware capacities.
+ * Consistency values may reference the universal resource/capability/policy
+ * system.
  *
- * A consistency declaration may contain semantic expressions referring to
- * resources or capabilities, but this grammar does not define those resource
- * semantics.
- *
- * For example, resource/capability systems may independently express:
- *
- *     requires capability("distributed.consistency");
- *     requires memory >= required_memory;
- *
- * Such requirements are semantic contracts and are not parser limits.
- *
- * ============================================================================
- * DUPLICATE PROPERTY POLICY
- * ============================================================================
- *
- * Repeated properties are syntactically preserved.
- *
- * Example:
+ * For example:
  *
  *     consistency state {
- *         requirement: read_your_writes;
- *         requirement: monotonic_read;
+ *         requirement: strong;
+ *         capability: capability("distributed.consistency");
+ *         preference: low_latency;
  *     }
  *
- * The parser does not merge, override, reorder, or discard them.
+ * or:
  *
- * Semantic analysis decides whether repeated properties:
+ *     consistency state {
+ *         requirements {
+ *             capability("distributed.consistency");
+ *             resources.available("memory");
+ *         }
+ *     }
  *
- *     - compose;
- *     - conflict;
- *     - override;
- *     - are redundant;
- *     - are invalid.
+ * This grammar merely preserves those expressions.
+ *
+ * It does NOT evaluate them.
+ *
+ * Semantic analysis determines whether they are requirements, constraints,
+ * preferences, hints, capabilities, effects, policies, or other semantic
+ * entities.
+ *
+ * ============================================================================
+ * DECLARATION SHAPE
+ * ============================================================================
+ *
+ * Canonical declaration:
+ *
+ *     consistency state {
+ *         requirement: strong;
+ *         ordering: causal;
+ *     }
+ *
+ * The dedicated CONSISTENCY token provides a deterministic declaration
+ * boundary.
+ *
+ * This intentionally replaces the previous ambiguous structural form:
+ *
+ *     identifier identifier body
+ *
+ * which could accidentally classify unrelated distributed declarations as
+ * consistency declarations.
+ *
+ * ============================================================================
+ * INVOCATION SHAPE
+ * ============================================================================
+ *
+ * Canonical invocation:
+ *
+ *     consistency::policy(state, strong);
+ *
+ *     distributed::consistency::require(state, causal);
+ *
+ * The invocation form remains open-world.
+ *
+ * The qualified name is semantic data.
+ *
+ * ============================================================================
+ * DECLARATION VS INVOCATION
+ * ============================================================================
+ *
+ * Declaration:
+ *
+ *     CONSISTENCY identifier body
+ *
+ * Invocation:
+ *
+ *     qualifiedName '(' arguments ')' ';'
+ *
+ * These forms have structurally distinct shapes.
+ *
+ * The parser therefore does not need semantic predicates.
  *
  * ============================================================================
  * PROPERTY MODEL
  * ============================================================================
  *
- * The grammar intentionally has ONE property production.
+ * There is exactly ONE generic property production.
  *
- * Do NOT create separate parser productions such as:
+ * Examples:
  *
- *     consistencyStrong
- *     consistencyCausal
- *     consistencyEventual
- *     consistencyOrdering
- *     consistencyFreshness
- *     ...
+ *     requirement: strong;
+ *     ordering: causal;
+ *     visibility: read_your_writes;
+ *     freshness: bounded_staleness;
+ *     conflict: application_defined;
+ *     convergence: eventual;
+ *     synchronization: causal;
+ *     preference: low_latency;
+ *     hint: locality;
  *
- * when their syntax is identical.
+ * Property names remain semantic identifiers.
  *
- * The property name is semantic data.
+ * The parser preserves repeated properties.
  *
- * This avoids parser ambiguity and prevents grammar-level duplication.
+ * Semantic analysis determines whether repetition means:
  *
- * ============================================================================
- * NESTED VALUES
- * ============================================================================
- *
- * Property values may be:
- *
- *     - general expressions;
- *     - nested objects;
- *     - lists.
- *
- * This permits extensible structures without requiring a new grammar rule
- * every time the semantic consistency model gains another dimension.
+ *     - composition;
+ *     - conjunction;
+ *     - override;
+ *     - conflict;
+ *     - redundancy;
+ *     - invalidity.
  *
  * ============================================================================
- * QUANTUM BOUNDARY
+ * SECTION MODEL
  * ============================================================================
  *
- * Distributed quantum systems may use consistency for:
+ * Named sections provide structured semantic namespaces without requiring a
+ * new grammar production for every future consistency dimension.
  *
- *     - classical control state;
- *     - measurement results;
- *     - orchestration metadata;
- *     - distributed protocol state;
- *     - classical feed-forward state.
+ * Example:
  *
- * This grammar MUST NOT interpret consistency as replication of quantum state.
+ *     consistency state {
+ *         read {
+ *             guarantee: read_your_writes;
+ *             ordering: causal;
+ *         }
  *
- * It MUST NOT define:
- *
- *     QubitId
- *     PhysicalQubitId
- *     QuantumGate
- *     QuantumOperation
- *     Circuit
- *     QuantumTopology
- *     Calibration
- *     Pulse
- *     QEC
- *     ZQN
- *
- * Quantum semantics remain owned by the quantum subsystem and cross the
- * canonical quantum::ir boundary downstream.
+ *         write {
+ *             guarantee: monotonic_write;
+ *         }
+ *     }
  *
  * ============================================================================
- * NETWORK BOUNDARY
+ * VALUE MODEL
  * ============================================================================
  *
- * This grammar does not select:
+ * Consistency values are intentionally open.
  *
- *     TCP
- *     UDP
- *     QUIC
- *     HTTP
- *     RPC
- *     MPI
- *     RDMA
- *     InfiniBand
- *     vendor transport.
+ * They may be:
  *
- * Network realization is downstream.
+ *     - ordinary Zamani expressions;
+ *     - nested consistency objects;
+ *     - consistency lists.
+ *
+ * This allows future semantic models without modifying this grammar.
+ *
+ * ============================================================================
+ * LIST MODEL
+ * ============================================================================
+ *
+ * Lists are structurally unbounded:
+ *
+ *     [
+ *         expression,
+ *         expression,
+ *         ...
+ *     ]
+ *
+ * No grammar-level element limit exists.
+ *
+ * The parser preserves list order.
+ *
+ * ============================================================================
+ * EXTENSION MODEL
+ * ============================================================================
+ *
+ * Future/vendor/dialect-specific consistency semantics can be represented
+ * without modifying the universal grammar.
+ *
+ * Example:
+ *
+ *     vendor::consistency::property(value);
+ *
+ *     future::consistency::model(argument);
+ *
+ *     dialect::consistency::guarantee(expression);
+ *
+ * The semantic layer decides whether the extension is valid.
  *
  * ============================================================================
  * REPLICATION BOUNDARY
  * ============================================================================
  *
- * Consistency and replication are distinct concepts.
+ * Replication remains owned by:
  *
- * Replication owns:
+ *     grammar/distributed/replication.g4
  *
- *     whether/how state is replicated;
+ * Replication answers questions such as logical multiplicity and replication
+ * relationships.
  *
- * consistency owns:
+ * Consistency answers questions such as visibility, ordering, freshness, and
+ * convergence.
  *
- *     what visibility/order/freshness guarantees apply.
+ * This grammar MUST NOT define:
  *
- * A consistency declaration may apply to replicated or non-replicated state.
+ *     replica;
+ *     replication;
+ *     replica_factor;
+ *     replica_placement;
+ *     replica_group;
  *
- * This grammar therefore MUST NOT duplicate replication syntax.
+ * unless those concepts are expressed as ordinary semantic expressions inside
+ * a consistency property.
+ *
+ * ============================================================================
+ * PARTITIONING BOUNDARY
+ * ============================================================================
+ *
+ * Partitioning remains owned by:
+ *
+ *     grammar/distributed/partitioning.g4
+ *
+ * This grammar does not define:
+ *
+ *     shard;
+ *     partition;
+ *     partition count;
+ *     shard placement;
+ *     partition routing.
+ *
+ * Such concepts can be referenced semantically through expressions where
+ * appropriate.
  *
  * ============================================================================
  * TRANSACTION BOUNDARY
  * ============================================================================
  *
- * Transaction semantics remain owned by:
+ * Transaction syntax remains owned by:
  *
  *     grammar/distributed/transactions.g4
  *
- * This grammar may express consistency properties associated semantically
- * with transactions, but does not define transaction syntax.
+ * This grammar may express properties semantically associated with
+ * transactions, for example:
+ *
+ *     consistency transaction_scope {
+ *         isolation: serializable;
+ *     }
+ *
+ * but it does not define transaction syntax.
  *
  * ============================================================================
  * FAULT-TOLERANCE BOUNDARY
  * ============================================================================
  *
- * Failure handling remains owned by:
+ * Failure and recovery syntax remains owned by:
  *
  *     grammar/distributed/fault-tolerance.g4
  *
- * Consistency may constrain the result of recovery, but does not implement
- * recovery.
+ * This grammar does not define:
+ *
+ *     retry;
+ *     recover;
+ *     failover;
+ *     restart;
+ *     quarantine;
+ *     reroute;
+ *     reschedule;
+ *
+ * Consistency properties may constrain post-recovery guarantees through
+ * expressions.
  *
  * ============================================================================
- * SOURCE PRESERVATION
+ * TOPOLOGY / PLACEMENT BOUNDARY
  * ============================================================================
  *
- * The parser must preserve enough structure for the frontend AST to retain:
+ * Logical topology remains owned by:
  *
- *     - source spans;
- *     - declaration order;
- *     - property order;
- *     - property names;
- *     - expressions;
- *     - nested objects;
- *     - lists;
- *     - invocation names;
- *     - invocation arguments.
+ *     grammar/distributed/topology.g4
  *
- * No parser action may resolve semantic policy.
+ * Placement remains owned by:
+ *
+ *     grammar/distributed/placement.g4
+ *
+ * Consistency MUST NOT select:
+ *
+ *     machine;
+ *     node;
+ *     rack;
+ *     region;
+ *     host;
+ *     network path;
+ *     physical device.
+ *
+ * Any such requirement belongs downstream to placement/resource/capability
+ * analysis.
+ *
+ * ============================================================================
+ * NETWORKING BOUNDARY
+ * ============================================================================
+ *
+ * This grammar does not select or require a particular transport.
+ *
+ * It does not define:
+ *
+ *     TCP;
+ *     UDP;
+ *     QUIC;
+ *     HTTP;
+ *     RPC;
+ *     MPI;
+ *     RDMA;
+ *     InfiniBand;
+ *     vendor transport.
+ *
+ * Network realization is downstream.
+ *
+ * ============================================================================
+ * QUANTUM BOUNDARY
+ * ============================================================================
+ *
+ * Distributed consistency may apply to classical state associated with:
+ *
+ *     - quantum control;
+ *     - measurement results;
+ *     - classical feed-forward;
+ *     - orchestration;
+ *     - distributed metadata;
+ *     - experiment coordination.
+ *
+ * It MUST NOT define or imply replication of quantum state itself.
+ *
+ * This grammar does not define:
+ *
+ *     QubitId;
+ *     PhysicalQubitId;
+ *     QuantumGate;
+ *     QuantumOperation;
+ *     Circuit;
+ *     QuantumTopology;
+ *     Calibration;
+ *     Pulse;
+ *     QEC;
+ *     ZQN.
+ *
+ * Quantum semantics remain owned by the quantum subsystem.
+ *
+ * When a consistency-aware program contains quantum computation, the semantic
+ * pipeline remains:
+ *
+ *     source
+ *       |
+ *       v
+ *     domain-neutral AST
+ *       |
+ *       v
+ *     semantic analysis
+ *       |
+ *       v
+ *     quantum::ir
+ *       |
+ *       v
+ *     optimization / routing / scheduling / QEC / ZQN
+ *       |
+ *       v
+ *     HAL
+ *
+ * ============================================================================
+ * HDL / HARDWARE BOUNDARY
+ * ============================================================================
+ *
+ * Consistency syntax does not define:
+ *
+ *     register widths;
+ *     device counts;
+ *     memory sizes;
+ *     bus widths;
+ *     hardware topology;
+ *     clock counts;
+ *     physical links.
+ *
+ * Hardware realization remains downstream.
+ *
+ * ============================================================================
+ * EFFECT CONTRACT
+ * ============================================================================
+ *
+ * Consistency declaration syntax itself introduces no runtime effect.
+ *
+ * Semantic analysis may associate consistency-related operations with effects
+ * such as:
+ *
+ *     distributed
+ *     network
+ *     io
+ *     synchronization
+ *     mutation
+ *
+ * depending on the actual semantic operation.
+ *
+ * This grammar does not assign those effects.
+ *
+ * ============================================================================
+ * CAPABILITY CONTRACT
+ * ============================================================================
+ *
+ * The grammar does not assert that a target has any capability.
+ *
+ * Semantic analysis may resolve requirements such as:
+ *
+ *     capability("distributed.consistency")
+ *
+ *     capability("distributed.strong-consistency")
+ *
+ *     capability("distributed.causal-ordering")
+ *
+ * without requiring those capability names to become parser keywords.
+ *
+ * ============================================================================
+ * RESOURCE CONTRACT
+ * ============================================================================
+ *
+ * Resource expressions are delegated to the canonical expression/resource
+ * system.
+ *
+ * Examples:
+ *
+ *     memory >= required_memory
+ *
+ *     resources.available("distributed.communication")
+ *
+ *     bandwidth >= required_bandwidth
+ *
+ * The grammar does not define the units, machine widths, or capacity limits.
+ *
+ * ============================================================================
+ * CONTRACT / POLICY CONTRACT
+ * ============================================================================
+ *
+ * Consistency declarations may semantically participate in:
+ *
+ *     requires
+ *     ensures
+ *     invariant
+ *     assume
+ *     guarantee
+ *     property
+ *     policy
+ *     allow
+ *     forbid
+ *     prefer
+ *     constrain
+ *
+ * Those constructs remain owned by their canonical grammar/semantic systems.
+ *
+ * This file only provides expression positions in which they may be
+ * referenced when the surrounding language permits them.
+ *
+ * ============================================================================
+ * PROVENANCE CONTRACT
+ * ============================================================================
+ *
+ * Parsing must preserve source structure sufficient for downstream provenance.
+ *
+ * Semantic provenance may record:
+ *
+ *     source declaration;
+ *     property;
+ *     semantic interpretation;
+ *     resolved consistency model;
+ *     evidence;
+ *     selected realization;
+ *     transformation;
+ *     diagnostic.
+ *
+ * The grammar does not generate provenance records itself.
  *
  * ============================================================================
  * AST CONTRACT
  * ============================================================================
  *
- * The stable AST contract is conceptually:
+ * The parser must provide enough structure for the domain-neutral AST to
+ * represent conceptually:
  *
  *     ConsistencyDeclaration
  *         name
- *         body
+ *         members
+ *         source_span
  *
  *     ConsistencyInvocation
  *         qualified_name
  *         arguments
+ *         source_span
  *
  *     ConsistencyProperty
  *         name
  *         value
+ *         source_span
  *
- *     ConsistencyValue
- *         expression
- *         object
- *         list
+ *     ConsistencySection
+ *         name
+ *         members
+ *         source_span
  *
- * The exact Rust AST type names remain owned by the frontend AST subsystem.
+ *     ConsistencyList
+ *         elements
+ *         source_span
  *
- * This grammar must not require vendor-specific AST nodes.
+ * The exact Rust type names remain owned by the AST subsystem.
+ *
+ * This grammar MUST NOT require:
+ *
+ *     RaftAst
+ *     PaxosAst
+ *     CrdtAst
+ *     DatabaseConsistencyAst
+ *     PhysicalReplicaAst
+ *     HardwareConsistencyAst
+ *
+ * or other implementation-specific AST nodes.
  *
  * ============================================================================
  * SEMANTIC CONTRACT
@@ -441,17 +893,22 @@
  *
  * Semantic analysis must:
  *
- *     - classify the declaration;
- *     - validate contextual property names;
- *     - resolve names;
- *     - validate expressions;
- *     - detect incompatible properties;
- *     - validate referenced capabilities;
- *     - validate resource requirements;
- *     - determine whether a requested consistency model is implementable;
- *     - preserve diagnostics with source spans.
+ *     1. resolve the declaration name;
+ *     2. resolve qualified names;
+ *     3. resolve property names where appropriate;
+ *     4. type-check expressions;
+ *     5. classify consistency semantics;
+ *     6. validate consistency-model compatibility;
+ *     7. detect contradictory properties;
+ *     8. resolve resource requirements;
+ *     9. resolve capability requirements;
+ *     10. apply policy constraints;
+ *     11. evaluate contract relationships;
+ *     12. preserve provenance;
+ *     13. produce source-linked diagnostics;
+ *     14. determine whether the requested semantic guarantee can be realized.
  *
- * The parser must NOT perform these tasks.
+ * The parser performs NONE of these semantic decisions.
  *
  * ============================================================================
  * IR CONTRACT
@@ -459,196 +916,266 @@
  *
  * This grammar introduces NO new IR.
  *
- * Consistency intent is lowered by semantic/IR infrastructure into the
- * repository's canonical distributed semantic/IR representation.
- *
- * This file MUST NOT introduce:
+ * There must be no:
  *
  *     ConsistencyIR
  *     DistributedConsistencyIR
  *     ReplicaConsistencyIR
+ *     DatabaseConsistencyIR
  *
- * merely as a frontend convenience.
+ * merely for parser convenience.
+ *
+ * Consistency semantics lower through the repository's canonical semantic
+ * representation and established IR architecture.
+ *
+ * Classical execution continues through the canonical classical pipeline.
+ *
+ * Quantum computation continues through:
+ *
+ *     quantum::ir
+ *
+ * Distributed execution metadata remains compiler/runtime semantic metadata.
  *
  * ============================================================================
- * IMPLEMENTATION CONTRACT
+ * COMPILER INTEGRATION
  * ============================================================================
+ *
+ * The compiler pipeline is:
+ *
+ *     source
+ *       |
+ *       v
+ *     lexer
+ *       |
+ *       v
+ *     DistributedConsistency parser
+ *       |
+ *       v
+ *     domain-neutral AST
+ *       |
+ *       v
+ *     structural validation
+ *       |
+ *       +--> type checking
+ *       +--> effect checking
+ *       +--> capability checking
+ *       +--> resource checking
+ *       +--> contract checking
+ *       +--> policy checking
+ *       +--> provenance
+ *       |
+ *       v
+ *     distributed semantic model
+ *       |
+ *       v
+ *     canonical semantic representation
+ *       |
+ *       +--> classical IR
+ *       +--> quantum::ir
+ *       +--> HDL/hardware representation
+ *       |
+ *       v
+ *     optimization
+ *       |
+ *       +--> placement
+ *       +--> routing
+ *       +--> scheduling
+ *       +--> resilience
+ *       |
+ *       v
+ *     target realization
+ *
+ * No stage after parsing may silently change the declared consistency meaning.
+ *
+ * ============================================================================
+ * RUNTIME INTEGRATION
+ * ============================================================================
+ *
+ * Runtime behavior is downstream.
+ *
+ * The runtime may enforce, monitor, or report consistency guarantees according
+ * to the compiled semantic plan.
+ *
+ * The grammar does not specify:
+ *
+ *     - runtime data structures;
+ *     - synchronization algorithms;
+ *     - lock implementations;
+ *     - network protocols;
+ *     - storage implementations;
+ *     - retry mechanisms.
+ *
+ * Runtime enforcement must preserve the semantic contract established by the
+ * compiler.
+ *
+ * ============================================================================
+ * DIAGNOSTIC CONTRACT
+ * ============================================================================
+ *
+ * Parser diagnostics cover structural errors only.
+ *
+ * Examples:
+ *
+ *     consistency
+ *
+ *     consistency state
+ *
+ *     consistency state {
+ *
+ *     consistency state {
+ *         requirement:
+ *     }
+ *
+ *     distributed::consistency::policy(
+ *
+ * Semantic diagnostics include:
+ *
+ *     unknown consistency model;
+ *     contradictory consistency requirements;
+ *     unsupported capability;
+ *     unsatisfied resource requirement;
+ *     incompatible policy;
+ *     impossible guarantee;
+ *     invalid consistency/transaction relationship.
+ *
+ * Such failures MUST NOT be represented as grammar-level capacity errors.
+ *
+ * ============================================================================
+ * DETERMINISM CONTRACT
+ * ============================================================================
+ *
+ * Parsing must depend only on:
+ *
+ *     - source tokens;
+ *     - grammar version;
+ *     - lexical configuration.
+ *
+ * Parsing MUST NOT depend on:
+ *
+ *     - hardware availability;
+ *     - node count;
+ *     - runtime state;
+ *     - wall-clock time;
+ *     - randomness;
+ *     - network state;
+ *     - deployment state;
+ *     - filesystem state.
  *
  * The grammar contains:
  *
- *     - no embedded Rust;
+ *     - no actions;
  *     - no semantic predicates;
- *     - no parser actions;
- *     - no filesystem access;
- *     - no network access;
  *     - no runtime callbacks;
- *     - no hardware discovery;
+ *     - no I/O;
+ *     - no network access;
+ *     - no hardware access;
  *     - no randomness.
  *
- * Generated parser integration must remain compatible with:
- *
- *     Rust 1.97
- *     Rust 1.97.1
- *     Rust Edition 2021
- *
- * Generated and handwritten compiler code must use safe Rust only.
- *
  * ============================================================================
- * INTEGRATION CONTRACT
+ * SOURCE-PRESERVATION CONTRACT
  * ============================================================================
  *
- * This grammar is the canonical syntax owner for distributed consistency.
+ * Downstream AST/tooling must preserve:
  *
- * grammar/distributed/distributed.g4 MUST:
+ *     - declaration order;
+ *     - member order;
+ *     - property order;
+ *     - list order;
+ *     - qualified-name segment order;
+ *     - argument order;
+ *     - nested section structure;
+ *     - source spans.
  *
- *     1. import Consistency;
- *     2. route distributedConsistency to
- *        distributedConsistencyConstruct;
- *     3. remove its duplicate inline consistency invocation syntax.
+ * The parser must not:
  *
- * Conceptually:
- *
- *     distributedConstruct
- *         ...
- *         | distributedConsistency
- *         ...
- *         ;
- *
- *     distributedConsistency
- *         : distributedConsistencyConstruct
- *         ;
- *
- * No second consistency grammar should be introduced.
+ *     - sort properties;
+ *     - merge properties;
+ *     - discard duplicates;
+ *     - evaluate expressions;
+ *     - normalize semantic values.
  *
  * ============================================================================
- * LEXER CONTRACT
+ * COMPATIBILITY CONTRACT
  * ============================================================================
  *
- * This parser grammar introduces no lexer tokens.
+ * This revision intentionally establishes a deterministic production syntax:
  *
- * In particular, it does NOT require global keywords for:
+ *     consistency <identifier> { ... }
  *
- *     consistency
- *     strong
- *     causal
- *     eventual
- *     linearizable
- *     sequential
- *     session
- *     freshness
- *     ordering
- *     visibility
- *     quorum
+ * rather than retaining the ambiguous:
  *
- * Contextual classification is a semantic responsibility unless the
- * repository-wide lexical specification later deliberately promotes a word
- * to a reserved keyword.
+ *     <identifier> <identifier> { ... }
  *
- * ============================================================================
- * DETERMINISM
- * ============================================================================
+ * form.
  *
- * The grammar is deliberately structured so that its primary alternatives
- * have distinguishable shapes:
+ * The invocation mechanism remains open-world and compatible with the
+ * repository's qualified-name expression architecture.
  *
- *     identifier identifier ...
+ * The public distributed entry point remains:
  *
- * versus:
+ *     distributedConsistencyConstruct
  *
- *     qualifiedName LPAREN ...
+ * Existing distributed.g4 composition therefore remains stable.
  *
- * Property syntax has exactly one production rather than many identical
- * alternatives.
+ * If historical source used the ambiguous two-identifier declaration form,
+ * compatibility/migration tooling must translate it to:
  *
- * This minimizes ambiguity and makes parser behavior deterministic.
+ *     consistency <identifier> { ... }
+ *
+ * rather than weakening the production grammar.
  *
  * ============================================================================
- * VALIDATION REQUIREMENTS
+ * ANTLR COMPOSITION CONTRACT
  * ============================================================================
  *
- * Production validation must verify:
+ * Public entry point:
  *
- *     - no unreachable rules;
- *     - no duplicate alternatives;
- *     - no ambiguity introduced by imports;
- *     - no left-recursion violations;
- *     - deterministic property parsing;
- *     - source-span preservation;
- *     - AST coverage;
- *     - semantic coverage;
- *     - IR coverage;
- *     - positive cases;
- *     - negative cases;
- *     - boundary cases;
- *     - scalability cases;
- *     - compatibility cases.
+ *     distributedConsistencyConstruct
  *
- * ============================================================================
- * HARD-CODING AUDIT
- * ============================================================================
+ * The distributed composition grammar consumes exactly that rule.
  *
- * This grammar contains no universal capacity constants.
+ * This grammar does not become the repository root.
  *
- * Forbidden examples include:
+ * The repository composition remains:
  *
- *     MAX_NODES
- *     MAX_REPLICAS
- *     MAX_PROPERTIES
- *     MAX_PARTITIONS
- *     MAX_MEMORY
- *     MAX_THREADS
- *
- * No physical identifiers are built into the syntax.
+ *     grammar/Zamani.g4
+ *         |
+ *         v
+ *     grammar/antlr/ZamaniParser.g4
+ *         |
+ *         v
+ *     distributed.g4
+ *         |
+ *         v
+ *     consistency.g4
  *
  * ============================================================================
- * COMPLETION CRITERIA
- * ============================================================================
- *
- * This file is complete when:
- *
- *     [x] ownership is explicit
- *     [x] non-ownership is explicit
- *     [x] lexical dependencies are explicit
- *     [x] declaration syntax is defined
- *     [x] invocation syntax is defined
- *     [x] property syntax is unambiguous
- *     [x] nested values are supported
- *     [x] arbitrary expressions are delegated
- *     [x] no fixed consistency enumeration exists
- *     [x] no hardware limits exist
- *     [x] no duplicate consistency property productions exist
- *     [x] AST contract is defined
- *     [x] semantic boundary is defined
- *     [x] IR boundary is defined
- *     [x] distributed integration is defined
- *     [x] quantum boundary is defined
- *     [x] replication boundary is defined
- *     [x] Rust compatibility is defined
- *     [x] safe-Rust requirement is defined
- *     [x] validation requirements are defined
- *     [x] hard-coding audit is defined
- *
- * Repository integration and conformance tests must be completed as
- * repository-level work described below this file.
- *
+ * GRAMMAR IMPLEMENTATION
  * ============================================================================
  */
 
-parser grammar Consistency;
+parser grammar DistributedConsistency;
 
 options {
     tokenVocab = ZamaniLexer;
 }
 
-import Names, Expressions;
+import
+    Names,
+    Expressions
+    ;
 
 
 /*
  * ============================================================================
- * PUBLIC ENTRY POINT
+ * 1. PUBLIC DISTRIBUTED ENTRY POINT
  * ============================================================================
  *
- * Stable entry point consumed by distributed.g4.
+ * Stable rule consumed by:
+ *
+ *     grammar/distributed/distributed.g4
+ *
+ * DO NOT rename without a versioned grammar compatibility change.
  */
 distributedConsistencyConstruct
     : consistencyConstruct
@@ -657,18 +1184,16 @@ distributedConsistencyConstruct
 
 /*
  * ============================================================================
- * CONSISTENCY CONSTRUCT
+ * 2. CONSISTENCY CONSTRUCT
  * ============================================================================
  *
- * The two forms have intentionally different token shapes:
+ * Declaration and invocation are structurally distinguishable:
  *
- *     declaration:
- *         identifier identifier body
+ *     CONSISTENCY identifier body
  *
- *     invocation:
- *         qualifiedName LPAREN ...
+ * versus:
  *
- * This keeps dispatch deterministic without requiring a new lexer keyword.
+ *     qualifiedName LPAREN ... RPAREN SEMICOLON
  */
 consistencyConstruct
     : consistencyDeclaration
@@ -678,31 +1203,20 @@ consistencyConstruct
 
 /*
  * ============================================================================
- * DECLARATION
+ * 3. CONSISTENCY DECLARATION
  * ============================================================================
  *
- * Canonical semantic form:
- *
- *     consistency <name> { ... }
- *
- * The first identifier is contextually classified as "consistency" by
- * semantic analysis.
- *
- * Examples:
+ * Canonical:
  *
  *     consistency state {
  *         requirement: strong;
- *     }
- *
- *     consistency shared_state {
  *         ordering: causal;
- *         freshness: bounded_staleness(10, milliseconds);
  *     }
  *
- * The grammar deliberately does not reserve "consistency" globally.
+ * The declaration marker is a reserved language-level token.
  */
 consistencyDeclaration
-    : identifier
+    : CONSISTENCY
       identifier
       consistencyBody
     ;
@@ -710,28 +1224,31 @@ consistencyDeclaration
 
 /*
  * ============================================================================
- * INVOCATION
+ * 4. CONSISTENCY INVOCATION
  * ============================================================================
  *
- * Canonical extensible form:
+ * Canonical examples:
  *
- *     consistency.policy(state, strong);
- *     distributed.consistency(state, causal);
+ *     consistency::policy(state, strong);
  *
- * The qualified name remains semantic data.
+ *     distributed::consistency::require(state, causal);
+ *
+ *     vendor::consistency::property(value);
+ *
+ * The qualified name is intentionally open-world.
  */
 consistencyInvocation
     : qualifiedName
       LPAREN
-      expressionList?
+      optionalExpressionList
       RPAREN
-      SEMICOLON
+      SEMICOLON?
     ;
 
 
 /*
  * ============================================================================
- * BODY
+ * 5. CONSISTENCY BODY
  * ============================================================================
  */
 consistencyBody
@@ -743,53 +1260,31 @@ consistencyBody
 
 /*
  * ============================================================================
- * MEMBERS
+ * 6. CONSISTENCY MEMBER
  * ============================================================================
  *
- * A member is either:
+ * Members are deliberately divided by syntactic shape:
  *
- *     property:
- *         name : value
+ *     name : value ;
  *
- * or:
+ *     name { ... }
  *
- *     nested declaration:
- *         name { ... }
+ *     qualifiedName(...);
  *
- * The second form permits semantic namespaces without creating a new grammar
- * rule for every future consistency dimension.
+ * This allows future semantic properties without requiring new grammar
+ * alternatives for every property name.
  */
 consistencyMember
     : consistencyProperty
     | consistencySection
+    | consistencyExtensionStatement
     ;
 
 
 /*
  * ============================================================================
- * PROPERTY
+ * 7. PROPERTY
  * ============================================================================
- *
- * ONE property production intentionally replaces the former collection of
- * syntactically identical productions.
- *
- * Examples:
- *
- *     requirement: strong;
- *     policy: linearizable;
- *     ordering: causal;
- *     visibility: read_after_write;
- *     freshness: bounded_staleness(10, milliseconds);
- *     read: read_your_writes;
- *     write: monotonic;
- *     session: monotonic_reads;
- *     conflict: application_defined;
- *     convergence: eventual;
- *     synchronization: causal;
- *     preference: low_latency;
- *     hint: local_preference;
- *
- * Property names are semantic identifiers.
  */
 consistencyProperty
     : identifier
@@ -801,26 +1296,8 @@ consistencyProperty
 
 /*
  * ============================================================================
- * NESTED SECTION
+ * 8. NESTED SECTION
  * ============================================================================
- *
- * Examples:
- *
- *     consistency state {
- *         read {
- *             guarantee: read_your_writes;
- *             ordering: causal;
- *         }
- *     }
- *
- *     consistency state {
- *         requirements {
- *             availability: expression;
- *             durability: expression;
- *         }
- *     }
- *
- * The parser preserves the section name and structure.
  */
 consistencySection
     : identifier
@@ -830,10 +1307,35 @@ consistencySection
 
 /*
  * ============================================================================
- * VALUE
+ * 9. EXTENSION STATEMENT
  * ============================================================================
  *
- * Values delegate normal computation/expression syntax to Expressions.
+ * Examples:
+ *
+ *     vendor::consistency::property(value);
+ *
+ *     future::consistency::guarantee(expression);
+ *
+ *     dialect::consistency::model(argument);
+ */
+consistencyExtensionStatement
+    : qualifiedName
+      LPAREN
+      optionalExpressionList
+      RPAREN
+      SEMICOLON?
+    ;
+
+
+/*
+ * ============================================================================
+ * 10. VALUE
+ * ============================================================================
+ *
+ * General expressions remain owned by Expressions.
+ *
+ * Nested objects and lists provide structural data without introducing a
+ * second expression language.
  */
 consistencyValue
     : expression
@@ -844,10 +1346,8 @@ consistencyValue
 
 /*
  * ============================================================================
- * OBJECT
+ * 11. OBJECT
  * ============================================================================
- *
- * Objects intentionally reuse the same property/section structure.
  */
 consistencyObject
     : LBRACE
@@ -858,25 +1358,875 @@ consistencyObject
 
 /*
  * ============================================================================
- * LIST
+ * 12. LIST
  * ============================================================================
  *
- * Lists are unbounded at the grammar level.
+ * There is no grammar-level list-size limit.
  */
 consistencyList
     : LBRACKET
-      consistencyListElement*
+      optionalConsistencyListElements
       RBRACKET
     ;
 
 
 /*
  * ============================================================================
- * LIST ELEMENT
+ * 13. LIST ELEMENTS
  * ============================================================================
+ *
+ * Elements are separated explicitly by commas.
+ *
+ * Empty lists are valid.
+ *
+ * A trailing comma is intentionally not accepted here unless the canonical
+ * repository collection grammar later establishes that convention.
  */
+optionalConsistencyListElements
+    : consistencyListElements?
+    ;
+
+
+consistencyListElements
+    : consistencyListElement
+      (COMMA consistencyListElement)*
+    ;
+
+
 consistencyListElement
     : expression
     | consistencyObject
     | consistencyList
     ;
+
+
+/*
+ * ============================================================================
+ * 14. STABLE SEMANTIC ADAPTER RULES
+ * ============================================================================
+ *
+ * These aliases provide stable integration points for semantic consumers
+ * without creating a second expression language.
+ */
+
+
+/*
+ * Consistency requirement value.
+ */
+consistencyRequirement
+    : expression
+    ;
+
+
+/*
+ * Consistency constraint value.
+ */
+consistencyConstraint
+    : expression
+    ;
+
+
+/*
+ * Consistency preference value.
+ */
+consistencyPreference
+    : expression
+    ;
+
+
+/*
+ * Consistency guarantee value.
+ */
+consistencyGuarantee
+    : expression
+    ;
+
+
+/*
+ * Consistency ordering value.
+ */
+consistencyOrdering
+    : expression
+    ;
+
+
+/*
+ * Consistency freshness value.
+ */
+consistencyFreshness
+    : expression
+    ;
+
+
+/*
+ * Consistency visibility value.
+ */
+consistencyVisibility
+    : expression
+    ;
+
+
+/*
+ * Consistency conflict value.
+ */
+consistencyConflict
+    : expression
+    ;
+
+
+/*
+ * Consistency convergence value.
+ */
+consistencyConvergence
+    : expression
+    ;
+
+
+/*
+ * Consistency synchronization value.
+ */
+consistencySynchronization
+    : expression
+    ;
+
+
+/*
+ * Consistency policy value.
+ */
+consistencyPolicy
+    : expression
+    ;
+
+
+/*
+ * Consistency capability requirement.
+ */
+consistencyCapability
+    : expression
+    ;
+
+
+/*
+ * Consistency resource requirement.
+ */
+consistencyResourceRequirement
+    : expression
+    ;
+
+
+/*
+ * Consistency evidence.
+ */
+consistencyEvidence
+    : expression
+    ;
+
+
+/*
+ * Consistency provenance reference.
+ */
+consistencyProvenance
+    : expression
+    ;
+
+
+/*
+ * ============================================================================
+ * 15. SOURCE-PRESERVATION CONTRACT
+ * ============================================================================
+ *
+ * The parser/frontend must preserve:
+ *
+ *     - source spans;
+ *     - declaration order;
+ *     - member order;
+ *     - property order;
+ *     - section order;
+ *     - list order;
+ *     - qualified-name segment order;
+ *     - argument order;
+ *     - expression structure;
+ *     - duplicate properties.
+ *
+ * The grammar itself performs no normalization.
+ */
+
+
+/*
+ * ============================================================================
+ * 16. NO SEMANTIC EXECUTION
+ * ============================================================================
+ *
+ * This grammar contains:
+ *
+ *     - no actions;
+ *     - no semantic predicates;
+ *     - no embedded Rust;
+ *     - no filesystem access;
+ *     - no network access;
+ *     - no hardware discovery;
+ *     - no runtime callbacks;
+ *     - no randomness.
+ *
+ * ============================================================================
+ * 17. HARD-CODING AUDIT
+ * ============================================================================
+ *
+ * Forbidden:
+ *
+ *     MAX_NODES
+ *     MAX_REPLICAS
+ *     MAX_PARTITIONS
+ *     MAX_PROPERTIES
+ *     MAX_REQUIREMENTS
+ *     MAX_CONSISTENCY_LEVELS
+ *     MAX_RESOURCES
+ *     MAX_DEVICES
+ *     MAX_MEMORY
+ *     MAX_THREADS
+ *
+ * Also forbidden are implicit fixed physical identities such as:
+ *
+ *     node_0
+ *     replica_0
+ *     machine_0
+ *     gpu_0
+ *     qpu_0
+ *
+ * Numeric literals appearing inside expressions remain ordinary program
+ * semantics and MUST NOT be interpreted as language-wide limits.
+ */
+
+
+/*
+ * ============================================================================
+ * 18. DIAGNOSTIC BOUNDARY
+ * ============================================================================
+ *
+ * Parser diagnostics:
+ *
+ *     - missing CONSISTENCY marker;
+ *     - missing declaration name;
+ *     - missing body;
+ *     - malformed property;
+ *     - malformed section;
+ *     - malformed list;
+ *     - malformed extension call;
+ *     - malformed invocation.
+ *
+ * Semantic diagnostics:
+ *
+ *     - unknown consistency model;
+ *     - contradictory guarantees;
+ *     - unsupported capability;
+ *     - unsatisfied resource requirement;
+ *     - invalid policy;
+ *     - invalid contract relationship;
+ *     - unsupported target realization.
+ *
+ * Resource/capability failure MUST NOT be converted into a grammar-level
+ * machine-capacity limit.
+ */
+
+
+/*
+ * ============================================================================
+ * 19. QUANTUM INTEGRATION
+ * ============================================================================
+ *
+ * Consistency metadata associated with quantum-classical computation remains
+ * classical semantic metadata unless the quantum subsystem explicitly defines
+ * a valid relationship.
+ *
+ * The canonical quantum path remains:
+ *
+ *     Zamani source
+ *         |
+ *         v
+ *     domain-neutral AST
+ *         |
+ *         v
+ *     quantum semantic analysis
+ *         |
+ *         v
+ *     quantum::ir
+ *         |
+ *         v
+ *     optimization
+ *         |
+ *         v
+ *     routing
+ *         |
+ *         v
+ *     scheduling
+ *         |
+ *         v
+ *     QEC / resilience
+ *         |
+ *         v
+ *     ZQN
+ *         |
+ *         v
+ *     HAL
+ *
+ * This grammar does not create a quantum IR.
+ */
+
+
+/*
+ * ============================================================================
+ * 20. REPLICATION INTEGRATION
+ * ============================================================================
+ *
+ * Consistency may semantically apply to replicated state.
+ *
+ * The relationship is:
+ *
+ *     replication.g4
+ *         -> logical replication intent
+ *
+ *     consistency.g4
+ *         -> visibility/order/freshness/convergence intent
+ *
+ * Semantic analysis combines the two.
+ *
+ * Neither grammar owns the other's syntax.
+ */
+
+
+/*
+ * ============================================================================
+ * 21. TRANSACTION INTEGRATION
+ * ============================================================================
+ *
+ * Transactions remain owned by:
+ *
+ *     grammar/distributed/transactions.g4
+ *
+ * Consistency properties may be referenced from transaction semantics through
+ * expressions and semantic relations.
+ *
+ * This grammar does not define transaction operations.
+ */
+
+
+/*
+ * ============================================================================
+ * 22. FAULT-TOLERANCE INTEGRATION
+ * ============================================================================
+ *
+ * Fault tolerance remains owned by:
+ *
+ *     grammar/distributed/fault-tolerance.g4
+ *
+ * A consistency declaration may specify a guarantee that must remain true
+ * after recovery, but the grammar does not implement recovery.
+ */
+
+
+/*
+ * ============================================================================
+ * 23. RESOURCE / CAPABILITY INTEGRATION
+ * ============================================================================
+ *
+ * Resource and capability requirements remain target-independent.
+ *
+ * Examples of semantic expressions:
+ *
+ *     capability("distributed.consistency")
+ *
+ *     capability("distributed.causal-ordering")
+ *
+ *     memory >= required_memory
+ *
+ *     bandwidth >= required_bandwidth
+ *
+ * The grammar preserves these expressions.
+ *
+ * Semantic analysis determines feasibility.
+ */
+
+
+/*
+ * ============================================================================
+ * 24. EFFECT INTEGRATION
+ * ============================================================================
+ *
+ * A consistency declaration itself is declarative syntax.
+ *
+ * Actual operations associated with:
+ *
+ *     synchronization;
+ *     communication;
+ *     mutation;
+ *     distributed execution;
+ *
+ * may acquire effects during semantic analysis.
+ *
+ * This grammar does not assign effects directly.
+ */
+
+
+/*
+ * ============================================================================
+ * 25. POLICY INTEGRATION
+ * ============================================================================
+ *
+ * Policies may constrain which consistency guarantees are permitted.
+ *
+ * Examples:
+ *
+ *     allow consistency model;
+ *     forbid consistency model;
+ *     prefer consistency model;
+ *
+ * remain semantic/policy constructs.
+ *
+ * This grammar does not create a competing policy language.
+ */
+
+
+/*
+ * ============================================================================
+ * 26. PROVENANCE INTEGRATION
+ * ============================================================================
+ *
+ * Consistency declarations and properties must remain traceable to source
+ * locations.
+ *
+ * Downstream provenance may record:
+ *
+ *     source declaration
+ *     selected semantic model
+ *     evidence
+ *     capability resolution
+ *     resource resolution
+ *     policy decisions
+ *     compiler transformations
+ *     final realization
+ *
+ * The parser only preserves the source structure required to construct those
+ * records.
+ */
+
+
+/*
+ * ============================================================================
+ * 27. CANONICAL IR INTEGRATION
+ * ============================================================================
+ *
+ * This grammar creates no IR.
+ *
+ * There must be one canonical semantic representation for distributed
+ * consistency intent rather than a grammar-specific IR.
+ *
+ * The lowering path is:
+ *
+ *     Consistency AST
+ *         |
+ *         v
+ *     consistency semantic model
+ *         |
+ *         v
+ *     canonical semantic representation
+ *         |
+ *         +--> classical IR
+ *         +--> quantum::ir where quantum computation is involved
+ *         +--> HDL/hardware representation where applicable
+ *
+ * Optimization, placement, routing, scheduling, resilience, ZQN and HAL
+ * remain downstream.
+ */
+
+
+/*
+ * ============================================================================
+ * 28. RUNTIME INTEGRATION
+ * ============================================================================
+ *
+ * The runtime may enforce, monitor, observe, or report consistency semantics
+ * according to the compiled execution plan.
+ *
+ * Runtime implementations MUST NOT reinterpret source syntax in a way that
+ * changes its semantic contract.
+ */
+
+
+/*
+ * ============================================================================
+ * 29. COMPATIBILITY / MIGRATION
+ * ============================================================================
+ *
+ * The public rule:
+ *
+ *     distributedConsistencyConstruct
+ *
+ * remains unchanged.
+ *
+ * The production declaration syntax is:
+ *
+ *     consistency <identifier> { ... }
+ *
+ * The old ambiguous contextual declaration:
+ *
+ *     <identifier> <identifier> { ... }
+ *
+ * is intentionally not retained in the production grammar.
+ *
+ * Historical source using that shape belongs in compatibility/migration
+ * tooling rather than the canonical parser.
+ *
+ * Invocation remains open-world:
+ *
+ *     qualifiedName(...) ;
+ *
+ * This permits future consistency APIs without parser expansion.
+ */
+
+
+/*
+ * ============================================================================
+ * 30. VALIDATION REQUIREMENTS
+ * ============================================================================
+ *
+ * Production validation must include:
+ *
+ * STRUCTURAL:
+ *
+ *     - ANTLR generation succeeds;
+ *     - imports resolve;
+ *     - public rule resolves;
+ *     - no unreachable rules;
+ *     - no duplicate rules;
+ *     - no grammar actions;
+ *     - no semantic predicates.
+ *
+ * POSITIVE:
+ *
+ *     consistency state {
+ *         requirement: strong;
+ *     }
+ *
+ *     consistency state {
+ *         requirement: strong;
+ *         ordering: causal;
+ *         freshness: bounded_staleness;
+ *     }
+ *
+ *     consistency state {
+ *         read {
+ *             guarantee: read_your_writes;
+ *         }
+ *
+ *         write {
+ *             guarantee: monotonic_write;
+ *         }
+ *     }
+ *
+ *     consistency state {
+ *         requirements {
+ *             capability("distributed.consistency");
+ *             memory >= required_memory;
+ *         }
+ *     }
+ *
+ *     consistency state {
+ *         models: [
+ *             strong,
+ *             causal,
+ *             eventual
+ *         ];
+ *     }
+ *
+ *     consistency::policy(state, strong);
+ *
+ *     distributed::consistency::require(
+ *         state,
+ *         causal
+ *     );
+ *
+ *     vendor::consistency::property(value);
+ *
+ * NEGATIVE:
+ *
+ *     consistency
+ *
+ *     consistency {
+ *     }
+ *
+ *     consistency state
+ *
+ *     consistency state {
+ *         requirement:
+ *     }
+ *
+ *     consistency state {
+ *         read {
+ *     }
+ *
+ *     distributed::consistency::require(
+ *
+ * BOUNDARY:
+ *
+ *     - empty consistency body;
+ *     - one property;
+ *     - many properties;
+ *     - repeated properties;
+ *     - nested sections;
+ *     - nested lists;
+ *     - deeply qualified names;
+ *     - large expression trees;
+ *     - large property collections;
+ *     - large consistency declarations.
+ *
+ * SCALABILITY:
+ *
+ *     - no declaration-count limit;
+ *     - no property-count limit;
+ *     - no list-size limit;
+ *     - no section-count limit;
+ *     - no node-count limit;
+ *     - no replica-count limit;
+ *     - no partition-count limit;
+ *     - no resource-count limit.
+ *
+ * DETERMINISM:
+ *
+ *     identical source + identical grammar/lexical configuration
+ *     -> identical parse structure.
+ *
+ * COMPATIBILITY:
+ *
+ *     distributed.g4 continues to consume:
+ *
+ *         distributedConsistencyConstruct
+ *
+ *     replication.g4 remains the replication syntax owner;
+ *
+ *     transactions.g4 remains the transaction syntax owner;
+ *
+ *     fault-tolerance.g4 remains the fault-tolerance syntax owner;
+ *
+ *     expressions remain owned by Expressions;
+ *
+ *     names remain owned by Names.
+ */
+
+
+/*
+ * ============================================================================
+ * 31. HARD-CODING / PORTABILITY AUDIT
+ * ============================================================================
+ *
+ * This file contains:
+ *
+ *     no fixed machine count;
+ *     no fixed node count;
+ *     no fixed replica count;
+ *     no fixed partition count;
+ *     no fixed memory capacity;
+ *     no fixed network capacity;
+ *     no fixed thread count;
+ *     no fixed device count;
+ *     no fixed hardware topology;
+ *     no fixed transport;
+ *     no fixed database;
+ *     no fixed consistency algorithm.
+ *
+ * Therefore the syntax remains suitable for:
+ *
+ *     tiny
+ *       ->
+ *     embedded
+ *       ->
+ *     workstation
+ *       ->
+ *     multicore
+ *       ->
+ *     accelerator
+ *       ->
+ *     HPC
+ *       ->
+ *     cluster
+ *       ->
+ *     federated
+ *       ->
+ *     cloud
+ *       ->
+ *     heterogeneous
+ *       ->
+ *     future computational substrates
+ *
+ * subject only to actual implementation and resource availability.
+ */
+
+
+/*
+ * ============================================================================
+ * 32. SAFE RUST CONTRACT
+ * ============================================================================
+ *
+ * This grammar contains no Rust implementation.
+ *
+ * The consuming compiler/frontend must remain compatible with:
+ *
+ *     Rust 1.97+
+ *     Rust Edition 2021
+ *
+ * and must use safe Rust only.
+ *
+ * No unsafe block, unsafe trait, unsafe function, unsafe implementation, or
+ * unsafe foreign-memory operation is required by this grammar.
+ */
+
+
+/*
+ * ============================================================================
+ * 33. COMPLETION CRITERIA
+ * ============================================================================
+ *
+ * This file is DONE when:
+ *
+ * [x] It owns consistency syntax only.
+ *
+ * [x] It has one stable public distributed entry point.
+ *
+ * [x] Declaration syntax is deterministic.
+ *
+ * [x] Invocation syntax is open-world.
+ *
+ * [x] Consistency model names remain extensible.
+ *
+ * [x] Properties remain open-world.
+ *
+ * [x] Nested sections are supported.
+ *
+ * [x] Structured values are supported.
+ *
+ * [x] Lists are supported without fixed capacity.
+ *
+ * [x] General expressions remain owned by Expressions.
+ *
+ * [x] Names remain owned by Names.
+ *
+ * [x] Replication remains owned by replication.g4.
+ *
+ * [x] Partitioning remains owned by partitioning.g4.
+ *
+ * [x] Transactions remain owned by transactions.g4.
+ *
+ * [x] Fault tolerance remains owned by fault-tolerance.g4.
+ *
+ * [x] Topology remains owned by topology.g4.
+ *
+ * [x] Placement remains owned by placement.g4.
+ *
+ * [x] Resources remain owned by resources/.
+ *
+ * [x] Capabilities remain owned by resources/ and semantic analysis.
+ *
+ * [x] Effects remain owned by effects/.
+ *
+ * [x] Policies remain owned by policies/.
+ *
+ * [x] Provenance remains owned by the provenance system.
+ *
+ * [x] No implementation algorithm is selected.
+ *
+ * [x] No physical hardware is selected.
+ *
+ * [x] No transport is selected.
+ *
+ * [x] No fixed capacity exists.
+ *
+ * [x] No parser action exists.
+ *
+ * [x] No semantic predicate exists.
+ *
+ * [x] No unsafe Rust is required.
+ *
+ * [x] Rust 1.97+ compatibility is defined.
+ *
+ * [x] Canonical quantum::ir integration is preserved.
+ *
+ * [x] POCO-REAF semantics are preserved.
+ *
+ * Repository-level verification must additionally confirm:
+ *
+ * [ ] `CONSISTENCY` exists in the canonical lexical vocabulary.
+ *
+ * [ ] ANTLR generation succeeds.
+ *
+ * [ ] `distributed.g4` imports this grammar successfully.
+ *
+ * [ ] `distributedConsistencyConstruct` remains reachable.
+ *
+ * [ ] AST mapping exists for all accepted constructs.
+ *
+ * [ ] semantic validation exists for accepted consistency properties.
+ *
+ * [ ] canonical semantic/IR lowering exists.
+ *
+ * [ ] positive tests pass.
+ *
+ * [ ] negative tests pass.
+ *
+ * [ ] boundary tests pass.
+ *
+ * [ ] scalability tests pass.
+ *
+ * [ ] determinism tests pass.
+ *
+ * [ ] compatibility tests pass.
+ *
+ * ============================================================================
+ * FINAL INVARIANT
+ * ============================================================================
+ *
+ * The fundamental architectural invariant is:
+ *
+ *     CONSISTENCY SYNTAX
+ *          |
+ *          v
+ *     PORTABLE SEMANTIC INTENT
+ *          |
+ *          v
+ *     TYPE / EFFECT / CAPABILITY / RESOURCE ANALYSIS
+ *          |
+ *          v
+ *     POLICY / CONTRACT / PROVENANCE ANALYSIS
+ *          |
+ *          v
+ *     CANONICAL SEMANTIC REPRESENTATION
+ *          |
+ *          +--> classical IR
+ *          +--> quantum::ir
+ *          +--> HDL / hardware representation
+ *          |
+ *          v
+ *     OPTIMIZATION
+ *          |
+ *          v
+ *     PLACEMENT
+ *          |
+ *          v
+ *     ROUTING
+ *          |
+ *          v
+ *     SCHEDULING
+ *          |
+ *          v
+ *     RESILIENCE
+ *          |
+ *          v
+ *     ZQN / HAL / TARGET
+ *
+ * Source consistency intent MUST remain semantically stable while the
+ * realization changes.
+ *
+ * Therefore the same source program can be considered for increasingly large
+ * or different computational environments without changing the consistency
+ * meaning merely because the target has more or different resources.
+ *
+ * ============================================================================
+ */
