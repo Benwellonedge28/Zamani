@@ -1,176 +1,4 @@
 /*
- * Zamani Programming Language
- * File: grammar/types/linear-types.g4
- *
- * PURPOSE
- * -------
- * Canonical grammar component for linear and affine type qualifiers.
- *
- * This file deliberately does NOT define typeExpression. The canonical
- * type-expression composition boundary is owned by grammar/types/types.g4.
- *
- * ARCHITECTURAL PRINCIPLE
- * -----------------------
- * Linear/affine typing describes semantic usage/ownership constraints on
- * values. It does not describe physical resources, hardware capacity,
- * quantum topology, register width, memory capacity, scheduling, routing,
- * or target realization.
- *
- * POCO-REAF
- * ---------
- * The grammar introduces no machine-size assumptions or fixed capacity
- * limits. A program may contain arbitrarily many linear/affine declarations
- * subject only to parser/compiler/runtime resource availability.
- *
- * RUST
- * ----
- * This grammar is consumed by the Rust frontend. Rust implementation code
- * must remain safe Rust; this grammar contains no embedded actions and
- * therefore introduces no unsafe implementation requirement.
- *
- * OWNERSHIP
- * ---------
- * OWNS:
- *   - linearityQualifier
- *   - linearTypeQualifier (compatibility-facing alias)
- *   - linear/affine qualifier syntax
- *
- * DOES NOT OWN:
- *   - typeExpression
- *   - named/qualified types
- *   - generic arguments
- *   - generic declarations
- *   - type bounds
- *   - general constraints
- *   - where clauses
- *   - references/lifetimes
- *   - ownership checking
- *   - borrow checking
- *   - resource allocation
- *   - capability negotiation
- *   - effects
- *   - contracts
- *   - policies
- *   - quantum operations
- *   - HDL constructs
- *   - hardware topology
- *   - IR construction
- *   - target lowering
- *   - runtime enforcement
- *
- * SEMANTIC BOUNDARY
- * -----------------
- *
- *   source
- *      |
- *      v
- *   linearityQualifier
- *      |
- *      v
- *   canonical TypeExpr
- *      |
- *      v
- *   semantic type model
- *      |
- *      v
- *   linear/affine usage analysis
- *      |
- *      v
- *   canonical semantic IR
- *
- * The grammar records syntax only. It must not attempt to prove linearity,
- * affine usage, ownership, borrowing, resource consumption, or lifetime
- * correctness.
- *
- * INTEGRATION CONTRACT
- * --------------------
- * DEPENDS_ON:
- *   lexer tokens LINEAR and AFFINE
- *
- * EXPORTS:
- *   linearityQualifier
- *   linearTypeQualifier
- *
- * CONSUMED_BY:
- *   grammar/types/types.g4
- *   generic/type-parameter grammar where supported
- *   declaration grammar through types.g4
- *
- * AST_OWNER:
- *   canonical frontend TypeExpr representation
- *
- * SEMANTIC_OWNER:
- *   type/ownership/resource semantic analysis
- *
- * IR_OWNER:
- *   canonical semantic IR and downstream domain IRs
- *
- * TEST_OWNER:
- *   grammar/tests/types/linear/
- *
- * SPEC_OWNER:
- *   grammar/specification/ and grammar/spec/type-system documentation
- *
- * COMPATIBILITY
- * -------------
- * New code should consume linearityQualifier.
- *
- * linearTypeQualifier is retained as a compatibility-facing rule name so
- * older delegate/root grammars can migrate without creating another
- * implementation of linearity syntax.
- *
- * IMPORTANT
- * ---------
- * Do not import types.g4 here. Doing so would create the wrong dependency
- * direction and can introduce grammar composition cycles.
- *
- * The owning type grammar imports/delegates to this component instead.
- */
-
-parser grammar LinearTypes;
-
-options {
-    tokenVocab = ZamaniLexer;
-}
-
-
-/*
- * --------------------------------------------------------------------------
- * PUBLIC API
- * --------------------------------------------------------------------------
- */
-
-/*
- * Canonical linearity qualifier.
- *
- * A type may be associated with exactly one qualifier at this grammar
- * boundary. Combining qualifiers is a semantic error, not something this
- * grammar should silently normalize.
- *
- * Examples of accepted qualifier forms:
- *
- *   linear
- *   affine
- *
- * The actual token spelling is owned exclusively by ZamaniLexer.
- */
-linearityQualifier
-    : LINEAR
-    | AFFINE
-    ;
-
-
-/*
- * Compatibility-facing rule.
- *
- * This alias deliberately delegates to the canonical rule instead of
- * duplicating its alternatives.
- */
-linearTypeQualifier
-    : linearityQualifier
-    ;
-
-/*
  * ============================================================================
  * Zamani Programming Language
  * ============================================================================
@@ -182,573 +10,479 @@ linearTypeQualifier
  *     LinearTypes
  *
  * Status:
- *     Production-ready modular parser component.
+ *     PRODUCTION
+ *
+ * Language role:
+ *     Source-level linear type qualifier.
  *
  * Compiler baseline:
- *     Rust 1.97 / Rust 1.97.1
+ *     Rust 1.97+
  *     Rust 2021
  *     safe Rust only
  *     no unsafe
  *
  * ============================================================================
- * FEATURE CONTRACT
- * ============================================================================
- *
  * PURPOSE
- * -------
- *
- * Define the source-level syntax for the `linear` type qualifier and expose
- * it as a reusable parser component for the canonical Zamani type grammar.
- *
- * The complete type expression is intentionally NOT parsed here.
- *
- *
- * OWNS
- * ----
- *
- * This file owns:
- *
- *   - linearQualifier;
- *   - linearityQualifier;
- *   - the parser-level meaning of the `linear` keyword as a type qualifier;
- *   - the modular grammar boundary for linear type qualification.
- *
- *
- * DOES NOT OWN
- * -------------
- *
- * This file does NOT own:
- *
- *   - lexer rules;
- *   - keyword spelling;
- *   - identifiers;
- *   - punctuation;
- *   - complete typeExpression;
- *   - typeCore;
- *   - generic types;
- *   - references;
- *   - pointers;
- *   - tuples;
- *   - arrays;
- *   - slices;
- *   - function types;
- *   - quantum types;
- *   - HDL types;
- *   - hardware types;
- *   - resource discovery;
- *   - capability discovery;
- *   - ownership analysis;
- *   - borrow checking;
- *   - move checking;
- *   - linear-use checking;
- *   - allocation;
- *   - deallocation;
- *   - runtime representation;
- *   - ABI layout;
- *   - target selection;
- *   - physical resource selection;
- *   - quantum mapping;
- *   - routing;
- *   - scheduling;
- *   - QEC;
- *   - ZQN;
- *   - HAL;
- *   - optimization;
- *   - backend selection.
- *
- *
- * ============================================================================
- * OWNERSHIP BOUNDARY
  * ============================================================================
  *
- * Complete source syntax:
+ * This grammar owns exactly one source-level construct:
+ *
+ *     linear
+ *
+ * as a type qualifier.
+ *
+ * It deliberately does NOT parse the type that follows the qualifier.
+ *
+ * Complete type expressions are owned by:
+ *
+ *     grammar/types/types.g4
+ *
+ * Therefore:
  *
  *     linear T
  *
- * is composed by:
+ * is composed by the canonical type grammar as:
  *
- *     types.g4
- *          │
- *          ├── linearityQualifier
- *          │        │
- *          │        └── this file
- *          │
- *          └── typeExpression
+ *     linearQualifier + typeExpression
  *
- * Therefore this file MUST NOT contain:
+ * ============================================================================
+ * ARCHITECTURAL PRINCIPLE
+ * ============================================================================
  *
- *     linearType
- *         : LINEAR typeExpression
- *         ;
+ * Linearity is a type-system property describing permitted value usage.
  *
- * because `typeExpression` is owned by types.g4.
+ * This grammar records only the source-level qualifier.
  *
- * Doing so would make this grammar depend upward on its importing grammar and
- * would create an invalid/circular modular dependency.
+ * It does NOT decide:
  *
+ *     - whether a particular type may be linear;
+ *     - whether a value must be consumed;
+ *     - whether a value may be copied;
+ *     - whether a value may be moved;
+ *     - whether aliases are permitted;
+ *     - whether destruction consumes a value;
+ *     - whether a value is resource-bearing;
+ *     - whether a value requires a capability;
+ *     - whether a value requires a physical resource;
+ *     - whether a value requires a quantum resource;
+ *     - whether a value maps to hardware;
+ *     - whether a value is executable;
+ *     - whether a value is schedulable.
+ *
+ * Those decisions belong to downstream semantic analysis.
+ *
+ * ============================================================================
+ * SINGLE-OWNER RULE
+ * ============================================================================
+ *
+ * THIS FILE OWNS:
+ *
+ *     linearQualifier
+ *
+ * THIS FILE DOES NOT OWN:
+ *
+ *     typeExpression
+ *     typeCore
+ *     typePostfix
+ *     typePrefix
+ *     affineQualifier
+ *     references
+ *     pointers
+ *     generics
+ *     tuples
+ *     arrays
+ *     slices
+ *     functions
+ *     dependent types
+ *     associated types
+ *     type classes
+ *     quantum types
+ *     classical types
+ *     HDL types
+ *     hardware types
+ *     resource types
+ *     capability types
+ *     effects
+ *     contracts
+ *     policies
+ *     provenance
+ *     ownership analysis
+ *     borrow analysis
+ *     move analysis
+ *     copy analysis
+ *     resource allocation
+ *     capability negotiation
+ *     target selection
+ *     optimization
+ *     lowering
+ *     routing
+ *     scheduling
+ *     resilience
+ *     QEC
+ *     ZQN
+ *     HAL
+ *     runtime execution
  *
  * ============================================================================
  * DEPENDENCY CONTRACT
  * ============================================================================
  *
- * DEPENDS_ON
- * ----------
+ * DEPENDS_ON:
  *
- *   grammar/lexer/keywords.g4
- *   grammar/lexer/tokens.g4
- *   grammar/antlr/ZamaniLexer.g4
+ *     grammar/antlr/ZamaniLexer.g4
  *
- * More precisely, this parser consumes the canonical:
+ * through the canonical token vocabulary:
  *
  *     LINEAR
  *
- * token produced by the composed Zamani lexer.
+ * The lexer token is ultimately owned by the repository's lexical subsystem.
  *
+ * This grammar MUST NOT define another:
  *
- * EXPORTS
- * -------
+ *     LINEAR
+ *     LINEAR_KEYWORD
+ *     LINEAR_TYPE
+ *     'linear'
  *
- *   linearQualifier
- *   linearityQualifier
+ * token.
  *
+ * EXPORTS:
  *
- * CONSUMED_BY
- * ----------
+ *     linearQualifier
  *
- *   grammar/types/types.g4
+ * CONSUMED_BY:
+ *
+ *     grammar/types/types.g4
  *
  * Indirectly consumed by:
  *
- *   grammar/Zamani.g4
- *   canonical parser/frontend
- *
- *
- * AST_OWNER
- * ---------
- *
- *   src/frontend/ast/node/types/type_expr.rs
- *
- * The relevant canonical AST representation is:
- *
- *     TypeExpr::Linear(...)
- *
- *
- * SEMANTIC_OWNER
- * --------------
- *
- *   semantic/type-system/ownership analysis
- *
- * The existing semantic layer currently resolves:
- *
- *     TypeExpr::Linear(inner)
- *
- * to:
- *
- *     Type::Linear(...)
- *
- * Full linearity enforcement must remain semantic rather than grammatical.
- *
- *
- * IR_OWNER
- * --------
- *
- * No independent IR is created by this grammar.
- *
- * Linear information is preserved through the canonical semantic type model
- * and lowered by the normal canonical IR pipeline.
- *
- * For quantum programs, the downstream quantum boundary remains:
- *
- *     quantum::ir
- *
- * No linear-specific quantum IR is introduced.
- *
- *
- * TEST_OWNER
- * ----------
- *
- *   grammar/tests/
- *   grammar/tests/types/
- *
- * The parser tests should exercise this rule through the canonical
- * `typeExpression` entry point rather than treating this grammar as a
- * standalone language.
- *
- *
- * SPEC_OWNER
- * ----------
- *
- *   grammar/spec/type-system.md
- *   grammar/specification/types.md
- *
+ *     grammar/Zamani.g4
+ *     canonical parser/frontend
  *
  * ============================================================================
- * LEXER CONTRACT
+ * ANTLR COMPOSITION CONTRACT
  * ============================================================================
  *
  * This is a parser grammar.
  *
- * It defines NO lexer rules.
+ * It MUST use:
  *
- * The canonical lexical spelling is owned by:
+ *     tokenVocab = ZamaniLexer
  *
- *     grammar/lexer/keywords.g4
+ * It MUST NOT import:
  *
- * where:
+ *     Types
  *
- *     LINEAR : 'linear' ;
+ * or any other grammar that owns complete type expressions.
  *
- * is defined.
+ * Dependency direction is:
  *
- * The composed lexer is:
+ *     LinearTypes
+ *          |
+ *          | exports linearQualifier
+ *          v
+ *     Type
+ *          |
+ *          | owns typeExpression
+ *          v
+ *     canonical frontend
  *
- *     grammar/antlr/ZamaniLexer.g4
+ * NOT:
  *
- * This grammar consumes the resulting `LINEAR` token.
+ *     Type -> LinearTypes -> Type
  *
- * It MUST NOT define:
- *
- *     LINEAR
- *     'linear'
- *     LINEAR_KEYWORD
- *     LINEAR_TYPE
- *
- * or any alternate token identity.
- *
- *
- * ============================================================================
- * ANTLR CONTRACT
- * ============================================================================
- *
- * This grammar is deliberately a parser grammar.
- *
- * It must use the canonical lexer vocabulary:
- *
- *     ZamaniLexer
- *
- * No local lexer is permitted.
- *
- * This keeps token identity consistent across:
- *
- *     types
- *     declarations
- *     functions
- *     memory
- *     quantum
- *     HDL
- *     resources
- *     classical
- *     distributed
- *     interoperability
- *
+ * The latter would create a circular grammar dependency.
  *
  * ============================================================================
- * PUBLIC RULES
+ * PUBLIC GRAMMAR API
  * ============================================================================
- */
-
-/**
- * Canonical source-level linearity qualifier.
  *
- * This rule consumes only the qualifier.
+ * `linearQualifier` consumes exactly one canonical LINEAR token.
  *
- * The operand type is supplied by the importing canonical type grammar.
+ * The rule intentionally does not consume the operand type.
  *
- * Example when composed by types.g4:
+ * Example composition:
  *
  *     linear T
  *
- * parses structurally as:
+ * is handled by the importing type grammar:
  *
- *     linearQualifier + typeExpression
+ *     typeExpression
+ *         : typePrefix* typeCore typePostfix*
+ *         ;
+ *
+ *     typePrefix
+ *         : linearTypePrefix
+ *         | ...
+ *         ;
+ *
+ *     linearTypePrefix
+ *         : linearQualifier
+ *         ;
+ *
+ * The result is structurally:
+ *
+ *     linearQualifier
+ *     typeExpression
+ *
+ * ============================================================================
+ * QUALIFIER OWNERSHIP
+ * ============================================================================
+ *
+ * `linear.g4` owns:
+ *
+ *     linearQualifier
+ *
+ * `affine.g4` owns:
+ *
+ *     affineQualifier
+ *
+ * They are intentionally independent.
+ *
+ * The canonical type orchestrator combines them.
+ *
+ * This prevents:
+ *
+ *     linear.g4
+ *
+ * from becoming an ownership-discipline grammar that silently owns affine
+ * syntax as well.
+ *
+ * ============================================================================
+ * GRAMMAR
+ * ============================================================================
  */
+
+parser grammar LinearTypes;
+
+options {
+    tokenVocab = ZamaniLexer;
+}
+
+
+/*
+ * ============================================================================
+ * LINEAR QUALIFIER
+ * ============================================================================
+ *
+ * Canonical source spelling:
+ *
+ *     linear
+ *
+ * Canonical lexer token:
+ *
+ *     LINEAR
+ *
+ * The operand type is intentionally NOT consumed here.
+ *
+ * Correct:
+ *
+ *     linearQualifier
+ *         : LINEAR
+ *         ;
+ *
+ * Incorrect:
+ *
+ *     linearQualifier
+ *         : LINEAR typeExpression
+ *         ;
+ *
+ * The incorrect form would make this component depend on the complete type
+ * grammar and would violate the repository's single-owner architecture.
+ *
+ * ============================================================================
+ */
+
 linearQualifier
     : LINEAR
     ;
 
 
-/**
- * Unified linearity qualifier boundary.
- *
- * This rule is intentionally designed so future ownership disciplines can
- * participate in a common qualifier composition without changing the
- * complete type-expression grammar.
- *
- * Currently the canonical alternatives are:
- *
- *     linear
- *
- * and, through the unified modular ownership boundary, affine.
- *
- * `affine` is defined by affine.g4.
- *
- * This file therefore does not duplicate the AFFINE token.
- */
-linearityQualifier
-    : linearQualifier
-    ;
-
-
 /*
- * ============================================================================
- * TYPE COMPOSITION CONTRACT
- * ============================================================================
- *
- * The canonical types/types.g4 file should consume this grammar approximately
- * as follows:
- *
- *     typeExpression
- *         : typeQualifier* typeCore typePostfix*
- *         ;
- *
- *     typeQualifier
- *         : linearityQualifier
- *         | affineQualifier
- *         | ...
- *         ;
- *
- * Or, if the repository chooses to make the combined ownership boundary
- * explicit:
- *
- *     typeQualifier
- *         : linearityQualifier
- *         | ...
- *         ;
- *
- * The critical invariant is:
- *
- *     linear.g4 owns linearQualifier
- *
- * while:
- *
- *     types.g4 owns typeExpression
- *
- * No file should create another competing `linearType` rule that consumes
- * `typeExpression`.
- *
- *
- * ============================================================================
- * SOURCE-LEVEL SEMANTIC INTENT
- * ============================================================================
- *
- * `linear T` expresses that values of T participate in a linear ownership or
- * resource discipline.
- *
- * The grammar does not determine the exact discipline.
- *
- * Semantic analysis determines:
- *
- *   - whether T may be linear;
- *   - whether T is resource-bearing;
- *   - whether copying is permitted;
- *   - whether duplication is permitted;
- *   - whether moving is permitted;
- *   - whether destruction consumes the value;
- *   - whether a value must be consumed;
- *   - whether a value may be transferred;
- *   - whether aliases are permitted;
- *   - how control-flow joins affect ownership;
- *   - how function parameters and returns affect ownership;
- *   - how generic substitutions affect ownership;
- *   - how references affect ownership;
- *   - how effects affect ownership;
- *   - how capabilities affect ownership;
- *   - how resource requirements affect ownership.
- *
- * These rules MUST NOT be encoded in this grammar.
- *
- *
  * ============================================================================
  * AST CONTRACT
  * ============================================================================
  *
- * The parser/frontend AST adapter maps a complete:
+ * This grammar does not construct an AST.
+ *
+ * The canonical frontend AST already provides:
+ *
+ *     TypeExpr::Linear(Box<TypeExpr>)
+ *
+ * Therefore the complete source construct:
  *
  *     linear T
  *
- * to the existing canonical:
+ * is represented downstream as conceptually:
  *
- *     TypeExpr::Linear(...)
+ *     TypeExpr::Linear(T)
  *
- * Conceptually:
- *
- *     linear T
- *         │
- *         ▼
- *     TypeExpr::Linear(TypeExpr(T))
- *
- * This grammar does not construct Rust values directly.
- *
- * No second:
+ * No additional:
  *
  *     LinearType
+ *     LinearTypeExpr
+ *     LinearNode
  *
- * AST hierarchy should be introduced.
+ * AST hierarchy is introduced here.
  *
+ * Source spans for the LINEAR token must remain available through the normal
+ * parser/frontend source-context machinery.
  *
  * ============================================================================
  * SEMANTIC CONTRACT
  * ============================================================================
  *
- * Structural parsing succeeds when:
+ * The grammar establishes only syntactic presence of the linear qualifier.
  *
- *     linear
+ * Semantic analysis owns:
  *
- * is followed by a syntactically valid type expression through the
- * surrounding `types.g4` grammar.
+ *     - linear type validity;
+ *     - linear-use checking;
+ *     - move checking;
+ *     - copy checking;
+ *     - destruction/consumption checking;
+ *     - control-flow ownership joins;
+ *     - function argument ownership;
+ *     - function return ownership;
+ *     - generic substitution;
+ *     - reference interaction;
+ *     - pointer interaction;
+ *     - resource interaction;
+ *     - capability interaction;
+ *     - effect interaction.
  *
- * Semantic validation then determines whether:
- *
- *     linear T
- *
- * is meaningful for T.
- *
- * Therefore the following distinction is intentional:
- *
- *     syntactically valid
- *
- * versus:
- *
- *     semantically valid.
- *
- * For example:
- *
- *     linear int
- *
- * may be syntactically accepted.
- *
- * Whether `int` may participate in the linear ownership discipline is a
- * semantic type-system decision.
- *
- * The grammar must not hard-code a whitelist such as:
- *
- *     Qubit
- *     Resource
- *     Buffer
- *     Memory
- *
- * because future user-defined and domain-specific resource types must remain
- * representable without changing this grammar.
- *
+ * In particular, this grammar MUST NOT contain semantic predicates that try
+ * to determine whether the qualified type is valid.
  *
  * ============================================================================
  * TYPE CONTRACT
  * ============================================================================
  *
- * The operand of `linear` is an arbitrary source-level type expression
- * accepted by the canonical type system.
+ * The operand of `linear` is whatever complete type expression the canonical
+ * type system accepts.
  *
- * Consequently the following categories may participate when semantically
- * permitted:
+ * This means the grammar does not need to know the universe of types.
  *
- *     named types
- *     generic types
- *     references
- *     pointers
- *     tuples
- *     arrays
- *     slices
- *     function types
- *     quantum types
- *     temporal types
- *     dependent types
- *     user-defined types
- *     resource types
- *     capability types
- *     accelerator abstractions
- *     distributed abstractions
- *     HDL abstractions
- *     future domain types
+ * Examples that may be accepted by the surrounding type grammar include:
  *
- * The grammar imposes no finite type inventory.
+ *     linear T
+ *     linear User
+ *     linear module::User
+ *     linear Vec<T>
+ *     linear Result<T, E>
+ *     linear (T, U)
+ *     linear [T]
+ *     linear fn(T) -> U
+ *     linear &T
+ *     linear &mut T
+ *     linear Qubit
+ *     linear Resource<T>
+ *     linear Tensor<T, Shape>
  *
+ * Whether any particular combination is semantically legal is decided after
+ * parsing.
+ *
+ * No finite type whitelist is permitted here.
+ *
+ * ============================================================================
+ * GENERIC / SYMBOLIC SCALABILITY
+ * ============================================================================
+ *
+ * This grammar imposes no limit on:
+ *
+ *     - generic arity;
+ *     - identifier length;
+ *     - qualified-name depth;
+ *     - type nesting;
+ *     - symbolic dimensions;
+ *     - resource quantities;
+ *     - quantum quantities;
+ *     - hardware quantities;
+ *     - tensor dimensions.
+ *
+ * It contains no implementation capacity constants.
+ *
+ * It therefore does not impose a language-level machine-size ceiling.
+ *
+ * Actual compiler, memory, parser-stack, execution, and target-resource
+ * limitations remain implementation/resource concerns rather than grammar
+ * semantics.
  *
  * ============================================================================
  * EFFECT CONTRACT
  * ============================================================================
  *
- * The presence of `linear` is not itself an execution effect.
+ * Applying the `linear` qualifier is not itself an execution effect.
  *
- * Ownership/resource semantics are type-system semantics.
+ * It does not imply:
  *
- * If a linear type is subsequently used in an operation producing effects,
- * those effects belong to the operation/effect system rather than this
- * grammar.
- *
- * This separation prevents:
- *
- *     linear
- *
- * from accidentally implying:
- *
+ *     IO
  *     mutation
  *     allocation
- *     IO
- *     network
- *     quantum
- *     measurement
+ *     deallocation
+ *     networking
+ *     randomness
  *     native execution
+ *     foreign execution
+ *     quantum measurement
  *     learning
  *     adaptation
+ *     reflection
+ *     simulation
  *
- * merely because the type is linear.
- *
+ * Effects belong to the canonical effect system and to the operations that
+ * use the resulting value.
  *
  * ============================================================================
  * CAPABILITY CONTRACT
  * ============================================================================
  *
- * `linear` does not require a hardware capability.
+ * Parsing `linear` requires no hardware or execution capability.
  *
- * A semantic type may independently require capabilities.
+ * A type qualified by `linear` may later participate in a semantic capability
+ * requirement.
  *
- * For example, a user-defined type may semantically represent a quantum,
- * accelerator, distributed, or other resource.
+ * For example, a user-defined type might semantically represent a resource
+ * requiring some capability.
  *
- * Capability requirements belong to:
+ * Such requirements belong to:
  *
  *     grammar/resources/
  *
- * and the semantic capability system.
+ * and the semantic capability/resource systems.
  *
- * This grammar must never contain:
- *
- *     capability("...")
- *
- * or hardware-specific capability names.
- *
+ * This grammar MUST NOT contain capability names.
  *
  * ============================================================================
  * RESOURCE CONTRACT
  * ============================================================================
  *
- * Linearity can model resource ownership, but this grammar does not allocate
- * resources.
+ * A linear value can represent a resource-bearing abstraction, but the
+ * qualifier does not allocate or reserve a resource.
  *
- * Resource requirements remain symbolic.
- *
- * Examples of valid downstream concepts include:
- *
- *     requires capability("quantum.measurement")
- *     requires memory >= required_memory
- *     requires qubits >= required_qubits
- *
- * Those are not part of this grammar.
- *
- * The type:
+ * For example:
  *
  *     linear Resource<T>
  *
- * expresses a source-level type abstraction.
+ * expresses source-level type information only.
  *
- * It does not select a physical resource.
+ * It does not mean:
  *
+ *     allocate hardware;
+ *     reserve memory;
+ *     reserve a processor;
+ *     reserve a GPU;
+ *     reserve a QPU;
+ *     reserve a node;
+ *     reserve a device.
+ *
+ * Resource feasibility remains downstream.
  *
  * ============================================================================
  * CONTRACT CONTRACT
  * ============================================================================
  *
- * Type-level linearity does not itself define:
+ * The linear qualifier may be referenced by operations governed by:
  *
  *     requires
  *     ensures
@@ -757,86 +491,88 @@ linearityQualifier
  *     guarantee
  *     property
  *
- * Contracts may constrain operations involving linear values, but their
- * syntax and semantics belong to the validation/contract subsystem.
+ * However, none of those contract constructs belong in this file.
  *
+ * Contract syntax and verification remain owned by the validation/contract
+ * subsystem.
  *
  * ============================================================================
  * POLICY CONTRACT
  * ============================================================================
  *
- * Policies may restrict operations involving linear resources.
+ * Policies may constrain operations involving linear values.
  *
  * Examples include policies concerning:
  *
  *     transfer
- *     duplication
  *     persistence
+ *     duplication
  *     external calls
- *     adaptation
  *     distribution
+ *     adaptation
  *
- * Such policies are consumed semantically.
- *
- * This grammar does not define policy syntax.
- *
+ * Policy syntax and evaluation remain outside this grammar.
  *
  * ============================================================================
  * PROVENANCE CONTRACT
  * ============================================================================
  *
- * The source span of `LINEAR` must remain available to the parser/frontend so
- * diagnostics can identify the qualifier precisely.
+ * The parser/frontend must preserve the source context of LINEAR.
  *
  * Downstream provenance may record:
  *
  *     source declaration
  *     source qualifier
  *     semantic interpretation
- *     transformations
- *     verification
+ *     validation
+ *     transformation
+ *     optimization
  *     lowering
  *
- * This grammar does not generate provenance records.
- *
+ * This grammar does not create provenance records.
  *
  * ============================================================================
- * QUANTUM BOUNDARY
+ * QUANTUM INTEGRATION
  * ============================================================================
  *
- * Linear types are useful for quantum-resource semantics, but this grammar is
- * domain-neutral.
+ * Linearity is useful for values whose semantic domain includes quantum
+ * resources.
  *
  * Examples:
  *
  *     linear Qubit
  *     linear LogicalQubit
- *     linear QuantumResource<Qubit>
+ *     linear QuantumResource<T>
  *
- * are source-level type expressions.
+ * remain ordinary source-level type expressions.
  *
- * This file MUST NOT encode:
+ * This grammar MUST NOT encode:
  *
- *     physical qubit identity
- *     QPU identity
+ *     physical qubit identifiers
+ *     QPU identifiers
+ *     coupling maps
  *     topology
- *     gate decomposition
+ *     gate sets
+ *     decomposition
  *     routing
  *     scheduling
  *     calibration
- *     error correction
+ *     error-correction strategy
  *     resilience strategy
- *     vendor instruction set
  *
- * The downstream quantum pipeline remains:
+ * If a linear type participates in quantum computation, downstream processing
+ * remains:
  *
  *     source
  *       |
  *       v
- *     AST
+ *     AST TypeExpr::Linear
  *       |
  *       v
- *     semantic quantum model
+ *     semantic type analysis
+ *       |
+ *       v
+ *     quantum semantic model
  *       |
  *       v
  *     quantum::ir
@@ -845,16 +581,10 @@ linearityQualifier
  *     optimization
  *       |
  *       v
- *     decomposition
+ *     decomposition/routing/scheduling
  *       |
  *       v
- *     routing
- *       |
- *       v
- *     scheduling
- *       |
- *       v
- *     resilience / QEC
+ *     resilience/QEC
  *       |
  *       v
  *     ZQN
@@ -863,313 +593,223 @@ linearityQualifier
  *     HAL
  *       |
  *       v
- *     target
+ *     target realization
  *
- * No linear-specific quantum IR is introduced.
- *
- *
- * ============================================================================
- * HDL BOUNDARY
- * ============================================================================
- *
- * HDL/resource types may also be linear where their semantic model requires
- * exclusive resource ownership.
- *
- * Examples:
- *
- *     linear Signal<T>
- *     linear Resource<Register<T>>
- *
- * The grammar remains unaware of whether a named type represents:
- *
- *     signal
- *     register
- *     bus
- *     memory
- *     accelerator
- *     device
- *     interface
- *
- * HDL ownership, synthesis, timing, placement, and physical realization remain
- * downstream.
- *
+ * No linear-specific quantum IR is created.
  *
  * ============================================================================
- * BACKEND BOUNDARY
+ * HDL / HARDWARE INTEGRATION
  * ============================================================================
  *
- * Backends consume the semantic consequences of linearity.
+ * A linear-qualified type may represent an HDL, hardware, accelerator, or
+ * device resource abstraction if the canonical type system permits it.
  *
- * This grammar must never choose:
+ * This grammar does not identify a physical implementation.
  *
- *     CPU
- *     GPU
- *     FPGA
- *     ASIC
- *     QPU
- *     simulator
- *     cluster
- *     cloud
- *     accelerator
+ * It MUST NOT encode:
  *
- * Nor may it encode target-specific representation choices.
+ *     CPU count
+ *     GPU count
+ *     FPGA count
+ *     ASIC capacity
+ *     node count
+ *     memory capacity
+ *     register width
+ *     network size
+ *     device count
  *
+ * Hardware realization belongs to hardware/resource/capability analysis and
+ * target lowering.
  *
  * ============================================================================
- * SCALABILITY / POCO-REAF
+ * POCO-REAF CONTRACT
  * ============================================================================
  *
- * This grammar intentionally contains no implementation capacity constants.
+ * The source-level meaning of:
  *
- * It must NOT contain:
+ *     linear T
+ *
+ * is independent of the size or identity of the machine on which T is
+ * eventually realized.
+ *
+ * Therefore this grammar contains no artificial machine ceiling.
+ *
+ * It MUST NOT define or imply constants such as:
  *
  *     MAX_LINEAR_VALUES
- *     MAX_LINEAR_RESOURCES
  *     MAX_LINEAR_TYPES
- *     MAX_AFFINE_VALUES
+ *     MAX_TYPE_DEPTH
+ *     MAX_GENERIC_ARITY
  *     MAX_QUBITS
  *     MAX_CPUS
  *     MAX_GPUS
  *     MAX_FPGAS
- *     MAX_QPUS
  *     MAX_NODES
  *     MAX_MEMORY
  *     MAX_THREADS
- *     MAX_DEVICES
- *     MAX_TYPE_DEPTH
- *     MAX_GENERIC_ARITY
+ *     MAX_REGISTER_WIDTH
+ *     MAX_NETWORK_SIZE
+ *     MAX_DEVICE_COUNT
  *
- * or equivalent limits.
+ * No resource number is encoded by this qualifier.
  *
- * Nested and generic types remain bounded only by actual parser/compiler
- * implementation resources, not by language-level constants.
- *
- * Examples:
- *
- *     linear T
- *
- *     linear A::B::C::D::T
- *
- *     linear Resource<T>
- *
- *     linear Resource<Capability<QuantumResource<Qubit>>>
- *
- *     linear Vec<Vec<Vec<T>>>
- *
- * are all structurally representable.
- *
- * No grammar change should be required merely because a program uses larger
- * resource cardinalities.
- *
- * POCO-REAF is therefore achieved at the language level by describing
- * ownership intent rather than physical resource instances.
- *
+ * A program remains source-compatible across target scales as long as its
+ * semantic requirements can be satisfied by the selected realization.
  *
  * ============================================================================
- * DETERMINISM
+ * DETERMINISM CONTRACT
  * ============================================================================
  *
- * This grammar contains:
+ * Parsing this construct must depend only on:
  *
- *     no semantic predicates;
- *     no parser actions;
- *     no runtime calls;
- *     no I/O;
- *     no filesystem access;
- *     no network access;
- *     no hardware discovery;
- *     no target-dependent alternatives;
- *     no generated identifiers;
- *     no mutable global state.
+ *     - input token stream;
+ *     - grammar version;
+ *     - lexer vocabulary;
+ *     - parser configuration.
  *
- * For a fixed token stream and lexer vocabulary, parsing is deterministic.
+ * It MUST NOT depend on:
  *
+ *     - available CPU count;
+ *     - available GPU count;
+ *     - available QPU;
+ *     - machine memory;
+ *     - network topology;
+ *     - filesystem state;
+ *     - wall-clock time;
+ *     - randomness;
+ *     - scheduler state;
+ *     - target vendor.
  *
- * ============================================================================
- * SECURITY
- * ============================================================================
- *
- * The grammar performs no execution.
- *
- * It cannot:
- *
- *     allocate hardware;
- *     execute source code;
- *     invoke foreign code;
- *     access files;
- *     access networks;
- *     inspect devices;
- *     modify resources.
- *
- * Hostile-input protection belongs to parser/compiler resource policy and must
- * not alter the source-language semantics.
- *
- * The Rust implementation remains:
- *
- *     Rust 1.97 / Rust 1.97.1
- *     Rust 2021
- *     safe Rust only
- *     no unsafe
- *
+ * Identical source and identical language configuration must produce identical
+ * parser structure.
  *
  * ============================================================================
- * COMPATIBILITY
+ * SECURITY CONTRACT
  * ============================================================================
  *
- * The source spelling remains:
+ * This grammar is declarative and side-effect free.
  *
- *     linear T
+ * It contains:
  *
- * Existing programs using the `linear` qualifier therefore require no source
- * rename.
+ *     - no embedded Rust;
+ *     - no target-language actions;
+ *     - no semantic predicates;
+ *     - no filesystem access;
+ *     - no network access;
+ *     - no environment inspection;
+ *     - no command execution;
+ *     - no dynamic evaluation.
  *
- * The modularization changes ownership of the parser rule, not the source
- * spelling.
- *
- * Any historical rule such as:
- *
- *     linearType : LINEAR typeExpression ;
- *
- * must not remain a competing production owner.
- *
- * Historical/legacy grammars may remain only as explicitly marked
- * compatibility artifacts until their consumers are migrated.
- *
+ * Consequently it does not introduce an unsafe Rust requirement.
  *
  * ============================================================================
- * DIAGNOSTICS
+ * COMPATIBILITY CONTRACT
  * ============================================================================
  *
- * Parser-level diagnostics should naturally identify:
- *
- *     unexpected end after `linear`
- *
- * or:
- *
- *     unexpected token where a type expression is required
- *
- * through the surrounding `types.g4` rule.
- *
- * This grammar must not embed semantic error strings.
- *
- * Semantic diagnostics belong downstream, for example:
- *
- *     invalid linear type
- *     illegal duplication
- *     linear value reused
- *     required linear value not consumed
- *
- * Exact diagnostic identifiers belong to the semantic diagnostic contract,
- * not to this parser component.
- *
- *
- * ============================================================================
- * POSITIVE TEST CONTRACT
- * ============================================================================
- *
- * These examples are tested through the canonical `typeExpression` rule:
- *
- *     linear T
- *     linear Resource<T>
- *     linear Resource<Capability<T>>
- *     linear quantum::Qubit
- *     linear LogicalQubit
- *     linear Memory<T>
- *     linear Signal<T>
- *     linear Vec<Vec<T>>
- *
- * Additional valid forms should include every type constructor accepted by
- * the canonical type grammar.
- *
- *
- * ============================================================================
- * NEGATIVE TEST CONTRACT
- * ============================================================================
- *
- * Parser-invalid examples include:
+ * Stable source spelling:
  *
  *     linear
  *
- * where a complete type expression is required.
+ * Stable lexer token:
  *
- * These must fail through the enclosing type grammar rather than through a
- * special error rule here.
+ *     LINEAR
  *
- * The following should NOT be rejected merely by this grammar:
+ * Stable parser rule:
  *
- *     linear int
+ *     linearQualifier
  *
- * because eligibility of `int` is a semantic question.
+ * Stable AST destination:
  *
+ *     TypeExpr::Linear
  *
- * ============================================================================
- * BOUNDARY TEST CONTRACT
- * ============================================================================
+ * The previous implementation exposed additional rule names and duplicated
+ * qualifier definitions. Those are intentionally removed from the production
+ * grammar because they are not required by the current canonical type
+ * orchestrator.
  *
- * Test interactions with:
- *
- *     linear &T
- *     linear &mut T
- *     linear &'a T
- *     linear *T
- *     linear Vec<T>
- *     linear (T, U)
- *     linear [T]
- *     linear [T; N]
- *     linear fn(T) -> U
- *     linear Result<T, E>
- *     linear QuantumResource<Qubit>
- *     linear Tensor<T>[N, M]
- *
- * Whether each is semantically legal is determined by the type system.
- *
+ * In particular, this file does NOT retain a compatibility alias that creates
+ * another ownership/linearity rule unless an actual production consumer
+ * requires that alias.
  *
  * ============================================================================
- * CROSS-DOMAIN TEST CONTRACT
+ * REQUIRED INTEGRATION WITH `grammar/types/types.g4`
  * ============================================================================
  *
- * The same syntax must be usable with source-defined types representing:
+ * The canonical type grammar already defines:
  *
- *     classical resources
- *     quantum resources
- *     HDL resources
- *     accelerator resources
- *     distributed resources
- *     data resources
- *     AI model resources
- *     networking resources
- *     future domain resources
+ *     typeExpression
+ *     typePrefix
+ *     linearTypePrefix
  *
- * No domain-specific grammar fork is permitted.
+ * with the integration boundary:
  *
+ *     linearTypePrefix
+ *         : linearQualifier
+ *         ;
  *
- * ============================================================================
- * SCALABILITY TEST CONTRACT
- * ============================================================================
+ * The production grammar composition must import LinearTypes into the
+ * canonical Type grammar using the repository's ANTLR composition mechanism.
  *
- * Tests must verify that no language-level maximum is introduced.
+ * Conceptually:
  *
- * Examples should be generated structurally rather than with a fixed maximum
- * chosen by the grammar.
+ *     Type
+ *       |
+ *       +--> LinearTypes
+ *       |       |
+ *       |       +--> linearQualifier
+ *       |
+ *       +--> typeExpression
  *
- * Test families should cover:
+ * `types.g4` remains the owner of complete type composition.
  *
- *     deeply nested generic types;
- *     long qualified type paths;
- *     nested linear types;
- *     linear types containing symbolic dependent values;
- *     large source-level programs containing many independently declared
- *     linear values.
+ * `linear.g4` remains the owner of the LINEAR qualifier.
  *
- * Parser stress limits, when needed for denial-of-service protection, belong
- * to explicit implementation configuration rather than this grammar.
- *
+ * Neither file should absorb the other's ownership.
  *
  * ============================================================================
- * INTEGRATION TEST CONTRACT
+ * REQUIRED INTEGRATION WITH `grammar/types/affine.g4`
  * ============================================================================
  *
- * The canonical integration path is:
+ * `affine.g4` independently owns:
+ *
+ *     affineQualifier
+ *
+ * This file MUST NOT reference AFFINE.
+ *
+ * The canonical type orchestrator combines:
+ *
+ *     linearQualifier
+ *
+ * and:
+ *
+ *     affineQualifier
+ *
+ * at the type-prefix level.
+ *
+ * ============================================================================
+ * REQUIRED INTEGRATION WITH THE LEXER
+ * ============================================================================
+ *
+ * The lexer subsystem owns the spelling:
+ *
+ *     linear
+ *
+ * and emits:
+ *
+ *     LINEAR
+ *
+ * This parser grammar consumes that token through:
+ *
+ *     tokenVocab = ZamaniLexer
+ *
+ * No lexer change is required merely to make this parser component correct,
+ * provided the canonical lexical pipeline continues exporting LINEAR.
+ *
+ * ============================================================================
+ * AST / SEMANTIC / IR BOUNDARY
+ * ============================================================================
+ *
+ * The complete pipeline is:
  *
  *     source
  *       |
@@ -1177,7 +817,10 @@ linearityQualifier
  *     ZamaniLexer
  *       |
  *       v
- *     Types.typeExpression
+ *     LinearTypes.linearQualifier
+ *       |
+ *       v
+ *     Type.typeExpression
  *       |
  *       v
  *     frontend AST
@@ -1189,27 +832,23 @@ linearityQualifier
  *     structural validation
  *       |
  *       v
- *     semantic type resolution
+ *     semantic type analysis
+ *       |
+ *       +--> ownership/linearity analysis
+ *       +--> resource analysis
+ *       +--> capability analysis
+ *       +--> effect analysis
  *       |
  *       v
- *     ownership/resource analysis
+ *     canonical semantic model
+ *       |
+ *       +--> classical IR
+ *       +--> quantum::ir
+ *       +--> HDL/hardware semantics
+ *       +--> other domain IR
  *       |
  *       v
- *     canonical IR
- *
- * For quantum programs:
- *
- *     semantic quantum model
- *       |
- *       v
- *     quantum::ir
- *
- * For all targets:
- *
- *     canonical IR
- *       |
- *       v
- *     optimization
+ *     target-independent optimization
  *       |
  *       v
  *     lowering
@@ -1217,229 +856,129 @@ linearityQualifier
  *       v
  *     target realization
  *
+ * This file owns only the parser node between the lexer and canonical type
+ * composition.
  *
  * ============================================================================
- * REQUIRED COMPANION CHANGE: grammar/types/types.g4
+ * TEST CONTRACT
  * ============================================================================
  *
- * The current repository's canonical types.g4 currently contains the direct
- * qualifier alternatives:
+ * Tests for this component should be driven through the canonical type
+ * expression entry point wherever possible.
  *
- *     typeQualifier
- *         : LINEAR
- *         | AFFINE
- *         ;
- *
- * That defeats modular ownership.
- *
- * After this file is installed, the canonical composition must instead
- * delegate to the modular qualifier rules.
- *
- * Conceptually:
- *
- *     typeQualifier
- *         : linearityQualifier
- *         ;
- *
- * if `linearityQualifier` is the combined ownership boundary, or:
- *
- *     typeQualifier
- *         : linearQualifier
- *         | affineQualifier
- *         ;
- *
- * if the repository imports both modular qualifier grammars directly.
- *
- * The preferred long-term architecture is:
- *
- *     linear.g4
- *          -> linearQualifier
- *
- *     affine.g4
- *          -> affineQualifier
- *
- *     types.g4
- *          -> typeQualifier
- *          -> typeExpression
- *
- * No direct LINEAR/AFFINE parser ownership remains in types.g4.
- *
- *
- * ============================================================================
- * REQUIRED ANTLR IMPORT CONTRACT
- * ============================================================================
- *
- * `types.g4` must import this grammar and the affine grammar using the
- * repository's canonical ANTLR modular-import mechanism.
- *
- * The exact import syntax must match the repository's existing
- * `grammar/types/types.g4` composition structure.
- *
- * The resulting dependency direction MUST remain:
- *
- *     lexer
- *       ↓
- *     linear.g4 / affine.g4
- *       ↓
- *     types.g4
- *       ↓
- *     root parser
- *
- * Never:
- *
- *     linear.g4
- *       ↓
- *     types.g4
- *       ↓
- *     linear.g4
- *
- *
- * ============================================================================
- * REQUIRED LEGACY CLEANUP
- * ============================================================================
- *
- * Any older grammar containing an independent:
- *
- *     linearType
- *
- * production that consumes the complete type expression must be removed from
- * the production import graph or explicitly marked deprecated.
- *
- * In particular, no legacy grammar may create a second interpretation of:
+ * POSITIVE STRUCTURAL CASES:
  *
  *     linear T
+ *     linear User
+ *     linear module::User
+ *     linear Vec<T>
+ *     linear Result<T, E>
+ *     linear (T, U)
+ *     linear [T]
+ *     linear fn(T) -> U
+ *     linear &T
+ *     linear &mut T
+ *     linear Qubit
+ *     linear Resource<T>
  *
- * with a different AST contract.
+ * The exact accepted forms depend on the canonical type grammar.
  *
+ * NEGATIVE STRUCTURAL CASES:
  *
- * ============================================================================
- * RUST INTEGRATION
- * ============================================================================
+ *     linear
+ *     linear 123
+ *     linear (
+ *     linear <
+ *     linear [
+ *     linear &
+ *     linear *
  *
- * This grammar contains no embedded Rust.
+ * These are complete-type failures owned by the enclosing type grammar.
  *
- * Therefore:
+ * QUALIFIER ISOLATION:
  *
- *     Rust 1.97
- *     Rust 1.97.1
- *     Rust 2021
+ *     affine T
  *
- * compatibility is achieved through the generated parser/frontend integration.
+ * must be handled by AffineTypes, not by this grammar.
  *
- * No:
+ * CROSS-DOMAIN:
  *
- *     unsafe
+ *     linear Qubit
+ *     linear Resource<Qubit>
+ *     linear Tensor<T, Shape>
+ *     linear HardwareResource
  *
- * code is required.
+ * must not require this grammar to know what those names mean.
  *
- * Ownership checking must be implemented with ordinary safe Rust data
- * structures and algorithms.
+ * SCALABILITY:
  *
- * The grammar itself must remain language-definition code rather than Rust
- * implementation code.
+ * Test arbitrarily large symbolic/nested type structures subject only to
+ * external parser/compiler resource policies.
  *
+ * No test may establish a language-level maximum.
+ *
+ * DETERMINISM:
+ *
+ * Repeated parsing of identical source under identical parser configuration
+ * must produce identical parser structure.
  *
  * ============================================================================
  * HARD-CODING AUDIT
  * ============================================================================
  *
- * Fixed language-level spelling:
- *
- *     linear
- *
- * Required canonical token:
+ * Allowed fixed language element:
  *
  *     LINEAR
  *
- * No physical or implementation capacity is encoded.
+ * No physical resource is named.
  *
- * No:
+ * No finite domain inventory is named.
  *
- *     hardware ID
- *     device ID
- *     processor count
- *     GPU count
- *     QPU count
- *     FPGA count
- *     node count
- *     memory capacity
- *     thread count
- *     tensor rank limit
- *     generic arity limit
- *     type-depth limit
+ * No capacity is encoded.
  *
- * is present.
+ * No hardware limit is encoded.
  *
+ * No vendor operation is encoded.
+ *
+ * No quantum topology is encoded.
+ *
+ * No tensor-rank ceiling is encoded.
+ *
+ * No generic-arity ceiling is encoded.
+ *
+ * No type-depth ceiling is encoded.
  *
  * ============================================================================
- * DEFINITION OF DONE
+ * COMPLETION CRITERIA
  * ============================================================================
  *
  * This file is complete when all of the following are true:
  *
- *   [x] It is a parser grammar.
- *   [x] It uses the canonical ZamaniLexer vocabulary.
- *   [x] It consumes only the canonical LINEAR token.
- *   [x] It defines no lexer rules.
- *   [x] It defines linearQualifier.
- *   [x] It defines the modular linearity boundary.
- *   [x] It does not consume typeExpression.
- *   [x] It does not create a circular ANTLR dependency.
- *   [x] Complete type composition remains owned by types.g4.
- *   [x] TypeExpr::Linear remains the canonical AST destination.
- *   [x] Semantic ownership remains downstream.
- *   [x] Resource analysis remains downstream.
- *   [x] Capability analysis remains downstream.
- *   [x] Effects remain downstream.
- *   [x] Contracts remain downstream.
- *   [x] Policies remain downstream.
- *   [x] Provenance remains downstream.
- *   [x] Quantum semantics remain target-independent.
- *   [x] quantum::ir remains the quantum IR boundary.
- *   [x] HDL semantics remain downstream.
- *   [x] No backend is selected here.
- *   [x] No physical resource is selected here.
- *   [x] No artificial scalability limit is introduced.
- *   [x] No embedded executable code exists.
- *   [x] No unsafe Rust is required.
- *   [x] Rust 1.97 / 1.97.1 compatibility is preserved.
+ *     [x] Exactly one parser grammar declaration exists.
+ *     [x] Grammar name is LinearTypes.
+ *     [x] tokenVocab is ZamaniLexer.
+ *     [x] Exactly one canonical linearQualifier rule exists.
+ *     [x] linearQualifier consumes only LINEAR.
+ *     [x] No AFFINE token is owned here.
+ *     [x] No typeExpression is defined here.
+ *     [x] No typeCore is defined here.
+ *     [x] No lexer rule is defined here.
+ *     [x] No embedded Rust exists.
+ *     [x] No semantic predicates exist.
+ *     [x] No AST implementation is duplicated.
+ *     [x] No IR is created.
+ *     [x] No resource limit is encoded.
+ *     [x] No hardware target is encoded.
+ *     [x] Quantum semantics remain downstream.
+ *     [x] HDL semantics remain downstream.
+ *     [x] Resource/capability semantics remain downstream.
+ *     [x] Effect semantics remain downstream.
+ *     [x] Contract semantics remain downstream.
+ *     [x] Policy semantics remain downstream.
+ *     [x] Provenance remains downstream.
+ *     [x] TypeExpr::Linear remains the canonical AST destination.
+ *     [x] Rust 1.97+ compatibility is preserved.
+ *     [x] Safe Rust remains sufficient.
  *
  * ============================================================================
  */
-
-parser grammar LinearTypes;
-
-options {
-    tokenVocab = ZamaniLexer;
-}
-
-
-/* ============================================================================
- * PUBLIC RULES
- * ========================================================================== */
-
-/**
- * Source-level linear type qualifier.
- *
- * Complete syntax is composed by grammar/types/types.g4:
- *
- *     linear <type-expression>
- */
-linearQualifier
-    : LINEAR
-    ;
-
-
-/**
- * Unified linearity boundary.
- *
- * This file owns the linear branch.
- *
- * The complete ownership qualifier composition remains the responsibility of
- * the canonical type grammar, which can combine this rule with the affine
- * qualifier without creating a dependency from this grammar back to the
- * complete type grammar.
- */
-linearityQualifier
-    : linearQualifier
-    ;
