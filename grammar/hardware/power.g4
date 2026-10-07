@@ -1,2225 +1,1094 @@
 /**
-
-* ============================================================================
-* Zamani Universal Computing Language
-* ============================================================================
-* 
-* FILE
-* ---
-* grammar/hardware/power.g4
-* 
-* GRAMMAR
-* ---
-* ZamaniHardwarePowerParser
-* 
-* STATUS
-* ---
-* Production-ready hardware power-intent grammar
-* 
-* RUNTIME / COMPILER BASELINE
-* ---
-* Rust 1.97 / Rust 1.97.1
-* Rust 2021
-* 
-* SAFETY
-* ---
-* Action-free ANTLR grammar.
-* No embedded Rust.
-* No embedded target-language actions.
-* No semantic predicates.
-* No unsafe implementation requirement.
-* 
-* ============================================================================
-* 1. PURPOSE
-* ============================================================================
-* 
-* This grammar defines the source-language syntax for expressing
-* target-independent hardware power intent.
-* 
-* It allows Zamani programs and hardware contracts to describe:
-* 
-* - power requirements;
-* - power constraints;
-* - power preferences;
-* - power hints;
-* - power budgets;
-* - power limits as program/contract constraints;
-* - power relationships;
-* - power profiles;
-* - power domains;
-* - power states;
-* - power transitions;
-* - power properties;
-* - power measurements/contracts;
-* - dynamic and static power intent;
-* - energy relationships relevant to power contracts;
-* - scaling relationships;
-* - target-independent power characteristics;
-* - extensible vendor/technology properties.
-* 
-* This file describes SOURCE-LEVEL POWER INTENT.
-* 
-* It does NOT implement:
-* 
-* - physical power measurement;
-* - power estimation algorithms;
-* - thermal simulation;
-* - device discovery;
-* - voltage regulation;
-* - clock/power management;
-* - runtime power enforcement;
-* - scheduler implementation;
-* - placement;
-* - routing;
-* - synthesis;
-* - target selection;
-* - hardware drivers;
-* - calibration;
-* - physical electrical models.
-* 
-* ============================================================================
-* 2. ARCHITECTURAL POSITION
-* ============================================================================
-* 
-* The intended pipeline is:
-* 
-* Zamani source
-*      |
-*      v
-* Zamani lexer
-*      |
-*      v
-* Zamani parser
-*      |
-*      v
-* domain-neutral AST
-*      |
-*      v
-* semantic analysis
-*      |
-*      +--> type analysis
-*      +--> capability analysis
-*      +--> resource analysis
-*      +--> power-contract validation
-*      +--> thermal-contract validation
-*      |
-*      v
-* canonical semantic representation
-*      |
-*      v
-* compiler IR
-*      |
-*      +--> optimization
-*      +--> scheduling
-*      +--> placement
-*      +--> routing
-*      +--> synthesis
-*      +--> resilience
-*      |
-*      v
-* HAL / target realization
-*      |
-*      v
-* runtime / deployment
-* 
-* Power grammar therefore remains ABOVE physical realization.
-* 
-* ============================================================================
-* 3. OWNERSHIP
-* ============================================================================
-* 
-* THIS FILE OWNS:
-* 
-* - hardware power declarations;
-* - hardware power contracts;
-* - power-specific hardware intent;
-* - power requirements;
-* - power constraints;
-* - power preferences;
-* - power hints;
-* - power budgets;
-* - power profiles;
-* - power domains;
-* - power states;
-* - power transitions;
-* - power relationships;
-* - power properties;
-* - extensible power metadata.
-* 
-* THIS FILE DOES NOT OWN:
-* 
-* - the POWER lexer token;
-* - numeric literal syntax;
-* - unit lexical syntax;
-* - general expressions;
-* - general identifiers;
-* - general types;
-* - universal resources;
-* - universal capabilities;
-* - clocks;
-* - timing;
-* - thermal semantics;
-* - energy resource declarations;
-* - hardware targets;
-* - physical devices;
-* - CPU/GPU/FPGA/QPU declarations;
-* - HDL;
-* - quantum operations;
-* - quantum::ir;
-* - QEC;
-* - ZQN;
-* - routing;
-* - scheduling;
-* - optimization;
-* - HAL;
-* - runtime execution.
-* 
-* ============================================================================
-* 4. CRITICAL RESOURCE BOUNDARY
-* ============================================================================
-* 
-* grammar/hardware/resources.g4 already owns the universal resource clause:
-* 
-* power = expression;
-* 
-* That rule MUST remain there.
-* 
-* This file does NOT redefine:
-* 
-* hardwareResourcePowerClause
-* 
-* and does NOT create a second universal resource grammar.
-* 
-* Instead:
-* 
-* hardware/resources.g4
-*         |
-*         +--> generic resource power
-* 
-* hardware/power.g4
-*         |
-*         +--> hardware-specific power contract
-* 
-* These are complementary ownership domains.
-* 
-* Example:
-* 
-* resource accelerator {
-*     power = power_budget;
-* };
-* 
-* belongs to the resource grammar.
-* 
-* Whereas:
-* 
-* power contract accelerator_power {
-*     budget <= available_power;
-* }
-* 
-* belongs to this grammar.
-* 
-* Semantic analysis is responsible for determining whether the two contracts
-* are compatible.
-* 
-* ============================================================================
-* 5. POWER IS NOT A HARDWARE LIMIT
-* ============================================================================
-* 
-* Power values are program/contract data.
-* 
-* A value such as:
-* 
-* 100
-* 
-* does NOT establish:
-* 
-* MAX_POWER = 100
-* 
-* Likewise:
-* 
-* power <= 100 W
-* 
-* is a PROGRAM CONSTRAINT.
-* 
-* It is not a universal Zamani compiler limit.
-* 
-* The target may provide:
-* 
-* 1 W
-* 
-* 10 W
-* 
-* 100 W
-* 
-* 1 kW
-* 
-* 1 MW
-* 
-* ...
-* 
-* or another available capability.
-* 
-* Whether the target satisfies the source requirement is determined
-* downstream.
-* 
-* ============================================================================
-* 6. ABSOLUTE SCALABILITY RULE
-* ============================================================================
-* 
-* This grammar MUST NOT encode:
-* 
-* MAX_POWER
-* MAX_ENERGY
-* MAX_POWER_DOMAINS
-* MAX_POWER_STATES
-* MAX_POWER_PROFILES
-* MAX_POWER_TRANSITIONS
-* MAX_DEVICES
-* MAX_ACCELERATORS
-* MAX_CPUS
-* MAX_GPUS
-* MAX_FPGAS
-* MAX_QPUS
-* MAX_NODES
-* 
-* Nor may it encode equivalent limits through bounded grammar alternatives.
-* 
-* Repetition is therefore intentionally unbounded:
-* 
-* *
-* +
-* 
-* where the language semantics require arbitrary collections.
-* 
-* Actual limits belong to:
-* 
-* target capabilities
-* semantic validation
-* resource availability
-* compiler policy
-* runtime availability
-* deployment policy
-* physical hardware
-* 
-* ============================================================================
-* 7. POCO-REAF
-* ============================================================================
-* 
-* Power contracts MUST preserve:
-* 
-* Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
-* 
-* The same source-level power intent may be realized differently on:
-* 
-* embedded systems
-* CPUs
-* multicore CPUs
-* GPUs
-* FPGAs
-* ASICs
-* accelerators
-* QPUs
-* simulators
-* HPC systems
-* clusters
-* distributed systems
-* cloud systems
-* edge systems
-* future hardware
-* 
-* The grammar describes WHAT POWER PROPERTY is required or preferred.
-* 
-* It does not prescribe WHICH physical device supplies it.
-* 
-* ============================================================================
-* 8. REQUIREMENT / CONSTRAINT / PREFERENCE / HINT
-* ============================================================================
-* 
-* These concepts MUST remain distinct.
-* 
-* Requirement
-* ---
-* A property required for valid realization.
-* 
-* Example:
-* 
-* require <= power_budget;
-* 
-* Constraint
-* ---
-* A condition that must hold for the selected realization.
-* 
-* Example:
-* 
-* constraint peak <= peak_limit;
-* 
-* Preference
-* ---
-* A desirable property that may be violated if necessary.
-* 
-* Example:
-* 
-* prefer lower <= power;
-* 
-* Hint
-* ---
-* An optimization suggestion without semantic necessity.
-* 
-* Example:
-* 
-* hint minimize dynamic_power;
-* 
-* The semantic layer determines how these categories interact.
-* 
-* ============================================================================
-* 9. POWER DECLARATION
-* ============================================================================
-* 
-* A named power contract is the principal public entry point.
-* 
-* Example:
-* 
-* power contract compute_power {
-*     budget <= available_power;
-* }
-* 
-* The identifier is symbolic.
-* 
-* It is NOT a physical device identifier.
-* 
-* ============================================================================
-  */
+ * ============================================================================
+ * Zamani Universal Computing Language
+ * ============================================================================
+ *
+ * FILE
+ * ----
+ * grammar/hardware/power.g4
+ *
+ * GRAMMAR
+ * -------
+ * ZamaniHardwarePowerParser
+ *
+ * STATUS
+ * ------
+ * Canonical hardware power-intent grammar.
+ *
+ * RUNTIME / COMPILER
+ * ------------------
+ * Rust 1.97+
+ * Rust 2021+
+ *
+ * SAFETY
+ * ------
+ * Action-free ANTLR4 parser grammar.
+ *
+ * This grammar:
+ *
+ *   - contains no embedded Rust;
+ *   - contains no target-language actions;
+ *   - contains no semantic predicates;
+ *   - performs no hardware discovery;
+ *   - performs no runtime execution;
+ *   - performs no resource allocation;
+ *   - introduces no unsafe Rust requirement.
+ *
+ * ============================================================================
+ * FEATURE CONTRACT
+ * ============================================================================
+ *
+ * PURPOSE
+ * -------
+ * Express portable, target-independent hardware power intent.
+ *
+ * OWNED
+ * -----
+ * This file owns:
+ *
+ *   - hardware power declarations;
+ *   - power requirements;
+ *   - power constraints;
+ *   - power preferences;
+ *   - power hints;
+ *   - power budgets;
+ *   - power profiles;
+ *   - logical power domains;
+ *   - logical power states;
+ *   - logical power transitions;
+ *   - power measurements as contracts;
+ *   - extensible power properties;
+ *   - symbolic power relationships.
+ *
+ * DOES NOT OWN
+ * ------------
+ * This file does not own:
+ *
+ *   - lexical token definitions;
+ *   - identifier syntax;
+ *   - qualified-name syntax;
+ *   - general expressions;
+ *   - general types;
+ *   - generic resources;
+ *   - generic capabilities;
+ *   - generic constraints;
+ *   - thermal semantics;
+ *   - timing semantics;
+ *   - energy-resource semantics;
+ *   - physical power measurement;
+ *   - voltage regulation;
+ *   - clock/power management;
+ *   - DVFS implementation;
+ *   - device discovery;
+ *   - target selection;
+ *   - placement;
+ *   - routing;
+ *   - scheduling;
+ *   - synthesis;
+ *   - calibration;
+ *   - runtime power management;
+ *   - hardware drivers;
+ *   - quantum operations;
+ *   - quantum::ir;
+ *   - QEC;
+ *   - ZQN;
+ *   - HAL implementation.
+ *
+ * DEPENDS_ON
+ * ----------
+ *   - ZamaniLexer
+ *   - ZamaniExpressions
+ *   - ZamaniNames
+ *
+ * EXPORTS
+ * -------
+ *   - hardwarePowerDeclaration
+ *   - hardwarePowerItem
+ *   - hardwarePowerRequirement
+ *   - hardwarePowerConstraint
+ *   - hardwarePowerPreference
+ *   - hardwarePowerHint
+ *   - hardwarePowerBudget
+ *   - hardwarePowerProfile
+ *   - hardwarePowerDomain
+ *   - hardwarePowerState
+ *   - hardwarePowerTransition
+ *   - hardwarePowerMeasurementContract
+ *   - hardwarePowerProperty
+ *
+ * CONSUMED_BY
+ * -----------
+ *   - grammar/hardware/hardware.g4
+ *
+ * AST_OWNER
+ * ---------
+ * Domain-neutral frontend AST.
+ *
+ * The grammar must map into existing generic declaration/property/
+ * requirement/constraint structures where available.
+ *
+ * SEMANTIC_OWNER
+ * --------------
+ * Hardware/resource semantic analysis.
+ *
+ * TYPE_OWNER
+ * ----------
+ * Canonical type/expression semantic system.
+ *
+ * EFFECT_OWNER
+ * ------------
+ * Effects are not introduced by this grammar.
+ * Any measurement/runtime effect belongs to the semantic/runtime layer.
+ *
+ * CAPABILITY_OWNER
+ * ----------------
+ * Canonical capability/resource subsystem.
+ *
+ * RESOURCE_OWNER
+ * --------------
+ * Generic resource semantics remain owned by grammar/resources/.
+ *
+ * CONTRACT_OWNER
+ * --------------
+ * Generic contracts remain owned by grammar/validation/.
+ *
+ * POLICY_OWNER
+ * ------------
+ * Generic policy semantics remain owned by grammar/policies/ and
+ * grammar/security/.
+ *
+ * PROVENANCE_OWNER
+ * ----------------
+ * Canonical provenance subsystem.
+ *
+ * IR_OWNER
+ * --------
+ * No hardware-specific IR is created here.
+ *
+ * Lowering proceeds through the canonical semantic/IR architecture.
+ *
+ * QUANTUM BOUNDARY
+ * ----------------
+ * Power intent may constrain a quantum realization, but this grammar:
+ *
+ *   - does not define quantum operations;
+ *   - does not define qubits;
+ *   - does not define physical qubits;
+ *   - does not define routing;
+ *   - does not define QEC;
+ *   - does not define calibration;
+ *   - does not construct quantum::ir.
+ *
+ * Quantum semantic lowering remains:
+ *
+ *   source
+ *     -> frontend AST
+ *     -> semantic model
+ *     -> quantum::ir
+ *
+ * HDL BOUNDARY
+ * ------------
+ * Power intent may constrain HDL/hardware realization.
+ *
+ * HDL syntax remains owned by grammar/hdl/.
+ *
+ * BACKEND BOUNDARY
+ * ----------------
+ * Backend stages consume semantic power requirements and constraints for:
+ *
+ *   - target feasibility;
+ *   - optimization;
+ *   - placement;
+ *   - scheduling;
+ *   - synthesis;
+ *   - runtime/deployment planning.
+ *
+ * No backend decision is made here.
+ *
+ * ============================================================================
+ * POCO-REAF
+ * ============================================================================
+ *
+ * Power syntax describes PORTABLE INTENT.
+ *
+ * It must remain valid regardless of whether the eventual realization is:
+ *
+ *   - a tiny embedded target;
+ *   - a CPU;
+ *   - a multicore system;
+ *   - a GPU;
+ *   - an FPGA;
+ *   - an ASIC;
+ *   - an accelerator;
+ *   - a QPU;
+ *   - a simulator;
+ *   - an HPC system;
+ *   - a cluster;
+ *   - a distributed system;
+ *   - a cloud system;
+ *   - a future architecture.
+ *
+ * The source does not select the physical realization.
+ *
+ * ============================================================================
+ * HARD-CODING PROHIBITION
+ * ============================================================================
+ *
+ * This grammar MUST NOT define:
+ *
+ *   MAX_POWER
+ *   MAX_ENERGY
+ *   MAX_POWER_DOMAINS
+ *   MAX_POWER_STATES
+ *   MAX_POWER_PROFILES
+ *   MAX_POWER_TRANSITIONS
+ *   MAX_DEVICES
+ *   MAX_CPUS
+ *   MAX_GPUS
+ *   MAX_FPGAS
+ *   MAX_QPUS
+ *   MAX_NODES
+ *   MAX_THREADS
+ *   MAX_MEMORY
+ *
+ * or equivalent bounded alternatives.
+ *
+ * All quantities are expressions.
+ *
+ * All collections use unbounded grammar repetition.
+ *
+ * Physical limits belong to:
+ *
+ *   - target capabilities;
+ *   - resource availability;
+ *   - semantic validation;
+ *   - compilation policy;
+ *   - scheduling;
+ *   - runtime;
+ *   - deployment.
+ *
+ * ============================================================================
+ * LEXICAL AUTHORITY
+ * ============================================================================
+ *
+ * The canonical parser-facing lexer is:
+ *
+ *   grammar/antlr/ZamaniLexer.g4
+ *
+ * The grammar therefore uses:
+ *
+ *   tokenVocab = ZamaniLexer;
+ *
+ * This file MUST NOT use ZamaniTokens directly.
+ *
+ * It MUST NOT define lexical tokens.
+ *
+ * ============================================================================
+ * NAME / EXPRESSION AUTHORITY
+ * ============================================================================
+ *
+ * Identifier and qualified-name syntax is owned by ZamaniNames.
+ *
+ * Expression syntax is owned by ZamaniExpressions.
+ *
+ * This grammar consumes those rules and never recreates them.
+ *
+ * ============================================================================
+ */
 
 parser grammar ZamaniHardwarePowerParser;
 
 options {
-tokenVocab = ZamaniTokens;
+    tokenVocab = ZamaniLexer;
 }
 
-/* ============================================================================
+import
+    ZamaniExpressions,
+    ZamaniNames
+;
 
-* 10. PUBLIC ENTRY POINT
-* ============================================================================
-* 
-* hardware.g4 MUST delegate power declarations to:
-* 
-* hardwarePowerDeclaration
-* 
-* This rule is intentionally independent of the implementation of the
-* hardware composition grammar.
-  */
+
+/* ============================================================================
+ * 1. PUBLIC ENTRY POINT
+ * ============================================================================
+ *
+ * hardware.g4 exposes this rule through hardwareDeclaration.
+ *
+ * The declaration has deliberately small fixed syntax.
+ *
+ * The extensible part is inside the body.
+ *
+ * ============================================================================
+ */
 
 hardwarePowerDeclaration
-: hardwarePowerAttributes*
-hardwarePowerVisibility?
-hardwarePowerModifier*
-POWER
-hardwarePowerDeclarationKind?
-identifier
-hardwarePowerGenericParameters?
-hardwarePowerTargetClause?
-hardwarePowerContractBody
-;
+    : hardwarePowerAttribute*
+      POWER
+      hardwarePowerDeclarationKind?
+      identifier
+      hardwarePowerParameterList?
+      hardwarePowerTargetClause?
+      hardwarePowerBody
+    ;
+
 
 /* ============================================================================
-
-* 11. DECLARATION KIND
-* ============================================================================
-* 
-* The declaration kind remains intentionally open-ended.
-* 
-* The standard "contract" spelling is provided as a stable language form.
-* 
-* Additional kinds may be introduced by dialect/semantic extensions without
-* requiring the POWER token itself to change.
-  */
+ * 2. DECLARATION KIND
+ * ============================================================================
+ *
+ * Only vocabulary already represented by the canonical lexer is used.
+ *
+ * "state" and "transition" are intentionally NOT lexer keywords.
+ * They remain body-level semantic constructs represented by identifiers
+ * where appropriate.
+ *
+ * ============================================================================
+ */
 
 hardwarePowerDeclarationKind
-: CONTRACT
-| PROFILE
-| DOMAIN
-| STATE
-;
+    : CONTRACT
+    | PROFILE
+    | DOMAIN
+    ;
+
 
 /* ============================================================================
+ * 3. ATTRIBUTES
+ * ============================================================================
+ *
+ * Attributes are syntactic metadata.
+ *
+ * Their meaning is resolved semantically.
+ *
+ * ============================================================================
+ */
 
-* 12. VISIBILITY
-* ============================================================================
-  */
+hardwarePowerAttribute
+    : AT
+      qualifiedName
+      (
+          LPAREN
+          expressionList?
+          RPAREN
+      )?
+    ;
 
-hardwarePowerVisibility
-: PUBLIC
-| PRIVATE
-| PROTECTED
-| INTERNAL
-;
-
-/* ============================================================================
-
-* 13. MODIFIERS
-* ============================================================================
-* 
-* Modifiers describe source-level declaration properties.
-* 
-* They do not describe physical implementation.
-  */
-
-hardwarePowerModifier
-: STATIC
-| CONST
-| EXTERN
-| FINAL
-| ABSTRACT
-| SEALED
-| PARTIAL
-;
 
 /* ============================================================================
+ * 4. GENERIC PARAMETERS
+ * ============================================================================
+ *
+ * Generic parameters remain symbolic.
+ *
+ * They do not encode machine capacity.
+ *
+ * ============================================================================
+ */
 
-* 14. ATTRIBUTES
-* ============================================================================
-* 
-* Attributes remain qualified names rather than a fixed vendor/technology
-* vocabulary.
-* 
-* This is necessary for future hardware evolution.
-* 
-* Example:
-* 
-* @vendor.example(power_mode)
-* power contract ...
-* 
-* Semantic validation determines whether an attribute is known and valid.
-  */
+hardwarePowerParameterList
+    : LT
+      hardwarePowerParameter
+      (
+          COMMA
+          hardwarePowerParameter
+      )*
+      GT
+    ;
 
-hardwarePowerAttributes
-: AT
-qualifiedName
-(
-LPAREN
-hardwarePowerAttributeArguments?
-RPAREN
-)?
-;
+hardwarePowerParameter
+    : identifier
+      (
+          COLON
+          qualifiedName
+      )?
+      (
+          ASSIGN
+          expression
+      )?
+    ;
 
-hardwarePowerAttributeArguments
-: expressionList
-;
-
-/* ============================================================================
-
-* 15. GENERIC PARAMETERS
-* ============================================================================
-* 
-* Power contracts may depend on program-level symbolic values.
-* 
-* Example:
-* 
-* power contract budget<limit, workload> {
-*     budget <= limit;
-* }
-* 
-* No finite hardware scale is encoded.
-  */
-
-hardwarePowerGenericParameters
-: LT
-hardwarePowerGenericParameter
-(
-COMMA
-hardwarePowerGenericParameter
-)*
-COMMA?
-GT
-;
-
-hardwarePowerGenericParameter
-: identifier
-(
-COLON
-hardwarePowerGenericBound
-)?
-(
-ASSIGN
-expression
-)?
-;
-
-hardwarePowerGenericBound
-: qualifiedName
-| hardwarePowerCapabilityReference
-;
 
 /* ============================================================================
-
-* 16. TARGET CLAUSE
-* ============================================================================
-* 
-* A power contract MAY identify an abstract target class.
-* 
-* It MUST NOT require a physical device.
-* 
-* Example:
-* 
-* target accelerator;
-* 
-* is an abstract target relationship.
-* 
-* Physical target selection remains downstream.
-  */
+ * 5. ABSTRACT TARGET ASSOCIATION
+ * ============================================================================
+ *
+ * TARGET refers to an abstract compilation/execution context.
+ *
+ * It does not require a physical device identity.
+ *
+ * ============================================================================
+ */
 
 hardwarePowerTargetClause
-: TARGET
-qualifiedName
-SEMICOLON
-;
+    : TARGET
+      qualifiedName
+      SEMICOLON
+    ;
+
 
 /* ============================================================================
+ * 6. POWER BODY
+ * ============================================================================
+ */
 
-* 17. POWER CONTRACT BODY
-* ============================================================================
-  */
+hardwarePowerBody
+    : LBRACE
+      hardwarePowerItem*
+      RBRACE
+    ;
 
-hardwarePowerContractBody
-: LBRACE
-hardwarePowerItem*
-RBRACE
-;
 
 /* ============================================================================
-
-* 18. POWER BODY DISPATCH
-* ============================================================================
-* 
-* All power-specific constructs enter through this single dispatch rule.
-* 
-* This prevents a second hidden power grammar from being created inside
-* hardware.g4.
-  */
+ * 7. POWER ITEM DISPATCH
+ * ============================================================================
+ *
+ * Every power-specific construct enters through this single dispatch rule.
+ *
+ * No duplicate hidden power grammar should be added to hardware.g4.
+ *
+ * ============================================================================
+ */
 
 hardwarePowerItem
-: hardwarePowerAttributes*
-(
-hardwarePowerRequirement
-| hardwarePowerConstraint
-| hardwarePowerPreference
-| hardwarePowerHint
-| hardwarePowerBudget
-| hardwarePowerProfile
-| hardwarePowerDomain
-| hardwarePowerState
-| hardwarePowerTransition
-| hardwarePowerRelation
-| hardwarePowerProperty
-| hardwarePowerMeasurementContract
-| hardwarePowerAssertion
-| hardwarePowerCapabilityRequirement
-| hardwarePowerResourceRequirement
-| hardwarePowerScalingContract
-| hardwarePowerNestedContract
-)
-;
+    : hardwarePowerAttribute*
+      (
+          hardwarePowerRequirement
+        | hardwarePowerConstraint
+        | hardwarePowerPreference
+        | hardwarePowerHint
+        | hardwarePowerBudget
+        | hardwarePowerProfile
+        | hardwarePowerDomain
+        | hardwarePowerState
+        | hardwarePowerTransition
+        | hardwarePowerMeasurementContract
+        | hardwarePowerProperty
+      )
+    ;
+
 
 /* ============================================================================
-
-* 19. REQUIREMENT
-* ============================================================================
-* 
-* Example:
-* 
-* require peak <= power_budget;
-* 
-* The grammar does not evaluate the expression.
-  */
+ * 8. REQUIREMENT
+ * ============================================================================
+ *
+ * REQUIRES is the canonical repository token.
+ *
+ * The expression determines the actual requirement.
+ *
+ * ============================================================================
+ */
 
 hardwarePowerRequirement
-: REQUIRE
-hardwarePowerRequirementExpression
-SEMICOLON
-;
+    : REQUIRES
+      expression
+      SEMICOLON
+    ;
+
 
 /* ============================================================================
-
-* 20. CONSTRAINT
-* ============================================================================
-  */
+ * 9. CONSTRAINT
+ * ============================================================================
+ */
 
 hardwarePowerConstraint
-: CONSTRAINT
-hardwarePowerConstraintExpression
-SEMICOLON
-;
+    : CONSTRAINT
+      expression
+      SEMICOLON
+    ;
+
 
 /* ============================================================================
-
-* 21. PREFERENCE
-* ============================================================================
-  */
+ * 10. PREFERENCE
+ * ============================================================================
+ */
 
 hardwarePowerPreference
-: PREFER
-hardwarePowerPreferenceExpression
-SEMICOLON
-;
+    : PREFER
+      expression
+      SEMICOLON
+    ;
+
 
 /* ============================================================================
-
-* 22. HINT
-* ============================================================================
-  */
+ * 11. HINT
+ * ============================================================================
+ */
 
 hardwarePowerHint
-: HINT
-hardwarePowerHintExpression
-SEMICOLON
-;
+    : HINT
+      expression
+      SEMICOLON
+    ;
+
 
 /* ============================================================================
-
-* 23. POWER BUDGET
-* ============================================================================
-* 
-* A budget is a semantic bound.
-* 
-* It is NOT a compiler-wide maximum.
-* 
-* Example:
-* 
-* budget <= workload_power;
-* 
-* or:
-* 
-* budget = power_budget;
-* 
-* Both are source-level expressions.
-  */
+ * 12. POWER BUDGET
+ * ============================================================================
+ *
+ * A budget is source-level semantic information.
+ *
+ * It is never a compiler-wide maximum.
+ *
+ * ============================================================================
+ */
 
 hardwarePowerBudget
-: BUDGET
-hardwarePowerBudgetOperator
-expression
-SEMICOLON
-;
+    : BUDGET
+      hardwarePowerRelationalOperator
+      expression
+      SEMICOLON
+    ;
 
-hardwarePowerBudgetOperator
-: ASSIGN
-| LE
-| LT
-| GE
-| GT
-;
 
 /* ============================================================================
-
-* 24. POWER PROFILE
-* ============================================================================
-* 
-* Profiles allow source programs to describe power behavior without
-* prescribing implementation.
-* 
-* Example:
-* 
-* profile compute {
-*     dynamic = dynamic_power;
-*     static = leakage_power;
-* }
-* 
-* Property names remain open.
-  */
+ * 13. POWER PROFILE
+ * ============================================================================
+ *
+ * Profiles are named logical descriptions.
+ *
+ * Property names remain open through qualifiedName.
+ *
+ * ============================================================================
+ */
 
 hardwarePowerProfile
-: PROFILE
-identifier
-hardwarePowerProfileBody
-;
+    : PROFILE
+      identifier
+      hardwarePowerBlock
+    ;
 
-hardwarePowerProfileBody
-: LBRACE
-hardwarePowerProfileItem*
-RBRACE
-;
-
-hardwarePowerProfileItem
-: hardwarePowerProperty
-| hardwarePowerRequirement
-| hardwarePowerConstraint
-| hardwarePowerPreference
-| hardwarePowerHint
-;
 
 /* ============================================================================
-
-* 25. POWER DOMAIN
-* ============================================================================
-* 
-* A power domain is a logical semantic grouping.
-* 
-* It does not identify a physical voltage rail unless a downstream target
-* contract explicitly maps it to one.
-  */
+ * 14. POWER DOMAIN
+ * ============================================================================
+ *
+ * A power domain is a logical semantic grouping.
+ *
+ * It does not imply a physical voltage rail, package, die, or device.
+ *
+ * ============================================================================
+ */
 
 hardwarePowerDomain
-: DOMAIN
-identifier
-hardwarePowerDomainBody
-;
+    : DOMAIN
+      identifier
+      hardwarePowerBlock
+    ;
 
-hardwarePowerDomainBody
-: LBRACE
-hardwarePowerDomainItem*
-RBRACE
-;
-
-hardwarePowerDomainItem
-: hardwarePowerProperty
-| hardwarePowerRequirement
-| hardwarePowerConstraint
-| hardwarePowerPreference
-| hardwarePowerHint
-| hardwarePowerReference
-;
 
 /* ============================================================================
-
-* 26. POWER STATE
-* ============================================================================
-* 
-* Power states are symbolic semantic states.
-* 
-* The grammar does not enumerate:
-* 
-* ON
-* OFF
-* SLEEP
-* DEEP_SLEEP
-* TURBO
-* 
-* as universal states.
-* 
-* State names remain identifiers so future targets can introduce states
-* through semantic contracts/dialects.
-  */
+ * 15. POWER STATE
+ * ============================================================================
+ *
+ * STATE is deliberately not a reserved lexer token.
+ *
+ * The construct is introduced by the qualified name "state".
+ *
+ * This keeps the lexical vocabulary extensible and avoids another global
+ * keyword solely for hardware power management.
+ *
+ * ============================================================================
+ */
 
 hardwarePowerState
-: STATE
-identifier
-hardwarePowerStateBody
-;
+    : hardwarePowerStateKeyword
+      identifier
+      hardwarePowerBlock
+    ;
 
-hardwarePowerStateBody
-: LBRACE
-hardwarePowerStateItem*
-RBRACE
-;
+hardwarePowerStateKeyword
+    : identifier
+    ;
 
-hardwarePowerStateItem
-: hardwarePowerProperty
-| hardwarePowerRequirement
-| hardwarePowerConstraint
-| hardwarePowerPreference
-| hardwarePowerHint
-| hardwarePowerReference
-;
 
 /* ============================================================================
-
-* 27. POWER TRANSITION
-* ============================================================================
-* 
-* Describes a logical relationship between power states.
-* 
-* It does not implement a power-management controller.
-  */
+ * 16. POWER TRANSITION
+ * ============================================================================
+ *
+ * TRANSITION is likewise represented through a symbolic name rather than
+ * introducing a universal lexer keyword.
+ *
+ * Semantic validation recognizes the declaration form.
+ *
+ * ============================================================================
+ */
 
 hardwarePowerTransition
-: TRANSITION
+    : hardwarePowerTransitionKeyword
+      hardwarePowerStateReference
+      TO
+      hardwarePowerStateReference
+      hardwarePowerTransitionBlock?
+      SEMICOLON
+    ;
+
+hardwarePowerTransitionKeyword
+    : identifier
+    ;
+
 hardwarePowerStateReference
-TO
-hardwarePowerStateReference
-hardwarePowerTransitionBody?
-SEMICOLON
-;
+    : qualifiedName
+    ;
 
-hardwarePowerTransitionBody
-: LBRACE
-hardwarePowerTransitionItem*
-RBRACE
-;
+hardwarePowerTransitionBlock
+    : hardwarePowerBlock
+    ;
 
-hardwarePowerTransitionItem
-: hardwarePowerProperty
-| hardwarePowerRequirement
-| hardwarePowerConstraint
-| hardwarePowerPreference
-| hardwarePowerHint
-;
 
 /* ============================================================================
-
-* 28. POWER RELATION
-* ============================================================================
-* 
-* Relations allow arbitrary source-level relationships without enumerating
-* every possible physical power-management concept.
-* 
-* Example:
-* 
-* relation accelerator_power {
-*     source = accelerator;
-*     property = dynamic;
-*     expression = workload_power;
-* }
-* 
-* ============================================================================
-  */
-
-hardwarePowerRelation
-: RELATION
-identifier
-hardwarePowerRelationBody
-;
-
-hardwarePowerRelationBody
-: LBRACE
-hardwarePowerRelationItem*
-RBRACE
-;
-
-hardwarePowerRelationItem
-: hardwarePowerProperty
-| hardwarePowerRequirement
-| hardwarePowerConstraint
-| hardwarePowerPreference
-| hardwarePowerHint
-| hardwarePowerReference
-;
-
-/* ============================================================================
-
-* 29. POWER PROPERTY
-* ============================================================================
-* 
-* Property names are deliberately open.
-* 
-* Standard semantic names may include:
-* 
-* static
-* dynamic
-* idle
-* peak
-* average
-* sustained
-* transient
-* leakage
-* switching
-* 
-* They remain identifiers rather than permanent universal keywords.
-* 
-* This avoids requiring a grammar release for every future power technology.
-  */
-
-hardwarePowerProperty
-: hardwarePowerPropertyName
-hardwarePowerPropertyOperator
-expression
-SEMICOLON
-;
-
-hardwarePowerPropertyName
-: identifier
-;
-
-hardwarePowerPropertyOperator
-: ASSIGN
-| LE
-| LT
-| GE
-| GT
-;
-
-/* ============================================================================
-
-* 30. MEASUREMENT CONTRACT
-* ============================================================================
-* 
-* This does not perform measurement.
-* 
-* It describes a contract concerning an observable power quantity.
-* 
-* Example:
-* 
-* measurement peak {
-*     require <= peak_limit;
-* }
-* 
-* The runtime/measurement subsystem is responsible for obtaining actual
-* measurements.
-  */
+ * 17. MEASUREMENT CONTRACT
+ * ============================================================================
+ *
+ * This is a CONTRACT concerning measurement.
+ *
+ * It does not perform a measurement.
+ *
+ * ============================================================================
+ */
 
 hardwarePowerMeasurementContract
-: MEASUREMENT
-identifier
-hardwarePowerMeasurementBody
-;
+    : MEASUREMENT
+      identifier
+      hardwarePowerBlock
+    ;
 
-hardwarePowerMeasurementBody
-: LBRACE
-hardwarePowerMeasurementItem*
-RBRACE
-;
-
-hardwarePowerMeasurementItem
-: hardwarePowerProperty
-| hardwarePowerRequirement
-| hardwarePowerConstraint
-| hardwarePowerPreference
-| hardwarePowerHint
-;
 
 /* ============================================================================
+ * 18. GENERIC POWER PROPERTY
+ * ============================================================================
+ *
+ * The property name is open-ended.
+ *
+ * This is critical for future hardware technologies.
+ *
+ * The language therefore does not require a new grammar release for every
+ * future power-related property.
+ *
+ * Examples of semantic property names include:
+ *
+ *   static
+ *   dynamic
+ *   peak
+ *   average
+ *   sustained
+ *   transient
+ *   leakage
+ *   switching
+ *   idle
+ *   profile
+ *   efficiency
+ *
+ * These are NOT hard-coded here.
+ *
+ * ============================================================================
+ */
 
-* 31. ASSERTION
-* ============================================================================
-* 
-* Assertions are source-level contracts.
-* 
-* They are not runtime implementation.
-  */
+hardwarePowerProperty
+    : qualifiedName
+      hardwarePowerRelationalOperator
+      expression
+      SEMICOLON
+    ;
 
-hardwarePowerAssertion
-: ASSERT
-hardwarePowerBooleanExpression
-SEMICOLON
-;
-
-/* ============================================================================
-
-* 32. CAPABILITY REQUIREMENT
-* ============================================================================
-* 
-* Example:
-* 
-* capability power_management;
-* 
-* This describes an abstract capability.
-* 
-* It does not discover whether a physical target implements it.
-  */
-
-hardwarePowerCapabilityRequirement
-: CAPABILITY
-hardwarePowerCapabilityReference
-hardwarePowerCapabilityValue?
-SEMICOLON
-;
-
-hardwarePowerCapabilityReference
-: qualifiedName
-;
-
-hardwarePowerCapabilityValue
-: ASSIGN
-expression
-;
 
 /* ============================================================================
+ * 19. COMMON BLOCK
+ * ============================================================================
+ */
 
-* 33. RESOURCE REQUIREMENT
-* ============================================================================
-* 
-* This is deliberately a reference to the universal resource model.
-* 
-* The power grammar does not redefine resource declarations.
-* 
-* Example:
-* 
-* resource power >= required_power;
-* 
-* Semantic analysis determines whether the referenced resource exists and
-* whether the requirement is satisfiable.
-  */
+hardwarePowerBlock
+    : LBRACE
+      hardwarePowerItem*
+      RBRACE
+    ;
 
-hardwarePowerResourceRequirement
-: RESOURCE
-qualifiedName
-hardwarePowerResourceRelation?
-SEMICOLON
-;
-
-hardwarePowerResourceRelation
-: hardwarePowerComparisonOperator
-expression
-;
 
 /* ============================================================================
+ * 20. RELATIONAL OPERATOR
+ * ============================================================================
+ *
+ * These are canonical lexer tokens.
+ *
+ * No duplicate operator definitions are permitted.
+ *
+ * ============================================================================
+ */
 
-* 34. SCALING CONTRACT
-* ============================================================================
-* 
-* Power behavior can depend on workload/resource scale.
-* 
-* The grammar accepts arbitrary expressions.
-* 
-* It does not impose a finite number of scaling points.
-* 
-* Example:
-* 
-* scaling workload {
-*     power = base_power + coefficient * workload;
-* }
+hardwarePowerRelationalOperator
+    : ASSIGN
+    | LESS
+    | LESS_EQUAL
+    | GREATER
+    | GREATER_EQUAL
+    | EQUAL_EQUAL
+    | NOT_EQUAL
+    ;
 
-*/
-
-hardwarePowerScalingContract
-: SCALING
-identifier
-hardwarePowerScalingBody
-;
-
-hardwarePowerScalingBody
-: LBRACE
-hardwarePowerScalingItem*
-RBRACE
-;
-
-hardwarePowerScalingItem
-: hardwarePowerProperty
-| hardwarePowerRequirement
-| hardwarePowerConstraint
-| hardwarePowerPreference
-| hardwarePowerHint
-;
 
 /* ============================================================================
-
-* 35. NESTED CONTRACT
-* ============================================================================
-* 
-* Allows compositional power contracts without introducing another grammar
-* namespace.
-  */
-
-hardwarePowerNestedContract
-: CONTRACT
-identifier
-hardwarePowerContractBody
-;
-
-/* ============================================================================
-
-* 36. REFERENCES
-* ============================================================================
-* 
-* Power references are symbolic.
-* 
-* They may identify:
-* 
-* a logical power domain;
-* a power profile;
-* a resource;
-* a capability;
-* a target;
-* a semantic property.
-* 
-* They MUST NOT inherently identify a physical device.
-  */
-
-hardwarePowerReference
-: REFERENCE
-qualifiedName
-SEMICOLON
-;
-
-hardwarePowerStateReference
-: qualifiedName
-;
-
-/* ============================================================================
-
-* 37. REQUIREMENT EXPRESSIONS
-* ============================================================================
-* 
-* Requirement expressions intentionally use the canonical expression model.
-* 
-* The power grammar does not create a second expression language.
-  */
-
-hardwarePowerRequirementExpression
-: hardwarePowerBooleanExpression
-;
-
-hardwarePowerConstraintExpression
-: hardwarePowerBooleanExpression
-;
-
-hardwarePowerPreferenceExpression
-: hardwarePowerBooleanExpression
-;
-
-hardwarePowerHintExpression
-: expression
-;
-
-hardwarePowerBooleanExpression
-: expression
-;
-
-/* ============================================================================
-
-* 38. COMPARISON OPERATOR
-* ============================================================================
-* 
-* Comparison operators are references to the canonical lexical vocabulary.
-* 
-* This file does not define duplicate operator tokens.
-  */
-
-hardwarePowerComparisonOperator
-: EQ
-| NE
-| LT
-| LE
-| GT
-| GE
-;
-
-/* ============================================================================
-
-* 39. INTEGRATION BRIDGE
-* ============================================================================
-* 
-* The bridge rule is deliberately named and isolated.
-* 
-* It allows the hardware composition grammar to consume power syntax without
-* taking ownership of its internals.
-* 
-* hardware.g4 should contain:
-* 
-* | hardwarePowerDeclaration
-* 
-* inside hardwareItem.
-* 
-* No power rules should be copied into hardware.g4.
-  */
-
-hardwarePowerContract
-: hardwarePowerDeclaration
-;
-
-/* ============================================================================
-
-* 40. AST CONTRACT
-* ============================================================================
-* 
-* This grammar MUST map into the domain-neutral frontend AST.
-* 
-* Recommended conceptual mapping:
-* 
-* hardwarePowerDeclaration
-*      |
-*      v
-* Declaration
-*      |
-*      v
-* HardwarePowerContract
-* 
-* The exact Rust AST type remains owned by:
-* 
-* src/frontend/ast/
-* 
-* This grammar MUST NOT define Rust AST structures.
-* 
-* The AST should preserve at minimum:
-* 
-* declaration name
-* declaration kind
-* attributes
-* modifiers
-* generic parameters
-* target reference
-* body items
-* source spans
-* 
-* For body items, the AST must preserve their semantic category:
-* 
-* requirement
-* constraint
-* preference
-* hint
-* budget
-* profile
-* domain
-* state
-* transition
-* relation
-* property
-* measurement contract
-* capability requirement
-* resource requirement
-* scaling contract
-* 
-* No information may be silently discarded during parsing.
-* 
-* ============================================================================
-* 41. SEMANTIC CONTRACT
-* ============================================================================
-* 
-* Semantic analysis owns:
-* 
-* unit interpretation;
-* dimensional correctness;
-* power/energy consistency;
-* target compatibility;
-* capability validation;
-* resource validation;
-* requirement classification;
-* constraint validation;
-* preference validation;
-* hint handling;
-* state transition validity;
-* domain relationships;
-* profile validity;
-* measurement semantics;
-* scaling semantics.
-* 
-* This grammar intentionally does not decide whether:
-* 
-* 10 W
-* 
-* is compatible with a target.
-* 
-* It only recognizes the source representation.
-* 
-* ============================================================================
-* 42. UNIT / DIMENSION BOUNDARY
-* ============================================================================
-* 
-* This file intentionally does NOT introduce a second unit lexer.
-* 
-* Power values should use the canonical Zamani literal/expression system.
-* 
-* If the repository's canonical quantity/unit system supports:
-* 
-* W
-* mW
-* kW
-* MW
-* GW
-* 
-* or other representations, this grammar consumes them through:
-* 
-* expression
-* 
-* rather than defining duplicate power-specific literal tokens.
-* 
-* The same applies to derived relationships involving:
-* 
-* energy
-* time
-* voltage
-* current
-* frequency
-* duration
-* 
-* Dimensional validity belongs to semantic analysis.
-* 
-* ============================================================================
-* 43. ENERGY / POWER RELATIONSHIP
-* ============================================================================
-* 
-* Power and energy are related but are not the same semantic quantity.
-* 
-* This grammar therefore does not redefine ENERGY.
-* 
-* Existing:
-* 
-* hardware/resources.g4
-* 
-* owns the resource-level energy clause.
-* 
-* A power contract may reference energy expressions through:
-* 
-* expression
-* 
-* where the semantic type system determines dimensional correctness.
-* 
-* Conceptually:
-* 
-* energy = power * duration
-* 
-* but this relationship MUST NOT be implemented as parser logic.
-* 
-* ============================================================================
-* 44. TIMING INTEGRATION
-* ============================================================================
-* 
-* Power may depend on timing.
-* 
-* This file does NOT redefine timing.
-* 
-* Timing remains owned by:
-* 
-* grammar/hardware/timing.g4
-* 
-* and related timing contracts.
-* 
-* Example semantic relationship:
-* 
-* power contract workload {
-*     peak <= peak_power;
-*     ...
-* }
-* 
-* Timing analysis may consume the resulting semantic power contract.
-* 
-* The power grammar does not parse timing schedules.
-* 
-* ============================================================================
-* 45. THERMAL INTEGRATION
-* ============================================================================
-* 
-* Power and thermal behavior are related but distinct domains.
-* 
-* Power syntax MUST NOT become thermal syntax.
-* 
-* Thermal analysis, temperature constraints and thermal models belong to the
-* thermal/resource/target semantic layer designated by the repository.
-* 
-* This grammar may reference thermal capabilities/properties symbolically:
-* 
-* require thermal_management;
-* 
-* but it does not define thermal equations or thermal simulation.
-* 
-* ============================================================================
-* 46. RESOURCE INTEGRATION
-* ============================================================================
-* 
-* Existing:
-* 
-* grammar/hardware/resources.g4
-* 
-* already owns:
-* 
-* hardwareResourcePowerClause
-* 
-* with the canonical form:
-* 
-* power = expression;
-* 
-* That rule MUST remain unchanged as the resource-level power representation.
-* 
-* This file provides a higher-level hardware power contract.
-* 
-* Therefore:
-* 
-* resource power
-* 
-* and:
-* 
-* hardware power contract
-* 
-* are semantically composable but grammatically distinct.
-* 
-* ============================================================================
-* 47. CAPABILITY INTEGRATION
-* ============================================================================
-* 
-* Existing:
-* 
-* grammar/hardware/capabilities.g4
-* 
-* owns hardware capability declarations.
-* 
-* This file may reference capabilities using:
-* 
-* qualifiedName
-* 
-* and MUST NOT duplicate capability declaration ownership.
-* 
-* Examples:
-* 
-* capability power_management;
-* 
-* capability dynamic_power_scaling;
-* 
-* remain semantic capability references unless explicitly declared through
-* the canonical capability grammar.
-* 
-* ============================================================================
-* 48. TARGET INTEGRATION
-* ============================================================================
-* 
-* Existing:
-* 
-* grammar/hardware/targets.g4
-* 
-* owns target declarations.
-* 
-* This file may reference an abstract target through:
-* 
-* hardwarePowerTargetClause
-* 
-* but MUST NOT duplicate target declaration syntax.
-* 
-* Physical target selection remains downstream.
-* 
-* ============================================================================
-* 49. HARDWARE.G4 INTEGRATION
-* ============================================================================
-* 
-* The existing:
-* 
-* grammar/hardware/hardware.g4
-* 
-* currently has hardware-wide composition ownership.
-* 
-* It should consume:
-* 
-* hardwarePowerDeclaration
-* 
-* as a specialized hardware item.
-* 
-* Integration point:
-* 
-* hardwareItem
-*     |
-*     +--> hardwarePowerDeclaration
-* 
-* The parent grammar MUST NOT copy the contents of this file.
-* 
-* This creates one ownership boundary:
-* 
-* hardware.g4
-*     |
-*     +--> power.g4
-* 
-* rather than:
-* 
-* hardware.g4
-*     |
-*     +--> duplicated power rules
-* 
-* ============================================================================
-* 50. ZAMANI.G4 INTEGRATION
-* ============================================================================
-* 
-* grammar/Zamani.g4 remains the root composition grammar.
-* 
-* It MUST NOT import this file directly.
-* 
-* The composition chain remains:
-* 
-* Zamani.g4
-*     |
-*     v
-* ZamaniParser.g4
-*     |
-*     v
-* hardware composition
-*     |
-*     v
-* hardwarePowerDeclaration
-* 
-* This preserves the repository's single-root architecture.
-* 
-* ============================================================================
-* 51. LEXER INTEGRATION
-* ============================================================================
-* 
-* This file consumes the existing POWER token.
-* 
-* The canonical lexical owner already defines:
-* 
-* POWER : 'power' ;
-* 
-* This file MUST NOT define:
-* 
-* POWER
-* 
-* again.
-* 
-* The lexer hierarchy remains:
-* 
-* grammar/lexer/
-*     |
-*     v
-* ZamaniTokens
-*     |
-*     v
-* grammar/antlr/ZamaniLexer.g4
-* 
-* No power-specific lexer is created.
-* 
-* ============================================================================
-* 52. RUST INTEGRATION
-* ============================================================================
-* 
-* This grammar contains no Rust code.
-* 
-* The Rust implementation consuming its parse tree must remain compatible
-* with:
-* 
-* Rust 1.97
-* Rust 1.97.1
-* Rust 2021
-* 
-* and must not require:
-* 
-* unsafe
-* 
-* Rust code.
-* 
-* This file does not prescribe implementation details for:
-* 
-* src/lexer.rs
-* src/parser.rs
-* src/frontend/ast/
-* 
-* Those files own executable frontend behavior.
-* 
-* ============================================================================
-* 53. CANONICAL IR INTEGRATION
-* ============================================================================
-* 
-* This grammar does NOT define an IR.
-* 
-* Power information must lower through the repository's canonical semantic
-* representation and compiler IR.
-* 
-* Conceptually:
-* 
-* HardwarePowerContract
-*         |
-*         v
-* SemanticPowerContract
-*         |
-*         v
-* canonical resource/capability/constraint representation
-*         |
-*         v
-* compiler IR
-* 
-* No second power IR is introduced merely because this grammar exists.
-* 
-* ============================================================================
-* 54. QUANTUM INTEGRATION
-* ============================================================================
-* 
-* Power requirements for quantum execution may be represented here.
-* 
-* Example semantic intent:
-* 
-* power contract qpu_power {
-*     require peak <= power_budget;
-* }
-* 
-* The contract may later be consumed alongside:
-* 
-* quantum::ir
-* 
-* but this grammar MUST NOT modify or duplicate quantum::ir.
-* 
-* The quantum pipeline remains:
-* 
-* quantum source
-*      |
-*      v
-* domain-neutral AST
-*      |
-*      v
-* semantic analysis
-*      |
-*      v
-* quantum::ir
-*      |
-*      v
-* optimization
-*      |
-*      v
-* routing
-*      |
-*      v
-* scheduling
-*      |
-*      v
-* QEC / resilience
-*      |
-*      v
-* ZQN
-*      |
-*      v
-* HAL
-* 
-* Power information is associated with the relevant semantic/IR contracts;
-* it does not become a second quantum IR.
-* 
-* ============================================================================
-* 55. HDL INTEGRATION
-* ============================================================================
-* 
-* HDL owns hardware behavior and structure.
-* 
-* Power contracts may constrain HDL/hardware designs, but this file does not
-* duplicate:
-* 
-* modules
-* signals
-* nets
-* clocks
-* processes
-* synthesis
-* verification
-* 
-* Those remain owned by grammar/hdl/.
-* 
-* ============================================================================
-* 56. DISTRIBUTED INTEGRATION
-* ============================================================================
-* 
-* Power contracts may apply to distributed workloads.
-* 
-* The grammar permits symbolic expressions involving arbitrary workload
-* scale.
-* 
-* It does not encode:
-* 
-* MAX_NODES
-* MAX_POWER_DOMAINS
-* MAX_WORKERS
-* 
-* Distributed placement and allocation remain downstream.
-* 
-* ============================================================================
-* 57. ACCELERATOR INTEGRATION
-* ============================================================================
-* 
-* Power contracts may apply to:
-* 
-* CPU
-* GPU
-* FPGA
-* ASIC
-* QPU
-* accelerator
-* 
-* through symbolic target/capability/resource references.
-* 
-* No accelerator type is hard-coded into this grammar as a finite universe.
-* 
-* Future accelerator classes may be introduced through qualified names and
-* dialect mechanisms.
-* 
-* ============================================================================
-* 58. VENDOR EXTENSION MODEL
-* ============================================================================
-* 
-* Vendor-specific power properties MUST NOT require permanent universal
-* keywords.
-* 
-* Prefer:
-* 
-* vendor::property
-* 
-* or attributes/properties using qualified names.
-* 
-* Example:
-* 
-* @vendor.example(power_policy)
-* 
-* or:
-* 
-* vendor::dynamic_scaling = expression;
-* 
-* The semantic layer determines whether the extension is supported.
-* 
-* ============================================================================
-* 59. DETERMINISM
-* ============================================================================
-* 
-* Parsing MUST depend only on:
-* 
-* source text
-* selected grammar version
-* canonical lexical vocabulary
-* parser configuration
-* explicitly selected dialects
-* 
-* Parsing MUST NOT depend on:
-* 
-* current power consumption
-* hardware availability
-* physical temperature
-* wall-clock time
-* randomness
-* environment state
-* network state
-* target discovery
-* 
-* Hardware availability is a semantic/resource-resolution concern.
-* 
-* ============================================================================
-* 60. DIAGNOSTICS
-* ============================================================================
-* 
-* Syntax errors MUST identify the source span of the malformed construct.
-* 
-* Semantic errors belong downstream and should distinguish at least:
-* 
-* invalid syntax
-* invalid expression
-* invalid power dimension
-* unsatisfied power requirement
-* violated power constraint
-* unavailable capability
-* unavailable resource
-* unsupported target
-* unsupported dialect extension
-* 
-* A target that cannot satisfy a power requirement MUST NOT cause the source
-* program to be incorrectly reported as syntactically invalid.
-* 
-* ============================================================================
-* 61. SECURITY
-* ============================================================================
-* 
-* This grammar performs no:
-* 
-* hardware discovery
-* filesystem access
-* network access
-* command execution
-* environment inspection
-* secret access
-* 
-* Vendor attributes and properties are inert syntax until validated by the
-* semantic/compiler layers.
-* 
-* ============================================================================
-* 62. SCALABILITY TEST CONTRACT
-* ============================================================================
-* 
-* Tests for this grammar MUST include:
-* 
-* tiny power values
-* large power values
-* symbolic power values
-* computed power values
-* arbitrary precision/representable values
-* many power contracts
-* many domains
-* many states
-* many transitions
-* deeply nested contracts
-* large expressions
-* distributed power contracts
-* accelerator power contracts
-* quantum power contracts
-* future qualified properties
-* 
-* Tests MUST NOT establish a language maximum.
-* 
-* ============================================================================
-* 63. HARD-CODING AUDIT
-* ============================================================================
-* 
-* This file MUST fail review if it introduces:
-* 
-* MAX_POWER
-* MAX_ENERGY
-* MAX_POWER_DOMAINS
-* MAX_POWER_STATES
-* MAX_POWER_PROFILES
-* MAX_POWER_TRANSITIONS
-* MAX_DEVICES
-* MAX_CPUS
-* MAX_GPUS
-* MAX_FPGAS
-* MAX_QPUS
-* MAX_ACCELERATORS
-* MAX_NODES
-* 
-* or equivalent hidden bounds.
-* 
-* The following are also prohibited as universal language semantics:
-* 
-* fixed wattage
-* fixed voltage
-* fixed current
-* fixed device power
-* fixed number of power domains
-* fixed number of power states
-* 
-* Explicit program values remain valid.
-* 
-* For example:
-* 
-* budget <= 100W;
-* 
-* is valid program intent.
-* 
-* It does NOT establish a universal 100 W language limit.
-* 
-* ============================================================================
-* 64. NEGATIVE CASES
-* ============================================================================
-* 
-* The following must be rejected syntactically when malformed:
-* 
-* power contract;
-* 
-* power contract foo {
-* 
-* power contract foo {
-*     require;
-* }
-* 
-* power contract foo {
-*     constraint <=;
-* }
-* 
-* power contract foo {
-*     budget;
-* }
-* 
-* power contract foo {
-*     transition state;
-* }
-* 
-* The exact diagnostic wording is owned by the parser/frontend diagnostic
-* subsystem.
-* 
-* ============================================================================
-* 65. POSITIVE CASES
-* ============================================================================
-* 
-* Examples of intended forms:
-* 
-* power contract system_power {
-*     budget <= power_budget;
-* }
-* 
-* power contract accelerator_power {
-*     require peak <= allowed_peak_power;
-*     constraint average <= average_power_budget;
-*     prefer lower_power <= requested_power;
-*     hint minimize dynamic_power;
-* }
-* 
-* power contract scalable_power<limit> {
-*     budget <= limit;
-* }
-* 
-* power profile compute {
-*     dynamic = dynamic_power;
-*     static = leakage_power;
-*     peak <= peak_power;
-* }
-* 
-* power domain accelerator {
-*     require power_management;
-* }
-* 
-* power state idle {
-*     constraint power <= idle_power;
-* }
-* 
-* power state active {
-*     constraint power <= active_power;
-* }
-* 
-* power transition idle to active {
-*     require transition_power <= transition_budget;
-* }
-* 
-* power scaling workload {
-*     power = base_power + coefficient * workload;
-* }
-* 
-* power contract qpu_power {
-*     capability quantum::power_management;
-*     resource power >= required_power;
-*     require peak <= power_budget;
-* }
-* 
-* These examples are semantic demonstrations, not fixed required vocabulary.
-* 
-* ============================================================================
-* 66. BOUNDARY CASES
-* ============================================================================
-* 
-* The parser must permit:
-* 
-* power values represented by expressions;
-* symbolic values;
-* generic parameters;
-* qualified names;
-* arbitrarily large representable numeric literals;
-* arbitrarily small representable values supported by the lexical/type
-* system;
-* nested contracts;
-* multiple profiles;
-* multiple domains;
-* multiple states;
-* multiple transitions;
-* multiple requirements;
-* multiple constraints;
-* multiple preferences;
-* multiple hints.
-* 
-* The parser must not turn any of these into fixed machine capacities.
-* 
-* ============================================================================
-* 67. COMPLETION / INTEGRATION CHECKLIST
-* ============================================================================
-* 
-* This file is complete when all of the following are true:
-* 
-* LEXER
-* 
-* [ ] POWER is consumed from the canonical lexer vocabulary.
-* 
-* [ ] No POWER token is declared here.
-* 
-* [ ] No duplicate unit lexer is created.
-* 
-* [ ] General expressions use the canonical expression grammar.
-* 
-* [ ] General identifiers use the canonical identifier grammar.
-* 
-* HARDWARE
-* 
-* [ ] hardware.g4 delegates hardwarePowerDeclaration here.
-* 
-* [ ] hardware.g4 does not duplicate power rules.
-* 
-* [ ] No second hardware power grammar exists.
-* 
-* RESOURCES
-* 
-* [ ] hardware/resources.g4 remains owner of hardwareResourcePowerClause.
-* 
-* [ ] "power = expression;" remains valid there.
-* 
-* [ ] power.g4 does not redefine hardwareResourcePowerClause.
-* 
-* CAPABILITIES
-* 
-* [ ] hardware/capabilities.g4 remains capability declaration authority.
-* 
-* [ ] power.g4 only references capabilities.
-* 
-* TARGETS
-* 
-* [ ] hardware/targets.g4 remains target declaration authority.
-* 
-* [ ] power.g4 only references abstract targets.
-* 
-* TIMING
-* 
-* [ ] hardware/timing.g4 remains timing authority.
-* 
-* [ ] power.g4 does not redefine timing.
-* 
-* THERMAL
-* 
-* [ ] power.g4 does not become a thermal grammar.
-* 
-* [ ] Thermal semantics remain downstream.
-* 
-* HDL
-* 
-* [ ] HDL grammar remains independent.
-* 
-* [ ] No HDL behavioral syntax is duplicated here.
-* 
-* QUANTUM
-* 
-* [ ] No quantum operation syntax is introduced.
-* 
-* [ ] No quantum gate enumeration is introduced.
-* 
-* [ ] No second quantum IR is introduced.
-* 
-* [ ] quantum::ir remains canonical.
-* 
-* AST
-* 
-* [ ] Every public rule has a predetermined AST mapping.
-* 
-* [ ] Source spans are preserved.
-* 
-* [ ] No semantic information is silently discarded.
-* 
-* SEMANTICS
-* 
-* [ ] Power dimensional validation is downstream.
-* 
-* [ ] Resource satisfaction is downstream.
-* 
-* [ ] Capability satisfaction is downstream.
-* 
-* [ ] Target selection is downstream.
-* 
-* [ ] Physical enforcement is downstream.
-* 
-* IR
-* 
-* [ ] No parser-level power IR is created.
-* 
-* [ ] Power contracts lower through the canonical semantic/IR boundary.
-* 
-* COMPILER
-* 
-* [ ] Optimization may consume power contracts.
-* 
-* [ ] Scheduling may consume power contracts.
-* 
-* [ ] Placement may consume power contracts.
-* 
-* [ ] Target lowering may consume power contracts.
-* 
-* RUNTIME
-* 
-* [ ] Runtime enforcement is not performed by the parser.
-* 
-* [ ] Runtime measurement is not performed by the parser.
-* 
-* SCALABILITY
-* 
-* [ ] No power capacity constant exists.
-* 
-* [ ] No bounded power collection exists.
-* 
-* [ ] No fixed hardware scale is encoded.
-* 
-* [ ] Program values remain independent of implementation limits.
-* 
-* POCO-REAF
-* 
-* [ ] Same source-level power contract can be mapped to different targets.
-* 
-* [ ] Hardware realization can vary without changing source semantics.
-* 
-* [ ] Target failure is distinguishable from source syntax failure.
-* 
-* SAFETY
-* 
-* [ ] Grammar contains no actions.
-* 
-* [ ] No unsafe Rust is required.
-* 
-* VERSIONING
-* 
-* [ ] Feature status is recorded in the appropriate specification/compatibility
-* registry.
-* 
-* [ ] Future changes are additive where possible.
-* 
-* [ ] Breaking changes require an explicit migration.
-* 
-* ============================================================================
-* 68. FINAL OWNERSHIP INVARIANT
-* ============================================================================
-* 
-* The final ownership chain is:
-* 
-* grammar/lexer/
-*         |
-*         v
-* canonical tokens
-*         |
-*         v
-* grammar/antlr/ZamaniLexer.g4
-*         |
-*         v
-* grammar/antlr/ZamaniParser.g4
-*         |
-*         v
-* grammar/hardware/hardware.g4
-*         |
-*         +--> hardware/resources.g4
-*         +--> hardware/capabilities.g4
-*         +--> hardware/targets.g4
-*         +--> hardware/timing.g4
-*         +--> hardware/power.g4
-*         |
-*         v
-* domain-neutral AST
-*         |
-*         v
-* semantic power/resource/capability model
-*         |
-*         v
-* canonical compiler IR
-*         |
-*         +--> optimization
-*         +--> scheduling
-*         +--> placement
-*         +--> routing
-*         +--> synthesis
-*         +--> resilience
-*         |
-*         v
-* HAL
-*         |
-*         v
-* target realization
-* 
-* The invariant is:
-* 
-* POWER SYNTAX
-*      !=
-* POWER ANALYSIS
-*      !=
-* POWER MEASUREMENT
-*      !=
-* POWER SCHEDULING
-*      !=
-* POWER MANAGEMENT
-*      !=
-* PHYSICAL POWER CONTROL
-* 
-* Each layer owns its own responsibility.
-* 
-* ============================================================================
-* 69. POCO-REAF FINAL INVARIANT
-* ============================================================================
-* 
-* The language expresses:
-* 
-* what power behavior is required,
-* what power behavior is constrained,
-* what power behavior is preferred,
-* what power behavior is hinted,
-* what capabilities are required,
-* what resources are required.
-* 
-* The compiler/runtime decides:
-* 
-* how that intent is realized.
-* 
-* Therefore:
-* 
-* SAME PROGRAM
-*      |
-*      +--> tiny target
-*      |
-*      +--> medium target
-*      |
-*      +--> large target
-*      |
-*      +--> heterogeneous target
-*      |
-*      +--> distributed target
-*      |
-*      +--> quantum target
-*      |
-*      +--> future target
-* 
-* without introducing a language-level power ceiling.
-* 
-* ============================================================================
-* END OF FILE
-* ============================================================================
-  */
+ * 21. INTEGRATION CONTRACT
+ * ============================================================================
+ *
+ * hardware.g4 MUST:
+ *
+ *   1. import ZamaniHardwarePowerParser;
+ *   2. expose hardwarePowerDeclaration exactly once from hardwareDeclaration.
+ *
+ * hardware.g4 MUST NOT:
+ *
+ *   - duplicate any rule in this file;
+ *   - define another power declaration;
+ *   - redefine POWER;
+ *   - redefine power properties;
+ *   - redefine power requirements;
+ *   - redefine power constraints.
+ *
+ * ============================================================================
+ * 22. RESOURCE BOUNDARY
+ * ============================================================================
+ *
+ * Generic resource declarations remain owned by:
+ *
+ *   grammar/hardware/resources.g4
+ *   grammar/resources/
+ *
+ * For example, a generic resource relationship may express a power value.
+ *
+ * This grammar instead describes a named hardware power contract.
+ *
+ * The semantic layer correlates the two.
+ *
+ * ============================================================================
+ * 23. THERMAL BOUNDARY
+ * ============================================================================
+ *
+ * Thermal syntax remains owned by:
+ *
+ *   grammar/hardware/thermal.g4
+ *
+ * Power may participate in thermal analysis downstream.
+ *
+ * This grammar does not define:
+ *
+ *   temperature;
+ *   cooling;
+ *   heat transfer;
+ *   thermal simulation;
+ *   physical thermal limits.
+ *
+ * ============================================================================
+ * 24. ENERGY BOUNDARY
+ * ============================================================================
+ *
+ * POWER and ENERGY are related but distinct semantic quantities.
+ *
+ * This grammar does not redefine generic energy-resource syntax.
+ *
+ * Energy semantics remain available through the generic resource and
+ * semantic systems.
+ *
+ * ============================================================================
+ * 25. QUANTUM BOUNDARY
+ * ============================================================================
+ *
+ * A power contract can constrain a quantum realization.
+ *
+ * It does not define:
+ *
+ *   gates;
+ *   qubits;
+ *   circuits;
+ *   physical qubit identifiers;
+ *   topology;
+ *   calibration;
+ *   QEC;
+ *   routing;
+ *   scheduling.
+ *
+ * Those remain downstream.
+ *
+ * ============================================================================
+ * 26. HDL BOUNDARY
+ * ============================================================================
+ *
+ * Power properties can constrain an HDL realization.
+ *
+ * HDL declarations and behavior remain owned by grammar/hdl/.
+ *
+ * ============================================================================
+ * 27. AST CONTRACT
+ * ============================================================================
+ *
+ * The parser must preserve:
+ *
+ *   - declaration kind;
+ *   - declaration name;
+ *   - generic parameters;
+ *   - target association;
+ *   - property/requirement/constraint classification;
+ *   - expressions;
+ *   - nesting;
+ *   - source locations.
+ *
+ * Recommended semantic AST mapping:
+ *
+ *   hardwarePowerDeclaration
+ *       -> PowerDeclaration
+ *
+ *   hardwarePowerRequirement
+ *       -> Requirement
+ *
+ *   hardwarePowerConstraint
+ *       -> Constraint
+ *
+ *   hardwarePowerPreference
+ *       -> Preference
+ *
+ *   hardwarePowerHint
+ *       -> Hint
+ *
+ *   hardwarePowerBudget
+ *       -> Resource/Contract Budget
+ *
+ *   hardwarePowerProperty
+ *       -> Property
+ *
+ *   hardwarePowerProfile
+ *       -> Named Property Group
+ *
+ *   hardwarePowerDomain
+ *       -> Logical Domain
+ *
+ *   hardwarePowerState
+ *       -> Logical State
+ *
+ *   hardwarePowerTransition
+ *       -> Logical Transition
+ *
+ *   hardwarePowerMeasurementContract
+ *       -> Measurement Contract
+ *
+ * The exact existing Rust AST types should be reused when equivalent types
+ * already exist.
+ *
+ * ============================================================================
+ * 28. SEMANTIC CONTRACT
+ * ============================================================================
+ *
+ * Semantic analysis is responsible for:
+ *
+ *   - name resolution;
+ *   - generic parameter validation;
+ *   - expression typing;
+ *   - dimensional/unit validation;
+ *   - power/energy distinction;
+ *   - requirement classification;
+ *   - constraint validation;
+ *   - preference classification;
+ *   - capability matching;
+ *   - resource matching;
+ *   - target feasibility;
+ *   - policy validation;
+ *   - provenance;
+ *   - satisfiability analysis.
+ *
+ * The parser MUST NOT decide whether a target satisfies a power requirement.
+ *
+ * ============================================================================
+ * 29. SCALABILITY CONTRACT
+ * ============================================================================
+ *
+ * The grammar has no artificial finite capacity.
+ *
+ * These are intentionally unbounded:
+ *
+ *   hardwarePowerItem*
+ *   hardwarePowerAttribute*
+ *
+ * and expression size is delegated to the canonical expression grammar.
+ *
+ * Therefore the grammar itself does not impose a ceiling on:
+ *
+ *   - power properties;
+ *   - power domains;
+ *   - logical states;
+ *   - transitions;
+ *   - contracts;
+ *   - profiles;
+ *   - resources;
+ *   - devices;
+ *   - targets.
+ *
+ * Actual limits are implementation/resource limits, never language constants.
+ *
+ * ============================================================================
+ * 30. DETERMINISM
+ * ============================================================================
+ *
+ * This grammar contains:
+ *
+ *   - no actions;
+ *   - no semantic predicates;
+ *   - no randomness;
+ *   - no environment access;
+ *   - no hardware access;
+ *   - no filesystem access;
+ *   - no network access.
+ *
+ * Parsing is therefore determined by the source token stream and selected
+ * grammar version.
+ *
+ * ============================================================================
+ * 31. DIAGNOSTICS
+ * ============================================================================
+ *
+ * Parser diagnostics should identify:
+ *
+ *   - missing declaration name;
+ *   - malformed generic parameter;
+ *   - missing body;
+ *   - malformed requirement;
+ *   - malformed constraint;
+ *   - malformed budget;
+ *   - malformed property;
+ *   - malformed state;
+ *   - malformed transition;
+ *   - malformed measurement contract;
+ *   - missing statement terminator.
+ *
+ * Semantic diagnostics, not parser diagnostics, should identify:
+ *
+ *   - unknown power property;
+ *   - invalid unit;
+ *   - incompatible dimensions;
+ *   - impossible requirement;
+ *   - unavailable capability;
+ *   - unsatisfied target constraint;
+ *   - conflicting power contracts.
+ *
+ * ============================================================================
+ * 32. POSITIVE TEST CONTRACT
+ * ============================================================================
+ *
+ * The grammar must accept structurally valid forms such as:
+ *
+ *   power contract workload {
+ *       requires power <= available_power;
+ *       constraint peak_power <= power_budget;
+ *       prefer power_efficiency >= desired_efficiency;
+ *       hint dynamic_power;
+ *       budget <= workload_budget;
+ *       peak <= peak_limit;
+ *       profile compute {
+ *           dynamic <= dynamic_budget;
+ *           static <= static_budget;
+ *       }
+ *   }
+ *
+ *   power domain compute {
+ *       requires capability("power.management");
+ *   }
+ *
+ *   power profile low_power {
+ *       target hardware::power;
+ *       dynamic <= dynamic_budget;
+ *       leakage <= leakage_budget;
+ *   }
+ *
+ * Exact semantic validity is checked downstream.
+ *
+ * ============================================================================
+ * 33. NEGATIVE TEST CONTRACT
+ * ============================================================================
+ *
+ * Reject syntactically malformed forms such as:
+ *
+ *   power contract {
+ *       ...
+ *   }
+ *
+ *   power contract workload {
+ *       requires ;
+ *   }
+ *
+ *   power contract workload {
+ *       <= budget;
+ *   }
+ *
+ *   power contract workload {
+ *       budget;
+ *   }
+ *
+ *   power contract workload {
+ *       peak <= ;
+ *   }
+ *
+ * ============================================================================
+ * 34. SCALABILITY TEST CONTRACT
+ * ============================================================================
+ *
+ * Tests must generate:
+ *
+ *   - arbitrarily many properties;
+ *   - arbitrarily many profiles;
+ *   - arbitrarily many nested logical domains;
+ *   - arbitrarily many symbolic constraints;
+ *   - arbitrarily large expressions;
+ *
+ * subject only to available test resources.
+ *
+ * No test may assert a language-level maximum.
+ *
+ * ============================================================================
+ * 35. COMPATIBILITY
+ * ============================================================================
+ *
+ * Existing source compatibility must be handled by:
+ *
+ *   grammar/compatibility/
+ *
+ * This grammar must not create duplicate lexical aliases.
+ *
+ * In particular:
+ *
+ *   REQUIRE
+ *
+ * is NOT introduced merely for compatibility.
+ *
+ * The canonical spelling is:
+ *
+ *   REQUIRES
+ *
+ * ============================================================================
+ * 36. COMPLETION CRITERIA
+ * ============================================================================
+ *
+ * This file is DONE when:
+ *
+ * [ ] tokenVocab is ZamaniLexer;
+ * [ ] all imported rules resolve;
+ * [ ] no local lexical tokens exist;
+ * [ ] no K_* token aliases exist;
+ * [ ] no undefined parser rules remain;
+ * [ ] no undefined lexer tokens remain;
+ * [ ] hardware.g4 imports this parser exactly once;
+ * [ ] hardware.g4 dispatches hardwarePowerDeclaration exactly once;
+ * [ ] generic resources remain owned elsewhere;
+ * [ ] thermal semantics remain owned elsewhere;
+ * [ ] energy semantics remain distinct;
+ * [ ] no hardware capacity constants exist;
+ * [ ] no physical device identity is required;
+ * [ ] AST mapping is documented;
+ * [ ] semantic ownership is documented;
+ * [ ] IR ownership is documented;
+ * [ ] quantum::ir remains untouched by the grammar;
+ * [ ] positive tests pass;
+ * [ ] negative tests pass;
+ * [ ] boundary tests pass;
+ * [ ] scalability tests pass;
+ * [ ] compatibility tests pass;
+ * [ ] generated Rust compiles under Rust 1.97+;
+ * [ ] the generated implementation contains no unsafe Rust.
+ *
+ * ============================================================================
+ */
