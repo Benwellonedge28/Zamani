@@ -1,3 +1,415 @@
+/**
+ * Zamani Type-Class Composition Grammar
+ *
+ * File:
+ *   grammar/types/type-classes.g4
+ *
+ * Purpose:
+ *   Provides the type-level composition boundary for type classes,
+ *   trait constraints, associated-type projections, and type-class
+ *   references without creating a second declaration language.
+ *
+ * Architectural authority:
+ *   - grammar/declarations/traits.g4
+ *       Owns trait/type-class declarations and their members.
+ *
+ *   - grammar/types/types.g4
+ *       Owns complete type expressions.
+ *
+ *   - grammar/types/generic.g4
+ *       Owns generic application and generic argument syntax.
+ *
+ *   - grammar/types/bounds.g4
+ *       Owns canonical type-bound syntax.
+ *
+ *   - grammar/types/type-constraints.g4
+ *       Owns/bridges general type constraints where applicable.
+ *
+ * This grammar:
+ *   - does NOT declare traits.
+ *   - does NOT declare implementations.
+ *   - does NOT solve type classes.
+ *   - does NOT perform type inference.
+ *   - does NOT perform coherence checking.
+ *   - does NOT perform specialization.
+ *   - does NOT select implementations.
+ *   - does NOT define backend behavior.
+ *   - does NOT impose resource limits.
+ *
+ * POCO-REAF:
+ *   Type-class syntax expresses semantic requirements only.
+ *   Hardware/resource realization is handled downstream.
+ *
+ * Safety:
+ *   No embedded target-language actions.
+ *   No semantic predicates.
+ *   No unsafe implementation dependency.
+ *
+ * Scalability:
+ *   No fixed limits on:
+ *     - number of type parameters
+ *     - number of bounds
+ *     - number of associated types
+ *     - nesting depth
+ *     - implementation count
+ *     - hardware size
+ *     - resource capacity
+ *     - quantum capacity
+ *     - tensor rank
+ *     - execution width
+ *
+ * Rust:
+ *   Downstream implementation targets Rust 1.97+.
+ *   No unsafe Rust is required by this grammar.
+ */
+
+parser grammar TypeClasses;
+
+options {
+    tokenVocab = ZamaniLexer;
+}
+
+/*
+ * --------------------------------------------------------------------------
+ * FEATURE CONTRACT
+ * --------------------------------------------------------------------------
+ *
+ * DEPENDS_ON:
+ *   grammar/declarations/traits.g4
+ *   grammar/types/types.g4
+ *   grammar/types/generic.g4
+ *   grammar/types/bounds.g4
+ *   grammar/types/type-constraints.g4
+ *
+ * EXPORTS:
+ *   typeClassReference
+ *   typeClassConstraint
+ *   typeClassConstraintList
+ *   associatedTypeProjection
+ *   associatedTypeBinding
+ *   associatedTypeConstraint
+ *   typeClassMemberReference
+ *
+ * CONSUMED_BY:
+ *   grammar/types/types.g4
+ *   grammar/types/type-constraints.g4
+ *   grammar/expressions/*
+ *   grammar/statements/*
+ *   grammar/declarations/*
+ *
+ * AST_OWNER:
+ *   src/frontend/ast/node/types/type_expr.rs
+ *   Existing trait/type declaration AST infrastructure
+ *
+ * SEMANTIC_OWNER:
+ *   Type-system semantic analysis
+ *
+ * IR_OWNER:
+ *   Canonical semantic/type representation.
+ *   No direct backend IR ownership.
+ *
+ * TEST_OWNER:
+ *   grammar/tests/types/type-classes/
+ *
+ * SPEC_OWNER:
+ *   grammar/specification/
+ *   grammar/spec/
+ *
+ * --------------------------------------------------------------------------
+ */
+
+
+/*
+ * ==========================================================================
+ * TYPE-CLASS REFERENCE
+ * ==========================================================================
+ *
+ * Represents a reference to a declared type class / trait.
+ *
+ * Examples:
+ *
+ *   Numeric
+ *   Comparable
+ *   Collection<T>
+ *   Iterable<Item = T>
+ *
+ * The grammar records structure only.
+ *
+ * Whether the referenced entity exists, is a trait, is a type class,
+ * accepts the supplied parameters, or is satisfied is semantic analysis.
+ */
+
+typeClassReference
+    : qualifiedTypeClassName
+      typeClassArguments?
+    ;
+
+
+/*
+ * ==========================================================================
+ * TYPE-CLASS NAME
+ * ==========================================================================
+ *
+ * Names are deliberately delegated to the repository's canonical
+ * qualified-name representation.
+ *
+ * If the canonical name rule has a different public name in the current
+ * declaration grammar, this rule should delegate to that existing rule
+ * rather than introducing another identifier/path implementation.
+ */
+
+qualifiedTypeClassName
+    : typePath
+    ;
+
+
+/*
+ * ==========================================================================
+ * TYPE-CLASS ARGUMENTS
+ * ==========================================================================
+ *
+ * Type-class arguments are structural.
+ *
+ * They may represent:
+ *
+ *   - concrete types
+ *   - generic parameters
+ *   - associated projections
+ *   - dependent types
+ *   - other canonical TypeExpr forms
+ *
+ * Semantic validation determines whether an argument is legal.
+ *
+ * No arity limit is encoded here.
+ */
+
+typeClassArguments
+    : LESS
+      typeClassArgumentList
+      GREATER
+    ;
+
+typeClassArgumentList
+    : typeClassArgument
+      (COMMA typeClassArgument)*
+    ;
+
+typeClassArgument
+    : typeExpression
+    ;
+
+
+/*
+ * ==========================================================================
+ * TYPE-CLASS CONSTRAINT
+ * ==========================================================================
+ *
+ * This is the central type-class requirement form.
+ *
+ * Examples:
+ *
+ *   T: Numeric
+ *   T: Comparable
+ *   T: Iterable
+ *
+ * More complex constraints should continue to use the canonical type-bound
+ * and constraint infrastructure instead of growing a second constraint
+ * language here.
+ */
+
+typeClassConstraint
+    : typeExpression
+      COLON
+      typeClassReference
+    ;
+
+
+/*
+ * ==========================================================================
+ * MULTIPLE TYPE-CLASS CONSTRAINTS
+ * ==========================================================================
+ *
+ * No fixed number of constraints.
+ */
+
+typeClassConstraintList
+    : typeClassConstraint
+      (COMMA typeClassConstraint)*
+    ;
+
+
+/*
+ * ==========================================================================
+ * ASSOCIATED TYPE PROJECTION
+ * ==========================================================================
+ *
+ * Canonical projection form:
+ *
+ *   T::Item
+ *   Iterator::Item
+ *   Collection<T>::Element
+ *
+ * The resulting AST must map to the existing associated-type representation,
+ * not to a new type-class-specific AST universe.
+ *
+ * Existing semantic representation:
+ *
+ *   TypeExpr::Associated
+ *
+ * The grammar only captures the projection structure.
+ */
+
+associatedTypeProjection
+    : associatedTypeBase
+      DOUBLE_COLON
+      associatedTypeName
+    ;
+
+associatedTypeBase
+    : typeExpression
+    ;
+
+associatedTypeName
+    : IDENTIFIER
+    ;
+
+
+/*
+ * ==========================================================================
+ * ASSOCIATED TYPE BINDING
+ * ==========================================================================
+ *
+ * Used where a type-class/trait requirement needs to constrain an
+ * associated type.
+ *
+ * Conceptual forms include:
+ *
+ *   T::Item = U
+ *
+ * or the repository's canonical equivalent.
+ *
+ * Equality/compatibility is semantic.
+ *
+ * Do not introduce a separate semantic equality implementation here.
+ */
+
+associatedTypeBinding
+    : associatedTypeProjection
+      EQUAL_EQUAL
+      typeExpression
+    ;
+
+
+/*
+ * ==========================================================================
+ * ASSOCIATED TYPE CONSTRAINT
+ * ==========================================================================
+ *
+ * Associates a projected type with a type-class requirement.
+ *
+ * Example conceptual form:
+ *
+ *   T::Item: Numeric
+ *
+ * This intentionally reuses the canonical type-class constraint shape.
+ */
+
+associatedTypeConstraint
+    : associatedTypeProjection
+      COLON
+      typeClassReference
+    ;
+
+
+/*
+ * ==========================================================================
+ * TYPE-CLASS MEMBER REFERENCE
+ * ==========================================================================
+ *
+ * Provides a structural reference to a member associated with a type class.
+ *
+ * This is deliberately not a declaration rule.
+ *
+ * Examples:
+ *
+ *   Iterator::next
+ *   Collection::size
+ *
+ * The semantic layer determines:
+ *
+ *   - whether the type class exists
+ *   - whether the member exists
+ *   - whether the member is associated
+ *   - whether the receiver is valid
+ *   - whether the member is callable
+ *   - whether associated types/constants are involved
+ */
+
+typeClassMemberReference
+    : typeClassMemberBase
+      DOUBLE_COLON
+      IDENTIFIER
+    ;
+
+typeClassMemberBase
+    : typeExpression
+    ;
+
+
+/*
+ * ==========================================================================
+ * TYPE-CLASS REQUIREMENT
+ * ==========================================================================
+ *
+ * Unified type-level requirement.
+ *
+ * This rule is intentionally structural.
+ *
+ * The semantic layer may classify the resulting requirement as:
+ *
+ *   - type-class satisfaction
+ *   - associated-type constraint
+ *   - associated-type equality
+ *   - generic bound
+ *   - dependent constraint
+ *
+ * This prevents grammar-level duplication of semantic concepts.
+ */
+
+typeClassRequirement
+    : typeClassConstraint
+    | associatedTypeConstraint
+    | associatedTypeBinding
+    ;
+
+
+/*
+ * ==========================================================================
+ * TYPE-CLASS REQUIREMENT LIST
+ * ==========================================================================
+ */
+
+typeClassRequirementList
+    : typeClassRequirement
+      (COMMA typeClassRequirement)*
+    ;
+
+
+/*
+ * ==========================================================================
+ * TYPE-CLASS QUALIFIER
+ * ==========================================================================
+ *
+ * A reusable type-level requirement wrapper.
+ *
+ * This is intentionally separate from declarations and implementations.
+ */
+
+typeClassQualifier
+    : typeClassRequirementList
+    ;
+
+
 /*
  * ============================================================================
  * Zamani Programming Language
