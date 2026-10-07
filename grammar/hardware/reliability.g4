@@ -10,36 +10,26 @@
  *     ZamaniHardwareReliabilityParser
  *
  * Status:
- *     CANONICAL HARDWARE RELIABILITY / RESILIENCE INTENT LEAF GRAMMAR
+ *     CANONICAL HARDWARE RELIABILITY INTENT LEAF GRAMMAR
  *
  * Rust baseline:
- *     Rust 1.97 / Rust 1.97.1
- *     Rust edition 2021
+ *     Rust 1.97+
+ *     Rust 2021
  *     Safe Rust only
  *
- * Safety:
- *     Action-free ANTLR parser grammar.
- *     No embedded Rust.
- *     No target-language actions.
- *     No semantic predicates.
- *     No I/O.
- *     No hardware discovery.
- *     No runtime execution.
- *     No unsafe implementation requirement.
- *
  * ============================================================================
- * 1. PURPOSE
+ * FEATURE CONTRACT
  * ============================================================================
  *
- * This file defines SOURCE-LEVEL, TARGET-INDEPENDENT hardware reliability
- * intent.
+ * PURPOSE
+ * -------
  *
- * It describes properties and contracts such as:
+ * This file defines the SOURCE-LEVEL, TARGET-INDEPENDENT syntax for
+ * expressing hardware reliability and resilience intent.
  *
- *     reliability requirements
- *     reliability constraints
- *     reliability preferences
- *     reliability hints
+ * It allows a Zamani program to describe requirements concerning:
+ *
+ *     reliability
  *     availability
  *     durability
  *     dependability
@@ -51,201 +41,237 @@
  *     survivability
  *     service continuity
  *     failure domains
- *     resilience relationships
- *     resilience states
- *     resilience outcomes
- *     recovery intent
+ *     resilience
+ *     degradation
+ *     recovery
  *     reliability scaling
  *     reliability capabilities
  *     reliability resources
  *     reliability profiles
- *     reliability properties
  *     reliability assertions
+ *     evidence
+ *     policy references
  *
- * The grammar describes WHAT reliability/resilience properties are required
- * or preferred.
+ * The grammar describes WHAT the program requires or prefers.
  *
- * It does NOT decide HOW those properties are physically achieved.
+ * It does NOT describe HOW a target physically realizes that intent.
  *
- * ============================================================================
- * 2. ARCHITECTURAL POSITION
- * ============================================================================
  *
- * The intended pipeline is:
+ * OWNS
+ * ----
  *
- *     Zamani source
- *          |
- *          v
- *     canonical lexer
- *          |
- *          v
- *     canonical parser
- *          |
- *          v
- *     domain-neutral AST
- *          |
- *          v
- *     semantic analysis
- *          |
- *          +--> reliability analysis
- *          +--> resource analysis
- *          +--> capability analysis
- *          +--> resilience analysis
- *          |
- *          v
- *     canonical semantic representation
- *          |
- *          +--> classical IR
- *          +--> quantum::ir
- *          +--> HDL / hardware semantics
- *          +--> distributed semantics
- *          |
- *          v
- *     optimization
- *          |
- *          +--> routing
- *          +--> scheduling
- *          +--> resilience
- *          +--> QEC
- *          +--> ZQN
- *          |
- *          v
- *     HAL / target realization
- *          |
- *          v
- *     runtime / deployment
+ * This file owns:
  *
- * This grammar remains ABOVE target realization.
- *
- * ============================================================================
- * 3. SINGLE OWNER
- * ============================================================================
- *
- * THIS FILE OWNS:
- *
- *     hardware reliability declarations
- *     hardware reliability contracts
- *     reliability-specific requirements
- *     reliability-specific constraints
- *     reliability-specific preferences
- *     reliability-specific hints
+ *     hardwareReliabilityDeclaration
+ *     hardware reliability declaration modifiers
+ *     hardware reliability declaration kinds
+ *     hardware reliability bodies
+ *     reliability requirements
+ *     reliability constraints
+ *     reliability preferences
+ *     reliability hints
  *     reliability properties
- *     reliability profiles
- *     reliability groups
- *     reliability failure-domain intent
- *     reliability redundancy intent
- *     reliability recovery intent
- *     resilience-state intent
- *     resilience-outcome intent
- *     reliability scaling intent
  *     reliability capability references
  *     reliability resource references
+ *     reliability target references
+ *     reliability profiles
+ *     reliability groups
+ *     reliability resilience blocks
  *     reliability assertions
- *     reliability relationships
+ *     reliability evidence
+ *     reliability policy references
  *
- * THIS FILE DOES NOT OWN:
+ *
+ * DOES NOT OWN
+ * ------------
+ *
+ * This file does NOT own:
  *
  *     lexer rules
  *     identifiers
- *     literals
- *     general expressions
- *     general types
+ *     qualified-name syntax
+ *     literal syntax
+ *     expression precedence
  *     universal resource declarations
  *     universal capability declarations
- *     hardware targets
- *     physical device IDs
- *     physical addresses
- *     topology realization
+ *     generic contracts
+ *     generic policies
+ *     hardware allocation
+ *     device discovery
+ *     physical topology
  *     routing
  *     scheduling
+ *     placement algorithms
  *     calibration
- *     thermal modeling
- *     power modeling
- *     QEC algorithms
+ *     thermal implementation
+ *     power implementation
+ *     runtime recovery
+ *     QEC implementation
  *     ZQN implementation
  *     quantum::ir
- *     runtime recovery
- *     device discovery
- *     backend selection
  *     HAL implementation
+ *     backend selection
+ *
  *
  * ============================================================================
- * 4. RELATIONSHIP WITH EXISTING RESOURCE GRAMMARS
+ * DEPENDENCY CONTRACT
  * ============================================================================
  *
- * The repository already contains lower-level reliability syntax, including:
+ * DEPENDS_ON:
  *
- *     grammar/resources/reliability.g4
- *     grammar/declarations/resources.g4
- *     grammar/hardware/memory.g4
- *     grammar/hardware/cpu.g4
+ *     grammar/antlr/ZamaniLexer.g4
+ *     grammar/expressions/expressions.g4
  *
- * Those files remain responsible for reliability information attached to
- * their respective resource/declaration contexts.
+ * The canonical expression grammar is imported directly.
  *
- * THIS FILE DOES NOT duplicate those productions.
+ * This is deliberate.
  *
- * Instead:
+ * The leaf grammar must not depend on an accidental transitive import from
+ * hardware.g4 merely to obtain `expression`.
  *
- *     resource reliability
- *             |
- *             v
- *     generic resource semantics
  *
- *     hardware reliability
- *             |
- *             v
- *     hardware reliability contract
+ * EXPORTS:
  *
- * Both converge in semantic analysis.
+ *     hardwareReliabilityDeclaration
+ *     hardwareReliabilityBody
+ *     hardwareReliabilityItem
+ *     hardwareReliabilityRequirement
+ *     hardwareReliabilityConstraint
+ *     hardwareReliabilityPreference
+ *     hardwareReliabilityHint
+ *     hardwareReliabilityProperty
+ *     hardwareReliabilityCapability
+ *     hardwareReliabilityResource
+ *     hardwareReliabilityTarget
+ *     hardwareReliabilityProfile
+ *     hardwareReliabilityGroup
+ *     hardwareReliabilityResilience
+ *     hardwareReliabilityAssertion
+ *     hardwareReliabilityEvidence
+ *     hardwareReliabilityPolicy
  *
- * This separation is intentional.
  *
- * ============================================================================
- * 5. RELATIONSHIP WITH RESILIENCE
- * ============================================================================
+ * CONSUMED BY:
  *
- * Reliability and resilience are related but distinct.
+ *     grammar/hardware/hardware.g4
  *
- * Reliability generally describes the probability/ability of a system,
- * resource, service, or computation to satisfy a required behavior over
- * a defined context or interval.
  *
- * Resilience describes the ability of the system to tolerate, recover from,
- * adapt to, or continue operation through adverse conditions.
+ * AST_OWNER:
  *
- * Therefore:
+ *     domain-neutral frontend AST subsystem
  *
- *     reliability
- *         !=
+ *
+ * SEMANTIC_OWNER:
+ *
+ *     hardware reliability semantic subsystem
+ *     resilience semantic subsystem
+ *     resource/capability semantic subsystems
+ *
+ *
+ * TYPE_OWNER:
+ *
+ *     canonical Zamani type system
+ *
+ *
+ * EFFECT_OWNER:
+ *
+ *     canonical effect subsystem
+ *
+ *
+ * RESOURCE_OWNER:
+ *
+ *     grammar/resources/
+ *     resource semantic subsystem
+ *
+ *
+ * CAPABILITY_OWNER:
+ *
+ *     grammar/core/capabilities.g4
+ *     hardware capability semantic subsystem
+ *
+ *
+ * CONTRACT_OWNER:
+ *
+ *     grammar/validation/
+ *
+ *
+ * POLICY_OWNER:
+ *
+ *     grammar/policies/
+ *     grammar/security/
+ *
+ *
+ * IR_OWNER:
+ *
+ *     canonical semantic representation
+ *     domain-specific downstream IRs
+ *
+ * Quantum reliability information ultimately participates in:
+ *
+ *     quantum::ir
+ *
+ * followed by:
+ *
+ *     optimization
+ *     decomposition
+ *     routing
+ *     scheduling
  *     resilience
- *
- * This grammar permits both concepts while preserving their semantic
- * distinction.
- *
- * The semantic/runtime resilience subsystem remains responsible for actual:
- *
- *     detection
- *     diagnosis
- *     recovery
- *     retry
- *     repair
- *     quarantine
- *     failover
  *     QEC
- *     fault handling
+ *     ZQN
+ *     HAL
+ *
+ *
+ * TEST_OWNER:
+ *
+ *     grammar/tests/hardware/
+ *     grammar/tests/resources/
+ *     grammar/tests/reliability/
+ *     grammar/tests/quantum/
+ *     grammar/tests/hybrid/
+ *     grammar/tests/scalability/
+ *     grammar/tests/portability/
+ *     grammar/tests/negative/
+ *
+ *
+ * SPEC_OWNER:
+ *
+ *     grammar/spec/reliability.md
+ *     grammar/spec/resources.md
+ *     grammar/spec/policies.md
+ *     grammar/specification/poco-reaf.md
+ *
  *
  * ============================================================================
- * 6. POCO-REAF
+ * ARCHITECTURAL RULE
+ * ============================================================================
+ *
+ * Reliability is CROSS-CUTTING semantic information.
+ *
+ * It is not a separate intermediate representation.
+ *
+ * Therefore this grammar MUST NOT create:
+ *
+ *     ReliabilityIR
+ *     HardwareReliabilityIR
+ *     QuantumReliabilityIR
+ *     ResilienceIR
+ *
+ * Reliability information remains attached to the domain-neutral semantic
+ * model and is consumed by the appropriate downstream subsystem.
+ *
+ *
+ * ============================================================================
+ * POCO-REAF CONTRACT
  * ============================================================================
  *
  * Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
  *
- * Reliability intent must remain portable across:
+ * A reliability declaration must remain meaningful when realization changes
+ * between:
  *
- *     atom-scale systems
+ *     tiny systems
  *     embedded systems
- *     microcontrollers
  *     CPUs
  *     multicore systems
  *     GPUs
@@ -254,41 +280,51 @@
  *     accelerators
  *     QPUs
  *     simulators
- *     HPC
+ *     HPC systems
  *     clusters
  *     distributed systems
- *     cloud systems
  *     edge systems
+ *     cloud systems
  *     heterogeneous systems
  *     future computational substrates
  *
- * A reliability contract describes semantic requirements.
+ * The source program expresses reliability intent.
  *
- * It does NOT select:
+ * The compiler/runtime determines whether that intent can be realized.
  *
- *     a specific CPU
- *     a specific GPU
- *     a specific FPGA
- *     a specific ASIC
- *     a specific QPU
- *     a physical qubit
- *     a physical node
- *     a device address
- *     a vendor implementation
- *
- * Those decisions belong downstream.
  *
  * ============================================================================
- * 7. NO ARTIFICIAL SCALABILITY LIMITS
+ * SCALABILITY CONTRACT
  * ============================================================================
  *
- * This grammar MUST NOT define:
+ * There is NO language-level maximum for:
+ *
+ *     reliability declarations
+ *     reliability properties
+ *     profiles
+ *     groups
+ *     nested groups
+ *     nested resilience blocks
+ *     failure domains
+ *     replicas
+ *     recovery objectives
+ *     resources
+ *     capabilities
+ *     devices
+ *     nodes
+ *     processors
+ *     accelerators
+ *     quantum resources
+ *     qubits
+ *
+ * The grammar MUST NOT introduce any universal capacity constants.
+ *
+ * In particular, this file contains no:
  *
  *     MAX_RELIABILITY_CONTRACTS
  *     MAX_FAILURE_DOMAINS
  *     MAX_REDUNDANCY
  *     MAX_RECOVERY_STEPS
- *     MAX_FAILURES
  *     MAX_RETRIES
  *     MAX_DEVICES
  *     MAX_NODES
@@ -299,55 +335,43 @@
  *     MAX_QUBITS
  *     MAX_THREADS
  *     MAX_RESOURCES
- *     MAX_WORKERS
  *     MAX_REPLICAS
  *     MAX_STATES
  *     MAX_OUTCOMES
  *
- * Nor may equivalent finite limits be encoded through bounded alternatives.
+ * Repetition is represented through normal ANTLR repetition operators.
  *
- * Collections therefore use:
+ * Physical scale is determined by:
  *
- *     *
- *     +
- *
- * and quantities use expressions.
- *
- * "Infinity" means:
- *
- *     unbounded by the language architecture.
- *
- * It does NOT claim physically infinite resources.
- *
- * Actual scale is determined by:
- *
- *     source semantics
  *     available resources
  *     target capabilities
  *     compiler resources
  *     runtime resources
  *     deployment policy
- *     physical reality
+ *     physical feasibility
+ *
+ * The language itself imposes no artificial hardware ceiling.
+ *
  *
  * ============================================================================
- * 8. REQUIREMENT / CONSTRAINT / PREFERENCE / HINT
+ * REQUIREMENT / CONSTRAINT / PREFERENCE / HINT
  * ============================================================================
  *
  * REQUIREMENT
- *     Mandatory semantic condition.
+ *     A mandatory semantic condition.
  *
  * CONSTRAINT
- *     Mandatory condition restricting valid realization.
+ *     A mandatory restriction on valid realization.
  *
  * PREFERENCE
- *     Advisory optimization objective.
+ *     Non-mandatory optimization guidance.
  *
  * HINT
- *     Optional optimization information.
+ *     Advisory information.
  *
- * These categories MUST remain distinguishable in the parse tree.
+ * These categories MUST remain structurally distinguishable.
  *
- * A backend MUST NOT silently convert:
+ * A backend MUST NOT silently weaken:
  *
  *     requirement -> preference
  *
@@ -355,62 +379,357 @@
  *
  *     constraint -> hint
  *
- * because a target cannot satisfy the stronger form.
+ * because a particular realization cannot satisfy the stronger form.
+ *
  *
  * ============================================================================
- * 9. LEXICAL CONTRACT
+ * TARGET INDEPENDENCE
  * ============================================================================
  *
- * This file consumes the canonical Zamani token vocabulary.
+ * This grammar MUST NOT select:
  *
- * It does NOT define lexer rules.
+ *     physical CPU
+ *     physical GPU
+ *     physical FPGA
+ *     physical ASIC
+ *     physical QPU
+ *     physical qubit
+ *     physical node
+ *     physical memory bank
+ *     PCI address
+ *     serial number
+ *     machine hostname
+ *     vendor-specific device instance
  *
- * The hardware grammar family currently uses:
+ * A symbolic target expression is allowed.
  *
- *     tokenVocab = ZamaniTokens;
+ * Physical realization remains downstream.
  *
- * This file follows that existing hardware integration contract.
- *
- * Reliability-specific vocabulary uses existing canonical tokens such as:
- *
- *     K_RELIABILITY
- *     K_RESILIENCE
- *     K_REQUIRES
- *     K_CONSTRAINT
- *     K_PREFER
- *     K_HINT
- *     K_CAPABILITY
- *     K_RESOURCE
- *     K_TARGET
- *     K_PROFILE
- *     K_CONTRACT
- *     K_GROUP
- *     K_ASSERT
- *
- * Property names remain extensible wherever structural syntax permits.
- *
- * This avoids turning every future reliability concept into a permanent
- * language keyword.
  *
  * ============================================================================
- * 10. SHARED HARDWARE PARSER CONTRACT
+ * EXPRESSION INTEGRATION
  * ============================================================================
  *
- * When composed by grammar/hardware/hardware.g4, this grammar consumes the
- * shared hardware parser rules:
+ * All values and conditions use the canonical:
+ *
+ *     expression
+ *
+ * rule.
+ *
+ * This file does NOT create:
  *
  *     hardwareExpression
- *     hardwareQualifiedName
- *     hardwareRelationOperator
- *     hardwareLogicalOperator
+ *     reliabilityExpression
+ *     reliabilityLogicalExpression
+ *     reliabilityArithmeticExpression
  *
- * Those rules remain owned by the hardware composition grammar.
+ * as competing expression systems.
  *
- * This file MUST NOT redefine them.
+ * This is important for production maintainability.
  *
- * The eventual migration to the universal expression grammar can therefore
- * replace the hardware expression bridge without changing the reliability
- * contract.
+ * A future expression-system improvement therefore propagates naturally to
+ * reliability syntax without requiring this file to duplicate that change.
+ *
+ *
+ * ============================================================================
+ * LEXICAL INTEGRATION
+ * ============================================================================
+ *
+ * The canonical lexer is:
+ *
+ *     grammar/antlr/ZamaniLexer.g4
+ *
+ * Its vocabulary is assembled from:
+ *
+ *     grammar/lexer/
+ *
+ * This file therefore uses the actual canonical token names:
+ *
+ *     RELIABILITY
+ *     RESILIENCE
+ *     REQUIRES
+ *     CONSTRAINT
+ *     PREFER
+ *     HINT
+ *     CAPABILITY
+ *     RESOURCE
+ *     TARGET
+ *     PROFILE
+ *     GROUP
+ *     ASSERT
+ *     EVIDENCE
+ *     POLICY
+ *     PROPERTY
+ *     SCALABILITY
+ *     AVAILABILITY
+ *     CAPACITY
+ *     PERFORMANCE
+ *     LATENCY
+ *     THROUGHPUT
+ *     BANDWIDTH
+ *     ENERGY
+ *     POWER
+ *     COST
+ *
+ * No K_* aliases are invented here.
+ *
+ *
+ * ============================================================================
+ * DETERMINISM
+ * ============================================================================
+ *
+ * Parsing depends only on:
+ *
+ *     source text
+ *     canonical token stream
+ *     grammar version
+ *     explicit parser configuration
+ *
+ * Parsing MUST NOT depend on:
+ *
+ *     hardware availability
+ *     device health
+ *     runtime state
+ *     resource availability
+ *     network state
+ *     wall-clock time
+ *     randomness
+ *     filesystem state
+ *     environment variables
+ *
+ *
+ * ============================================================================
+ * SAFE RUST CONTRACT
+ * ============================================================================
+ *
+ * This grammar contains:
+ *
+ *     no embedded Rust
+ *     no target-language actions
+ *     no semantic predicates
+ *     no I/O
+ *     no hardware access
+ *     no runtime execution
+ *
+ * It therefore imposes no unsafe Rust requirement.
+ *
+ * The Rust frontend consuming generated ANTLR artifacts MUST remain:
+ *
+ *     Rust 1.97+
+ *     Rust 2021
+ *     safe Rust
+ *     no unsafe
+ *
+ *
+ * ============================================================================
+ * QUANTUM INTEGRATION
+ * ============================================================================
+ *
+ * Reliability requirements attached to quantum computation remain above the
+ * physical quantum realization boundary.
+ *
+ * The conceptual pipeline is:
+ *
+ *     source
+ *       |
+ *       v
+ *     domain-neutral AST
+ *       |
+ *       v
+ *     semantic reliability analysis
+ *       |
+ *       v
+ *     quantum semantic model
+ *       |
+ *       v
+ *     quantum::ir
+ *       |
+ *       v
+ *     optimization
+ *       |
+ *       v
+ *     decomposition
+ *       |
+ *       v
+ *     routing
+ *       |
+ *       v
+ *     scheduling
+ *       |
+ *       v
+ *     resilience / QEC / ZQN
+ *       |
+ *       v
+ *     HAL
+ *       |
+ *       v
+ *     target realization
+ *
+ * This grammar does NOT define:
+ *
+ *     physical qubits
+ *     physical topology
+ *     gate calibration
+ *     QEC algorithms
+ *     syndrome decoders
+ *     pulse schedules
+ *     QPU allocation
+ *
+ *
+ * ============================================================================
+ * HARDWARE / HDL INTEGRATION
+ * ============================================================================
+ *
+ * Hardware reliability is distinct from HDL behavioral semantics.
+ *
+ * HDL remains owned by:
+ *
+ *     grammar/hdl/
+ *
+ * Hardware realization intent remains owned by:
+ *
+ *     grammar/hardware/
+ *
+ * Reliability may constrain an HDL/hardware computation, but this grammar
+ * does not define:
+ *
+ *     signals
+ *     procedural blocks
+ *     clock semantics
+ *     synthesis
+ *     RTL behavior
+ *     physical layout
+ *
+ *
+ * ============================================================================
+ * RESOURCE INTEGRATION
+ * ============================================================================
+ *
+ * Hardware reliability may refer to resources:
+ *
+ *     requires resource::compute >= required_compute;
+ *
+ *     requires resource::memory >= required_memory;
+ *
+ *     resource resource::recovery;
+ *
+ * Such references are symbolic.
+ *
+ * They do not allocate resources.
+ *
+ * Resource interpretation remains owned by:
+ *
+ *     grammar/resources/
+ *
+ *
+ * ============================================================================
+ * CAPABILITY INTEGRATION
+ * ============================================================================
+ *
+ * Capability references remain open-world.
+ *
+ * Examples:
+ *
+ *     capability quantum::error_correction;
+ *
+ *     capability distributed::failover;
+ *
+ *     capability resilience::recovery;
+ *
+ * No finite capability catalogue is encoded.
+ *
+ *
+ * ============================================================================
+ * RESILIENCE STATE / OUTCOME INTEGRATION
+ * ============================================================================
+ *
+ * Standard semantic resilience states include:
+ *
+ *     Unknown
+ *     Healthy
+ *     Degraded
+ *     Unstable
+ *     Unavailable
+ *     Recovering
+ *     Quarantined
+ *     Retired
+ *
+ * Standard semantic outcomes include:
+ *
+ *     ACCEPT
+ *     DEGRADED_ACCEPT
+ *     RETRY
+ *     RECOVER
+ *     ESCALATE
+ *     REJECT
+ *
+ * These are SEMANTIC VALUES.
+ *
+ * They are deliberately not implemented as a closed parser enumeration.
+ *
+ * Future resilience states and outcomes therefore remain representable.
+ *
+ *
+ * ============================================================================
+ * PROPERTY MODEL
+ * ============================================================================
+ *
+ * Reliability properties use:
+ *
+ *     property-name relation expression ;
+ *
+ * Examples:
+ *
+ *     availability >= required_availability;
+ *
+ *     failure_probability <= acceptable_probability;
+ *
+ *     failure_rate <= acceptable_rate;
+ *
+ *     mtbf >= required_mtbf;
+ *
+ *     mttr <= recovery_budget;
+ *
+ *     redundancy >= required_redundancy;
+ *
+ *     resilience_state == Healthy;
+ *
+ *     resilience_outcome == ACCEPT;
+ *
+ *     failure_domain == execution::domain;
+ *
+ * Property names remain extensible.
+ *
+ * Only the currently reserved reliability/resource vocabulary that can appear
+ * in property position is explicitly admitted below. All other names remain
+ * ordinary identifiers.
+ *
+ *
+ * ============================================================================
+ * DECLARATION MODEL
+ * ============================================================================
+ *
+ * Canonical forms include:
+ *
+ *     reliability {
+ *         availability >= required_availability;
+ *     }
+ *
+ *     reliability contract compute {
+ *         requires availability >= required_availability;
+ *         constraint failure_probability <= allowed_probability;
+ *     }
+ *
+ *     reliability profile resilient {
+ *         redundancy >= required_redundancy;
+ *     }
+ *
+ *     reliability target {
+ *         ...
+ *     }
+ *
+ * The target clause is symbolic and never selects a physical device.
+ *
  *
  * ============================================================================
  */
@@ -418,36 +737,25 @@
 parser grammar ZamaniHardwareReliabilityParser;
 
 options {
-    tokenVocab = ZamaniTokens;
+    tokenVocab = ZamaniLexer;
 }
 
+import Expressions;
 
-/* ============================================================================
- * 11. PUBLIC ENTRY POINT
+
+/*
+ * ============================================================================
+ * PUBLIC ENTRY POINT
  * ============================================================================
  *
- * Examples:
+ * hardware.g4 exposes this rule through its hardwareDeclaration dispatcher.
  *
- *     reliability compute {
- *         availability >= required_availability;
- *     }
- *
- *     reliability contract compute {
- *         requires availability >= required_availability;
- *         constraint failure_rate <= allowed_failure_rate;
- *     }
- *
- *     reliability profile resilient {
- *         redundancy >= required_redundancy;
- *     }
- *
- * The declaration is symbolic.
- *
- * It does not identify a physical device.
+ * No EOF is used here because this is a leaf grammar consumed inside the
+ * universal program grammar.
  */
 
 hardwareReliabilityDeclaration
-    : K_RELIABILITY
+    : RELIABILITY
       hardwareReliabilityDeclarationModifier*
       hardwareReliabilityDeclarationKind?
       IDENTIFIER?
@@ -457,65 +765,62 @@ hardwareReliabilityDeclaration
     ;
 
 
-/* ============================================================================
- * 12. DECLARATION KINDS
+/*
  * ============================================================================
- *
- * These are intentionally limited to existing structural vocabulary.
- *
- * Future reliability concepts should normally be represented as properties
- * or dialect extensions rather than permanent root keywords.
+ * DECLARATION KINDS
+ * ============================================================================
  */
 
 hardwareReliabilityDeclarationKind
-    : K_CONTRACT
-    | K_PROFILE
+    : CONTRACT
+    | PROFILE
     ;
 
 
-/* ============================================================================
- * 13. MODIFIERS
+/*
+ * ============================================================================
+ * DECLARATION MODIFIERS
  * ============================================================================
  *
- * Reliability modifiers describe source-level declaration intent only.
+ * These are existing language modifiers.
  *
- * They do not identify a physical implementation.
+ * They carry no physical hardware meaning.
  */
 
 hardwareReliabilityDeclarationModifier
-    : K_STATIC
-    | K_CONST
-    | K_EXTERN
-    | K_FINAL
-    | K_ABSTRACT
-    | K_SEALED
-    | K_PARTIAL
+    : STATIC
+    | CONST
+    | EXTERN
+    | FINAL
+    | ABSTRACT
+    | SEALED
+    | PARTIAL
     ;
 
 
-/* ============================================================================
- * 14. TARGET
+/*
  * ============================================================================
- *
- * The target is an abstract semantic subject.
+ * TARGET
+ * ============================================================================
  *
  * Example:
  *
- *     reliability compute for hardware::accelerator {
+ *     reliability target hardware::accelerator {
  *         ...
  *     }
  *
- * Actual device selection remains downstream.
+ * `expression` owns the actual reference syntax.
  */
 
 hardwareReliabilityTargetClause
-    : K_TARGET
-      hardwareQualifiedName
+    : TARGET
+      expression
     ;
 
 
-/* ============================================================================
- * 15. BODY
+/*
+ * ============================================================================
+ * BODY
  * ============================================================================
  */
 
@@ -526,13 +831,17 @@ hardwareReliabilityBody
     ;
 
 
-/* ============================================================================
- * 16. BODY DISPATCH
+/*
+ * ============================================================================
+ * BODY DISPATCH
  * ============================================================================
  *
- * Every reliability construct has one owner.
+ * Every alternative has a distinct structural owner.
  *
- * No reliability production is duplicated inside hardware.g4.
+ * Generic property syntax is represented exactly once.
+ *
+ * This deliberately eliminates the old design in which multiple productions
+ * began with IDENTIFIER and therefore competed for the same syntax.
  */
 
 hardwareReliabilityItem
@@ -546,430 +855,340 @@ hardwareReliabilityItem
     | hardwareReliabilityTarget
     | hardwareReliabilityProfile
     | hardwareReliabilityGroup
-    | hardwareReliabilityFailureDomain
-    | hardwareReliabilityRedundancy
-    | hardwareReliabilityRecovery
     | hardwareReliabilityResilience
-    | hardwareReliabilityRelation
-    | hardwareReliabilityScaling
     | hardwareReliabilityAssertion
+    | hardwareReliabilityEvidence
+    | hardwareReliabilityPolicy
     ;
 
 
-/* ============================================================================
- * 17. REQUIREMENT
+/*
+ * ============================================================================
+ * REQUIREMENT
  * ============================================================================
  *
- * Examples:
+ * Example:
  *
  *     requires availability >= required_availability;
- *     requires failure_rate <= allowed_failure_rate;
- *     requires capability::fault_tolerance;
  *
- * The grammar records intent.
- *
- * Semantic analysis determines:
- *
- *     dimensional validity
- *     probabilistic validity
- *     resource validity
- *     capability validity
- *     target compatibility
- *     satisfiability
+ * The complete condition is delegated to the canonical expression grammar.
  */
 
 hardwareReliabilityRequirement
-    : K_REQUIRES
-      hardwareReliabilityCondition
+    : REQUIRES
+      expression
       SEMICOLON
     ;
 
 
-/* ============================================================================
- * 18. CONSTRAINT
+/*
  * ============================================================================
+ * CONSTRAINT
+ * ============================================================================
+ *
+ * Example:
+ *
+ *     constraint failure_probability <= acceptable_probability;
  */
 
 hardwareReliabilityConstraint
-    : K_CONSTRAINT
-      hardwareReliabilityCondition
+    : CONSTRAINT
+      expression
       SEMICOLON
     ;
 
 
-/* ============================================================================
- * 19. PREFERENCE
+/*
  * ============================================================================
+ * PREFERENCE
+ * ============================================================================
+ *
+ * Example:
+ *
+ *     prefer availability >= preferred_availability;
  */
 
 hardwareReliabilityPreference
-    : K_PREFER
-      hardwareReliabilityCondition
+    : PREFER
+      expression
       SEMICOLON
     ;
 
 
-/* ============================================================================
- * 20. HINT
+/*
  * ============================================================================
+ * HINT
+ * ============================================================================
+ *
+ * A hint is advisory only.
+ *
+ * It MUST NOT acquire requirement or constraint semantics during parsing.
  */
 
 hardwareReliabilityHint
-    : K_HINT
-      hardwareExpression
+    : HINT
+      expression
       SEMICOLON
     ;
 
 
-/* ============================================================================
- * 21. RELIABILITY CONDITION
+/*
+ * ============================================================================
+ * PROPERTY
  * ============================================================================
  *
- * A condition may be:
- *
- *     property >= expression
- *     property <= expression
- *     expression
- *
- * Logical composition uses the existing hardware logical operator contract.
- *
- * The grammar does not evaluate the condition.
- */
-
-hardwareReliabilityCondition
-    : hardwareReliabilityPredicate
-      (
-          hardwareLogicalOperator
-          hardwareReliabilityPredicate
-      )*
-    ;
-
-
-hardwareReliabilityPredicate
-    : hardwareExpression
-      hardwareRelationOperator
-      hardwareExpression
-    | hardwareExpression
-    | LPAREN
-      hardwareReliabilityCondition
-      RPAREN
-    ;
-
-
-/* ============================================================================
- * 22. GENERIC PROPERTY
- * ============================================================================
- *
- * This is the principal extensibility mechanism.
+ * Generic reliability property.
  *
  * Examples:
  *
  *     availability >= required_availability;
- *     durability >= required_durability;
- *     failure_probability <= acceptable_probability;
- *     failure_rate <= acceptable_rate;
- *     mtbf >= required_mtbf;
+ *     failure_rate <= allowed_failure_rate;
  *     mttr <= recovery_budget;
- *     confidence >= required_confidence;
  *     redundancy >= required_redundancy;
- *     survivability >= required_survivability;
- *     resilience_state = Healthy;
- *     resilience_outcome = ACCEPT;
+ *     resilience_state == Healthy;
  *
- * Property names remain open-world.
- *
- * The semantic layer determines whether a property is recognized and what
- * dimension/type/domain it requires.
+ * Property semantics are resolved downstream.
  */
 
 hardwareReliabilityProperty
     : hardwareReliabilityPropertyName
-      hardwareRelationOperator
-      hardwareExpression
+      hardwareReliabilityComparisonOperator
+      expression
       SEMICOLON
     ;
 
+
+/*
+ * ============================================================================
+ * PROPERTY NAME
+ * ============================================================================
+ *
+ * Open-world property names remain possible through IDENTIFIER.
+ *
+ * Reserved language words that are valid semantic property names are admitted
+ * explicitly because the lexer correctly emits them as keyword tokens.
+ *
+ * This prevents:
+ *
+ *     availability
+ *
+ * from becoming unusable as a property simply because the lexer reserves the
+ * word.
+ */
 
 hardwareReliabilityPropertyName
-    : IDENTIFIER
-    | K_RELIABILITY
-    | K_RESILIENCE
-    | K_AVAILABILITY
-    | K_CAPACITY
-    | K_PERFORMANCE
-    | K_LATENCY
-    | K_THROUGHPUT
-    | K_BANDWIDTH
-    | K_ENERGY
-    | K_POWER
-    | K_COST
-    | K_SCALABILITY
-    | K_PORTABILITY
-    | K_CAPABILITY
-    | K_RESOURCE
-    | K_TARGET
-    | K_PROFILE
-    | K_CONTRACT
-    | K_GROUP
-    | K_PROPERTY
-    ;
-
-
-/* ============================================================================
- * 23. CAPABILITY
- * ============================================================================
- *
- * Examples:
- *
- *     capability = fault_tolerance;
- *     capability = quantum::fault_tolerance;
- *     capability = resilience::recovery;
- *
- * Capability discovery remains downstream.
- */
-
-hardwareReliabilityCapability
-    : K_CAPABILITY
+    : hardwareReliabilityPropertySegment
       (
-          ASSIGN
-      )?
-      hardwareExpression
-      SEMICOLON
+          DOUBLE_COLON
+          hardwareReliabilityPropertySegment
+      )*
     ;
 
 
-/* ============================================================================
- * 24. RESOURCE
- * ============================================================================
- *
- * A resource reference is symbolic.
- *
- * It does not allocate or reserve physical hardware.
- */
-
-hardwareReliabilityResource
-    : K_RESOURCE
-      hardwareQualifiedName
-      (
-          hardwareRelationOperator
-          hardwareExpression
-      )?
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 25. TARGET REFERENCE
- * ============================================================================
- *
- * This is a semantic target expression.
- *
- * It is not a physical device selection.
- */
-
-hardwareReliabilityTarget
-    : K_TARGET
-      (
-          ASSIGN
-      )?
-      hardwareExpression
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 26. PROFILE
- * ============================================================================
- *
- * A profile groups reliability properties without defining a closed world of
- * reliability technologies.
- */
-
-hardwareReliabilityProfile
-    : K_PROFILE
-      IDENTIFIER
-      hardwareReliabilityProfileBody
-    ;
-
-
-hardwareReliabilityProfileBody
-    : LBRACE
-      hardwareReliabilityProfileItem*
-      RBRACE
-    ;
-
-
-hardwareReliabilityProfileItem
-    : hardwareReliabilityProperty
-    | hardwareReliabilityRequirement
-    | hardwareReliabilityConstraint
-    | hardwareReliabilityPreference
-    | hardwareReliabilityHint
-    | hardwareReliabilityCapability
-    | hardwareReliabilityResource
-    | hardwareReliabilityResilience
-    ;
-
-
-/* ============================================================================
- * 27. GROUP
- * ============================================================================
- *
- * A logical reliability group can represent:
- *
- *     service
- *     component set
- *     resource set
- *     execution region
- *     failure domain
- *     deployment unit
- *
- * It does not imply a physical topology.
- */
-
-hardwareReliabilityGroup
-    : K_GROUP
-      IDENTIFIER
-      hardwareReliabilityGroupBody
-    ;
-
-
-hardwareReliabilityGroupBody
-    : LBRACE
-      hardwareReliabilityGroupItem*
-      RBRACE
-    ;
-
-
-hardwareReliabilityGroupItem
-    : hardwareReliabilityProperty
-    | hardwareReliabilityRequirement
-    | hardwareReliabilityConstraint
-    | hardwareReliabilityPreference
-    | hardwareReliabilityHint
-    | hardwareReliabilityFailureDomain
-    | hardwareReliabilityRedundancy
-    | hardwareReliabilityRecovery
-    | hardwareReliabilityResilience
-    ;
-
-
-/* ============================================================================
- * 28. FAILURE DOMAIN
- * ============================================================================
- *
- * Failure domains are LOGICAL.
- *
- * They may later be mapped to:
- *
- *     process
- *     task
- *     service
- *     resource
- *     module
- *     rack
- *     node
- *     device
- *     QPU
- *     QEC region
- *
- * but this grammar does not make any of those mappings mandatory.
- *
- * The name is intentionally symbolic.
- */
-
-hardwareReliabilityFailureDomain
+hardwareReliabilityPropertySegment
     : IDENTIFIER
-      hardwareReliabilityFailureDomainOperator
-      hardwareQualifiedName
-      SEMICOLON
+    | RELIABILITY
+    | RESILIENCE
+    | AVAILABILITY
+    | CAPACITY
+    | PERFORMANCE
+    | LATENCY
+    | THROUGHPUT
+    | BANDWIDTH
+    | ENERGY
+    | POWER
+    | COST
+    | SCALABILITY
+    | PORTABILITY
+    | RESOURCE
+    | CAPABILITY
+    | TARGET
+    | PROFILE
+    | GROUP
+    | PROPERTY
     ;
 
 
-hardwareReliabilityFailureDomainOperator
-    : ASSIGN
-    ;
-
-
-/* ============================================================================
- * 29. REDUNDANCY
+/*
+ * ============================================================================
+ * COMPARISON OPERATOR
  * ============================================================================
  *
- * Redundancy is semantic intent.
+ * Assignment is intentionally excluded.
  *
- * It does not require replication onto a fixed number of physical devices.
+ * Therefore:
+ *
+ *     reliability = value;
+ *
+ * is not silently interpreted as a reliability property assignment.
+ *
+ * Property relations are semantic comparisons.
+ *
+ * If assignment-like reliability syntax is ever required, it must be added
+ * deliberately and documented as a separate construct.
  */
 
-hardwareReliabilityRedundancy
-    : IDENTIFIER
-      hardwareReliabilityRedundancyOperator
-      hardwareExpression
-      SEMICOLON
-    ;
-
-
-hardwareReliabilityRedundancyOperator
-    : ASSIGN
-    | EQUAL_EQUAL
+hardwareReliabilityComparisonOperator
+    : EQUAL_EQUAL
     | NOT_EQUAL
-    | LESS_THAN
+    | LESS
     | LESS_EQUAL
-    | GREATER_THAN
+    | GREATER
     | GREATER_EQUAL
     ;
 
 
-/* ============================================================================
- * 30. RECOVERY
+/*
  * ============================================================================
- *
- * Recovery properties are intentionally represented through an extensible
- * named-property form.
+ * CAPABILITY
+ * ============================================================================
  *
  * Examples:
  *
- *     recovery_time <= recovery_budget;
- *     recovery_probability >= required_probability;
- *     recovery_overhead <= overhead_budget;
+ *     capability quantum::error_correction;
  *
- * Actual recovery implementation belongs to the resilience/runtime layers.
+ *     capability resilience::recovery;
+ *
+ *     capability capability_reference();
+ *
+ * The value is an expression so future capability-reference mechanisms do not
+ * require grammar changes.
  */
 
-hardwareReliabilityRecovery
-    : IDENTIFIER
-      hardwareRelationOperator
-      hardwareExpression
+hardwareReliabilityCapability
+    : CAPABILITY
+      expression
       SEMICOLON
     ;
 
 
-/* ============================================================================
- * 31. RESILIENCE
+/*
+ * ============================================================================
+ * RESOURCE
  * ============================================================================
  *
- * Resilience is represented as a semantic contract.
+ * A resource reference is symbolic.
+ *
+ * It does not allocate, reserve, or discover a physical resource.
+ *
+ * Examples:
+ *
+ *     resource resource::compute;
+ *
+ *     resource resource::memory;
+ *
+ *     resource resource::recovery;
+ */
+
+hardwareReliabilityResource
+    : RESOURCE
+      expression
+      SEMICOLON
+    ;
+
+
+/*
+ * ============================================================================
+ * TARGET REFERENCE
+ * ============================================================================
+ *
+ * This is a semantic target reference.
+ *
+ * It is not physical device selection.
+ */
+
+hardwareReliabilityTarget
+    : TARGET
+      expression
+      SEMICOLON
+    ;
+
+
+/*
+ * ============================================================================
+ * PROFILE
+ * ============================================================================
+ *
+ * A profile is a named collection of reliability intent.
+ *
+ * Profiles remain open-ended.
  *
  * Example:
  *
- *     resilience = required_resilience;
+ *     profile resilient {
+ *         availability >= required_availability;
+ *         redundancy >= required_redundancy;
+ *     }
+ */
+
+hardwareReliabilityProfile
+    : PROFILE
+      IDENTIFIER
+      hardwareReliabilityBody
+    ;
+
+
+/*
+ * ============================================================================
+ * GROUP
+ * ============================================================================
  *
- * or:
+ * A group is a logical grouping mechanism.
+ *
+ * It does not imply physical topology.
+ *
+ * A semantic implementation may later map a group to:
+ *
+ *     service
+ *     component
+ *     task
+ *     execution region
+ *     resource set
+ *     deployment unit
+ *     failure domain
+ *
+ * without changing source syntax.
+ */
+
+hardwareReliabilityGroup
+    : GROUP
+      IDENTIFIER
+      hardwareReliabilityBody
+    ;
+
+
+/*
+ * ============================================================================
+ * RESILIENCE
+ * ============================================================================
+ *
+ * Both scalar and block forms are supported.
+ *
+ * Scalar:
  *
  *     resilience >= required_resilience;
  *
- * This grammar does not implement recovery.
+ *     resilience == required_resilience;
+ *
+ * Block:
+ *
+ *     resilience {
+ *         resilience_state == Healthy;
+ *         resilience_outcome == ACCEPT;
+ *         recovery_time <= recovery_budget;
+ *     }
+ *
+ * The grammar does not implement recovery.
  */
 
 hardwareReliabilityResilience
-    : K_RESILIENCE
-      (
-          hardwareRelationOperator
-          hardwareExpression
-        | ASSIGN
-          hardwareExpression
-        | hardwareReliabilityResilienceBody
-      )
+    : RESILIENCE
+      hardwareReliabilityResilienceBody
       SEMICOLON?
+    | RESILIENCE
+      hardwareReliabilityComparisonOperator
+      expression
+      SEMICOLON
     ;
 
 
@@ -981,152 +1200,125 @@ hardwareReliabilityResilienceBody
 
 
 hardwareReliabilityResilienceItem
-    : hardwareReliabilityProperty
-    | hardwareReliabilityRequirement
+    : hardwareReliabilityRequirement
     | hardwareReliabilityConstraint
     | hardwareReliabilityPreference
     | hardwareReliabilityHint
+    | hardwareReliabilityProperty
     | hardwareReliabilityCapability
     | hardwareReliabilityResource
+    | hardwareReliabilityTarget
+    | hardwareReliabilityAssertion
+    | hardwareReliabilityEvidence
+    | hardwareReliabilityPolicy
+    | hardwareReliabilityResilience
     ;
 
 
-/* ============================================================================
- * 32. RESILIENCE STATES AND OUTCOMES
+/*
  * ============================================================================
- *
- * Standard semantic vocabulary established by the resilience architecture:
- *
- *     Unknown
- *     Healthy
- *     Degraded
- *     Unstable
- *     Unavailable
- *     Recovering
- *     Quarantined
- *     Retired
- *
- * Standard resilience outcomes:
- *
- *     ACCEPT
- *     DEGRADED_ACCEPT
- *     RETRY
- *     RECOVER
- *     ESCALATE
- *     REJECT
- *
- * These are intentionally NOT lexer-level closed enums here.
- *
- * They are represented as values of extensible properties such as:
- *
- *     resilience_state = Healthy;
- *     resilience_outcome = ACCEPT;
- *
- * This allows future states/outcomes without changing the universal lexer or
- * creating a parser-level hard-coded closed world.
- *
- * Semantic analysis is responsible for validating standard vocabulary and
- * dialect-defined extensions.
- */
-
-
-/* ============================================================================
- * 33. RELATIONSHIP
+ * ASSERTION
  * ============================================================================
- *
- * A relationship expresses a semantic dependency between reliability
- * properties, resources, or logical domains.
  *
  * Example:
  *
- *     relationship {
- *         availability = service::availability;
- *         redundancy = compute::redundancy;
- *     }
+ *     assert(availability >= required_availability);
  *
- * The relationship is declarative.
- */
-
-hardwareReliabilityRelation
-    : IDENTIFIER
-      hardwareReliabilityRelationBody
-    ;
-
-
-hardwareReliabilityRelationBody
-    : LBRACE
-      hardwareReliabilityRelationItem*
-      RBRACE
-    ;
-
-
-hardwareReliabilityRelationItem
-    : hardwareReliabilityProperty
-    | hardwareReliabilityRequirement
-    | hardwareReliabilityConstraint
-    | hardwareReliabilityPreference
-    | hardwareReliabilityHint
-    | hardwareReliabilityCapability
-    | hardwareReliabilityResource
-    ;
-
-
-/* ============================================================================
- * 34. SCALING
- * ============================================================================
+ * This is a source-level assertion.
  *
- * Reliability may depend on:
- *
- *     workload size
- *     resource scale
- *     parallelism
- *     replication
- *     execution duration
- *     environmental conditions
- *
- * The grammar accepts arbitrary expressions.
- *
- * No finite number of scaling points is encoded.
- *
- * Example:
- *
- *     scaling = workload_size;
- *     reliability_target >= required_reliability(workload_size);
- */
-
-hardwareReliabilityScaling
-    : K_SCALABILITY
-      hardwareRelationOperator
-      hardwareExpression
-      SEMICOLON
-    ;
-
-
-/* ============================================================================
- * 35. ASSERTION
- * ============================================================================
- *
- * Assertions are source-level contracts.
- *
- * They do not perform runtime recovery.
+ * It does not perform recovery or runtime fault handling.
  */
 
 hardwareReliabilityAssertion
-    : K_ASSERT
+    : ASSERT
       LPAREN
-      hardwareReliabilityCondition
+      expression
       RPAREN
       SEMICOLON
     ;
 
 
-/* ============================================================================
- * 36. STANDARD RELIABILITY PROPERTY VOCABULARY
+/*
+ * ============================================================================
+ * EVIDENCE
  * ============================================================================
  *
- * The following names are examples of semantic properties.
+ * Evidence is declarative information associated with reliability reasoning.
  *
- * They intentionally remain identifiers rather than new lexer keywords:
+ * It may ultimately be associated with:
+ *
+ *     measurements
+ *     benchmarks
+ *     calibration
+ *     observations
+ *     provenance
+ *     verification
+ *     external evidence
+ *
+ * The grammar does not validate evidence quality.
+ */
+
+hardwareReliabilityEvidence
+    : EVIDENCE
+      expression
+      SEMICOLON
+    ;
+
+
+/*
+ * ============================================================================
+ * POLICY
+ * ============================================================================
+ *
+ * Policy references are symbolic.
+ *
+ * Policy evaluation remains owned by the policy/security semantic layers.
+ */
+
+hardwareReliabilityPolicy
+    : POLICY
+      expression
+      SEMICOLON
+    ;
+
+
+/*
+ * ============================================================================
+ * COMMON PROFILE/GROUP ITEM BOUNDARY
+ * ============================================================================
+ *
+ * This rule intentionally reuses the same canonical reliability items.
+ *
+ * There is no second reliability-property language for profiles.
+ */
+
+hardwareReliabilityScopedItem
+    : hardwareReliabilityRequirement
+    | hardwareReliabilityConstraint
+    | hardwareReliabilityPreference
+    | hardwareReliabilityHint
+    | hardwareReliabilityProperty
+    | hardwareReliabilityCapability
+    | hardwareReliabilityResource
+    | hardwareReliabilityTarget
+    | hardwareReliabilityResilience
+    | hardwareReliabilityAssertion
+    | hardwareReliabilityEvidence
+    | hardwareReliabilityPolicy
+    | hardwareReliabilityProfile
+    | hardwareReliabilityGroup
+    ;
+
+
+/*
+ * ============================================================================
+ * SEMANTIC PROPERTY VOCABULARY
+ * ============================================================================
+ *
+ * These names are intentionally NOT converted into parser-level closed
+ * enumerations.
+ *
+ * Examples include:
  *
  *     availability
  *     durability
@@ -1154,300 +1346,240 @@ hardwareReliabilityAssertion
  *     common_mode_failure
  *     resilience_state
  *     resilience_outcome
+ *     noise_budget
+ *     error_budget
+ *     recovery_budget
  *
- * The semantic specification decides which properties are normative.
+ * Names not reserved by the lexer remain IDENTIFIER tokens.
  *
- * This grammar remains open to future reliability models.
- */
-
-
-/* ============================================================================
- * 37. QUANTITY / UNIT BOUNDARY
- * ============================================================================
+ * The semantic subsystem decides:
  *
- * This grammar does NOT define:
+ *     whether a property exists;
+ *     its type;
+ *     its unit;
+ *     its probability domain;
+ *     its reliability model;
+ *     whether it is applicable;
+ *     whether it is satisfiable.
  *
- *     probability literals
- *     duration literals
- *     frequency literals
- *     energy literals
- *     power literals
- *     percentage literals
- *     arbitrary-precision numeric literals
- *
- * Those belong to the canonical lexical/expression/type system.
- *
- * Examples that may be represented through the canonical expression system
- * include:
- *
- *     availability >= required_availability
- *     failure_probability <= 1e-9
- *     mtbf >= required_mtbf
- *     mttr <= 20ms
- *     recovery_time <= recovery_budget
- *
- * Dimensional and probabilistic correctness belongs to semantic analysis.
  *
  * ============================================================================
- * 38. TARGET INDEPENDENCE
+ * STANDARD RESILIENCE STATES
  * ============================================================================
  *
- * The following MUST remain invalid as implicit semantics:
+ * These are semantic values rather than parser alternatives.
  *
- *     physical_device(0)
- *     physical_qubit(17)
- *     cpu_core(7)
- *     gpu(3)
- *     node(42)
- *     memory_address(...)
+ * Standard vocabulary:
  *
- * unless a separate explicitly target-specific/deployment language owns such
- * syntax.
+ *     Unknown
+ *     Healthy
+ *     Degraded
+ *     Unstable
+ *     Unavailable
+ *     Recovering
+ *     Quarantined
+ *     Retired
  *
- * A reliability contract must remain meaningful when the implementation
- * changes target.
+ * The grammar accepts them through the canonical expression/name system.
  *
- * ============================================================================
- * 39. QUANTUM INTEGRATION
- * ============================================================================
+ * Future states remain possible without grammar modification.
  *
- * Reliability intent associated with quantum computation follows:
- *
- *     Zamani source
- *          |
- *          v
- *     domain-neutral AST
- *          |
- *          v
- *     semantic reliability/resource analysis
- *          |
- *          v
- *     quantum::ir
- *          |
- *          v
- *     resilience
- *          |
- *          +--> QEC
- *          +--> ZQN
- *          +--> routing
- *          +--> scheduling
- *          |
- *          v
- *     HAL
- *          |
- *          v
- *     QPU realization
- *
- * This grammar MUST NOT define:
- *
- *     QuantumGate
- *     PhysicalQubit
- *     QPUAllocation
- *     QEC algorithm
- *     syndrome decoder
- *     physical topology
- *     calibration data
- *
- * Those remain downstream concerns.
  *
  * ============================================================================
- * 40. CLASSICAL / GPU / FPGA / ASIC INTEGRATION
+ * STANDARD RESILIENCE OUTCOMES
  * ============================================================================
  *
- * The same reliability contract may apply to:
+ * Standard vocabulary:
  *
- *     CPU computation
- *     GPU computation
- *     FPGA implementation
- *     ASIC implementation
- *     accelerator computation
- *     distributed computation
- *     hybrid computation
+ *     ACCEPT
+ *     DEGRADED_ACCEPT
+ *     RETRY
+ *     RECOVER
+ *     ESCALATE
+ *     REJECT
  *
- * Target-specific reliability realization is performed after semantic
- * validation.
+ * These are semantic outcomes.
  *
- * The source contract remains portable.
+ * This grammar does not define a finite outcome enumeration.
  *
- * ============================================================================
- * 41. POWER INTEGRATION
- * ============================================================================
- *
- * Power remains owned by:
- *
- *     grammar/hardware/power.g4
- *
- * This file may reference power as a reliability property:
- *
- *     power <= power_budget;
- *
- * but it MUST NOT duplicate power grammar.
- *
- * Semantic analysis may correlate:
- *
- *     reliability
- *     power
- *     thermal behavior
- *     timing
- *     resource availability
- *
- * without collapsing those domains into one grammar.
  *
  * ============================================================================
- * 42. TIMING INTEGRATION
+ * FAILURE DOMAIN SEMANTICS
  * ============================================================================
  *
- * Timing remains owned by:
+ * Failure-domain intent is normally expressed as a property:
  *
- *     grammar/hardware/timing.g4
+ *     failure_domain == execution::domain;
  *
- * Reliability may reference timing expressions such as:
+ *     common_mode_failure == false;
+ *
+ *     correlated_failure <= permitted_correlation;
+ *
+ * The parser therefore does not create a separate physical failure-domain
+ * grammar.
+ *
+ * This is intentional.
+ *
+ * A failure domain can later map to:
+ *
+ *     process
+ *     task
+ *     service
+ *     logical resource
+ *     node
+ *     device class
+ *     deployment unit
+ *     QEC region
+ *     other semantic domain
+ *
+ * without changing the source grammar.
+ *
+ *
+ * ============================================================================
+ * REDUNDANCY SEMANTICS
+ * ============================================================================
+ *
+ * Redundancy is expressed as a semantic property:
+ *
+ *     redundancy >= required_redundancy;
+ *
+ *     replication >= required_replication;
+ *
+ * The parser does not interpret the number as a fixed hardware allocation.
+ *
+ * Semantic analysis determines:
+ *
+ *     replication model
+ *     independence
+ *     correlated failure behavior
+ *     placement implications
+ *     resource cost
+ *     feasibility
+ *
+ *
+ * ============================================================================
+ * RECOVERY SEMANTICS
+ * ============================================================================
+ *
+ * Recovery objectives are expressed as properties:
  *
  *     recovery_time <= recovery_budget;
  *
- * but timing declaration syntax remains outside this file.
+ *     recovery_probability >= required_probability;
+ *
+ *     recovery_overhead <= permitted_overhead;
+ *
+ *     recoverability >= required_recoverability;
+ *
+ * This grammar does not implement:
+ *
+ *     retry
+ *     rollback
+ *     checkpoint restoration
+ *     migration
+ *     failover
+ *     repair
+ *     replacement
+ *     quarantine
+ *
+ * Those are downstream resilience/runtime responsibilities.
+ *
  *
  * ============================================================================
- * 43. THERMAL INTEGRATION
+ * QUANTUM RELIABILITY
  * ============================================================================
  *
- * Thermal semantics remain downstream.
+ * Quantum-specific reliability properties remain open-world:
  *
- * Reliability may contain symbolic properties such as:
- *
- *     thermal_reliability >= required_value;
- *
- * but this file does not define:
- *
- *     temperature equations
- *     thermal simulation
- *     cooling implementation
- *     heat-sink selection
- *     physical thermal topology
- *
- * ============================================================================
- * 44. RESOURCE INTEGRATION
- * ============================================================================
- *
- * Resource requirements remain composable with reliability requirements.
+ *     quantum::error_rate
+ *     quantum::logical_error_rate
+ *     quantum::error_correction
+ *     quantum::fault_tolerance
+ *     quantum::noise_budget
+ *     quantum::readout_fidelity
  *
  * Example:
  *
- *     reliability compute {
- *         requires resource::compute >= required_compute;
- *         requires availability >= required_availability;
+ *     reliability quantum {
+ *         requires capability quantum::error_correction;
+ *         quantum::noise_budget <= allowed_noise;
+ *         quantum::logical_error_rate <= target_error_rate;
  *     }
  *
- * The reliability grammar does not allocate the resource.
+ * The parser does not know whether the realization uses:
  *
- * Resource resolution remains downstream.
+ *     physical qubits
+ *     logical qubits
+ *     a simulator
+ *     a QPU
+ *     a future quantum substrate
  *
- * ============================================================================
- * 45. CAPABILITY INTEGRATION
- * ============================================================================
- *
- * Capability references are open-world.
- *
- * Examples:
- *
- *     capability = fault_tolerance;
- *     capability = resilience::recovery;
- *     capability = quantum::error_correction;
- *     capability = distributed::failover;
- *
- * No fixed capability list is encoded.
  *
  * ============================================================================
- * 46. FAILURE MODEL BOUNDARY
+ * CLASSICAL / GPU / FPGA / ASIC / ACCELERATOR RELIABILITY
  * ============================================================================
  *
- * This grammar may describe failure-related intent:
+ * The same grammar supports:
  *
- *     failure_probability
- *     failure_rate
- *     correlated_failure
- *     common_mode_failure
- *     failure_domain
+ *     CPU reliability
+ *     GPU reliability
+ *     FPGA reliability
+ *     ASIC reliability
+ *     accelerator reliability
+ *     embedded reliability
+ *     distributed reliability
+ *     hybrid reliability
  *
- * It does NOT define a particular probabilistic or physical fault model.
+ * without creating a different reliability language for each target.
  *
- * Fault-model semantics belong to:
- *
- *     semantic analysis
- *     resilience
- *     ZQN
- *     QEC
- *     hardware capability models
- *     runtime
  *
  * ============================================================================
- * 47. RECOVERY BOUNDARY
+ * RESOURCE / CAPABILITY NEGOTIATION
  * ============================================================================
  *
- * This grammar can state recovery objectives.
+ * A typical semantic pipeline is:
  *
- * It does not implement:
+ *     reliability requirement
+ *          |
+ *          v
+ *     semantic validation
+ *          |
+ *          +--> resource analysis
+ *          |
+ *          +--> capability analysis
+ *          |
+ *          +--> contract analysis
+ *          |
+ *          +--> policy analysis
+ *          |
+ *          +--> provenance
+ *          |
+ *          v
+ *     target feasibility
+ *          |
+ *          v
+ *     execution planning
  *
- *     retry loops
- *     rollback
- *     checkpoint restore
- *     migration
- *     failover
- *     device replacement
- *     repair
- *     quarantine
+ * The grammar itself performs none of these operations.
  *
- * Those are downstream runtime/resilience responsibilities.
- *
- * ============================================================================
- * 48. DETERMINISM
- * ============================================================================
- *
- * Parsing MUST depend only on:
- *
- *     source text
- *     selected grammar version
- *     canonical token stream
- *     explicit parser configuration
- *
- * Parsing MUST NOT depend on:
- *
- *     current hardware
- *     available resources
- *     runtime state
- *     device health
- *     network state
- *     randomness
- *     wall-clock time
- *     environment variables
- *     filesystem state
  *
  * ============================================================================
- * 49. AST CONTRACT
+ * AST CONTRACT
  * ============================================================================
  *
- * The parser output maps into the domain-neutral AST.
+ * The parser output must preserve:
  *
- * Conceptually:
- *
- *     hardwareReliabilityDeclaration
- *             |
- *             v
- *     Declaration
- *             |
- *             v
- *     HardwareReliabilityContract
- *
- * The AST MUST preserve:
- *
- *     declaration name
  *     declaration kind
+ *     declaration name
  *     modifiers
  *     target
- *     body items
+ *     body item category
+ *     property name
+ *     comparison operator
+ *     expression
  *     source spans
  *
- * Body item categories MUST remain distinguishable:
+ * The domain-neutral AST must not discard whether an item was:
  *
  *     requirement
  *     constraint
@@ -1459,27 +1591,24 @@ hardwareReliabilityAssertion
  *     target
  *     profile
  *     group
- *     failure domain
- *     redundancy
- *     recovery
  *     resilience
- *     relationship
- *     scaling
  *     assertion
+ *     evidence
+ *     policy
  *
- * No semantic information may be discarded by the parser.
  *
  * ============================================================================
- * 50. SEMANTIC CONTRACT
+ * SEMANTIC CONTRACT
  * ============================================================================
  *
  * Semantic analysis owns:
  *
- *     property validity
- *     unit validity
- *     dimensional correctness
- *     probability validity
- *     reliability model validity
+ *     property recognition
+ *     type checking
+ *     unit checking
+ *     dimensional checking
+ *     probability validation
+ *     reliability-model validation
  *     capability resolution
  *     resource resolution
  *     target compatibility
@@ -1489,114 +1618,103 @@ hardwareReliabilityAssertion
  *     resilience semantics
  *     state validation
  *     outcome validation
- *     correlation semantics
- *     scaling semantics
  *     contradiction detection
  *     satisfiability
  *     diagnostics
  *
  * For example:
  *
- *     availability >= 0.999999
+ *     availability >= 0.999999;
  *
- * is syntactically valid here.
+ * is syntactically valid.
  *
- * Whether that is a valid availability quantity and whether a target can
- * satisfy it is semantic analysis.
+ * Whether the left side is a valid availability quantity and whether the
+ * target can satisfy it is a semantic question.
  *
- * ============================================================================
- * 51. IR CONTRACT
- * ============================================================================
- *
- * This grammar MUST NOT define an IR.
- *
- * Reliability information is lowered from:
- *
- *     domain-neutral AST
- *          |
- *          v
- *     canonical semantic model
- *          |
- *          +--> classical IR
- *          +--> quantum::ir
- *          +--> HDL/hardware semantics
- *          +--> distributed semantics
- *
- * There MUST NOT be:
- *
- *     ReliabilityIR
- *     HardwareReliabilityIR
- *     QuantumReliabilityIR
- *
- * created by this grammar.
- *
- * Reliability is cross-cutting semantic information consumed by the
- * appropriate canonical downstream representations.
  *
  * ============================================================================
- * 52. COMPILER INTEGRATION
+ * CONTRACT / POLICY INTEGRATION
  * ============================================================================
  *
- * Compiler consumers may include:
+ * Generic contracts remain owned by:
  *
- *     resource analysis
- *     target capability negotiation
- *     optimization
- *     replication
- *     fault-domain analysis
- *     placement
- *     routing
- *     scheduling
- *     resilience planning
- *     QEC planning
- *     ZQN analysis
- *     deployment planning
+ *     grammar/validation/
  *
- * The grammar itself performs none of these operations.
+ * Generic policies remain owned by:
+ *
+ *     grammar/policies/
+ *     grammar/security/
+ *
+ * This file only allows reliability declarations to reference those concepts
+ * through their canonical semantic forms.
+ *
+ * It does not create competing contract or policy systems.
+ *
  *
  * ============================================================================
- * 53. RUNTIME INTEGRATION
+ * PROVENANCE
  * ============================================================================
  *
- * Runtime may consume the semantic contract to determine:
+ * Reliability evidence and decisions may participate in the universal
+ * provenance system.
+ *
+ * Provenance may record:
+ *
+ *     source
+ *     derived value
+ *     evidence
+ *     verification
+ *     transformation
+ *     decision
+ *     policy
+ *     target realization
+ *
+ * Provenance is not generated by this parser.
+ *
+ *
+ * ============================================================================
+ * IR CONTRACT
+ * ============================================================================
+ *
+ * This grammar produces NO IR.
+ *
+ * Reliability intent is represented in the domain-neutral semantic model.
+ *
+ * It may subsequently influence:
+ *
+ *     classical IR
+ *     quantum::ir
+ *     HDL/hardware semantic representations
+ *     distributed execution plans
+ *
+ * There is no second reliability-specific IR.
+ *
+ *
+ * ============================================================================
+ * RUNTIME CONTRACT
+ * ============================================================================
+ *
+ * Runtime observations may establish:
  *
  *     health
  *     availability
  *     degradation
  *     recovery
+ *     failure
  *     failover
- *     retry
  *     quarantine
  *     retirement
  *
- * Runtime observations MUST NOT alter source parsing.
+ * Those observations do not modify parsing.
+ *
+ * Runtime state cannot become hidden parser input.
+ *
  *
  * ============================================================================
- * 54. RESILIENCE STATE CONTRACT
+ * RESILIENCE OUTCOME CONTRACT
  * ============================================================================
  *
- * The canonical resilience state vocabulary is:
- *
- *     Unknown
- *     Healthy
- *     Degraded
- *     Unstable
- *     Unavailable
- *     Recovering
- *     Quarantined
- *     Retired
- *
- * These remain semantic values.
- *
- * The parser does not hard-code them as a finite machine.
- *
- * This allows future states without requiring a grammar fork.
- *
- * ============================================================================
- * 55. RESILIENCE OUTCOME CONTRACT
- * ============================================================================
- *
- * The canonical outcome vocabulary is:
+ * The semantic/runtime resilience subsystem owns the interpretation of:
  *
  *     ACCEPT
  *     DEGRADED_ACCEPT
@@ -1605,140 +1723,312 @@ hardwareReliabilityAssertion
  *     ESCALATE
  *     REJECT
  *
- * These are semantic outcomes.
+ * This grammar only preserves the source representation.
  *
- * The parser preserves them as source values when used through properties such
- * as:
- *
- *     resilience_outcome = ACCEPT;
- *
- * Runtime/resilience analysis determines their actual meaning in context.
  *
  * ============================================================================
- * 56. SECURITY
+ * ERROR CONTRACT
  * ============================================================================
  *
- * This grammar MUST NOT provide a way to bypass:
+ * Syntax errors are parser errors.
  *
- *     capability checking
- *     resource checking
- *     type checking
- *     ownership
- *     effects
- *     security policy
- *     semantic validation
- *     IR validation
+ * Semantic errors must remain semantic diagnostics.
  *
- * Attributes and symbolic properties are not authority to bypass semantic
- * validation.
+ * Examples of semantic errors:
  *
- * ============================================================================
- * 57. PERFORMANCE
- * ============================================================================
+ *     invalid reliability unit
+ *     invalid probability range
+ *     unsupported capability
+ *     impossible resource requirement
+ *     contradictory requirements
+ *     invalid resilience state
+ *     incompatible property types
+ *     unsatisfied target requirement
  *
- * The grammar must scale with source size without introducing artificial
- * reliability-domain cardinality limits.
+ * This grammar MUST NOT attempt to diagnose those conditions using actions or
+ * semantic predicates.
  *
- * Avoid:
- *
- *     fixed-size alternatives
- *     recursive physical topology enumeration
- *     provider-specific branches
- *     duplicated expression grammars
- *     semantic predicates
- *     target-dependent parser decisions
- *
- * Large reliability contracts should remain collections of independently
- * parseable semantic items.
  *
  * ============================================================================
- * 58. COMPATIBILITY
+ * PERFORMANCE CONTRACT
  * ============================================================================
  *
- * This file is additive.
+ * The grammar is intentionally structured around:
  *
- * It does not rename:
+ *     explicit keyword dispatch
+ *     one canonical expression grammar
+ *     one generic property production
+ *     iterative collections
  *
- *     grammar/hardware/hardware.g4
- *     grammar/hardware/power.g4
+ * It does not recursively enumerate:
+ *
+ *     hardware devices
+ *     topology
+ *     failure domains
+ *     resources
+ *     quantum systems
+ *
+ * Large reliability contracts therefore grow with source size rather than
+ * requiring grammar expansion for each new resource or reliability property.
+ *
+ *
+ * ============================================================================
+ * HARD-CODING AUDIT
+ * ============================================================================
+ *
+ * This file contains:
+ *
+ *     no hardware capacities
+ *     no device IDs
+ *     no physical topology
+ *     no provider catalogue
+ *     no finite reliability-property universe
+ *     no finite resilience-state universe
+ *     no finite resilience-outcome universe
+ *     no retry limit
+ *     no recovery-step limit
+ *     no replica limit
+ *     no failure-domain limit
+ *     no qubit limit
+ *     no CPU limit
+ *     no GPU limit
+ *     no FPGA limit
+ *     no node limit
+ *     no memory limit
+ *     no thread limit
+ *     no unsafe Rust
+ *
+ *
+ * ============================================================================
+ * COMPATIBILITY
+ * ============================================================================
+ *
+ * Existing resource-level reliability syntax remains owned by:
+ *
  *     grammar/resources/reliability.g4
- *     grammar/declarations/resources.g4
  *
- * Existing resource-level reliability syntax remains valid.
+ * This file does not replace or rename that grammar.
  *
- * New hardware-level reliability syntax is introduced through:
+ * The distinction is:
+ *
+ *     resources/reliability.g4
+ *         resource-level reliability syntax
+ *
+ *     hardware/reliability.g4
+ *         hardware-domain reliability intent
+ *
+ * Both converge in semantic analysis.
+ *
+ *
+ * ============================================================================
+ * HARDWARE COMPOSITION CONTRACT
+ * ============================================================================
+ *
+ * `grammar/hardware/hardware.g4` MUST import:
+ *
+ *     ZamaniHardwareReliabilityParser
+ *
+ * and add:
  *
  *     hardwareReliabilityDeclaration
  *
- * Existing lower-level resource reliability clauses MUST NOT be removed
- * merely because this file exists.
+ * to:
+ *
+ *     hardwareDeclaration
+ *
+ * This is the ONLY hardware-root integration required for this leaf grammar.
+ *
+ * The hardware composition root remains responsible for exposing this rule
+ * through the universal parser.
+ *
  *
  * ============================================================================
- * 59. HARD-CODING AUDIT
+ * BUILD CONTRACT
  * ============================================================================
  *
- * This grammar contains:
+ * ANTLR must have access to:
  *
- *     no maximum qubit count
- *     no maximum CPU count
- *     no maximum GPU count
- *     no maximum FPGA count
- *     no maximum node count
- *     no maximum device count
- *     no maximum memory
- *     no maximum thread count
- *     no maximum redundancy
- *     no maximum failure-domain count
- *     no maximum recovery count
- *     no maximum state count
- *     no maximum outcome count
+ *     grammar/antlr/ZamaniLexer.g4
+ *     grammar/expressions/expressions.g4
+ *     grammar/hardware/reliability.g4
  *
- * Numeric values remain program semantics.
+ * and the transitive imported parser grammars.
  *
- * Example:
+ * The repository's build tooling must make the grammar directories available
+ * through ANTLR's grammar library path.
  *
- *     availability >= 0.999999999;
- *
- * is a program-level reliability requirement.
- *
- * It is NOT a Zamani-wide reliability ceiling.
  *
  * ============================================================================
- * 60. COMPLETION CRITERIA
+ * TEST CONTRACT
  * ============================================================================
  *
- * This file is complete when:
+ * POSITIVE TESTS
+ * -------------
  *
- *     [x] one hardware reliability grammar owner exists;
- *     [x] resource reliability remains separately owned;
- *     [x] reliability and resilience remain distinct;
- *     [x] requirements are distinct from constraints;
- *     [x] preferences are distinct from hints;
- *     [x] properties are open-world;
- *     [x] capabilities are open-world;
- *     [x] resources are symbolic;
- *     [x] targets are abstract;
- *     [x] failure domains are logical;
- *     [x] redundancy is symbolic;
- *     [x] recovery is intent only;
- *     [x] resilience states remain extensible;
- *     [x] resilience outcomes remain extensible;
- *     [x] no physical device selection is encoded;
- *     [x] no physical topology is encoded;
- *     [x] no QEC implementation is encoded;
- *     [x] no ZQN implementation is encoded;
- *     [x] no second IR is created;
- *     [x] quantum uses the canonical quantum::ir boundary;
- *     [x] expressions remain owned by the canonical expression system;
- *     [x] source spans can be preserved;
- *     [x] semantic validation is downstream;
- *     [x] Rust implementation remains safe;
- *     [x] Rust 1.97 / 1.97.1 remains supported;
- *     [x] no artificial hardware limits are encoded;
- *     [x] POCO-REAF is preserved.
+ *     reliability {
+ *         availability >= required_availability;
+ *     }
  *
- * Remaining completion work is repository integration and conformance tests,
- * not further expansion of this leaf grammar.
+ *     reliability contract compute {
+ *         requires availability >= required_availability;
+ *         constraint failure_probability <= allowed_probability;
+ *         prefer reliability >= preferred_reliability;
+ *         hint reliability::optimization;
+ *     }
+ *
+ *     reliability profile resilient {
+ *         redundancy >= required_redundancy;
+ *         mttr <= recovery_budget;
+ *     }
+ *
+ *     reliability group service {
+ *         availability >= required_availability;
+ *     }
+ *
+ *     reliability target hardware::accelerator {
+ *         capability hardware::fault_tolerance;
+ *     }
+ *
+ *     reliability quantum {
+ *         requires capability::quantum::error_correction;
+ *         quantum::noise_budget <= allowed_noise;
+ *         quantum::logical_error_rate <= target_error_rate;
+ *         resilience {
+ *             resilience_state == Healthy;
+ *             resilience_outcome == ACCEPT;
+ *         }
+ *     }
+ *
+ *
+ * OPEN-WORLD PROPERTY TESTS
+ * -------------------------
+ *
+ *     reliability {
+ *         future::reliability_metric >= future_requirement;
+ *         vendor_extension::property == expected;
+ *         new_domain::metric <= limit;
+ *     }
+ *
+ *
+ * SCALABILITY TESTS
+ * -----------------
+ *
+ * Tests must generate collections based on available test resources rather
+ * than repository constants.
+ *
+ * Test:
+ *
+ *     many properties
+ *     many groups
+ *     many profiles
+ *     deep symbolic namespaces
+ *     large expressions
+ *     large source units
+ *
+ * No artificial language maximum may be used in these tests.
+ *
+ *
+ * NEGATIVE TESTS
+ * --------------
+ *
+ *     reliability {
+ *         availability;
+ *     }
+ *
+ *     reliability {
+ *         availability = value;
+ *     }
+ *
+ *     reliability contract {
+ *         requires;
+ *     }
+ *
+ *     reliability {
+ *         requires availability >= ;
+ *     }
+ *
+ *     reliability {
+ *         resilience {
+ *             resilience_state;
+ *         }
+ *     }
+ *
+ *
+ * DETERMINISM TESTS
+ * -----------------
+ *
+ * Identical source and identical parser configuration must produce identical
+ * parse structure and source spans.
+ *
+ *
+ * CROSS-DOMAIN TESTS
+ * ------------------
+ *
+ * Test reliability requirements originating from:
+ *
+ *     classical
+ *     quantum
+ *     hybrid
+ *     HDL
+ *     distributed
+ *     accelerator
+ *     networking
+ *     AI
+ *     data
+ *     embedded
+ *
+ * without creating domain-specific reliability grammars.
+ *
+ *
+ * ============================================================================
+ * DEFINITION OF DONE
+ * ============================================================================
+ *
+ * This file is DONE when:
+ *
+ *     [x] It uses the actual canonical lexer token names.
+ *     [x] It uses the canonical expression grammar.
+ *     [x] It contains no K_* token aliases.
+ *     [x] It contains no duplicate expression hierarchy.
+ *     [x] It contains one generic property production.
+ *     [x] It does not use competing IDENTIFIER-based reliability alternatives.
+ *     [x] Requirement, constraint, preference and hint remain distinct.
+ *     [x] Capability references remain open-world.
+ *     [x] Resource references remain symbolic.
+ *     [x] Targets remain abstract.
+ *     [x] Resilience remains separate from reliability.
+ *     [x] Resilience states remain extensible.
+ *     [x] Resilience outcomes remain extensible.
+ *     [x] Failure domains remain semantic rather than physical.
+ *     [x] Redundancy remains semantic rather than physical allocation.
+ *     [x] Recovery remains intent rather than implementation.
+ *     [x] Evidence remains declarative.
+ *     [x] Policy references remain downstream-owned.
+ *     [x] No physical device selection is encoded.
+ *     [x] No routing is encoded.
+ *     [x] No scheduling is encoded.
+ *     [x] No QEC implementation is encoded.
+ *     [x] No ZQN implementation is encoded.
+ *     [x] No second IR is created.
+ *     [x] quantum::ir remains the quantum semantic boundary.
+ *     [x] No hardware capacity constants exist.
+ *     [x] No unsafe Rust is required.
+ *     [x] Rust 1.97+ remains supported.
+ *     [x] The grammar remains target-independent.
+ *     [x] The grammar remains POCO-REAF compatible.
+ *
+ * Repository integration is complete when:
+ *
+ *     [ ] hardware.g4 imports this grammar.
+ *     [ ] hardwareDeclaration dispatches hardwareReliabilityDeclaration.
+ *     [ ] ANTLR generation succeeds.
+ *     [ ] generated Rust compiles on Rust 1.97+.
+ *     [ ] safe-Rust checks contain no unsafe requirement.
+ *     [ ] positive tests pass.
+ *     [ ] negative tests pass.
+ *     [ ] scalability tests pass.
+ *     [ ] cross-domain tests pass.
+ *     [ ] determinism tests pass.
  *
  * ============================================================================
  */
