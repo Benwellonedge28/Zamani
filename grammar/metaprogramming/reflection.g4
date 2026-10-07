@@ -1,1882 +1,1770 @@
 /*
- * ============================================================================
- * Zamani Universal Programming Language
- * ============================================================================
- *
- * File:
- *     grammar/metaprogramming/reflection.g4
- *
- * Grammar:
- *     Reflection
- *
- * Status:
- *     Production parser-grammar component
- *
- * Baseline:
- *     ANTLR4
- *     Rust 2021
- *     Rust 1.97 / Rust 1.97.1
- *     Safe Rust only
- *     No unsafe Rust
- *
- * ============================================================================
- * PURPOSE
- * ============================================================================
- *
- * This file owns the SOURCE-LEVEL SYNTAX of Zamani reflection.
- *
- * Reflection provides a language-defined way to request structured information
- * about a source-level entity, type, declaration, operation, function, module,
- * metadata-bearing object, or other semantically reflectable entity.
- *
- * Reflection is intentionally a VIEW over the canonical Zamani semantic model.
- *
- * It does not define:
- *
- *     - a second type system;
- *     - a second AST;
- *     - a second IR;
- *     - a quantum IR;
- *     - a hardware model;
- *     - a runtime object model;
- *     - a compiler API;
- *     - a host introspection API.
- *
- * ============================================================================
- * ARCHITECTURAL POSITION
- * ============================================================================
- *
- *     Zamani source
- *          |
- *          v
- *     canonical lexer
- *          |
- *          v
- *     canonical parser
- *          |
- *          v
- *     domain-neutral frontend AST
- *          |
- *          v
- *     semantic analysis
- *          |
- *          +--> name resolution
- *          +--> type analysis
- *          +--> visibility analysis
- *          +--> effect analysis
- *          +--> capability analysis
- *          +--> reflection validation
- *          |
- *          v
- *     canonical semantic model
- *          |
- *          +--> classical semantics
- *          +--> quantum::ir
- *          +--> HDL / hardware semantics
- *          +--> distributed semantics
- *          +--> AI / data / networking semantics
- *          |
- *          v
- *     optimization / lowering / routing / scheduling / resilience
- *          |
- *          v
- *     HAL / target realization
- *
- * Reflection is therefore a FRONTEND LANGUAGE FACILITY.
- *
- * It is not a backend facility.
- *
- * ============================================================================
- * OWNERSHIP
- * ============================================================================
- *
- * THIS FILE OWNS:
- *
- *     - reflection expression syntax;
- *     - reflection subject syntax;
- *     - explicit type-reflection syntax;
- *     - reflection projection syntax;
- *     - reflection selector syntax;
- *     - reflection query chaining;
- *     - the stable `reflectionExpressionCore` integration boundary.
- *
- * THIS FILE DOES NOT OWN:
- *
- *     - lexical identifiers;
- *     - qualified-name syntax;
- *     - ordinary expressions;
- *     - type syntax;
- *     - declarations;
- *     - statements;
- *     - attributes;
- *     - generic syntax;
- *     - compile-time execution;
- *     - macro expansion;
- *     - source generation;
- *     - specialization;
- *     - semantic reflection;
- *     - type checking;
- *     - name resolution;
- *     - capability discovery;
- *     - resource discovery;
- *     - hardware discovery;
- *     - target selection;
- *     - quantum compilation;
- *     - quantum::ir;
- *     - classical IR;
- *     - HDL IR;
- *     - routing;
- *     - scheduling;
- *     - QEC;
- *     - ZQN;
- *     - resilience;
- *     - runtime execution.
- *
- * ============================================================================
- * CRITICAL DESIGN DECISION
- * ============================================================================
- *
- * Reflection MUST NOT embed the complete `expression` grammar as its subject.
- *
- * The reason is architectural.
- *
- * If:
- *
- *     expression
- *         -> primaryExpression
- *             -> reflectionExpression
- *                 -> expression
- *
- * then reflection introduces an indirect recursive dependency into the
- * canonical expression hierarchy.
- *
- * That creates avoidable ambiguity and makes modular ANTLR composition fragile.
- *
- * Therefore this grammar deliberately uses a NON-RECURSIVE source subject:
- *
- *     qualifiedName
- *
- * for value/declaration reflection, and:
- *
- *     typeExpression
- *
- * for explicit type reflection.
- *
- * Examples:
- *
- *     reflect(value)
- *     reflect(myFunction)
- *     reflect(quantum::operation)
- *     reflect(hardware::capability)
- *
- *     reflect type(MyType)
- *     reflect type(Qubit)
- *     reflect type(Tensor<float>)
- *
- * Arbitrary computed expressions are NOT silently accepted as reflection
- * subjects.
- *
- * If future Zamani semantics require reflection of an arbitrary computed
- * expression, that feature must be introduced through an explicit quotation,
- * compile-time-value, or other canonical metaprogramming facility rather than
- * recursively embedding `expression` here.
- *
- * ============================================================================
- * REFLECTION IS OPEN-WORLD
- * ============================================================================
- *
- * Reflection selectors are identifiers.
- *
- * The grammar does NOT enumerate:
- *
- *     name
- *     kind
- *     type
- *     members
- *     fields
- *     methods
- *     parameters
- *     returnType
- *     attributes
- *     generics
- *     effects
- *     capabilities
- *     requirements
- *     declaration
- *     source
- *     relationships
- *
- * Those are semantic reflection properties.
- *
- * This permits future language domains to expose reflection metadata without
- * changing the lexical vocabulary for every new property.
- *
- * For example, the same syntax can semantically expose information about:
- *
- *     classical declarations
- *     quantum operations
- *     logical qubits
- *     circuits
- *     measurements
- *     HDL modules
- *     ports
- *     signals
- *     hardware capabilities
- *     distributed services
- *     AI models
- *     data schemas
- *     networking abstractions
- *     security metadata
- *     future computing domains
- *
- * ============================================================================
- * LEXICAL CONTRACT
- * ============================================================================
- *
- * The canonical parser consumes:
- *
- *     tokenVocab = ZamaniLexer;
- *
- * `REFLECT` is the only reflection-specific reserved lexical word required by
- * this grammar.
- *
- * `REFLECT` MUST be owned by:
- *
- *     grammar/lexer/keywords.g4
- *
- * and composed into:
- *
- *     grammar/antlr/ZamaniLexer.g4
- *
- * This file MUST NOT define lexer rules.
- *
- * Reflection selectors remain ordinary identifiers.
- *
- * Therefore future selectors do not require permanent keyword additions.
- *
- * ============================================================================
- * NAME CONTRACT
- * ============================================================================
- *
- * Name syntax is owned by:
- *
- *     grammar/core/names.g4
- *
- * This grammar imports and consumes:
- *
- *     qualifiedName
- *
- * It does not redefine:
- *
- *     identifier
- *     nameSegment
- *     qualifiedName
- *
- * ============================================================================
- * TYPE CONTRACT
- * ============================================================================
- *
- * Type syntax is owned by:
- *
- *     grammar/types/types.g4
- *
- * This grammar consumes:
- *
- *     typeExpression
- *
- * It does not redefine:
- *
- *     typeCore
- *     namedType
- *     genericType
- *     quantumType
- *     dependentType
- *     or any other type form.
- *
- * ============================================================================
- * POCO-REAF
- * ============================================================================
- *
- * Reflection must preserve:
- *
- *     Program Once
- *          |
- *          v
- *     Compile Once
- *          |
- *          v
- *     Run Everywhere
- *          |
- *          v
- *     Run Anywhere
- *          |
- *          v
- *     Run Forever
- *
- * Reflection syntax therefore MUST NOT encode:
- *
- *     CPU counts
- *     core counts
- *     thread counts
- *     GPU counts
- *     FPGA counts
- *     ASIC counts
- *     accelerator counts
- *     QPU counts
- *     qubit limits
- *     memory capacities
- *     register widths
- *     tensor limits
- *     node counts
- *     topology sizes
- *     device identifiers
- *     physical addresses
- *     vendor-specific hardware
- *     backend identifiers
- *     calibration data
- *     scheduling data
- *
- * Reflection of a capability or resource description is still only source
- * syntax. Its actual availability is determined downstream by semantic,
- * resource, capability, compilation, deployment, or runtime systems.
- *
- * ============================================================================
- * SCALABILITY
- * ============================================================================
- *
- * There are NO language-level finite limits on:
- *
- *     - qualified-name depth;
- *     - type-expression complexity;
- *     - reflection projection count;
- *     - reflection chain depth;
- *     - reflected declarations;
- *     - reflected members;
- *     - reflected metadata;
- *     - reflected generic parameters;
- *     - reflected quantum operations;
- *     - reflected HDL entities;
- *     - reflected distributed entities;
- *     - reflected AI/data entities.
- *
- * Repetition is represented structurally using:
- *
- *     *
- *
- * and not by enumerating finite alternatives.
- *
- * Compiler implementation limits MAY exist for:
- *
- *     parser memory
- *     AST memory
- *     compilation time
- *     diagnostics
- *     semantic analysis
- *     reflection evaluation
- *
- * Those are implementation/resource policies.
- *
- * They MUST NOT become language-level constants.
- *
- * In particular, this grammar MUST NOT introduce:
- *
- *     MAX_REFLECTION_DEPTH
- *     MAX_REFLECTIONS
- *     MAX_MEMBERS
- *     MAX_TYPES
- *     MAX_DECLARATIONS
- *     MAX_ATTRIBUTES
- *     MAX_GENERIC_PARAMETERS
- *     MAX_QUERY_LENGTH
- *
- * ============================================================================
- * DETERMINISM
- * ============================================================================
- *
- * Parsing reflection syntax is deterministic.
- *
- * Given identical:
- *
- *     source
- *     language version
- *     lexical specification
- *     grammar version
- *
- * the parser must produce the same reflection structure.
- *
- * Parsing MUST NOT depend on:
- *
- *     hardware
- *     filesystem state
- *     network state
- *     environment variables
- *     wall-clock time
- *     randomness
- *     QPU availability
- *     GPU availability
- *     FPGA availability
- *     deployment topology
- *     runtime state
- *
- * Reflection RESULT determinism is a semantic concern.
- *
- * Static language metadata SHOULD be deterministic.
- *
- * External-state reflection MUST be explicitly classified by the effect,
- * capability, resource, and portability systems.
- *
- * ============================================================================
- * SECURITY
- * ============================================================================
- *
- * This grammar is syntactic only.
- *
- * Parsing reflection MUST NOT:
- *
- *     - read files;
- *     - read environment variables;
- *     - inspect credentials;
- *     - inspect arbitrary memory;
- *     - inspect processes;
- *     - inspect network state;
- *     - inspect physical hardware;
- *     - contact a QPU;
- *     - contact a GPU;
- *     - contact an FPGA;
- *     - execute host code;
- *     - execute generated code.
- *
- * A semantic reflection implementation may expose additional capabilities only
- * through the repository's established capability/effect/security model.
- *
- * ============================================================================
- * QUANTUM BOUNDARY
- * ============================================================================
- *
- * Reflection may inspect semantic descriptions of quantum entities, including:
- *
- *     Qubit
- *     logical qubits
- *     quantum registers
- *     quantum operations
- *     circuits
- *     measurements
- *     observables
- *     quantum declarations
- *     quantum capabilities
- *
- * It MUST NOT:
- *
- *     - enumerate a fixed gate set;
- *     - assign physical qubits;
- *     - select a QPU;
- *     - route a circuit;
- *     - schedule a circuit;
- *     - perform QEC;
- *     - perform ZQN analysis;
- *     - perform calibration;
- *     - mutate quantum::ir.
- *
- * The canonical quantum path remains:
- *
- *     source
- *       |
- *       v
- *     AST
- *       |
- *       v
- *     semantic quantum model
- *       |
- *       v
- *     quantum::ir
- *
- * Reflection is a read/view facility over that model.
- *
- * ============================================================================
- * HARDWARE / RESOURCE BOUNDARY
- * ============================================================================
- *
- * Reflection does not implicitly mean hardware discovery.
- *
- * For example:
- *
- *     reflect(hardware::capability)
- *
- * is syntactically a reflection request.
- *
- * Whether that entity represents:
- *
- *     source-declared capability metadata
- *     compile-time capability information
- *     target capability information
- *     runtime capability information
- *
- * is decided semantically.
- *
- * The grammar MUST NOT make runtime hardware state implicit.
- *
- * ============================================================================
- * AST CONTRACT
- * ============================================================================
- *
- * The parser produces an ANTLR parse tree only.
- *
- * The frontend must map the structure into the existing domain-neutral AST.
- *
- * Conceptually:
- *
- *     ReflectionExpr
- *         subject
- *             ValueName | Type
- *         projections[]
- *         source_span
- *
- * A projection conceptually contains:
- *
- *     ReflectionProjection
- *         selector
- *         source_span
- *
- * The exact Rust AST type names belong to:
- *
- *     src/frontend/ast/
- *
- * This grammar MUST NOT define Rust AST types.
- *
- * The AST MUST preserve:
- *
- *     - complete source span;
- *     - subject kind;
- *     - qualified-name structure;
- *     - type-expression structure;
- *     - projection order;
- *     - projection spelling;
- *     - nesting;
- *
- * The AST MUST NOT contain:
- *
- *     - device handles;
- *     - physical addresses;
- *     - mutable compiler state;
- *     - runtime pointers;
- *     - backend objects;
- *     - scheduler objects;
- *     - quantum::ir nodes.
- *
- * ============================================================================
- * SEMANTIC CONTRACT
- * ============================================================================
- *
- * Successful parsing means only:
- *
- *     syntactically valid reflection expression
- *
- * Semantic analysis must determine:
- *
- *     1. whether the subject resolves;
- *     2. whether it is reflectable;
- *     3. whether it is visible;
- *     4. whether the requested projection exists;
- *     5. whether the projection is valid for the subject;
- *     6. whether reflection is legal in the current phase;
- *     7. whether the result is compile-time known;
- *     8. whether the result is deterministic;
- *     9. whether capabilities are required;
- *    10. whether effects are required;
- *    11. whether the operation is portable;
- *    12. whether implementation-private information is protected.
- *
- * Semantic errors MUST NOT be encoded as parser alternatives merely to produce
- * custom error messages.
- *
- * ============================================================================
- * IR CONTRACT
- * ============================================================================
- *
- * This grammar creates NO IR.
- *
- * Reflection MUST NOT directly create:
- *
- *     classical IR
- *     quantum::ir
- *     HDL IR
- *     hardware IR
- *     routing IR
- *     scheduling IR
- *     QEC operations
- *     ZQN faults
- *     resilience actions
- *
- * The correct relationship is:
- *
- *     reflection syntax
- *          |
- *          v
- *     canonical AST
- *          |
- *          v
- *     semantic reflection model
- *          |
- *          v
- *     existing canonical semantic representation
- *
- * If a compile-time reflection result disappears before target lowering,
- * it remains a compile-time metaprogramming operation.
- *
- * If a reflection result survives into the compiled program, it must use the
- * ordinary canonical type/IR model.
- *
- * ============================================================================
- * NO SECOND REFLECTION TYPE SYSTEM
- * ============================================================================
- *
- * Reflection may have a semantic result type supplied by the canonical type
- * system.
- *
- * This grammar does not define:
- *
- *     ReflectionType
- *     ReflectedType
- *     ReflectionValue
- *     ReflectionObject
- *
- * as a separate source-level type universe.
- *
- * Any semantic reflection value must integrate with the ordinary Zamani type
- * system.
- *
- * ============================================================================
- * NO SECOND QUERY LANGUAGE
- * ============================================================================
- *
- * This grammar intentionally does not define a reflection-specific DSL for:
- *
- *     filters
- *     predicates
- *     sorting
- *     grouping
- *     traversal
- *     search
- *     joins
- *
- * Such facilities, if required, belong to ordinary Zamani expressions or a
- * separately specified metaprogramming query facility.
- *
- * This prevents reflection from becoming a second programming language inside
- * Zamani.
- *
- * ============================================================================
- * PROJECTION MODEL
- * ============================================================================
- *
- * A reflection request consists of:
- *
- *     REFLECT
- *     (
- *         subject
- *     )
- *     projection*
- *
- * Each projection is:
- *
- *     . selector
- *
- * The projection sequence is ordered and unbounded by the grammar.
- *
- * Examples:
- *
- *     reflect(MyType).name
- *
- *     reflect(MyType).kind
- *
- *     reflect(MyType).members
- *
- *     reflect(MyType).members.attributes
- *
- *     reflect(myFunction).parameters
- *
- *     reflect(myFunction).returnType
- *
- *     reflect(myFunction).effects
- *
- *     reflect(type(MyType)).members
- *
- * The grammar does not decide what any selector means.
- *
- * ============================================================================
- * PUBLIC RULE
- * ============================================================================
- *
- * `reflectionExpressionCore` is the canonical public integration boundary
- * consumed by:
- *
- *     grammar/metaprogramming/metaprogramming.g4
- *
- * The wrapper in that composition grammar is expected to be:
- *
- *     reflectionExpression
- *         : reflectionExpressionCore
- *         ;
- *
- * This file MUST NOT redefine `reflectionExpression` itself.
- *
- * This avoids the current duplicate-rule problem.
- *
- * ============================================================================
- * GRAMMAR
- * ============================================================================
- */
 
-
-/*
- * ============================================================================
- * Parser declaration
- * ============================================================================
- */
+* ============================================================================
+* ZAMANI PROGRAMMING LANGUAGE
+* ============================================================================
+* 
+* FILE
+* ---
+* grammar/metaprogramming/reflection.g4
+* 
+* GRAMMAR
+* ---
+* Reflection
+* 
+* STATUS
+* ---
+* CANONICAL PRODUCTION METAPROGRAMMING COMPONENT
+* 
+* BASELINE
+* ---
+* ANTLR4
+* Rust 2021
+* Rust 1.97+
+* Safe Rust only
+* No unsafe Rust required
+* 
+* ============================================================================
+* PURPOSE
+* ============================================================================
+* 
+* This file owns the SOURCE-LEVEL SYNTAX of explicit semantic reflection.
+* 
+* Reflection is a language facility for requesting structured information
+* about a source-level entity or type.
+* 
+* Reflection is intentionally a VIEW over Zamani's canonical semantic model.
+* 
+* This grammar does not:
+* 
+* - define a second type system;
+* - define a second expression language;
+* - define a second AST;
+* - define an IR;
+* - define quantum::ir;
+* - define an HDL IR;
+* - define a hardware model;
+* - select targets;
+* - discover physical hardware;
+* - execute code;
+* - perform compile-time evaluation;
+* - expand macros;
+* - generate source;
+* - specialize programs;
+* - perform runtime introspection.
+* 
+* ============================================================================
+* ARCHITECTURAL POSITION
+* ============================================================================
+* 
+* source
+*   |
+*   v
+* ZamaniLexer
+*   |
+*   v
+* parser
+*   |
+*   v
+* domain-neutral AST
+*   |
+*   v
+* structural validation
+*   |
+*   v
+* semantic analysis
+*   |
+*   +--> name resolution
+*   +--> type resolution
+*   +--> visibility
+*   +--> effect analysis
+*   +--> capability analysis
+*   +--> resource analysis
+*   +--> policy analysis
+*   +--> provenance
+*   |
+*   v
+* canonical semantic model
+*   |
+*   +--> classical semantics
+*   +--> quantum semantics
+*   +--> quantum::ir
+*   +--> HDL/hardware semantics
+*   +--> distributed semantics
+*   +--> AI/data semantics
+*   +--> networking semantics
+*   |
+*   v
+* optimization / lowering / routing / scheduling / resilience
+*   |
+*   v
+* HAL / target realization
+* 
+* Reflection participates only at the source/semantic boundary.
+* 
+* ============================================================================
+* OWNERSHIP
+* ============================================================================
+* 
+* THIS FILE OWNS
+* ---
+* 
+* reflectionExpressionCore
+* reflectionSubject
+* reflectionValueSubject
+* reflectionTypeSubject
+* reflectionProjection
+* reflectionSelector
+* 
+* THIS FILE DOES NOT OWN
+* ---
+* 
+* identifier
+* qualifiedName
+* typeExpression
+* ordinary expression syntax
+* member access
+* declarations
+* statements
+* attributes
+* compile-time execution
+* macros
+* quotation
+* source generation
+* specialization
+* introspection
+* semantic reflection
+* capability resolution
+* resource resolution
+* policies
+* effects
+* AST types
+* IR
+* quantum::ir
+* HDL IR
+* hardware discovery
+* routing
+* scheduling
+* QEC
+* ZQN
+* HAL
+* runtime execution
+* 
+* ============================================================================
+* DEPENDENCY CONTRACT
+* ============================================================================
+* 
+* DEPENDS_ON
+* ---
+* 
+* Lexer:
+* 
+* grammar/antlr/ZamaniLexer.g4
+* 
+* Canonical parser components:
+* 
+* grammar/core/names.g4
+* grammar/types/types.g4
+* 
+* ANTLR grammar names:
+* 
+* Names
+* Type
+* 
+* Required imported rules:
+* 
+* qualifiedName
+* identifier
+* typeExpression
+* 
+* Required lexer tokens:
+* 
+* REFLECT
+* TYPE
+* LPAREN
+* RPAREN
+* DOT
+* IDENTIFIER
+* 
+* IMPORTANT:
+* 
+* "REFLECT" is a language-level reserved word and must have exactly one
+* lexical owner in the canonical lexical hierarchy.
+* 
+* It MUST be added to:
+* 
+* grammar/lexer/keywords.g4
+* grammar/lexer/tokens.g4
+* 
+* with the canonical spelling:
+* 
+* REFLECT : 'reflect' ;
+* 
+* The parser must never define the token.
+* 
+* ============================================================================
+* EXPORTS
+* ============================================================================
+* 
+* Public parser integration boundary:
+* 
+* reflectionExpressionCore
+* 
+* Reusable internal rules:
+* 
+* reflectionSubject
+* reflectionValueSubject
+* reflectionTypeSubject
+* reflectionProjection
+* reflectionSelector
+* 
+* The metaprogramming composition layer owns the public wrapper:
+* 
+* reflectionExpression
+* 
+* This file deliberately does NOT define:
+* 
+* reflectionDeclarationCore
+* reflectionStatementCore
+* 
+* because reflection is an expression facility.
+* 
+* ============================================================================
+* CONSUMED BY
+* ============================================================================
+* 
+* Primary consumer:
+* 
+* grammar/metaprogramming/metaprogramming.g4
+* 
+* Expression-level consumer:
+* 
+* grammar/expressions/metaprogramming.g4
+* 
+* Downstream semantic consumers:
+* 
+* semantic reflection analysis
+* compile-time evaluation
+* macro system
+* source-generation system
+* specialization system
+* tooling / IDE / diagnostics
+* 
+* ============================================================================
+* SINGLE-AUTHORITY RULE
+* ============================================================================
+* 
+* There MUST be exactly one grammar owner for:
+* 
+* reflectionExpressionCore
+* 
+* There MUST be exactly one expression-level wrapper:
+* 
+* reflectionExpression
+* 
+* No other grammar file may reproduce the syntax:
+* 
+* REFLECT '(' ... ')'
+* 
+* Reflection properties such as:
+* 
+* name
+* kind
+* type
+* members
+* parameters
+* effects
+* capabilities
+* requirements
+* provenance
+* 
+* remain ordinary identifiers.
+* 
+* This is deliberate.
+* 
+* New semantic metadata must not require new lexer keywords.
+* 
+* ============================================================================
+* CRITICAL RECURSION RULE
+* ============================================================================
+* 
+* Reflection MUST NOT consume the complete "expression" grammar as its subject.
+* 
+* The canonical expression hierarchy eventually contains reflection:
+* 
+* expression
+*   ->
+* metaprogrammingExpression
+*   ->
+* reflectionExpression
+*   ->
+* reflectionExpressionCore
+* 
+* Therefore this file MUST NOT define:
+* 
+* reflectionSubject
+*     : expression
+*     ;
+* 
+* Such a definition would create an indirect recursive grammar dependency.
+* 
+* Reflection subjects are intentionally restricted to:
+* 
+* qualifiedName
+* 
+* or:
+* 
+* typeExpression
+* 
+* If future reflection of an arbitrary computed value is required, that
+* facility must be expressed through the canonical quotation/value mechanism,
+* not by making this grammar recursively consume "expression".
+* 
+* ============================================================================
+* SOURCE FORMS
+* ============================================================================
+* 
+* Canonical forms:
+* 
+* reflect(value)
+* 
+* reflect(namespace::value)
+* 
+* reflect(type(MyType))
+* 
+* reflect(type(namespace::MyType))
+* 
+* Projection:
+* 
+* reflect(value).name
+* 
+* reflect(value).type
+* 
+* reflect(type(MyType)).members
+* 
+* Chaining:
+* 
+* reflect(type(MyType)).members.attributes
+* 
+* reflect(namespace::operation).effects.capabilities
+* 
+* Projection depth has no grammar-defined finite limit.
+* 
+* ============================================================================
+* OPEN-WORLD REFLECTION
+* ============================================================================
+* 
+* The grammar recognizes only the STRUCTURE of a reflection request.
+* 
+* It does not enumerate semantic properties.
+* 
+* Therefore all of these are syntactically represented through the same rule:
+* 
+* reflect(foo).name
+* reflect(foo).kind
+* reflect(foo).type
+* reflect(foo).members
+* reflect(foo).quantum_metadata
+* reflect(foo).hardware_requirements
+* reflect(foo).provenance
+* 
+* Whether a property exists is a semantic question.
+* 
+* This permits reflection to evolve with:
+* 
+* classical computing
+* numerical computing
+* scientific computing
+* AI
+* data
+* probabilistic computing
+* quantum computing
+* hybrid computing
+* HDL
+* hardware/software co-design
+* accelerators
+* distributed computing
+* networking
+* security
+* future computational domains
+* 
+* without modifying this grammar for every new metadata property.
+* 
+* ============================================================================
+* NAME CONTRACT
+* ============================================================================
+* 
+* Names are owned by:
+* 
+* grammar/core/names.g4
+* 
+* This file consumes:
+* 
+* qualifiedName
+* identifier
+* 
+* It does not redefine:
+* 
+* identifier
+* nameSegment
+* qualifiedName
+* 
+* Qualified names use the canonical:
+* 
+* nameSegment (DOUBLE_COLON nameSegment)*
+* 
+* syntax.
+* 
+* ============================================================================
+* TYPE CONTRACT
+* ============================================================================
+* 
+* Types are owned by:
+* 
+* grammar/types/types.g4
+* 
+* The canonical public type rule is:
+* 
+* typeExpression
+* 
+* This file consumes that rule directly.
+* 
+* It does not redefine:
+* 
+* typeCore
+* namedType
+* genericType
+* dependentType
+* quantumType
+* hardwareType
+* resourceType
+* capabilityType
+* or any other type constructor.
+* 
+* ============================================================================
+* AST CONTRACT
+* ============================================================================
+* 
+* The ANTLR parse tree is NOT the canonical AST.
+* 
+* The frontend AST layer should map:
+* 
+* reflectionExpressionCore
+*      |
+*      v
+* ReflectionExpr
+*      |
+*      +--> subject
+*      |      |
+*      |      +--> NameReference
+*      |      |
+*      |      +--> TypeReference
+*      |
+*      +--> projections[]
+*      |
+*      +--> source span
+* 
+* The AST representation should preserve:
+* 
+* - complete source span;
+* - subject span;
+* - subject kind;
+* - qualified-name segment order;
+* - type structure;
+* - projection order;
+* - selector spelling;
+* - source ordering;
+* - provenance information supplied by the frontend.
+* 
+* This grammar MUST NOT depend on Rust AST implementation types.
+* 
+* ============================================================================
+* SEMANTIC CONTRACT
+* ============================================================================
+* 
+* Semantic analysis owns:
+* 
+* - name resolution;
+* - type resolution;
+* - visibility;
+* - accessibility;
+* - reflection eligibility;
+* - projection validation;
+* - phase legality;
+* - effect analysis;
+* - capability analysis;
+* - resource analysis;
+* - policy enforcement;
+* - portability classification;
+* - determinism classification;
+* - provenance;
+* - protection of implementation-private information.
+* 
+* Example:
+* 
+* reflect(quantum::operation).capabilities
+* 
+* is syntactically valid if "quantum::operation" is a valid qualified name.
+* 
+* Whether:
+* 
+* quantum::operation
+* 
+* resolves to a reflectable entity and whether:
+* 
+* capabilities
+* 
+* is a legal property is determined semantically.
+* 
+* ============================================================================
+* REFLECTION SUBJECT SEMANTICS
+* ============================================================================
+* 
+* A value subject may resolve to:
+* 
+* - value;
+* - variable;
+* - constant;
+* - function;
+* - method;
+* - module;
+* - namespace;
+* - declaration;
+* - quantum operation;
+* - quantum circuit;
+* - HDL entity;
+* - hardware abstraction;
+* - capability;
+* - resource;
+* - service;
+* - actor;
+* - AI model;
+* - data schema;
+* - dialect-defined entity;
+* - future-domain entity.
+* 
+* A type subject may resolve to any valid Zamani type.
+* 
+* Semantic resolution, not syntax, determines the category.
+* 
+* ============================================================================
+* QUANTUM CONTRACT
+* ============================================================================
+* 
+* Reflection may inspect semantic descriptions of:
+* 
+* - quantum types;
+* - qubits;
+* - logical quantum resources;
+* - quantum operations;
+* - circuits;
+* - measurements;
+* - observables;
+* - effects;
+* - capabilities;
+* - resource requirements;
+* - provenance.
+* 
+* Reflection MUST NOT:
+* 
+* - enumerate a fixed gate set;
+* - assign physical qubits;
+* - select a QPU;
+* - route operations;
+* - schedule circuits;
+* - perform decomposition;
+* - perform QEC;
+* - perform ZQN processing;
+* - perform calibration;
+* - mutate quantum::ir.
+* 
+* The quantum pipeline remains:
+* 
+* source
+* ->
+* domain-neutral AST
+* ->
+* semantic quantum model
+* ->
+* quantum::ir
+* ->
+* optimization
+* ->
+* decomposition
+* ->
+* routing
+* ->
+* scheduling
+* ->
+* resilience/QEC/ZQN
+* ->
+* HAL
+* ->
+* target
+* 
+* Reflection is a read/view request over semantic information.
+* 
+* ============================================================================
+* HDL / HARDWARE CONTRACT
+* ============================================================================
+* 
+* Reflection may inspect semantic descriptions of:
+* 
+* - HDL declarations;
+* - modules;
+* - ports;
+* - signals;
+* - timing intent;
+* - resource requirements;
+* - capabilities;
+* - accelerator intent;
+* - hardware-independent design metadata.
+* 
+* It MUST NOT imply:
+* 
+* - physical placement;
+* - physical wiring;
+* - device selection;
+* - vendor selection;
+* - physical register width;
+* - physical memory size;
+* - hardware inventory;
+* - physical topology.
+* 
+* Those are downstream concerns.
+* 
+* ============================================================================
+* RESOURCE / CAPABILITY CONTRACT
+* ============================================================================
+* 
+* Reflection syntax does not perform capability discovery.
+* 
+* For example:
+* 
+* reflect(hardware::capability)
+* 
+* is merely a reflection request.
+* 
+* It does not implicitly mean:
+* 
+* inspect the current machine
+* 
+* or:
+* 
+* discover available GPUs
+* 
+* or:
+* 
+* discover available QPUs.
+* 
+* Target-dependent information requires explicit semantic authorization through
+* the repository's capability/effect/resource/security model.
+* 
+* ============================================================================
+* EFFECT CONTRACT
+* ============================================================================
+* 
+* Parsing reflection has no runtime effects.
+* 
+* The following are NOT implied by this grammar:
+* 
+* IO
+* network access
+* native execution
+* foreign execution
+* hardware access
+* measurement
+* randomness
+* mutation
+* reflection of host state
+* 
+* If semantic evaluation of reflection requires an effect, the semantic layer
+* must declare and validate it.
+* 
+* ============================================================================
+* COMPILE-TIME CONTRACT
+* ============================================================================
+* 
+* Reflection may be consumed by the compile-time subsystem.
+* 
+* However:
+* 
+* parsing != evaluation
+* 
+* This grammar never evaluates a reflection expression.
+* 
+* Compile-time evaluation must separately validate:
+* 
+* - phase;
+* - capability;
+* - effect;
+* - determinism;
+* - provenance;
+* - resource policy;
+* - security policy;
+* - reproducibility.
+* 
+* ============================================================================
+* MACRO CONTRACT
+* ============================================================================
+* 
+* Macros may consume reflection results where permitted by semantic policy.
+* 
+* Reflection does not:
+* 
+* - expand macros;
+* - create tokens;
+* - create syntax trees;
+* - bypass hygiene;
+* - mutate macro state.
+* 
+* Generated source must re-enter the canonical frontend pipeline.
+* 
+* ============================================================================
+* QUOTATION CONTRACT
+* ============================================================================
+* 
+* Quotation remains owned by:
+* 
+* grammar/metaprogramming/quotation.g4
+* 
+* Reflection does not define:
+* 
+* quote
+* unquote
+* syntax quotation
+* token quotation
+* 
+* If arbitrary expression reflection is eventually required, quotation or
+* another explicitly specified value representation is the appropriate
+* extension point.
+* 
+* ============================================================================
+* GENERATION CONTRACT
+* ============================================================================
+* 
+* Source generation remains owned by:
+* 
+* grammar/metaprogramming/generation.g4
+* 
+* Reflection may supply semantic metadata to generation, but reflection does
+* not generate source.
+* 
+* Generated source must pass through ordinary:
+* 
+* lexer
+* parser
+* AST
+* validation
+* semantic analysis
+* 
+* before becoming part of a compilation.
+* 
+* ============================================================================
+* SPECIALIZATION CONTRACT
+* ============================================================================
+* 
+* Specialization may consume reflected information.
+* 
+* Reflection itself does not:
+* 
+* - select a target;
+* - choose an implementation;
+* - lower code;
+* - specialize quantum circuits;
+* - specialize hardware;
+* - allocate resources.
+* 
+* Those decisions remain downstream.
+* 
+* ============================================================================
+* INTROSPECTION BOUNDARY
+* ============================================================================
+* 
+* "introspect" is a separate facility owned by:
+* 
+* grammar/metaprogramming/introspection.g4
+* 
+* Reflection and introspection must not be conflated.
+* 
+* Reflection:
+* 
+* source/semantic model information
+* 
+* Introspection:
+* 
+* explicitly requested context-dependent information
+* 
+* Therefore this file MUST NOT accept:
+* 
+* introspect(...)
+* 
+* and MUST NOT define introspection subjects.
+* 
+* ============================================================================
+* PORTABILITY / POCO-REAF CONTRACT
+* ============================================================================
+* 
+* Reflection syntax must remain target-independent.
+* 
+* The same source syntax may be compiled for:
+* 
+* tiny systems
+* embedded systems
+* CPU
+* multicore CPU
+* GPU
+* FPGA
+* ASIC
+* accelerator
+* QPU
+* quantum simulator
+* HPC
+* cluster
+* distributed systems
+* cloud
+* future execution substrates
+* 
+* Reflection MUST NOT encode:
+* 
+* - CPU counts;
+* - GPU counts;
+* - FPGA counts;
+* - ASIC counts;
+* - accelerator counts;
+* - QPU counts;
+* - qubit limits;
+* - memory capacities;
+* - register widths;
+* - tensor ranks;
+* - node counts;
+* - topology sizes;
+* - device identifiers;
+* - vendor identifiers;
+* - physical addresses;
+* - calibration values;
+* - scheduling decisions.
+* 
+* Target feasibility is determined downstream by:
+* 
+* semantic analysis
+* resource analysis
+* capability negotiation
+* compilation
+* lowering
+* routing
+* scheduling
+* deployment
+* runtime
+* HAL
+* 
+* Reflection must never silently turn compilation into host-dependent
+* specialization.
+* 
+* ============================================================================
+* SCALABILITY CONTRACT
+* ============================================================================
+* 
+* This grammar deliberately imposes no finite language-level limit on:
+* 
+* - qualified-name depth;
+* - type-expression complexity;
+* - projection-chain length;
+* - number of reflected declarations;
+* - number of reflected properties;
+* - number of reflection expressions in a program;
+* - generic type complexity;
+* - domain size;
+* - hardware scale.
+* 
+* Structural repetition uses:
+* 
+* * 
+* 
+* where appropriate.
+* 
+* Practical limits are implementation/resource limits, not language semantics.
+* 
+* The grammar MUST NOT introduce:
+* 
+* MAX_REFLECTION_DEPTH
+* MAX_REFLECTIONS
+* MAX_PROJECTIONS
+* MAX_MEMBERS
+* MAX_TYPES
+* MAX_DECLARATIONS
+* MAX_QUERY_LENGTH
+* MAX_GENERIC_PARAMETERS
+* MAX_HARDWARE_SIZE
+* MAX_QUBITS
+* MAX_CPUS
+* MAX_GPUS
+* MAX_FPGAS
+* MAX_NODES
+* MAX_MEMORY
+* MAX_THREADS
+* MAX_TENSOR_RANK
+* MAX_REGISTER_WIDTH
+* MAX_NETWORK_SIZE
+* MAX_DEVICE_COUNT
+* 
+* ============================================================================
+* DETERMINISM CONTRACT
+* ============================================================================
+* 
+* Parsing must be deterministic.
+* 
+* Identical:
+* 
+* source
+* lexer configuration
+* grammar version
+* language version
+* 
+* must produce equivalent parse structures.
+* 
+* Parsing must not depend on:
+* 
+* hardware;
+* filesystem state;
+* network state;
+* environment variables;
+* wall-clock time;
+* randomness;
+* target availability;
+* deployment topology;
+* runtime state.
+* 
+* Determinism of a reflection RESULT is semantic and may depend on the
+* reflected information's classification.
+* 
+* ============================================================================
+* SECURITY CONTRACT
+* ============================================================================
+* 
+* Parsing reflection MUST NOT:
+* 
+* - read files;
+* - read environment variables;
+* - read credentials;
+* - inspect arbitrary process memory;
+* - inspect arbitrary processes;
+* - inspect network state;
+* - inspect physical hardware;
+* - contact a QPU;
+* - contact a GPU;
+* - contact an FPGA;
+* - execute host code;
+* - execute generated code.
+* 
+* Security-sensitive semantic reflection requires explicit authorization
+* through the existing security/capability/effect architecture.
+* 
+* ============================================================================
+* DIAGNOSTIC CONTRACT
+* ============================================================================
+* 
+* Parser diagnostics are restricted to malformed syntax.
+* 
+* Examples:
+* 
+* reflect(
+* reflect()
+* reflect(,)
+* reflect(type())
+* reflect(type(,))
+* reflect(foo
+* reflect(foo).
+* reflect(foo)..
+* 
+* Semantic diagnostics belong downstream and include:
+* 
+* - unresolved reflection subject;
+* - inaccessible subject;
+* - invalid reflection target;
+* - unknown semantic projection;
+* - invalid projection for the reflected entity;
+* - illegal phase;
+* - missing capability;
+* - missing effect authorization;
+* - policy violation;
+* - prohibited implementation detail;
+* - non-portable dependency;
+* - non-deterministic dependency where determinism is required.
+* 
+* These semantic errors MUST NOT be represented as an ever-growing parser
+* catalogue of special cases.
+* 
+* ============================================================================
+* ERROR RECOVERY
+* ============================================================================
+* 
+* The grammar must preserve normal ANTLR error recovery.
+* 
+* It must not use:
+* 
+* semantic predicates;
+* target-language actions;
+* embedded Rust;
+* runtime callbacks.
+* 
+* ============================================================================
+* PERFORMANCE CONTRACT
+* ============================================================================
+* 
+* The grammar uses only linear structural repetition for reflection:
+* 
+* projection*
+* 
+* There is no intentionally quadratic reflection-specific production.
+* 
+* Reflection does not copy or evaluate reflected entities.
+* 
+* Any memory associated with semantic reflection results belongs to the
+* frontend/semantic implementation and is governed by implementation resource
+* accounting.
+* 
+* ============================================================================
+* ANTLR INTEGRATION CONTRACT
+* ============================================================================
+* 
+* This file is a parser grammar:
+* 
+* parser grammar Reflection;
+* 
+* It consumes the canonical:
+* 
+* ZamaniLexer
+* 
+* It imports exactly:
+* 
+* Names
+* Type
+* 
+* because those are the actual grammar names of:
+* 
+* grammar/core/names.g4
+* grammar/types/types.g4
+* 
+* The old import:
+* 
+* Types
+* 
+* is intentionally NOT used.
+* 
+* ============================================================================
+* PUBLIC COMPOSITION CONTRACT
+* ============================================================================
+* 
+* This file exports:
+* 
+* reflectionExpressionCore
+* 
+* The composition grammar:
+* 
+* grammar/metaprogramming/metaprogramming.g4
+* 
+* owns:
+* 
+* reflectionExpression
+* 
+* and must contain:
+* 
+* reflectionExpression
+*   : reflectionExpressionCore
+*   ;
+* 
+* It MUST NOT expect:
+* 
+* reflectionDeclarationCore
+* reflectionStatementCore
+* 
+* because those rules do not exist in this file and reflection is not a
+* declaration/statement facility.
+* 
+* ============================================================================
+* EXPRESSION INTEGRATION
+* ============================================================================
+* 
+* The expression composition should conceptually be:
+* 
+* expression
+*   ...
+*   | metaprogrammingExpression
+*   ...
+*   ;
+* 
+* and:
+* 
+* metaprogrammingExpression
+*   ...
+*   | reflectionExpression
+*   ...
+*   ;
+* 
+* This file does not redefine either composition rule.
+* 
+* ============================================================================
+* LEXER INTEGRATION REQUIRED BEFORE COMPOSITION
+* ============================================================================
+* 
+* The canonical lexical hierarchy currently requires the addition:
+* 
+* REFLECT : 'reflect' ;
+* 
+* to its canonical keyword/token owner.
+* 
+* Required files:
+* 
+* grammar/lexer/keywords.g4
+* grammar/lexer/tokens.g4
+* 
+* There must be exactly one emitted token identity for "reflect".
+* 
+* Do NOT add:
+* 
+* REFLECT
+* 
+* to:
+* 
+* grammar/antlr/ZamaniLexer.g4
+* 
+* because that file is only the public lexer composition boundary.
+* 
+* ============================================================================
+* AST INTEGRATION
+* ============================================================================
+* 
+* The frontend must map:
+* 
+* reflectionExpressionCore
+* 
+* into the existing domain-neutral AST.
+* 
+* No new domain-specific IR should be introduced merely for reflection.
+* 
+* Recommended semantic structure:
+* 
+* ReflectionExpr {
+*   subject,
+*   projections,
+*   span
+* }
+* 
+* where subject is represented by the existing name/type reference machinery.
+* 
+* If the existing AST does not yet have a reflection node, that is an AST
+* integration task; it is not a reason to make this grammar own an AST.
+* 
+* ============================================================================
+* SEMANTIC MODEL INTEGRATION
+* ============================================================================
+* 
+* Reflection results should be represented through the canonical semantic
+* reflection model.
+* 
+* The semantic model should distinguish at least:
+* 
+* declaration metadata
+* type metadata
+* function metadata
+* effect metadata
+* capability metadata
+* resource metadata
+* contract metadata
+* policy metadata
+* provenance metadata
+* domain metadata
+* 
+* New domains should register semantic reflection metadata rather than modify
+* this grammar.
+* 
+* ============================================================================
+* IR CONTRACT
+* ============================================================================
+* 
+* This grammar owns NO IR.
+* 
+* Reflection may be evaluated before IR generation or represented in a
+* canonical semantic/compile-time representation.
+* 
+* It must not create:
+* 
+* - a reflection IR;
+* - a quantum reflection IR;
+* - a hardware reflection IR;
+* - a backend-specific reflection IR.
+* 
+* If reflection is evaluated during compilation, its result must flow through
+* the ordinary semantic/compile-time machinery.
+* 
+* ============================================================================
+* QUANTUM IR BOUNDARY
+* ============================================================================
+* 
+* If reflection inspects a quantum entity:
+* 
+* source
+* ->
+* AST
+* ->
+* quantum semantic model
+* 
+* Reflection may inspect the semantic representation.
+* 
+* It must not bypass the semantic model to inspect or mutate:
+* 
+* quantum::ir
+* physical qubits
+* routing state
+* scheduling state
+* QEC state
+* calibration state
+* 
+* ============================================================================
+* HARDWARE BOUNDARY
+* ============================================================================
+* 
+* If reflection refers to hardware-related semantic names, the meaning is
+* resolved by semantic analysis.
+* 
+* Reflection syntax itself does not select or discover a machine.
+* 
+* This is essential to POCO-REAF:
+* 
+* source intent
+*   ->
+* semantic requirements
+*   ->
+* capability/resource negotiation
+*   ->
+* target realization
+* 
+* rather than:
+* 
+* source
+*   ->
+* compiler-host-specific reflection
+*   ->
+* accidental specialization.
+* 
+* ============================================================================
+* TOOLING CONTRACT
+* ============================================================================
+* 
+* Tooling may use this grammar for:
+* 
+* - syntax highlighting;
+* - parse-tree construction;
+* - diagnostics;
+* - formatting;
+* - source navigation;
+* - IDE/LSP structure;
+* - source provenance.
+* 
+* Tooling must not infer runtime hardware semantics from syntax alone.
+* 
+* ============================================================================
+* TEST CONTRACT
+* ============================================================================
+* 
+* Positive syntax tests:
+* 
+* reflect(value)
+* reflect(namespace::value)
+* reflect(type(MyType))
+* reflect(type(namespace::MyType))
+* reflect(value).name
+* reflect(value).kind
+* reflect(value).type
+* reflect(type(MyType)).members
+* reflect(type(MyType)).members.attributes
+* reflect(namespace::operation).effects.capabilities
+* 
+* Qualified-name scale:
+* 
+* reflect(a)
+* reflect(a::b)
+* reflect(a::b::c)
+* ...
+* 
+* Projection scale:
+* 
+* reflect(a).x
+* reflect(a).x.y
+* reflect(a).x.y.z
+* ...
+* 
+* Negative syntax tests:
+* 
+* reflect()
+* reflect(,)
+* reflect(type())
+* reflect(type(,))
+* reflect(value
+* reflect(value).
+* reflect(value)..
+* reflect value
+* reflect type(MyType)
+* reflect(foo + bar)
+* 
+* The final negative category is intentional: arbitrary expression subjects
+* belong to a separately specified quotation/value-reflection facility.
+* 
+* Boundary tests:
+* 
+* deeply qualified names;
+* deeply nested generic types;
+* long projection chains;
+* Unicode identifiers permitted by the canonical lexer;
+* comments and whitespace;
+* EOF-adjacent constructs;
+* large valid reflection expressions.
+* 
+* Cross-domain tests:
+* 
+* classical declaration reflection;
+* quantum semantic reflection;
+* hybrid reflection;
+* HDL reflection;
+* hardware-intent reflection;
+* distributed reflection;
+* AI/data reflection;
+* networking reflection;
+* security metadata reflection;
+* dialect-defined reflection.
+* 
+* ============================================================================
+* SCALABILITY TEST CONTRACT
+* ============================================================================
+* 
+* Tests must demonstrate increasing structural size without establishing a
+* universal maximum.
+* 
+* The test suite must NOT assert:
+* 
+* "N projections is the maximum"
+* 
+* or:
+* 
+* "N qualified-name segments is the maximum".
+* 
+* Instead, tests establish that additional structure remains syntactically
+* representable until implementation resources are exhausted.
+* 
+* ============================================================================
+* DETERMINISM TEST CONTRACT
+* ============================================================================
+* 
+* Repeated parsing of identical source under identical grammar/lexer
+* configuration must produce equivalent parse structures and source spans.
+* 
+* Parsing must not vary with:
+* 
+* CPU;
+* GPU;
+* FPGA;
+* QPU;
+* available memory;
+* network;
+* filesystem;
+* environment;
+* runtime state.
+* 
+* ============================================================================
+* COMPATIBILITY CONTRACT
+* ============================================================================
+* 
+* Existing filename remains:
+* 
+* grammar/metaprogramming/reflection.g4
+* 
+* Existing canonical production:
+* 
+* reflectionExpressionCore
+* 
+* is retained.
+* 
+* The wrapper:
+* 
+* reflectionExpression
+* 
+* remains owned by:
+* 
+* grammar/metaprogramming/metaprogramming.g4
+* 
+* The source spelling:
+* 
+* reflect
+* 
+* becomes a reserved lexical spelling through the canonical lexer vocabulary.
+* 
+* Reflection selectors remain ordinary identifiers.
+* 
+* ============================================================================
+* SAFE-RUST CONTRACT
+* ============================================================================
+* 
+* This grammar contains:
+* 
+* - no Rust actions;
+* - no semantic predicates;
+* - no unsafe code;
+* - no filesystem access;
+* - no network access;
+* - no hardware access;
+* - no process execution;
+* - no runtime callbacks.
+* 
+* The consuming implementation must remain compatible with:
+* 
+* Rust 1.97+
+* Rust 2021
+* 
+* and must use safe Rust.
+* 
+* ============================================================================
+* HARD-CODING AUDIT
+* ============================================================================
+* 
+* This grammar contains no language-level capacity constants.
+* 
+* In particular, it contains no:
+* 
+* MAX_QUBITS
+* MAX_CPUS
+* MAX_GPUS
+* MAX_FPGAS
+* MAX_NODES
+* MAX_MEMORY
+* MAX_THREADS
+* MAX_TENSOR_RANK
+* MAX_REGISTER_WIDTH
+* MAX_NETWORK_SIZE
+* MAX_DEVICE_COUNT
+* MAX_REFLECTION_DEPTH
+* MAX_REFLECTIONS
+* MAX_PROJECTIONS
+* 
+* ============================================================================
+* COMPLETION CRITERIA
+* ============================================================================
+* 
+* This file is complete when:
+* 
+* [x] Existing filename is retained.
+* [x] Reflection has one canonical source grammar.
+* [x] reflectionExpressionCore is the public core boundary.
+* [x] No declaration-level reflection is invented.
+* [x] No statement-level reflection is invented.
+* [x] No duplicate reflection syntax exists.
+* [x] Actual grammar name "Type" is imported.
+* [x] Actual grammar name "Names" is imported.
+* [x] Canonical qualifiedName is reused.
+* [x] Canonical typeExpression is reused.
+* [x] Complete expression grammar is not recursively imported.
+* [x] Projection names remain open-world identifiers.
+* [x] No semantic property catalogue is hard-coded.
+* [x] No quantum gate catalogue is encoded.
+* [x] No hardware topology is encoded.
+* [x] No machine-capacity limit is encoded.
+* [x] No physical target selection is encoded.
+* [x] No runtime hardware discovery is implicit.
+* [x] No IR is created by the grammar.
+* [x] quantum::ir remains downstream.
+* [x] HDL/hardware realization remains downstream.
+* [x] Compile-time execution remains downstream.
+* [x] Macro expansion remains downstream.
+* [x] Generation remains downstream.
+* [x] Specialization remains downstream.
+* [x] Introspection remains a separate facility.
+* [x] AST ownership is explicit.
+* [x] Semantic ownership is explicit.
+* [x] Effect/capability/resource ownership is explicit.
+* [x] Provenance requirements are explicit.
+* [x] Security requirements are explicit.
+* [x] Positive tests are defined.
+* [x] Negative tests are defined.
+* [x] Boundary tests are defined.
+* [x] Scalability tests are defined.
+* [x] Cross-domain tests are defined.
+* [x] Determinism requirements are defined.
+* [x] Safe-Rust requirements are defined.
+* 
+* ============================================================================
+* FINAL INVARIANT
+* ============================================================================
+* 
+* Reflection answers:
+* 
+* "What does the canonical Zamani semantic model expose about this
+* source-level entity or type?"
+* 
+* It does not implicitly answer:
+* 
+* "What hardware exists?"
+* "Which QPU is available?"
+* "How many GPUs exist?"
+* "What is the physical topology?"
+* "What device should be selected?"
+* 
+* Those questions belong to explicitly authorized capability/resource/
+* deployment/runtime/HAL mechanisms.
+* 
+* ============================================================================
+  */
 
 parser grammar Reflection;
 
 options {
-    tokenVocab = ZamaniLexer;
+tokenVocab = ZamaniLexer;
 }
 
-
 /*
- * ============================================================================
- * Canonical grammar dependencies
- * ============================================================================
- *
- * Names:
- *     qualifiedName
- *
- * Types:
- *     typeExpression
- *
- * These are canonical shared grammar components.
- *
- * We deliberately do NOT import the complete Expressions grammar because doing
- * so would create a circular dependency once reflection is inserted into the
- * canonical expression hierarchy.
- *
- * ============================================================================
- */
+
+* ============================================================================
+* CANONICAL DEPENDENCIES
+* ============================================================================
+* 
+* Actual repository grammar names:
+* 
+* grammar/core/names.g4  -> parser grammar Names
+* grammar/types/types.g4 -> parser grammar Type
+* 
+* Therefore the imports below intentionally use:
+* 
+* Names
+* Type
+* 
+* and NOT "Types".
+* ============================================================================
+  */
 
 import
-    Names,
-    Types
+Names,
+Type
 ;
 
-
 /*
- * ============================================================================
- * 1. CANONICAL REFLECTION EXPRESSION
- * ============================================================================
- *
- * Canonical source forms:
- *
- *     reflect(name)
- *
- *     reflect(namespace::name)
- *
- *     reflect type(Type)
- *
- *     reflect type(namespace::Type)
- *
- * followed by zero or more semantic projections.
- *
- * ============================================================================
- */
+
+* ============================================================================
+* PUBLIC REFLECTION CORE
+* ============================================================================
+* 
+* Canonical forms:
+* 
+* reflect(name)
+* reflect(type(TypeName))
+* 
+* followed by zero or more semantic projections.
+* 
+* ============================================================================
+  */
 
 reflectionExpressionCore
-    : REFLECT
-      LPAREN
-      reflectionSubject
-      RPAREN
-      reflectionProjection*
-    ;
-
+: REFLECT
+LPAREN
+reflectionSubject
+RPAREN
+reflectionProjection*
+;
 
 /*
- * ============================================================================
- * 2. REFLECTION SUBJECT
- * ============================================================================
- *
- * There are deliberately two subject classes:
- *
- *     value/declaration name
- *     explicit type
- *
- * The value/declaration form uses qualifiedName rather than expression.
- *
- * This prevents:
- *
- *     expression
- *         -> reflection
- *             -> expression
- *
- * recursion.
- *
- * ============================================================================
- */
+
+* ============================================================================
+* REFLECTION SUBJECT
+* ============================================================================
+  */
 
 reflectionSubject
-    : reflectionValueSubject
-    | reflectionTypeSubject
-    ;
-
+: reflectionValueSubject
+| reflectionTypeSubject
+;
 
 /*
- * ============================================================================
- * 3. VALUE / DECLARATION SUBJECT
- * ============================================================================
- *
- * A qualified name can semantically resolve to:
- *
- *     - a value;
- *     - a constant;
- *     - a function;
- *     - a type-associated declaration;
- *     - a module;
- *     - a namespace;
- *     - a quantum operation;
- *     - an HDL entity;
- *     - a hardware capability;
- *     - another reflectable language entity.
- *
- * Semantic resolution decides which interpretation is valid.
- *
- * ============================================================================
- */
+
+* ============================================================================
+* VALUE / DECLARATION SUBJECT
+* ============================================================================
+* 
+* qualifiedName is intentionally reused from Names.
+* 
+* Semantic analysis determines what the name denotes.
+* ============================================================================
+  */
 
 reflectionValueSubject
-    : qualifiedName
-    ;
-
+: qualifiedName
+;
 
 /*
- * ============================================================================
- * 4. EXPLICIT TYPE SUBJECT
- * ============================================================================
- *
- * Syntax:
- *
- *     reflect type(T)
- *
- * The TYPE keyword is already part of the canonical Zamani lexical vocabulary.
- *
- * Type syntax remains completely delegated to `typeExpression`.
- *
- * ============================================================================
- */
+
+* ============================================================================
+* TYPE SUBJECT
+* ============================================================================
+* 
+* Canonical source form:
+* 
+* reflect(type(MyType))
+* 
+* "typeExpression" is owned by Type.
+* ============================================================================
+  */
 
 reflectionTypeSubject
-    : TYPE
-      LPAREN
-      typeExpression
-      RPAREN
-    ;
-
+: TYPE
+LPAREN
+typeExpression
+RPAREN
+;
 
 /*
- * ============================================================================
- * 5. REFLECTION PROJECTION
- * ============================================================================
- *
- * Projection is deliberately open-ended.
- *
- * The grammar recognizes the structural operation:
- *
- *     . identifier
- *
- * Semantic analysis determines whether the selector is legal.
- *
- * ============================================================================
- */
+
+* ============================================================================
+* PROJECTION
+* ============================================================================
+* 
+* One projection is:
+* 
+* .identifier
+* 
+* The enclosing "reflectionExpressionCore" owns the repetition.
+* 
+* This avoids recursive projection rules while allowing arbitrary chain
+* length subject only to implementation resources.
+* ============================================================================
+  */
 
 reflectionProjection
-    : DOT
-      reflectionSelector
-    ;
-
+: DOT
+reflectionSelector
+;
 
 /*
- * ============================================================================
- * 6. REFLECTION SELECTOR
- * ============================================================================
- *
- * Selectors remain identifiers rather than reserved keywords.
- *
- * This allows future reflection metadata to evolve without continuously
- * changing the lexer.
- *
- * ============================================================================
- */
+
+* ============================================================================
+* SELECTOR
+* ============================================================================
+* 
+* Reflection metadata names are intentionally ordinary identifiers.
+* 
+* Do NOT replace this with a finite keyword list.
+* ============================================================================
+  */
 
 reflectionSelector
-    : identifier
-    ;
+: identifier
+;
+::
 
+Required integration corrections
 
-/*
- * ============================================================================
- * 7. EXPLICIT QUERY ALIAS
- * ============================================================================
- *
- * Tooling and semantic layers may refer to the complete request using the
- * named `reflectionQuery` boundary.
- *
- * It is an alias only.
- *
- * It does not create a second reflection syntax.
- *
- * ============================================================================
- */
+The file above is deliberately not accompanied by fake "reflectionDeclarationCore" or "reflectionStatementCore" rules. Those should be removed from "grammar/metaprogramming/metaprogramming.g4".
 
-reflectionQuery
+The metaprogramming composition should instead have this reflection section:
+
+reflectionExpression
     : reflectionExpressionCore
     ;
 
+and:
 
-/*
- * ============================================================================
- * 8. REFLECTION PATH
- * ============================================================================
- *
- * A reflection path is the complete reflection expression plus its ordered
- * projection chain.
- *
- * The public expression already contains the same structure, so this rule is
- * provided only as a named tooling/semantic boundary.
- *
- * It does not add syntax.
- *
- * ============================================================================
- */
-
-reflectionPath
-    : reflectionExpressionCore
+metaprogrammingExpression
+    : macroExpression
+    | compileTimeExpression
+    | generationExpression
+    | reflectionExpression
+    | specializationExpression
     ;
 
+The following must not remain:
 
-/*
- * ============================================================================
- * 9. SEMANTIC CATEGORY BOUNDARIES
- * ============================================================================
- *
- * These aliases intentionally do not duplicate syntax.
- *
- * They allow downstream documentation and AST conversion code to refer to the
- * same canonical reflection structure without creating separate parser
- * languages.
- *
- * ============================================================================
- */
-
-reflectionValueQuery
-    : reflectionExpressionCore
+reflectionDeclaration
+    : reflectionDeclarationCore
     ;
 
-
-reflectionTypeQuery
-    : reflectionExpressionCore
+reflectionStatement
+    : reflectionStatementCore
     ;
 
+because the production "reflection.g4" intentionally does not own declaration or statement syntax.
 
-/*
- * ============================================================================
- * 10. AST INTEGRATION CONTRACT
- * ============================================================================
- *
- * The expected semantic conversion is:
- *
- *     reflectionExpressionCore
- *          |
- *          v
- *     ReflectionExpr
- *          |
- *          +--> subject
- *          |      |
- *          |      +--> qualified-name reference
- *          |      |
- *          |      +--> canonical TypeExpr
- *          |
- *          +--> ordered projections
- *          |
- *          +--> source span
- *
- * No parser rule in this file is an AST type declaration.
- *
- * ============================================================================
- */
+Required lexical integration
 
+The repository currently has "REFLECTION" and "REFLECTIVE", but the production syntax requested by this grammar is:
 
-/*
- * ============================================================================
- * 11. SEMANTIC INTEGRATION CONTRACT
- * ============================================================================
- *
- * Semantic analysis owns:
- *
- *     name resolution
- *     type resolution
- *     visibility
- *     projection validation
- *     phase legality
- *     effect checking
- *     capability checking
- *     portability checking
- *     determinism classification
- *     implementation-detail protection
- *
- * Example:
- *
- *     reflect(quantum::operation).capabilities
- *
- * is syntactically valid.
- *
- * Whether:
- *
- *     quantum::operation
- *
- * exists, and whether:
- *
- *     capabilities
- *
- * is a valid projection, is a semantic question.
- *
- * ============================================================================
- */
+reflect(...)
 
+Therefore the canonical lexical vocabulary needs one new token:
 
-/*
- * ============================================================================
- * 12. CLASSICAL INTEGRATION
- * ============================================================================
- *
- * Reflection may inspect:
- *
- *     functions
- *     constants
- *     variables
- *     classes
- *     structs
- *     records
- *     traits
- *     modules
- *     mathematical abstractions
- *     data structures
- *
- * Their meaning remains owned by the corresponding semantic systems.
- *
- * Reflection does not create a classical reflection IR.
- *
- * ============================================================================
- */
+REFLECT : 'reflect' ;
 
+It belongs in the canonical keyword/token hierarchy, not in "reflection.g4" and not in "grammar/antlr/ZamaniLexer.g4".
 
-/*
- * ============================================================================
- * 13. QUANTUM INTEGRATION
- * ============================================================================
- *
- * Reflection may inspect semantic quantum entities through ordinary reflection:
- *
- *     reflect(type(Qubit))
- *     reflect(quantum::operation)
- *     reflect(quantum::circuit)
- *
- * It does not enumerate or reserve gate names.
- *
- * Therefore:
- *
- *     H
- *     X
- *     Y
- *     Z
- *     CNOT
- *
- * remain ordinary semantic operation names unless independently reserved by the
- * canonical language.
- *
- * No reflection rule is tied to a finite gate set.
- *
- * ============================================================================
- */
+The important distinction is:
 
+reflection       -> effect/semantic vocabulary
+reflect          -> source-language reflection operator
+reflective       -> existing lexical vocabulary, if retained
 
-/*
- * ============================================================================
- * 14. QUANTUM IR INTEGRATION
- * ============================================================================
- *
- * Reflection has no direct dependency on quantum::ir.
- *
- * The correct relationship is:
- *
- *     source
- *       |
- *       v
- *     reflection AST
- *       |
- *       v
- *     semantic reflection
- *       |
- *       v
- *     existing quantum semantic model
- *       |
- *       v
- *     quantum::ir
- *
- * Reflection MUST NOT:
- *
- *     - create quantum::ir nodes;
- *     - mutate quantum::ir;
- *     - assign physical qubits;
- *     - route operations;
- *     - schedule operations;
- *     - invoke QEC;
- *     - invoke ZQN;
- *     - perform calibration.
- *
- * ============================================================================
- */
+Those should not be conflated.
 
+Why I changed the existing design
 
-/*
- * ============================================================================
- * 15. HDL / HARDWARE INTEGRATION
- * ============================================================================
- *
- * Reflection may inspect semantic descriptions of:
- *
- *     HDL modules
- *     ports
- *     signals
- *     registers
- *     interfaces
- *     hardware capabilities
- *     resource requirements
- *     accelerator intent
- *
- * It must not expose physical implementation state merely because the source
- * contains a reflection request.
- *
- * ============================================================================
- */
+The most important correction is that "reflection.g4" is now genuinely a leaf feature grammar:
 
+Reflection
+   │
+   ├── Names
+   │    └── qualifiedName
+   │
+   └── Type
+        └── typeExpression
 
-/*
- * ============================================================================
- * 16. DISTRIBUTED / AI / DATA / NETWORKING INTEGRATION
- * ============================================================================
- *
- * The same reflection boundary applies to all language domains.
- *
- * No new parser syntax is needed merely because the reflected entity belongs
- * to:
- *
- *     distributed computing
- *     AI
- *     data processing
- *     networking
- *     security
- *     scientific computing
- *     embedded computing
- *     future computing domains.
- *
- * Domain-specific meaning is semantic.
- *
- * ============================================================================
- */
+rather than trying to become a miniature language of its own.
 
+The semantic pipeline is consequently:
 
-/*
- * ============================================================================
- * 17. METAPROGRAMMING INTEGRATION
- * ============================================================================
- *
- * The canonical metaprogramming composition grammar:
- *
- *     grammar/metaprogramming/metaprogramming.g4
- *
- * owns the wrapper:
- *
- *     reflectionExpression
- *         : reflectionExpressionCore
- *         ;
- *
- * This file therefore owns:
- *
- *     reflectionExpressionCore
- *
- * and not:
- *
- *     reflectionExpression
- *
- * This is the single-authority rule.
- *
- * ============================================================================
- */
+reflect(...)
+      │
+      ▼
+Reflection parse structure
+      │
+      ▼
+domain-neutral AST
+      │
+      ▼
+semantic reflection
+      │
+      ├── name/type resolution
+      ├── visibility
+      ├── effects
+      ├── capabilities
+      ├── resources
+      ├── policies
+      └── provenance
+      │
+      ▼
+canonical semantic model
+      │
+      ├── classical
+      ├── quantum
+      ├── HDL
+      ├── hardware
+      ├── AI/data
+      ├── distributed
+      └── future domains
 
+That means adding a future quantum construct, accelerator, tensor type, HDL entity, AI model, distributed service, or hardware capability does not require reopening this grammar. The new domain only needs to expose its metadata through the semantic reflection system.
 
-/*
- * ============================================================================
- * 18. EXPRESSION INTEGRATION
- * ============================================================================
- *
- * Reflection is an expression-producing metaprogramming facility.
- *
- * The canonical expression hierarchy must integrate the metaprogramming
- * composition boundary at its designated primary-expression extension point.
- *
- * Conceptually:
- *
- *     primaryExpression
- *         :
- *             ...
- *           | metaprogrammingExpression
- *           ;
- *
- * The exact primary-expression composition remains owned by:
- *
- *     grammar/expressions/
- *
- * This file does not redefine primaryExpression.
- *
- * ============================================================================
- */
+Also, this preserves the important distinction between:
 
+reflection
 
-/*
- * ============================================================================
- * 19. COMPILE-TIME EXECUTION INTEGRATION
- * ============================================================================
- *
- * Reflection may be used by compile-time semantic evaluation.
- *
- * However:
- *
- *     parsing != execution
- *
- * This grammar never executes reflection.
- *
- * The compile-time subsystem must establish:
- *
- *     phase
- *     capabilities
- *     effects
- *     determinism
- *     provenance
- *     resource policy
- *
- * before evaluating a reflection request.
- *
- * ============================================================================
- */
+and:
 
+introspection
 
-/*
- * ============================================================================
- * 20. MACRO INTEGRATION
- * ============================================================================
- *
- * Macros may consume reflection information where the semantic model permits
- * it.
- *
- * Reflection does not:
- *
- *     - expand macros;
- *     - bypass macro hygiene;
- *     - manufacture tokens;
- *     - manufacture syntax trees;
- *     - mutate macro state.
- *
- * Generated source must return through the ordinary parser/AST/semantic
- * pipeline.
- *
- * ============================================================================
- */
+so a program cannot accidentally become machine-dependent merely because it uses reflection.
 
-
-/*
- * ============================================================================
- * 21. GENERATION INTEGRATION
- * ============================================================================
- *
- * Source generation may consume reflection results.
- *
- * Generation remains owned by:
- *
- *     grammar/metaprogramming/generation.g4
- *
- * This grammar does not generate source.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 22. SPECIALIZATION INTEGRATION
- * ============================================================================
- *
- * Specialization may consume reflected type or declaration information.
- *
- * Specialization remains owned by its canonical metaprogramming subsystem.
- *
- * Reflection itself does not specialize code.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 23. RESOURCE / CAPABILITY INTEGRATION
- * ============================================================================
- *
- * Reflection syntax does not resolve resources or capabilities.
- *
- * For example:
- *
- *     reflect(hardware::capability)
- *
- * does not mean:
- *
- *     discover the current GPU
- *
- * or:
- *
- *     discover the current QPU
- *
- * or:
- *
- *     inspect physical memory.
- *
- * Semantic analysis determines whether the reflected entity represents a
- * source-level capability declaration, compile-time capability, target
- * capability, or some explicitly authorized external state.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 24. PORTABILITY CONTRACT
- * ============================================================================
- *
- * A portable program must not accidentally specialize itself based on the
- * machine used to compile it.
- *
- * Therefore:
- *
- *     static language reflection
- *
- * is naturally portable when its semantic inputs are portable.
- *
- * Target-dependent reflection must be explicitly represented by the relevant
- * capability/effect/resource model.
- *
- * It MUST NOT silently become a compile-time machine probe.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 25. RUNTIME REFLECTION
- * ============================================================================
- *
- * Runtime reflection is NOT implied by this grammar.
- *
- * If runtime reflection is introduced later, it must have an explicit semantic
- * contract covering:
- *
- *     runtime effects
- *     capabilities
- *     determinism
- *     security
- *     provenance
- *     portability
- *     resource usage
- *
- * This grammar should not be modified merely to turn static reflection into
- * unrestricted runtime introspection.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 26. ERROR CONTRACT
- * ============================================================================
- *
- * Parser-level errors include malformed syntax such as:
- *
- *     reflect(
- *     reflect()
- *     reflect type(
- *     reflect type()
- *     reflect(name
- *     reflect(name). 
- *
- * Semantic errors include:
- *
- *     unresolved subject
- *     inaccessible subject
- *     unknown projection
- *     invalid projection for subject
- *     phase violation
- *     capability violation
- *     effect violation
- *     non-portable reflection
- *     forbidden implementation-detail exposure
- *
- * Semantic errors belong to semantic analysis.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 27. NEGATIVE SYNTAX CONTRACT
- * ============================================================================
- *
- * The following must not be accepted as reflection syntax:
- *
- *     reflect()
- *     reflect(,)
- *     reflect type()
- *     reflect type(,)
- *     reflect(name
- *     reflect(name)).
- *
- *     reflect name
- *     reflect type name
- *
- *     reflect(unknown expression operators)
- *
- * The final category is intentionally not accepted as a reflection subject
- * because arbitrary expression reflection is a separate semantic design
- * problem and must not introduce expression-recursion into this grammar.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 28. POSITIVE TEST CONTRACT
- * ============================================================================
- *
- * Minimum positive cases:
- *
- *     reflect(value)
- *     reflect(myFunction)
- *     reflect(quantum::operation)
- *     reflect(hardware::capability)
- *     reflect(classical::algorithm)
- *     reflect(type(MyType))
- *     reflect(type(Qubit))
- *     reflect(type(Tensor<float>))
- *
- * Projection cases:
- *
- *     reflect(MyType).name
- *     reflect(MyType).kind
- *     reflect(MyType).members
- *     reflect(MyType).members.attributes
- *     reflect(myFunction).parameters
- *     reflect(myFunction).returnType
- *     reflect(myFunction).effects
- *     reflect(quantum::operation).capabilities
- *     reflect(hardware::capability).requirements
- *
- * Deep chains must be tested structurally without introducing a fixed depth.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 29. BOUNDARY TEST CONTRACT
- * ============================================================================
- *
- * Boundary tests must include:
- *
- *     - one-segment names;
- *     - deeply qualified names;
- *     - large type expressions;
- *     - deeply nested generic types;
- *     - long projection chains;
- *     - Unicode identifiers where permitted;
- *     - selectors adjacent to keywords;
- *     - source spans at EOF;
- *     - whitespace variation;
- *     - comments around reflection syntax.
- *
- * Boundary tests must distinguish:
- *
- *     language syntax limits
- *
- * from:
- *
- *     compiler resource limits.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 30. SCALABILITY TEST CONTRACT
- * ============================================================================
- *
- * Scalability tests should progressively exercise:
- *
- *     reflect(a)
- *     reflect(a::b)
- *     reflect(a::b::c)
- *     ...
- *
- * and:
- *
- *     reflect(a).x
- *     reflect(a).x.y
- *     reflect(a).x.y.z
- *     ...
- *
- * without declaring a maximum language depth.
- *
- * Large source programs containing many independent reflection expressions must
- * remain structurally representable.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 31. DETERMINISM TEST CONTRACT
- * ============================================================================
- *
- * Parsing identical source with identical grammar and lexical configuration
- * must produce equivalent parse structures.
- *
- * Reflection parsing must not depend on:
- *
- *     CPU
- *     GPU
- *     FPGA
- *     QPU
- *     filesystem
- *     network
- *     environment
- *     wall clock
- *     randomness
- *     deployment topology.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 32. COMPATIBILITY CONTRACT
- * ============================================================================
- *
- * The filename:
- *
- *     grammar/metaprogramming/reflection.g4
- *
- * is retained.
- *
- * The canonical public production is:
- *
- *     reflectionExpressionCore
- *
- * Existing consumers expecting the old local `reflectionExpression` production
- * must migrate to the composition wrapper in:
- *
- *     grammar/metaprogramming/metaprogramming.g4
- *
- * This avoids maintaining two competing reflection-expression authorities.
- *
- * The spelling:
- *
- *     reflect
- *
- * becomes a reserved lexical spelling only after `REFLECT` is added to the
- * canonical keyword vocabulary.
- *
- * Projection names remain identifiers.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 33. REQUIRED LEXER INTEGRATION
- * ============================================================================
- *
- * grammar/lexer/keywords.g4
- *
- * MUST contain exactly one canonical reflection keyword:
- *
- *     REFLECT : 'reflect' ;
- *
- * It must not be defined in this parser grammar.
- *
- * The canonical lexer composition must make REFLECT available to:
- *
- *     grammar/antlr/ZamaniLexer.g4
- *
- * and therefore to:
- *
- *     grammar/antlr/ZamaniParser.g4
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 34. REQUIRED METAPROGRAMMING INTEGRATION
- * ============================================================================
- *
- * `grammar/metaprogramming/metaprogramming.g4` currently expects:
- *
- *     reflectionExpressionCore
- *     reflectionDeclarationCore
- *     reflectionStatementCore
- *
- * Only the first is legitimately supplied by this file.
- *
- * `reflectionDeclarationCore` and `reflectionStatementCore` MUST NOT be
- * invented here merely to satisfy undefined references.
- *
- * Reflection is an expression facility in this grammar.
- *
- * Therefore the metaprogramming composition grammar must be corrected so that:
- *
- *     metaprogrammingDeclaration
- *
- * does not include a nonexistent reflection declaration form, and:
- *
- *     metaprogrammingStatement
- *
- * does not include a nonexistent reflection statement form.
- *
- * If a future declaration/statement-level reflection feature is desired, it
- * must be specified independently with real source semantics and tests.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 35. REQUIRED EXPRESSION INTEGRATION
- * ============================================================================
- *
- * `grammar/expressions/metaprogramming.g4` should continue to own the
- * expression-level metaprogramming dispatch:
- *
- *     metaprogrammingExpression
- *         :
- *             macroExpression
- *           | compileTimeExpression
- *           | generationExpression
- *           | reflectionExpression
- *           | specializationExpression
- *           ;
- *
- * The reflection wrapper:
- *
- *     reflectionExpression
- *         : reflectionExpressionCore
- *         ;
- *
- * belongs to:
- *
- *     grammar/metaprogramming/metaprogramming.g4
- *
- * or its finalized composition boundary.
- *
- * There must be exactly one such wrapper.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 36. NO HARDWARE LIMITS
- * ============================================================================
- *
- * This grammar contains no:
- *
- *     MAX_QUBITS
- *     MAX_CPUS
- *     MAX_GPUS
- *     MAX_FPGAS
- *     MAX_NODES
- *     MAX_MEMORY
- *     MAX_THREADS
- *     MAX_TENSOR_RANK
- *     MAX_REGISTER_WIDTH
- *     MAX_NETWORK_SIZE
- *     MAX_DEVICE_COUNT
- *     MAX_REFLECTION_DEPTH
- *
- * It also contains no fixed:
- *
- *     physical qubit IDs
- *     GPU IDs
- *     CPU IDs
- *     FPGA IDs
- *     device IDs
- *     vendor IDs
- *     topology IDs
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 37. SAFE-RUST CONTRACT
- * ============================================================================
- *
- * This grammar contains:
- *
- *     - no embedded Rust;
- *     - no semantic predicates;
- *     - no target-language actions;
- *     - no filesystem access;
- *     - no network access;
- *     - no runtime execution;
- *     - no hardware access;
- *     - no unsafe code.
- *
- * The compiler implementation consuming this grammar MUST compile with:
- *
- *     Rust 1.97
- *     Rust 1.97.1
- *     Rust 2021
- *
- * and MUST remain safe Rust.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 38. COMPLETION CRITERIA
- * ============================================================================
- *
- * This file is complete when:
- *
- * [x] Existing filename is retained.
- *
- * [x] Reflection owns one canonical public core production.
- *
- * [x] `reflectionExpressionCore` is the integration boundary.
- *
- * [x] No duplicate reflection-expression authority exists here.
- *
- * [x] Reflection does not recursively import the complete expression grammar.
- *
- * [x] Qualified names use canonical `qualifiedName`.
- *
- * [x] Types use canonical `typeExpression`.
- *
- * [x] Reflection selectors remain extensible identifiers.
- *
- * [x] Projection chains are structurally unbounded.
- *
- * [x] No finite hardware/resource limits are encoded.
- *
- * [x] No quantum gate enumeration is encoded.
- *
- * [x] No physical hardware mapping is encoded.
- *
- * [x] No quantum IR is created.
- *
- * [x] No classical IR is created.
- *
- * [x] No HDL IR is created.
- *
- * [x] No runtime execution is performed.
- *
- * [x] No host introspection is implicit.
- *
- * [x] Static reflection remains suitable for POCO-REAF.
- *
- * [x] Semantic reflection remains downstream.
- *
- * [x] AST integration is defined.
- *
- * [x] IR integration is defined.
- *
- * [x] Quantum integration is defined.
- *
- * [x] Hardware/resource integration is defined.
- *
- * [x] Compile-time integration is defined.
- *
- * [x] Macro integration is defined.
- *
- * [x] Generation integration is defined.
- *
- * [x] Specialization integration is defined.
- *
- * [x] Diagnostics responsibilities are defined.
- *
- * [x] Positive tests are defined.
- *
- * [x] Negative tests are defined.
- *
- * [x] Boundary tests are defined.
- *
- * [x] Scalability tests are defined.
- *
- * [x] Determinism requirements are defined.
- *
- * [x] Compatibility requirements are defined.
- *
- * [x] Rust 1.97 / 1.97.1 safe-Rust requirements are defined.
- *
- * ============================================================================
- * FINAL INVARIANT
- * ============================================================================
- *
- * Reflection answers:
- *
- *     "What does the canonical Zamani semantic model say about this source
- *      entity or type?"
- *
- * It does NOT implicitly answer:
- *
- *     "What hardware exists right now?"
- *
- *     "Which QPU is available?"
- *
- *     "How many GPUs exist?"
- *
- *     "What is the physical topology?"
- *
- *     "What device should be selected?"
- *
- * Those questions belong to capability, resource, compilation, deployment,
- * runtime, and HAL layers.
- *
- * ============================================================================
- */
+One important caveat: the repository's existing ANTLR tree and the hand-written Rust frontend are not yet perfectly unified. In particular, "src/parser.rs" is a separate recursive-descent/Pratt parser with its own AST vocabulary. Therefore this grammar can be production-ready as the ANTLR grammar component, but full repository production readiness still requires the parser-to-AST adapter to recognize "ReflectionExpr" consistently with this contract. That should be treated as the next integration task rather than contaminating "reflection.g4" with Rust-specific behavior.
