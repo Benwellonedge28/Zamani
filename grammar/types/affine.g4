@@ -12,16 +12,21 @@
  * Status:
  *     PRODUCTION
  *
+ * Language role:
+ *     Source-level affine type qualifier.
+ *
  * Compiler baseline:
- *     Rust 1.97 / Rust 1.97.1
+ *     Rust 1.97+
  *
  * Rust edition:
  *     2021
  *
  * Safety:
- *     This grammar contains no embedded executable code.
- *     The Zamani implementation uses safe Rust only.
- *     No unsafe Rust is required or permitted.
+ *     Declarative ANTLR grammar only.
+ *     No embedded Rust.
+ *     No semantic predicates.
+ *     No parser actions.
+ *     No unsafe code.
  *
  * ============================================================================
  * FEATURE CONTRACT
@@ -30,247 +35,213 @@
  * PURPOSE
  * -------
  *
- * This file defines the source-level `affine` type qualifier.
- *
- * It intentionally defines ONLY the qualifier marker:
+ * This file owns exactly one source-level type qualifier:
  *
  *     affine
  *
- * The complete type expression is composed by:
+ * It recognizes the lexical token:
+ *
+ *     AFFINE
+ *
+ * and exports the parser rule:
+ *
+ *     affineQualifier
+ *
+ * The operand type is deliberately NOT parsed here.
+ *
+ * Complete type composition is owned by:
  *
  *     grammar/types/types.g4
  *
- * For example:
+ * The canonical source-level structure is therefore:
  *
  *     affine T
- *     affine Resource<T>
- *     affine Qubit
- *     affine Vec<T>
- *     affine Tensor<T, Shape>
  *
- * are composed by the canonical type-expression grammar.
- *
- * This file does not parse the operand type.
- *
+ *       affineQualifier
+ *       +
+ *       canonical typeExpression
  *
  * ============================================================================
  * ARCHITECTURAL PRINCIPLE
  * ============================================================================
  *
- * An affine type expresses an ownership/usage property:
+ * Affine typing is an ownership/usage discipline.
  *
- *     Affine(T)
+ * At the semantic level, an affine value is normally permitted to have:
  *
- * The semantic meaning is generally:
+ *     zero or one consuming use
  *
- *     a value may be consumed zero or one time.
+ * The exact rules for:
  *
- * The exact ownership rules are semantic rules and are NOT implemented by
- * this grammar.
+ *     ownership
+ *     moves
+ *     copies
+ *     drops
+ *     borrowing
+ *     aliasing
+ *     lifetime
+ *     destruction
+ *     resource consumption
  *
- * The grammar is therefore responsible only for recognizing:
+ * belong to semantic analysis.
  *
- *     affine
- *
- * and exposing that construct to the canonical type composition grammar.
- *
+ * This grammar records only the source-level qualifier.
  *
  * ============================================================================
- * OWNERSHIP
+ * SINGLE-OWNER RULE
  * ============================================================================
  *
- * THIS FILE OWNS
- * --------------
+ * THIS FILE OWNS:
  *
- * This file owns:
+ *     affineQualifier
  *
- *     - affineQualifier;
- *     - the parser-level representation of the `affine` qualifier;
- *     - the modular grammar boundary for affine qualification;
- *     - consumption of the canonical AFFINE lexer token.
+ * THIS FILE DOES NOT OWN:
  *
- *
- * THIS FILE DOES NOT OWN
- * ---------------------
- *
- * This file does NOT own:
- *
- *     - the complete typeExpression;
- *     - typeCore;
- *     - typePrimary;
- *     - typePostfix;
- *     - identifiers;
- *     - qualified names;
- *     - generic arguments;
- *     - tuples;
- *     - arrays;
- *     - slices;
- *     - function types;
- *     - references;
- *     - pointers;
- *     - dependent types;
- *     - quantum types;
- *     - HDL types;
- *     - resource types;
- *     - capability types;
- *     - lifetime syntax;
- *     - borrowing;
- *     - ownership analysis;
- *     - move analysis;
- *     - copy analysis;
- *     - drop analysis;
- *     - linear-use analysis;
- *     - allocation;
- *     - deallocation;
- *     - resource discovery;
- *     - capability discovery;
- *     - hardware discovery;
- *     - target selection;
- *     - placement;
- *     - routing;
- *     - scheduling;
- *     - calibration;
- *     - optimization;
- *     - QEC;
- *     - ZQN;
- *     - HAL;
- *     - ABI layout;
- *     - runtime representation;
- *     - execution.
- *
+ *     typeExpression
+ *     typeCore
+ *     typePrefix
+ *     typePostfix
+ *     named types
+ *     qualified names
+ *     generic arguments
+ *     tuples
+ *     arrays
+ *     slices
+ *     functions
+ *     references
+ *     pointers
+ *     dependent types
+ *     associated types
+ *     type classes
+ *     linear types
+ *     quantum types
+ *     classical types
+ *     HDL types
+ *     hardware types
+ *     resource types
+ *     capability types
+ *     temporal types
+ *     effects
+ *     contracts
+ *     policies
+ *     provenance
+ *     ownership checking
+ *     borrow checking
+ *     lifetime checking
+ *     move checking
+ *     copy checking
+ *     resource checking
+ *     capability negotiation
+ *     target selection
+ *     optimization
+ *     lowering
+ *     routing
+ *     scheduling
+ *     resilience
+ *     QEC
+ *     ZQN
+ *     HAL
+ *     runtime execution
  *
  * ============================================================================
  * DEPENDENCY CONTRACT
  * ============================================================================
  *
- * DEPENDS_ON
- * ----------
+ * DIRECT DEPENDENCY:
  *
  *     grammar/antlr/ZamaniLexer.g4
- *     grammar/lexer/tokens.g4
- *     grammar/lexer/keywords.g4
  *
- * The exact lexical composition is owned by the canonical lexer.
+ * Parser grammars consume the public token vocabulary exposed by
+ * ZamaniLexer.
  *
+ * This file MUST NOT define lexer rules.
  *
- * EXPORTS
- * -------
- *
- *     affineQualifier
- *
- *
- * CONSUMED_BY
- * ----------
- *
- *     grammar/types/types.g4
- *
- *
- * AST_OWNER
- * ---------
- *
- *     src/ast/mod.rs
- *
- * The canonical source representation is:
- *
- *     TypeExpr::Affine
- *
- *
- * SEMANTIC_OWNER
- * -------------
- *
- * The semantic/type-analysis subsystem owns:
- *
- *     - affine validity;
- *     - ownership;
- *     - use counts;
- *     - move semantics;
- *     - copy semantics;
- *     - drop semantics;
- *     - interaction with references;
- *     - interaction with linear types;
- *     - interaction with generic constraints;
- *     - interaction with resource semantics.
- *
- *
- * IR_OWNER
- * --------
- *
- * The grammar does not own an IR.
- *
- * After semantic analysis, the type is represented by the repository's
- * canonical semantic/IR pipeline.
- *
- * Quantum semantics continue through:
- *
- *     quantum::ir
- *
- * when applicable.
- *
- *
- * TEST_OWNER
- * ----------
- *
- *     grammar/tests/
- *
- * with affine-specific parser/type conformance tests.
- *
- *
- * SPEC_OWNER
- * ----------
- *
- *     grammar/specification/
- *     grammar/spec/
- *
- *
- * ============================================================================
- * LEXER CONTRACT
- * ============================================================================
- *
- * The canonical lexical token is:
- *
- *     AFFINE
- *
- * whose source spelling is:
+ * The lexical spelling:
  *
  *     affine
  *
- * This parser grammar MUST NOT define:
+ * and the token:
  *
  *     AFFINE
  *
- * or any other lexer rule.
+ * belong to the canonical lexer hierarchy.
  *
- * The lexical authority remains:
+ * INDIRECT LEXICAL OWNERS:
  *
- *     grammar/antlr/ZamaniLexer.g4
+ *     grammar/lexer/tokens.g4
+ *     grammar/lexer/keywords.g4
+ *     grammar/lexer/lexer.g4
  *
- * with the repository's lexical composition under:
- *
- *     grammar/lexer/
- *
+ * This file must not import those lexical component grammars directly.
  *
  * ============================================================================
- * PUBLIC RULE
+ * ANTLR COMPOSITION CONTRACT
  * ============================================================================
  *
- * `affineQualifier` is the only public rule exported by this feature grammar.
+ * This is a parser grammar.
  *
- * It represents the qualifier marker only.
+ * It therefore uses:
  *
- * Complete source syntax is composed elsewhere:
+ *     tokenVocab = ZamaniLexer;
  *
- *     affineQualifier + canonical type expression
- *
- * Example:
- *
- *     affine T
- *
- * becomes conceptually:
+ * It exports only:
  *
  *     affineQualifier
- *         +
- *     typeExpression
  *
+ * The canonical type orchestrator:
+ *
+ *     grammar/types/types.g4
+ *
+ * consumes this rule.
+ *
+ * Dependency direction:
+ *
+ *     ZamaniLexer
+ *          |
+ *          v
+ *     AffineTypes
+ *          |
+ *          | affineQualifier
+ *          v
+ *     Type
+ *          |
+ *          | typeExpression
+ *          v
+ *     frontend AST
+ *
+ * This file MUST NOT import the canonical type grammar.
+ *
+ * In particular, this file MUST NOT contain:
+ *
+ *     import Type;
+ *
+ * or any equivalent dependency on the complete type-expression grammar.
+ *
+ * This prevents:
+ *
+ *     Type -> AffineTypes -> Type
+ *
+ * circularity.
+ *
+ * ============================================================================
+ * PUBLIC GRAMMAR API
+ * ============================================================================
+ *
+ * Public rule:
+ *
+ *     affineQualifier
+ *
+ * Input:
+ *
+ *     AFFINE
+ *
+ * Output:
+ *
+ *     one affine qualifier node in the parser tree
+ *
+ * The rule consumes exactly one AFFINE token.
+ *
+ * It deliberately does not consume the following type.
  *
  * ============================================================================
  * GRAMMAR
@@ -289,33 +260,31 @@ options {
  * AFFINE QUALIFIER
  * ============================================================================
  *
- * The qualifier intentionally stops after AFFINE.
+ * Source:
  *
- * DO NOT change this to:
+ *     affine
+ *
+ * Parser representation:
  *
  *     affineQualifier
- *         : AFFINE typeExpression
- *         ;
  *
- * because `typeExpression` belongs to grammar/types/types.g4.
+ * The enclosing canonical type grammar supplies the type being qualified.
  *
- * Such a rule would invert the dependency:
+ * Examples at the composed-language level include:
  *
- *     types.g4
- *         -> affine.g4
- *             -> types.g4
+ *     affine T
+ *     affine User
+ *     affine module::User
+ *     affine Vec<T>
+ *     affine Result<T, E>
+ *     affine Tensor<T, Shape>
+ *     affine Qubit
+ *     affine Resource<T>
  *
- * and would create an invalid/circular modular grammar architecture.
+ * This rule intentionally does not know any of those type constructors.
  *
- * The correct direction is:
- *
- *     affine.g4
- *         -> affineQualifier
- *
- *     types.g4
- *         -> affineQualifier
- *         -> typeExpression
- *
+ * Therefore adding a future type constructor does not require modifying
+ * this file.
  * ============================================================================
  */
 
@@ -326,221 +295,249 @@ affineQualifier
 
 /*
  * ============================================================================
- * SEMANTIC CONTRACT
+ * AST CONTRACT
  * ============================================================================
  *
- * The parser recognizes:
+ * This grammar does not construct Rust AST values directly.
  *
- *     affine
+ * The canonical frontend AST owner is:
  *
- * Semantic analysis interprets:
+ *     src/frontend/ast/node/types/type_expr.rs
  *
- *     affine T
- *
- * as an affine-qualified type.
- *
- * The canonical AST destination is:
+ * The canonical affine representation is:
  *
  *     TypeExpr::Affine(inner)
  *
- * where `inner` is produced by the canonical type grammar.
+ * The parser/frontend integration is responsible for combining:
  *
- * This grammar itself MUST NOT:
+ *     affineQualifier
  *
- *     - count variable uses;
- *     - perform ownership analysis;
- *     - determine whether a value is copied;
- *     - determine whether a value is moved;
- *     - determine whether a value is dropped;
- *     - validate lifetime relationships;
- *     - inspect generic constraints;
- *     - inspect capabilities;
- *     - inspect resources;
- *     - inspect hardware.
+ * with:
  *
+ *     typeExpression
+ *
+ * and constructing the equivalent:
+ *
+ *     TypeExpr::Affine(...)
+ *
+ * structure.
+ *
+ * No second affine AST node is permitted.
+ *
+ * This file MUST NOT introduce:
+ *
+ *     AffineTypeExpr
+ *     AffineType
+ *     OwnershipTypeExpr
+ *     ResourceAffineType
+ *     QuantumAffineType
+ *
+ * as competing universal AST representations.
  *
  * ============================================================================
- * AFFINE SEMANTICS
+ * SEMANTIC CONTRACT
  * ============================================================================
  *
- * The semantic distinction is:
+ * Parsing:
  *
- *     unrestricted
- *         zero or more uses as permitted by the type system
+ *     affine T
  *
- *     affine
- *         zero or one consuming use
+ * establishes only that the source requests affine qualification.
+ *
+ * Semantic analysis determines:
+ *
+ *     - whether T is a valid affine-qualified type;
+ *     - whether affine qualification is permitted for T;
+ *     - how ownership is tracked;
+ *     - how many consuming uses are permitted;
+ *     - whether copying is legal;
+ *     - whether moving is legal;
+ *     - whether borrowing is legal;
+ *     - whether aliases are legal;
+ *     - whether destruction consumes the value;
+ *     - whether generic constraints permit the qualification;
+ *     - whether nested ownership qualifiers are valid;
+ *     - whether resource semantics impose additional requirements.
+ *
+ * None of those checks belong in this grammar.
+ *
+ * ============================================================================
+ * LINEAR TYPE INTEGRATION
+ * ============================================================================
+ *
+ * The related source-level qualifier:
+ *
+ *     linear
+ *
+ * is owned by:
+ *
+ *     grammar/types/linear.g4
+ *
+ * That file exports:
+ *
+ *     linearQualifier
+ *
+ * This file exports:
+ *
+ *     affineQualifier
+ *
+ * The canonical type orchestrator combines both qualifiers.
+ *
+ * Conceptually:
+ *
+ *     typeExpression
+ *         : typePrefix* typeCore typePostfix*
+ *         ;
+ *
+ *     typePrefix
+ *         : linearTypePrefix
+ *         | affineTypePrefix
+ *         | ...
+ *         ;
+ *
+ *     linearTypePrefix
+ *         : linearQualifier
+ *         ;
+ *
+ *     affineTypePrefix
+ *         : affineQualifier
+ *         ;
+ *
+ * Linear and affine semantics must remain distinct downstream:
  *
  *     linear
  *         exactly one required consuming use
  *
- * These are semantic distinctions.
+ *     affine
+ *         zero or one consuming use
  *
- * The grammar only records the source qualifier.
- *
+ * These descriptions are semantic contracts, not parser enforcement.
  *
  * ============================================================================
- * LINEAR INTEGRATION
+ * QUALIFIER COMPOSITION
  * ============================================================================
  *
- * `grammar/types/linear.g4` owns:
+ * This file MUST NOT parse:
  *
- *     linearQualifier
+ *     affine typeExpression
  *
- * This file owns:
+ * directly.
  *
- *     affineQualifier
+ * Doing so would make this component responsible for the complete type
+ * expression and create a dependency on its own parent.
  *
- * The canonical composition owner:
+ * Correct composition is performed by:
  *
  *     grammar/types/types.g4
  *
- * combines them.
+ * Example:
  *
- * The intended architecture is:
+ *     affine Vec<T>
  *
- *     LinearTypes
- *         |
- *         +--> linearQualifier
- *                         \
- *                          \
- *                           +--> types.g4
- *                          /
- *                         /
- *     AffineTypes
- *         |
- *         +--> affineQualifier
+ * is structurally composed as:
  *
- * This prevents either qualifier grammar from depending on the complete type
- * grammar.
+ *     affineQualifier
+ *     typeCore
  *
+ * where the canonical type grammar determines how Vec<T> is represented.
  *
  * ============================================================================
- * TYPE COMPOSITION
+ * GENERIC TYPE INTEGRATION
  * ============================================================================
  *
- * The complete form:
+ * Affine qualification is independent of generic syntax.
  *
- *     affine T
+ * Consequently the following forms can be composed whenever the canonical
+ * type grammar accepts their underlying type:
  *
- * is owned compositionally by `types.g4`.
- *
- * Examples include:
- *
- *     affine T
- *     affine User
- *     affine module::User
  *     affine Vec<T>
  *     affine Map<K, V>
  *     affine Result<T, E>
- *     affine (T, U)
- *     affine [T]
- *     affine [T; N]
- *     affine fn(T) -> U
- *     affine &T
- *     affine &mut T
- *     affine Qubit
- *     affine Resource<Qubit>
+ *     affine Model<T>
+ *     affine Dataset<T>
  *     affine Tensor<T, Shape>
+ *     affine Resource<R>
  *
- * This file deliberately does not enumerate any of those types.
+ * This grammar does not enumerate generic constructors.
  *
- * Therefore newly introduced types automatically participate in affine
- * qualification as long as the canonical type grammar accepts them.
- *
- *
- * ============================================================================
- * GENERIC INTEGRATION
- * ============================================================================
- *
- * Generic syntax belongs to:
- *
- *     grammar/types/types.g4
- *
- * This grammar does not know or care whether the inner type is:
- *
- *     Vec<T>
- *     Map<K,V>
- *     Tensor<T, Shape>
- *     Resource<R>
- *     Capability<C>
- *
- * or a future type constructor.
- *
- * This is required for long-term extensibility.
- *
+ * Generic ownership belongs to the canonical generic/type machinery.
  *
  * ============================================================================
- * DEPENDENT / SYMBOLIC TYPE INTEGRATION
+ * SYMBOLIC / DEPENDENT TYPE INTEGRATION
  * ============================================================================
  *
- * Affine qualification must work with symbolic type parameters and symbolic
- * dimensions.
+ * Affine qualification must remain compatible with symbolic type parameters
+ * and value parameters.
  *
  * Examples:
  *
  *     affine Vector<T, N>
- *     affine Matrix<T, Rows, Cols>
+ *     affine Matrix<T, Rows, Columns>
  *     affine Tensor<T, Shape>
- *
- * `N`, `Rows`, `Cols`, and `Shape` remain semantic values/parameters.
  *
  * This grammar does not:
  *
- *     - evaluate them;
- *     - convert them to machine integers;
- *     - impose ranges;
- *     - impose maximum dimensions;
- *     - select storage.
+ *     - evaluate N;
+ *     - evaluate Rows;
+ *     - evaluate Columns;
+ *     - evaluate Shape;
+ *     - convert symbolic values to host integers;
+ *     - impose bounds;
+ *     - impose machine limits;
+ *     - select storage;
+ *     - select hardware.
  *
+ * Those responsibilities belong downstream.
  *
  * ============================================================================
- * REFERENCE INTEGRATION
+ * REFERENCE AND BORROWING INTEGRATION
  * ============================================================================
  *
- * Reference syntax belongs to the canonical type grammar and its modular
- * reference component.
+ * Reference syntax is owned by the canonical reference grammar.
  *
- * Examples that may be accepted by the composed type grammar include:
+ * This file must not define:
+ *
+ *     referenceType
+ *     referencePrefix
+ *     lifetimeAnnotation
+ *     borrowType
+ *
+ * The composed type system may therefore encounter source structures such as:
  *
  *     affine &T
  *     affine &mut T
- *     affine &'a T
- *     affine &'a mut T
  *
- * Whether a particular combination is semantically valid belongs to ownership,
- * borrowing, and lifetime analysis.
+ * where supported by the canonical type grammar.
  *
- * This grammar MUST NOT duplicate:
- *
- *     referenceType
- *     lifetimeAnnotation
- *
+ * Whether such combinations are semantically valid is determined by the
+ * ownership, borrowing, and lifetime systems.
  *
  * ============================================================================
  * POINTER INTEGRATION
  * ============================================================================
  *
- * Pointer syntax belongs to the canonical pointer grammar.
+ * Pointer syntax is owned by the pointer type grammar.
  *
  * This file does not define:
  *
+ *     pointerType
  *     *T
  *     *mut T
+ *     *const T
  *
- * nor does it determine pointer representation.
+ * If an affine-qualified pointer is legal, that legality is determined by
+ * semantic analysis after normal type composition.
  *
- * If an affine-qualified pointer type is permitted by the semantic type system,
- * it is composed by the canonical type grammar.
- *
+ * No pointer representation is implied by this grammar.
  *
  * ============================================================================
  * QUANTUM INTEGRATION
  * ============================================================================
  *
- * Affine qualification may be useful for quantum resource ownership.
+ * Affine ownership can be useful for semantic management of quantum values
+ * and resources.
  *
- * Examples:
+ * Examples of source-level types that may be qualified include:
  *
  *     affine Qubit
  *     affine LogicalQubit
@@ -548,161 +545,190 @@ affineQualifier
  *     affine QuantumState<T>
  *     affine QuantumResource<R>
  *
- * This grammar does not assign physical meaning to those names.
+ * These names are not defined by this file.
  *
- * It MUST NOT:
+ * The grammar only recognizes:
  *
- *     - allocate physical qubits;
- *     - select QPUs;
- *     - inspect coupling maps;
- *     - select physical qubit identifiers;
- *     - route quantum operations;
- *     - schedule circuits;
- *     - model calibration;
- *     - perform QEC;
- *     - inspect device topology.
+ *     affine
  *
- * If the qualified type participates in quantum computation, downstream
- * semantic lowering continues through:
+ * The quantum subsystem remains responsible for semantic interpretation.
  *
+ * If the resulting type participates in quantum computation, the downstream
+ * quantum pipeline remains:
+ *
+ *     source AST
+ *         |
+ *         v
+ *     semantic quantum model
+ *         |
+ *         v
  *     quantum::ir
+ *         |
+ *         v
+ *     optimization
+ *         |
+ *         v
+ *     decomposition
+ *         |
+ *         v
+ *     routing
+ *         |
+ *         v
+ *     scheduling
+ *         |
+ *         v
+ *     resilience / QEC
+ *         |
+ *         v
+ *     ZQN
+ *         |
+ *         v
+ *     HAL
  *
- * No affine-specific quantum IR is created.
+ * This file MUST NOT:
  *
+ *     - allocate qubits;
+ *     - identify physical qubits;
+ *     - select a QPU;
+ *     - inspect coupling topology;
+ *     - perform routing;
+ *     - perform scheduling;
+ *     - choose calibration;
+ *     - choose QEC;
+ *     - construct pulses.
  *
  * ============================================================================
- * RESOURCE / CAPABILITY INTEGRATION
+ * CLASSICAL / AI / DATA INTEGRATION
  * ============================================================================
  *
- * Affine qualification may apply to resource-oriented semantic types.
+ * Affine qualification is domain-neutral.
  *
- * For example:
+ * It may therefore qualify ordinary or domain-defined types used for:
  *
- *     affine Resource<T>
- *     affine Capability<C>
+ *     classical computation;
+ *     numerical computation;
+ *     scientific computation;
+ *     data processing;
+ *     models;
+ *     datasets;
+ *     reasoning state;
+ *     evidence;
+ *     probabilistic values;
+ *     learned state;
+ *     agent state.
  *
- * remains source-level type information.
+ * No domain-specific type catalogue belongs here.
  *
- * It does NOT mean:
- *
- *     allocate resource;
- *     reserve hardware;
- *     claim a device;
- *     select a processor;
- *     select a memory bank.
- *
- * Resource realization remains downstream:
- *
- *     type semantics
- *         |
- *         v
- *     resource analysis
- *         |
- *         v
- *     capability negotiation
- *         |
- *         v
- *     execution planning
- *         |
- *         v
- *     target realization
- *
+ * Domain semantics remain downstream of the common type system.
  *
  * ============================================================================
  * HDL / HARDWARE INTEGRATION
  * ============================================================================
  *
- * Affine qualification is target-neutral.
+ * Affine qualification may be applied to source-level types used by HDL or
+ * hardware/software co-design where the semantic type system permits it.
  *
- * It does not identify:
+ * This grammar does not encode:
  *
- *     CPU
- *     GPU
- *     FPGA
- *     ASIC
- *     QPU
- *     accelerator
- *     memory bank
- *     register
- *     physical signal
- *     physical device
+ *     signal widths;
+ *     register widths;
+ *     memory capacities;
+ *     physical addresses;
+ *     device identifiers;
+ *     FPGA resources;
+ *     ASIC resources;
+ *     placement;
+ *     timing closure;
+ *     routing;
+ *     synthesis decisions.
  *
- * HDL and hardware semantic layers determine the actual realization.
+ * Those responsibilities belong to:
  *
+ *     grammar/hdl/
+ *     grammar/hardware/
+ *     grammar/resources/
  *
- * ============================================================================
- * EFFECT CONTRACT
- * ============================================================================
- *
- * Merely parsing:
- *
- *     affine
- *
- * produces no runtime effect.
- *
- * The affine qualifier may influence semantic analysis of operations involving
- * the resulting type.
- *
- * Any resulting effects are owned by the canonical effect system, not this
- * grammar.
- *
- * This grammar must never execute:
- *
- *     allocation;
- *     mutation;
- *     learning;
- *     adaptation;
- *     I/O;
- *     networking;
- *     native calls;
- *     foreign calls;
- *     hardware operations.
- *
- *
- * ============================================================================
- * CAPABILITY CONTRACT
- * ============================================================================
- *
- * The affine qualifier requires no capability merely to parse.
- *
- * Semantic consumers may later require capabilities associated with:
- *
- *     resource ownership;
- *     quantum execution;
- *     hardware access;
- *     foreign resources;
- *     privileged operations.
- *
- * Capability resolution belongs to the resource/capability subsystem.
- *
+ * and their downstream semantic/compiler systems.
  *
  * ============================================================================
  * RESOURCE CONTRACT
  * ============================================================================
  *
- * This grammar introduces no resource requirement.
+ * This grammar introduces NO resource requirement.
  *
- * In particular, it does not encode:
+ * In particular, it does not specify:
  *
- *     memory size;
- *     processor count;
- *     thread count;
- *     qubit count;
- *     GPU count;
- *     FPGA count;
- *     node count;
- *     device count;
- *     tensor rank;
- *     register width.
+ *     memory
+ *     CPU count
+ *     GPU count
+ *     FPGA count
+ *     ASIC count
+ *     QPU count
+ *     qubit count
+ *     node count
+ *     thread count
+ *     device count
+ *     tensor rank
+ *     register width
+ *     network size
  *
- * Resource requirements are expressed by the universal resource system.
+ * Affine ownership is a language-semantic property, not a hardware capacity.
  *
+ * A semantic type may later participate in resource analysis, but that
+ * analysis is separate from parsing.
  *
  * ============================================================================
- * CONTRACT / POLICY / PROVENANCE
+ * CAPABILITY CONTRACT
  * ============================================================================
  *
- * Affine qualification may participate in:
+ * Parsing an affine qualifier requires no target capability.
+ *
+ * A downstream semantic operation involving an affine-qualified resource may
+ * require capabilities.
+ *
+ * Capability resolution belongs to the resource/capability subsystem.
+ *
+ * This grammar must never inspect:
+ *
+ *     CPU availability
+ *     GPU availability
+ *     FPGA availability
+ *     QPU availability
+ *     network availability
+ *     hardware generation
+ *     vendor identity
+ *     physical topology
+ *
+ * ============================================================================
+ * EFFECT CONTRACT
+ * ============================================================================
+ *
+ * The affine qualifier itself has no runtime effect.
+ *
+ * It is declarative type information.
+ *
+ * Operations performed on affine-qualified values may produce effects, but
+ * those effects belong to the canonical effect system.
+ *
+ * This grammar therefore does not declare or execute:
+ *
+ *     allocation
+ *     deallocation
+ *     mutation
+ *     I/O
+ *     networking
+ *     native execution
+ *     foreign execution
+ *     measurement
+ *     learning
+ *     adaptation
+ *     reflection
+ *
+ * ============================================================================
+ * CONTRACT / POLICY INTEGRATION
+ * ============================================================================
+ *
+ * Affine-qualified types may participate in:
  *
  *     requires
  *     ensures
@@ -711,29 +737,44 @@ affineQualifier
  *     guarantee
  *     property
  *
- * but those constructs are owned by the contract/validation subsystem.
+ * and policy-controlled ownership/resource decisions.
  *
- * Policies affecting ownership or resource use are consumed semantically.
+ * The corresponding grammar owners remain:
  *
- * Provenance for:
+ *     grammar/validation/
+ *     grammar/policies/
  *
- *     source qualifier
- *     inferred ownership
- *     type transformation
- *     optimization
+ * This file does not duplicate those grammars.
  *
- * belongs to the compiler provenance subsystem.
+ * Semantic analysis may use affine information when checking contracts and
+ * policies.
  *
- * This grammar preserves the parser source context needed by those systems.
+ * ============================================================================
+ * PROVENANCE CONTRACT
+ * ============================================================================
  *
+ * The parser must preserve the source location of the AFFINE token through
+ * the normal parser/frontend source-span mechanism.
+ *
+ * The enclosing AST builder must preserve sufficient source information for:
+ *
+ *     diagnostics
+ *     IDE/LSP
+ *     formatting
+ *     source maps
+ *     incremental compilation
+ *     provenance
+ *     compatibility analysis
+ *
+ * This grammar does not implement provenance storage.
  *
  * ============================================================================
  * POCO-REAF SCALABILITY CONTRACT
  * ============================================================================
  *
- * This file contains no machine or implementation ceiling.
+ * This grammar has no artificial capacity limit.
  *
- * It MUST NOT introduce limits such as:
+ * It MUST NOT define or depend on limits such as:
  *
  *     MAX_AFFINE_VALUES
  *     MAX_AFFINE_TYPES
@@ -752,145 +793,93 @@ affineQualifier
  *     MAX_NETWORK_SIZE
  *     MAX_DEVICE_COUNT
  *
- * It also MUST NOT indirectly enumerate a finite set of supported types.
+ * It also must not enumerate a closed collection of types that may be
+ * affine-qualified.
  *
- * The only fixed lexical concept here is:
+ * The scalable property is:
+ *
+ *     affine + canonical typeExpression
+ *
+ * Therefore a future type constructor can participate without changing this
+ * grammar, provided the canonical type system supports it.
+ *
+ * "Infinity" means that the language imposes no artificial physical-capacity
+ * ceiling through this grammar. Actual execution remains bounded by available
+ * computational resources and implementation limits.
+ *
+ * ============================================================================
+ * DETERMINISM CONTRACT
+ * ============================================================================
+ *
+ * Parsing:
  *
  *     affine
  *
- * Consequently:
+ * must be deterministic.
  *
- *     affine + any future canonical type
+ * Recognition depends only on:
  *
- * remains possible without modifying this grammar.
+ *     source tokens
+ *     lexical vocabulary
+ *     grammar
+ *     selected language/compatibility version
  *
- * This supports the POCO-REAF objective:
+ * It must not depend on:
  *
- *     Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
- *
- * subject to actual resource/capability feasibility.
- *
- * "Infinity" here means no artificial language-level machine ceiling.
- * It does not claim infinite physical hardware, compiler memory, storage,
- * execution time, or network capacity.
- *
- *
- * ============================================================================
- * DETERMINISM
- * ============================================================================
- *
- * The rule:
- *
- *     affineQualifier : AFFINE ;
- *
- * is deterministic.
- *
- * Parsing depends only on:
- *
- *     - source tokens;
- *     - language version;
- *     - grammar definition;
- *     - lexical configuration.
- *
- * It MUST NOT depend on:
- *
- *     - hardware availability;
- *     - CPU count;
- *     - GPU availability;
- *     - QPU availability;
- *     - filesystem state;
- *     - network state;
- *     - wall-clock time;
- *     - random state;
- *     - scheduler state;
- *     - deployment topology.
- *
+ *     hardware
+ *     resources
+ *     target selection
+ *     network state
+ *     filesystem state
+ *     scheduler state
+ *     wall-clock time
+ *     random state
+ *     runtime state
  *
  * ============================================================================
  * SECURITY CONTRACT
  * ============================================================================
  *
- * This grammar is side-effect free.
+ * This grammar is declarative and side-effect free.
  *
  * It contains:
  *
- *     - no embedded Rust;
+ *     - no embedded executable code;
  *     - no semantic predicates;
- *     - no filesystem operations;
- *     - no network operations;
+ *     - no filesystem access;
+ *     - no network access;
  *     - no environment inspection;
  *     - no hardware access;
  *     - no command execution;
  *     - no dynamic evaluation.
  *
- * Hostile-input protection belongs to explicit parser/compiler resource
- * policies and MUST NOT change the language meaning of `affine`.
- *
- *
- * ============================================================================
- * SOURCE-PRESERVATION CONTRACT
- * ============================================================================
- *
- * The parser/frontend must preserve sufficient source information for:
- *
- *     - diagnostics;
- *     - IDE/LSP;
- *     - formatting;
- *     - source maps;
- *     - provenance;
- *     - incremental compilation;
- *     - compatibility analysis.
- *
- * The AFFINE token's source span belongs to the parser context.
- *
- * The complete:
- *
- *     affine T
- *
- * source span is constructed by the enclosing type-expression AST builder.
- *
+ * Parser resource limits used to defend against hostile input are compiler
+ * configuration concerns and must not change the meaning of affine typing.
  *
  * ============================================================================
- * DIAGNOSTIC CONTRACT
+ * ERROR CONTRACT
  * ============================================================================
  *
- * Syntax-level examples:
+ * Syntax errors are limited to malformed source at the lexical/parser level.
  *
- *     affine
+ * Examples of parser-level errors include:
  *
- * may be incomplete when used where a complete type expression is required.
+ *     malformed AFFINE token stream
+ *     invalid token sequence around the qualifier
  *
- * The enclosing `types.g4` grammar reports the missing operand.
+ * The following are NOT parser errors produced by this file:
  *
- * Examples such as:
+ *     unknown type
+ *     invalid ownership use
+ *     duplicate consumption
+ *     illegal copy
+ *     invalid borrow
+ *     unsatisfied type constraint
+ *     unavailable capability
+ *     insufficient resource
+ *     unsupported hardware
  *
- *     affine 123
- *
- * are rejected by the canonical type grammar because the operand does not
- * form a valid type expression.
- *
- * Examples such as:
- *
- *     affine affine T
- *
- * are parsed according to the canonical qualifier-composition rules.
- * Whether duplicate affine qualification is legal is a semantic/type-system
- * decision rather than an affine grammar decision.
- *
- * Examples such as:
- *
- *     affine linear T
- *
- * and:
- *
- *     linear affine T
- *
- * are likewise governed by the canonical qualifier composition and semantic
- * ownership rules.
- *
- * This prevents independent qualifier grammars from inventing incompatible
- * ordering semantics.
- *
+ * Those are semantic/compiler diagnostics.
  *
  * ============================================================================
  * COMPATIBILITY CONTRACT
@@ -904,406 +893,192 @@ affineQualifier
  *
  *     AFFINE
  *
- * Stable semantic destination:
- *
- *     TypeExpr::Affine
- *
- * This grammar therefore preserves the existing language spelling and AST
- * concept while correcting modular ownership.
- *
- * No source-level migration is required merely because the grammar becomes
- * modular.
- *
- *
- * ============================================================================
- * REQUIRED INTEGRATION WITH `grammar/types/types.g4`
- * ============================================================================
- *
- * The canonical type grammar currently owns:
- *
- *     typeExpression
- *     typeQualifier
- *     typeCore
- *     referenceType
- *     lifetimeAnnotation
- *     and the other type composition rules.
- *
- * Its current direct qualifier form is conceptually:
- *
- *     typeQualifier
- *         : LINEAR
- *         | AFFINE
- *         ;
- *
- * After installing this file, that direct ownership should be changed to:
- *
- *     typeQualifier
- *         : linearQualifier
- *         | affineQualifier
- *         ;
- *
- * `types.g4` must import the modular qualifier grammars using its normal ANTLR
- * import mechanism:
- *
- *     import LinearTypes, AffineTypes;
- *
- * or the equivalent ordering already established by the repository's generated
- * grammar layout.
- *
- * IMPORTANT:
- *
- * The exact import declaration must be made in `types.g4`, not in this file.
- *
- * This file MUST NOT import `Types`.
- *
- *
- * ============================================================================
- * REQUIRED INTEGRATION WITH `grammar/types/linear.g4`
- * ============================================================================
- *
- * `linear.g4` owns:
- *
- *     linearQualifier
- *
- * This file owns:
+ * Stable parser rule:
  *
  *     affineQualifier
  *
- * Neither qualifier grammar depends on the other.
+ * The rule must remain source-compatible unless a deliberate language-version
+ * migration changes the normative type syntax.
  *
- * Both depend only on:
+ * Compatibility handling belongs to:
  *
- *     ZamaniLexer
+ *     grammar/compatibility/
  *
- * The canonical type composition grammar combines them.
- *
- *
- * ============================================================================
- * LEGACY GRAMMAR INTEGRATION
- * ============================================================================
- *
- * Any older grammar that defines:
- *
- *     affineType
- *
- * as:
- *
- *     AFFINE typeExpression
- *
- * must not remain in the production ANTLR import graph.
- *
- * In particular, a legacy reference such as:
- *
- *     grammar/types/reference-types.g4
- *
- * or any historical type grammar must not create a competing affine qualifier
- * or a second complete type-expression composition path.
- *
- * Legacy material should be:
- *
- *     deprecated;
- *     excluded from the production import graph;
- *     documented for migration;
- *
- * rather than silently acting as a second grammar authority.
- *
- *
- * ============================================================================
- * AST INTEGRATION
- * ============================================================================
- *
- * The existing canonical AST contains:
- *
- *     TypeExpr::Affine(Box<TypeExpr>)
- *
- * Therefore this grammar does NOT introduce:
- *
- *     AffineType
- *     AffineTypeExpr
- *     AffineIR
- *     AffineNode
- *
- * as parallel representations.
- *
- * The frontend transformation is conceptually:
- *
- *     affineQualifier
- *          +
- *     typeExpression
- *          |
- *          v
- *     TypeExpr::Affine(inner)
- *
- * The exact Rust AST construction remains the responsibility of the parser/
- * frontend implementation.
- *
- *
- * ============================================================================
- * IR INTEGRATION
- * ============================================================================
- *
- * No IR is produced by this grammar.
- *
- * The pipeline remains:
- *
- *     source
- *       |
- *       v
- *     lexer
- *       |
- *       v
- *     parser
- *       |
- *       v
- *     TypeExpr::Affine
- *       |
- *       v
- *     structural validation
- *       |
- *       v
- *     semantic type analysis
- *       |
- *       v
- *     ownership/resource/effect analysis
- *       |
- *       v
- *     canonical semantic IR
- *       |
- *       +----------------------+
- *       |                      |
- *       v                      v
- *   classical              quantum::ir
- *       |                      |
- *       +----------+-----------+
- *                  |
- *                  v
- *             optimization
- *                  |
- *               lowering
- *                  |
- *           routing/scheduling
- *                  |
- *          resilience/QEC
- *                  |
- *                 ZQN
- *                  |
- *                 HAL
- *                  |
- *               target
- *
+ * This file must not implement version-dependent semantic behavior.
  *
  * ============================================================================
  * TEST CONTRACT
  * ============================================================================
  *
- * POSITIVE TESTS
- * --------------
+ * Tests owned by the affine feature should verify the parser boundary.
  *
- * These should be tested through the canonical type-expression entry point:
+ * POSITIVE:
  *
  *     affine T
  *     affine User
  *     affine module::User
  *     affine Vec<T>
- *     affine Map<K, V>
  *     affine Result<T, E>
- *     affine Qubit
- *     affine Resource<Qubit>
  *     affine Tensor<T, Shape>
- *     affine Vector<T, N>
- *     affine &T
- *     affine &mut T
- *     affine &'a T
- *     affine &'a mut T
- *
- *
- * NEGATIVE TESTS
- * --------------
- *
- * The following must not be accepted as complete affine types:
- *
- *     affine 123
- *     affine (
- *     affine <
- *     affine [
- *     affine &
- *     affine *
- *
- * The canonical type grammar owns the precise diagnostic.
- *
- *
- * BOUNDARY TESTS
- * --------------
- *
- * Test combinations with:
- *
- *     linear
- *     references
- *     pointers
- *     generics
- *     dependent types
- *     quantum types
- *     resource types
- *     function types
- *     tuple types
- *     optional types
- *     Result types
- *
- *
- * CROSS-DOMAIN TESTS
- * ------------------
- *
- * At minimum:
- *
  *     affine Qubit
- *     affine Resource<Qubit>
- *     affine Tensor<T, Shape>
- *     affine AcceleratorResource
- *     affine HardwareResource
+ *     affine Resource<T>
  *
- * Domain names remain ordinary canonical types unless separately reserved.
+ * The test harness should parse these through the canonical type-expression
+ * entry point rather than treating affineQualifier as a substitute for the
+ * complete type grammar.
  *
+ * NEGATIVE:
  *
- * SCALABILITY TESTS
- * -----------------
+ *     affine
  *
- * Tests must verify that the qualifier remains independent of:
+ * when a complete type is required by the enclosing type grammar.
  *
- *     - generic arity;
- *     - qualified-name depth;
- *     - symbolic dimension count;
- *     - type nesting;
- *     - resource count;
- *     - quantum resource count;
- *     - hardware scale.
+ * Additional semantic-negative cases belong to the semantic/type-checking
+ * test suite, not this parser grammar.
  *
- * No test may encode a language-level maximum.
+ * BOUNDARY:
  *
+ *     linear T
+ *     affine T
+ *     affine linear T
+ *     linear affine T
  *
- * DETERMINISM TESTS
- * -----------------
+ * where the canonical type system determines whether combinations are legal.
  *
- * Identical source and identical language configuration must produce identical
- * parser structure independent of:
+ * CROSS-DOMAIN:
  *
- *     - machine size;
- *     - target;
- *     - available accelerators;
- *     - network topology;
- *     - runtime state.
+ *     affine classical_type
+ *     affine quantum_type
+ *     affine hardware_type
+ *     affine Resource<T>
  *
+ * where those underlying types are available through the canonical type
+ * grammar.
  *
- * ============================================================================
- * HARD-CODING AUDIT
- * ============================================================================
+ * SCALABILITY:
  *
- * The only fixed language concept in this grammar is:
+ * Use symbolic and nested type constructions rather than tests containing
+ * fixed machine capacities.
  *
- *     AFFINE
+ * DETERMINISM:
  *
- * There are no:
- *
- *     - hardware identifiers;
- *     - resource counts;
- *     - processor counts;
- *     - qubit counts;
- *     - device counts;
- *     - memory capacities;
- *     - thread counts;
- *     - tensor-rank ceilings;
- *     - generic-arity ceilings;
- *     - type-depth ceilings;
- *     - implementation-specific numeric limits.
- *
- * No application-specific vocabulary is introduced.
- *
- * No vendor-specific type inventory is introduced.
- *
+ * Parsing the same token sequence repeatedly must produce equivalent parse
+ * structure and diagnostics.
  *
  * ============================================================================
- * ANTLR / RUST SAFETY
+ * INTEGRATION MATRIX
  * ============================================================================
  *
- * This is a pure ANTLR parser grammar.
+ * SPECIFICATION
+ *     grammar/spec/type-system.md
+ *     grammar/specification/types.md
  *
- * It contains no:
+ * LEXER
+ *     grammar/antlr/ZamaniLexer.g4
+ *     grammar/lexer/
  *
- *     @members
- *     embedded Rust
- *     semantic predicates
- *     target-language actions
- *     unsafe blocks
- *     unsafe functions
+ * GRAMMAR
+ *     grammar/types/affine.g4
+ *     grammar/types/types.g4
  *
- * Rust 1.97 / Rust 1.97.1 compatibility is therefore preserved at the frontend
- * implementation boundary.
+ * AST
+ *     src/frontend/ast/node/types/type_expr.rs
  *
+ * SEMANTICS
+ *     ownership / type-system semantic implementation
+ *
+ * CONSTRAINTS
+ *     grammar/types/constraints.g4
+ *     downstream constraint solver
+ *
+ * EFFECTS
+ *     grammar/effects/
+ *
+ * RESOURCES
+ *     grammar/resources/
+ *
+ * CAPABILITIES
+ *     grammar/resources/
+ *     downstream capability analysis
+ *
+ * CONTRACTS
+ *     grammar/validation/
+ *
+ * POLICIES
+ *     grammar/policies/
+ *
+ * PROVENANCE
+ *     compiler/frontend provenance infrastructure
+ *
+ * QUANTUM
+ *     semantic quantum type handling
+ *     quantum::ir
+ *
+ * HDL/HARDWARE
+ *     grammar/hdl/
+ *     grammar/hardware/
+ *
+ * COMPILATION
+ *     grammar/compile/
+ *
+ * EXECUTION
+ *     grammar/execution/
+ *
+ * TARGET REALIZATION
+ *     downstream compiler/backend/HAL systems
  *
  * ============================================================================
- * COMPLETION CRITERIA
+ * FILE COMPLETION CRITERIA
  * ============================================================================
  *
- * This file is DONE when:
+ * This file is DONE when all of the following are true:
  *
- *     [x] It is a parser grammar.
- *     [x] It uses tokenVocab = ZamaniLexer.
- *     [x] It consumes the canonical AFFINE token.
- *     [x] It defines affineQualifier.
- *     [x] It does not define lexer rules.
- *     [x] It does not consume typeExpression.
- *     [x] It does not create a circular dependency with types.g4.
- *     [x] Complete type composition remains owned by types.g4.
- *     [x] TypeExpr::Affine remains the canonical AST destination.
- *     [x] Linear and affine qualifiers have separate modular ownership.
- *     [x] Ownership semantics remain downstream.
- *     [x] Borrow/lifetime semantics remain downstream.
- *     [x] Resource semantics remain downstream.
- *     [x] Capability semantics remain downstream.
- *     [x] Effect semantics remain downstream.
- *     [x] Contract semantics remain downstream.
- *     [x] Policy semantics remain downstream.
- *     [x] Provenance remains downstream.
- *     [x] Quantum semantics remain target-independent.
- *     [x] quantum::ir remains the quantum IR boundary.
- *     [x] HDL semantics remain downstream.
- *     [x] No backend is selected.
- *     [x] No physical resource is selected.
- *     [x] No machine ceiling is encoded.
- *     [x] No application-specific keyword inventory is encoded.
- *     [x] No embedded executable code exists.
- *     [x] No unsafe Rust is required.
- *     [x] Rust 1.97 / Rust 1.97.1 compatibility is preserved.
+ * [x] It is a parser grammar.
  *
+ * [x] It uses the canonical ZamaniLexer vocabulary.
+ *
+ * [x] It defines no lexer rules.
+ *
+ * [x] It exports exactly affineQualifier.
+ *
+ * [x] affineQualifier consumes exactly AFFINE.
+ *
+ * [x] It does not define typeExpression.
+ *
+ * [x] It does not parse the operand type.
+ *
+ * [x] It does not create a competing AST.
+ *
+ * [x] It does not implement semantic ownership checking.
+ *
+ * [x] It does not implement resource negotiation.
+ *
+ * [x] It does not implement capability negotiation.
+ *
+ * [x] It does not select a target.
+ *
+ * [x] It does not contain hardware limits.
+ *
+ * [x] It does not enumerate supported affine-qualified types.
+ *
+ * [x] It is independent of quantum physical realization.
+ *
+ * [x] It is independent of HDL physical realization.
+ *
+ * [x] It is independent of AI/data implementation.
+ *
+ * [x] It preserves source-level extensibility.
+ *
+ * [x] It is deterministic.
+ *
+ * [x] It requires no unsafe Rust.
+ *
+ * [x] It is compatible with the Rust 1.97+ compiler architecture because it
+ *     contains no Rust implementation code.
+ *
+ * [x] It has a documented downstream integration contract.
+ *
+ * ============================================================================
+ * END OF FEATURE CONTRACT
  * ============================================================================
  */
-
-parser grammar AffineTypes;
-
-options {
-    tokenVocab = ZamaniLexer;
-}
-
-
-/*
- * ============================================================================
- * PUBLIC AFFINE QUALIFIER
- * ============================================================================
- *
- * IMPORTANT:
- *
- * This rule intentionally consumes only AFFINE.
- *
- * The following is NOT permitted here:
- *
- *     affineQualifier
- *         : AFFINE typeExpression
- *         ;
- *
- * `typeExpression` belongs to `grammar/types/types.g4`.
- *
- * ============================================================================
- */
-
-affineQualifier
-    : AFFINE
-    ;
