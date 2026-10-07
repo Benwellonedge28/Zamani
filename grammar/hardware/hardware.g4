@@ -3,341 +3,312 @@
  * Zamani Universal Computing Language
  * ============================================================================
  *
- * File:
- *     grammar/hardware/hardware.g4
+ * FILE
+ * ----
+ * grammar/hardware/hardware.g4
  *
- * Grammar:
- *     Hardware
+ * GRAMMAR
+ * -------
+ * Hardware
  *
- * Status:
- *     CANONICAL HARDWARE-DOMAIN COMPOSITION ROOT
- *
- * Rust baseline:
- *     Rust 1.97 / Rust 1.97.1
- *     Rust 2021
- *
- * Safety:
- *     Action-free ANTLR4 parser grammar.
- *     No embedded Rust.
- *     No semantic predicates.
- *     No filesystem access.
- *     No network access.
- *     No hardware discovery.
- *     No runtime execution.
- *     No unsafe Rust.
+ * STATUS
+ * ------
+ * CANONICAL HARDWARE-DOMAIN COMPOSITION ROOT
  *
  * ============================================================================
  * PURPOSE
  * ============================================================================
  *
- * This file is the SINGLE HARDWARE-DOMAIN COMPOSITION ROOT.
+ * This file is the SINGLE COMPOSITION ROOT for grammar/hardware/.
  *
- * It does not attempt to implement every hardware concept itself.
+ * It is intentionally an ORCHESTRATOR, not a second implementation of the
+ * hardware language.
  *
- * Instead it composes the independently owned hardware grammars:
+ * Its responsibilities are limited to:
  *
- *     resources.g4
- *     capabilities.g4
- *     constraints.g4
- *     targets.g4
- *     devices.g4
- *     topology.g4
- *     placement.g4
- *     accelerators.g4
- *     memory.g4
- *     interconnect.g4
- *     qpu.g4
- *     cpu.g4
- *     fpga.g4
- *     asic.g4
+ *   1. composing the independently owned hardware parser grammars;
+ *   2. exposing one stable Hardware grammar boundary to ZamaniParser;
+ *   3. dispatching hardware declarations to their owning leaf grammar;
+ *   4. dispatching hardware statements where a hardware leaf owns them;
+ *   5. providing the hardware-domain expression boundary;
+ *   6. providing stable cross-domain composition points;
+ *   7. ensuring that new hardware technologies can be added without changing
+ *      the universal language's machine-capacity model.
  *
- * The architectural direction is:
+ * It MUST NOT become a monolithic hardware grammar.
  *
- *     source
- *       |
- *       v
+ * ============================================================================
+ * LANGUAGE / IMPLEMENTATION BASELINE
+ * ============================================================================
+ *
+ * ANTLR4 parser grammar
+ * Rust 2021
+ * Rust 1.97 or later
+ * Safe Rust only
+ * No unsafe Rust
+ *
+ * This grammar contains no:
+ *
+ *   - embedded Rust actions;
+ *   - semantic predicates;
+ *   - filesystem access;
+ *   - network access;
+ *   - environment inspection;
+ *   - hardware discovery;
+ *   - allocation;
+ *   - scheduling;
+ *   - routing;
+ *   - optimization;
+ *   - calibration execution;
+ *   - runtime execution;
+ *   - target selection;
+ *   - physical-device access.
+ *
+ * ============================================================================
+ * ARCHITECTURAL POSITION
+ * ============================================================================
+ *
+ * The hardware grammar participates in the canonical frontend as follows:
+ *
+ *     Zamani source
+ *          |
+ *          v
  *     ZamaniLexer
- *       |
- *       v
+ *          |
+ *          v
  *     ZamaniParser
- *       |
- *       v
+ *          |
+ *          v
  *     Hardware
- *       |
- *       +-------------------------------+
- *       |                               |
- *       v                               v
- *     hardware declarations        canonical expression
- *       |                               |
- *       +---------------+---------------+
- *                       |
- *                       v
- *                 domain-neutral AST
- *                       |
- *                       v
- *                semantic analysis
- *                       |
- *       +---------------+----------------+
- *       |               |                |
- *       v               v                v
- *    resources     capabilities      constraints
- *       |               |                |
- *       +---------------+----------------+
- *                       |
- *                       v
- *                target-independent
- *                hardware intent
- *                       |
- *                       v
- *                canonical semantic
- *                     model / IR
- *                       |
- *          +------------+-------------+
- *          |            |             |
- *          v            v             v
- *      classical     quantum::ir   HDL/hardware
- *          |            |             |
- *          +------------+-------------+
- *                       |
- *                       v
- *                 optimization
- *                       |
- *          +------------+-------------+
- *          |            |             |
- *          v            v             v
- *       routing     scheduling    resilience
+ *          |
+ *          +--------------------------------------------------+
+ *          |                                                  |
+ *          v                                                  v
+ *     hardware leaf grammars                         canonical expressions
+ *          |                                                  |
+ *          +-------------------------+------------------------+
  *                                    |
  *                                    v
- *                                   ZQN
+ *                           domain-neutral AST
  *                                    |
  *                                    v
- *                                   HAL
+ *                           structural validation
  *                                    |
  *                                    v
- *                            target realization
+ *                            semantic analysis
+ *                                    |
+ *                  +-----------------+------------------+
+ *                  |                 |                  |
+ *                  v                 v                  v
+ *              resources        capabilities        constraints
+ *                  |                 |                  |
+ *                  +-----------------+------------------+
+ *                                    |
+ *                                    v
+ *                         target-independent intent
+ *                                    |
+ *                                    v
+ *                         canonical semantic model
+ *                                    |
+ *                  +-----------------+------------------+
+ *                  |                 |                  |
+ *                  v                 v                  v
+ *              classical        quantum::ir          HDL
+ *                  |                 |                  |
+ *                  +-----------------+------------------+
+ *                                    |
+ *                                    v
+ *                              optimization
+ *                                    |
+ *                       +------------+------------+
+ *                       |            |            |
+ *                       v            v            v
+ *                    routing     scheduling   resilience
+ *                                                 |
+ *                                                 v
+ *                                                ZQN
+ *                                                 |
+ *                                                 v
+ *                                                HAL
+ *                                                 |
+ *                                                 v
+ *                                         target realization
  *
  * ============================================================================
- * ARCHITECTURAL AUTHORITY
+ * COMPOSITION PRINCIPLE
  * ============================================================================
  *
- * THIS FILE OWNS:
+ * hardware.g4 owns COMPOSITION.
  *
- *     - hardware-domain composition;
- *     - hardware declaration dispatch;
- *     - hardware statement dispatch;
- *     - hardware expression boundary;
- *     - hardware-domain integration;
- *     - cross-domain hardware composition;
- *     - the public Hardware grammar namespace;
- *     - integration of specialized hardware grammars.
+ * Leaf grammars own their feature syntax.
  *
- * THIS FILE DOES NOT OWN:
+ * Therefore:
  *
- *     - lexical tokens;
- *     - keywords;
- *     - identifiers;
- *     - literals;
- *     - expression precedence;
- *     - type syntax;
- *     - resource semantics;
- *     - capability semantics;
- *     - target semantics;
- *     - topology semantics;
- *     - placement algorithms;
- *     - device discovery;
- *     - physical allocation;
- *     - routing;
- *     - scheduling;
- *     - optimization;
- *     - calibration;
- *     - QEC;
- *     - ZQN;
- *     - quantum::ir;
- *     - HDL behavioral semantics;
- *     - compiler backend implementation;
- *     - runtime implementation.
+ *     hardware.g4
+ *         |
+ *         +--> resources.g4
+ *         +--> capabilities.g4
+ *         +--> constraints.g4
+ *         +--> targets.g4
+ *         +--> devices.g4
+ *         +--> topology.g4
+ *         +--> placement.g4
+ *         +--> accelerators.g4
+ *         +--> memory.g4
+ *         +--> interconnect.g4
+ *         +--> qpu.g4
+ *         +--> cpu.g4
+ *         +--> fpga.g4
+ *         +--> asic.g4
+ *         +--> compute.g4
+ *         +--> calibration.g4
+ *         +--> deployment.g4
+ *         +--> performance.g4
+ *         +--> power.g4
+ *         +--> reliability.g4
+ *         +--> thermal.g4
+ *         +--> negotiation.g4
+ *         +--> quantum-device.g4
+ *
+ * Each leaf remains independently testable.
  *
  * ============================================================================
- * CANONICAL LEXER
+ * IMPORTANT OWNERSHIP RULE
  * ============================================================================
  *
- * All parser rules consume the canonical production lexer:
+ * This file MUST NOT duplicate rules owned by a leaf grammar.
+ *
+ * In particular, this file does not define:
+ *
+ *     hardwareResourceDeclaration
+ *     hardwareCapabilityDeclaration
+ *     hardwareConstraintDeclaration
+ *     hardwareTargetDeclaration
+ *     deviceDeclaration
+ *     topologyDeclaration
+ *     placementDeclaration
+ *     hardwareAcceleratorDeclaration
+ *     hardwareMemoryContract
+ *     hardwareInterconnectDeclaration
+ *     qpuDeclaration
+ *     cpuDeclaration
+ *     hardwareFpgaDecl
+ *     hardwareAsicDecl
+ *     computeDeclaration
+ *     hardwareCalibrationDeclaration
+ *     hardwareDeploymentDeclaration
+ *     hardwarePerformanceDeclaration
+ *     hardwarePowerDeclaration
+ *     hardwareReliabilityDeclaration
+ *     hardwareThermalDeclaration
+ *     hardwareNegotiationDeclaration
+ *     hardwareQuantumDeviceDeclaration
+ *
+ * Those rules belong to their respective leaf grammars.
+ *
+ * ============================================================================
+ * LEXICAL AUTHORITY
+ * ============================================================================
+ *
+ * The canonical lexer is:
  *
  *     grammar/antlr/ZamaniLexer.g4
  *
- * whose vocabulary is assembled by:
+ * Hardware grammar files consume its vocabulary.
  *
- *     grammar/lexer/tokens.g4
+ * This file MUST NOT introduce:
  *
- * This file MUST therefore use canonical token names such as:
+ *     hardware-specific lexer rules
+ *     duplicate keyword aliases
+ *     duplicate punctuation
+ *     duplicate literals
+ *     vendor-specific lexical tokens
  *
- *     IDENTIFIER
- *     INTEGER
- *     FLOAT
- *     STRING
- *     CHAR
- *     LPAREN
- *     RPAREN
- *     LBRACE
- *     RBRACE
- *     LBRACKET
- *     RBRACKET
- *     COMMA
- *     DOT
- *     SEMICOLON
- *     COLON
- *     ASSIGN
- *     EQ_EQ
- *     NOT_EQ
- *     LE
- *     GE
- *     AND_AND
- *     OR_OR
- *
- * It MUST NOT invent aliases such as:
- *
- *     K_HARDWARE
- *     K_RESOURCE
- *     K_CAPABILITY
- *     K_TARGET
- *     K_CPU
- *     K_GPU
- *     K_FPGA
- *     K_QPU
- *
- * unless those tokens have first been deliberately added to the canonical
- * lexer vocabulary.
+ * Hardware technology names should remain semantic identifiers unless the
+ * canonical lexical specification explicitly reserves a keyword.
  *
  * ============================================================================
- * IMPORTANT TOKEN POLICY
+ * EXPRESSION AUTHORITY
  * ============================================================================
  *
- * The current canonical lexer already provides source-level tokens such as:
+ * Hardware grammar does NOT define another expression language.
  *
- *     RESOURCE
- *     CAPABILITY
- *     TARGET
- *     CONSTRAINT
- *     PREFER
- *     HINT
- *     REQUIRES
- *     QUANTUM
- *     GPU
+ * Expressions are owned by:
  *
- * but does not currently provide a universal reserved HARDWARE/CPU/FPGA/ASIC
- * keyword family.
+ *     grammar/expressions/
  *
- * This composition grammar therefore does NOT invent such tokens.
+ * Consequently all:
  *
- * Hardware-specific declaration keywords are owned by their respective leaf
- * grammars and their lexical contracts.
+ *     quantities
+ *     dimensions
+ *     capacities
+ *     timing values
+ *     performance values
+ *     power values
+ *     thermal values
+ *     reliability values
+ *     predicates
+ *     constraints
+ *     capability arguments
+ *     resource requirements
+ *     placement predicates
+ *     topology predicates
  *
- * This prevents hardware.g4 from becoming a second lexical authority.
- *
- * ============================================================================
- * ANTLR COMPOSITION
- * ============================================================================
- *
- * ANTLR parser grammars may import parser grammars and inherit their rules.
- *
- * The Hardware grammar deliberately imports specialized hardware parser
- * grammars rather than duplicating their rules here.
- *
- * The canonical composition is:
- *
- *     Hardware
- *       |
- *       +-- ZamaniHardwareResourcesParser
- *       +-- ZamaniHardwareCapabilitiesParser
- *       +-- ZamaniHardwareConstraintsParser
- *       +-- ZamaniHardwareTargetsParser
- *       +-- ZamaniHardwareDevicesParser
- *       +-- ZamaniHardwareTopologyParser
- *       +-- ZamaniHardwarePlacementParser
- *       +-- ZamaniHardwareAcceleratorParser
- *       +-- ZamaniHardwareMemoryParser
- *       +-- ZamaniHardwareInterconnectParser
- *       +-- ZamaniHardwareQpuParser
- *       +-- ZamaniHardwareCpuParser
- *       +-- HardwareFpga
- *       +-- HardwareAsic
- *
- * There is deliberately no second copy of those rules in this file.
+ * ultimately consume the canonical expression model through the leaf grammar
+ * that owns the corresponding construct.
  *
  * ============================================================================
- * SPECIALIZED FILE OWNERSHIP
+ * TYPE AUTHORITY
  * ============================================================================
  *
- * resources.g4
- *     Owns hardware resource intent.
+ * Hardware grammar does not define a second type system.
  *
- * capabilities.g4
- *     Owns hardware capability syntax.
+ * Types remain owned by:
  *
- * constraints.g4
- *     Owns hardware constraint syntax.
+ *     grammar/types/
  *
- * targets.g4
- *     Owns abstract target syntax.
- *
- * devices.g4
- *     Owns logical device syntax.
- *
- * topology.g4
- *     Owns abstract topology syntax.
- *
- * placement.g4
- *     Owns placement intent.
- *
- * accelerators.g4
- *     Owns accelerator syntax.
- *
- * memory.g4
- *     Owns hardware memory contracts.
- *
- * interconnect.g4
- *     Owns hardware interconnect syntax.
- *
- * qpu.g4
- *     Owns QPU hardware contracts.
- *
- * cpu.g4
- *     Owns CPU hardware contracts.
- *
- * fpga.g4
- *     Owns FPGA hardware contracts.
- *
- * asic.g4
- *     Owns ASIC hardware contracts.
- *
- * hardware.g4
- *     ONLY composes and dispatches these domains.
+ * Hardware-specific semantic interpretation occurs after parsing.
  *
  * ============================================================================
- * NO DUPLICATE HARDWARE IR
+ * RESOURCE / CAPABILITY SEPARATION
  * ============================================================================
  *
- * This grammar produces syntax only.
+ * RESOURCE
+ *     A computational or physical resource that may be available, consumed,
+ *     reserved, shared, or otherwise relevant to realization.
  *
- * It does not define:
+ * CAPABILITY
+ *     Something a realization can provide.
  *
- *     HardwareIR
- *     DeviceIR
- *     HardwareOperationIR
- *     HardwareResourceIR
- *     HardwareCapabilityIR
- *     QuantumHardwareIR
+ * REQUIREMENT
+ *     Something required for semantic validity.
  *
- * or any other competing intermediate representation.
+ * CONSTRAINT
+ *     A mandatory condition restricting legal realization.
  *
- * Hardware semantics flow into the repository's canonical semantic/IR
- * architecture.
+ * PREFERENCE
+ *     Non-mandatory guidance for realization/optimization.
  *
- * Quantum computation continues through:
+ * HINT
+ *     Advisory information.
  *
- *     quantum::ir
+ * TARGET
+ *     An abstract realization class or execution context.
  *
- * This file never replaces or duplicates that boundary.
+ * DEVICE
+ *     A logical device or device class.
+ *
+ * TOPOLOGY
+ *     A logical relationship model between computational entities.
+ *
+ * PLACEMENT
+ *     Target-independent realization intent.
+ *
+ * NEGOTIATION
+ *     A declarative description of acceptable realization alternatives.
+ *
+ * This composition root merely exposes these concepts through their owning
+ * grammars.
  *
  * ============================================================================
  * POCO-REAF
@@ -345,37 +316,33 @@
  *
  * Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
  *
- * Hardware syntax expresses portable computation intent.
+ * Hardware syntax expresses PORTABLE INTENT.
  *
- * It does NOT require the source program to name:
+ * It must not require a source program to hard-code:
  *
- *     a physical CPU;
- *     a physical core;
- *     a physical thread;
- *     a physical GPU;
- *     a physical FPGA;
- *     a physical ASIC;
- *     a physical QPU;
- *     a physical qubit;
- *     a physical node;
- *     a physical memory bank;
- *     a physical accelerator;
- *     a PCI address;
- *     an IP address;
- *     a serial number;
- *     a vendor device;
- *     a machine hostname;
- *     a calibration record.
+ *     physical CPU IDs
+ *     physical core IDs
+ *     physical thread IDs
+ *     physical GPU IDs
+ *     physical FPGA coordinates
+ *     physical ASIC identifiers
+ *     physical QPU identifiers
+ *     physical qubit IDs
+ *     PCI addresses
+ *     machine hostnames
+ *     physical memory addresses
+ *     serial numbers
+ *     vendor-specific device instances
  *
- * Concrete realization belongs downstream.
+ * Hardware realization belongs downstream.
  *
  * ============================================================================
  * SCALABILITY CONTRACT
  * ============================================================================
  *
- * This grammar contains NO universal hardware capacities.
+ * This composition grammar imposes NO universal physical capacity.
  *
- * It MUST NOT define:
+ * It MUST NOT define language-level constants such as:
  *
  *     MAX_CPUS
  *     MAX_CORES
@@ -393,440 +360,100 @@
  *     MAX_PORTS
  *     MAX_CONNECTIONS
  *     MAX_REGISTER_WIDTH
- *     MAX_TENSOR_RANK
  *     MAX_VECTOR_WIDTH
+ *     MAX_TENSOR_RANK
  *     MAX_TOPOLOGY_SIZE
  *
- * Repetition is represented with ANTLR repetition operators.
+ * The grammar itself also imposes no maximum number of declarations.
  *
- * Quantities are expressions.
+ * Repetition remains expressed through ordinary ANTLR repetition constructs
+ * in the owning leaf grammars.
  *
- * Therefore the language can describe:
+ * Quantities and dimensions remain semantic expressions.
  *
- *     tiny systems
+ * Therefore the same language architecture can describe:
+ *
+ *     microscopic computational substrates
  *     embedded systems
- *     single CPUs
- *     multicore CPUs
+ *     single processors
+ *     multicore systems
+ *     many-processor systems
  *     GPUs
  *     FPGAs
  *     ASICs
  *     accelerators
  *     QPUs
  *     simulators
+ *     workstations
+ *     servers
+ *     HPC systems
  *     clusters
  *     distributed systems
- *     HPC systems
  *     heterogeneous systems
  *     future computational substrates
  *
- * without changing the hardware composition grammar.
+ * Subject only to:
+ *
+ *     source semantics
+ *     compiler resources
+ *     runtime resources
+ *     target capabilities
+ *     explicit program requirements
+ *     explicit program constraints
  *
  * ============================================================================
- * RESOURCE / CAPABILITY / CONSTRAINT SEPARATION
+ * OPEN-WORLD HARDWARE MODEL
  * ============================================================================
  *
- * RESOURCE
- *     Something that may be available, consumed, shared, reserved, or
- *     otherwise relevant to execution.
+ * Hardware categories are OPEN semantic categories.
  *
- * CAPABILITY
- *     What an implementation can do.
+ * The universal grammar must not require an update merely because a new
+ * hardware technology appears.
  *
- * REQUIREMENT
- *     What must exist for the program to be semantically valid.
+ * Examples of semantic categories may include:
  *
- * CONSTRAINT
- *     A mandatory restriction on legal realization.
- *
- * PREFERENCE
- *     Non-mandatory optimization guidance.
- *
- * HINT
- *     Advisory information.
- *
- * TARGET
- *     An abstract realization class or execution context.
- *
- * PLACEMENT
- *     Target-independent realization intent.
- *
- * TOPOLOGY
- *     An abstract relationship model among logical resources.
- *
- * DEVICE
- *     A logical device class or semantic device object, not a physical
- *     enumeration.
- *
- * These concepts MUST remain distinct.
- *
- * ============================================================================
- * TARGET-INDEPENDENCE
- * ============================================================================
- *
- * Hardware declarations must describe semantic requirements rather than
- * implementation decisions.
- *
- * Conceptually:
- *
- *     requires resource.qubits >= required_qubits;
- *
- *     requires capability.quantum.measurement;
- *
- *     requires capability.tensor.compute;
- *
- *     requires memory >= required_memory;
- *
- *     prefer target.gpu;
- *
- *     prefer accelerator.tensor;
- *
- *     constraint latency <= budget;
- *
- * are portable intent.
- *
- * By contrast:
- *
- *     use physical_gpu_0
- *     use physical_qubit_17
- *     map_to_pci_address(...)
- *     use_host_machine(...)
- *
- * are target-realization decisions and therefore do not belong in this
- * portable composition grammar.
- *
- * ============================================================================
- * HARD-CODING PROHIBITION
- * ============================================================================
- *
- * This file must remain free from:
- *
- *     fixed hardware counts;
- *     fixed physical IDs;
- *     fixed addresses;
- *     fixed topology sizes;
- *     fixed register widths;
- *     fixed memory capacities;
- *     fixed tensor dimensions;
- *     fixed accelerator counts;
- *     fixed qubit counts;
- *     fixed device counts;
- *     vendor-specific assumptions.
- *
- * Numeric literals remain valid program values.
- *
- * For example:
- *
- *     required_memory = 64GB
- *
- * may be valid program semantics if the canonical literal/type system supports
- * the size literal.
- *
- * What is prohibited is:
- *
- *     language maximum memory = 64GB
- *
- * or any equivalent universal compiler restriction encoded here.
- *
- * ============================================================================
- * CROSS-DOMAIN INTEGRATION
- * ============================================================================
- *
- * Hardware syntax is intentionally reusable by:
- *
- *     classical
+ *     cpu
+ *     gpu
+ *     accelerator
+ *     fpga
+ *     asic
  *     quantum
- *     hybrid
- *     HDL
- *     distributed
- *     AI
- *     data
- *     networking
- *     security
- *     compile
- *     execution
+ *     memory
+ *     storage
+ *     network
+ *     controller
+ *     optical
+ *     neuromorphic
+ *     molecular
+ *     biological
+ *     analog
+ *     reconfigurable
+ *     heterogeneous
  *
- * A hardware requirement may therefore originate from a quantum program,
- * classical computation, HDL co-design contract, accelerator computation,
- * distributed deployment, or future domain.
+ * These are semantic categories, not a closed enumeration in this file.
  *
- * The hardware grammar must not create domain-specific duplicate resource
- * systems.
+ * New technologies should normally be introduced through:
  *
- * ============================================================================
- * QUANTUM INTEGRATION
- * ============================================================================
- *
- * QPU declarations are delegated to:
- *
- *     qpu.g4
- *
- * Quantum program semantics remain outside this file.
- *
- * The pipeline is:
- *
- *     quantum source
- *         |
- *         v
- *     domain-neutral AST
- *         |
- *         v
- *     quantum semantic analysis
- *         |
- *         v
- *     quantum::ir
- *         |
- *         v
- *     hardware capability/resource analysis
- *         |
- *         v
- *     routing
- *         |
- *         v
- *     scheduling
- *         |
- *         v
- *     QEC / resilience / ZQN
- *         |
- *         v
- *     HAL
- *         |
- *         v
- *     target realization
- *
- * hardware.g4 never creates a second quantum IR.
- *
- * ============================================================================
- * HDL INTEGRATION
- * ============================================================================
- *
- * HDL behavioral semantics remain owned by:
- *
- *     grammar/hdl/
- *
- * hardware.g4 may provide hardware intent consumed alongside HDL, but it must
- * not reproduce:
- *
- *     module behavior
- *     procedural blocks
- *     always blocks
- *     signal assignment semantics
- *     HDL process semantics
- *     HDL simulation semantics
- *
- * Hardware/software co-design is therefore composed rather than duplicated.
- *
- * ============================================================================
- * EXPRESSION INTEGRATION
- * ============================================================================
- *
- * hardware.g4 MUST NOT define a second expression language.
- *
- * The canonical public expression rule is:
- *
- *     expression
- *
- * from:
- *
- *     grammar/expressions/expressions.g4
- *
- * Therefore hardware-specific quantities, bounds, dimensions, predicates,
- * resource values, timing values, and properties use the canonical expression
- * model.
- *
- * ============================================================================
- * TYPE INTEGRATION
- * ============================================================================
- *
- * hardware.g4 does not define a second type system.
- *
- * Hardware-specific semantic types are supplied by the canonical Zamani type
- * system and interpreted by semantic analysis.
- *
- * Examples include conceptual forms such as:
- *
- *     Qubit[n]
- *     Tensor<T, shape>
- *     Memory<T, size>
- *
- * where the dimensions are semantic expressions rather than grammar-level
- * limits.
- *
- * ============================================================================
- * AST CONTRACT
- * ============================================================================
- *
- * Every imported hardware construct must map to the domain-neutral frontend
- * AST.
- *
- * hardware.g4 does not prescribe vendor-specific AST nodes.
- *
- * The expected semantic information includes, as applicable:
- *
- *     declaration kind
- *     name
- *     qualified name
- *     parameters
- *     attributes
- *     requirements
+ *     identifiers
  *     capabilities
  *     resources
- *     constraints
- *     preferences
- *     hints
- *     topology intent
- *     placement intent
- *     target intent
- *     source span
- *
- * Physical device identity is NOT part of the source-level portable contract.
+ *     targets
+ *     dialects
+ *     semantic registrations
+ *     leaf grammars where genuinely new syntax is required
  *
  * ============================================================================
- * SEMANTIC CONTRACT
+ * ANTLR IMPORT AUTHORITY
  * ============================================================================
  *
- * After parsing, semantic analysis is responsible for:
+ * Every grammar named in this import list MUST be a valid ANTLR4 parser
+ * grammar.
  *
- *     name resolution;
- *     type validation;
- *     capability validation;
- *     resource validation;
- *     constraint validation;
- *     target compatibility;
- *     portability validation;
- *     conflict detection;
- *     requirement satisfaction;
- *     preference handling;
- *     topology validation;
- *     placement validation;
- *     device-class compatibility.
+ * Import names are grammar names, not filesystem paths.
  *
- * A syntax error must not be used to represent an unavailable resource.
+ * The source tree path remains:
  *
- * Example:
- *
- *     requires qubits >= n;
- *
- * is syntactically valid even when the current target has insufficient
- * resources.
- *
- * Insufficient resources are a semantic/resource-resolution result.
- *
- * ============================================================================
- * IR CONTRACT
- * ============================================================================
- *
- * hardware.g4 has NO independent IR.
- *
- * The compiler may lower hardware intent into the repository's canonical
- * semantic/IR representations.
- *
- * Quantum constructs converge through:
- *
- *     quantum::ir
- *
- * Classical constructs converge through the canonical classical representation.
- *
- * HDL/hardware constructs converge through the repository's hardware/HDL
- * semantic representation.
- *
- * Hardware intent may remain metadata/contract information when no executable
- * operation is implied.
- *
- * ============================================================================
- * DETERMINISM
- * ============================================================================
- *
- * This grammar contains:
- *
- *     no actions;
- *     no predicates;
- *     no external state;
- *     no environment access;
- *     no hardware discovery;
- *     no randomness.
- *
- * The same token stream therefore receives the same syntactic interpretation.
- *
- * Any target-dependent result must be produced after parsing by the semantic,
- * resource, target, routing, scheduling, or runtime layers.
- *
- * ============================================================================
- * COMPATIBILITY
- * ============================================================================
- *
- * Stable hardware syntax must remain compatible with:
- *
- *     grammar/spec/hardware.md
- *     grammar/spec/resources.md
- *     grammar/spec/portability.md
- *     grammar/compatibility/
- *     grammar/grammar.md
- *
- * `Zamani-Grammar.md` may contain historical/proposed hardware concepts but
- * does not automatically add syntax to this grammar.
- *
- * ============================================================================
- * BUILD INTEGRATION
- * ============================================================================
- *
- * This grammar is imported by:
- *
- *     grammar/antlr/ZamaniParser.g4
- *
- * through the grammar name:
- *
- *     Hardware
- *
- * The canonical parser therefore sees:
- *
- *     ZamaniParser
- *          |
- *          v
- *       Hardware
- *          |
- *          +--> specialized hardware parser rules
- *
- * The build system must make all imported grammars available to ANTLR's
- * grammar search path.
- *
- * ============================================================================
- * PRODUCTION COMPLETION CHECKLIST
- * ============================================================================
- *
- * This file is complete when:
- *
- *     [x] Single hardware composition authority
- *     [x] No duplicate resource grammar
- *     [x] No duplicate capability grammar
- *     [x] No duplicate target grammar
- *     [x] No duplicate topology grammar
- *     [x] No duplicate placement grammar
- *     [x] No duplicate QPU grammar
- *     [x] No duplicate CPU grammar
- *     [x] No duplicate FPGA grammar
- *     [x] No duplicate ASIC grammar
- *     [x] No local expression grammar
- *     [x] No local type system
- *     [x] No physical device selection
- *     [x] No physical IDs
- *     [x] No universal capacity constants
- *     [x] No Rust actions
- *     [x] No unsafe requirements
- *     [x] Canonical lexer vocabulary
- *     [x] Canonical expression boundary
- *     [x] Canonical AST boundary
- *     [x] Canonical semantic boundary
- *     [x] quantum::ir preserved
- *     [x] POCO-REAF preserved
- *
- * Repository-wide completion additionally requires:
- *
- *     [ ] specialized imported grammars compile together
- *     [ ] duplicate grammar names removed
- *     [ ] GPU grammar converted to a parser grammar or composed by its
- *         canonical dispatcher
- *     [ ] all imported grammar token names match ZamaniLexer
- *     [ ] hardware tests cover positive/negative/boundary/scalability cases
+ *     grammar/hardware/
  *
  * ============================================================================
  */
@@ -839,6 +466,7 @@ options {
 
 import
     Expressions,
+
     ZamaniHardwareResourcesParser,
     ZamaniHardwareCapabilitiesParser,
     ZamaniHardwareConstraintsParser,
@@ -849,24 +477,1180 @@ import
     ZamaniHardwareAcceleratorParser,
     ZamaniHardwareMemoryParser,
     ZamaniHardwareInterconnectParser,
+
     ZamaniHardwareQpuParser,
     ZamaniHardwareCpuParser,
     HardwareFpga,
-    HardwareAsic
+    HardwareAsic,
+
+    ZamaniHardwareComputeParser,
+    ZamaniHardwareCalibrationParser,
+    HardwareDeployment,
+    HardwarePerformance,
+    ZamaniHardwarePowerParser,
+    ZamaniHardwareReliabilityParser,
+    ZamaniHardwareThermalParser,
+    ZamaniHardwareNegotiationParser,
+    ZamaniHardwareQuantumDeviceParser
 ;
 
 
 /* ============================================================================
- * 1. HARDWARE DECLARATION DISPATCH
+ * 1. CANONICAL HARDWARE DECLARATION DISPATCH
  * ============================================================================
  *
- * There is deliberately no giant monolithic hardware rule here.
+ * This is the principal public hardware declaration boundary.
  *
- * Each specialized declaration is owned by its own file.
+ * Each alternative is owned by a leaf grammar.
  *
- * The alternatives below merely expose those declarations through the single
- * Hardware domain boundary consumed by ZamaniParser.
+ * The composition root does not reinterpret or transform the leaf rule.
  *
+ * ========================================================================== */
+
+hardwareDeclaration
+    : hardwareResourceDeclaration
+    | hardwareCapabilityDeclaration
+    | hardwareConstraintDeclaration
+    | hardwareTargetDeclaration
+    | deviceDeclaration
+    | topologyDeclaration
+    | placementDeclaration
+    | hardwareAcceleratorDeclaration
+    | hardwareMemoryContract
+    | hardwareInterconnectDeclaration
+
+    | qpuDeclaration
+    | cpuDeclaration
+    | hardwareFpgaDecl
+    | hardwareAsicDecl
+
+    | computeDeclaration
+    | hardwareCalibrationDeclaration
+    | hardwareDeploymentDeclaration
+    | hardwarePerformanceDeclaration
+    | hardwarePowerDeclaration
+    | hardwareReliabilityDeclaration
+    | hardwareThermalDeclaration
+    | hardwareNegotiationDeclaration
+    | hardwareQuantumDeviceDeclaration
+    ;
+
+
+/* ============================================================================
+ * 2. HARDWARE STATEMENT DISPATCH
+ * ============================================================================
+ *
+ * Hardware statements remain intentionally small.
+ *
+ * Executable behavior belongs to the domain that owns that behavior.
+ *
+ * HDL behavior remains in grammar/hdl/.
+ * Quantum behavior remains in grammar/quantum/.
+ * Classical behavior remains in grammar/classical/.
+ * Distributed behavior remains in grammar/distributed/.
+ *
+ * This composition root does not create a second executable hardware language.
+ *
+ * ========================================================================== */
+
+hardwareStatement
+    : hardwareAssertionStatement
+    ;
+
+
+/* ============================================================================
+ * 3. UNIVERSAL HARDWARE ASSERTION
+ * ============================================================================
+ *
+ * Assertions are properties of hardware intent.
+ *
+ * The assertion expression itself remains owned by the canonical expression
+ * grammar.
+ *
+ * ========================================================================== */
+
+hardwareAssertionStatement
+    : ASSERT
+      LPAREN
+      expression
+      RPAREN
+      SEMICOLON
+    ;
+
+
+/* ============================================================================
+ * 4. HARDWARE EXPRESSION BOUNDARY
+ * ============================================================================
+ *
+ * The hardware domain re-exports the canonical expression boundary without
+ * changing expression precedence or semantics.
+ *
+ * ========================================================================== */
+
+hardwareExpression
+    : expression
+    ;
+
+
+/* ============================================================================
+ * 5. HARDWARE DOMAIN DISPATCH
+ * ============================================================================
+ *
+ * This is the stable public boundary consumed by the universal parser.
+ *
+ * The universal parser therefore knows only:
+ *
+ *     Hardware
+ *
+ * and does not need to know every file below grammar/hardware/.
+ *
+ * ========================================================================== */
+
+hardwareDomain
+    : hardwareDeclaration
+    | hardwareStatement
+    | hardwareExpression
+    ;
+
+
+/* ============================================================================
+ * 6. HARDWARE CONTRACT
+ * ============================================================================
+ *
+ * A hardware contract is an ordered sequence of hardware declarations.
+ *
+ * The repetition is intentionally unbounded at the grammar level.
+ *
+ * Physical feasibility is not determined by parsing.
+ *
+ * ========================================================================== */
+
+hardwareContract
+    : hardwareDeclaration+
+    ;
+
+
+/* ============================================================================
+ * 7. HARDWARE DECLARATION LIST
+ * ============================================================================
+ *
+ * This rule is a convenience boundary for visitors, validators and tooling.
+ *
+ * It does not impose a size limit.
+ *
+ * ========================================================================== */
+
+hardwareDeclarationList
+    : hardwareDeclaration*
+    ;
+
+
+/* ============================================================================
+ * 8. HARDWARE STATEMENT LIST
+ * ============================================================================
+ */
+
+hardwareStatementList
+    : hardwareStatement*
+    ;
+
+
+/* ============================================================================
+ * 9. HARDWARE ELEMENT
+ * ============================================================================
+ *
+ * A hardware element is any construct exposed by the hardware-domain
+ * composition root.
+ *
+ * ========================================================================== */
+
+hardwareElement
+    : hardwareDeclaration
+    | hardwareStatement
+    ;
+
+
+/* ============================================================================
+ * 10. HARDWARE CONTRACT ELEMENT
+ * ============================================================================
+ *
+ * This rule intentionally excludes arbitrary expressions.
+ *
+ * Expressions are embedded through the owning leaf grammar and through the
+ * hardwareExpression boundary when a consumer explicitly requires an
+ * expression.
+ *
+ * ========================================================================== */
+
+hardwareContractElement
+    : hardwareDeclaration
+    | hardwareStatement
+    ;
+
+
+/* ============================================================================
+ * 11. HARDWARE REQUIREMENT BOUNDARY
+ * ============================================================================
+ *
+ * Requirements themselves remain owned by the appropriate leaf grammar.
+ *
+ * This rule exists only as an integration boundary for consumers that need
+ * to accept a canonical expression in a hardware requirement context.
+ *
+ * It does not redefine the syntax of `requires`.
+ *
+ * ========================================================================== */
+
+hardwareRequirementExpression
+    : expression
+    ;
+
+
+/* ============================================================================
+ * 12. HARDWARE CONSTRAINT EXPRESSION
+ * ============================================================================
+ */
+
+hardwareConstraintExpression
+    : expression
+    ;
+
+
+/* ============================================================================
+ * 13. HARDWARE PREFERENCE EXPRESSION
+ * ============================================================================
+ */
+
+hardwarePreferenceExpression
+    : expression
+    ;
+
+
+/* ============================================================================
+ * 14. HARDWARE HINT EXPRESSION
+ * ============================================================================
+ */
+
+hardwareHintExpression
+    : expression
+    ;
+
+
+/* ============================================================================
+ * 15. HARDWARE VALUE
+ * ============================================================================
+ *
+ * A hardware value is simply a canonical Zamani expression.
+ *
+ * This rule provides a semantic naming boundary without creating a second
+ * expression language.
+ *
+ * ========================================================================== */
+
+hardwareValue
+    : expression
+    ;
+
+
+/* ============================================================================
+ * 16. HARDWARE ATTRIBUTE VALUE
+ * ============================================================================
+ */
+
+hardwareAttributeValue
+    : expression
+    ;
+
+
+/* ============================================================================
+ * 17. HARDWARE DIMENSION
+ * ============================================================================
+ *
+ * Dimensions are expressions.
+ *
+ * No rank or dimensionality ceiling is encoded here.
+ *
+ * ========================================================================== */
+
+hardwareDimension
+    : expression
+    ;
+
+
+/* ============================================================================
+ * 18. HARDWARE DIMENSION LIST
+ * ============================================================================
+ *
+ * The number of dimensions is not limited by the language architecture.
+ *
+ * ========================================================================== */
+
+hardwareDimensionList
+    : LBRACKET
+      expression
+      RBRACKET
+      (
+          LBRACKET
+          expression
+          RBRACKET
+      )*
+    ;
+
+
+/* ============================================================================
+ * 19. HARDWARE EXPRESSION LIST
+ * ============================================================================
+ *
+ * The list is unbounded at the grammar level.
+ *
+ * ========================================================================== */
+
+hardwareExpressionList
+    : expression
+      (
+          COMMA
+          expression
+      )*
+      COMMA?
+    ;
+
+
+/* ============================================================================
+ * 20. HARDWARE NAME BOUNDARY
+ * ============================================================================
+ *
+ * Hardware names must remain ordinary Zamani identifiers.
+ *
+ * Physical identity is resolved downstream.
+ *
+ * ========================================================================== */
+
+hardwareNameReference
+    : IDENTIFIER
+    ;
+
+
+/* ============================================================================
+ * 21. HARDWARE QUALIFIED REFERENCE
+ * ============================================================================
+ *
+ * The canonical expression/member-access system remains responsible for
+ * qualified semantic references.
+ *
+ * This rule deliberately does not create a second qualified-name grammar.
+ *
+ * ========================================================================== */
+
+hardwareQualifiedReference
+    : expression
+    ;
+
+
+/* ============================================================================
+ * 22. CROSS-DOMAIN INTEGRATION BOUNDARY
+ * ============================================================================
+ *
+ * Hardware intent can accompany other Zamani domains.
+ *
+ * Examples:
+ *
+ *     classical computation + hardware requirements
+ *     quantum computation + QPU requirements
+ *     hybrid computation + accelerator requirements
+ *     HDL + hardware implementation intent
+ *     AI computation + tensor accelerator requirements
+ *     distributed computation + topology requirements
+ *     networking + interconnect requirements
+ *
+ * Hardware does not own those domains.
+ *
+ * It provides the realization-contract boundary they consume.
+ *
+ * ========================================================================== */
+
+hardwareCrossDomainElement
+    : hardwareDeclaration
+    | hardwareStatement
+    ;
+
+
+/* ============================================================================
+ * 23. QUANTUM HARDWARE BOUNDARY
+ * ============================================================================
+ *
+ * Quantum hardware descriptions enter through the dedicated hardware leaf
+ * grammars:
+ *
+ *     qpu.g4
+ *     quantum-device.g4
+ *
+ * Quantum PROGRAM semantics do not belong here.
+ *
+ * Quantum computation follows:
+ *
+ *     source
+ *       |
+ *       v
+ *     domain-neutral AST
+ *       |
+ *       v
+ *     quantum semantic model
+ *       |
+ *       v
+ *     quantum::ir
+ *       |
+ *       v
+ *     hardware capability/resource analysis
+ *       |
+ *       v
+ *     routing
+ *       |
+ *       v
+ *     scheduling
+ *       |
+ *       v
+ *     resilience / QEC / ZQN
+ *       |
+ *       v
+ *     HAL
+ *       |
+ *       v
+ *     target realization
+ *
+ * hardware.g4 does not create or modify quantum::ir.
+ *
+ * ========================================================================== */
+
+hardwareQuantumDeclaration
+    : qpuDeclaration
+    | hardwareQuantumDeviceDeclaration
+    ;
+
+
+/* ============================================================================
+ * 24. CLASSICAL HARDWARE BOUNDARY
+ * ============================================================================
+ *
+ * CPU and generic compute declarations describe target-independent hardware
+ * intent.
+ *
+ * They do not determine actual CPU/core/thread allocation.
+ *
+ * ========================================================================== */
+
+hardwareClassicalDeclaration
+    : cpuDeclaration
+    | computeDeclaration
+    ;
+
+
+/* ============================================================================
+ * 25. RECONFIGURABLE / FIXED HARDWARE BOUNDARY
+ * ============================================================================
+ */
+
+hardwareImplementationDeclaration
+    : hardwareFpgaDecl
+    | hardwareAsicDecl
+    | hardwareAcceleratorDeclaration
+    ;
+
+
+/* ============================================================================
+ * 26. SYSTEM INFRASTRUCTURE BOUNDARY
+ * ============================================================================
+ *
+ * These constructs collectively describe the non-compute aspects of a target:
+ *
+ *     resources
+ *     memory
+ *     interconnect
+ *     topology
+ *     placement
+ *     power
+ *     thermal
+ *     timing
+ *     reliability
+ *     performance
+ *
+ * Actual realization remains downstream.
+ *
+ * ========================================================================== */
+
+hardwareInfrastructureDeclaration
+    : hardwareResourceDeclaration
+    | hardwareMemoryContract
+    | hardwareInterconnectDeclaration
+    | topologyDeclaration
+    | placementDeclaration
+    | hardwarePowerDeclaration
+    | hardwareThermalDeclaration
+    | hardwareReliabilityDeclaration
+    | hardwarePerformanceDeclaration
+    ;
+
+
+/* ============================================================================
+ * 27. TARGET / REALIZATION BOUNDARY
+ * ============================================================================
+ *
+ * Targets and negotiation remain declarations of intent.
+ *
+ * They do not perform target discovery or allocation.
+ *
+ * ========================================================================== */
+
+hardwareRealizationDeclaration
+    : hardwareTargetDeclaration
+    | hardwareNegotiationDeclaration
+    | hardwareDeploymentDeclaration
+    ;
+
+
+/* ============================================================================
+ * 28. QUALITY / VALIDATION BOUNDARY
+ * ============================================================================
+ *
+ * These declarations express conditions or evidence about hardware
+ * realization. They remain declarative.
+ *
+ * ========================================================================== */
+
+hardwareQualityDeclaration
+    : hardwareConstraintDeclaration
+    | hardwareCalibrationDeclaration
+    | hardwareReliabilityDeclaration
+    | hardwarePerformanceDeclaration
+    | hardwarePowerDeclaration
+    | hardwareThermalDeclaration
+    ;
+
+
+/* ============================================================================
+ * 29. HARDWARE DOMAIN CONTRACT
+ * ============================================================================
+ *
+ * This is the strongest aggregate boundary exposed by the hardware grammar.
+ *
+ * It deliberately accepts only constructs that are genuinely hardware-domain
+ * declarations/statements.
+ *
+ * It does not accept arbitrary source elements and therefore cannot become a
+ * competing program root.
+ *
+ * ========================================================================== */
+
+hardwareProgram
+    : hardwareElement*
+    ;
+
+
+/* ============================================================================
+ * 30. AST CONTRACT
+ * ============================================================================
+ *
+ * hardware.g4 does not define AST structures.
+ *
+ * Every leaf declaration must enter the repository's domain-neutral frontend
+ * AST.
+ *
+ * The AST must preserve, where applicable:
+ *
+ *     declaration kind
+ *     source span
+ *     name
+ *     qualified name
+ *     parameters
+ *     attributes
+ *     requirements
+ *     resources
+ *     capabilities
+ *     constraints
+ *     preferences
+ *     hints
+ *     target intent
+ *     topology intent
+ *     placement intent
+ *     provenance metadata
+ *
+ * Physical hardware identity must NOT be required for source portability.
+ *
+ * ============================================================================
+ * SEMANTIC CONTRACT
+ * ============================================================================
+ *
+ * After parsing, semantic analysis is responsible for:
+ *
+ *     name resolution
+ *     type checking
+ *     requirement validation
+ *     capability validation
+ *     resource validation
+ *     constraint validation
+ *     target compatibility
+ *     topology validation
+ *     placement validation
+ *     negotiation analysis
+ *     portability analysis
+ *     conflict detection
+ *     policy validation
+ *     effect validation
+ *     provenance handling
+ *
+ * Parsing must never determine whether a requested resource physically exists.
+ *
+ * Example:
+ *
+ *     requires qubits >= required_qubits;
+ *
+ * may be syntactically valid even when the selected execution context cannot
+ * satisfy the requirement.
+ *
+ * That is a resource/capability semantic result, not a parser error.
+ *
+ * ============================================================================
+ * EFFECT CONTRACT
+ * ============================================================================
+ *
+ * hardware.g4 introduces no runtime effects.
+ *
+ * Hardware-related effects such as:
+ *
+ *     hardware access
+ *     native access
+ *     device I/O
+ *     measurement
+ *     networking
+ *     foreign calls
+ *
+ * are semantic properties handled downstream.
+ *
+ * ============================================================================
+ * CAPABILITY CONTRACT
+ * ============================================================================
+ *
+ * Capabilities are declarative.
+ *
+ * A hardware declaration may describe capabilities such as:
+ *
+ *     compute
+ *     tensor.compute
+ *     quantum.measurement
+ *     quantum.dynamic_circuit
+ *     memory
+ *     interconnect
+ *     acceleration
+ *     reconfiguration
+ *     secure.execution
+ *     simulation
+ *
+ * without hard-coding a closed list in this composition root.
+ *
+ * ============================================================================
+ * RESOURCE CONTRACT
+ * ============================================================================
+ *
+ * Hardware resource quantities are symbolic expressions.
+ *
+ * This supports:
+ *
+ *     requires memory >= required_memory;
+ *     requires qubits >= required_qubits;
+ *     requires capability("tensor.compute");
+ *     requires topology(required_topology);
+ *
+ * without establishing a universal physical ceiling.
+ *
+ * ============================================================================
+ * POLICY CONTRACT
+ * ============================================================================
+ *
+ * Hardware grammar does not implement policy.
+ *
+ * Policy is evaluated by the appropriate semantic/security/resource/execution
+ * layers.
+ *
+ * A hardware declaration may therefore be affected by:
+ *
+ *     resource policies
+ *     execution policies
+ *     security policies
+ *     deployment policies
+ *     adaptation policies
+ *     fallback policies
+ *
+ * without embedding those implementations in ANTLR.
+ *
+ * ============================================================================
+ * PROVENANCE CONTRACT
+ * ============================================================================
+ *
+ * Hardware declarations must remain traceable to their source spans.
+ *
+ * Downstream provenance may record:
+ *
+ *     source declaration
+ *     semantic interpretation
+ *     resource decision
+ *     capability decision
+ *     target realization
+ *     optimization decision
+ *     routing decision
+ *     scheduling decision
+ *     resilience decision
+ *
+ * hardware.g4 itself records none of these runtime decisions.
+ *
+ * ============================================================================
+ * IR CONTRACT
+ * ============================================================================
+ *
+ * hardware.g4 defines NO independent hardware IR.
+ *
+ * It MUST NOT introduce:
+ *
+ *     HardwareIR
+ *     HardwareResourceIR
+ *     HardwareCapabilityIR
+ *     HardwareDeviceIR
+ *     HardwareTopologyIR
+ *     HardwareTargetIR
+ *     HardwareQuantumIR
+ *
+ * Hardware syntax becomes part of the repository's canonical semantic model.
+ *
+ * Quantum computation continues through:
+ *
+ *     quantum::ir
+ *
+ * HDL behavior continues through:
+ *
+ *     grammar/hdl/
+ *
+ * Classical computation continues through:
+ *
+ *     grammar/classical/
+ *
+ * ============================================================================
+ * BACKEND CONTRACT
+ * ============================================================================
+ *
+ * The hardware grammar never chooses:
+ *
+ *     LLVM
+ *     QIR
+ *     SPIR-V
+ *     CUDA
+ *     OpenCL
+ *     Verilog
+ *     VHDL
+ *     SystemVerilog
+ *     vendor-specific FPGA flows
+ *     vendor-specific ASIC flows
+ *     vendor-specific QPU flows
+ *
+ * Those are downstream lowering/backend concerns.
+ *
+ * ============================================================================
+ * ROUTING CONTRACT
+ * ============================================================================
+ *
+ * Topology and placement are SOURCE-LEVEL INTENT.
+ *
+ * Physical routing is downstream.
+ *
+ * hardware.g4 therefore does not:
+ *
+ *     route
+ *     allocate
+ *     map physical qubits
+ *     assign physical cores
+ *     assign physical GPU units
+ *     assign FPGA regions
+ *     assign ASIC cells
+ *     select network paths
+ *
+ * ============================================================================
+ * SCHEDULING CONTRACT
+ * ============================================================================
+ *
+ * Timing requirements and performance requirements are declarative.
+ *
+ * Actual scheduling is downstream.
+ *
+ * ============================================================================
+ * RESILIENCE CONTRACT
+ * ============================================================================
+ *
+ * Reliability declarations describe intent.
+ *
+ * Runtime resilience remains downstream.
+ *
+ * This includes integration with the repository's resilience states and
+ * execution outcomes where applicable.
+ *
+ * ============================================================================
+ * CALIBRATION CONTRACT
+ * ============================================================================
+ *
+ * Calibration grammar expresses calibration requirements/contracts.
+ *
+ * It does not:
+ *
+ *     discover calibration
+ *     execute calibration
+ *     select physical calibration records
+ *     mutate hardware
+ *
+ * ============================================================================
+ * DEPLOYMENT CONTRACT
+ * ============================================================================
+ *
+ * hardware/deployment.g4 describes hardware-specific deployment intent.
+ *
+ * General deployment semantics remain owned by:
+ *
+ *     grammar/execution/
+ *
+ * No deployment occurs during parsing.
+ *
+ * ============================================================================
+ * LEGACY CONSTRAINT FILE
+ * ============================================================================
+ *
+ * The repository currently contains:
+ *
+ *     grammar/hardware/constraints.g4
+ *     grammar/hardware/hardware-constraints.g4
+ *
+ * `constraints.g4` is the canonical owner.
+ *
+ * `hardware-constraints.g4` MUST NOT become a competing implementation.
+ *
+ * It must be treated as:
+ *
+ *     compatibility facade
+ *     migration/deprecation surface
+ *
+ * until all repository references are migrated.
+ *
+ * hardware.g4 therefore imports ONLY:
+ *
+ *     ZamaniHardwareConstraintsParser
+ *
+ * from constraints.g4.
+ *
+ * ============================================================================
+ * GPU INTEGRATION
+ * ============================================================================
+ *
+ * IMPORTANT REPOSITORY INTEGRATION REQUIREMENT:
+ *
+ * The current:
+ *
+ *     grammar/hardware/gpu.g4
+ *
+ * is not presently declared as an ANTLR parser grammar.
+ *
+ * It therefore cannot legally be imported by this parser grammar in its
+ * current state.
+ *
+ * hardware.g4 MUST NOT fake an import or duplicate the GPU grammar.
+ *
+ * Required repository correction:
+ *
+ *     gpu.g4
+ *         ->
+ *     valid ANTLR4 parser grammar
+ *
+ * with a stable grammar name and a canonical exported GPU declaration rule.
+ *
+ * Once corrected, the GPU parser grammar belongs in this composition root's
+ * import set and GPU declaration dispatch.
+ *
+ * Until then, GPU-specific syntax must not be duplicated here.
+ *
+ * This is an integration prerequisite, not a reason to make hardware.g4
+ * monolithic.
+ *
+ * ============================================================================
+ * TIMING INTEGRATION
+ * ============================================================================
+ *
+ * The current:
+ *
+ *     grammar/hardware/timing.g4
+ *
+ * also lacks a parser-grammar declaration.
+ *
+ * Therefore it cannot legally be imported as a parser grammar yet.
+ *
+ * Required repository correction:
+ *
+ *     timing.g4
+ *         ->
+ *     valid ANTLR4 parser grammar
+ *
+ * with a stable grammar name and canonical exported timing declaration rule.
+ *
+ * hardware.g4 must then compose it without duplicating timing rules.
+ *
+ * ============================================================================
+ * ROOT PARSER INTEGRATION
+ * ============================================================================
+ *
+ * grammar/antlr/ZamaniParser.g4 already imports:
+ *
+ *     Hardware
+ *
+ * This is the correct architecture.
+ *
+ * ZamaniParser must continue to see only the Hardware composition boundary
+ * rather than every hardware leaf grammar.
+ *
+ * Conceptually:
+ *
+ *     sourceElement
+ *          |
+ *          +--> domainElement
+ *                    |
+ *                    +--> hardwareElement
+ *                              |
+ *                              +--> Hardware
+ *                                       |
+ *                                       +--> hardwareDeclaration
+ *
+ * No direct leaf imports should be added to ZamaniParser merely to support a
+ * new hardware technology.
+ *
+ * ============================================================================
+ * BUILD INTEGRATION
+ * ============================================================================
+ *
+ * The ANTLR build configuration must place the entire hardware grammar
+ * directory on the grammar source path.
+ *
+ * The generation order is logically:
+ *
+ *     ZamaniLexer
+ *          |
+ *          v
+ *     hardware leaf parser grammars
+ *          |
+ *          v
+ *     Hardware
+ *          |
+ *          v
+ *     ZamaniParser
+ *
+ * No grammar action may depend on Rust implementation details.
+ *
+ * ============================================================================
+ * TEST INTEGRATION
+ * ============================================================================
+ *
+ * The hardware test suite must exercise this composition root through:
+ *
+ *     grammar/tests/
+ *
+ * and the hardware-specific test hierarchy.
+ *
+ * Required categories:
+ *
+ *     lexical
+ *     parser
+ *     AST
+ *     semantic
+ *     resource
+ *     capability
+ *     target
+ *     topology
+ *     placement
+ *     quantum
+ *     classical
+ *     accelerator
+ *     HDL/co-design
+ *     distributed
+ *     portability
+ *     scalability
+ *     compatibility
+ *     negative
+ *     deterministic parsing
+ *
+ * ============================================================================
+ * REQUIRED POSITIVE COVERAGE
+ * ============================================================================
+ *
+ * At minimum, the repository must parse hardware programs covering:
+ *
+ *     generic compute
+ *     CPU
+ *     GPU
+ *     accelerator
+ *     FPGA
+ *     ASIC
+ *     QPU
+ *     quantum device
+ *     memory
+ *     interconnect
+ *     topology
+ *     placement
+ *     resource requirements
+ *     capabilities
+ *     constraints
+ *     target intent
+ *     negotiation
+ *     deployment intent
+ *     performance
+ *     power
+ *     thermal
+ *     reliability
+ *     calibration
+ *
+ * ============================================================================
+ * REQUIRED NEGATIVE COVERAGE
+ * ============================================================================
+ *
+ * Tests must reject or semantically diagnose:
+ *
+ *     malformed hardware declarations
+ *     malformed resource declarations
+ *     malformed capability declarations
+ *     malformed constraints
+ *     invalid target syntax
+ *     invalid topology syntax
+ *     invalid placement syntax
+ *     malformed specialized declarations
+ *     malformed contracts
+ *
+ * Physical infeasibility must NOT automatically be represented as a parser
+ * error.
+ *
+ * ============================================================================
+ * SCALABILITY TESTS
+ * ============================================================================
+ *
+ * Tests must verify that the grammar architecture does not introduce limits
+ * based on:
+ *
+ *     number of devices
+ *     number of processors
+ *     number of accelerators
+ *     number of QPUs
+ *     number of qubits
+ *     number of nodes
+ *     amount of memory
+ *     number of topology participants
+ *     number of dimensions
+ *     number of declarations
+ *
+ * The tests should use generated/parameterized inputs rather than hard-coded
+ * language ceilings.
+ *
+ * ============================================================================
+ * DETERMINISM TEST
+ * ============================================================================
+ *
+ * For a fixed token stream:
+ *
+ *     parse(source)
+ *
+ * must have deterministic syntactic interpretation.
+ *
+ * No hardware discovery or runtime state may influence parsing.
+ *
+ * ============================================================================
+ * COMPATIBILITY
+ * ============================================================================
+ *
+ * Normative hardware semantics are defined by the appropriate specification
+ * files.
+ *
+ * This grammar must remain consistent with:
+ *
+ *     grammar/spec/hardware.md
+ *     grammar/spec/resources.md
+ *     grammar/spec/portability.md
+ *     grammar/compatibility/
+ *     grammar/grammar.md
+ *     grammar/Zamani-Grammar.md
+ *
+ * Historical or proposed syntax in Zamani-Grammar.md does not automatically
+ * become legal syntax.
+ *
+ * ============================================================================
+ * COMPLETION CRITERIA
+ * ============================================================================
+ *
+ * hardware.g4 is DONE when:
+ *
+ *   [ ] it is the only hardware composition root;
+ *   [ ] all valid hardware leaf parser grammars are composed here;
+ *   [ ] ZamaniParser imports Hardware rather than individual hardware leaves;
+ *   [ ] no leaf syntax is duplicated here;
+ *   [ ] no second expression language exists here;
+ *   [ ] no second type system exists here;
+ *   [ ] no hardware IR is defined here;
+ *   [ ] quantum::ir remains the canonical quantum IR boundary;
+ *   [ ] no routing exists here;
+ *   [ ] no scheduling exists here;
+ *   [ ] no physical allocation exists here;
+ *   [ ] no physical device discovery exists here;
+ *   [ ] no universal capacity constants exist here;
+ *   [ ] no vendor-specific physical assumptions exist here;
+ *   [ ] GPU integration is completed through a valid parser grammar;
+ *   [ ] timing integration is completed through a valid parser grammar;
+ *   [ ] legacy hardware-constraints ownership is resolved;
+ *   [ ] all imported rule names compile;
+ *   [ ] all hardware parser tests pass;
+ *   [ ] cross-domain tests pass;
+ *   [ ] scalability tests pass;
+ *   [ ] deterministic parsing tests pass;
+ *   [ ] generated Rust remains compatible with Rust 1.97+;
+ *   [ ] no unsafe Rust is required.
+ *
+ * ============================================================================
+ */
+
+parser grammar Hardware;
+
+options {
+    tokenVocab = ZamaniLexer;
+}
+
+import
+    Expressions,
+
+    ZamaniHardwareResourcesParser,
+    ZamaniHardwareCapabilitiesParser,
+    ZamaniHardwareConstraintsParser,
+    ZamaniHardwareTargetsParser,
+    ZamaniHardwareDevicesParser,
+    ZamaniHardwareTopologyParser,
+    ZamaniHardwarePlacementParser,
+    ZamaniHardwareAcceleratorParser,
+    ZamaniHardwareMemoryParser,
+    ZamaniHardwareInterconnectParser,
+
+    ZamaniHardwareQpuParser,
+    ZamaniHardwareCpuParser,
+    HardwareFpga,
+    HardwareAsic,
+
+    ZamaniHardwareComputeParser,
+    ZamaniHardwareCalibrationParser,
+    HardwareDeployment,
+    HardwarePerformance,
+    ZamaniHardwarePowerParser,
+    ZamaniHardwareReliabilityParser,
+    ZamaniHardwareThermalParser,
+    ZamaniHardwareNegotiationParser,
+    ZamaniHardwareQuantumDeviceParser
+;
+
+
+/* ============================================================================
+ * PUBLIC HARDWARE DECLARATION DISPATCH
  * ========================================================================== */
 
 hardwareDeclaration
@@ -882,29 +1666,22 @@ hardwareDeclaration
     | hardwareInterconnectDeclaration
     | qpuDeclaration
     | cpuDeclaration
-    | hardwareFpgaDeclaration
-    | hardwareAsicDeclaration
+    | hardwareFpgaDecl
+    | hardwareAsicDecl
+    | computeDeclaration
+    | hardwareCalibrationDeclaration
+    | hardwareDeploymentDeclaration
+    | hardwarePerformanceDeclaration
+    | hardwarePowerDeclaration
+    | hardwareReliabilityDeclaration
+    | hardwareThermalDeclaration
+    | hardwareNegotiationDeclaration
+    | hardwareQuantumDeviceDeclaration
     ;
 
 
 /* ============================================================================
- * 2. HARDWARE STATEMENT BOUNDARY
- * ============================================================================
- *
- * Hardware declarations are the primary source-level hardware contract form.
- *
- * Hardware-specific executable behavior must remain owned by the appropriate
- * domain grammar:
- *
- *     HDL -> grammar/hdl/
- *     quantum -> grammar/quantum/
- *     classical -> grammar/classical/
- *     distributed -> grammar/distributed/
- *
- * Assertions are the one universal hardware-domain statement form retained
- * here because they express a property of hardware intent rather than an
- * implementation algorithm.
- *
+ * PUBLIC HARDWARE STATEMENT DISPATCH
  * ========================================================================== */
 
 hardwareStatement
@@ -921,14 +1698,7 @@ hardwareAssertionStatement
 
 
 /* ============================================================================
- * 3. HARDWARE EXPRESSION BOUNDARY
- * ============================================================================
- *
- * Hardware expressions are NOT a second expression language.
- *
- * This alias deliberately exposes the canonical expression rule to the
- * Hardware domain.
- *
+ * PUBLIC HARDWARE EXPRESSION BOUNDARY
  * ========================================================================== */
 
 hardwareExpression
@@ -937,95 +1707,53 @@ hardwareExpression
 
 
 /* ============================================================================
- * 4. HARDWARE CONTRACT EXPRESSION
- * ============================================================================
+ * PUBLIC HARDWARE DOMAIN BOUNDARY
  *
- * A hardware contract expression is useful when a consumer needs a single
- * expression boundary for a requirement, constraint, preference, property,
- * topology predicate, placement predicate, or resource quantity.
- *
- * No additional precedence is introduced.
- *
+ * This is the only hardware entry point that the universal parser needs.
  * ========================================================================== */
 
-hardwareContractExpression
-    : expression
+hardwareDomain
+    : hardwareDeclaration
+    | hardwareStatement
+    | hardwareExpression
     ;
 
 
 /* ============================================================================
- * 5. HARDWARE VALUE
- * ============================================================================
- *
- * A hardware value is intentionally the canonical expression.
- *
- * This rule exists only as a semantic naming boundary for AST/visitor
- * integration.
- *
- * It does not alter expression semantics.
- *
+ * AGGREGATE CONTRACT BOUNDARIES
  * ========================================================================== */
 
-hardwareValue
-    : expression
+hardwareContract
+    : hardwareDeclaration+
+    ;
+
+hardwareDeclarationList
+    : hardwareDeclaration*
+    ;
+
+hardwareStatementList
+    : hardwareStatement*
+    ;
+
+hardwareElement
+    : hardwareDeclaration
+    | hardwareStatement
+    ;
+
+hardwareContractElement
+    : hardwareDeclaration
+    | hardwareStatement
+    ;
+
+hardwareProgram
+    : hardwareElement*
     ;
 
 
 /* ============================================================================
- * 6. HARDWARE NAME REFERENCE
- * ============================================================================
+ * CANONICAL EXPRESSION BRIDGES
  *
- * Hardware names remain ordinary canonical names.
- *
- * No physical-device ID syntax is introduced here.
- *
- * The canonical name grammar owns qualified-name semantics.
- *
- * ========================================================================== */
-
-hardwareNameReference
-    : IDENTIFIER
-    ;
-
-
-/* ============================================================================
- * 7. HARDWARE QUALIFIED REFERENCE
- * ============================================================================
- *
- * Qualified hardware references are intentionally composed from the canonical
- * expression/member-access model rather than inventing a second qualified
- * name syntax.
- *
- * The semantic layer determines whether the resulting name refers to:
- *
- *     resource
- *     capability
- *     target
- *     device class
- *     topology object
- *     placement object
- *     accelerator
- *     QPU class
- *     CPU class
- *     FPGA class
- *     ASIC class
- *     future hardware domain
- *
- * ========================================================================== */
-
-hardwareQualifiedReference
-    : expression
-    ;
-
-
-/* ============================================================================
- * 8. RESOURCE/CAPABILITY REQUIREMENT BRIDGE
- * ============================================================================
- *
- * These rules are semantic naming boundaries only.
- *
- * They do not redefine resource/capability syntax.
- *
+ * These are aliases only. They do not create another expression language.
  * ========================================================================== */
 
 hardwareRequirementExpression
@@ -1044,21 +1772,16 @@ hardwareHintExpression
     : expression
     ;
 
-
-/* ============================================================================
- * 9. HARDWARE CONTRACT LISTS
- * ============================================================================
- *
- * These generic list boundaries are intentionally unbounded.
- *
- * ========================================================================== */
-
-hardwareDeclarationList
-    : hardwareDeclaration*
+hardwareValue
+    : expression
     ;
 
-hardwareStatementList
-    : hardwareStatement*
+hardwareAttributeValue
+    : expression
+    ;
+
+hardwareDimension
+    : expression
     ;
 
 hardwareExpressionList
@@ -1068,37 +1791,6 @@ hardwareExpressionList
           expression
       )*
       COMMA?
-    ;
-
-
-/* ============================================================================
- * 10. HARDWARE PROPERTY VALUE
- * ============================================================================
- *
- * Property values remain canonical expressions.
- *
- * This supports future hardware technologies without adding a keyword for
- * every property.
- *
- * ========================================================================== */
-
-hardwarePropertyValue
-    : expression
-    ;
-
-
-/* ============================================================================
- * 11. HARDWARE DIMENSION
- * ============================================================================
- *
- * Dimensions are expressions.
- *
- * No fixed width, rank, count, or capacity is encoded.
- *
- * ========================================================================== */
-
-hardwareDimension
-    : expression
     ;
 
 hardwareDimensionList
@@ -1114,162 +1806,66 @@ hardwareDimensionList
 
 
 /* ============================================================================
- * 12. HARDWARE ATTRIBUTE VALUE
- * ============================================================================
- *
- * Attributes are interpreted by their owning semantic subsystem.
- *
- * The hardware composition root only provides an expression boundary.
- *
+ * NAME / REFERENCE BRIDGES
  * ========================================================================== */
 
-hardwareAttributeValue
+hardwareNameReference
+    : IDENTIFIER
+    ;
+
+hardwareQualifiedReference
     : expression
     ;
 
 
 /* ============================================================================
- * 13. HARDWARE CONTRACT
- * ============================================================================
- *
- * This rule provides a generic aggregation boundary for consumers that need
- * to reason about a sequence of hardware declarations without creating a
- * second hardware program root.
- *
+ * CROSS-DOMAIN HARDWARE BOUNDARIES
  * ========================================================================== */
 
-hardwareContract
-    : hardwareDeclaration+
-    ;
-
-
-/* ============================================================================
- * 14. HARDWARE DOMAIN
- * ============================================================================
- *
- * This is the domain dispatcher consumed by ZamaniParser.g4:
- *
- *     hardwareElement
- *         : hardwareDeclaration
- *         | hardwareStatement
- *         | hardwareExpression
- *         ;
- *
- * Keeping this dispatcher here means the universal root parser does not need
- * to know individual hardware grammar files.
- *
- * ========================================================================== */
-
-hardwareDomain
+hardwareCrossDomainElement
     : hardwareDeclaration
     | hardwareStatement
-    | hardwareExpression
     ;
 
+hardwareQuantumDeclaration
+    : qpuDeclaration
+    | hardwareQuantumDeviceDeclaration
+    ;
 
-/* ============================================================================
- * 15. PORTABILITY INVARIANT
- * ============================================================================
- *
- * Hardware syntax may describe:
- *
- *     requirement
- *     capability
- *     resource
- *     target
- *     constraint
- *     preference
- *     topology
- *     placement
- *     memory
- *     interconnect
- *     accelerator
- *     CPU
- *     GPU
- *     FPGA
- *     ASIC
- *     QPU
- *     logical device
- *
- * but physical realization remains outside the grammar.
- *
- * ============================================================================
- */
+hardwareClassicalDeclaration
+    : cpuDeclaration
+    | computeDeclaration
+    ;
 
+hardwareImplementationDeclaration
+    : hardwareFpgaDecl
+    | hardwareAsicDecl
+    | hardwareAcceleratorDeclaration
+    ;
 
-/* ============================================================================
- * 16. FINAL ARCHITECTURAL BOUNDARY
- * ============================================================================
- *
- * The complete hardware path is:
- *
- *     Zamani source
- *          |
- *          v
- *     ZamaniLexer
- *          |
- *          v
- *     ZamaniParser
- *          |
- *          v
- *     Hardware
- *          |
- *          +--> resources
- *          +--> capabilities
- *          +--> constraints
- *          +--> targets
- *          +--> devices
- *          +--> topology
- *          +--> placement
- *          +--> accelerators
- *          +--> memory
- *          +--> interconnect
- *          +--> CPU
- *          +--> GPU integration
- *          +--> FPGA
- *          +--> ASIC
- *          +--> QPU
- *          |
- *          v
- *     domain-neutral AST
- *          |
- *          v
- *     semantic analysis
- *          |
- *          +--> resource analysis
- *          +--> capability analysis
- *          +--> portability analysis
- *          +--> target analysis
- *          +--> topology analysis
- *          +--> placement analysis
- *          |
- *          v
- *     canonical semantic model / IR
- *          |
- *          +--> classical
- *          +--> quantum::ir
- *          +--> HDL/hardware
- *          |
- *          v
- *     optimization
- *          |
- *          v
- *     routing / scheduling / resilience
- *          |
- *          v
- *     ZQN / QEC where applicable
- *          |
- *          v
- *     HAL
- *          |
- *          v
- *     target realization
- *
- * No stage above the target-realization boundary may depend on a particular
- * physical machine merely because that machine is available during
- * compilation.
- *
- * ============================================================================
- * END OF FILE
- * ============================================================================
- */
+hardwareInfrastructureDeclaration
+    : hardwareResourceDeclaration
+    | hardwareMemoryContract
+    | hardwareInterconnectDeclaration
+    | topologyDeclaration
+    | placementDeclaration
+    | hardwarePowerDeclaration
+    | hardwareThermalDeclaration
+    | hardwareReliabilityDeclaration
+    | hardwarePerformanceDeclaration
+    ;
+
+hardwareRealizationDeclaration
+    : hardwareTargetDeclaration
+    | hardwareNegotiationDeclaration
+    | hardwareDeploymentDeclaration
+    ;
+
+hardwareQualityDeclaration
+    : hardwareConstraintDeclaration
+    | hardwareCalibrationDeclaration
+    | hardwareReliabilityDeclaration
+    | hardwarePerformanceDeclaration
+    | hardwarePowerDeclaration
+    | hardwareThermalDeclaration
+    ;
