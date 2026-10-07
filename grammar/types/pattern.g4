@@ -3,186 +3,248 @@
  * Zamani Programming Language
  * ============================================================================
  *
- * File:
- *     grammar/types/pattern.g4
+ * FILE
+ * ----
+ * grammar/types/pattern.g4
  *
- * Grammar:
- *     PatternTypes
+ * GRAMMAR
+ * -------
+ * PatternTypes
  *
- * Status:
- *     PRODUCTION TYPE-SYSTEM COMPONENT
+ * STATUS
+ * ------
+ * PRODUCTION TYPE-SYSTEM DELEGATE
  *
- * Purpose:
- *     Define the source-level type-system boundary for pattern-constrained
- *     types without defining or duplicating the universal value-pattern
- *     language.
+ * PURPOSE
+ * -------
+ * This grammar owns the type-level boundary for pattern-constrained types.
+ *
+ * It does NOT own the universal value-pattern language.
+ *
+ * The universal pattern language is owned exclusively by:
+ *
+ *     grammar/expressions/patterns.g4
+ *
+ * This file therefore provides the reusable type-system construct:
+ *
+ *     patternTypeConstraint
+ *
+ * whose semantic meaning is:
+ *
+ *     an already parsed type expression constrained by a canonical
+ *     source-level pattern.
+ *
+ * Conceptually:
+ *
+ *     T where P
+ *
+ * means:
+ *
+ *     a value inhabiting T and satisfying the semantic constraint P
+ *
+ * where P is interpreted by the type/refinement semantic subsystem.
  *
  * ============================================================================
  * IMPLEMENTATION BASELINE
  * ============================================================================
  *
  * Rust:
+ *
  *     Rust 1.97 or later
  *     Rust 2021
  *     safe Rust only
- *     no unsafe
+ *     no unsafe Rust
  *
  * Parser:
+ *
  *     ANTLR4 parser grammar
  *
+ * This file contains:
+ *
+ *     no embedded Rust;
+ *     no semantic actions;
+ *     no semantic predicates;
+ *     no I/O;
+ *     no runtime execution;
+ *     no target discovery;
+ *     no hardware discovery.
+ *
  * ============================================================================
- * IMPORTANT ARCHITECTURAL DISTINCTION
+ * ARCHITECTURAL POSITION
  * ============================================================================
  *
- * Zamani has two related but deliberately separate concepts:
+ *     source
+ *        |
+ *        v
+ *     canonical lexer
+ *        |
+ *        v
+ *     parser
+ *        |
+ *        +-----------------------------+
+ *        |                             |
+ *        v                             v
+ *   typeExpression              value pattern
+ *        |                             |
+ *        |                             |
+ *        +-------------+---------------+
+ *                      |
+ *                      v
+ *              type-pattern constraint
+ *                      |
+ *                      v
+ *              domain-neutral AST
+ *                      |
+ *                      v
+ *              structural validation
+ *                      |
+ *                      v
+ *              semantic type analysis
+ *                      |
+ *          +-----------+-----------+
+ *          |           |           |
+ *          v           v           v
+ *       classical   quantum::ir   HDL/hardware
+ *          |           |           |
+ *          +-----------+-----------+
+ *                      |
+ *                      v
+ *              canonical semantic model
+ *                      |
+ *                      v
+ *                target-independent
+ *                    compilation
+ *                      |
+ *               optimization
+ *                      |
+ *                  lowering
+ *                      |
+ *             routing/scheduling
+ *                      |
+ *              resilience/QEC
+ *                      |
+ *                     ZQN
+ *                      |
+ *                     HAL
+ *                      |
+ *              target realization
  *
- *     1. VALUE PATTERNS
- *
- *        Owned by:
- *
- *            grammar/expressions/patterns.g4
- *
- *        This includes:
- *
- *            pattern
- *            wildcardPattern
- *            bindingPattern
- *            literalPattern
- *            tuplePattern
- *            sequencePattern
- *            structPattern
- *            variantPattern
- *            rangePattern
- *            referencePattern
- *            typePattern
- *            parenthesizedPattern
- *            orPattern
- *
- *
- *     2. PATTERN-CONSTRAINED TYPES
- *
- *        Owned by this file.
- *
- *        These are type-system constructs whose semantic identity depends on
- *        a pattern, predicate, refinement, or value constraint.
- *
- * This file MUST NOT redefine the value-pattern grammar.
+ * This grammar exists entirely before target realization.
  *
  * ============================================================================
  * SINGLE-AUTHORITY RULE
  * ============================================================================
  *
- * The universal source-level `pattern` rule belongs exclusively to:
+ * EXACTLY ONE grammar owns the universal source-level `pattern` rule:
  *
  *     grammar/expressions/patterns.g4
- *
- * Match expressions/statements consume that rule.
  *
  * This file MUST NOT define:
  *
  *     pattern
  *     patternAtom
- *     patternList
  *     wildcardPattern
  *     bindingPattern
  *     literalPattern
  *     tuplePattern
  *     sequencePattern
+ *     sequencePatternElement
+ *     restPattern
  *     structPattern
+ *     structPatternField
  *     variantPattern
  *     rangePattern
+ *     rangePatternEndpoint
+ *     orPattern
+ *     patternAlternative
  *     referencePattern
  *     typePattern
  *     parenthesizedPattern
- *     orPattern
+ *     patternList
  *
- * Defining any of those here would create two pattern authorities.
- *
- * ============================================================================
- * PURPOSE OF THIS COMPONENT
- * ============================================================================
- *
- * Pattern-constrained types are a type-system feature.
- *
- * Their purpose is to express a relationship between:
- *
- *     a type
- *     and
- *     a source-level value/pattern constraint
- *
- * without embedding target-specific representation.
- *
- * Conceptually:
- *
- *     base type
- *          +
- *     pattern/refinement
- *          |
- *          v
- *     constrained semantic type
- *
- * The exact semantic interpretation is owned by the type checker and
- * refinement/constraint system.
- *
- * This grammar therefore provides only the smallest stable composition
- * boundary needed by the type orchestrator.
+ * Those rules belong to the canonical Patterns grammar.
  *
  * ============================================================================
- * OWNERSHIP
+ * WHY THIS FILE EXISTS
+ * ============================================================================
+ *
+ * A value pattern and a type-constrained type are related but are not the
+ * same language construct.
+ *
+ * VALUE PATTERN
+ * ------------
+ *
+ *     x
+ *     _
+ *     0
+ *     (a, b)
+ *     Some(value)
+ *     0 .. limit
+ *     A | B
+ *
+ * A value pattern describes a structural/value-level matching condition.
+ *
+ * TYPE PATTERN CONSTRAINT
+ * -----------------------
+ *
+ *     Integer where 0 .. limit
+ *     Point where Point { x: _, y: _ }
+ *
+ * A type pattern constraint attaches a canonical value pattern to an already
+ * established type position.
+ *
+ * The semantic layer determines whether the pattern is a valid constraint
+ * for that type.
+ *
+ * This separation prevents:
+ *
+ *     value pattern syntax
+ *
+ * from becoming:
+ *
+ *     type-system syntax
+ *
+ * and prevents two independent pattern languages from developing.
+ *
+ * ============================================================================
+ * OWNERSHIP CONTRACT
  * ============================================================================
  *
  * THIS FILE OWNS:
  *
- *     patternType
- *     patternTypeBody
- *
- * These rules establish the type-level wrapper and its internal structural
- * boundary.
+ *     patternTypeConstraint
  *
  * THIS FILE DOES NOT OWN:
  *
- *     universal value-pattern syntax
+ *     typeExpression
+ *     typeCore
+ *     typePostfix
+ *     pattern
+ *     patternAtom
+ *     guards
  *     match expressions
  *     match statements
- *     guards
- *     pattern exhaustiveness
- *     pattern reachability
- *     pattern overlap
- *     binding analysis
+ *     refinement proving
+ *     constraint solving
  *     type inference
  *     type unification
- *     refinement proving
- *     theorem proving
- *     constant evaluation
  *     ownership
  *     borrowing
  *     lifetimes
  *     effects
  *     capabilities
  *     resources
+ *     contracts
  *     policies
  *     provenance
  *     IR
- *     quantum routing
- *     quantum scheduling
- *     QEC
- *     HDL synthesis
- *     hardware placement
- *     target selection
- *
- * ============================================================================
- * PUBLIC RULES
- * ============================================================================
- *
- * Public:
- *
- *     patternType
- *
- * Internal:
- *
- *     patternTypeBody
- *
- * The type orchestrator is the only intended consumer of `patternType`.
+ *     optimization
+ *     lowering
+ *     routing
+ *     scheduling
+ *     quantum realization
+ *     HDL realization
+ *     hardware realization
  *
  * ============================================================================
  * DEPENDENCY CONTRACT
@@ -191,374 +253,556 @@
  * DEPENDS_ON:
  *
  *     grammar/antlr/ZamaniLexer.g4
- *     canonical type-expression composition
- *     canonical expression/value-pattern composition
+ *     grammar/expressions/patterns.g4
+ *
+ * Consumed canonical rule:
+ *
+ *     pattern
+ *
+ * Required lexical token:
+ *
+ *     WHERE
  *
  * EXPORTS:
  *
- *     patternType
+ *     patternTypeConstraint
  *
  * CONSUMED_BY:
  *
  *     grammar/types/types.g4
- *     future canonical type-system composition where explicitly required
+ *     future type-system composition grammars
  *
  * AST_OWNER:
  *
- *     existing frontend type-expression / refinement AST infrastructure
+ *     existing canonical frontend type-expression / refinement AST
  *
  * SEMANTIC_OWNER:
  *
  *     semantic type checker
- *     refinement/constraint checker
+ *     refinement checker
+ *     constraint solver
+ *
+ * TYPE_OWNER:
+ *
+ *     canonical type system
+ *
+ * EFFECT_OWNER:
+ *
+ *     grammar/effects/ and semantic effect analysis
+ *
+ * RESOURCE_OWNER:
+ *
+ *     grammar/resources/ and semantic resource analysis
+ *
+ * POLICY_OWNER:
+ *
+ *     grammar/policies/ and semantic policy analysis
+ *
+ * PROVENANCE_OWNER:
+ *
+ *     canonical provenance subsystem
  *
  * IR_OWNER:
  *
  *     canonical semantic model
- *     downstream canonical IR
+ *     applicable domain IR
+ *     quantum::ir for quantum-derived semantics
+ *
+ * SPEC_OWNER:
+ *
+ *     grammar/specification/types.md
+ *     applicable refinement/type specifications
  *
  * TEST_OWNER:
  *
  *     grammar/tests/types/
  *     grammar/tests/semantic/
- *     repository frontend conformance tests
- *
- * SPEC_OWNER:
- *
- *     grammar/specification/types.md
+ *     frontend conformance tests
  *
  * ============================================================================
  * LEXER CONTRACT
  * ============================================================================
  *
- * This file declares no lexer rules.
+ * No lexer rules are declared here.
  *
- * All lexical tokens MUST originate from:
+ * The `where` keyword MUST come from the canonical lexer vocabulary.
  *
+ * This grammar consumes:
+ *
+ *     WHERE
+ *
+ * It MUST NOT introduce a second spelling or parser-local keyword.
+ *
+ * The canonical lexical source remains:
+ *
+ *     grammar/lexer/tokens.g4
  *     grammar/antlr/ZamaniLexer.g4
- *
- * and its canonical lexical hierarchy.
- *
- * This file MUST NOT introduce:
- *
- *     PATTERN_TYPE
- *     PATTERN_BEGIN
- *     PATTERN_END
- *     RANGE-specific duplicate tokens
- *     duplicate punctuation tokens
- *
- * merely to support this type component.
- *
- * ============================================================================
- * GRAMMAR DEPENDENCY DIRECTION
- * ============================================================================
- *
- * The intended dependency direction is:
- *
- *     ZamaniLexer
- *          |
- *          v
- *     expression/value-pattern grammar
- *          |
- *          v
- *     type-system composition
- *          |
- *          v
- *     semantic type model
- *
- * The type-pattern component MUST NOT import:
- *
- *     grammar/statements/*
- *
- * The type-pattern component MUST NOT import:
- *
- *     grammar/expressions/expressions.g4
- *
- * merely to obtain the complete expression language.
- *
- * The component must remain a narrow type-system boundary.
  *
  * ============================================================================
  * ANTLR COMPOSITION CONTRACT
  * ============================================================================
  *
- * IMPORTANT:
+ * This is a parser delegate.
  *
- * This file is intentionally a component grammar.
+ * It imports the canonical Patterns grammar.
  *
- * It does not define:
+ * It deliberately does NOT import the complete Types grammar.
  *
- *     typeExpression
+ * That direction is mandatory.
  *
- * and it does not define:
+ * Correct dependency:
  *
- *     program
- *
- * The canonical type orchestrator remains responsible for composing all
- * source-level type constructors.
- *
- * Therefore this file must never become a second type-expression root.
- *
- * ============================================================================
- * PATTERN-TYPE SURFACE
- * ============================================================================
- *
- * The production representation is intentionally minimal:
- *
- *     patternType
- *         : typeExpression patternTypeBody
- *         ;
- *
- * However, this component does not recursively import the complete type
- * orchestrator to implement that rule because doing so can create:
- *
- *     Type
- *       ->
  *     PatternTypes
- *       ->
- *     Type
- *
- * circular grammar composition.
- *
- * Consequently, the canonical production integration should expose the
- * `patternType` rule from the type orchestrator after its complete
- * composition has been established.
- *
- * This file therefore uses an explicit integration token boundary rather
- * than pretending that a standalone component can safely own the complete
- * recursive type language.
- *
- * ============================================================================
- * IMPORTANT PRODUCTION DECISION
- * ============================================================================
- *
- * A pattern-constrained type is NOT represented by inventing a lexer keyword.
- *
- * The language should remain open-world.
- *
- * Future type constraints should be expressible through:
- *
- *     generic parameters
- *     value parameters
- *     refinements
- *     predicates
- *     constraints
- *     dependent values
- *     registered semantic capabilities
- *
- * rather than requiring one new keyword for every possible domain.
- *
- * ============================================================================
- * REFINEMENT RELATION
- * ============================================================================
- *
- * Pattern-constrained types are closely related to refinement types.
- *
- * The architecture must distinguish:
- *
- *     type pattern
- *
- * from:
- *
- *     value pattern
+ *          |
+ *          +--> Patterns
  *
  * and:
  *
- *     refinement predicate
+ *     Type
+ *          |
+ *          +--> PatternTypes
  *
- * A value pattern answers:
+ * Incorrect dependency:
  *
- *     "Does this value have this structural form?"
+ *     Type
+ *       |
+ *       v
+ *     PatternTypes
+ *       |
+ *       v
+ *     Type
  *
- * A refinement answers:
+ * The latter creates a circular grammar dependency.
  *
- *     "Does this value satisfy this semantic predicate?"
+ * Therefore this file never references `typeExpression`.
  *
- * A type answers:
- *
- *     "What semantic type does this value inhabit?"
- *
- * These concepts may interact but MUST NOT collapse into one grammar authority.
+ * The enclosing type orchestrator attaches `patternTypeConstraint` to its
+ * type-expression composition.
  *
  * ============================================================================
- * TYPE-SYSTEM RELATION
+ * PUBLIC RULE
  * ============================================================================
  *
- * Pattern-constrained types must compose with:
+ * There is exactly one public rule:
  *
- *     generics
- *     dependent values
- *     associated types
- *     type constraints
- *     refinements
- *     ownership
- *     affine types
- *     linear types
- *     references
- *     lifetimes
- *     effects
- *     capabilities
- *     resources
- *     temporal types
- *     classical types
- *     quantum types
- *     HDL/hardware semantic types
+ *     patternTypeConstraint
  *
- * Semantic validation determines whether a particular combination is legal.
+ * It represents:
  *
- * This grammar does not attempt to encode all combinations explicitly.
+ *     WHERE pattern
+ *
+ * The preceding type expression is owned by the caller.
+ *
+ * ============================================================================
+ * SYNTAX
+ * ============================================================================
+ *
+ * Canonical conceptual form:
+ *
+ *     typeExpression where pattern
+ *
+ * Examples:
+ *
+ *     Integer where 0
+ *
+ *     Integer where 0 | 1 | 2
+ *
+ *     Integer where 0 .. limit
+ *
+ *     Point where Point { x: _, y: _ }
+ *
+ *     Result<T, E> where Ok(value)
+ *
+ *     Tensor<T> where _
+ *
+ *     QuantumState<T> where _
+ *
+ * The final examples are intentionally semantically permissive at the
+ * grammar level. Semantic analysis determines whether the pattern is
+ * meaningful for the type.
+ *
+ * ============================================================================
+ * IMPORTANT: OPEN-WORLD TYPE DESIGN
+ * ============================================================================
+ *
+ * This grammar deliberately does not enumerate:
+ *
+ *     integer widths
+ *     tensor dimensions
+ *     tensor ranks
+ *     quantum sizes
+ *     hardware types
+ *     accelerator types
+ *     CPU models
+ *     GPU models
+ *     FPGA families
+ *     QPU models
+ *     node counts
+ *     memory capacities
+ *     network sizes
+ *     vendor identifiers
+ *     AI model families
+ *
+ * Such information belongs to source types, generic parameters, semantic
+ * capabilities, resources, dialects or target descriptions.
+ *
+ * A pattern constraint is therefore independent of physical realization.
+ *
+ * ============================================================================
+ * PATTERN DELEGATION
+ * ============================================================================
+ *
+ * The complete pattern after `where` is delegated to:
+ *
+ *     grammar/expressions/patterns.g4
+ *
+ * This gives type constraints access to the same pattern language used by:
+ *
+ *     match expressions
+ *     match statements
+ *     guards where applicable
+ *     future pattern-consuming constructs
+ *
+ * Consequently:
+ *
+ *     pattern syntax
+ *
+ * remains one language-wide facility.
+ *
+ * ============================================================================
+ * PATTERN PRECEDENCE
+ * ============================================================================
+ *
+ * The canonical `pattern` rule already owns pattern precedence and
+ * alternative composition.
+ *
+ * This file therefore does not add:
+ *
+ *     |
+ *     &
+ *     ..
+ *     ..=
+ *     parentheses
+ *     tuple syntax
+ *     structure syntax
+ *     variant syntax
+ *
+ * around the delegated pattern.
+ *
+ * The complete pattern is consumed exactly once:
+ *
+ *     WHERE pattern
+ *
+ * ============================================================================
+ * DELIMITER CONTRACT
+ * ============================================================================
+ *
+ * `where` is the explicit boundary between:
+ *
+ *     type syntax
+ *
+ * and:
+ *
+ *     pattern syntax
+ *
+ * This is preferable to a bare:
+ *
+ *     Type { ... }
+ *
+ * boundary because braces already participate in:
+ *
+ *     struct patterns
+ *     blocks
+ *     record syntax
+ *     other domain constructs
+ *
+ * The explicit `WHERE` boundary is therefore both readable and structurally
+ * unambiguous.
  *
  * ============================================================================
  * AST CONTRACT
  * ============================================================================
  *
- * This grammar MUST NOT create a new AST universe.
+ * This grammar creates no AST.
  *
- * The canonical frontend AST remains the only source-level AST.
+ * The parser tree represents:
  *
- * A successful pattern-constrained type must ultimately be represented using
- * the repository's canonical TypeExpr/refinement representation.
+ *     patternTypeConstraint
+ *         |
+ *         +--> WHERE
+ *         |
+ *         +--> pattern
  *
- * If the existing AST does not yet have a dedicated pattern-constrained type
- * node, that is an AST implementation task and MUST NOT be solved by creating
- * a second grammar-local AST.
+ * The enclosing type AST associates the constraint with the preceding
+ * TypeExpr.
  *
- * Conceptually:
+ * The canonical semantic shape is conceptually:
  *
- *     PatternType {
- *         base_type
- *         constraint
- *         source_span
- *     }
+ *     TypeConstraint
+ *       baseType
+ *       pattern
+ *       sourceSpan
  *
- * is semantic structure, not an instruction to create a new incompatible AST
- * hierarchy.
+ * This is a semantic description, not an instruction to introduce a second
+ * AST hierarchy.
+ *
+ * Existing frontend AST infrastructure remains authoritative.
+ *
+ * The source span of the `where` clause and delegated pattern MUST remain
+ * available to diagnostics and provenance.
  *
  * ============================================================================
  * SEMANTIC CONTRACT
  * ============================================================================
  *
- * Semantic analysis owns:
+ * Parsing does not establish that a pattern is a valid refinement.
  *
- *     name resolution
- *     type resolution
- *     pattern resolution
- *     pattern/type compatibility
- *     constraint validation
- *     refinement validation
- *     constant evaluation where required
- *     exhaustiveness where relevant
- *     reachability where relevant
- *     binding validation
- *     ownership validation
- *     affine validation
- *     linear validation
- *     effect validation
- *     capability validation
- *     resource validation
- *     policy validation
- *     provenance
+ * Semantic analysis MUST determine:
  *
- * The grammar performs none of these operations.
+ *     1. the type of the preceding type expression;
+ *
+ *     2. the semantic identity of the pattern;
+ *
+ *     3. whether the pattern can constrain that type;
+ *
+ *     4. whether all pattern literals have compatible types;
+ *
+ *     5. whether bindings are legal;
+ *
+ *     6. whether repeated bindings satisfy the language's binding rules;
+ *
+ *     7. whether tuple/sequence/record/variant structure is compatible;
+ *
+ *     8. whether range endpoints are valid for the constrained type;
+ *
+ *     9. whether a reference pattern is legal;
+ *
+ *     10. whether an OR-pattern has compatible alternatives;
+ *
+ *     11. whether the refinement is satisfiable where proof is required;
+ *
+ *     12. whether compile-time evaluation is required and permitted;
+ *
+ *     13. whether runtime checking is required;
+ *
+ *     14. whether the constraint is decidable under the selected policy;
+ *
+ *     15. whether the constraint interacts with ownership/linearity;
+ *
+ *     16. whether the constraint introduces effects;
+ *
+ *     17. whether the constraint requires capabilities;
+ *
+ *     18. whether the constraint imposes resource requirements;
+ *
+ *     19. whether contracts apply;
+ *
+ *     20. whether policies permit its evaluation;
+ *
+ *     21. whether provenance must be recorded.
+ *
+ * A failed semantic proof MUST NOT silently become acceptance.
+ *
+ * An unavailable target capability MUST NOT be converted into a type error
+ * unless the language specification explicitly defines that dependency as
+ * part of the type's semantic validity.
  *
  * ============================================================================
- * TYPE SAFETY
+ * REFINEMENT CONTRACT
  * ============================================================================
  *
- * A pattern-constrained type MUST NOT silently weaken type safety.
+ * A pattern-constrained type is a refinement-like type relationship.
  *
- * In particular:
+ * It must remain distinguishable from:
  *
- *     failed inference
- *         !=
- *     dynamic/unknown escape
+ *     ordinary type constraints;
+ *     generic bounds;
+ *     resource requirements;
+ *     capability requirements;
+ *     contracts;
+ *     policies.
  *
- *     failed refinement proof
- *         !=
- *     automatic acceptance
+ * These systems may interact but are not interchangeable.
  *
- *     unavailable capability
- *         !=
- *     type validity
+ * Example conceptual distinction:
  *
- *     unavailable resource
- *         !=
- *     type validity
+ *     T: Numeric
  *
- * A semantically valid type must remain distinguishable from a valid type
- * whose realization is currently impossible on a particular target.
+ * is a type bound.
+ *
+ *     T where 0 .. N
+ *
+ * is a value/pattern refinement.
+ *
+ *     requires capability("tensor.compute")
+ *
+ * is a capability requirement.
+ *
+ *     requires memory >= required_memory
+ *
+ * is a resource requirement.
+ *
+ *     requires condition
+ *
+ * is a contract/requirement construct.
+ *
+ * The grammar must preserve these distinctions.
  *
  * ============================================================================
- * OWNERSHIP / LINEARITY / AFFINITY
+ * TYPE SYSTEM INTEGRATION
  * ============================================================================
  *
- * Pattern matching can bind values with ownership-sensitive types.
+ * `patternTypeConstraint` is attached to a complete type expression by the
+ * canonical type orchestrator.
  *
- * This file does not decide whether a binding:
+ * Conceptually:
  *
- *     moves
- *     borrows
- *     copies
- *     consumes
- *     aliases
+ *     typeExpression
+ *         : typePrefix*
+ *           typeCore
+ *           typePostfix*
+ *           ;
  *
- * Those rules belong to the semantic ownership system.
+ * and the type postfix composition includes:
  *
- * In particular, a pattern constraint MUST NOT implicitly make a linear value
- * copyable or an affine value reusable.
+ *     patternTypeConstraint
+ *
+ * Therefore the type system can represent:
+ *
+ *     BaseType where Pattern
+ *
+ * without this file needing to know how BaseType itself is constructed.
+ *
+ * ============================================================================
+ * GENERICS
+ * ============================================================================
+ *
+ * Generic types remain owned by the type system.
+ *
+ * Examples:
+ *
+ *     Vector<T> where _
+ *
+ *     Tensor<T, Shape> where _
+ *
+ *     Result<T, E> where Ok(value)
+ *
+ * Semantic analysis determines:
+ *
+ *     generic substitution;
+ *     bound satisfaction;
+ *     pattern/type compatibility;
+ *     dependent-value relationships.
+ *
+ * This grammar imposes no generic arity ceiling.
+ *
+ * ============================================================================
+ * DEPENDENT TYPES
+ * ============================================================================
+ *
+ * Pattern constraints may refer to symbolic values already represented by
+ * the source program.
+ *
+ * Example:
+ *
+ *     Array<T, N> where ...
+ *
+ * The grammar does not evaluate N.
+ *
+ * The semantic layer determines:
+ *
+ *     type;
+ *     const-ness;
+ *     value domain;
+ *     satisfiability;
+ *     representability;
+ *     specialization requirements.
+ *
+ * No host-sized integer is required by this grammar.
+ *
+ * ============================================================================
+ * LINEAR / AFFINE TYPES
+ * ============================================================================
+ *
+ * A pattern constraint MUST NOT alter ownership semantics.
+ *
+ * In particular, pattern matching does not automatically imply:
+ *
+ *     copy;
+ *     clone;
+ *     duplication;
+ *     aliasing;
+ *     movement;
+ *     borrowing.
+ *
+ * Ownership, affine and linear semantics remain owned by the type/semantic
+ * systems.
+ *
+ * A pattern cannot make a non-copyable value copyable merely by matching it.
  *
  * ============================================================================
  * EFFECT CONTRACT
  * ============================================================================
  *
- * Pattern-constrained types do not introduce an effect merely because their
- * syntax exists.
+ * The presence of this grammar construct introduces no effect by itself.
  *
- * If a semantic constraint requires:
+ * However, semantic evaluation of a pattern constraint may involve an effect
+ * depending on the expression/pattern and language policy.
  *
- *     evaluation
- *     IO
+ * Potential semantic effects include:
+ *
+ *     io
+ *     network
  *     randomness
+ *     native
+ *     foreign
+ *     distributed
  *     measurement
+ *     quantum
+ *     learning
+ *     adaptation
  *     reflection
- *     foreign interaction
- *     network access
+ *     code_generation
+ *     simulation
  *
- * the relevant effect must be determined by the semantic/effect system.
+ * Effects MUST be determined downstream.
  *
- * This grammar does not define effects.
+ * This grammar must never encode an effect by implication.
  *
  * ============================================================================
  * CAPABILITY CONTRACT
  * ============================================================================
  *
- * Pattern-constrained types do not directly require hardware capabilities.
+ * Pattern constraints do not directly select or inspect a target capability.
  *
- * A semantic type may nevertheless participate in capability constraints.
+ * A semantic constraint may depend on a capability-aware operation.
  *
- * For example, a type representing a value that requires a particular
- * computational capability remains source-level semantic information.
+ * Capability resolution remains downstream.
  *
- * Capability satisfaction belongs to:
+ * Examples of capabilities that might participate semantically include:
  *
- *     grammar/resources/
- *     semantic capability analysis
- *     compiler/runtime negotiation
+ *     tensor.compute
+ *     quantum.measurement
+ *     distributed.compute
+ *     native.execute
  *
- * The grammar must never inspect the available machine.
+ * The grammar never probes whether such a capability exists.
  *
  * ============================================================================
  * RESOURCE CONTRACT
  * ============================================================================
  *
- * This file contains no resource limits.
+ * No resource limits are defined here.
  *
- * It MUST NOT encode limits for:
+ * In particular, this grammar contains no universal limits on:
  *
- *     values
  *     pattern count
  *     pattern depth
- *     generic arguments
+ *     alternatives
+ *     tuple arity
+ *     sequence length
+ *     type nesting
+ *     generic arity
  *     tensor rank
  *     tensor dimensions
  *     qubits
@@ -568,15 +812,14 @@
  *     accelerators
  *     nodes
  *     memory
+ *     storage
  *     devices
  *     network topology
  *
- * There is no universal maximum pattern size.
+ * There are no parser-level constants representing those limits.
  *
- * There is no universal maximum type size.
- *
- * Any implementation limit belongs to compiler/runtime resource policy and
- * must never silently become language semantics.
+ * Practical compiler limits, if necessary, belong to resource policy and
+ * must produce explicit diagnostics rather than changing language semantics.
  *
  * ============================================================================
  * CONTRACT INTEGRATION
@@ -591,80 +834,79 @@
  *     guarantee
  *     property
  *
- * but this grammar does not own those constructs.
+ * Contract syntax is not defined here.
  *
- * Contract syntax remains owned by:
+ * Contract semantics may reason about the constrained type.
  *
- *     grammar/validation/
- *
- * A contract can constrain a value whose type is pattern-constrained.
- *
- * A contract MUST NOT change the source-level identity of the type merely
- * because a particular target cannot satisfy it.
+ * A contract MUST NOT cause a target-specific reinterpretation of the type.
  *
  * ============================================================================
  * POLICY INTEGRATION
  * ============================================================================
  *
- * Policies may restrict:
+ * Policies may govern:
  *
- *     refinement evaluation
- *     proof obligations
- *     runtime checking
- *     reflection
- *     dynamic checks
- *     resource use
+ *     refinement checking;
+ *     runtime validation;
+ *     proof requirements;
+ *     reflection;
+ *     dynamic evaluation;
+ *     resource consumption.
  *
- * Policy syntax is owned elsewhere.
+ * Policy syntax remains owned by the policy subsystem.
  *
- * This grammar only provides the type-system structure consumed by policy
- * analysis.
+ * This file provides no policy bypass.
  *
  * ============================================================================
  * PROVENANCE CONTRACT
  * ============================================================================
  *
- * Type-constrained information must preserve source provenance where the
- * frontend infrastructure supports it.
+ * The parser must preserve enough structure for the frontend to associate:
  *
- * Relevant provenance may include:
+ *     type source span
+ *     where source span
+ *     pattern source span
  *
- *     source span
- *     declaration origin
- *     generated-by information
- *     macro origin
- *     refinement origin
- *     semantic derivation
+ * with the resulting semantic type.
  *
- * This file does not define provenance storage.
+ * Provenance may subsequently record:
+ *
+ *     source;
+ *     derived_from;
+ *     generated_by;
+ *     transformed_by;
+ *     verified_by;
+ *     reason;
+ *     evidence;
+ *     decision;
+ *     version.
+ *
+ * Provenance storage and semantics remain downstream.
  *
  * ============================================================================
  * QUANTUM INTEGRATION
  * ============================================================================
  *
- * Quantum values may participate in pattern matching.
+ * Quantum types may be constrained by patterns when their semantic value model
+ * permits such a constraint.
  *
- * However, the type grammar MUST NOT introduce physical quantum patterns.
+ * This grammar does NOT introduce:
  *
- * It must not encode:
+ *     physical qubit patterns;
+ *     physical qubit identifiers;
+ *     coupling maps;
+ *     calibration;
+ *     pulse schedules;
+ *     routing;
+ *     QEC selection;
+ *     hardware topology.
  *
- *     physical qubit identifiers
- *     coupling maps
- *     calibration
- *     pulse topology
- *     physical QPU layout
- *     QEC code selection
- *     routing
- *     scheduling
- *
- * A semantic quantum type remains target-independent.
- *
- * The downstream quantum pipeline remains:
+ * The downstream quantum path remains:
  *
  *     source
  *       |
  *       v
- *     AST
+ *     domain-neutral AST
  *       |
  *       v
  *     semantic quantum model
@@ -696,351 +938,569 @@
  *       v
  *     target
  *
- * This type grammar participates only before that boundary.
+ * This grammar participates only before the `quantum::ir` boundary.
  *
  * ============================================================================
- * CLASSICAL / AI / DATA / HDL INTEGRATION
+ * HDL / HARDWARE INTEGRATION
  * ============================================================================
  *
- * The same pattern-constrained type machinery may apply to:
+ * HDL and hardware semantic values may use the same type-pattern mechanism.
  *
- *     classical values
- *     numerical values
- *     tensor values
- *     model values
- *     datasets
- *     knowledge values
- *     probabilistic values
- *     distributed values
- *     HDL semantic values
- *     hardware abstraction values
+ * The grammar does not encode:
  *
- * No domain-specific pattern type hierarchy is required.
+ *     fixed bus widths;
+ *     fixed register widths;
+ *     fixed device counts;
+ *     fixed topology sizes;
+ *     physical addresses;
+ *     vendor-specific hardware identifiers.
  *
- * Domain-specific behavior is represented through normal types, generic
- * parameters, constraints, capabilities, and semantic registration.
+ * Those are target or semantic properties, not universal grammar limits.
+ *
+ * ============================================================================
+ * CLASSICAL / DATA / AI INTEGRATION
+ * ============================================================================
+ *
+ * The same construct can constrain:
+ *
+ *     scalar values;
+ *     tuples;
+ *     records;
+ *     variants;
+ *     collections;
+ *     tensors;
+ *     datasets;
+ *     probabilistic values;
+ *     knowledge values;
+ *     inference results;
+ *     learning results;
+ *     distributed values;
+ *     resource descriptions;
+ *     capability descriptions.
+ *
+ * No domain-specific pattern-type grammar is required.
+ *
+ * ============================================================================
+ * MATCH INTEGRATION
+ * ============================================================================
+ *
+ * Match constructs consume the same canonical `pattern` rule.
+ *
+ * This file does not define:
+ *
+ *     matchStatement
+ *     matchExpression
+ *     matchArm
+ *     guardClause
+ *
+ * A pattern appearing after `where` is therefore structurally identical to a
+ * pattern appearing in a match arm.
+ *
+ * The semantic context differs:
+ *
+ *     match context
+ *         -> scrutinee matching
+ *
+ *     type context
+ *         -> type refinement
+ *
+ * Semantic analysis owns that distinction.
+ *
+ * ============================================================================
+ * GUARD INTEGRATION
+ * ============================================================================
+ *
+ * A type-level pattern constraint does not own guards.
+ *
+ * If a future refinement feature requires predicates in addition to patterns,
+ * that predicate syntax must be owned by the canonical refinement/constraint
+ * subsystem.
+ *
+ * Do not add a second guard language here.
  *
  * ============================================================================
  * INTEROPERABILITY
  * ============================================================================
  *
- * Foreign values may participate in pattern constraints only after their
- * foreign representation has been mapped into a valid semantic boundary.
+ * Foreign values may be constrained only after their semantic type has crossed
+ * the FFI/ABI boundary.
  *
  * This file does not define:
  *
- *     ABI
- *     calling conventions
- *     foreign layout
- *     pointer representation
- *     data marshaling
+ *     ABI;
+ *     layout;
+ *     calling convention;
+ *     marshaling;
+ *     pointer representation.
  *
- * Those belong to:
- *
- *     grammar/interoperability/
- *
- * ============================================================================
- * DIALECT INTEGRATION
- * ============================================================================
- *
- * Dialects may provide additional semantic types and constraint forms.
- *
- * A dialect MUST NOT silently redefine the universal pattern language.
- *
- * Dialect extensions must declare:
- *
- *     syntax ownership
- *     semantic ownership
- *     compatibility
- *     AST representation
- *     lowering
- *     diagnostics
- *     provenance
- *
- * Core Zamani remains independent of any one dialect.
+ * Those belong to interoperability.
  *
  * ============================================================================
  * METAPROGRAMMING
  * ============================================================================
  *
- * Macros and compile-time facilities may generate pattern-constrained type
- * syntax.
+ * Generated type constraints must re-enter the ordinary parser and semantic
+ * pipeline.
  *
- * Generated syntax must pass through the same:
+ * Reflection and code generation MUST NOT bypass:
  *
- *     parsing
- *     structural validation
- *     name resolution
- *     type checking
- *     constraint checking
- *
- * as handwritten syntax.
- *
- * Metaprogramming must not bypass semantic validation.
- *
- * ============================================================================
- * DETERMINISM
- * ============================================================================
- *
- * Parsing this component must be deterministic with respect to:
- *
- *     source text
- *     selected language version
- *     selected grammar configuration
- *
- * It must not depend on:
- *
- *     target hardware
- *     runtime state
- *     scheduler state
- *     randomness
- *     network state
- *     filesystem state
- *     resource availability
- *
- * Resource availability is evaluated downstream.
+ *     type checking;
+ *     refinement checking;
+ *     ownership;
+ *     effects;
+ *     capabilities;
+ *     resources;
+ *     contracts;
+ *     policies;
+ *     provenance.
  *
  * ============================================================================
- * POCO-REAF CONTRACT
+ * DIALECT INTEGRATION
  * ============================================================================
  *
- * Pattern-constrained types describe semantic intent.
+ * Domain dialects may define types whose values can be constrained by the
+ * universal pattern system.
  *
- * They must remain independent of the machine on which they are realized.
+ * A dialect does not obtain permission to redefine:
  *
- * The same source-level type may ultimately participate in:
+ *     pattern
  *
- *     tiny embedded execution
- *     CPU execution
- *     multicore execution
- *     GPU execution
- *     FPGA execution
- *     ASIC execution
- *     accelerator execution
- *     QPU execution
- *     simulation
- *     HPC execution
- *     distributed execution
- *     cloud execution
- *     future execution targets
+ * or:
  *
- * Target realization may change:
+ *     patternTypeConstraint
  *
- *     representation
- *     layout
- *     optimization
- *     placement
- *     scheduling
- *     execution strategy
+ * as a competing universal syntax.
  *
- * but must not silently change the source type's semantic identity.
+ * Dialect-specific semantics remain outside this grammar.
  *
  * ============================================================================
- * SCALABILITY
+ * ERROR / DIAGNOSTIC CONTRACT
  * ============================================================================
  *
- * The grammar contains no artificial finite capacity.
+ * Syntax errors associated with this rule include:
  *
- * Arbitrarily large source structures remain representable subject only to
- * actual implementation resources.
+ *     missing pattern after `where`;
+ *     malformed pattern;
+ *     unexpected end of input;
+ *     invalid delimiter structure within the delegated pattern.
  *
- * Compiler/resource limits must be expressed as implementation policy and
- * diagnostics, not as grammar constants.
+ * Semantic diagnostics include:
  *
- * In particular, no source rule may assume:
+ *     pattern incompatible with base type;
+ *     impossible refinement;
+ *     invalid binding;
+ *     invalid range endpoint;
+ *     invalid structural decomposition;
+ *     unsupported semantic refinement;
+ *     forbidden effect;
+ *     unavailable required capability;
+ *     unavailable required resource;
+ *     policy violation.
  *
- *     fixed tuple size
- *     fixed generic arity
- *     fixed pattern depth
- *     fixed tensor rank
- *     fixed collection length
- *     fixed quantum size
- *     fixed machine size
+ * The parser MUST distinguish syntax failure from semantic failure.
  *
- * ============================================================================
- * DIAGNOSTICS
- * ============================================================================
- *
- * Syntax diagnostics are owned by the parser.
- *
- * Semantic diagnostics are owned by semantic analysis.
- *
- * The separation must remain explicit.
- *
- * Examples:
- *
- *     malformed type constraint
- *         -> parser diagnostic
- *
- *     unknown type
- *         -> name/type resolver diagnostic
- *
- *     invalid pattern/type relationship
- *         -> semantic type diagnostic
- *
- *     unsatisfied refinement
- *         -> refinement/constraint diagnostic
- *
- *     missing hardware capability
- *         -> capability/resource diagnostic
- *
- *     insufficient runtime resources
- *         -> execution/resource diagnostic
- *
- * These conditions must never be collapsed into one generic parser error.
+ * A target feasibility failure MUST NOT be reported as a parser error.
  *
  * ============================================================================
- * COMPATIBILITY
+ * SCALABILITY CONTRACT
  * ============================================================================
  *
- * This file introduces no replacement for the canonical value-pattern
- * grammar.
+ * The grammar is open-ended with respect to:
  *
- * Existing source using:
+ *     pattern alternatives;
+ *     nesting;
+ *     type complexity;
+ *     generic structure;
+ *     symbolic values;
+ *     source-program size.
+ *
+ * No finite language ceiling is introduced here.
+ *
+ * "Scale to infinity" means that the language does not artificially cap the
+ * semantic domain.
+ *
+ * It does not claim that finite implementations possess infinite resources.
+ *
+ * A compiler may enforce configurable resource budgets for:
+ *
+ *     parsing;
+ *     memory;
+ *     semantic analysis;
+ *     proof;
+ *     compilation;
+ *     execution.
+ *
+ * Such budgets are implementation policy, not language semantics.
+ *
+ * ============================================================================
+ * DETERMINISM CONTRACT
+ * ============================================================================
+ *
+ * Given identical:
+ *
+ *     source;
+ *     grammar version;
+ *     lexer vocabulary;
+ *     parser configuration;
+ *
+ * this grammar must produce the same parse structure and source ordering.
+ *
+ * The grammar introduces no:
+ *
+ *     randomness;
+ *     time dependence;
+ *     environment inspection;
+ *     target inspection;
+ *     mutable parser state.
+ *
+ * ============================================================================
+ * SAFETY CONTRACT
+ * ============================================================================
+ *
+ * This grammar contains no executable code.
+ *
+ * Rust integration MUST remain:
+ *
+ *     Rust 1.97+
+ *     Rust 2021
+ *     safe Rust only
+ *
+ * No `unsafe` Rust is required.
+ *
+ * The grammar itself cannot perform:
+ *
+ *     filesystem access;
+ *     network access;
+ *     process execution;
+ *     hardware discovery;
+ *     device discovery.
+ *
+ * ============================================================================
+ * COMPATIBILITY CONTRACT
+ * ============================================================================
+ *
+ * The new construct is additive:
+ *
+ *     existing type syntax remains unchanged;
+ *     existing value-pattern syntax remains unchanged;
+ *     existing match syntax remains unchanged.
+ *
+ * The new boundary is introduced only by the canonical `WHERE` token.
+ *
+ * Existing programs containing:
+ *
+ *     where
+ *
+ * in an identifier position must follow the repository's existing reserved
+ * keyword policy.
+ *
+ * No parser-local alias is permitted.
+ *
+ * ============================================================================
+ * INTEGRATION WITH THE TYPE ORCHESTRATOR
+ * ============================================================================
+ *
+ * `grammar/types/types.g4` remains the owner of:
+ *
+ *     typeExpression
+ *     typeCore
+ *     typePostfix
+ *
+ * It must import this grammar:
+ *
+ *     import PatternTypes;
+ *
+ * and its `typePostfix` rule must consume:
+ *
+ *     patternTypeConstraint
+ *
+ * The resulting composition is:
+ *
+ *     typeExpression
+ *         : typePrefix*
+ *           typeCore
+ *           typePostfix*
+ *         ;
+ *
+ *     typePostfix
+ *         : QUESTION_MARK
+ *         | patternTypeConstraint
+ *         ;
+ *
+ * This keeps the dependency direction acyclic:
+ *
+ *     Type
+ *       |
+ *       v
+ *     PatternTypes
+ *       |
+ *       v
+ *     Patterns
+ *
+ * `PatternTypes` does NOT import `Type`.
+ *
+ * ============================================================================
+ * INTEGRATION WITH VALUE PATTERNS
+ * ============================================================================
+ *
+ * `grammar/expressions/patterns.g4` remains unchanged by this file.
+ *
+ * It continues to own:
+ *
+ *     pattern
+ *     patternAtom
+ *     wildcardPattern
+ *     bindingPattern
+ *     literalPattern
+ *     tuplePattern
+ *     sequencePattern
+ *     structPattern
+ *     variantPattern
+ *     rangePattern
+ *     referencePattern
+ *     typePattern
+ *     orPattern
+ *     parenthesizedPattern
+ *
+ * No rule is copied here.
+ *
+ * ============================================================================
+ * INTEGRATION WITH MATCH
+ * ============================================================================
+ *
+ * Match grammars continue to consume:
+ *
+ *     pattern
+ *
+ * from:
  *
  *     grammar/expressions/patterns.g4
  *
- * remains governed by that grammar.
- *
- * If a historical syntax is supported, compatibility handling belongs under:
- *
- *     grammar/compatibility/
- *
- * Historical aliases must not create duplicate canonical tokens or duplicate
- * pattern authorities.
+ * They do not consume `patternTypeConstraint` unless a future type grammar
+ * explicitly requires it.
  *
  * ============================================================================
- * TEST CONTRACT
+ * INTEGRATION WITH REFINEMENT
  * ============================================================================
  *
- * Production completion requires tests at all relevant layers.
+ * The existing validation/refinement subsystem remains the semantic owner of
+ * proof and validation.
  *
- * STRUCTURAL TESTS:
+ * This grammar does not create:
  *
- *     - PatternTypes grammar generates successfully;
- *     - canonical lexer vocabulary resolves;
- *     - no lexer rules are declared here;
- *     - no duplicate pattern rule is declared;
- *     - no duplicate type-expression root is declared;
- *     - grammar imports remain acyclic.
+ *     refinementStatement
+ *     refinementExpression
+ *     refinementPattern
  *
- * PARSER TESTS:
+ * solely for this feature.
  *
- *     - valid pattern-type forms parse;
- *     - malformed pattern-type forms fail deterministically;
- *     - nested type structures remain bounded by implementation resources
- *       rather than language constants;
- *     - source spans are preserved.
+ * The type checker can transform the parsed structure into the repository's
+ * existing refinement representation.
  *
- * INTEGRATION TESTS:
+ * ============================================================================
+ * INTEGRATION WITH CONTRACTS
+ * ============================================================================
  *
- *     - type orchestrator consumes patternType;
- *     - canonical expression pattern grammar remains the sole owner of
- *       `pattern`;
- *     - match expressions continue consuming expression patterns;
- *     - match statements continue consuming expression patterns;
- *     - type expressions remain the sole type composition authority.
+ * Contracts remain independent:
  *
- * SEMANTIC TESTS:
+ *     requires
+ *     ensures
+ *     invariant
+ *     assume
+ *     guarantee
+ *     property
  *
- *     - pattern/type compatibility;
- *     - invalid refinement;
- *     - valid refinement;
- *     - generic interaction;
- *     - dependent-value interaction;
- *     - ownership interaction;
- *     - affine interaction;
- *     - linear interaction;
- *     - reference interaction;
- *     - effect interaction;
- *     - capability interaction;
- *     - resource interaction.
+ * may reference values whose types contain pattern constraints.
  *
- * CROSS-DOMAIN TESTS:
+ * Contract syntax is never duplicated here.
  *
- *     - classical values;
- *     - tensor/data values;
- *     - probabilistic values;
- *     - knowledge values;
- *     - quantum semantic values;
- *     - hybrid values;
- *     - HDL semantic values;
- *     - hardware abstraction values;
- *     - distributed values.
+ * ============================================================================
+ * INTEGRATION WITH RESOURCES / CAPABILITIES
+ * ============================================================================
  *
- * SCALABILITY TESTS:
+ * Pattern constraints may appear on types that have semantic relationships
+ * with:
  *
- *     - symbolic constraints;
- *     - large type graphs;
- *     - large nested structures;
- *     - large generic structures;
- *     - large pattern alternatives;
- *     - large source spans;
- *     - no artificial parser maximum is introduced.
+ *     resources;
+ *     capabilities;
+ *     requirements;
+ *     constraints;
+ *     policies.
  *
- * NEGATIVE TESTS:
+ * Resolution occurs downstream.
  *
- *     - malformed pattern constraint;
- *     - missing type component;
- *     - malformed delimiter;
- *     - invalid nesting;
- *     - duplicate incompatible constraints where prohibited semantically;
- *     - unsatisfied semantic refinement;
- *     - invalid type/pattern relationship.
+ * This grammar never inspects the available machine.
  *
- * DETERMINISM TESTS:
+ * ============================================================================
+ * INTEGRATION WITH EFFECTS
+ * ============================================================================
  *
- *     The same source and grammar configuration must produce the same parse
- *     structure and source spans.
+ * Pattern syntax remains effect-neutral.
+ *
+ * If semantic checking of the pattern requires an effect, the effect system
+ * records it.
+ *
+ * This keeps:
+ *
+ *     syntax
+ *
+ * separate from:
+ *
+ *     execution behavior.
+ *
+ * ============================================================================
+ * INTEGRATION WITH PROVENANCE
+ * ============================================================================
+ *
+ * The parser structure must allow the semantic layer to associate provenance
+ * with:
+ *
+ *     the constrained type;
+ *     the `where` clause;
+ *     the delegated pattern;
+ *     any generated/refined semantic representation.
+ *
+ * No provenance storage is implemented here.
+ *
+ * ============================================================================
+ * INTEGRATION WITH CANONICAL IR
+ * ============================================================================
+ *
+ * This grammar creates no IR.
+ *
+ * Semantic lowering may represent the constraint in the canonical semantic
+ * model.
+ *
+ * Domain-specific lowering then determines whether the constraint:
+ *
+ *     can be statically proven;
+ *     becomes a runtime check;
+ *     is discharged during specialization;
+ *     is represented as metadata;
+ *     is rejected as unsatisfiable.
+ *
+ * Quantum-derived semantics continue toward:
+ *
+ *     quantum::ir
+ *
+ * No second quantum IR is introduced.
  *
  * ============================================================================
  * HARD-CODING AUDIT
  * ============================================================================
  *
- * This file MUST contain:
+ * This file contains no universal numerical capacity.
  *
- *     no universal hardware constants
- *     no maximum pattern count
- *     no maximum type count
- *     no maximum generic arity
- *     no maximum tuple arity
- *     no maximum tensor rank
- *     no maximum quantum count
- *     no maximum node count
- *     no maximum memory size
- *     no target-specific numeric assumptions
+ * Forbidden concepts include any universal maximum for:
  *
- * It MUST NOT contain:
+ *     qubits;
+ *     CPUs;
+ *     GPUs;
+ *     FPGAs;
+ *     accelerators;
+ *     nodes;
+ *     memory;
+ *     threads;
+ *     register width;
+ *     tensor rank;
+ *     network size;
+ *     device count;
+ *     pattern count;
+ *     pattern depth;
+ *     generic arity;
+ *     tuple arity.
  *
- *     CPU-specific syntax
- *     GPU-specific syntax
- *     FPGA-specific syntax
- *     QPU-specific syntax
- *     vendor-specific physical identifiers
- *     physical topology
- *     runtime resource discovery
+ * Numeric literals inside source patterns remain program data.
+ *
+ * For example:
+ *
+ *     Integer where 42
+ *
+ * contains a program value.
+ *
+ * The grammar MUST NOT interpret `42` as a language-wide capacity.
  *
  * ============================================================================
- * RUST CONTRACT
+ * TEST CONTRACT
  * ============================================================================
  *
- * This grammar contains no Rust actions.
+ * Required lexical tests:
  *
- * Rust integration must use:
+ *     where
  *
- *     Rust 1.97 or later
- *     Rust 2021
- *     safe Rust
+ * Required parser-positive tests:
  *
- * No unsafe Rust is required or permitted by this grammar feature.
+ *     Integer where 0
+ *     Integer where 0 | 1
+ *     Integer where 0 .. limit
+ *     Point where Point { x: _, y: _ }
+ *     Result<T, E> where Ok(value)
+ *     Tensor<T> where _
  *
- * Parser generation must not embed:
+ * Required parser-negative tests:
  *
- *     filesystem operations
- *     network operations
- *     hardware operations
- *     dynamic execution
- *     target probing
+ *     Integer where
+ *     Integer where |
+ *     Integer where ,
+ *     Integer where (
+ *     Integer where )
+ *
+ * Required semantic tests:
+ *
+ *     compatible pattern/type;
+ *     incompatible pattern/type;
+ *     invalid binding;
+ *     invalid range;
+ *     impossible refinement;
+ *     valid generic refinement;
+ *     valid dependent-value refinement;
+ *     ownership-sensitive refinement.
+ *
+ * Required cross-domain tests:
+ *
+ *     classical type + pattern;
+ *     tensor type + pattern;
+ *     data type + pattern;
+ *     quantum semantic type + pattern;
+ *     HDL semantic type + pattern;
+ *     distributed value type + pattern.
+ *
+ * Required scalability tests:
+ *
+ *     large pattern alternatives;
+ *     deeply nested patterns;
+ *     large generic type structures;
+ *     symbolic dependent values;
+ *     large source files;
+ *     no artificial language-level ceiling.
+ *
+ * Required determinism tests:
+ *
+ *     identical input produces identical parse structure;
+ *     source ordering remains unchanged;
+ *     delegated pattern structure is preserved.
+ *
+ * ============================================================================
+ * TEST OWNERSHIP
+ * ============================================================================
+ *
+ * grammar/types/pattern.g4
+ *     owns parser syntax for patternTypeConstraint.
+ *
+ * grammar/expressions/patterns.g4
+ *     owns pattern syntax tests.
+ *
+ * semantic type tests
+ *     own compatibility/refinement semantics.
+ *
+ * frontend AST tests
+ *     own AST representation.
+ *
+ * compiler/IR tests
+ *     own semantic-to-IR behavior.
+ *
+ * backend tests
+ *     own target realization.
  *
  * ============================================================================
  * COMPLETION CRITERIA
@@ -1048,173 +1508,129 @@
  *
  * This file is DONE when:
  *
- *     [ ] the repository explicitly confirms what semantic surface
- *         `patternType` represents;
+ *     [ ] grammar name is PatternTypes;
  *
- *     [ ] the canonical value-pattern grammar remains
- *         grammar/expressions/patterns.g4;
+ *     [ ] tokenVocab is ZamaniLexer;
  *
- *     [ ] no competing `pattern` rule exists here;
+ *     [ ] Patterns is imported;
  *
- *     [ ] no competing `typePattern` rule exists here;
+ *     [ ] `patternTypeConstraint` is the only public rule;
  *
- *     [ ] the canonical type orchestrator consumes this component;
+ *     [ ] `pattern` is not redefined;
  *
- *     [ ] AST representation is defined by the existing frontend AST;
+ *     [ ] `typeExpression` is not redefined;
  *
- *     [ ] semantic ownership is defined;
+ *     [ ] `typeCore` is not redefined;
  *
- *     [ ] refinement/constraint ownership is defined;
+ *     [ ] no circular import exists;
  *
- *     [ ] effects are delegated to the effect system;
+ *     [ ] WHERE is consumed from the canonical lexer;
  *
- *     [ ] capabilities are delegated to capability analysis;
+ *     [ ] the delegated pattern is the canonical pattern rule;
  *
- *     [ ] resources are delegated to resource analysis;
+ *     [ ] no semantic actions exist;
  *
- *     [ ] policies are delegated to policy analysis;
+ *     [ ] no semantic predicates exist;
+ *
+ *     [ ] no Rust is embedded;
+ *
+ *     [ ] no unsafe implementation is required;
+ *
+ *     [ ] no hardware assumptions exist;
+ *
+ *     [ ] no resource ceilings exist;
+ *
+ *     [ ] no domain-specific keyword catalogue is introduced;
+ *
+ *     [ ] AST ownership is downstream;
+ *
+ *     [ ] semantic ownership is downstream;
+ *
+ *     [ ] refinement ownership is downstream;
+ *
+ *     [ ] effects are downstream;
+ *
+ *     [ ] capabilities are downstream;
+ *
+ *     [ ] resources are downstream;
+ *
+ *     [ ] contracts are downstream;
+ *
+ *     [ ] policies are downstream;
  *
  *     [ ] provenance is preserved;
  *
- *     [ ] quantum semantics terminate at the canonical quantum::ir boundary;
+ *     [ ] canonical IR ownership is preserved;
  *
- *     [ ] no target-specific realization is encoded;
+ *     [ ] quantum semantics continue toward quantum::ir;
  *
- *     [ ] no artificial scalability ceiling exists;
+ *     [ ] positive parser tests pass;
  *
- *     [ ] positive tests pass;
+ *     [ ] negative parser tests pass;
  *
- *     [ ] negative tests pass;
+ *     [ ] semantic tests pass;
  *
  *     [ ] boundary tests pass;
  *
- *     [ ] cross-domain tests pass;
+ *     [ ] scalability tests pass;
  *
  *     [ ] determinism tests pass;
  *
- *     [ ] safe Rust integration passes on Rust 1.97 or later.
+ *     [ ] compatibility tests pass;
+ *
+ *     [ ] Rust 1.97+ frontend integration passes.
  *
  * ============================================================================
- * FINAL ARCHITECTURAL RULE
+ * FINAL ARCHITECTURAL INVARIANT
  * ============================================================================
  *
- * This file exists to give the type system a stable home for
- * pattern-constrained type semantics.
- *
- * It is NOT another pattern language.
- *
- * The authoritative architecture is:
- *
- *     grammar/expressions/patterns.g4
- *             |
- *             | value-pattern syntax
- *             v
- *        canonical pattern
- *             |
- *             v
- *     grammar/types/pattern.g4
- *             |
- *             | type-level integration
- *             v
- *        canonical type system
- *             |
- *             v
- *        semantic model
- *             |
- *       +-----+------+----------------+
- *       |            |                |
- *       v            v                v
- *   classical    quantum::ir      HDL/hardware
- *       |            |                |
- *       +------------+----------------+
- *                    |
- *                    v
- *              target-independent
- *                 optimization
- *                    |
- *               lowering/routing
- *                    |
- *                scheduling
- *                    |
- *             resilience/recovery
- *                    |
- *                  ZQN
- *                    |
- *                  HAL
- *                    |
- *              target realization
- *
- * The grammar therefore remains portable, open-ended, target-independent,
- * deterministic, and free of artificial hardware limits.
+ * ONE TYPE SYSTEM
+ * ONE VALUE-PATTERN LANGUAGE
+ * ONE PATTERN AUTHORITY
+ * ONE DOMAIN-NEUTRAL AST
+ * ONE SEMANTIC TYPE MODEL
+ * MANY DOMAINS
+ * MANY TARGETS
+ * NO ARTIFICIAL CAPACITY CEILING
  *
  * ============================================================================
  */
+
 parser grammar PatternTypes;
 
 options {
     tokenVocab = ZamaniLexer;
 }
 
-/*
- * ============================================================================
- * PUBLIC TYPE-PATTERN ENTRY
- * ============================================================================
- *
- * NOTE:
- *
- * The concrete type-expression implementation belongs to the canonical type
- * orchestrator. This component deliberately does not import that orchestrator
- * because doing so would create a circular dependency when the orchestrator
- * imports this component.
- *
- * The production composition layer should bind the semantic type-pattern
- * construct to the canonical type-expression rule.
- *
- * The leaf rule below is therefore intentionally a structural marker rather
- * than a second complete type grammar.
- *
- * If the repository's ANTLR composition is later normalized so that a shared
- * type-expression delegate can be imported without a cycle, this rule may be
- * widened through that delegate without changing the ownership contract.
- */
-patternType
-    : patternTypeBody
-    ;
+import Patterns;
 
 
 /*
  * ============================================================================
- * TYPE-PATTERN BODY
+ * TYPE-LEVEL PATTERN CONSTRAINT
  * ============================================================================
  *
- * This rule is intentionally a narrow integration hook.
+ * This is intentionally a narrow delegate.
  *
- * The exact surface representation of a pattern-constrained type MUST be
- * finalized by grammar/types/types.g4 and grammar/specification/types.md
- * together.
+ * The preceding type expression is owned by the enclosing type grammar.
  *
- * It MUST NOT consume arbitrary complete expressions here because doing so
- * would make this component capable of swallowing unrelated expression
- * syntax and would introduce parser ambiguity with the canonical expression
- * pattern grammar.
+ * This rule owns only:
  *
- * Until the normative type syntax is established, the production-safe form
- * is an explicit parenthesized constraint boundary.
+ *     where pattern
  *
- * The semantic type orchestrator owns the interpretation of the contents.
+ * Therefore there is no recursive dependency from this grammar back into
+ * Type/types.g4.
  *
- * IMPORTANT:
+ * Examples:
  *
- * The token sequence inside the boundary is intentionally represented using
- * the canonical expression/pattern entry only after the composition grammar
- * supplies that dependency. This leaf cannot safely import the full
- * expression grammar without potentially creating a dependency cycle.
+ *     Integer where 0
  *
- * Therefore this rule is a placeholder integration boundary and MUST NOT be
- * promoted to a normative source syntax until the corresponding specification
- * defines its concrete delimiters.
+ *     Integer where 0 | 1
+ *
+ *     Point where Point { x: _, y: _ }
+ *
+ *     Result<T, E> where Ok(value)
  */
-patternTypeBody
-    : LBRACE
-      RBRACE
+patternTypeConstraint
+    : WHERE pattern
     ;
