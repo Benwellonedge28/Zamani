@@ -13,15 +13,11 @@
  *
  * STATUS
  * ------
- * CANONICAL / PRODUCTION DATA-LAYOUT CONTRACT
- *
- * LANGUAGE
- * --------
- * Zamani
+ * CANONICAL / PRODUCTION DATA-LAYOUT CONTRACT GRAMMAR
  *
  * IMPLEMENTATION BASELINE
  * -----------------------
- * Rust 1.97 or later
+ * Rust 1.97+
  * Rust 2021
  * Safe Rust only
  * No unsafe Rust
@@ -33,45 +29,87 @@
  * PURPOSE
  * -------
  *
- * This file owns the SOURCE-LEVEL SYNTAX for describing data-layout
- * interoperability intent at a foreign/ABI boundary.
+ * This grammar owns SOURCE-LEVEL DATA-LAYOUT INTEROPERABILITY INTENT.
  *
- * A data-layout contract describes how a semantic Zamani value or type is
- * expected to cross an interoperability boundary.
+ * A data-layout contract describes requirements and properties governing how
+ * a semantic Zamani value/type is represented when crossing an interoperability
+ * boundary.
  *
- * It may express:
+ * This includes, where semantically applicable:
  *
- *     - representation identity;
- *     - scalar representation;
- *     - aggregate representation;
- *     - field-order intent;
- *     - field-layout intent;
- *     - size intent;
- *     - alignment intent;
- *     - stride intent;
- *     - offset intent;
- *     - byte-order intent;
- *     - bit-order intent;
+ *     - representation;
+ *     - field ordering;
+ *     - field offsets;
+ *     - aggregate layout;
+ *     - size;
+ *     - alignment;
+ *     - stride;
+ *     - byte order;
+ *     - bit order;
  *     - address-space intent;
- *     - pointer/reference representation intent;
- *     - integer/float representation intent;
- *     - vector representation intent;
- *     - opaque representation;
- *     - transparent representation;
- *     - tagged/untagged representation intent;
- *     - discriminant representation intent;
- *     - nullable representation intent;
- *     - calling-boundary representation metadata;
- *     - layout compatibility constraints;
- *     - layout requirements;
- *     - layout capabilities;
- *     - target-independent layout properties;
- *     - symbolic layout expressions;
- *     - extensible vendor/domain metadata.
+ *     - pointer/reference representation;
+ *     - scalar representation;
+ *     - vector representation;
+ *     - aggregate representation;
+ *     - tagged/untagged representation;
+ *     - discriminant representation;
+ *     - nullability;
+ *     - opacity/transparency;
+ *     - compatibility;
+ *     - requirements;
+ *     - capabilities;
+ *     - constraints;
+ *     - extensible interoperability metadata.
  *
- * This grammar describes DECLARATIVE INTENT.
+ * This grammar expresses DECLARATIVE INTENT only.
  *
- * It does NOT calculate, allocate, or materialize a machine layout.
+ * It does NOT calculate or materialize a target-specific physical layout.
+ *
+ *
+ * ============================================================================
+ * ARCHITECTURAL BOUNDARY
+ * ============================================================================
+ *
+ * The data-layout pipeline is:
+ *
+ *     source
+ *       |
+ *       v
+ *     canonical lexer
+ *       |
+ *       v
+ *     canonical parser
+ *       |
+ *       v
+ *     data-layout contract
+ *       |
+ *       v
+ *     domain-neutral AST
+ *       |
+ *       v
+ *     structural validation
+ *       |
+ *       v
+ *     semantic interoperability analysis
+ *       |
+ *       +-------------------+--------------------+
+ *       |                   |                    |
+ *       v                   v                    v
+ *     types                ABI                  FFI
+ *       |                   |                    |
+ *       +-------------------+--------------------+
+ *                           |
+ *                           v
+ *                canonical semantic model
+ *                           |
+ *                           v
+ *                 target-independent lowering
+ *                           |
+ *                           v
+ *                    target realization
+ *
+ * Data-layout syntax MUST NOT bypass the semantic model.
+ *
  *
  * ============================================================================
  * OWNS
@@ -85,19 +123,17 @@
  *     dataLayoutMember
  *     dataLayoutProfileReference
  *     dataLayoutTypeContract
- *     dataLayoutRepresentation
  *     dataLayoutFieldContract
- *     dataLayoutProperty
  *     dataLayoutRequirement
  *     dataLayoutCapability
  *     dataLayoutConstraint
- *     dataLayoutExpression
- *     dataLayoutReference
- *     dataLayoutOpaque
- *     dataLayoutTransparent
  *     dataLayoutCompatibility
+ *     dataLayoutProperty
+ *     dataLayoutReference
+ *     dataLayoutExpression
  *
- * It owns the syntactic organization of data-layout contracts.
+ * It owns the syntactic composition of a data-layout contract.
+ *
  *
  * ============================================================================
  * DOES NOT OWN
@@ -105,193 +141,268 @@
  *
  * This file does NOT own:
  *
- *     - lexer rules;
- *     - identifier spelling;
- *     - qualified-name syntax;
- *     - general expressions;
- *     - general types;
- *     - ABI identity;
- *     - ABI contracts;
- *     - FFI declarations;
- *     - foreign function declarations;
- *     - foreign type declarations;
- *     - calling conventions;
- *     - linkage;
- *     - symbol resolution;
- *     - target selection;
- *     - target architecture;
- *     - machine instruction selection;
- *     - register allocation;
- *     - stack allocation;
- *     - object-file generation;
- *     - linker implementation;
- *     - loader implementation;
- *     - physical memory allocation;
- *     - hardware discovery;
- *     - hardware placement;
- *     - quantum routing;
- *     - quantum scheduling;
- *     - QEC;
- *     - ZQN;
- *     - HAL;
- *     - runtime execution.
+ *     lexer rules
+ *     identifiers
+ *     qualified names
+ *     attributes
+ *     general expressions
+ *     general types
+ *     ordinary declarations
+ *     ordinary functions
+ *     FFI calls
+ *     foreign functions
+ *     foreign types
+ *     ABI identity
+ *     calling conventions
+ *     linkage
+ *     symbol resolution
+ *     dynamic loading
+ *     serialization formats
+ *     deserialization formats
+ *     target selection
+ *     target architecture
+ *     machine instructions
+ *     register allocation
+ *     stack allocation
+ *     physical memory allocation
+ *     hardware discovery
+ *     quantum routing
+ *     quantum scheduling
+ *     QEC
+ *     ZQN
+ *     HAL
+ *     runtime execution
+ *
  *
  * ============================================================================
- * CRITICAL ARCHITECTURAL RULE
+ * SINGLE-AUTHORITY CONTRACT
  * ============================================================================
  *
- * DATA LAYOUT != PHYSICAL MACHINE LAYOUT.
+ * General names:
  *
- * A source-level data-layout contract describes an interoperability
- * representation requirement.
+ *     grammar/core/names.g4
  *
- * The compiler may later realize that contract differently for:
+ * General attributes:
  *
- *     CPU
- *     GPU
- *     FPGA
- *     ASIC
- *     accelerator
- *     QPU
- *     simulator
- *     embedded target
- *     distributed target
- *     future target
+ *     grammar/core/attributes.g4
  *
- * without changing the source program.
+ * General expressions:
+ *
+ *     grammar/expressions/expressions.g4
+ *
+ * General types:
+ *
+ *     grammar/types/types.g4
+ *
+ * ABI:
+ *
+ *     grammar/interoperability/abi.g4
+ *
+ * FFI:
+ *
+ *     grammar/interoperability/ffi.g4
+ *
+ * Foreign functions:
+ *
+ *     grammar/interoperability/foreign-functions.g4
+ *
+ * Foreign types:
+ *
+ *     grammar/interoperability/foreign-types.g4
+ *
+ * Calling conventions:
+ *
+ *     grammar/interoperability/calling-conventions.g4
+ *
+ * Serialization:
+ *
+ *     grammar/interoperability/serialization.g4
+ *
+ * Deserialization:
+ *
+ *     grammar/interoperability/deserialization.g4
+ *
+ * Data-layout syntax MUST NOT duplicate those authorities.
+ *
+ *
+ * ============================================================================
+ * DEPENDENCY CONTRACT
+ * ============================================================================
+ *
+ * DEPENDS_ON:
+ *
+ *     ZamaniLexer
+ *     Names
+ *     Attributes
+ *     Expressions
+ *     Type
+ *
+ * EXPORTS:
+ *
+ *     dataLayoutDeclaration
+ *     dataLayoutContract
+ *     dataLayoutBody
+ *     dataLayoutMember
+ *     dataLayoutProfileReference
+ *     dataLayoutTypeContract
+ *     dataLayoutFieldContract
+ *     dataLayoutRequirement
+ *     dataLayoutCapability
+ *     dataLayoutConstraint
+ *     dataLayoutCompatibility
+ *     dataLayoutProperty
+ *     dataLayoutReference
+ *     dataLayoutExpression
+ *
+ * CONSUMED_BY:
+ *
+ *     interoperability dispatcher
+ *     ABI semantic analysis
+ *     FFI semantic analysis
+ *     foreign-type semantic analysis
+ *     AST construction
+ *     validation
+ *     compiler/lowering
+ *
+ * AST_OWNER:
+ *
+ *     existing domain-neutral frontend AST
+ *
+ * SEMANTIC_OWNER:
+ *
+ *     interoperability semantic analysis
+ *
+ * IR_OWNER:
+ *
+ *     existing canonical semantic model
+ *
+ * TEST_OWNER:
+ *
+ *     grammar/tests/interoperability/data-layout/
+ *     grammar/tests/negative/
+ *     grammar/tests/boundary/
+ *     grammar/tests/scalability/
+ *
+ * SPEC_OWNER:
+ *
+ *     grammar/spec/interoperability.md
+ *
  *
  * ============================================================================
  * POCO-REAF CONTRACT
  * ============================================================================
  *
- * This grammar MUST preserve:
+ * A data-layout contract describes source-level intent.
  *
- *     Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
+ * It MUST NOT impose universal machine limits for:
  *
- * Therefore this file MUST NOT define universal constants for:
- *
- *     pointer width
- *     address width
- *     register width
- *     word width
- *     alignment maximum
- *     field count
- *     aggregate size
- *     structure size
- *     vector width
- *     tensor rank
- *     address-space count
- *     memory-bank count
- *     device count
  *     CPU count
  *     GPU count
  *     FPGA count
- *     node count
+ *     ASIC count
+ *     accelerator count
+ *     QPU count
  *     qubit count
+ *     node count
+ *     device count
+ *     memory capacity
+ *     storage capacity
+ *     thread count
+ *     register count
+ *     register width
+ *     pointer width
+ *     address width
+ *     word width
+ *     vector width
+ *     tensor rank
+ *     field count
+ *     aggregate size
+ *     nesting depth
+ *     address-space count
  *
- * No universal numeric ceiling is defined here.
+ * There are NO MAX_* constants in this grammar.
  *
- * ============================================================================
- * OPEN-WORLD DESIGN
- * ============================================================================
+ * Source-level numeric values are values.
  *
- * Layout identities and property values are symbolic wherever possible.
+ * Whether a concrete target can satisfy a requirement is determined by:
  *
- * The grammar MUST NOT enumerate:
+ *     semantic analysis
+ *     resource analysis
+ *     capability negotiation
+ *     policy analysis
+ *     target lowering
+ *     runtime/deployment
  *
- *     x86
- *     arm
- *     riscv
- *     wasm
- *     C
- *     Rust
- *     SysV
- *     Win64
- *     AAPCS
- *     vendor-specific layouts
+ * A target limitation MUST NOT become a grammar-level limitation.
  *
- * as the universal set of supported layouts.
- *
- * Such identities may be supplied as symbolic names or strings and resolved
- * by semantic analysis against registered interoperability descriptions.
- *
- * A future layout convention therefore does not require modifying this file.
- *
- * ============================================================================
- * SINGLE-AUTHORITY RULE
- * ============================================================================
- *
- * General type syntax remains owned by:
- *
- *     grammar/types/types.g4
- *
- * General names remain owned by:
- *
- *     grammar/core/names.g4
- *
- * General attributes remain owned by:
- *
- *     grammar/core/attributes.g4
- *
- * ABI syntax remains owned by:
- *
- *     grammar/interoperability/abi.g4
- *
- * FFI syntax remains owned by:
- *
- *     grammar/interoperability/ffi.g4
- *
- * Foreign type syntax remains owned by:
- *
- *     grammar/interoperability/foreign-types.g4
- *
- * Calling-convention syntax remains owned by:
- *
- *     grammar/interoperability/calling-conventions.g4
- *
- * Serialization/deserialization remain owned by their existing grammars.
- *
- * This file MUST NOT duplicate those language areas.
  *
  * ============================================================================
- * ARCHITECTURAL POSITION
+ * OPEN-WORLD CONTRACT
  * ============================================================================
  *
- *     Zamani source
- *          |
- *          v
- *     ZamaniLexer
- *          |
- *          v
- *     canonical parser
- *          |
- *          v
- *     data-layout syntax
- *          |
- *          v
- *     domain-neutral AST
- *          |
- *          v
- *     structural validation
- *          |
- *          v
- *     semantic interoperability analysis
- *          |
- *     +----+----------------------+-------------------+
- *     |                           |                   |
- *     v                           v                   v
- *   types                        ABI                 FFI
- *     |                           |                   |
- *     +---------------------------+-------------------+
- *                                 |
- *                                 v
- *                      canonical semantic model
- *                                 |
- *                   target-independent representation
- *                                 |
- *                        target realization
+ * The grammar deliberately does NOT enumerate:
  *
- * Data-layout syntax MUST NOT bypass the semantic model.
+ *     CPU architectures
+ *     GPU architectures
+ *     FPGA families
+ *     ASIC families
+ *     QPU architectures
+ *     ABI families
+ *     byte orders
+ *     vendor layouts
+ *     representation schemes
+ *     address-space universes
+ *     serialization formats
+ *     future hardware models
+ *
+ * Such identities are represented through symbolic names, strings, or
+ * properties and interpreted semantically.
+ *
+ * Therefore a future representation convention does not require changing
+ * this grammar.
+ *
+ *
+ * ============================================================================
+ * IMPORTANT DESIGN DECISION
+ * ============================================================================
+ *
+ * The repository already has an open-world PROPERTY token.
+ *
+ * Therefore this grammar does NOT introduce separate lexical keywords for:
+ *
+ *     representation
+ *     endian
+ *     bit_order
+ *     size
+ *     alignment
+ *     stride
+ *     offset
+ *     address_space
+ *     pointer
+ *     aggregate
+ *     scalar
+ *     vector
+ *     opaque
+ *     transparent
+ *     discriminant
+ *     nullability
+ *
+ * Those concepts can be represented as semantic property names:
+ *
+ *     property representation = ...;
+ *     property endian = ...;
+ *     property bit_order = ...;
+ *     property size = ...;
+ *     property alignment = ...;
+ *     property stride = ...;
+ *     property offset = ...;
+ *     property address_space = ...;
+ *
+ * The semantic schema determines which properties are known, required,
+ * exclusive, compatible, deprecated, or target-dependent.
+ *
+ * This prevents keyword explosion while retaining future extensibility.
+ *
  *
  * ============================================================================
  * AST CONTRACT
@@ -299,42 +410,53 @@
  *
  * This grammar creates parser contexts only.
  *
- * The frontend AST owns the actual representation.
+ * It does NOT create a new layout-specific IR.
  *
  * Conceptual mapping:
  *
  *     dataLayoutDeclaration
- *         ->
- *     DataLayoutContractNode
- *         ->
- *     semantic data-layout contract
+ *         |
+ *         v
+ *     domain-neutral AST data-layout contract node
+ *         |
+ *         v
+ *     semantic interoperability model
+ *         |
+ *         v
+ *     ABI / FFI / foreign-type analysis
+ *         |
+ *         v
+ *     target realization
  *
- * The AST MUST preserve:
+ * The AST SHOULD preserve:
  *
- *     - source span;
- *     - symbolic layout identity;
- *     - optional associated type;
- *     - representation clauses;
- *     - property ordering where semantically observable;
- *     - symbolic expressions;
- *     - requirements;
- *     - capabilities;
- *     - constraints;
- *     - compatibility metadata;
- *     - attributes;
- *     - provenance.
+ *     source span
+ *     declaration identity
+ *     associated type
+ *     profile references
+ *     field references
+ *     properties
+ *     requirements
+ *     capabilities
+ *     constraints
+ *     compatibility information
+ *     attributes
+ *     source ordering where semantically relevant
+ *     provenance
  *
  * The AST MUST NOT contain:
  *
- *     - physical addresses;
- *     - selected registers;
- *     - selected stack slots;
- *     - selected memory banks;
- *     - physical device identifiers;
- *     - physical CPU identifiers;
- *     - physical GPU identifiers;
- *     - physical qubit identifiers;
- *     - backend allocation decisions.
+ *     physical addresses
+ *     physical registers
+ *     stack slots
+ *     memory-bank identifiers
+ *     physical CPU identifiers
+ *     physical GPU identifiers
+ *     physical FPGA resources
+ *     physical QPU identifiers
+ *     physical qubit identifiers
+ *     target allocation decisions
+ *
  *
  * ============================================================================
  * SEMANTIC CONTRACT
@@ -345,120 +467,129 @@
  * Semantic analysis determines:
  *
  *     - whether the referenced type exists;
- *     - whether the layout identity is known or permitted;
- *     - whether properties are compatible;
- *     - whether size/alignment expressions are meaningful;
- *     - whether symbolic dimensions can be resolved;
- *     - whether representation requirements are satisfiable;
- *     - whether ABI and FFI requirements agree;
- *     - whether ownership and lifetime constraints remain valid;
- *     - whether the target can realize the requested contract;
- *     - whether a conversion is required;
- *     - whether the conversion preserves program meaning.
+ *     - whether the layout identity is known;
+ *     - whether the layout identity is permitted;
+ *     - whether properties are valid;
+ *     - whether properties conflict;
+ *     - whether expressions are valid for their property;
+ *     - whether symbolic quantities can be resolved;
+ *     - whether requirements are satisfiable;
+ *     - whether capabilities exist;
+ *     - whether ABI and FFI contracts agree;
+ *     - whether foreign-type constraints agree;
+ *     - whether conversion is required;
+ *     - whether conversion preserves semantics;
+ *     - whether policy permits the representation;
+ *     - whether the selected target can realize the contract.
  *
- * A target's inability to realize a layout MUST NOT become a parser failure.
+ * A target's inability to realize a layout is NOT a parser error.
  *
- * It is a semantic/compilation/realization diagnostic.
  *
  * ============================================================================
  * TYPE CONTRACT
  * ============================================================================
  *
- * Data-layout contracts may refer to an existing Zamani type through the
- * canonical Type grammar.
+ * Type references use:
  *
- * This grammar MUST NOT introduce:
+ *     typeExpression
+ *
+ * from the canonical Type grammar.
+ *
+ * This grammar does NOT introduce:
  *
  *     DataLayoutType
- *     UniversalLayoutType
- *     AbiType2
- *     ForeignType2
+ *     ForeignLayoutType
+ *     AbiLayoutType
+ *     MachineLayoutType
  *
  * as competing type systems.
+ *
  *
  * ============================================================================
  * EXPRESSION CONTRACT
  * ============================================================================
  *
- * Layout values may be:
+ * Property values and requirements use the canonical:
  *
- *     symbolic;
- *     literal;
- *     named;
- *     qualified;
- *     expression-derived;
- *     type-derived;
- *     capability-derived;
- *     resource-derived.
+ *     expression
  *
- * The grammar therefore avoids imposing a closed numeric universe.
+ * rule.
  *
- * Examples of semantic intent include:
+ * This permits:
  *
- *     size = sizeof(T);
- *     alignment = required_alignment;
- *     stride = element_stride;
- *     offset = field_offset;
+ *     literals
+ *     identifiers
+ *     qualified names
+ *     symbolic quantities
+ *     type-derived expressions
+ *     resource-derived expressions
+ *     capability-derived expressions
+ *     arithmetic/relational expressions
+ *     future canonical expression forms
  *
- * The exact meaning of these expressions belongs to semantic analysis.
+ * This grammar does NOT reproduce expression precedence.
+ *
  *
  * ============================================================================
  * EFFECT CONTRACT
  * ============================================================================
  *
- * Parsing this grammar produces no runtime effects.
+ * Parsing a data-layout contract has no runtime effects.
  *
  * It MUST NOT:
  *
- *     - inspect hardware;
- *     - inspect host ABI;
- *     - load libraries;
- *     - resolve symbols;
- *     - allocate memory;
- *     - execute foreign code;
- *     - access the filesystem;
- *     - access the network;
- *     - probe a target.
+ *     inspect hardware
+ *     inspect host ABI
+ *     inspect process state
+ *     inspect filesystem state
+ *     access the network
+ *     load libraries
+ *     resolve symbols
+ *     allocate native memory
+ *     execute foreign code
+ *     invoke callbacks
+ *     select a device
  *
- * If a data-layout declaration eventually requires a foreign/native operation,
- * that effect is represented downstream through the existing effect system.
+ * Any actual conversion or foreign operation is handled downstream by the
+ * appropriate effect-aware subsystem.
+ *
  *
  * ============================================================================
  * CAPABILITY CONTRACT
  * ============================================================================
  *
- * Data-layout requirements may refer symbolically to capabilities.
+ * A data-layout contract may express a symbolic capability requirement:
  *
- * Examples:
+ *     capability "foreign.layout";
+ *     capability platform::layout;
  *
- *     requires capability("foreign.layout");
- *     requires capability("representation.transform");
+ * The grammar does not decide whether that capability exists.
  *
- * Capability existence and satisfaction are semantic concerns.
+ * Capability resolution belongs to the resource/capability semantic system.
  *
- * This grammar does not enumerate the world's capabilities.
  *
  * ============================================================================
  * RESOURCE CONTRACT
  * ============================================================================
  *
- * Layout contracts may contain symbolic resource requirements where required
- * by interoperability semantics.
+ * Data-layout expressions may reference resource-derived values.
  *
- * Resource resolution belongs to:
+ * Example semantic intent:
  *
- *     grammar/resources/
+ *     requires size <= available_size;
  *
- * and downstream semantic analysis.
+ * Resource resolution remains outside this grammar.
  *
- * This grammar MUST NOT encode fixed resource quantities as language-wide
- * limits.
+ * The grammar imposes no fixed resource capacity.
+ *
  *
  * ============================================================================
- * CONTRACT CONTRACT
+ * CONTRACT / POLICY CONTRACT
  * ============================================================================
  *
- * A data-layout declaration may participate in existing:
+ * General contracts and policies remain owned by their canonical systems.
+ *
+ * Data-layout requirements and constraints can participate in:
  *
  *     requires
  *     ensures
@@ -467,42 +598,27 @@
  *     guarantee
  *     property
  *
- * semantics.
+ * semantics where the surrounding declaration permits them.
  *
- * This grammar does not redefine the general contract language.
+ * This file does not create another contract language.
  *
- * ============================================================================
- * POLICY CONTRACT
- * ============================================================================
- *
- * Security and deployment policies may constrain layout interoperability.
- *
- * Examples:
- *
- *     whether native representation is permitted;
- *     whether transparent representation is permitted;
- *     whether conversion is permitted;
- *     whether foreign memory is permitted.
- *
- * Policy ownership remains outside this file.
  *
  * ============================================================================
  * PROVENANCE CONTRACT
  * ============================================================================
  *
- * Data-layout information may participate in provenance.
- *
- * The semantic model should be capable of recording:
+ * Semantic data-layout processing should preserve provenance describing:
  *
  *     source declaration
- *     referenced layout profile
+ *     profile/reference origin
+ *     property origin
  *     transformations
- *     conversions
- *     verification
+ *     compatibility checks
+ *     conversion decisions
  *     target realization
  *
- * Provenance storage and audit semantics belong to the existing provenance
- * architecture.
+ * Provenance semantics remain owned by the repository's provenance system.
+ *
  *
  * ============================================================================
  * IR CONTRACT
@@ -510,275 +626,212 @@
  *
  * This grammar creates NO IR.
  *
- * Data-layout information is attached to the existing semantic interoperability
- * model and is lowered by the appropriate compiler/backend stages.
- *
- * This file MUST NOT introduce:
+ * In particular, it MUST NOT introduce:
  *
  *     DataLayoutIR
  *     AbiLayoutIR
  *     ForeignLayoutIR
+ *     MachineLayoutIR
  *     HardwareLayoutIR
  *
- * as competing canonical IRs.
+ * Layout information attaches to the existing semantic interoperability
+ * representation.
  *
- * If the representation affects quantum computation, the downstream quantum
- * semantic path remains:
+ * If the associated operation participates in quantum computation, downstream
+ * processing continues through the canonical quantum semantic path and,
+ * where appropriate:
  *
- *     semantic model
- *         ->
  *     quantum::ir
  *
- * This grammar itself remains domain-neutral.
+ * This grammar remains domain-neutral.
+ *
  *
  * ============================================================================
- * TARGET LOWERING CONTRACT
+ * TARGET REALIZATION CONTRACT
  * ============================================================================
  *
- * Downstream compilation may derive:
+ * Only downstream compilation may derive concrete:
  *
- *     concrete size;
- *     concrete alignment;
- *     concrete offsets;
- *     concrete strides;
- *     concrete address spaces;
- *     concrete calling-boundary representation;
- *     concrete marshaling;
- *     concrete conversion routines.
+ *     sizes
+ *     alignments
+ *     offsets
+ *     strides
+ *     pointer representations
+ *     address spaces
+ *     aggregate layouts
+ *     ABI passing rules
+ *     marshaling implementation
+ *     conversion routines
  *
- * Those values are target realization details.
+ * These are target-realization facts.
  *
- * They MUST NOT be elevated into universal source-language constants.
+ * They MUST NOT be promoted into universal source-language constants.
  *
- * ============================================================================
- * DEPENDENCY CONTRACT
- * ============================================================================
- *
- * DEPENDS_ON:
- *
- *     grammar/antlr/ZamaniLexer.g4
- *     grammar/core/names.g4
- *     grammar/core/attributes.g4
- *     grammar/expressions/expressions.g4
- *     grammar/types/types.g4
- *
- * OPTIONAL SEMANTIC CONSUMERS:
- *
- *     grammar/interoperability/abi.g4
- *     grammar/interoperability/ffi.g4
- *     grammar/interoperability/foreign-types.g4
- *     grammar/interoperability/calling-conventions.g4
- *     grammar/interoperability/serialization.g4
- *     grammar/interoperability/deserialization.g4
- *
- * RESOURCE SEMANTIC OWNER:
- *
- *     grammar/resources/
- *
- * EFFECT SEMANTIC OWNER:
- *
- *     grammar/effects/
- *
- * CONTRACT SEMANTIC OWNER:
- *
- *     grammar/validation/
- *
- * POLICY SEMANTIC OWNER:
- *
- *     grammar/policies/
- *
- * AST OWNER:
- *
- *     existing domain-neutral frontend AST
- *
- * SEMANTIC OWNER:
- *
- *     interoperability semantic analysis
- *
- * IR OWNER:
- *
- *     canonical semantic model and downstream domain IRs
- *
- * TEST OWNER:
- *
- *     grammar/tests/interoperability/data-layout/
- *
- * SPEC OWNER:
- *
- *     grammar/spec/interoperability.md
- *
- * ============================================================================
- * INTEGRATION CONTRACT
- * ============================================================================
- *
- * 1. ABI
- *
- * grammar/interoperability/abi.g4 may consume:
- *
- *     dataLayoutContract
- *     dataLayoutReference
- *
- * ABI syntax remains owned by abi.g4.
- *
- *
- * 2. FFI
- *
- * grammar/interoperability/ffi.g4 may attach a data-layout contract to a
- * foreign boundary.
- *
- * FFI remains responsible for foreign-call syntax.
- *
- *
- * 3. FOREIGN TYPES
- *
- * grammar/interoperability/foreign-types.g4 may reference data-layout
- * information for an externally implemented type.
- *
- * Foreign-type declaration syntax remains owned by foreign-types.g4.
- *
- *
- * 4. CALLING CONVENTIONS
- *
- * grammar/interoperability/calling-conventions.g4 may associate a calling
- * convention with an ABI whose representation requirements reference this
- * grammar.
- *
- * This file does not redefine calling conventions.
- *
- *
- * 5. SERIALIZATION
- *
- * Serialization/deserialization may consume the semantic representation
- * information produced from this grammar.
- *
- * Serialization format is not the same thing as ABI data layout.
- *
- *
- * 6. TYPES
- *
- * Type references use the canonical Type grammar.
- *
- *
- * 7. EXPRESSIONS
- *
- * Symbolic values use the canonical expression grammar.
- *
- *
- * 8. RESOURCES
- *
- * Resource requirements are resolved by the existing resource subsystem.
- *
- *
- * 9. EFFECTS
- *
- * Any conversion or foreign operation requiring effects is checked by the
- * existing effect subsystem.
- *
- *
- * 10. TARGETS
- *
- * Target-specific layout realization happens only downstream.
  *
  * ============================================================================
  * COMPATIBILITY CONTRACT
  * ============================================================================
  *
- * A data-layout contract is source-level API.
+ * A data-layout declaration is source-level interoperability API.
  *
- * Changes to its meaning require explicit language-version or interoperability
- * compatibility handling.
+ * Property meaning is determined by semantic schema/version information.
  *
- * New property names MUST NOT silently change the meaning of an existing
- * property.
+ * A property name MUST NOT silently change meaning between compatibility
+ * versions.
  *
- * Unknown open-world properties may be preserved for later semantic handling
- * where the surrounding interoperability policy permits them.
+ * Unknown properties may be preserved for:
+ *
+ *     future dialects
+ *     vendor interoperability
+ *     forward-compatible tooling
+ *
+ * provided the enclosing interoperability policy permits them.
+ *
  *
  * ============================================================================
  * DIAGNOSTIC CONTRACT
  * ============================================================================
  *
- * Required semantic diagnostics include, where applicable:
+ * Parser diagnostics are limited to structural syntax errors.
  *
- *     - unknown type reference;
- *     - invalid layout reference;
- *     - duplicate exclusive property;
- *     - incompatible representation properties;
- *     - invalid size expression;
- *     - invalid alignment expression;
- *     - invalid offset expression;
- *     - invalid stride expression;
- *     - incompatible ABI contract;
- *     - unsupported required representation;
- *     - unsatisfied capability;
- *     - unsatisfied resource requirement;
- *     - forbidden policy;
- *     - incompatible interoperability version.
+ * Semantic diagnostics may include:
  *
- * These are semantic diagnostics, not parser-side target probing.
+ *     unknown type
+ *     unknown profile
+ *     invalid property
+ *     duplicate exclusive property
+ *     conflicting properties
+ *     invalid property value
+ *     invalid size expression
+ *     invalid alignment expression
+ *     invalid offset expression
+ *     invalid stride expression
+ *     incompatible representation
+ *     incompatible ABI
+ *     incompatible FFI boundary
+ *     unsatisfied capability
+ *     unsatisfied resource requirement
+ *     forbidden policy
+ *     unsupported target realization
+ *     incompatible interoperability version
+ *
+ * The parser MUST NOT perform target probing to produce these diagnostics.
+ *
  *
  * ============================================================================
  * SCALABILITY CONTRACT
  * ============================================================================
  *
- * The grammar is intentionally open-ended.
+ * Repetition is intentionally unbounded by the grammar:
  *
- * It permits:
+ *     dataLayoutMember*
  *
- *     arbitrary symbolic type names;
- *     arbitrary qualified layout identities;
- *     arbitrary property names;
- *     symbolic dimensions;
- *     symbolic sizes;
- *     symbolic alignments;
- *     symbolic offsets;
- *     symbolic strides;
- *     arbitrary field identifiers;
- *     arbitrary layout metadata.
+ *     dataLayoutProperty
  *
- * No grammar-level fixed collection size is defined.
+ *     qualifiedName
  *
- * Parser/compiler implementation limits, if any, are implementation resource
- * limits and MUST NOT become language semantics.
+ *     expression
+ *
+ * There is no language-level maximum number of:
+ *
+ *     layouts
+ *     profiles
+ *     fields
+ *     properties
+ *     requirements
+ *     capabilities
+ *     constraints
+ *     compatibility clauses
+ *     nested declarations
+ *
+ * Practical compiler limits are implementation/resource limits and MUST NOT
+ * become source-language semantics.
+ *
+ * This permits the same language model to describe:
+ *
+ *     tiny values
+ *     embedded interfaces
+ *     ordinary CPU interfaces
+ *     multicore systems
+ *     GPUs
+ *     FPGAs
+ *     ASICs
+ *     accelerators
+ *     quantum systems
+ *     simulators
+ *     HPC systems
+ *     clusters
+ *     distributed systems
+ *     cloud systems
+ *     future execution substrates
+ *
  *
  * ============================================================================
  * SECURITY CONTRACT
  * ============================================================================
  *
- * This grammar contains no embedded actions.
+ * This grammar contains:
  *
- * It performs no:
+ *     no embedded Rust
+ *     no semantic predicates
+ *     no filesystem operations
+ *     no network operations
+ *     no process execution
+ *     no dynamic loading
+ *     no hardware discovery
+ *     no native memory access
+ *     no foreign execution
  *
- *     filesystem operation;
- *     network operation;
- *     native call;
- *     dynamic loading;
- *     target probing;
- *     hardware discovery;
- *     memory allocation;
- *     code execution.
+ * Rust integration remains safe Rust and must target Rust 1.97+.
+ *
  *
  * ============================================================================
- * COMPLETION CRITERIA
+ * HARD-CODING AUDIT
  * ============================================================================
  *
- * This file is DONE when:
+ * FORBIDDEN IN THIS FILE:
  *
- *     1. It compiles as an ANTLR4 parser grammar with ZamaniLexer.
- *     2. Every imported grammar exists under its canonical path.
- *     3. Every referenced parser rule is exported by its owner.
- *     4. No lexer rules are duplicated here.
- *     5. No general type rules are duplicated here.
- *     6. No ABI rules are duplicated here.
- *     7. No FFI rules are duplicated here.
- *     8. No calling-convention rules are duplicated here.
- *     9. No target-specific constants exist here.
- *    10. No machine layout is selected during parsing.
- *    11. Positive interoperability tests pass.
- *    12. Negative semantic tests exist.
- *    13. Symbolic/scalability tests exist.
- *    14. ABI/FFI integration tests exist.
- *    15. Documentation identifies this as the canonical data-layout grammar.
+ *     MAX_QUBITS
+ *     MAX_CPUS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_NODES
+ *     MAX_MEMORY
+ *     MAX_THREADS
+ *     MAX_TENSOR_RANK
+ *     MAX_REGISTER_WIDTH
+ *     MAX_NETWORK_SIZE
+ *     MAX_DEVICE_COUNT
+ *
+ * Also forbidden are equivalent implicit limits such as:
+ *
+ *     field{0,31}
+ *     property{0,255}
+ *     alignment <= 64
+ *     pointer_width = 64
+ *     register_width = 32
+ *     address_width = 64
+ *
+ * The grammar must remain independent of target machine dimensions.
+ *
+ *
+ * ============================================================================
+ * 1. TOP-LEVEL DECLARATION
+ * ============================================================================
+ *
+ * Canonical form:
+ *
+ *     extern layout platform::representation {
+ *         ...
+ *     }
+ *
+ * or:
+ *
+ *     extern layout "external.representation" {
+ *         ...
+ *     }
+ *
+ * `LAYOUT` is the only dedicated data-layout declaration keyword.
  *
  * ============================================================================
  */
@@ -799,23 +852,21 @@ import
 
 /*
  * ============================================================================
- * 1. TOP-LEVEL DECLARATION
+ * 2. PUBLIC DECLARATION
  * ============================================================================
  *
- * The explicit EXTERN token keeps a data-layout declaration distinguishable
- * from ordinary identifier-led expressions/declarations.
+ * `EXTERN LAYOUT` gives the construct an unambiguous parser entry point.
  *
- * Examples:
+ * The identity is symbolic.
  *
- *     extern layout platform::representation {
- *         ...
- *     }
+ * It is NOT interpreted as:
  *
- *     extern layout "external.representation" {
- *         ...
- *     }
- *
- * The layout identity is symbolic and open-ended.
+ *     a file path
+ *     a library path
+ *     a device identifier
+ *     a memory location
+ *     an architecture
+ *     a physical address
  */
 dataLayoutDeclaration
     : attributeList?
@@ -828,11 +879,11 @@ dataLayoutDeclaration
 
 /*
  * ============================================================================
- * 2. REUSABLE CONTRACT
+ * 3. REUSABLE CONTRACT
  * ============================================================================
  *
- * Interoperability dispatchers may invoke this rule after establishing their
- * own external-boundary context.
+ * An interoperability dispatcher that has already established the external
+ * context may consume this rule without repeating EXTERN.
  */
 dataLayoutContract
     : LAYOUT
@@ -843,18 +894,17 @@ dataLayoutContract
 
 /*
  * ============================================================================
- * 3. IDENTITY
+ * 4. IDENTITY
  * ============================================================================
  *
- * A layout identity may be quoted or symbolic.
+ * Identity is open-world.
  *
  * Examples:
  *
- *     "external.representation"
  *     platform::layout
  *     vendor::representation::v2
- *
- * No finite registry is encoded by this grammar.
+ *     future::layout
+ *     "external.representation"
  */
 dataLayoutIdentity
     : STRING
@@ -864,7 +914,7 @@ dataLayoutIdentity
 
 /*
  * ============================================================================
- * 4. BODY
+ * 5. BODY
  * ============================================================================
  */
 
@@ -877,25 +927,21 @@ dataLayoutBody
 
 /*
  * ============================================================================
- * 5. MEMBER DISPATCH
+ * 6. MEMBER DISPATCH
  * ============================================================================
  *
- * Keyword-led members are separated from the open-world property form.
+ * Keyword-led constructs are structurally distinct.
  *
- * This avoids requiring the grammar to enumerate every future layout
- * convention.
+ * PROPERTY is the open-world extension mechanism.
  */
 dataLayoutMember
     : dataLayoutProfileReference
     | dataLayoutTypeContract
-    | dataLayoutRepresentation
     | dataLayoutFieldContract
     | dataLayoutRequirement
     | dataLayoutCapability
     | dataLayoutConstraint
     | dataLayoutCompatibility
-    | dataLayoutOpaque
-    | dataLayoutTransparent
     | dataLayoutProperty
     | attribute
     ;
@@ -903,16 +949,14 @@ dataLayoutMember
 
 /*
  * ============================================================================
- * 6. PROFILE
+ * 7. PROFILE REFERENCE
  * ============================================================================
- *
- * A profile names another symbolic layout description.
  *
  * Example:
  *
- *     profile platform::representation;
+ *     profile platform::layout;
  *
- * PROFILE resolution is semantic.
+ * A profile is a symbolic semantic reference.
  */
 dataLayoutProfileReference
     : PROFILE
@@ -923,18 +967,18 @@ dataLayoutProfileReference
 
 /*
  * ============================================================================
- * 7. TYPE CONTRACT
+ * 8. TYPE CONTRACT
  * ============================================================================
  *
- * Associates layout intent with an existing Zamani type.
+ * Associates the layout contract with an existing Zamani type.
  *
  * Example:
  *
- *     type SomeType {
+ *     type ExternalValue {
  *         ...
  *     }
  *
- * The canonical Type grammar remains authoritative for the type itself.
+ * The complete type syntax belongs to Type.
  */
 dataLayoutTypeContract
     : TYPE
@@ -945,46 +989,21 @@ dataLayoutTypeContract
 
 /*
  * ============================================================================
- * 8. REPRESENTATION
- * ============================================================================
- *
- * A representation can be symbolic.
- *
- * Examples:
- *
- *     representation scalar;
- *     representation aggregate;
- *     representation opaque;
- *     representation platform::custom;
- *
- * The grammar deliberately does not enumerate the legal representation
- * universe.
- */
-dataLayoutRepresentation
-    : REPRESENTATION
-      dataLayoutReference
-      SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
  * 9. FIELD CONTRACT
  * ============================================================================
  *
- * A field is identified by a normal source-level name.
+ * FIELD already exists in the canonical lexical vocabulary.
  *
- * Field layout values remain symbolic.
+ * Example:
  *
- * Examples:
- *
- *     field value {
- *         ...
+ *     field payload {
+ *         property offset = payload_offset;
+ *         property alignment = payload_alignment;
  *     }
  *
- *     field namespace::value {
- *         ...
- *     }
+ * Field names are normal qualified names.
+ *
+ * No field count or field-index limit is imposed.
  */
 dataLayoutFieldContract
     : FIELD
@@ -998,15 +1017,11 @@ dataLayoutFieldContract
  * 10. REQUIREMENT
  * ============================================================================
  *
- * Layout requirements remain symbolic and are checked semantically.
- *
- * Examples:
+ * Example:
  *
  *     requires size >= required_size;
- *     requires alignment >= required_alignment;
  *
- * The expression is deliberately delegated to the canonical expression
- * grammar where possible.
+ * The expression is symbolic and is interpreted semantically.
  */
 dataLayoutRequirement
     : REQUIRES
@@ -1020,12 +1035,12 @@ dataLayoutRequirement
  * 11. CAPABILITY
  * ============================================================================
  *
- * Capability identity is symbolic.
- *
  * Examples:
  *
  *     capability "foreign.layout";
  *     capability platform::layout;
+ *
+ * Capability resolution is downstream.
  */
 dataLayoutCapability
     : CAPABILITY
@@ -1039,13 +1054,11 @@ dataLayoutCapability
  * 12. CONSTRAINT
  * ============================================================================
  *
- * A layout constraint limits realization without selecting a concrete target.
- *
  * Example:
  *
- *     constraint alignment <= preferred_alignment;
+ *     constraint alignment >= required_alignment;
  *
- * Semantic validation determines whether the constraint is satisfiable.
+ * A constraint is not a target selector.
  */
 dataLayoutConstraint
     : CONSTRAINT
@@ -1059,92 +1072,50 @@ dataLayoutConstraint
  * 13. COMPATIBILITY
  * ============================================================================
  *
- * Compatibility metadata remains symbolic.
+ * The repository does not currently expose a dedicated COMPATIBLE_WITH
+ * lexical token.
+ *
+ * Therefore compatibility is represented through the existing open-world
+ * PROPERTY mechanism rather than inventing another keyword.
+ *
+ * Example:
+ *
+ *     property compatible_with = platform::layout;
+ *
+ * The semantic interoperability schema owns the meaning.
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * 14. OPEN-WORLD PROPERTY
+ * ============================================================================
+ *
+ * Generic form:
+ *
+ *     property name = expression;
  *
  * Examples:
  *
- *     compatible_with platform::layout;
- *     compatibility platform::layout;
+ *     property representation = aggregate;
+ *     property byte_order = platform::native;
+ *     property bit_order = platform::native;
+ *     property size = sizeof(T);
+ *     property alignment = required_alignment;
+ *     property stride = element_stride;
+ *     property offset = field_offset;
+ *     property address_space = memory::default;
+ *     property pointer_representation = symbolic_pointer;
+ *     property nullable = true;
+ *     property transparent = true;
  *
- * Only the canonical keyword-led form is accepted here.
- */
-dataLayoutCompatibility
-    : COMPATIBLE_WITH
-      dataLayoutReference
-      SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * 14. OPAQUE
- * ============================================================================
+ * The property NAME is an ordinary identifier.
  *
- * OPAQUE states that the representation is intentionally not exposed through
- * the source-level layout contract.
+ * The property VALUE is a canonical Zamani expression.
  *
- * This is semantic metadata, not a machine pointer.
- */
-dataLayoutOpaque
-    : OPAQUE
-      SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * 15. TRANSPARENT
- * ============================================================================
- *
- * TRANSPARENT states that the semantic boundary permits the referenced
- * representation to remain exposed.
- *
- * Exact transparency guarantees are semantic and ABI-dependent.
- */
-dataLayoutTransparent
-    : TRANSPARENT
-      SEMICOLON
-    ;
-
-
-/*
- * ============================================================================
- * 16. OPEN-WORLD PROPERTY
- * ============================================================================
- *
- * Generic property form:
- *
- *     property = value;
- *
- * The property name is a symbolic identifier and the value is an expression
- * or symbolic value.
- *
- * This is the central extensibility mechanism.
- *
- * It avoids grammar changes for every future:
- *
- *     size model
- *     alignment model
- *     endian model
- *     address-space model
- *     representation convention
- *     vendor property
- *     accelerator representation
- *     quantum representation
- *     HDL representation
- *     distributed representation
- *
- * Examples:
- *
- *     endian = platform::native;
- *     size = sizeof(T);
- *     alignment = required_alignment;
- *     stride = element_stride;
- *     offset = field_offset;
- *     address_space = memory::default;
- *     bit_order = platform::native;
- *
- * Semantic validation owns the legal property vocabulary.
+ * This means new representation concepts do not require a grammar change.
  */
 dataLayoutProperty
     : PROPERTY
@@ -1157,10 +1128,12 @@ dataLayoutProperty
 
 /*
  * ============================================================================
- * 17. REFERENCE
+ * 15. SYMBOLIC REFERENCE
  * ============================================================================
  *
- * Symbolic layout references are open-world.
+ * References can be qualified names or strings.
+ *
+ * They are never resolved by the parser.
  */
 dataLayoutReference
     : qualifiedName
@@ -1170,17 +1143,13 @@ dataLayoutReference
 
 /*
  * ============================================================================
- * 18. EXPRESSION
+ * 16. EXPRESSION FORWARDING BOUNDARY
  * ============================================================================
  *
- * The exact expression grammar remains owned by Expressions.
+ * Expression semantics remain owned by Expressions.
  *
- * This rule provides a local integration boundary so that future changes to
- * the general expression grammar do not require this file to duplicate
- * expression syntax.
- *
- * If the canonical Expressions grammar exports `expression`, this rule is
- * intentionally a forwarding boundary.
+ * This forwarding rule exists solely to provide a stable local boundary for
+ * the data-layout grammar.
  */
 dataLayoutExpression
     : expression
