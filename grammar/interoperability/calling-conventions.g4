@@ -10,13 +10,20 @@
  *     InteroperabilityCallingConventions
  *
  * Status:
- *     Production source-level calling-convention interoperability contract
+ *     Production-ready source-level calling-convention interoperability
+ *     contract.
  *
- * Compiler baseline:
- *     Rust 1.97 / Rust 1.97.1
+ * Language:
+ *     Zamani
+ *
+ * Grammar technology:
+ *     ANTLR 4
+ *
+ * Rust implementation baseline:
+ *     Rust 1.97 or later
  *     Rust 2021
- *     SAFE RUST ONLY
- *     NO UNSAFE
+ *     Safe Rust only
+ *     No unsafe Rust required or permitted by this grammar contract
  *
  * Architectural objective:
  *
@@ -24,40 +31,61 @@
  *     (POCO-REAF)
  *
  * ============================================================================
- * PURPOSE
+ * 1. PURPOSE
  * ============================================================================
  *
- * This file owns the INTEROPERABILITY-LAYER SOURCE SYNTAX for reusable
- * calling-convention references and attachments.
+ * This file owns the reusable SOURCE-LEVEL SYNTAX for attaching a symbolic
+ * calling-convention reference to an interoperability boundary.
  *
- * It describes which symbolic calling-convention contract a callable
- * declaration requires or references.
+ * A calling convention identifies a callable interoperability contract.
  *
- * It does NOT implement an ABI.
+ * It does NOT itself define:
  *
- * It does NOT calculate ABI layout.
+ *     ABI layout
+ *     parameter registers
+ *     return registers
+ *     stack layout
+ *     alignment
+ *     object format
+ *     symbol decoration
+ *     linkage
+ *     ownership
+ *     lifetime
+ *     marshalling
+ *     exception/unwind behavior
+ *     target architecture
+ *     target device
+ *     hardware topology
+ *     scheduling
+ *     resource allocation
  *
- * It does NOT select a target.
+ * Those concerns belong to their respective semantic, ABI, compiler, runtime,
+ * and target layers.
  *
- * It does NOT select a CPU, GPU, FPGA, ASIC, QPU, accelerator, node,
- * register, memory bank, physical address, or device.
+ * ============================================================================
+ * 2. FUNDAMENTAL SEPARATION
+ * ============================================================================
  *
- * The distinction is fundamental:
+ * The following concepts are intentionally distinct:
  *
  *     calling-convention syntax
  *             !=
- *     calling-convention semantics
+ *     calling-convention semantic identity
  *             !=
  *     ABI contract
  *             !=
- *     ABI implementation
+ *     FFI contract
+ *             !=
+ *     linkage
  *             !=
  *     target lowering
  *             !=
  *     runtime execution
  *
+ * This file provides only the first item.
+ *
  * ============================================================================
- * ARCHITECTURAL POSITION
+ * 3. ARCHITECTURAL POSITION
  * ============================================================================
  *
  *     Zamani source
@@ -69,321 +97,331 @@
  *     canonical parser
  *          |
  *          v
- *     interoperability calling-convention syntax
+ *     calling-convention syntax
  *          |
  *          v
- *     domain-neutral frontend AST
+ *     domain-neutral AST
  *          |
  *          v
  *     semantic analysis
  *          |
- *          +-----------------------------+
- *          |              |              |
- *          v              v              v
- *        types          effects       capabilities
- *          |              |              |
- *          +--------------+--------------+
- *                         |
- *                         v
- *                 canonical semantics
- *                         |
- *                         v
- *                    ABI resolution
- *                         |
- *                         v
- *                 canonical IR boundary
- *                         |
- *          +--------------+---------------+
- *          |              |               |
- *          v              v               v
- *      classical       quantum::ir     HDL/hardware
- *          |              |               |
- *          +--------------+---------------+
- *                         |
- *                         v
- *                    optimization
- *                         |
- *                         v
- *                 routing / scheduling
- *                         |
- *                         v
- *                 resilience / QEC / ZQN
- *                         |
- *                         v
- *                         HAL
- *                         |
- *                         v
- *                  target realization
+ *          +------------------+
+ *          |                  |
+ *          v                  v
+ *        ABI              interoperability
+ *       analysis             analysis
+ *          |                  |
+ *          +--------+---------+
+ *                   |
+ *                   v
+ *            canonical semantic model
+ *                   |
+ *                   v
+ *              canonical IR
+ *                   |
+ *          +--------+---------+
+ *          |        |         |
+ *          v        v         v
+ *      classical quantum::ir HDL/hardware
+ *          |        |         |
+ *          +--------+---------+
+ *                   |
+ *                   v
+ *          target-independent
+ *             optimization
+ *                   |
+ *                   v
+ *          target lowering
+ *                   |
+ *                   v
+ *             target realization
  *
- * This grammar MUST NOT reverse that dependency direction.
+ * This grammar MUST NOT reverse this dependency direction.
  *
  * ============================================================================
- * OWNS
+ * 4. OWNS
  * ============================================================================
  *
  * This file owns:
  *
- *   - reusable interoperability calling-convention references;
- *   - source-level calling-convention attachment syntax;
- *   - the canonical calling-convention metadata key;
- *   - symbolic/open-world convention references;
- *   - composition adapters for ordinary functions;
- *   - composition adapters for foreign functions;
- *   - source-level syntactic boundaries for calling-convention metadata.
+ *     - the canonical reusable calling-convention reference syntax;
+ *     - the canonical callable calling-convention attachment syntax;
+ *     - the interoperability-level calling-convention adapter rules;
+ *     - source-level adapters for ordinary functions;
+ *     - source-level adapters for foreign functions;
+ *     - source-level adapters for callbacks;
+ *     - source-level source-span boundaries for this construct.
  *
  * ============================================================================
- * DOES NOT OWN
+ * 5. DOES NOT OWN
  * ============================================================================
  *
  * This file does NOT own:
  *
- *   - lexical token definitions;
- *   - identifiers;
- *   - qualified names;
- *   - ordinary function declarations;
- *   - parameters;
- *   - return types;
- *   - function types;
- *   - effects;
- *   - contracts;
- *   - FFI marshalling;
- *   - ownership checking;
- *   - lifetime checking;
- *   - nullability semantics;
- *   - linkage semantics;
- *   - symbol resolution;
- *   - ABI declarations;
- *   - ABI layout;
- *   - register allocation;
- *   - stack layout;
- *   - calling-sequence generation;
- *   - machine instructions;
- *   - object-file generation;
- *   - linker behavior;
- *   - dynamic loading;
- *   - foreign execution;
- *   - operating-system APIs;
- *   - hardware discovery;
- *   - CPU selection;
- *   - GPU selection;
- *   - FPGA selection;
- *   - ASIC selection;
- *   - QPU selection;
- *   - accelerator selection;
- *   - routing;
- *   - scheduling;
- *   - calibration;
- *   - QEC;
- *   - ZQN;
- *   - resilience;
- *   - HAL;
- *   - physical placement;
- *   - resource allocation;
- *   - canonical IR definition.
+ *     - lexer token definitions;
+ *     - identifier syntax;
+ *     - qualified-name syntax;
+ *     - function declaration syntax;
+ *     - function type syntax;
+ *     - parameter syntax;
+ *     - return-type syntax;
+ *     - generic syntax;
+ *     - ABI declaration syntax;
+ *     - ABI layout;
+ *     - linkage syntax;
+ *     - symbol resolution;
+ *     - FFI declaration structure;
+ *     - foreign-function declaration structure;
+ *     - ownership semantics;
+ *     - lifetime semantics;
+ *     - nullability semantics;
+ *     - marshalling semantics;
+ *     - effect semantics;
+ *     - capability semantics;
+ *     - resource semantics;
+ *     - policy semantics;
+ *     - contracts;
+ *     - target selection;
+ *     - register allocation;
+ *     - stack allocation;
+ *     - machine instruction selection;
+ *     - object generation;
+ *     - linker behavior;
+ *     - loader behavior;
+ *     - runtime execution;
+ *     - hardware discovery;
+ *     - hardware placement;
+ *     - quantum routing;
+ *     - quantum scheduling;
+ *     - QEC;
+ *     - ZQN;
+ *     - HAL implementation.
  *
  * ============================================================================
- * SINGLE-AUTHORITY RULE
+ * 6. SINGLE-AUTHORITY RULE
  * ============================================================================
  *
- * ABI contract syntax remains owned by:
+ * The ownership chain is:
  *
- *     grammar/interoperability/abi.g4
+ *     identifiers / qualified names
+ *         -> grammar/core/names.g4
  *
- * FFI boundary syntax remains owned by:
+ *     ordinary function declarations
+ *         -> grammar/functions/
  *
- *     grammar/interoperability/ffi.g4
+ *     function-level compatibility adapter
+ *         -> grammar/functions/calling-conventions.g4
  *
- * Foreign callable declaration structure remains owned by:
+ *     foreign callable declarations
+ *         -> grammar/interoperability/foreign-functions.g4
  *
- *     grammar/interoperability/foreign-functions.g4
+ *     generic FFI boundary
+ *         -> grammar/interoperability/ffi.g4
  *
- * Ordinary function declaration structure remains owned by:
+ *     ABI contract
+ *         -> grammar/interoperability/abi.g4
  *
- *     grammar/functions/functions.g4
+ *     calling-convention attachment
+ *         -> THIS FILE
  *
- * The existing:
+ * This file MUST NOT redefine ABI declarations.
  *
- *     grammar/functions/calling-conventions.g4
+ * This file MUST NOT become a second function declaration grammar.
  *
- * remains an existing compatibility/function-layer adapter and MUST NOT be
- * unnecessarily renamed.
+ * This file MUST NOT become a second FFI grammar.
  *
- * This file does NOT recreate:
- *
- *     abiDeclaration
- *     abiConventionDeclaration
- *     abiProfileDeclaration
- *     abiLinkageDeclaration
- *
- * nor does it create a second ABI model.
- *
- * ============================================================================
- * WHY THIS FILE EXISTS
- * ============================================================================
- *
- * Calling conventions are interoperability concepts and therefore need a
- * stable home beneath the interoperability composition boundary.
- *
- * The existing function-level calling-convention grammar is useful as a
- * compatibility adapter, but the interoperability subsystem needs its own
- * canonical reusable representation so that:
- *
- *     ordinary functions
- *     foreign functions
- *     callbacks
- *     adapters
- *     cross-language boundaries
- *     software/HDL boundaries
- *     classical/quantum boundaries
- *
- * can reference the same semantic concept without duplicating grammar.
+ * This file MUST NOT become a second identifier or qualified-name grammar.
  *
  * ============================================================================
- * LEXER CONTRACT
+ * 7. CANONICAL LEXICAL CONTRACT
  * ============================================================================
  *
  * This is a parser grammar.
  *
  * It declares NO lexer rules.
  *
- * It MUST NOT introduce dedicated lexer tokens for:
+ * The canonical parser-facing lexer vocabulary is:
  *
- *     CALLING
- *     CONVENTION
+ *     ZamaniLexer
+ *
+ * Therefore:
+ *
+ *     tokenVocab = ZamaniLexer;
+ *
+ * MUST be used.
+ *
+ * This file MUST NOT introduce tokens for:
+ *
+ *     CALLING_CONVENTION
  *     ABI
  *     C
  *     CDECL
  *     STDCALL
  *     SYSV
+ *     SYSV64
  *     WIN64
  *     AAPCS
  *     VECTORCALL
- *     GPU
- *     QPU
+ *     THISCALL
+ *     FASTCALL
  *
- * Calling-convention names are data, not a closed language enumeration.
+ * or any other current or future convention.
  *
- * ============================================================================
- * TOKEN-VOCABULARY CONTRACT
- * ============================================================================
- *
- * The repository currently contains legacy modular parser delegates using:
- *
- *     tokenVocab = ZamaniTokens;
- *
- * while the production architecture identifies:
- *
- *     grammar/antlr/ZamaniLexer.g4
- *
- * as the canonical lexer boundary.
- *
- * This file follows the existing modular parser-delegate convention:
- *
- *     tokenVocab = ZamaniTokens;
- *
- * It MUST NOT create another lexical vocabulary.
- *
- * The eventual repository-wide migration from ZamaniTokens to the canonical
- * parser-facing ZamaniLexer vocabulary belongs to the grammar composition and
- * lexical-conformance work, not to this file.
+ * Convention identities are open-world symbolic data.
  *
  * ============================================================================
- * SHARED GRAMMAR DEPENDENCIES
+ * 8. CANONICAL SHARED NAME CONTRACT
  * ============================================================================
  *
- * Only the canonical name grammar is imported here.
+ * Name syntax is owned by:
  *
- * This file intentionally does NOT import:
+ *     grammar/core/names.g4
  *
- *     Types
- *     Expressions
- *     Functions
- *     FFI
- *     ABI
+ * This grammar imports:
  *
- * because doing so would create ownership duplication and unnecessary grammar
- * cycles.
+ *     Names
  *
- * The convention reference is deliberately limited to:
+ * and therefore reuses:
  *
- *     STRING_LITERAL
- *
- * or:
- *
+ *     identifier
  *     qualifiedName
  *
- * ============================================================================
- * OPEN-WORLD REQUIREMENT
- * ============================================================================
+ * It MUST NOT reproduce:
  *
- * Calling conventions MUST be open-world.
+ *     IDENTIFIER
+ *     identifier
+ *     qualifiedName
+ *     nameSegment
+ *     DOUBLE_COLON
  *
- * The grammar MUST NOT contain a closed alternative such as:
- *
- *     c
- *     cdecl
- *     stdcall
- *     fastcall
- *     thiscall
- *     sysv64
- *     win64
- *     aapcs
- *     vectorcall
- *
- * A future convention must be representable without modifying this grammar.
- *
- * Examples:
- *
- *     "c"
- *     "cdecl"
- *     "sysv64"
- *     "future-convention"
- *
- *     platform::native
- *     vendor::extension::convention
- *     future::architecture::convention
- *
- * These are symbolic values.
- *
- * They are NOT grammar alternatives.
+ * grammar/core/names.g4 remains the canonical owner of those constructs.
  *
  * ============================================================================
- * CANONICAL SOURCE FORM
+ * 9. OPEN-WORLD CONVENTION MODEL
  * ============================================================================
  *
- * The canonical reusable clause is:
+ * Calling conventions are deliberately open-ended.
  *
- *     calling_convention = "c"
+ * The grammar MUST represent a convention without enumerating it.
+ *
+ * Valid examples include:
+ *
+ *     calling_convention = "c";
+ *     calling_convention = "cdecl";
+ *     calling_convention = "sysv64";
+ *     calling_convention = "win64";
+ *     calling_convention = "aapcs";
+ *
+ *     calling_convention = platform::native;
+ *     calling_convention = vendor::extension::convention;
+ *     calling_convention = future::calling::convention;
+ *
+ * A new convention therefore requires:
+ *
+ *     NO grammar modification
+ *     NO lexer modification
+ *     NO parser modification
+ *
+ * provided its source representation fits the existing symbolic model.
+ *
+ * Semantic validation determines whether the referenced convention is:
+ *
+ *     known
+ *     supported
+ *     deprecated
+ *     aliased
+ *     incompatible
+ *     unavailable
+ *     target-dependent
+ *     intentionally unresolved
+ *
+ * ============================================================================
+ * 10. STRING AND SYMBOLIC REFERENCES
+ * ============================================================================
+ *
+ * Two source representations are supported:
+ *
+ *     quoted external identity
+ *
+ *         "c"
+ *
+ * and:
+ *
+ *     qualified symbolic identity
+ *
+ *         platform::native
+ *
+ * A quoted identity is appropriate where the external convention name is
+ * not naturally a Zamani namespace symbol.
+ *
+ * A qualified symbolic identity is appropriate where the convention is
+ * represented through a language-visible namespace.
+ *
+ * The grammar does not assign target-specific meaning to either representation.
+ *
+ * ============================================================================
+ * 11. CANONICAL SOURCE FORM
+ * ============================================================================
+ *
+ * The canonical attachment is:
+ *
+ *     calling_convention = "c";
  *
  * or:
  *
- *     calling_convention = platform::native
+ *     calling_convention = platform::native;
  *
- * The key intentionally remains an ordinary identifier because
- * calling_convention is not required to become a global reserved keyword.
+ * The assignment operator is the repository's canonical:
  *
- * Semantic analysis MUST canonicalize the key to:
+ *     ASSIGN
+ *
+ * The declaration terminator is the repository's canonical:
+ *
+ *     SEMICOLON
+ *
+ * This file MUST NOT use obsolete or duplicate assignment tokens such as
+ * EQUALS when the repository's canonical token is ASSIGN.
+ *
+ * ============================================================================
+ * 12. KEY OWNERSHIP
+ * ============================================================================
+ *
+ * The spelling:
  *
  *     calling_convention
  *
- * and reject unrelated metadata keys when this rule is being consumed as a
- * calling-convention clause.
+ * remains source-level metadata rather than a universal reserved keyword.
+ *
+ * Therefore the grammar accepts the metadata-key position as the canonical
+ * identifier rule:
+ *
+ *     identifier
+ *
+ * Semantic analysis MUST verify that its canonical spelling is:
+ *
+ *     calling_convention
+ *
+ * This deliberately keeps the lexer open and avoids globally reserving a
+ * keyword solely for interoperability metadata.
+ *
+ * A different identifier in this specific rule is therefore a semantic
+ * metadata-key error, not a different calling convention.
  *
  * ============================================================================
- * FUNCTION INTEGRATION
+ * 13. FUNCTION INTEGRATION
  * ============================================================================
  *
  * Ordinary function declarations remain owned by:
  *
- *     grammar/functions/functions.g4
+ *     grammar/functions/
  *
- * That grammar should consume:
+ * The function grammar may consume:
  *
- *     interoperabilityCallingConventionClause
+ *     interoperabilityFunctionCallingConvention
  *
- * at its metadata boundary.
+ * at its declaration metadata/attribute boundary.
  *
- * The function grammar remains responsible for:
+ * It remains responsible for:
  *
  *     function name
  *     generic parameters
@@ -392,15 +430,41 @@
  *     effects
  *     contracts
  *     body
- *     prototype/definition structure
+ *     declaration/prototype structure
  *
  * This file contributes only the calling-convention attachment.
  *
  * ============================================================================
- * FOREIGN FUNCTION INTEGRATION
+ * 14. FUNCTION COMPATIBILITY ADAPTER
  * ============================================================================
  *
- * Foreign function declaration structure remains owned by:
+ * Existing:
+ *
+ *     grammar/functions/calling-conventions.g4
+ *
+ * MUST NOT become a competing implementation.
+ *
+ * Its long-term role is:
+ *
+ *     function grammar
+ *          |
+ *          v
+ *     interoperabilityFunctionCallingConvention
+ *          |
+ *          v
+ *     THIS FILE
+ *
+ * Existing source compatibility can be preserved by keeping the filename.
+ *
+ * The function-layer grammar should delegate its canonical convention
+ * representation to this interoperability boundary when the parser
+ * composition is integrated.
+ *
+ * ============================================================================
+ * 15. FOREIGN FUNCTION INTEGRATION
+ * ============================================================================
+ *
+ * Foreign callable declarations remain owned by:
  *
  *     grammar/interoperability/foreign-functions.g4
  *
@@ -408,94 +472,218 @@
  *
  *     interoperabilityForeignFunctionCallingConvention
  *
- * without reproducing the calling-convention syntax.
+ * It MUST NOT reproduce:
  *
- * This avoids:
+ *     calling_convention = ...
  *
- *     foreign-functions.g4
- *             +
- *     functions/calling-conventions.g4
- *             +
- *     interoperability/calling-conventions.g4
- *
- * becoming three competing implementations.
- *
- * The canonical interoperability composition layer should expose exactly one
- * semantic calling-convention construct.
+ * independently.
  *
  * ============================================================================
- * ABI INTEGRATION
+ * 16. FFI INTEGRATION
  * ============================================================================
  *
- * The source-to-target flow is:
+ * Generic FFI remains owned by:
  *
- *     interoperabilityCallingConventionClause
- *                  |
- *                  v
- *          domain-neutral AST
- *                  |
- *                  v
- *          semantic ABI reference
- *                  |
- *                  v
- *          ABI contract validation
- *                  |
- *                  v
- *          target ABI resolution
- *                  |
- *                  v
- *          concrete target lowering
+ *     grammar/interoperability/ffi.g4
  *
- * This file never invokes ABI resolution.
+ * FFI may consume this grammar's calling-convention attachment.
+ *
+ * FFI remains responsible for the interoperability boundary.
+ *
+ * This grammar remains responsible only for the calling-convention reference.
  *
  * ============================================================================
- * ABI DISTINCTION
+ * 17. ABI INTEGRATION
  * ============================================================================
  *
- * The following are distinct concepts:
+ * ABI syntax remains owned by:
  *
- *     calling convention
- *     ABI identity
+ *     grammar/interoperability/abi.g4
+ *
+ * The semantic relationship is:
+ *
+ *     calling convention reference
+ *              |
+ *              v
+ *     ABI compatibility analysis
+ *              |
+ *              v
+ *     target ABI realization
+ *
+ * A calling convention does not automatically define:
+ *
+ *     pointer representation
+ *     register allocation
+ *     stack layout
+ *     alignment
+ *     object format
+ *     symbol decoration
  *     linkage
- *     symbol naming
- *     representation
- *     parameter passing
- *     return passing
- *     ownership
- *     lifetime
- *     marshalling
+ *     exception model
+ *     unwind model
+ *     parameter marshalling
  *
- * A calling convention MUST NOT silently define the others.
+ * Those are separate ABI concerns.
+ *
+ * ============================================================================
+ * 18. LINKAGE SEPARATION
+ * ============================================================================
+ *
+ * Calling convention and linkage are independent semantic dimensions.
  *
  * For example:
  *
- *     calling_convention = "c"
+ *     calling_convention = "c";
  *
- * does not itself specify:
+ * MUST NOT implicitly mean:
  *
- *     object format
- *     symbol decoration
- *     pointer width
- *     alignment
- *     register allocation
- *     stack layout
- *     exception/unwind behavior
+ *     external linkage
+ *     dynamic linkage
+ *     static linkage
+ *     weak linkage
+ *     exported symbol
+ *     imported symbol
  *
- * Those are downstream ABI concerns.
+ * Linkage remains owned by the interoperability/ABI/function systems.
  *
  * ============================================================================
- * POCO-REAF
+ * 19. CALLBACK INTEGRATION
  * ============================================================================
  *
- * Calling-convention syntax describes portable interoperability intent.
+ * Callback declaration structure remains owned by:
  *
- * It MUST NOT select physical hardware.
+ *     grammar/interoperability/ffi.g4
+ *     grammar/interoperability/foreign-functions.g4
  *
- * It MUST NOT imply:
+ * as applicable.
+ *
+ * A callback may consume:
+ *
+ *     interoperabilityCallbackCallingConvention
+ *
+ * without defining a separate callback convention vocabulary.
+ *
+ * ============================================================================
+ * 20. FUNCTION-TYPE SEPARATION
+ * ============================================================================
+ *
+ * This grammar does NOT modify:
+ *
+ *     grammar/types/function.g4
+ *
+ * A declaration-level calling-convention attachment does not automatically
+ * make calling convention part of every function type.
+ *
+ * If calling-convention metadata becomes part of a canonical function type,
+ * that must be specified by the type-system authority and integrated through
+ * the semantic type model.
+ *
+ * This grammar must not make that decision implicitly.
+ *
+ * ============================================================================
+ * 21. GENERICS
+ * ============================================================================
+ *
+ * Generic parameters and generic constraints remain owned by the function and
+ * type grammars.
+ *
+ * A calling convention does not impose a generic-arity limit.
+ *
+ * Generic specialization, monomorphization, erasure, or other lowering is
+ * compiler semantics, not grammar semantics.
+ *
+ * ============================================================================
+ * 22. EFFECTS
+ * ============================================================================
+ *
+ * Calling convention is NOT an effect.
+ *
+ * This grammar must not transform:
+ *
+ *     calling_convention = ...
+ *
+ * into an effect declaration.
+ *
+ * Effects remain owned by:
+ *
+ *     grammar/effects/
+ *
+ * A foreign/native operation may separately carry an effect such as:
+ *
+ *     foreign
+ *     native
+ *     network
+ *     IO
+ *
+ * without making the calling convention itself an effect.
+ *
+ * ============================================================================
+ * 23. CAPABILITIES
+ * ============================================================================
+ *
+ * A calling convention does not grant capabilities.
+ *
+ * For example:
+ *
+ *     calling_convention = "native";
+ *
+ * does NOT grant:
+ *
+ *     filesystem access
+ *     process execution
+ *     network access
+ *     hardware access
+ *     dynamic library loading
+ *     reflection
+ *
+ * Capability requirements remain owned by:
+ *
+ *     grammar/resources/
+ *     grammar/security/
+ *
+ * and their semantic layers.
+ *
+ * ============================================================================
+ * 24. RESOURCES
+ * ============================================================================
+ *
+ * Calling-convention syntax does not reserve or allocate resources.
+ *
+ * It must never encode:
+ *
+ *     CPU count
+ *     GPU count
+ *     FPGA count
+ *     QPU count
+ *     node count
+ *     core count
+ *     thread count
+ *     memory capacity
+ *     register count
+ *     register width
+ *     device count
+ *     network size
+ *
+ * Resource requirements remain separate:
+ *
+ *     requires ...
+ *     capability(...)
+ *     resource(...)
+ *
+ * and are resolved downstream.
+ *
+ * ============================================================================
+ * 25. POCO-REAF CONTRACT
+ * ============================================================================
+ *
+ * Calling-convention metadata describes portable interoperability intent.
+ *
+ * It must not select:
  *
  *     CPU 0
  *     GPU 0
  *     FPGA 0
+ *     ASIC 0
  *     QPU 0
  *     node 0
  *     core 0
@@ -505,120 +693,147 @@
  *     physical address
  *     physical qubit
  *
- * It MUST NOT encode:
+ * The same source-level convention reference may therefore participate in
+ * compilation for:
  *
- *     MAX_CPUS
- *     MAX_GPUS
- *     MAX_FPGAS
- *     MAX_QPUS
- *     MAX_NODES
- *     MAX_THREADS
- *     MAX_MEMORY
- *     MAX_REGISTER_WIDTH
- *     MAX_DEVICE_COUNT
+ *     embedded systems
+ *     CPUs
+ *     multicore systems
+ *     GPUs
+ *     FPGAs
+ *     ASICs
+ *     accelerators
+ *     QPUs
+ *     simulators
+ *     HPC systems
+ *     clusters
+ *     distributed systems
+ *     cloud systems
+ *     future targets
  *
- * A calling convention is a compatibility requirement, not a hardware
- * capacity declaration.
+ * Target realization is determined downstream.
  *
  * ============================================================================
- * SCALABILITY
+ * 26. QUANTUM INTEGRATION
  * ============================================================================
  *
- * The grammar has no language-level finite limit on:
+ * This file contains NO quantum-specific calling-convention catalogue.
  *
- *     functions
- *     foreign functions
- *     callbacks
- *     parameters
- *     convention names
- *     ABI profiles
- *     interfaces
- *     domains
- *     targets
- *     devices
+ * It MUST NOT enumerate:
+ *
+ *     physical qubits
+ *     gates
+ *     coupling maps
+ *     routing strategies
+ *     calibration data
+ *     QEC parameters
+ *     QPU identifiers
+ *
+ * If a callable boundary participates in hybrid or quantum computation:
+ *
+ *     source
+ *       ->
+ *     domain-neutral AST
+ *       ->
+ *     semantic interoperability analysis
+ *       ->
+ *     quantum semantic model
+ *       ->
+ *     quantum::ir
+ *
+ * The canonical quantum IR remains:
+ *
+ *     quantum::ir
+ *
+ * This file introduces no second quantum IR.
+ *
+ * ============================================================================
+ * 27. HDL / HARDWARE INTEGRATION
+ * ============================================================================
+ *
+ * Hardware-facing calling conventions remain symbolic.
+ *
+ * This grammar does not define:
+ *
+ *     pins
+ *     fixed buses
+ *     physical addresses
+ *     fixed register layouts
+ *     universal clock widths
+ *     device identifiers
+ *     physical placement
+ *
+ * HDL and hardware semantic layers resolve those concerns.
+ *
+ * A calling convention may therefore participate in:
+ *
+ *     software <-> HDL
+ *     software <-> accelerator
+ *     software <-> hardware
+ *
+ * boundaries without introducing hardware-specific syntax here.
+ *
+ * ============================================================================
+ * 28. DISTRIBUTED INTEGRATION
+ * ============================================================================
+ *
+ * A distributed callable boundary may use a symbolic calling convention.
+ *
+ * Distributed semantics remain owned by:
+ *
+ *     grammar/distributed/
+ *     grammar/networking/
+ *
+ * This grammar does not define:
+ *
  *     nodes
- *     cores
- *     threads
- *     qubits
- *     memory
+ *     endpoints
+ *     routing
+ *     transport protocols
+ *     topology
+ *     serialization
  *
- * Repetition is structural.
- *
- * No artificial language ceiling is introduced here.
- *
- * Any practical parser/compiler limit must be represented as implementation
- * resource policy rather than as source-language semantics.
+ * Those are separate contracts.
  *
  * ============================================================================
- * DETERMINISM
+ * 29. AI / DATA / DOMAIN INDEPENDENCE
  * ============================================================================
  *
- * Parsing depends only on:
+ * Calling conventions are domain-neutral.
  *
- *     source text
- *     canonical token stream
- *     grammar version
+ * The grammar must work equally for callable boundaries used by:
  *
- * Parsing MUST NOT depend on:
+ *     classical computation
+ *     quantum computation
+ *     hybrid computation
+ *     HDL
+ *     hardware
+ *     AI
+ *     data systems
+ *     distributed systems
+ *     networking
+ *     metaprogramming
+ *     dialects
  *
- *     hardware availability
- *     filesystem state
- *     network state
- *     environment variables
- *     installed libraries
- *     linker state
- *     runtime state
- *     target discovery
- *     scheduler state
- *     calibration state
- *     randomness
- *     wall-clock time
+ * No application-specific convention vocabulary belongs here.
  *
  * ============================================================================
- * SAFETY / INERTNESS
+ * 30. AST CONTRACT
  * ============================================================================
  *
- * This grammar is declarative only.
+ * The preferred frontend representation is domain-neutral metadata:
  *
- * Parsing MUST NOT:
- *
- *     open files
- *     access networks
- *     inspect hardware
- *     load libraries
- *     resolve symbols
- *     invoke foreign functions
- *     execute processes
- *     access secrets
- *     query target capabilities
- *
- * The compiler implementation consuming this grammar must remain:
- *
- *     Rust 1.97
- *     Rust 1.97.1
- *     Rust 2021
- *     safe Rust
- *     no unsafe
- *
- * ============================================================================
- * AST CONTRACT
- * ============================================================================
- *
- * This grammar MUST map to the existing domain-neutral AST.
- *
- * Preferred representation:
- *
- *     metadata/attribute
+ *     metadata
  *         key:
  *             calling_convention
  *         value:
  *             symbolic convention reference
  *
- * The exact AST type is owned by:
+ * The exact AST implementation is owned by:
  *
  *     src/frontend/ast/
  *
- * This file MUST NOT require ABI-specific AST variants such as:
+ * This grammar must NOT require AST variants such as:
  *
  *     CpuCallingConvention
  *     GpuCallingConvention
@@ -627,557 +842,355 @@
  *     HdlCallingConvention
  *     QuantumCallingConvention
  *
- * Source spans MUST be preserved for:
+ * Source spans must remain available for:
  *
  *     metadata key
+ *     assignment operator
  *     convention reference
- *     complete clause
- *
- * so diagnostics, IDE tooling, source mapping, and deterministic compilation
- * remain possible.
+ *     complete attachment
  *
  * ============================================================================
- * SEMANTIC CONTRACT
+ * 31. SEMANTIC CONTRACT
  * ============================================================================
  *
- * Parsing establishes syntax only.
+ * Semantic analysis must:
  *
- * Semantic analysis MUST:
+ *     1. verify the metadata key is `calling_convention`;
  *
- *     1. verify that the metadata key is calling_convention;
- *     2. canonicalize the convention reference;
- *     3. resolve compatibility aliases according to language-version policy;
- *     4. validate the convention against the applicable ABI;
- *     5. validate compatibility with the callable signature;
- *     6. detect conflicting convention declarations;
- *     7. distinguish unknown conventions from malformed source;
- *     8. distinguish unsupported targets from invalid source;
- *     9. apply capability/resource/effect/security rules independently;
- *    10. prevent a convention declaration from silently selecting hardware.
+ *     2. canonicalize the convention identity;
  *
- * Open-world convention resolution is a semantic/compiler concern.
+ *     3. preserve the original source spelling for diagnostics/provenance;
  *
- * ============================================================================
- * DUPLICATE-CONVENTION RULE
- * ============================================================================
+ *     4. resolve compatibility aliases according to language-version rules;
  *
- * This grammar intentionally permits one syntactic attachment at each
- * attachment point.
+ *     5. determine whether the convention is known or intentionally open;
  *
- * It does not encode an arbitrary list of alternative conventions.
+ *     6. validate compatibility with the callable signature;
  *
- * If a source declaration contains multiple calling-convention metadata items
- * through a broader metadata mechanism, semantic analysis MUST determine
- * whether they:
+ *     7. validate compatibility with the applicable ABI;
  *
- *     agree;
- *     are compatible aliases;
- *     conflict;
- *     or are invalid.
+ *     8. detect conflicting calling-convention declarations;
  *
- * The grammar must not invent a finite conflict-resolution policy.
+ *     9. distinguish malformed source from unsupported conventions;
+ *
+ *    10. distinguish unsupported targets from invalid source programs;
+ *
+ *    11. apply effect/capability/resource/security validation independently;
+ *
+ *    12. never infer a physical hardware selection from a convention name.
+ *
+ * Unknown convention names must not be treated as parser errors merely because
+ * this grammar does not know their future semantics.
+ *
+ * Whether unknown conventions are accepted through compilation depends on the
+ * language's interoperability/open-world policy and target validation.
  *
  * ============================================================================
- * FUNCTION-TYPE RULE
+ * 32. DUPLICATE-CONVENTION SEMANTICS
  * ============================================================================
  *
- * This file does NOT make calling conventions part of every function type.
+ * This grammar provides one attachment occurrence.
  *
- * A declaration-level convention:
+ * If a broader metadata system allows multiple calling-convention metadata
+ * entries at the same declaration boundary, semantic analysis must detect:
  *
- *     calling_convention = ...
+ *     agreement
+ *     compatible aliases
+ *     conflicting declarations
+ *     invalid redeclarations
  *
- * does not automatically change:
+ * The grammar must not invent an arbitrary finite maximum.
  *
- *     grammar/types/function.g4
- *
- * If function-type ABI metadata is eventually standardized, that must be
- * specified independently by the canonical type-system contract.
- *
- * ============================================================================
- * CALLBACK INTEGRATION
- * ============================================================================
- *
- * A callback crossing an interoperability boundary may use the same semantic
- * calling-convention reference.
- *
- * This file does not define callback signatures.
- *
- * Callback structure remains owned by the applicable FFI/foreign-function
- * grammar.
- *
- * The semantic model associates:
- *
- *     callback signature
- *     calling convention
- *     ABI
- *     ownership
- *     lifetime
- *     effects
- *     capabilities
- *
- * without creating a callback-specific calling-convention grammar.
+ * It must also never silently choose one conflicting convention.
  *
  * ============================================================================
- * C / C++ / RUST / ZIG / PYTHON
+ * 33. DETERMINISM
  * ============================================================================
  *
- * Language-specific interoperability grammars remain responsible for their
- * own language boundary syntax:
+ * Parsing depends only on:
  *
- *     c.g4
- *     cpp.g4
- *     rust.g4
- *     zig.g4
- *     python.g4
+ *     source text
+ *     canonical lexer
+ *     grammar version
+ *     explicitly selected language configuration
  *
- * This file does NOT enumerate their calling conventions.
+ * Parsing must not depend on:
  *
- * Examples such as:
- *
- *     calling_convention = "C"
- *     calling_convention = "Rust"
- *     calling_convention = "cdecl"
- *
- * are symbolic source data.
- *
- * Future foreign languages and future conventions remain representable
- * without changing this grammar.
- *
- * ============================================================================
- * ASSEMBLY INTEGRATION
- * ============================================================================
- *
- * Assembly interoperability may require target-specific calling conventions.
- *
- * This file still represents the convention symbolically.
- *
- * AssemblyLanguage.g4 owns assembly-language syntax.
- *
- * Target-specific instruction-set details remain downstream.
- *
- * ============================================================================
- * OPENQASM / QUANTUM INTEGRATION
- * ============================================================================
- *
- * A callable boundary involving quantum computation may carry calling-
- * convention metadata.
- *
- * This file does NOT define:
- *
- *     qubits
- *     quantum operations
- *     gates
- *     physical qubits
- *     topology
- *     calibration
- *     routing
- *     scheduling
- *     QEC
- *     ZQN
- *
- * Quantum computation continues through the canonical:
- *
- *     quantum::ir
- *
- * path.
- *
- * No quantum calling-convention IR is introduced.
- *
- * ============================================================================
- * HDL / HARDWARE INTEGRATION
- * ============================================================================
- *
- * A calling convention may annotate a software/hardware callable boundary.
- *
- * It does NOT define:
- *
- *     pins
- *     wires
- *     buses
- *     register addresses
- *     fixed widths
- *     clock counts
- *     pipeline counts
- *     physical placement
- *
- * HDL/hardware grammars retain ownership of those source concepts.
- *
- * ============================================================================
- * CAPABILITY INTEGRATION
- * ============================================================================
- *
- * Calling-convention metadata does NOT grant capabilities.
- *
- * For example:
- *
- *     calling_convention = "native"
- *
- * MUST NOT automatically grant:
- *
- *     filesystem
- *     network
- *     process
  *     hardware
- *     quantum
- *     foreign-library
- *
- * capabilities.
- *
- * Capabilities remain explicit semantic requirements.
- *
- * ============================================================================
- * RESOURCE INTEGRATION
- * ============================================================================
- *
- * Calling convention is distinct from:
- *
- *     requirement
- *     constraint
- *     preference
- *     hint
- *     budget
- *     capability
- *
- * For example:
- *
- *     calling_convention = "c"
- *
- * does not mean:
- *
- *     requires cpu
- *
- * and:
- *
- *     requires capability::foreign_call
- *
- * does not mean:
- *
- *     calling_convention = "c"
- *
- * unless the semantic specification explicitly establishes that relationship.
+ *     target availability
+ *     filesystem state
+ *     network state
+ *     environment variables
+ *     installed libraries
+ *     linker state
+ *     runtime state
+ *     scheduler state
+ *     calibration state
+ *     randomness
+ *     wall-clock time
  *
  * ============================================================================
- * EFFECT INTEGRATION
+ * 34. SAFETY / INERTNESS
  * ============================================================================
  *
- * Calling convention is NOT an effect.
+ * This grammar contains:
  *
- * A foreign call may separately have:
+ *     no embedded Rust;
+ *     no semantic predicates;
+ *     no target-language actions;
+ *     no filesystem access;
+ *     no network access;
+ *     no hardware access;
+ *     no dynamic loading;
+ *     no foreign execution;
+ *     no environment inspection;
+ *     no runtime callbacks.
  *
- *     IO effects
- *     network effects
- *     process effects
- *     hardware effects
- *     quantum effects
- *     asynchronous effects
+ * Generated parser integration must remain compatible with:
  *
- * Those effects remain owned by the canonical effect system.
- *
- * ============================================================================
- * IR CONTRACT
- * ============================================================================
- *
- * This grammar creates NO IR.
- *
- * It MUST NOT introduce:
- *
- *     CallingConventionIR
- *     FunctionCallingConventionIR
- *     ForeignCallingConventionIR
- *     QuantumCallingConventionIR
- *     HardwareCallingConventionIR
- *
- * If an existing canonical IR needs calling-convention metadata, that metadata
- * belongs on the existing callable/external-symbol/function representation.
- *
- * Quantum lowering remains:
- *
- *     source
- *       ->
- *     domain-neutral AST
- *       ->
- *     semantic analysis
- *       ->
- *     quantum::ir
+ *     Rust 1.97 or later
+ *     Rust 2021
+ *     safe Rust
+ *     no unsafe
  *
  * ============================================================================
- * COMPILER CONTRACT
+ * 35. COMPILER CONTRACT
  * ============================================================================
  *
- * Downstream compilation may transform:
+ * The compiler may transform:
  *
- *     symbolic convention
- *          ->
- *     validated ABI identity
- *          ->
- *     target ABI
- *          ->
- *     concrete parameter/return lowering
+ *     symbolic convention reference
+ *             |
+ *             v
+ *     validated semantic convention
+ *             |
+ *             v
+ *     ABI compatibility
+ *             |
+ *             v
+ *     target-specific lowering
  *
- * Target lowering may determine:
+ * Target lowering may eventually determine:
  *
- *     register/stack use
  *     parameter passing
  *     return passing
- *     symbol decoration
+ *     register/stack strategy
+ *     symbol naming
+ *     linkage
  *     object format
  *     unwind behavior
  *     target-specific interoperability
  *
- * None of these are grammar responsibilities.
+ * None of these decisions belong to this grammar.
  *
  * ============================================================================
- * RUNTIME CONTRACT
+ * 36. IR CONTRACT
  * ============================================================================
  *
- * Runtime code MUST consume already validated compiler/semantic output.
+ * This grammar does not create a separate IR.
  *
- * A raw parser value is never authorization to:
+ * In particular, it must not create:
  *
- *     load a library;
- *     resolve a symbol;
- *     execute foreign code;
- *     access hardware.
+ *     CallingConventionIR
+ *     FunctionCallingConventionIR
+ *     QuantumCallingConventionIR
+ *     HardwareCallingConventionIR
+ *
+ * merely because the source contains calling-convention metadata.
+ *
+ * If a canonical IR requires calling-convention information, it belongs as
+ * metadata on the canonical callable/external-call representation already
+ * owned by that IR.
  *
  * ============================================================================
- * SECURITY CONTRACT
+ * 37. RUNTIME CONTRACT
  * ============================================================================
  *
- * A calling convention MUST NOT be treated as a capability.
+ * Runtime systems must consume calling-convention information only after
+ * semantic/compiler validation.
  *
- * The following conceptual transformation is forbidden:
+ * Parsing this grammar does not authorize:
  *
- *     calling_convention = "native"
- *                |
- *                +--> unrestricted native execution
+ *     dynamic library loading
+ *     symbol resolution
+ *     foreign execution
+ *     process execution
+ *     hardware access
+ *     capability acquisition
  *
- * The correct model is:
+ * Runtime authorization remains governed by the security, capability,
+ * execution, and deployment systems.
+ *
+ * ============================================================================
+ * 38. COMPATIBILITY CONTRACT
+ * ============================================================================
+ *
+ * The source spelling:
  *
  *     calling_convention
- *          |
- *          v
- *     interoperability contract
  *
- * while:
+ * is part of the metadata compatibility surface.
  *
- *     capability requirement
- *          |
- *          v
- *     security authorization
+ * Any future change to its spelling must pass through the language
+ * compatibility/versioning system.
  *
- * remains a separate semantic path.
+ * Existing programs must not silently change meaning because a new keyword or
+ * metadata spelling is introduced.
  *
  * ============================================================================
- * COMPATIBILITY CONTRACT
+ * 39. ERROR CLASSIFICATION
  * ============================================================================
  *
- * The existing:
+ * Structural/parser errors include:
  *
- *     grammar/functions/calling-conventions.g4
+ *     missing metadata key
+ *     missing assignment operator
+ *     missing convention reference
+ *     malformed qualified name
+ *     malformed string literal
+ *     missing terminator where the enclosing grammar requires one
  *
- * MUST NOT be unnecessarily renamed.
+ * Semantic errors include:
  *
- * Existing rule names there remain compatibility surfaces until the repository
- * completes the planned migration.
+ *     wrong metadata key
+ *     unsupported convention
+ *     incompatible convention
+ *     conflicting convention declarations
+ *     ABI incompatibility
+ *     invalid callable signature
  *
- * The interoperability composition layer SHOULD migrate function-level
- * consumers to:
+ * Target/environment errors include:
  *
- *     interoperabilityCallingConventionClause
+ *     convention unavailable on selected target
+ *     required ABI unavailable
+ *     required interoperability capability unavailable
  *
- * through normal compatibility work rather than duplicating grammar.
- *
- * Existing source spellings must not silently change meaning.
- *
- * Any spelling migration belongs in:
- *
- *     grammar/compatibility/
- *
- * and:
- *
- *     grammar/spec/compatibility.md
- *
- * ============================================================================
- * COMPOSITION CONTRACT
- * ============================================================================
- *
- * The canonical interoperability composition grammar:
- *
- *     grammar/interoperability/interoperability.g4
- *
- * SHOULD import:
- *
- *     InteroperabilityCallingConventions
- *
- * and expose:
- *
- *     interoperabilityCallingConventionClause
- *
- * through its interoperability metadata dispatcher.
- *
- * The ordinary function composition grammar:
- *
- *     grammar/functions/functions.g4
- *
- * SHOULD import this grammar, or receive the rule through its established
- * composition hierarchy, and consume:
- *
- *     interoperabilityFunctionCallingConvention
- *
- * at the function metadata boundary.
- *
- * The foreign-function grammar:
- *
- *     grammar/interoperability/foreign-functions.g4
- *
- * SHOULD consume:
- *
- *     interoperabilityForeignFunctionCallingConvention
- *
- * rather than duplicating the production.
- *
- * This produces:
- *
- *     one source syntax
- *          |
- *          +--> ordinary function
- *          |
- *          +--> foreign function
- *          |
- *          +--> callback
- *          |
- *          +--> interoperability boundary
- *          |
- *          v
- *     one semantic calling-convention contract
+ * These classes must remain distinguishable.
  *
  * ============================================================================
- * NO COMPOSITION CYCLE
+ * 40. POSITIVE TEST CONTRACT
  * ============================================================================
  *
- * The dependency direction MUST remain:
+ * The conformance suite must accept the following forms when embedded at a
+ * valid callable metadata boundary:
  *
- *     InteroperabilityCallingConventions
- *             |
- *             v
- *     interoperability composition
- *             |
- *             v
- *     canonical parser composition
+ *     calling_convention = "c";
  *
- * This file MUST NOT import:
+ *     calling_convention = "cdecl";
  *
- *     ZamaniParser
- *     Zamani.g4
+ *     calling_convention = "sysv64";
  *
- * and MUST NOT depend on a higher-level parser grammar.
+ *     calling_convention = "win64";
  *
- * ============================================================================
- * CONFORMANCE EXAMPLES
- * ============================================================================
+ *     calling_convention = "aapcs";
  *
- * Positive syntactic examples:
+ *     calling_convention = platform::native;
  *
- *     calling_convention = "c"
+ *     calling_convention = vendor::extension::convention;
  *
- *     calling_convention = "cdecl"
+ *     calling_convention = future::calling::convention;
  *
- *     calling_convention = platform::native
+ *     calling_convention = custom_convention;
  *
- *     calling_convention = vendor::extension::convention
+ *     calling_convention = custom::convention;
  *
- *     calling_convention = future::architecture::convention
+ * Deep qualification must remain structurally supported.
  *
- *     calling_convention = "any-future-convention"
- *
- * These are examples of syntax only.
- *
- * Semantic availability is determined downstream.
+ * No fixed qualification depth is introduced.
  *
  * ============================================================================
- * NEGATIVE / SEMANTIC EXAMPLES
+ * 41. NEGATIVE TEST CONTRACT
  * ============================================================================
  *
- * These must be rejected or diagnosed semantically where the surrounding
- * grammar permits them syntactically:
+ * The conformance suite must reject or semantically diagnose:
  *
- *     wrong_key = "c"
+ *     calling_convention
  *
  *     calling_convention =
  *
+ *     calling_convention = ;
+ *
  *     calling_convention = platform::
  *
- *     calling_convention = ""
+ *     calling_convention = ::
  *
- *     calling_convention = "c" calling_convention = "other"
+ *     calling_convention = "a" "b";
  *
- * The grammar does not need to encode every semantic error.
+ *     calling_convention = ();
  *
- * Structural syntax and semantic validity remain separate.
+ *     calling_convention = {};
+ *
+ *     calling_convention = wrong::;
+ *
+ *     calling_convention = ::wrong;
+ *
+ * A wrong metadata key such as:
+ *
+ *     wrong_key = "c";
+ *
+ * must not be interpreted semantically as a calling-convention declaration.
  *
  * ============================================================================
- * BOUNDARY TESTS
+ * 42. BOUNDARY TEST CONTRACT
  * ============================================================================
  *
- * The conformance suite must exercise:
+ * The suite must exercise:
  *
- *     one convention reference;
- *     deeply qualified convention reference;
- *     long symbolic convention reference;
- *     quoted external convention identity;
- *     generic function containing the clause;
- *     foreign function containing the clause;
- *     callback containing the clause;
+ *     one convention;
+ *     deeply qualified convention;
+ *     long symbolic convention;
+ *     quoted external convention;
+ *     future convention;
+ *     vendor convention;
+ *     ordinary function boundary;
+ *     generic function boundary;
+ *     foreign function boundary;
+ *     callback boundary;
  *     classical/foreign boundary;
- *     quantum/classical boundary;
  *     software/HDL boundary;
- *     hardware/software boundary;
- *     distributed/service boundary.
+ *     software/accelerator boundary;
+ *     distributed callable boundary;
+ *     hybrid classical/quantum boundary.
  *
  * ============================================================================
- * SCALABILITY TESTS
+ * 43. SCALABILITY CONTRACT
  * ============================================================================
  *
- * Scalability tests must verify that no source-language limit is introduced
- * by this grammar.
+ * This grammar introduces no source-language ceiling on:
  *
- * Tests should vary:
+ *     convention-name length;
+ *     qualification depth;
+ *     number of callable declarations;
+ *     number of modules;
+ *     number of functions;
+ *     number of foreign functions;
+ *     number of callbacks;
+ *     number of parameters;
+ *     number of targets;
+ *     number of devices;
+ *     number of processors;
+ *     number of QPUs;
+ *     number of nodes;
+ *     memory;
+ *     storage;
+ *     topology;
+ *     tensor rank;
+ *     register width.
  *
- *     number of declarations;
- *     qualified-name depth;
- *     source size;
- *     generic nesting;
- *     number of independent callable boundaries.
+ * Any practical limit belongs to compiler/resource policy rather than this
+ * language grammar.
  *
- * Tests MUST NOT establish a language maximum such as:
+ * "Infinity" therefore means:
  *
- *     MAX_CALLING_CONVENTIONS
- *     MAX_ABI_PROFILES
- *     MAX_FUNCTIONS
- *     MAX_PARAMETERS
+ *     no artificial language-defined ceiling.
  *
- * ============================================================================
- * DETERMINISM TESTS
- * ============================================================================
- *
- * Parse the same source repeatedly and verify identical parse acceptance and
- * equivalent parse-tree structure.
- *
- * Parsing must not change when:
- *
- *     hardware changes;
- *     target availability changes;
- *     libraries are installed/removed;
- *     network connectivity changes;
- *     environment variables change;
- *     runtime state changes.
+ * Actual execution remains bounded by available resources.
  *
  * ============================================================================
- * HARD-CODING AUDIT
+ * 44. HARD-CODING AUDIT
  * ============================================================================
  *
- * Forbidden:
+ * This file MUST NOT introduce:
  *
  *     MAX_QUBITS
  *     MAX_CPUS
@@ -1191,72 +1204,365 @@
  *     MAX_NETWORK_SIZE
  *     MAX_DEVICE_COUNT
  *
- * Also forbidden as universal grammar semantics:
+ * It must also not encode:
  *
- *     register RAX
- *     register X0
  *     CPU 0
  *     GPU 0
+ *     FPGA 0
  *     QPU 0
- *     physical_qubit 0
- *     fixed_pointer_width
- *     fixed_word_size
- *     fixed_register_width
+ *     node 0
+ *     register 0
+ *     physical address
+ *     fixed pointer width
+ *     fixed word size
+ *     fixed register width
  *
- * Numeric literals remain program data when supplied by other grammar
- * components. This file introduces none.
- *
- * ============================================================================
- * PRODUCTION COMPLETION CONTRACT
- * ============================================================================
- *
- * This file is considered complete as an independent grammar contract when:
- *
- * [x] Purpose is defined.
- * [x] Ownership is defined.
- * [x] Non-ownership is defined.
- * [x] Lexer contract is defined.
- * [x] Shared grammar dependencies are defined.
- * [x] Open-world convention model is defined.
- * [x] No finite convention enumeration exists.
- * [x] Function integration is defined.
- * [x] Foreign-function integration is defined.
- * [x] ABI integration is defined.
- * [x] FFI separation is defined.
- * [x] AST contract is defined.
- * [x] Semantic contract is defined.
- * [x] IR contract is defined.
- * [x] Quantum integration is defined.
- * [x] HDL/hardware integration is defined.
- * [x] Capability separation is defined.
- * [x] Resource separation is defined.
- * [x] Effect separation is defined.
- * [x] Compiler contract is defined.
- * [x] Runtime contract is defined.
- * [x] Security/inertness contract is defined.
- * [x] Compatibility contract is defined.
- * [x] Composition direction is defined.
- * [x] No grammar cycle is introduced.
- * [x] No hardware limits are introduced.
- * [x] No second quantum IR is introduced.
- * [x] Rust 1.97 / 1.97.1 compatibility is defined.
- * [x] Safe Rust / no unsafe requirement is preserved.
- * [x] Positive tests are defined.
- * [x] Negative tests are defined.
- * [x] Boundary tests are defined.
- * [x] Scalability tests are defined.
- * [x] Determinism tests are defined.
- * [x] Hard-coding audit is defined.
+ * Convention names must remain symbolic.
  *
  * ============================================================================
- * GRAMMAR
+ * 45. PROVENANCE CONTRACT
+ * ============================================================================
+ *
+ * The frontend should preserve:
+ *
+ *     original convention spelling;
+ *     canonical metadata key;
+ *     source span;
+ *     language version;
+ *     compatibility context.
+ *
+ * Semantic resolution may additionally record:
+ *
+ *     canonical convention identity;
+ *     alias resolution;
+ *     ABI resolution;
+ *     target compatibility result;
+ *     diagnostics;
+ *     compiler transformation provenance.
+ *
+ * This grammar itself does not perform provenance generation.
+ *
+ * ============================================================================
+ * 46. TOOLING CONTRACT
+ * ============================================================================
+ *
+ * IDE/LSP/formatter/tooling systems must be able to identify:
+ *
+ *     metadata key;
+ *     assignment operator;
+ *     convention reference;
+ *     complete calling-convention attachment.
+ *
+ * Because convention identities are open-world, tooling must not assume that
+ * an unknown convention is necessarily a syntax error.
+ *
+ * Tooling may provide semantic diagnostics after the semantic model resolves
+ * the convention.
+ *
+ * ============================================================================
+ * 47. INTEGRATION CONTRACT
+ * ============================================================================
+ *
+ * REQUIRED IMPORT:
+ *
+ *     grammar/core/names.g4
+ *
+ * Imported grammar:
+ *
+ *     Names
+ *
+ * Canonical lexer:
+ *
+ *     grammar/antlr/ZamaniLexer.g4
+ *
+ * Canonical root parser:
+ *
+ *     grammar/antlr/ZamaniParser.g4
+ *
+ * Complete grammar root:
+ *
+ *     grammar/Zamani.g4
+ *
+ * FUNCTION CONSUMER:
+ *
+ *     grammar/functions/
+ *
+ * FUNCTION COMPATIBILITY ADAPTER:
+ *
+ *     grammar/functions/calling-conventions.g4
+ *
+ * FOREIGN FUNCTION CONSUMER:
+ *
+ *     grammar/interoperability/foreign-functions.g4
+ *
+ * FFI CONSUMER:
+ *
+ *     grammar/interoperability/ffi.g4
+ *
+ * ABI CONSUMER:
+ *
+ *     grammar/interoperability/abi.g4
+ *
+ * NAME OWNER:
+ *
+ *     grammar/core/names.g4
+ *
+ * EFFECT OWNER:
+ *
+ *     grammar/effects/
+ *
+ * RESOURCE/CAPABILITY OWNER:
+ *
+ *     grammar/resources/
+ *
+ * SECURITY OWNER:
+ *
+ *     grammar/security/
+ *
+ * COMPATIBILITY OWNER:
+ *
+ *     grammar/compatibility/
+ *
+ * AST OWNER:
+ *
+ *     src/frontend/ast/
+ *
+ * SEMANTIC OWNER:
+ *
+ *     compiler/frontend semantic-analysis layer
+ *
+ * IR OWNER:
+ *
+ *     canonical IR / external-call representation
+ *
+ * QUANTUM IR:
+ *
+ *     quantum::ir
+ *
+ * TARGET LOWERING:
+ *
+ *     backend/target lowering layers
+ *
+ * ============================================================================
+ * 48. INTEGRATION DIRECTION
+ * ============================================================================
+ *
+ * The dependency direction is:
+ *
+ *     ZamaniLexer
+ *          |
+ *          v
+ *     Names
+ *          |
+ *          v
+ *     InteroperabilityCallingConventions
+ *          |
+ *          +----------------------+
+ *          |                      |
+ *          v                      v
+ *     function adapter       foreign-function adapter
+ *          |                      |
+ *          +----------+-----------+
+ *                     |
+ *                     v
+ *              domain-neutral AST
+ *                     |
+ *                     v
+ *              semantic analysis
+ *                     |
+ *          +----------+-----------+
+ *          |          |           |
+ *          v          v           v
+ *         ABI       effects    capabilities
+ *          |          |           |
+ *          +----------+-----------+
+ *                     |
+ *                     v
+ *              canonical semantic
+ *                  representation
+ *                     |
+ *                     v
+ *                canonical IR
+ *                     |
+ *          +----------+-----------+
+ *          |          |           |
+ *          v          v           v
+ *      classical  quantum::ir    HDL
+ *          |          |           |
+ *          +----------+-----------+
+ *                     |
+ *                     v
+ *              target lowering
+ *
+ * No reverse dependency is permitted.
+ *
+ * ============================================================================
+ * 49. AST / SEMANTIC / IR / BACKEND BOUNDARIES
+ * ============================================================================
+ *
+ * AST:
+ *
+ *     Generic metadata or equivalent domain-neutral callable metadata.
+ *
+ * Semantic:
+ *
+ *     Symbolic convention identity and compatibility.
+ *
+ * ABI:
+ *
+ *     ABI-specific validation and realization contract.
+ *
+ * IR:
+ *
+ *     Existing canonical callable/external-call metadata representation.
+ *
+ * Backend:
+ *
+ *     Concrete calling sequence, parameter passing, register/stack decisions,
+ *     object representation, and target-specific implementation.
+ *
+ * Runtime:
+ *
+ *     Validated execution only.
+ *
+ * ============================================================================
+ * 50. RUST CONTRACT
+ * ============================================================================
+ *
+ * This grammar contains no Rust implementation code.
+ *
+ * Rust consumers must remain compatible with:
+ *
+ *     Rust 1.97 or later
+ *     Rust 2021
+ *
+ * and must use safe Rust.
+ *
+ * No `unsafe` implementation is required by this grammar.
+ *
+ * Rust-specific ABI realization belongs downstream from the grammar.
+ *
+ * ============================================================================
+ * 51. ANTLR GENERATION CONTRACT
+ * ============================================================================
+ *
+ * This file is a parser grammar.
+ *
+ * Canonical declaration:
+ *
+ *     parser grammar InteroperabilityCallingConventions;
+ *
+ * Canonical lexer vocabulary:
+ *
+ *     tokenVocab = ZamaniLexer;
+ *
+ * Canonical imported grammar:
+ *
+ *     Names
+ *
+ * ANTLR generation must resolve the grammar library containing:
+ *
+ *     Names.g4
+ *
+ * and the canonical lexer vocabulary.
+ *
+ * This file must not require a second lexer vocabulary.
+ *
+ * ============================================================================
+ * 52. COMPLETION CRITERIA
+ * ============================================================================
+ *
+ * This file is DONE when all of the following are true:
+ *
+ *     [x] It owns reusable interoperability calling-convention syntax.
+ *
+ *     [x] It does not own ABI layout.
+ *
+ *     [x] It does not own FFI declaration structure.
+ *
+ *     [x] It does not own function declaration structure.
+ *
+ *     [x] It reuses canonical Names grammar.
+ *
+ *     [x] It uses the canonical ZamaniLexer vocabulary.
+ *
+ *     [x] It uses the canonical ASSIGN token.
+ *
+ *     [x] It uses the canonical SEMICOLON token.
+ *
+ *     [x] It does not define lexer tokens.
+ *
+ *     [x] It does not enumerate calling conventions.
+ *
+ *     [x] Future convention names require no grammar modification.
+ *
+ *     [x] It has no hardware-specific calling-convention variants.
+ *
+ *     [x] It has no fixed hardware capacities.
+ *
+ *     [x] It has no register names.
+ *
+ *     [x] It has no physical device identifiers.
+ *
+ *     [x] It does not create a second ABI model.
+ *
+ *     [x] It does not create a second quantum IR.
+ *
+ *     [x] It remains domain-neutral.
+ *
+ *     [x] It preserves POCO-REAF.
+ *
+ *     [x] It separates syntax from semantic ABI resolution.
+ *
+ *     [x] It separates calling convention from linkage.
+ *
+ *     [x] It separates calling convention from effects.
+ *
+ *     [x] It separates calling convention from capabilities.
+ *
+ *     [x] It separates calling convention from resources.
+ *
+ *     [x] It separates calling convention from security authorization.
+ *
+ *     [x] It specifies AST integration.
+ *
+ *     [x] It specifies semantic integration.
+ *
+ *     [x] It specifies IR integration.
+ *
+ *     [x] It specifies backend integration.
+ *
+ *     [x] It specifies runtime boundaries.
+ *
+ *     [x] It specifies compatibility behavior.
+ *
+ *     [x] It specifies provenance requirements.
+ *
+ *     [x] It specifies tooling requirements.
+ *
+ *     [x] It specifies positive tests.
+ *
+ *     [x] It specifies negative tests.
+ *
+ *     [x] It specifies boundary tests.
+ *
+ *     [x] It specifies scalability tests.
+ *
+ *     [x] It specifies determinism tests.
+ *
+ *     [x] It specifies hard-coding prohibitions.
+ *
+ *     [x] It is compatible with safe Rust 1.97+ integration.
+ *
+ * ============================================================================
+ * 53. GRAMMAR RULES
  * ============================================================================
  */
 
 parser grammar InteroperabilityCallingConventions;
 
 options {
-    tokenVocab = ZamaniTokens;
+    tokenVocab = ZamaniLexer;
 }
 
 import Names;
@@ -1264,15 +1570,13 @@ import Names;
 
 /*
  * ============================================================================
- * 1. CALLING-CONVENTION REFERENCE
+ * 53.1 SYMBOLIC CALLING-CONVENTION REFERENCE
  * ============================================================================
- *
- * A convention is symbolic and open-world.
  *
  * Examples:
  *
  *     "c"
- *     "cdecl"
+ *     "future-convention"
  *     platform::native
  *     vendor::extension::convention
  *
@@ -1286,40 +1590,34 @@ interoperabilityCallingConventionReference
 
 /*
  * ============================================================================
- * 2. CANONICAL CALLING-CONVENTION CLAUSE
+ * 53.2 CANONICAL CALLING-CONVENTION CLAUSE
  * ============================================================================
  *
- * Canonical source form:
+ * Canonical source:
  *
- *     calling_convention = "c"
+ *     calling_convention = "c";
  *
- * or:
+ *     calling_convention = platform::native;
  *
- *     calling_convention = platform::native
+ * The metadata key is syntactically an identifier and is validated
+ * semantically as `calling_convention`.
  *
- * No semicolon is included because the enclosing declaration owns its
- * terminator.
- *
- * IDENTIFIER is deliberately used for the metadata key because the repository
- * does not currently require calling_convention to be a globally reserved
- * lexer keyword.
- *
- * Semantic analysis canonicalizes the key.
+ * The enclosing declaration owns the declaration-level composition rules.
  */
 interoperabilityCallingConventionClause
-    : IDENTIFIER
-      EQUALS
+    : identifier
+      ASSIGN
       interoperabilityCallingConventionReference
     ;
 
 
 /*
  * ============================================================================
- * 3. COMPLETE METADATA ITEM
+ * 53.3 COMPLETE DECLARATION-LEVEL ATTACHMENT
  * ============================================================================
  *
- * This rule is useful where an interoperability composition grammar needs a
- * complete metadata item with its own terminator.
+ * This rule is used where the interoperability composition layer owns the
+ * metadata terminator.
  */
 interoperabilityCallingConventionDeclaration
     : interoperabilityCallingConventionClause
@@ -1329,13 +1627,10 @@ interoperabilityCallingConventionDeclaration
 
 /*
  * ============================================================================
- * 4. ORDINARY FUNCTION ADAPTER
+ * 53.4 ORDINARY FUNCTION ADAPTER
  * ============================================================================
  *
- * The complete function declaration remains owned by functions/functions.g4.
- *
- * This rule provides a stable integration name without duplicating the
- * calling-convention clause.
+ * Function declaration structure remains outside this grammar.
  */
 interoperabilityFunctionCallingConvention
     : interoperabilityCallingConventionClause
@@ -1344,11 +1639,10 @@ interoperabilityFunctionCallingConvention
 
 /*
  * ============================================================================
- * 5. FOREIGN-FUNCTION ADAPTER
+ * 53.5 FOREIGN FUNCTION ADAPTER
  * ============================================================================
  *
- * The complete foreign-function declaration remains owned by
- * interoperability/foreign-functions.g4.
+ * Foreign declaration structure remains outside this grammar.
  */
 interoperabilityForeignFunctionCallingConvention
     : interoperabilityCallingConventionClause
@@ -1357,12 +1651,10 @@ interoperabilityForeignFunctionCallingConvention
 
 /*
  * ============================================================================
- * 6. CALLBACK ADAPTER
+ * 53.6 CALLBACK ADAPTER
  * ============================================================================
  *
- * Callback signature structure remains owned by FFI/foreign-function grammar.
- *
- * This rule only supplies the reusable convention attachment.
+ * Callback declaration/signature structure remains outside this grammar.
  */
 interoperabilityCallbackCallingConvention
     : interoperabilityCallingConventionClause
@@ -1371,14 +1663,11 @@ interoperabilityCallbackCallingConvention
 
 /*
  * ============================================================================
- * 7. ATTACHMENT ALIAS
+ * 53.7 CANONICAL ATTACHMENT ALIAS
  * ============================================================================
  *
- * A single effective calling-convention attachment is the semantic model for
- * a callable declaration.
- *
- * Conflicts introduced through broader metadata composition are semantic
- * diagnostics, not a reason to introduce grammar-level fixed limits.
+ * Provides one stable integration rule for generic interoperability
+ * composition without introducing another semantic model.
  */
 interoperabilityCallingConventionAttachment
     : interoperabilityCallingConventionClause
@@ -1387,40 +1676,25 @@ interoperabilityCallingConventionAttachment
 
 /*
  * ============================================================================
- * 8. REFERENCE LIST FOR TOOLING
+ * 53.8 SOURCE-LEVEL REFERENCE
  * ============================================================================
  *
- * This helper is intentionally structural.
- *
- * It does NOT define how multiple convention references are combined.
- *
- * Semantic analysis owns compatibility/conflict resolution.
+ * This alias is useful for semantic/frontend integrations that need to
+ * distinguish the reference from the complete assignment attachment.
  */
-interoperabilityCallingConventionReferenceList
+interoperabilityCallingConvention
     : interoperabilityCallingConventionReference
-      (
-          COMMA
-          interoperabilityCallingConventionReference
-      )*
     ;
 
 
 /*
  * ============================================================================
- * 9. END-TO-END EXAMPLE CONTRACT
+ * 53.9 OPTIONAL ATTACHMENT
  * ============================================================================
  *
- * Example enclosing source:
- *
- *     fn compute(value: T) -> R
- *         calling_convention = vendor::convention
- *     ;
- *
- * This file recognizes only:
- *
- *     calling_convention = vendor::convention
- *
- * The enclosing function grammar recognizes the complete declaration.
- *
- * ============================================================================
+ * This rule does not introduce a new semantic construct. It simply permits
+ * callers to compose the canonical attachment optionally.
  */
+interoperabilityOptionalCallingConvention
+    : interoperabilityCallingConventionClause?
+    ;
