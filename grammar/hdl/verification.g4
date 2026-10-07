@@ -3,23 +3,23 @@
  * Zamani Universal Programming Language
  * ============================================================================
  *
- * File:
- *     grammar/hdl/verification.g4
+ * FILE
+ * ----
+ * grammar/hdl/verification.g4
  *
- * Grammar:
- *     HdlVerification
+ * GRAMMAR
+ * -------
+ * HdlVerification
  *
- * Status:
- *     CANONICAL HDL VERIFICATION COMPOSITION / SOURCE-SYNTAX BOUNDARY
+ * STATUS
+ * ------
+ * CANONICAL PRODUCTION HDL VERIFICATION COMPOSITION GRAMMAR
  *
- * Purpose:
- *     Compose the complete HDL verification syntax boundary without
- *     duplicating assertion/property syntax owned by assertions.g4.
- *
- * Rust baseline:
- *     Rust 1.97 / Rust 1.97.1
- *     Rust 2021
- *     Safe Rust only.
+ * IMPLEMENTATION BASELINE
+ * -----------------------
+ * Rust 1.97 or later
+ * Rust 2021
+ * Safe Rust only
  *
  * ============================================================================
  * AUTHORITY
@@ -28,6 +28,9 @@
  * Normative architecture:
  *
  *     grammar/DESIGN.md
+ *          |
+ *          v
+ *     grammar/specification/
  *          |
  *          v
  *     grammar/spec/hdl.md
@@ -44,18 +47,55 @@
  *     semantic verification model
  *          |
  *          v
- *     canonical hardware semantic representation / IR
+ *     canonical hardware semantic representation
  *          |
  *          +--> simulation
  *          +--> formal verification
- *          +--> synthesis
+ *          +--> coverage
+ *          +--> synthesis checks
  *          +--> timing analysis
  *          +--> optimization
  *          +--> target lowering
  *
- * This file is a parser composition delegate.
+ * This file is a parser-composition boundary.
  *
- * It is NOT a second HDL root.
+ * It is NOT:
+ *
+ *     - a verification engine;
+ *     - a temporal-logic solver;
+ *     - a simulator;
+ *     - a formal-verification backend;
+ *     - a coverage engine;
+ *     - a solver interface;
+ *     - a vendor language;
+ *     - a hardware-target description language.
+ *
+ * ============================================================================
+ * PURPOSE
+ * ============================================================================
+ *
+ * This file provides the canonical HDL verification declaration boundary.
+ *
+ * It composes the authoritative assertion/property grammar with additional
+ * verification constructs whose source syntax genuinely belongs at the HDL
+ * verification boundary.
+ *
+ * The grammar represents PORTABLE VERIFICATION INTENT.
+ *
+ * It deliberately does not select:
+ *
+ *     - a simulator;
+ *     - a formal solver;
+ *     - a model checker;
+ *     - a coverage engine;
+ *     - a verification vendor;
+ *     - a hardware device;
+ *     - an FPGA;
+ *     - an ASIC;
+ *     - a CPU;
+ *     - a GPU;
+ *     - a QPU;
+ *     - a particular target topology.
  *
  * ============================================================================
  * SINGLE-OWNER RULE
@@ -65,178 +105,184 @@
  *
  *     grammar/hdl/assertions.g4
  *
- * This file MUST NOT redefine:
+ * Therefore this file MUST NOT redefine:
  *
  *     hdlAssertion
+ *     hdlAssertionBody
  *     hdlImmediateAssertion
  *     hdlPropertyAssertion
  *     hdlPropertyDeclaration
  *     hdlPropertyExpression
+ *     hdlPropertyReference
+ *     hdlPropertySpecification
+ *     hdlVerificationLabel
  *     hdlVerificationArgumentList
  *     hdlVerificationQualifier
  *
- * Instead, those rules are imported from HdlAssertions.
+ * Those rules are consumed from HdlAssertions.
  *
- * This file owns the broader verification composition boundary:
+ * This file owns only the verification COMPOSITION boundary and constructs
+ * that are not already owned by HdlAssertions.
+ *
+ * ============================================================================
+ * OWNS
+ * ============================================================================
+ *
+ * This file owns:
  *
  *     hdlVerificationDeclaration
  *     hdlVerificationItem
  *     hdlAssumption
  *     hdlCoverage
- *     hdlVerificationBlock
- *     hdlVerificationPropertyReference
- *     hdlVerificationDirective
  *
- * where those constructs are genuinely part of the verification language.
+ * This file may also expose small verification composition rules needed by
+ * the HDL composition root.
  *
  * ============================================================================
- * WHAT THIS FILE OWNS
+ * DOES NOT OWN
  * ============================================================================
  *
- * This file owns:
+ * This file does NOT own:
  *
- *     - verification declaration dispatch;
- *     - assumption syntax;
- *     - coverage syntax;
- *     - verification blocks;
- *     - verification directives;
- *     - composition of assertion/property syntax;
- *     - verification-specific structural boundaries;
- *
- * ============================================================================
- * WHAT THIS FILE DOES NOT OWN
- * ============================================================================
- *
- * It does NOT own:
- *
- *     - lexer rules;
- *     - keywords;
- *     - identifiers;
- *     - literals;
- *     - general expressions;
- *     - general types;
- *     - module declarations;
- *     - ports;
- *     - signals;
- *     - nets;
- *     - registers;
- *     - memories;
- *     - clocks;
- *     - resets;
- *     - timing declarations;
- *     - processes;
- *     - combinational behavior;
- *     - sequential behavior;
- *     - state machines;
- *     - pipelines;
- *     - generate/elaboration;
- *     - synthesis;
- *     - simulation engines;
- *     - formal-solvers;
- *     - theorem proving;
- *     - SAT/SMT algorithms;
- *     - target selection;
- *     - placement;
- *     - routing;
- *     - scheduling;
- *     - physical hardware;
- *     - vendor APIs;
- *     - FPGA resources;
- *     - ASIC resources;
- *     - CPU/GPU/QPU selection;
- *     - quantum::ir;
- *     - QEC;
- *     - ZQN;
- *     - HAL;
- *     - runtime execution.
+ *     lexer rules
+ *     keywords
+ *     identifiers
+ *     literals
+ *     punctuation
+ *     expressions
+ *     types
+ *     attributes
+ *     contracts
+ *     generic requirements
+ *     capabilities
+ *     resources
+ *     effects
+ *     policies
+ *     provenance
+ *     clocks
+ *     clock declarations
+ *     resets
+ *     timing declarations
+ *     modules
+ *     ports
+ *     signals
+ *     nets
+ *     registers
+ *     memories
+ *     processes
+ *     combinational behavior
+ *     sequential behavior
+ *     state machines
+ *     pipelines
+ *     generation
+ *     synthesis
+ *     placement
+ *     routing
+ *     scheduling
+ *     quantum operations
+ *     quantum::ir
+ *     QEC
+ *     ZQN
+ *     HAL
+ *     runtime execution
  *
  * ============================================================================
- * CANONICAL LEXER
+ * LEXICAL AUTHORITY
  * ============================================================================
  *
- * This grammar consumes:
+ * This grammar consumes the single canonical lexer:
  *
- *     ZamaniLexer
+ *     grammar/antlr/ZamaniLexer.g4
  *
  * through:
  *
  *     tokenVocab = ZamaniLexer;
  *
- * There is exactly one production Zamani lexer.
+ * No lexer rules are permitted here.
  *
- * This grammar MUST NOT:
+ * Required canonical verification tokens are:
  *
- *     - define lexer rules;
- *     - define tokens {};
- *     - define token aliases;
- *     - create a verification-specific lexer;
- *     - consume ZamaniTokens directly.
- *
- * ============================================================================
- * EXPRESSIONS AND TYPES
- * ============================================================================
- *
- * Verification expressions are ordinary Zamani expressions.
- *
- * This file MUST NOT create:
- *
- *     verificationExpression
- *     assertionExpression
- *     temporalExpression
- *     formalExpression
- *
- * as competing expression hierarchies.
- *
- * Instead:
- *
- *     hdlExpression
- *
- * remains the canonical HDL expression boundary supplied by the composition
- * root.
- *
- * Types remain supplied by:
- *
- *     hdlTypeExpression
- *
- * Identifiers and qualified names remain canonical shared rules.
- *
- * ============================================================================
- * VERIFICATION MODEL
- * ============================================================================
- *
- * The source language distinguishes:
- *
- *     ASSERTION
- *         The implementation is required to satisfy a property.
- *
- *     ASSUMPTION
- *         A property describing an assumed environment/precondition.
- *
- *     COVERAGE
- *         A property/event whose occurrence is to be observed.
- *
+ *     ASSERT
+ *     ASSUME
+ *     COVER
  *     PROPERTY
- *         A named reusable verification property.
  *
- * The grammar records syntax only.
+ * ASSERT, ASSUME and PROPERTY already belong to the canonical keyword layer.
  *
- * Semantic analysis determines:
+ * COVER MUST be added to the canonical keyword/token registry before this
+ * grammar is generated:
  *
- *     - whether the property is meaningful;
- *     - whether its referenced names exist;
- *     - whether types are compatible;
- *     - whether clocking is valid;
- *     - whether disable conditions are legal;
- *     - whether the property is legal in its enclosing context;
- *     - which verification backend can consume it.
+ *     COVER : 'cover' ;
+ *
+ * The addition MUST be made in the canonical lexical authority rather than
+ * being hidden inside this grammar.
  *
  * ============================================================================
- * ASSUMPTIONS
+ * OPEN-WORLD PRINCIPLE
  * ============================================================================
  *
- * Assumptions constrain the verification environment.
+ * Verification constructs must remain extensible.
  *
- * They do NOT assert that hardware itself satisfies the assumption.
+ * This grammar therefore MUST NOT enumerate:
+ *
+ *     - SAT solvers;
+ *     - SMT solvers;
+ *     - model checkers;
+ *     - theorem provers;
+ *     - simulators;
+ *     - waveform engines;
+ *     - vendor tools;
+ *     - FPGA vendors;
+ *     - ASIC technologies;
+ *     - fixed temporal-logic catalogs;
+ *     - fixed coverage algorithms.
+ *
+ * Such concepts are represented downstream through semantic metadata,
+ * capabilities, policies, dialects, interoperability layers, or backend
+ * configuration.
+ *
+ * ============================================================================
+ * ASSERTION OWNERSHIP
+ * ============================================================================
+ *
+ * Assertions remain owned by:
+ *
+ *     grammar/hdl/assertions.g4
+ *
+ * Therefore:
+ *
+ *     hdlAssertion
+ *
+ * is imported rather than redefined.
+ *
+ * This prevents the repository from having multiple meanings for:
+ *
+ *     assert(...)
+ *     assert property(...)
+ *
+ * ============================================================================
+ * PROPERTY OWNERSHIP
+ * ============================================================================
+ *
+ * Named property declarations remain owned by:
+ *
+ *     grammar/hdl/assertions.g4
+ *
+ * Examples:
+ *
+ *     property ready(v, r) = v && r;
+ *
+ *     property stable(a, b) = a == b;
+ *
+ * Property declaration syntax MUST NOT be duplicated here.
+ *
+ * ============================================================================
+ * ASSUMPTION SEMANTICS
+ * ============================================================================
+ *
+ * An assumption constrains the verification environment/model.
+ *
+ * It does NOT prove that the implementation satisfies the assumption.
  *
  * Canonical forms:
  *
@@ -248,186 +294,545 @@
  *     assume property(condition)
  *         disable(reset);
  *
- * Optional verification arguments remain semantic metadata.
+ * Verification qualifiers are consumed from HdlAssertions.
+ *
+ * Semantic analysis determines:
+ *
+ *     - whether the assumption is valid;
+ *     - what environment it constrains;
+ *     - whether the referenced names exist;
+ *     - whether types are compatible;
+ *     - whether clocking is legal;
+ *     - whether disable semantics are legal;
+ *     - whether the assumption is compatible with its enclosing HDL context.
  *
  * ============================================================================
- * COVERAGE
+ * COVERAGE SEMANTICS
  * ============================================================================
  *
- * Coverage describes behavior whose occurrence should be observed.
+ * Coverage describes behavior that verification should observe.
  *
  * Canonical form:
  *
  *     cover property(condition);
  *
- * Optional clock/disable qualifiers are allowed.
+ * Optional verification qualifiers are supported:
  *
- * Coverage is not an assertion.
+ *     cover property(condition)
+ *         clock(clk);
  *
- * ============================================================================
- * PROPERTY OWNERSHIP
- * ============================================================================
+ *     cover property(condition)
+ *         disable(reset);
  *
- * Named property declaration remains owned by assertions.g4:
+ * Coverage is semantically distinct from assertion.
  *
- *     property ready(v, r) = v && r;
+ * Assertion:
  *
- * Verification composition consumes that rule through:
+ *     implementation MUST satisfy the property.
  *
- *     hdlPropertyDeclaration
+ * Coverage:
  *
- * ============================================================================
- * VERIFICATION BLOCKS
- * ============================================================================
+ *     verification SHOULD determine whether the property/behavior can occur
+ *     or is exercised according to the selected verification semantics.
  *
- * A verification block provides an optional structural grouping mechanism.
+ * The grammar does not decide whether coverage is:
  *
- * The block does not represent:
- *
- *     - a simulation process;
- *     - a hardware module;
- *     - a physical verification engine;
- *     - a solver instance;
- *     - a target device.
- *
- * It is source-level organization only.
+ *     - simulation coverage;
+ *     - formal cover;
+ *     - runtime observation;
+ *     - symbolic exploration;
+ *     - another supported verification mode.
  *
  * ============================================================================
- * DIRECTIVES
+ * PROPERTY SPECIFICATION
  * ============================================================================
  *
- * Verification directives are intentionally represented through a generic
- * named form rather than a finite list of solver/vendor directives.
+ * Property specifications are owned by HdlAssertions.
  *
- * A directive identifies a source-level verification intent.
+ * This file intentionally consumes:
  *
- * Backend-specific meaning is resolved downstream.
+ *     hdlPropertySpecification
+ *
+ * rather than reproducing:
+ *
+ *     LPAREN hdlExpression RPAREN
+ *
+ * or property-reference syntax.
+ *
+ * This guarantees that assertion and coverage constructs use exactly the same
+ * property syntax.
  *
  * ============================================================================
- * NO FIXED TEMPORAL LANGUAGE
+ * VERIFICATION QUALIFIERS
  * ============================================================================
  *
- * This file deliberately does NOT enumerate:
+ * Qualifiers are owned by HdlAssertions.
+ *
+ * The current canonical qualifier boundary supports constructs such as:
+ *
+ *     clock(...)
+ *     disable(...)
+ *
+ * through the existing extensible qualifier representation.
+ *
+ * This file MUST NOT create a second qualifier grammar.
+ *
+ * ============================================================================
+ * TEMPORAL SEMANTICS
+ * ============================================================================
+ *
+ * This file deliberately does NOT enumerate a fixed temporal language.
+ *
+ * It does not define universal parser-level alternatives for:
  *
  *     always
  *     eventually
  *     until
  *     next
  *     throughout
- *     repetition
  *     implication
+ *     repetition
  *     strong
  *     weak
  *
- * as a universal finite temporal operator set.
+ * Temporal semantics belong to the semantic verification layer.
  *
- * Temporal semantics may be represented by ordinary expressions or by an
- * explicitly versioned future language extension.
+ * If a future temporal construct becomes stable Zamani syntax, it MUST first
+ * receive:
  *
- * A future temporal construct requires:
- *
- *     specification
- *     lexer contract
- *     AST contract
- *     semantic contract
- *     verification/IR contract
- *     compatibility decision
- *     tests
- *
- * before becoming stable language syntax.
- *
- * ============================================================================
- * NO BACKEND ENUMERATION
- * ============================================================================
- *
- * This grammar MUST NOT enumerate:
- *
- *     SAT
- *     SMT
- *     Z3
- *     CVC5
- *     SymbiYosys
- *     commercial formal tools
- *     simulator names
- *     vendor verification tools
- *
- * as universal grammar constructs.
- *
- * Such tools are interoperability/backend concerns.
+ *     - normative specification;
+ *     - lexical contract, if lexical reservation is required;
+ *     - grammar contract;
+ *     - AST contract;
+ *     - semantic contract;
+ *     - verification/IR contract;
+ *     - compatibility decision;
+ *     - positive tests;
+ *     - negative tests;
+ *     - boundary tests;
+ *     - scalability tests.
  *
  * ============================================================================
- * POCO-REAF
+ * LABELS
  * ============================================================================
  *
- * Verification syntax is target-independent.
+ * Verification labels are owned by HdlAssertions.
  *
- * It MUST NOT encode:
+ * Examples:
+ *
+ *     ready_check: assert(...);
+ *
+ *     protocol_check:
+ *         assume property(...);
+ *
+ *     progress:
+ *         cover property(...);
+ *
+ * Labels are source-level identity/metadata.
+ *
+ * They do not identify:
+ *
+ *     - physical resources;
+ *     - solver instances;
+ *     - devices;
+ *     - threads;
+ *     - simulator processes.
+ *
+ * ============================================================================
+ * VERIFICATION ARGUMENTS
+ * ============================================================================
+ *
+ * Assertion/property verification arguments remain owned by HdlAssertions.
+ *
+ * The verification grammar does not hard-code:
+ *
+ *     severity
+ *     message
+ *     solver
+ *     backend
+ *     waveform
+ *     report
+ *     engine
+ *
+ * as universal syntax.
+ *
+ * Backend-specific metadata belongs in semantic metadata, policies, dialects,
+ * or interoperability layers.
+ *
+ * ============================================================================
+ * CONTRACT / POLICY INTEGRATION
+ * ============================================================================
+ *
+ * Verification is compatible with the repository-wide:
+ *
+ *     contracts
+ *     requirements
+ *     capabilities
+ *     resources
+ *     effects
+ *     policies
+ *     provenance
+ *
+ * systems.
+ *
+ * This grammar does not import those grammars merely because verification may
+ * consume their semantic information.
+ *
+ * Semantic analysis is responsible for determining relationships such as:
+ *
+ *     verification requirement
+ *         |
+ *         v
+ *     capability resolution
+ *         |
+ *         v
+ *     resource feasibility
+ *         |
+ *         v
+ *     policy authorization
+ *         |
+ *         v
+ *     verification planning
+ *
+ * Resource/capability failures MUST NOT become syntax errors.
+ *
+ * ============================================================================
+ * EFFECT INTEGRATION
+ * ============================================================================
+ *
+ * Verification syntax itself is declarative.
+ *
+ * Parsing it does not perform:
+ *
+ *     simulation
+ *     measurement
+ *     I/O
+ *     network access
+ *     solver execution
+ *     code generation
+ *     native execution
+ *
+ * If a downstream verification realization has effects, those effects are
+ * attached by semantic analysis and execution planning.
+ *
+ * ============================================================================
+ * PROVENANCE INTEGRATION
+ * ============================================================================
+ *
+ * Verification constructs may participate in provenance.
+ *
+ * Semantic provenance may record:
+ *
+ *     source property
+ *     source assertion
+ *     source assumption
+ *     source coverage goal
+ *     derived verification obligation
+ *     verification transformation
+ *     verification result
+ *     evidence
+ *     tool/backend identity
+ *     policy
+ *     version
+ *
+ * The parser itself remains deterministic and side-effect free.
+ *
+ * ============================================================================
+ * AST CONTRACT
+ * ============================================================================
+ *
+ * This grammar produces parser contexts only.
+ *
+ * Semantic lowering MUST use the existing domain-neutral frontend AST.
+ *
+ * Conceptual mappings:
+ *
+ *     hdlAssertion
+ *         -> canonical verification assertion node
+ *
+ *     hdlAssumption
+ *         -> canonical verification assumption node
+ *
+ *     hdlCoverage
+ *         -> canonical verification coverage node
+ *
+ *     hdlPropertyDeclaration
+ *         -> canonical verification property declaration node
+ *
+ * This grammar MUST NOT create:
+ *
+ *     VerificationAst
+ *     HdlVerificationAst
+ *     FormalAst
+ *     CoverageAst
+ *
+ * as parallel AST hierarchies.
+ *
+ * Exact Rust AST ownership remains outside grammar/.
+ *
+ * ============================================================================
+ * SEMANTIC CONTRACT
+ * ============================================================================
+ *
+ * Semantic analysis owns:
+ *
+ *     - name resolution;
+ *     - property resolution;
+ *     - property parameter binding;
+ *     - expression typing;
+ *     - clock validation;
+ *     - disable-condition validation;
+ *     - assertion context validation;
+ *     - assumption context validation;
+ *     - coverage context validation;
+ *     - verification-mode resolution;
+ *     - capability checking;
+ *     - resource checking;
+ *     - policy checking;
+ *     - contract interaction;
+ *     - provenance;
+ *     - verification backend selection;
+ *     - elaboration.
+ *
+ * None of these operations occur in this grammar.
+ *
+ * ============================================================================
+ * IR CONTRACT
+ * ============================================================================
+ *
+ * This grammar owns NO IR.
+ *
+ * It MUST NOT introduce:
+ *
+ *     VerificationIR
+ *     AssertionIR
+ *     CoverageIR
+ *     FormalIR
+ *     SolverIR
+ *
+ * solely to represent parser syntax.
+ *
+ * Verification semantics must enter the repository's established canonical
+ * semantic/IR pipeline.
+ *
+ * For hardware verification:
+ *
+ *     source
+ *       |
+ *       v
+ *     domain-neutral AST
+ *       |
+ *       v
+ *     semantic verification model
+ *       |
+ *       v
+ *     canonical hardware representation / IR
+ *       |
+ *       +--> simulation
+ *       +--> formal verification
+ *       +--> coverage
+ *       +--> synthesis checks
+ *       +--> timing analysis
+ *       +--> target lowering
+ *
+ * ============================================================================
+ * QUANTUM / HYBRID INTEGRATION
+ * ============================================================================
+ *
+ * HDL verification expressions may reference quantum or hybrid values where
+ * the enclosing semantic domain permits them.
+ *
+ * This grammar does not define:
+ *
+ *     qubit syntax;
+ *     gate syntax;
+ *     quantum measurements;
+ *     QEC;
+ *     quantum routing;
+ *     quantum scheduling;
+ *     quantum target selection.
+ *
+ * Quantum meaning remains owned by the quantum subsystem.
+ *
+ * If verification semantics reference quantum operations, the semantic path
+ * remains:
+ *
+ *     source
+ *       |
+ *       v
+ *     domain-neutral AST
+ *       |
+ *       v
+ *     semantic quantum model
+ *       |
+ *       v
+ *     quantum::ir
+ *
+ * ============================================================================
+ * HDL INTEGRATION
+ * ============================================================================
+ *
+ * grammar/hdl/hdl.g4 is the HDL composition root.
+ *
+ * It MUST import:
+ *
+ *     HdlVerification
+ *
+ * and its declaration dispatch MUST use:
+ *
+ *     hdlVerificationDeclaration
+ *
+ * rather than directly importing/redeclaring individual verification
+ * constructs.
+ *
+ * The HDL composition root therefore owns composition, not verification
+ * syntax.
+ *
+ * ============================================================================
+ * SEQUENTIAL / COMBINATIONAL INTEGRATION
+ * ============================================================================
+ *
+ * grammar/hdl/sequential.g4 and grammar/hdl/combinational.g4 MUST NOT create
+ * independent HDL assertion languages.
+ *
+ * If they need assertion support, they must consume the canonical
+ * hdlAssertion rule through grammar composition.
+ *
+ * They MUST NOT redefine:
+ *
+ *     hdlAssertion
+ *     hdlAssumption
+ *     hdlCoverage
+ *     hdlPropertyDeclaration
+ *
+ * ============================================================================
+ * TIMING INTEGRATION
+ * ============================================================================
+ *
+ * Verification qualifiers such as:
+ *
+ *     clock(...)
+ *     disable(...)
+ *
+ * do not replace:
+ *
+ *     grammar/hdl/clocks.g4
+ *     grammar/hdl/clocking.g4
+ *     grammar/hdl/timing.g4
+ *
+ * Those grammars remain authoritative for their respective hardware/timing
+ * declarations.
+ *
+ * Verification only records the logical relationship required by a property.
+ *
+ * ============================================================================
+ * SIMULATION INTEGRATION
+ * ============================================================================
+ *
+ * grammar/hdl/simulation.g4 owns simulation syntax.
+ *
+ * This grammar does not execute simulation.
+ *
+ * Semantic analysis may lower:
+ *
+ *     assertion
+ *     assumption
+ *     coverage
+ *
+ * into simulation instrumentation when permitted by the semantic model.
+ *
+ * ============================================================================
+ * SYNTHESIS INTEGRATION
+ * ============================================================================
+ *
+ * Verification constructs may influence synthesis through semantic metadata,
+ * constraints, validation, or implementation policy.
+ *
+ * This grammar does not synthesize hardware.
+ *
+ * It does not select:
+ *
+ *     cells
+ *     LUTs
+ *     DSP blocks
+ *     BRAMs
+ *     physical registers
+ *     physical pins
+ *
+ * ============================================================================
+ * RESOURCE SCALABILITY
+ * ============================================================================
+ *
+ * There are NO grammar-level limits on:
+ *
+ *     verification declarations
+ *     assertions
+ *     assumptions
+ *     coverage goals
+ *     properties
+ *     property parameters
+ *     qualifier count
+ *     verification arguments
+ *     nested source structure
+ *     hierarchy depth
+ *     expression size
+ *     identifier size
+ *     source-unit size
+ *
+ * This grammar MUST NOT introduce:
  *
  *     MAX_ASSERTIONS
  *     MAX_PROPERTIES
  *     MAX_ASSUMPTIONS
- *     MAX_COVERPOINTS
+ *     MAX_COVERAGE
+ *     MAX_PROPERTY_PARAMETERS
+ *     MAX_QUALIFIERS
+ *     MAX_VERIFICATION_ARGUMENTS
  *     MAX_CYCLES
  *     MAX_STATES
  *     MAX_TRANSITIONS
- *     MAX_VERIFICATION_THREADS
- *     MAX_SOLVERS
  *     MAX_TRACE_LENGTH
+ *     MAX_SOLVERS
+ *     MAX_VERIFICATION_THREADS
  *     MAX_WAVEFORM_SIZE
  *
- * It also MUST NOT encode:
+ * or equivalent semantic ceilings.
  *
- *     FPGA0
- *     CPU0
- *     GPU0
- *     QPU0
- *     physical_pin
- *     physical_register
- *     physical_lut
- *     physical_bram
+ * Repetition is represented structurally using ANTLR repetition operators.
  *
- * as universal verification semantics.
+ * Actual limits, if required for denial-of-service protection or compiler
+ * operation, MUST be external configurable resource policies and MUST NOT
+ * change the language's meaning.
  *
  * ============================================================================
- * SCALABILITY
+ * "INFINITY" INTERPRETATION
  * ============================================================================
  *
- * The grammar uses:
+ * POCO-REAF scalability means:
  *
- *     *
- *     +
- *     ?
- *     symbolic expressions
- *     parameter lists
- *     named properties
- *     reusable blocks
+ *     no artificial language-level ceiling.
  *
- * and therefore imposes no artificial finite semantic ceiling on:
+ * It does NOT mean:
  *
- *     properties
- *     assertions
- *     assumptions
- *     coverage constructs
- *     verification blocks
- *     parameters
- *     referenced signals
- *     referenced modules
- *     verification metadata
+ *     infinite memory;
+ *     infinite parser stack;
+ *     infinite compilation time;
+ *     infinite solver capacity;
+ *     infinite simulation capacity;
+ *     infinite hardware.
  *
- * Actual compiler/tool resource limits may exist as configurable operational
- * safeguards.
- *
- * Those safeguards MUST NOT become language-level semantic limits.
+ * The same source semantics remain valid as the available resources grow,
+ * subject to explicit semantic feasibility and policy decisions.
  *
  * ============================================================================
  * DETERMINISM
  * ============================================================================
  *
- * Parsing depends only on:
+ * Parsing MUST depend only on:
  *
  *     source text
+ *     canonical lexer vocabulary
  *     grammar version
- *     canonical lexical vocabulary
  *
  * Parsing MUST NOT depend on:
  *
@@ -437,198 +842,30 @@
  *     randomness
  *     filesystem state
  *     network state
- *     environment variables
  *     runtime state
+ *     solver availability
  *
  * ============================================================================
- * SAFE RUST
+ * SAFETY
  * ============================================================================
  *
- * This grammar contains no embedded Rust actions, predicates, or semantic
- * execution.
+ * This file contains:
  *
- * Generated/compiler integration MUST remain compatible with:
+ *     - no embedded Rust;
+ *     - no semantic actions;
+ *     - no semantic predicates;
+ *     - no native calls;
+ *     - no unsafe code;
+ *     - no filesystem access;
+ *     - no network access;
+ *     - no hardware access;
+ *     - no solver execution.
  *
- *     Rust 1.97
- *     Rust 1.97.1
+ * Rust implementations consuming the grammar MUST remain compatible with:
+ *
+ *     Rust 1.97+
  *     Rust 2021
- *
- * and safe Rust.
- *
- * No `unsafe` implementation is required by this grammar.
- *
- * ============================================================================
- * AST CONTRACT
- * ============================================================================
- *
- * The parser produces ordinary parse-tree structure.
- *
- * Semantic lowering must map verification constructs into the existing
- * domain-neutral frontend AST.
- *
- * Conceptual mappings:
- *
- *     hdlAssertion
- *         -> verification assertion node
- *
- *     hdlAssumption
- *         -> verification assumption node
- *
- *     hdlCoverage
- *         -> verification coverage node
- *
- *     hdlPropertyDeclaration
- *         -> verification property declaration node
- *
- *     hdlVerificationBlock
- *         -> verification block node
- *
- *     hdlVerificationDirective
- *         -> verification directive/metadata node
- *
- * Exact concrete Rust AST type names remain owned by:
- *
- *     src/frontend/ast/
- *
- * This grammar MUST NOT create a second verification AST hierarchy.
- *
- * ============================================================================
- * SEMANTIC CONTRACT
- * ============================================================================
- *
- * Semantic analysis owns:
- *
- *     - name resolution;
- *     - property binding;
- *     - parameter binding;
- *     - type checking;
- *     - clock validation;
- *     - reset/disable validation;
- *     - assertion/assumption/coverage context validation;
- *     - verification capability checks;
- *     - resource requirements;
- *     - backend compatibility;
- *     - temporal semantics;
- *     - property elaboration.
- *
- * ============================================================================
- * IR CONTRACT
- * ============================================================================
- *
- * Verification syntax MUST lower into the repository's canonical semantic
- * verification/hardware representation.
- *
- * This grammar MUST NOT create:
- *
- *     VerificationIR
- *     AssertionIR
- *     FormalIR
- *     SolverIR
- *
- * merely to represent syntax.
- *
- * If a verification semantic IR already exists downstream, this grammar
- * feeds it through the established semantic boundary.
- *
- * ============================================================================
- * QUANTUM INTEGRATION
- * ============================================================================
- *
- * Verification may reference quantum/hybrid values when permitted by the
- * semantic system.
- *
- * This grammar does NOT define:
- *
- *     qubit verification;
- *     quantum gates;
- *     QEC;
- *     ZQN;
- *     quantum routing;
- *     quantum scheduling.
- *
- * Quantum meaning remains owned by the quantum subsystem.
- *
- * Where quantum semantics are involved:
- *
- *     source
- *       |
- *       v
- *     domain-neutral AST
- *       |
- *       v
- *     semantic analysis
- *       |
- *       v
- *     quantum::ir
- *
- * remains the canonical quantum semantic boundary.
- *
- * ============================================================================
- * RESOURCE / CAPABILITY INTEGRATION
- * ============================================================================
- *
- * Verification may depend on capabilities such as:
- *
- *     formal.verification
- *     assertion.monitoring
- *     coverage
- *     waveform
- *     simulation
- *
- * Capability names remain semantic data.
- *
- * This grammar does not determine whether a target provides them.
- *
- * Likewise:
- *
- *     requires verification_capability
- *
- * is a semantic requirement, not a parser-level hardware limit.
- *
- * ============================================================================
- * COMPILER INTEGRATION
- * ============================================================================
- *
- * The compiler may lower verification constructs into:
- *
- *     simulation instrumentation
- *     formal properties
- *     runtime monitors
- *     test infrastructure
- *     coverage instrumentation
- *     synthesis-time checks
- *     verification artifacts
- *
- * The grammar does not choose which backend is used.
- *
- * ============================================================================
- * RUNTIME INTEGRATION
- * ============================================================================
- *
- * Runtime behavior is downstream.
- *
- * An assertion may become:
- *
- *     runtime check
- *
- * only when its semantic contract explicitly permits runtime checking.
- *
- * A formal property is not automatically a runtime assertion.
- *
- * The grammar does not decide this.
- *
- * ============================================================================
- * INTEROPERABILITY
- * ============================================================================
- *
- * Verification constructs may eventually lower to external verification
- * formats.
- *
- * Examples include external assertion/formal/simulation ecosystems.
- *
- * Those formats are interoperability targets.
- *
- * They are not additional Zamani grammar authorities.
+ *     #![deny(unsafe_code)]
  *
  * ============================================================================
  * SECURITY
@@ -636,114 +873,97 @@
  *
  * Parsing verification syntax MUST NOT:
  *
- *     execute solver commands;
- *     execute simulation;
- *     access files;
- *     access network services;
- *     inspect hardware;
- *     invoke vendor tools;
- *     load arbitrary code.
+ *     - execute a solver;
+ *     - launch a simulator;
+ *     - invoke a vendor tool;
+ *     - access a file;
+ *     - access a network;
+ *     - inspect physical hardware;
+ *     - load arbitrary code.
  *
- * Backend execution belongs to controlled compiler/toolchain boundaries.
+ * Such operations belong to controlled downstream compiler/toolchain
+ * boundaries.
  *
  * ============================================================================
- * DIAGNOSTICS
+ * DIAGNOSTIC CONTRACT
  * ============================================================================
  *
  * Syntax diagnostics should identify:
  *
- *     - unexpected verification keyword;
+ *     - malformed assumption;
+ *     - malformed coverage declaration;
+ *     - missing PROPERTY;
  *     - malformed property specification;
  *     - malformed qualifier;
- *     - malformed argument;
- *     - malformed verification block;
- *     - malformed directive.
+ *     - malformed argument list;
+ *     - missing statement terminator.
  *
  * Semantic diagnostics should distinguish:
  *
  *     - undefined property;
- *     - undefined signal;
- *     - incompatible property argument;
+ *     - undefined property parameter;
+ *     - invalid expression type;
  *     - invalid clock;
- *     - invalid disable expression;
+ *     - invalid disable condition;
  *     - invalid verification context;
- *     - missing verification capability;
- *     - unsupported backend;
- *     - insufficient target resources.
+ *     - unsupported verification mode;
+ *     - unavailable verification capability;
+ *     - insufficient resources;
+ *     - policy rejection;
+ *     - unsupported target/backend.
  *
- * Resource/backend failures MUST NOT be reported as syntax errors.
- *
- * ============================================================================
- * INTEGRATION CONTRACT
- * ============================================================================
- *
- * grammar/hdl/hdl.g4 MUST:
- *
- *     1. import HdlVerification;
- *     2. remove its local hdlAssertion rule;
- *     3. remove its local hdlAssertionKind rule;
- *     4. use hdlVerificationDeclaration where verification declarations
- *        are permitted;
- *     5. not duplicate assertion/property syntax.
- *
- * grammar/hdl/assertions.g4 MUST:
- *
- *     1. remain the assertion/property syntax owner;
- *     2. remain imported by HdlVerification;
- *     3. not define assume/cover lexical tokens itself;
- *     4. continue using canonical expression/type/name rules.
- *
- * grammar/hdl/sequential.g4 MUST:
- *
- *     consume hdlAssertion or hdlVerificationDeclaration through composition;
- *     not redefine assertion syntax.
- *
- * grammar/hdl/combinational.g4 MUST:
- *
- *     consume hdlAssertion or hdlVerificationDeclaration through composition;
- *     not redefine assertion syntax.
- *
- * grammar/statements/assertions.g4 MUST NOT become a second HDL assertion
- * owner. Its relationship to HDL verification must be resolved at the
- * language-wide statement composition boundary.
+ * Syntax and semantic/resource/backend failures MUST remain distinct.
  *
  * ============================================================================
- * LEXER INTEGRATION
+ * COMPATIBILITY
  * ============================================================================
  *
- * The current repository already provides:
+ * Existing canonical syntax is preserved:
  *
- *     ASSERT
- *     PROPERTY
+ *     assert(condition);
+ *     assert property(condition);
+ *     property name = expression;
  *
- * through the canonical keyword vocabulary.
+ * This file adds/normalizes the verification composition forms:
  *
- * The current HDL root, however, still contains obsolete:
+ *     assume property(condition);
+ *     cover property(condition);
  *
- *     K_ASSERT
- *     K_ASSUME
- *     K_COVER
+ * ASSUME is already part of the canonical keyword vocabulary.
  *
- * references.
+ * COVER is a new reserved word and therefore requires the coordinated lexical
+ * registry update described below.
  *
- * These must not survive as a second token vocabulary.
- *
- * The canonical keyword layer should add:
- *
- *     ASSUME : 'assume' ;
- *     COVER  : 'cover' ;
- *
- * and the canonical parser should consume:
- *
- *     ASSERT
- *     ASSUME
- *     COVER
- *     PROPERTY
- *
- * from ZamaniLexer.
+ * No legacy K_* verification tokens are accepted by this grammar.
  *
  * ============================================================================
- * VERIFICATION DECLARATION DISPATCH
+ * COMPLETION CRITERIA
+ * ============================================================================
+ *
+ * This file is DONE when all of the following hold:
+ *
+ *     [x] It is a parser grammar.
+ *     [x] Grammar name matches HdlVerification.
+ *     [x] It consumes ZamaniLexer.
+ *     [x] It imports HdlAssertions.
+ *     [x] It owns verification composition only.
+ *     [x] It does not duplicate assertion/property syntax.
+ *     [x] It has no K_VERIFY dependency.
+ *     [x] It has no K_ASSERT dependency.
+ *     [x] It has no K_ASSUME dependency.
+ *     [x] It has no K_COVER dependency.
+ *     [x] It introduces no backend enumeration.
+ *     [x] It introduces no hardware-size limit.
+ *     [x] It introduces no fixed verification limit.
+ *     [x] It introduces no second AST.
+ *     [x] It introduces no second IR.
+ *     [x] It performs no execution.
+ *     [x] It is deterministic.
+ *     [x] It remains target-independent.
+ *     [x] It is compatible with safe Rust toolchain integration.
+ *
+ * Repository integration is complete only after the coordinated changes
+ * described in the integration contract below are applied.
  * ============================================================================
  */
 
@@ -753,15 +973,22 @@ options {
     tokenVocab = ZamaniLexer;
 }
 
+/*
+ * Assertion/property syntax is owned by HdlAssertions.
+ */
 import HdlAssertions;
 
 /*
  * ============================================================================
- * PUBLIC VERIFICATION ENTRY
+ * PUBLIC VERIFICATION DECLARATION
  * ============================================================================
  *
- * This is the single composition boundary for verification declarations.
+ * This is the ONLY verification declaration boundary that the HDL composition
+ * root should consume.
  *
+ * Assertions and property declarations are imported from HdlAssertions.
+ *
+ * Assumptions and coverage are owned here.
  * ============================================================================
  */
 
@@ -770,8 +997,20 @@ hdlVerificationDeclaration
     | hdlAssertion
     | hdlAssumption
     | hdlCoverage
-    | hdlVerificationBlock
-    | hdlVerificationDirective
+    ;
+
+/*
+ * ============================================================================
+ * VERIFICATION ITEM
+ * ============================================================================
+ *
+ * This reusable boundary permits callers that need a sequence of verification
+ * constructs without inventing another verification AST.
+ * ============================================================================
+ */
+
+hdlVerificationItem
+    : hdlVerificationDeclaration
     ;
 
 /*
@@ -779,16 +1018,16 @@ hdlVerificationDeclaration
  * ASSUMPTION
  * ============================================================================
  *
- * Examples:
+ * Canonical:
  *
- *     assume property(valid);
+ *     assume property(condition);
  *
- *     assume property(valid)
- *         clock(clk);
+ *     assume property(condition) clock(clk);
  *
- *     assume property(valid)
- *         disable(reset);
+ *     assume property(condition) disable(reset);
  *
+ * Labels are inherited from HdlAssertions.
+ * Property syntax is inherited from HdlAssertions.
  * ============================================================================
  */
 
@@ -806,13 +1045,16 @@ hdlAssumption
  * COVERAGE
  * ============================================================================
  *
- * Examples:
+ * Canonical:
  *
- *     cover property(done);
+ *     cover property(condition);
  *
- *     cover property(done)
- *         clock(clk);
+ *     cover property(condition) clock(clk);
  *
+ *     cover property(condition) disable(reset);
+ *
+ * Coverage uses exactly the same property specification and qualifier
+ * boundaries as assertion/assumption syntax.
  * ============================================================================
  */
 
@@ -824,95 +1066,3 @@ hdlCoverage
       hdlVerificationQualifier*
       SEMICOLON
     ;
-
-/*
- * ============================================================================
- * VERIFICATION BLOCK
- * ============================================================================
- *
- * A verification block is logical source organization.
- *
- * It is not a module, process, simulation thread, or hardware resource.
- *
- * ============================================================================
- */
-
-hdlVerificationBlock
-    : hdlVerificationLabel?
-      K_VERIFY
-      identifier?
-      LBRACE
-      hdlVerificationItem*
-      RBRACE
-    ;
-
-hdlVerificationItem
-    : hdlPropertyDeclaration
-    | hdlAssertion
-    | hdlAssumption
-    | hdlCoverage
-    | hdlVerificationDirective
-    | hdlVerificationBlock
-    ;
-
-/*
- * ============================================================================
- * VERIFICATION DIRECTIVE
- * ============================================================================
- *
- * Generic named directives keep the core grammar open-world.
- *
- * Example:
- *
- *     verify formal { backend: formal; }
- *
- *     verify coverage { mode: exhaustive; }
- *
- * The semantic layer owns the meaning of the directive name and arguments.
- *
- * ============================================================================
- */
-
-hdlVerificationDirective
-    : K_VERIFY
-      hdlQualifiedName
-      hdlVerificationDirectiveArguments?
-      SEMICOLON
-    ;
-
-hdlVerificationDirectiveArguments
-    : LBRACE
-      hdlVerificationArgumentList?
-      RBRACE
-    ;
-
-/*
- * ============================================================================
- * COMPLETION INVARIANTS
- * ============================================================================
- *
- * This file is complete when:
- *
- *     [x] It has one parser grammar declaration.
- *     [x] Filename and grammar name correspond.
- *     [x] It consumes ZamaniLexer.
- *     [x] It imports HdlAssertions.
- *     [x] It does not duplicate assertion syntax.
- *     [x] It owns assumption syntax.
- *     [x] It owns coverage syntax.
- *     [x] It owns verification composition.
- *     [x] It does not define a second expression grammar.
- *     [x] It does not define a second type grammar.
- *     [x] It does not define a second identifier grammar.
- *     [x] It does not define a second lexer.
- *     [x] It imposes no machine-size limits.
- *     [x] It does not select a target.
- *     [x] It does not execute verification.
- *     [x] It does not create a second quantum IR.
- *     [x] It preserves quantum::ir as the canonical quantum boundary.
- *     [x] It remains safe-Rust compatible.
- *     [x] It has deterministic source syntax.
- *     [x] It has explicit downstream integration contracts.
- *
- * ============================================================================
- */
