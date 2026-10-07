@@ -3,41 +3,139 @@
  * Zamani Universal Programming Language
  * ============================================================================
  *
- * File:
- *     grammar/compile/compile.g4
+ * FILE
+ * ----
+ * grammar/compile/compile.g4
  *
- * Grammar:
+ * GRAMMAR
+ * -------
+ * Compile
+ *
+ * STATUS
+ * ------
+ * PRODUCTION COMPOSITION ROOT
+ *
+ * ============================================================================
+ * PURPOSE
+ * ============================================================================
+ *
+ * This file is the SINGLE composition root for the source-level compilation
+ * subsystem.
+ *
+ * It does not implement the individual compilation features. Instead, it
+ * composes their independently-owned parser grammars behind one stable
+ * `Compile` boundary.
+ *
+ * The compilation subsystem covers:
+ *
+ *     intent
+ *     profiles
+ *     compile-time control
+ *     conditional compilation
+ *     feature selection
+ *     target intent
+ *     target selection
+ *     optimization intent
+ *     specialization intent
+ *     artifact intent
+ *     code-generation intent
+ *     lowering intent
+ *     cross-compilation
+ *     reproducibility
+ *     deterministic builds
+ *     caching
+ *     provenance
+ *     deployment intent
+ *
+ * This file therefore answers:
+ *
+ *     "Which source-level compilation constructs are being composed?"
+ *
+ * It does NOT answer:
+ *
+ *     "Which physical machine executes them?"
+ *
+ *     "Which device is allocated?"
+ *
+ *     "How are resources discovered?"
+ *
+ *     "How are quantum operations routed?"
+ *
+ *     "How are operations scheduled?"
+ *
+ *     "How is QEC performed?"
+ *
+ *     "How does the HAL realize the result?"
+ *
+ * Those responsibilities belong downstream.
+ *
+ * ============================================================================
+ * ARCHITECTURAL POSITION
+ * ============================================================================
+ *
+ *     source
+ *       |
+ *       v
+ *     ZamaniLexer
+ *       |
+ *       v
+ *     ZamaniParser
+ *       |
+ *       v
  *     Compile
- *
- * Status:
- *     PRODUCTION COMPOSITION ROOT
- *
- * Purpose:
- *     Canonical compilation-language composition boundary.
- *
- * This file owns the composition of source-level compilation constructs.
- * It does not duplicate the internal syntax owned by the dedicated grammar
- * modules under grammar/compile/.
- *
- * ============================================================================
- * LANGUAGE / TOOLCHAIN CONTRACT
- * ============================================================================
- *
- * Language:
- *     Zamani
- *
- * Grammar technology:
- *     ANTLR
- *
- * Compiler implementation:
- *     Rust 2021
- *
- * Supported Rust baseline:
- *     Rust 1.97
- *     Rust 1.97.1
- *
- * Safety:
- *     No unsafe Rust is required.
+ *       |
+ *       v
+ *     domain-neutral AST
+ *       |
+ *       v
+ *     structural validation
+ *       |
+ *       +--> names
+ *       +--> types
+ *       +--> effects
+ *       +--> resources
+ *       +--> capabilities
+ *       +--> contracts
+ *       +--> policies
+ *       +--> provenance
+ *       +--> portability
+ *       |
+ *       v
+ *     semantic compilation model
+ *       |
+ *       +-------------------+---------------------+
+ *       |                   |                     |
+ *       v                   v                     v
+ *   classical          quantum::ir          HDL/hardware
+ *       |                   |                     |
+ *       +-------------------+---------------------+
+ *                           |
+ *                           v
+ *                      optimization
+ *                           |
+ *                           v
+ *                      specialization
+ *                           |
+ *                           v
+ *                        lowering
+ *                           |
+ *                           v
+ *                  routing / scheduling
+ *                           |
+ *                           v
+ *                   resilience / QEC
+ *                           |
+ *                           v
+ *                          ZQN
+ *                           |
+ *                           v
+ *                          HAL
+ *                           |
+ *                           v
+ *                  target realization
+ *                           |
+ *                           v
+ *                      deployment/runtime
  *
  * ============================================================================
  * POCO-REAF
@@ -45,9 +143,13 @@
  *
  * Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
  *
- * Compilation syntax describes portable source intent.
+ * Compilation syntax MUST describe portable computational intent.
  *
- * It MUST NOT impose artificial universal limits on:
+ * A program may therefore be compiled for different realizations without
+ * requiring a change to the source grammar merely because the realization
+ * changes.
+ *
+ * The compilation grammar MUST NOT establish artificial universal limits for:
  *
  *     qubits
  *     logical qubits
@@ -66,73 +168,36 @@
  *     memory
  *     storage
  *     registers
+ *     register width
  *     vector width
  *     tensor dimensions
  *     tensor rank
  *     network size
+ *     topology size
  *     channels
- *     timelines
  *     targets
  *     artifacts
+ *     profiles
  *     compilation stages
+ *     optimization objectives
+ *     transformations
  *     requirements
  *     constraints
  *     capabilities
- *     optimization objectives
  *
- * Any actual limit is an implementation/resource/environment property and
- * belongs downstream of source parsing.
+ * No MAX_* language-level capacity constants are permitted.
  *
- * ============================================================================
- * ARCHITECTURAL POSITION
- * ============================================================================
+ * "Scale to infinity" means that the language does not establish an
+ * artificial finite machine ceiling.
  *
- *     Zamani source
- *          |
- *          v
- *     ZamaniLexer
- *          |
- *          v
- *     Compile
- *          |
- *          v
- *     frontend AST
- *          |
- *          v
- *     semantic analysis
- *          |
- *          +--> names / types / effects
- *          +--> resources / capabilities
- *          +--> portability
- *          +--> target resolution
- *          +--> specialization
- *          +--> optimization planning
- *          |
- *          v
- *     canonical semantic representation
- *          |
- *          +--> classical representation
- *          +--> quantum::ir
- *          +--> HDL / hardware representation
- *          +--> distributed representation
- *          |
- *          v
- *     optimization
- *          |
- *          v
- *     routing / scheduling / resilience
- *          |
- *          v
- *     QEC / ZQN where applicable
- *          |
- *          v
- *     HAL
- *          |
- *          v
- *     target realization
- *          |
- *          v
- *     runtime / deployment
+ * Physical and implementation limits remain properties of:
+ *
+ *     compiler resources
+ *     target capabilities
+ *     resource availability
+ *     operating environments
+ *     runtime environments
+ *     deployment environments
  *
  * ============================================================================
  * OWNERSHIP
@@ -140,83 +205,162 @@
  *
  * THIS FILE OWNS:
  *
- *     - the canonical compilation composition boundary;
- *     - the `Compile` parser grammar;
- *     - the public compilation declaration entry point;
- *     - composition of dedicated compilation grammar modules;
+ *     - the parser grammar named `Compile`;
+ *     - the public `compileDeclaration` entry point;
+ *     - the compilation specification boundary;
  *     - compilation-clause dispatch;
- *     - stable delegation names for compilation subsystems;
- *     - the boundary between compilation syntax and downstream semantics.
+ *     - stable adapter rules connecting the compilation root to its
+ *       independently-owned compilation grammars;
+ *     - the distinction between compilation syntax and downstream
+ *       compilation semantics.
  *
  * THIS FILE DOES NOT OWN:
  *
- *     - lexical definitions;
+ *     - lexical tokens;
  *     - identifiers;
  *     - qualified names;
  *     - expressions;
  *     - types;
  *     - ordinary declarations;
  *     - ordinary statements;
- *     - profile internals;
- *     - target internals;
- *     - target-selection internals;
- *     - optimization internals;
- *     - specialization internals;
- *     - artifact internals;
- *     - code-generation internals;
- *     - lowering internals;
- *     - cross-compilation internals;
- *     - reproducibility implementation;
- *     - caching implementation;
- *     - deployment execution;
- *     - hardware discovery;
- *     - resource discovery;
+ *     - resource definitions;
+ *     - capability definitions;
+ *     - hardware descriptions;
+ *     - optimization algorithms;
+ *     - specialization algorithms;
+ *     - lowering algorithms;
+ *     - code generators;
+ *     - artifact serializers;
+ *     - cache implementations;
+ *     - deployment implementations;
+ *     - target discovery;
+ *     - resource allocation;
  *     - routing;
  *     - scheduling;
+ *     - resilience;
  *     - QEC;
  *     - ZQN;
  *     - HAL;
- *     - canonical IR definitions.
+ *     - AST construction;
+ *     - semantic analysis;
+ *     - canonical IR construction;
+ *     - `quantum::ir` implementation.
  *
  * ============================================================================
  * SINGLE-AUTHORITY RULE
  * ============================================================================
  *
- * This file MUST remain the only compilation composition root.
+ * Every detailed compilation concern MUST have exactly one syntax authority.
  *
- * It MUST NOT be accompanied by another grammar that claims to be the
- * authoritative general compilation grammar.
+ * The composition root delegates to that authority.
  *
- * In particular:
+ * It MUST NOT copy the internal rules of:
+ *
+ *     profiles.g4
+ *     compile-time.g4
+ *     conditional-compilation.g4
+ *     feature-selection.g4
+ *     target.g4
+ *     target-selection.g4
+ *     optimization.g4
+ *     specialization.g4
+ *     artifacts.g4
+ *     code-generation.g4
+ *     lowering.g4
+ *     cross-compilation.g4
+ *     reproducibility.g4
+ *     deterministic-builds.g4
+ *     caching.g4
+ *     provenance.g4
+ *     deployment.g4
+ *
+ * ============================================================================
+ * COMPOSITION-ROOT RULE
+ * ============================================================================
+ *
+ * `Compile` is the canonical compilation composition root.
+ *
+ * `grammar/Zamani.g4`
+ *     remains the complete-language composition root.
+ *
+ * `grammar/antlr/ZamaniParser.g4`
+ *     imports `Compile` and exposes compilation through `compileElement`.
+ *
+ * This file MUST therefore remain usable as a parser-library component.
+ *
+ * ============================================================================
+ * NON-ROOT COMPILATION FILES
+ * ============================================================================
+ *
+ * The following existing files are deliberately NOT imported here:
  *
  *     grammar/compile/compilation.g4
+ *     grammar/compile/intent.g4
  *
- * must not become a second parser root.
+ * `compilation.g4` is an overlapping legacy composition root that already
+ * imports `Compile`. Importing it here would create a composition cycle and
+ * duplicate authority.
  *
- * If compilation.g4 is retained as the canonical composition root, any older
- * overlapping composition grammar must be reduced to documentation,
- * compatibility support, or removed after dependency verification.
+ * `intent.g4` already imports `Compile`. Importing it here would likewise
+ * create:
  *
- * The canonical public root remains:
+ *     Compile -> CompileIntent -> Compile
  *
- *     grammar/Zamani.g4
+ * and is therefore prohibited.
  *
- * and that root is responsible for integrating Compile into the complete
- * Zamani language.
+ * Their future role is:
+ *
+ *     compatibility adapter / migration boundary
+ *
+ * rather than independent compilation authorities.
+ *
+ * ============================================================================
+ * FEATURE-GRAMMAR OWNERSHIP
+ * ============================================================================
+ *
+ * `features.g4` provides the canonical reusable feature-reference machinery.
+ *
+ * `feature-selection.g4` owns feature-selection structure.
+ *
+ * They MUST have a one-way dependency:
+ *
+ *     CompileFeatures
+ *          |
+ *          v
+ *     FeatureSelection
+ *          |
+ *          v
+ *       Compile
+ *
+ * The two grammars MUST NOT independently define duplicate:
+ *
+ *     featureName
+ *     featureReference
+ *     featureNameList
+ *
+ * rules.
+ *
+ * Until that dependency is normalized, `Compile` MUST NOT directly import both
+ * grammars because ANTLR would receive duplicate imported rule authorities.
+ *
+ * `Compile` therefore consumes the feature-selection composition boundary.
  *
  * ============================================================================
  * DEPENDENCY DIRECTION
  * ============================================================================
  *
- * Canonical direction:
- *
  *     Zamani.g4
+ *          |
+ *          v
+ *     ZamaniParser
  *          |
  *          v
  *       Compile
  *          |
  *          +--> CompileProfiles
  *          +--> CompileTime
+ *          +--> ConditionalCompilation
+ *          +--> FeatureSelection
  *          +--> CompileTarget
  *          +--> CompileTargetSelection
  *          +--> CompileOptimization
@@ -226,60 +370,36 @@
  *          +--> CompileLowering
  *          +--> CompileCrossCompilation
  *          +--> CompileReproducibility
+ *          +--> CompileDeterministicBuilds
+ *          +--> CompileProvenance
  *          +--> CompileCaching
  *          +--> CompileDeployment
  *
- * Dedicated grammars may themselves import the canonical foundational
- * grammars, but no dedicated compilation grammar may import this composition
- * root.
- *
- * This prevents cycles such as:
- *
- *     Compile -> CompileOptimization -> Compile
+ * A dedicated grammar MUST NOT import this composition root.
  *
  * ============================================================================
  * ANTLR CONTRACT
  * ============================================================================
  *
- * This is a parser grammar, not a combined grammar.
+ * This is a parser grammar.
  *
  * The canonical lexer is:
  *
  *     ZamaniLexer
  *
- * No lexer rules are defined here.
+ * No lexer rules are declared here.
  *
- * No embedded host-language actions are permitted.
+ * No embedded Rust actions are permitted.
  *
  * No semantic predicates are required.
  *
- * No Rust code is embedded.
+ * No filesystem, network, hardware, environment, or runtime state may be
+ * inspected while parsing.
  *
  * ============================================================================
  */
 
 parser grammar Compile;
-
-
-/*
- * ============================================================================
- * CANONICAL TOKEN VOCABULARY
- * ============================================================================
- *
- * All lexical tokens come from the canonical Zamani lexer.
- *
- * The lexer remains the sole authority for:
- *
- *     keywords
- *     identifiers
- *     literals
- *     operators
- *     delimiters
- *     Unicode
- *     comments
- *
- * This grammar does not redefine them.
- */
 
 options {
     tokenVocab = ZamaniLexer;
@@ -288,30 +408,23 @@ options {
 
 /*
  * ============================================================================
- * IMPORTED COMPILATION COMPONENTS
+ * COMPILATION COMPONENT IMPORTS
  * ============================================================================
  *
- * Each imported parser grammar owns one independently completable concern.
+ * Each imported grammar is an independently-owned syntax component.
  *
- * The composition root delegates to those grammars instead of copying their
- * productions.
+ * The imports below intentionally use grammar names rather than filesystem
+ * paths.
  *
- * Foundational syntax is imported by the dedicated grammars where required.
- *
- * The compilation root therefore does not create another:
- *
- *     identifier
- *     qualifiedName
- *     expression
- *     typeExpression
- *     blockExpression
- *
- * authority.
+ * ANTLR resolves them through the configured grammar/import search path.
+ * ============================================================================
  */
 
 import
     CompileProfiles,
     CompileTime,
+    ConditionalCompilation,
+    FeatureSelection,
     CompileTarget,
     CompileTargetSelection,
     CompileOptimization,
@@ -321,26 +434,25 @@ import
     CompileLowering,
     CompileCrossCompilation,
     CompileReproducibility,
+    CompileDeterministicBuilds,
+    CompileProvenance,
     CompileCaching,
-    CompileDeployment;
+    CompileDeployment
+;
 
 
 /*
  * ============================================================================
- * 1. PUBLIC COMPILATION ENTRY POINT
+ * PUBLIC ENTRY POINT
  * ============================================================================
  *
- * This is the primary entry point exposed by this grammar.
+ * A compile declaration begins with the canonical COMPILE token.
  *
- * The canonical Zamani root should invoke:
+ * The declaration contains one or more compilation clauses.
  *
- *     compileDeclaration
+ * No finite number of clauses is imposed.
  *
- * when a source-level compilation declaration is encountered.
- *
- * The grammar deliberately permits a sequence of compilation clauses.
- *
- * No finite clause count is imposed.
+ * ============================================================================
  */
 
 compileDeclaration
@@ -350,19 +462,13 @@ compileDeclaration
 
 /*
  * ============================================================================
- * 2. COMPILATION SPECIFICATION
+ * COMPILATION SPECIFICATION
  * ============================================================================
  *
- * A compilation specification is a non-empty sequence of compilation clauses.
+ * One or more compilation clauses form the compilation specification.
  *
- * This prevents a meaningless:
- *
- *     compile;
- *
- * from being silently accepted as a complete compilation specification.
- *
- * If a future language version gives an empty compile declaration a defined
- * meaning, that change must be explicitly versioned.
+ * Repetition is intentionally structural rather than bounded.
+ * ============================================================================
  */
 
 compileSpecification
@@ -372,22 +478,23 @@ compileSpecification
 
 /*
  * ============================================================================
- * 3. COMPILATION CLAUSE DISPATCH
+ * COMPILATION CLAUSE DISPATCH
  * ============================================================================
  *
- * This is the central responsibility of this file.
+ * This is the central orchestration point of the compilation subsystem.
  *
- * Each branch delegates to the grammar that owns its syntax.
+ * The rules below are adapters only.
  *
- * No branch below reproduces the internal implementation of the delegated
- * grammar.
- *
+ * Detailed syntax remains owned by the imported grammar that defines the
+ * referenced rule.
  * ============================================================================
  */
 
 compileClause
     : compileProfileReference
     | compileTimeControlReference
+    | conditionalCompilationReference
+    | featureSelectionReference
     | compileTargetReference
     | compileTargetSelectionReference
     | compileOptimizationReference
@@ -397,6 +504,8 @@ compileClause
     | compileLoweringReference
     | compileCrossCompilationReference
     | compileReproducibilityReference
+    | compileDeterministicBuildReference
+    | compileProvenanceReference
     | compileCachingReference
     | compileDeploymentReference
     ;
@@ -404,39 +513,38 @@ compileClause
 
 /*
  * ============================================================================
- * 4. PROFILE COMPOSITION
+ * PROFILE
  * ============================================================================
  *
- * Ownership:
+ * Owner:
  *
  *     grammar/compile/profiles.g4
  *
- * Public grammar:
+ * Actual public rule:
  *
- *     CompileProfiles
+ *     compileProfile
  *
- * This wrapper gives the Compile grammar a stable composition boundary while
- * preserving CompileProfiles as the sole owner of profile syntax.
+ * The previous `compileProfileDeclaration` reference was invalid because that
+ * rule does not exist in the current repository.
+ * ============================================================================
  */
 
 compileProfileReference
-    : compileProfileDeclaration
+    : compileProfile
     ;
 
 
 /*
  * ============================================================================
- * 5. COMPILE-TIME CONTROL COMPOSITION
+ * COMPILE-TIME CONTROL
  * ============================================================================
  *
- * Ownership:
+ * Owner:
  *
  *     grammar/compile/compile-time.g4
  *
- * This grammar owns statement/control-level compile-time constructs.
- *
- * Expression-level compile-time constructs remain owned by the expressions
- * subsystem.
+ * Compile-time control remains distinct from ordinary runtime execution.
+ * ============================================================================
  */
 
 compileTimeControlReference
@@ -446,23 +554,57 @@ compileTimeControlReference
 
 /*
  * ============================================================================
- * 6. TARGET COMPOSITION
+ * CONDITIONAL COMPILATION
  * ============================================================================
  *
- * Ownership:
+ * Owner:
+ *
+ *     grammar/compile/conditional-compilation.g4
+ *
+ * Conditional compilation selects source constructs according to compile-time
+ * predicates.
+ *
+ * It does not perform target discovery or runtime execution.
+ * ============================================================================
+ */
+
+conditionalCompilationReference
+    : conditionalCompilation
+    ;
+
+
+/*
+ * ============================================================================
+ * FEATURE SELECTION
+ * ============================================================================
+ *
+ * Owner:
+ *
+ *     grammar/compile/feature-selection.g4
+ *
+ * Feature identity and feature-reference semantics remain owned by the
+ * canonical feature grammar relationship described above.
+ * ============================================================================
+ */
+
+featureSelectionReference
+    : featureSelection
+    ;
+
+
+/*
+ * ============================================================================
+ * TARGET INTENT
+ * ============================================================================
+ *
+ * Owner:
  *
  *     grammar/compile/target.g4
  *
- * Target declarations describe target intent.
+ * Target intent describes acceptable realization classes.
  *
- * They do not describe:
- *
- *     physical devices
- *     hardware inventories
- *     physical addresses
- *     provider credentials
- *     live devices
- *     machine state
+ * It does not select or allocate physical devices.
+ * ============================================================================
  */
 
 compileTargetReference
@@ -472,24 +614,17 @@ compileTargetReference
 
 /*
  * ============================================================================
- * 7. TARGET-SELECTION COMPOSITION
+ * TARGET SELECTION
  * ============================================================================
  *
- * Ownership:
+ * Owner:
  *
  *     grammar/compile/target-selection.g4
  *
- * Target selection is different from target declaration.
+ * Selection is policy.
  *
- * Target selection expresses policy for choosing an acceptable realization.
- *
- * It does not perform:
- *
- *     hardware discovery
- *     resource allocation
- *     physical placement
- *     routing
- *     scheduling
+ * Physical realization remains downstream.
+ * ============================================================================
  */
 
 compileTargetSelectionReference
@@ -499,18 +634,17 @@ compileTargetSelectionReference
 
 /*
  * ============================================================================
- * 8. OPTIMIZATION COMPOSITION
+ * OPTIMIZATION
  * ============================================================================
  *
- * Ownership:
+ * Owner:
  *
  *     grammar/compile/optimization.g4
  *
- * Optimization syntax expresses intent.
+ * The grammar represents optimization intent only.
  *
- * It does not implement optimization algorithms.
- *
- * The optimizer remains a downstream compiler subsystem.
+ * Optimization algorithms remain compiler implementation concerns.
+ * ============================================================================
  */
 
 compileOptimizationReference
@@ -520,18 +654,16 @@ compileOptimizationReference
 
 /*
  * ============================================================================
- * 9. SPECIALIZATION COMPOSITION
+ * SPECIALIZATION
  * ============================================================================
  *
- * Ownership:
+ * Owner:
  *
  *     grammar/compile/specialization.g4
  *
- * Explicit metaprogramming specialization remains separate from compilation
- * specialization policy.
- *
- * The compilation grammar must not redefine generic declarations or
- * metaprogramming syntax.
+ * Specialization remains distinct from metaprogramming and from target
+ * selection.
+ * ============================================================================
  */
 
 compileSpecializationReference
@@ -541,35 +673,41 @@ compileSpecializationReference
 
 /*
  * ============================================================================
- * 10. ARTIFACT COMPOSITION
+ * ARTIFACTS
  * ============================================================================
  *
- * Ownership:
+ * Owner:
  *
  *     grammar/compile/artifacts.g4
  *
- * Artifact syntax describes desired compilation products or representations.
+ * The existing artifact grammar does not export `artifactDeclaration`.
  *
- * It does not implement packaging, linking, serialization, or deployment.
+ * Its authoritative reusable entry is:
+ *
+ *     compileArtifactSpecification
+ *
+ * Therefore the COMPILE composition boundary supplies the ARTIFACT keyword
+ * while the artifact grammar owns the specification following it.
+ *
+ * This fixes the invalid `artifactDeclaration` reference in the previous
+ * version without duplicating artifact internals.
+ * ============================================================================
  */
 
 compileArtifactReference
-    : artifactDeclaration
+    : ARTIFACT compileArtifactSpecification
     ;
 
 
 /*
  * ============================================================================
- * 11. CODE-GENERATION COMPOSITION
+ * CODE GENERATION
  * ============================================================================
  *
- * Ownership:
+ * Owner:
  *
  *     grammar/compile/code-generation.g4
- *
- * Code-generation syntax describes generation intent.
- *
- * The actual generator remains downstream.
+ * ============================================================================
  */
 
 compileCodeGenerationReference
@@ -579,16 +717,24 @@ compileCodeGenerationReference
 
 /*
  * ============================================================================
- * 12. LOWERING COMPOSITION
+ * LOWERING
  * ============================================================================
  *
- * Ownership:
+ * Owner:
  *
  *     grammar/compile/lowering.g4
  *
- * Lowering syntax describes permitted/requested transformation boundaries.
+ * Lowering transforms one semantic representation into another permitted
+ * representation.
  *
- * It must never introduce another IR hierarchy.
+ * It does not define a second IR.
+ *
+ * Quantum transformations continue toward:
+ *
+ *     quantum::ir
+ *
+ * and subsequently toward domain-specific realization.
+ * ============================================================================
  */
 
 compileLoweringReference
@@ -598,33 +744,36 @@ compileLoweringReference
 
 /*
  * ============================================================================
- * 13. CROSS-COMPILATION COMPOSITION
+ * CROSS-COMPILATION
  * ============================================================================
  *
- * Ownership:
+ * Owner:
  *
  *     grammar/compile/cross-compilation.g4
  *
- * Cross-compilation expresses portability and realization intent.
+ * Cross-compilation expresses source/realization portability.
  *
- * It must not encode a finite target inventory.
+ * It does not define a finite target catalogue.
+ * ============================================================================
  */
 
 compileCrossCompilationReference
-    : crossCompilationDeclaration
+    : crossCompilationClause
     ;
 
 
 /*
  * ============================================================================
- * 14. REPRODUCIBILITY COMPOSITION
+ * REPRODUCIBILITY
  * ============================================================================
  *
- * Ownership:
+ * Owner:
  *
  *     grammar/compile/reproducibility.g4
  *
- * Reproducibility is a compilation property, not an execution implementation.
+ * Reproducibility intent describes requirements for repeatable compilation
+ * results and traceable compilation inputs.
+ * ============================================================================
  */
 
 compileReproducibilityReference
@@ -634,17 +783,65 @@ compileReproducibilityReference
 
 /*
  * ============================================================================
- * 15. CACHING COMPOSITION
+ * DETERMINISTIC BUILDS
  * ============================================================================
  *
- * Ownership:
+ * Owner:
+ *
+ *     grammar/compile/deterministic-builds.g4
+ *
+ * Deterministic build intent is kept separate from the broader reproducibility
+ * declaration because the repository already provides both authorities.
+ * ============================================================================
+ */
+
+compileDeterministicBuildReference
+    : deterministicBuildClause
+    ;
+
+
+/*
+ * ============================================================================
+ * PROVENANCE
+ * ============================================================================
+ *
+ * Owner:
+ *
+ *     grammar/compile/provenance.g4
+ *
+ * Provenance records compilation relationships such as:
+ *
+ *     source
+ *     derived-from
+ *     transformed-by
+ *     verified-by
+ *     justified-by
+ *     generated-from
+ *
+ * The grammar only preserves source intent.
+ *
+ * The actual provenance graph/record implementation remains downstream.
+ * ============================================================================
+ */
+
+compileProvenanceReference
+    : compileProvenanceDeclaration
+    ;
+
+
+/*
+ * ============================================================================
+ * CACHING
+ * ============================================================================
+ *
+ * Owner:
  *
  *     grammar/compile/caching.g4
  *
- * Cache syntax expresses compilation artifact reuse intent.
+ * Cache syntax expresses reuse intent.
  *
- * It does not grant access to a particular filesystem, network cache, build
- * server, or provider.
+ * It does not grant filesystem, network, remote-cache, or provider access.
+ * ============================================================================
  */
 
 compileCachingReference
@@ -654,13 +851,15 @@ compileCachingReference
 
 /*
  * ============================================================================
- * 16. DEPLOYMENT COMPOSITION
+ * DEPLOYMENT
  * ============================================================================
  *
- * Deployment grammar ownership remains separate.
+ * Owner:
  *
- * The compilation layer may reference deployment intent, but it does not
- * become the deployment implementation.
+ *     grammar/compile/deployment.g4
+ *
+ * Deployment intent remains separate from deployment execution.
+ * ============================================================================
  */
 
 compileDeploymentReference
@@ -670,161 +869,633 @@ compileDeploymentReference
 
 /*
  * ============================================================================
- * 17. COMPOSITION INVARIANTS
+ * COMPOSITION INVARIANTS
  * ============================================================================
  *
- * The following invariants are part of the grammar contract.
+ * 1. ONE LEXER
  *
- * ---------------------------------------------------------------------------
- * INVARIANT A — ONE LEXER
- * ---------------------------------------------------------------------------
+ *     All tokens originate from ZamaniLexer.
  *
- * Every token is supplied by ZamaniLexer.
+ * 2. ONE COMPILATION ROOT
  *
- * ---------------------------------------------------------------------------
- * INVARIANT B — ONE COMPILE ROOT
- * ---------------------------------------------------------------------------
+ *     Compile is the canonical compilation composition root.
  *
- * Compile is the only general compilation composition grammar.
+ * 3. ONE COMPLETE-LANGUAGE ROOT
  *
- * ---------------------------------------------------------------------------
- * INVARIANT C — ONE OWNER PER FEATURE
- * ---------------------------------------------------------------------------
+ *     grammar/Zamani.g4 remains the complete-language root.
  *
- * The composition root delegates rather than duplicates.
+ * 4. ONE OWNER PER FEATURE
  *
- * ---------------------------------------------------------------------------
- * INVARIANT D — NO SECOND EXPRESSION GRAMMAR
- * ---------------------------------------------------------------------------
+ *     Detailed syntax belongs to its dedicated grammar.
  *
- * Compilation components consume the canonical expression contract.
+ * 5. NO DUPLICATE EXPRESSIONS
  *
- * ---------------------------------------------------------------------------
- * INVARIANT E — NO SECOND TYPE GRAMMAR
- * ---------------------------------------------------------------------------
+ *     This grammar does not redefine expression syntax.
  *
- * Compilation components consume the canonical type contract.
+ * 6. NO DUPLICATE TYPES
  *
- * ---------------------------------------------------------------------------
- * INVARIANT F — NO SECOND AST
- * ---------------------------------------------------------------------------
+ *     This grammar does not redefine type syntax.
  *
- * Grammar modules describe syntax.
+ * 7. NO DUPLICATE IDENTIFIERS
  *
- * AST ownership remains with the domain-neutral frontend AST architecture.
+ *     This grammar consumes canonical identifier/name rules.
  *
- * ---------------------------------------------------------------------------
- * INVARIANT G — NO SECOND IR
- * ---------------------------------------------------------------------------
+ * 8. NO DUPLICATE RESOURCE MODEL
  *
- * This grammar creates no IR.
+ *     Resource requirements are consumed from their canonical semantic
+ *     subsystem.
  *
- * ---------------------------------------------------------------------------
- * INVARIANT H — CANONICAL QUANTUM IR
- * ---------------------------------------------------------------------------
+ * 9. NO DUPLICATE CAPABILITY MODEL
  *
- * Quantum compilation continues through:
+ *     Capability semantics remain outside this composition root.
  *
- *     quantum::ir
+ * 10. NO DUPLICATE EFFECT SYSTEM
  *
- * There is no compilation-specific quantum IR.
+ *     Compilation effects are analyzed downstream.
  *
- * ---------------------------------------------------------------------------
- * INVARIANT I — TARGET INDEPENDENCE
- * ---------------------------------------------------------------------------
+ * 11. NO AST IMPLEMENTATION
  *
- * Compile syntax does not require a particular machine realization.
+ *     The grammar only supplies parse structure.
  *
- * ---------------------------------------------------------------------------
- * INVARIANT J — RESOURCE INDEPENDENCE
- * ---------------------------------------------------------------------------
+ * 12. NO IR IMPLEMENTATION
  *
- * Compile syntax does not impose physical resource ceilings.
+ *     The grammar creates no IR.
  *
- * ---------------------------------------------------------------------------
- * INVARIANT K — SEMANTIC SEPARATION
- * ---------------------------------------------------------------------------
+ * 13. CANONICAL QUANTUM BOUNDARY
  *
- * Requirement, constraint, preference, hint, capability, resource and target
- * intent remain distinguishable semantic categories.
+ *     Quantum compilation continues through quantum::ir.
  *
- * ---------------------------------------------------------------------------
- * INVARIANT L — DETERMINISTIC PARSING
- * ---------------------------------------------------------------------------
+ * 14. NO BACKEND IMPLEMENTATION
  *
- * Given identical source, lexer configuration and grammar version, parsing is
- * deterministic.
+ *     CPU/GPU/FPGA/ASIC/QPU/HPC/distributed/cloud realization is downstream.
  *
- * ---------------------------------------------------------------------------
- * INVARIANT M — SAFE IMPLEMENTATION
- * ---------------------------------------------------------------------------
+ * 15. NO HARDWARE DISCOVERY
  *
- * No unsafe Rust is required by this grammar or its intended compiler
- * integration.
+ *     The parser never inspects actual hardware.
+ *
+ * 16. NO RESOURCE ALLOCATION
+ *
+ *     Resource feasibility is resolved downstream.
+ *
+ * 17. NO ROUTING
+ *
+ *     Routing is downstream.
+ *
+ * 18. NO SCHEDULING
+ *
+ *     Scheduling is downstream.
+ *
+ * 19. NO QEC
+ *
+ *     Error correction is downstream.
+ *
+ * 20. NO ZQN
+ *
+ *     Quantum-network/target realization remains downstream.
+ *
+ * 21. NO HAL
+ *
+ *     Hardware abstraction and backend realization remain downstream.
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 18. SEMANTIC CATEGORY CONTRACT
+ * POCO-REAF INVARIANTS
  * ============================================================================
  *
- * The composition grammar intentionally does not provide a generic:
+ * Changing the eventual realization from one available computational
+ * environment to another MUST NOT require a different compilation grammar
+ * merely because the target has:
  *
- *     compilerOption
+ *     more or fewer processors
+ *     more or fewer accelerators
+ *     more or fewer qubits
+ *     more or less memory
+ *     a different topology
+ *     a different instruction set
+ *     a different quantum architecture
+ *     a different HDL implementation
+ *     a different distributed topology
  *
- * escape hatch that could silently absorb every semantic category.
+ * Instead:
  *
- * The downstream semantic model must preserve distinctions between:
+ *     source intent
+ *         |
+ *         v
+ *     semantic requirements
+ *         |
+ *         v
+ *     capability negotiation
+ *         |
+ *         v
+ *     target selection
+ *         |
+ *         v
+ *     specialization
+ *         |
+ *         v
+ *     optimization
+ *         |
+ *         v
+ *     lowering
+ *         |
+ *         v
+ *     routing / scheduling
+ *         |
+ *         v
+ *     target realization
  *
- *     requirement
- *     constraint
- *     preference
- *     hint
- *     capability
- *     resource
- *     target
- *     artifact
- *     optimization objective
- *     compilation stage
+ * ============================================================================
+ * OPEN-WORLD EXTENSIBILITY
+ * ============================================================================
+ *
+ * This grammar deliberately does not enumerate:
+ *
+ *     CPU models
+ *     GPU models
+ *     FPGA families
+ *     ASIC families
+ *     QPU vendors
+ *     accelerator models
+ *     operating systems
+ *     cloud providers
+ *     network providers
+ *     machine sizes
+ *     device identifiers
+ *     quantum gates
+ *     HDL primitive inventories
+ *
+ * Such names are supplied by:
+ *
+ *     symbolic identifiers
+ *     qualified names
+ *     capabilities
+ *     resources
+ *     dialects
+ *     profiles
+ *     target metadata
+ *     compiler configuration
+ *
+ * This keeps the compilation language open to future computational systems.
+ *
+ * ============================================================================
+ * SOURCE/SEMANTIC SEPARATION
+ * ============================================================================
+ *
+ * A source-level declaration may express:
+ *
+ *     requirements
+ *     constraints
+ *     preferences
+ *     hints
+ *     capabilities
+ *     target intent
+ *     target-selection policy
+ *     optimization intent
+ *     specialization intent
+ *     lowering intent
+ *     reproducibility
+ *     deterministic-build requirements
+ *     provenance
+ *     caching
  *     deployment intent
  *
- * A backend must not reinterpret a preference as a requirement merely because
- * its own implementation prefers that interpretation.
+ * The parser does not determine whether those requirements are satisfiable.
+ *
+ * Example semantic intent:
+ *
+ *     requires capability("quantum.measurement");
+ *     requires capability("tensor.compute");
+ *     requires memory >= required_memory;
+ *     requires qubits >= required_qubits;
+ *     requires topology(required_topology);
+ *
+ * Such expressions remain semantic requirements.
+ *
+ * They are not universal language limits.
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 19. POCO-REAF RESOURCE CONTRACT
+ * DOMAIN NEUTRALITY
  * ============================================================================
  *
- * Compilation source may express requirements such as:
+ * The compilation subsystem can therefore orchestrate compilation involving:
  *
- *     requires qubits >= n
- *     requires memory >= required_memory
- *     requires capability("quantum.measurement")
- *     requires capability("tensor.compute")
- *     requires capability("gpu.compute")
+ *     classical computation
+ *     numerical computation
+ *     tensor computation
+ *     AI/ML computation
+ *     symbolic reasoning
+ *     probabilistic computation
+ *     quantum computation
+ *     hybrid computation
+ *     HDL
+ *     hardware/software co-design
+ *     embedded computation
+ *     accelerator computation
+ *     parallel computation
+ *     distributed computation
+ *     networking
+ *     data computation
+ *     simulation
+ *     future computational domains
  *
- * The composition grammar does not decide whether these are satisfiable.
+ * The compilation grammar does not need a new universal grammar branch merely
+ * because a new computational backend is introduced, provided that backend
+ * participates through the established semantic contracts.
  *
- * Satisfiability belongs to:
+ * ============================================================================
+ * ERROR BOUNDARY
+ * ============================================================================
  *
- *     semantic analysis
- *     resource analysis
- *     capability resolution
- *     target resolution
- *     compiler policy
- *     runtime/deployment infrastructure
+ * PARSER ERRORS
  *
- * The same source must therefore remain syntactically meaningful across:
+ * The parser reports structural problems such as:
  *
- *     atom-scale or very small systems
+ *     missing COMPILE
+ *     missing compilation clause
+ *     malformed profile
+ *     malformed target
+ *     malformed optimization declaration
+ *     malformed specialization
+ *     malformed artifact specification
+ *     malformed lowering
+ *     malformed cross-compilation declaration
+ *     malformed reproducibility declaration
+ *     malformed deterministic-build declaration
+ *     malformed provenance declaration
+ *     malformed caching declaration
+ *     malformed deployment declaration
+ *
+ * SEMANTIC ERRORS
+ *
+ * Semantic analysis reports:
+ *
+ *     unknown names
+ *     contradictory intent
+ *     incompatible types
+ *     incompatible requirements
+ *     impossible transformation paths
+ *     incompatible policies
+ *     unsupported capabilities
+ *     invalid specialization
+ *     invalid lowering
+ *     invalid target relationship
+ *
+ * RESOURCE/TARGET ERRORS
+ *
+ * Downstream resolution reports:
+ *
+ *     unavailable capability
+ *     insufficient resources
+ *     unsupported target realization
+ *     infeasible topology
+ *     unavailable deployment environment
+ *
+ * These must NOT be converted into parser errors.
+ *
+ * ============================================================================
+ * DETERMINISM
+ * ============================================================================
+ *
+ * Parsing MUST depend only on:
+ *
+ *     source token sequence
+ *     canonical lexer vocabulary
+ *     grammar version
+ *     parser configuration
+ *
+ * Parsing MUST NOT depend on:
+ *
+ *     hardware availability
+ *     resource availability
+ *     target selection
+ *     filesystem state
+ *     network state
+ *     environment variables
+ *     wall-clock time
+ *     randomness
+ *     runtime state
+ *     scheduler state
+ *
+ * Identical source and parser configuration must produce identical parse
+ * structure.
+ *
+ * ============================================================================
+ * AST CONTRACT
+ * ============================================================================
+ *
+ * Every compilation construct must remain reconstructable from the domain-
+ * neutral frontend AST.
+ *
+ * The AST must preserve, where applicable:
+ *
+ *     source span
+ *     source ordering
+ *     declaration kind
+ *     explicit versus omitted values
+ *     expressions
+ *     qualified names
+ *     properties
+ *     requirements
+ *     constraints
+ *     preferences
+ *     hints
+ *     target intent
+ *     selection intent
+ *     optimization intent
+ *     specialization intent
+ *     lowering intent
+ *     artifact relationships
+ *     reproducibility requirements
+ *     deterministic-build requirements
+ *     provenance references
+ *     caching intent
+ *     deployment intent
+ *
+ * The AST MUST NOT contain:
+ *
+ *     physical device handles
+ *     hardware addresses
+ *     runtime scheduler state
+ *     physical qubit mappings
+ *     calibration data
+ *     machine instructions
+ *     backend objects
+ *     mutable global compiler state
+ *
+ * ============================================================================
+ * SEMANTIC INTEGRATION
+ * ============================================================================
+ *
+ * After parsing:
+ *
+ *     Compile AST
+ *         |
+ *         +--> name resolution
+ *         |
+ *         +--> type analysis
+ *         |
+ *         +--> effect analysis
+ *         |
+ *         +--> contract analysis
+ *         |
+ *         +--> policy analysis
+ *         |
+ *         +--> capability analysis
+ *         |
+ *         +--> resource analysis
+ *         |
+ *         +--> provenance analysis
+ *         |
+ *         +--> portability analysis
+ *         |
+ *         v
+ *     compilation semantic model
+ *
+ * Compilation intent may then participate in:
+ *
+ *     canonical semantic representation
+ *         |
+ *         +--> classical IR
+ *         +--> quantum::ir
+ *         +--> HDL/hardware representation
+ *         +--> distributed representation
+ *         +--> other domain representations
+ *
+ * ============================================================================
+ * IR CONTRACT
+ * ============================================================================
+ *
+ * THIS FILE DEFINES NO IR.
+ *
+ * In particular it must not introduce:
+ *
+ *     CompileIR
+ *     CompilationIR
+ *     TargetIR
+ *     OptimizationIR
+ *     LoweringIR
+ *     QuantumCompileIR
+ *     HardwareCompileIR
+ *
+ * Quantum compilation MUST preserve:
+ *
+ *     semantic model
+ *         |
+ *         v
+ *     quantum::ir
+ *         |
+ *         v
+ *     quantum optimization/decomposition/routing/scheduling
+ *
+ * ============================================================================
+ * RUST CONTRACT
+ * ============================================================================
+ *
+ * This grammar contains no Rust implementation.
+ *
+ * Repository implementation requirements remain:
+ *
+ *     Rust 2021
+ *     Rust 1.97 or later
+ *     safe Rust only
+ *
+ * The generated compiler/frontend implementation MUST NOT require `unsafe`.
+ *
+ * Scalable implementation should prefer:
+ *
+ *     Vec<T>
+ *     String
+ *     growable collections
+ *     iterators
+ *     streaming/incremental processing where appropriate
+ *
+ * and MUST NOT introduce fixed-size arrays merely to establish artificial
+ * language ceilings.
+ *
+ * ============================================================================
+ * SCALABILITY CONTRACT
+ * ============================================================================
+ *
+ * The grammar uses:
+ *
+ *     +
+ *     *
+ *     ?
+ *
+ * and symbolic references rather than finite machine enumerations.
+ *
+ * Therefore there is no grammar-level maximum for:
+ *
+ *     compilation clauses
+ *     profiles
+ *     target alternatives
+ *     optimization directives
+ *     specialization declarations
+ *     lowering stages
+ *     artifacts
+ *     provenance entries
+ *     cache properties
+ *     deployment properties
+ *     deterministic-build properties
+ *
+ * Actual limits are implementation/environment limits, not language limits.
+ *
+ * ============================================================================
+ * PROVENANCE CONTRACT
+ * ============================================================================
+ *
+ * Compilation decisions should be traceable through the repository's
+ * provenance subsystem.
+ *
+ * At minimum, source intent should be capable of being related to:
+ *
+ *     source
+ *     transformation
+ *     specialization
+ *     optimization
+ *     lowering
+ *     generated artifact
+ *     verification
+ *     target realization
+ *
+ * The parser only preserves the declared relationships.
+ *
+ * ============================================================================
+ * COMPATIBILITY CONTRACT
+ * ============================================================================
+ *
+ * The following distinctions are stable:
+ *
+ *     target intent
+ *         != target selection
+ *
+ *     target selection
+ *         != target realization
+ *
+ *     optimization
+ *         != specialization
+ *
+ *     specialization
+ *         != lowering
+ *
+ *     lowering
+ *         != code generation
+ *
+ *     code generation
+ *         != deployment
+ *
+ *     reproducibility
+ *         != deterministic execution
+ *
+ *     compilation
+ *         != execution
+ *
+ * New computational domains should normally integrate through symbolic
+ * qualified names, capabilities, profiles, dialects, and semantic contracts
+ * instead of requiring a new universal machine-specific keyword.
+ *
+ * ============================================================================
+ * TOOLING CONTRACT
+ * ============================================================================
+ *
+ * Formatter:
+ *
+ *     preserves compilation-clause order and source representation.
+ *
+ * IDE/LSP:
+ *
+ *     resolves names and semantics through compiler services rather than a
+ *     hard-coded target catalogue.
+ *
+ * Documentation:
+ *
+ *     may render compilation intent without instantiating hardware backends.
+ *
+ * Static analysis:
+ *
+ *     may inspect requirements, policies, provenance, reproducibility,
+ *     optimization and lowering intent.
+ *
+ * Incremental compilation:
+ *
+ *     may use source spans and provenance to determine affected compilation
+ *     regions.
+ *
+ * ============================================================================
+ * TEST CONTRACT
+ * ============================================================================
+ *
+ * REQUIRED POSITIVE TESTS
+ *
+ *     minimal compile declaration
+ *     profile composition
+ *     compile-time control
+ *     conditional compilation
+ *     feature selection
+ *     target intent
+ *     target selection
+ *     optimization
+ *     specialization
+ *     artifact intent
+ *     code generation
+ *     lowering
+ *     cross compilation
+ *     reproducibility
+ *     deterministic builds
+ *     provenance
+ *     caching
+ *     deployment
+ *
+ * REQUIRED NEGATIVE TESTS
+ *
+ *     empty compile declaration
+ *     malformed compile declaration
+ *     missing clause
+ *     malformed profile
+ *     malformed target
+ *     malformed selection
+ *     malformed optimization
+ *     malformed specialization
+ *     malformed artifact
+ *     malformed code generation
+ *     malformed lowering
+ *     malformed cross-compilation
+ *     malformed reproducibility
+ *     malformed deterministic-build declaration
+ *     malformed provenance
+ *     malformed caching
+ *     malformed deployment
+ *
+ * REQUIRED SEMANTIC TESTS
+ *
+ *     conflicting target intent
+ *     conflicting requirements
+ *     unsatisfied capability
+ *     insufficient resources
+ *     incompatible optimization
+ *     impossible specialization
+ *     invalid lowering path
+ *     incompatible policy
+ *     invalid provenance relationship
+ *
+ * REQUIRED CROSS-DOMAIN TESTS
+ *
+ *     classical compilation
+ *     quantum compilation
+ *     hybrid compilation
+ *     HDL compilation
+ *     hardware/software co-design
+ *     accelerator compilation
+ *     distributed compilation
+ *     tensor compilation
+ *     AI/ML compilation
+ *     future symbolic target compilation
+ *
+ * REQUIRED POCO-REAF TEST
+ *
+ * The same source-level compilation intent must remain syntactically valid
+ * when the eventual realization changes among available:
+ *
+ *     tiny systems
  *     embedded systems
  *     CPUs
  *     multicore systems
@@ -832,869 +1503,223 @@ compileDeploymentReference
  *     FPGAs
  *     ASICs
  *     accelerators
- *     QPUs
+ *     quantum processors
  *     simulators
- *     emulators
+ *     HPC systems
  *     clusters
- *     HPC
- *     distributed systems
- *     cloud systems
- *     future architectures
+ *     distributed environments
+ *     cloud environments
+ *     future computational substrates
  *
- * subject to the semantic requirements of the program and resources actually
- * available to the implementation.
+ * The test must verify that target scaling is handled downstream rather than
+ * by changing the compilation grammar.
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 20. HARD-CODING PROHIBITION
+ * HARD-CODING AUDIT
  * ============================================================================
  *
- * This composition grammar MUST NOT contain or introduce universal grammar
- * rules equivalent to:
+ * This file MUST contain no:
  *
  *     MAX_QUBITS
  *     MAX_CPUS
- *     MAX_CORES
- *     MAX_THREADS
  *     MAX_GPUS
  *     MAX_FPGAS
- *     MAX_ASICS
- *     MAX_QPUS
  *     MAX_NODES
  *     MAX_MEMORY
- *     MAX_STORAGE
- *     MAX_REGISTER_WIDTH
- *     MAX_VECTOR_WIDTH
+ *     MAX_THREADS
  *     MAX_TENSOR_RANK
+ *     MAX_REGISTER_WIDTH
  *     MAX_NETWORK_SIZE
  *     MAX_DEVICE_COUNT
- *     MAX_ACCELERATOR_COUNT
  *
- * It also must not introduce disguised finite alternatives such as:
+ * or disguised equivalents.
  *
- *     target0
- *     target1
- *     target2
+ * It also MUST NOT enumerate:
  *
- * as a universal target inventory.
- *
- * Hardware/provider/device names belong to externally defined semantic
- * capability vocabularies or dialects.
+ *     processor models
+ *     accelerator models
+ *     QPU models
+ *     vendor devices
+ *     machine sizes
+ *     fixed network sizes
+ *     fixed quantum topologies
+ *     fixed deployment topologies
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 21. DOMAIN INDEPENDENCE
+ * INTEGRATION CONTRACT
  * ============================================================================
  *
- * Compile is deliberately domain-neutral.
+ * Upstream:
  *
- * It may compose compilation intent for:
+ *     grammar/antlr/ZamaniLexer.g4
+ *         |
+ *         v
+ *     grammar/antlr/ZamaniParser.g4
+ *         |
+ *         v
+ *     Compile
  *
- *     classical
- *     quantum
- *     hybrid
- *     HDL
- *     hardware
- *     AI
- *     tensor/data
- *     distributed
- *     networking
- *     security
- *     accelerator
- *     embedded
- *     simulator
- *     future computing domains
+ * Downstream:
  *
- * The domain-specific grammar remains owned by the relevant subsystem.
- *
- * For example:
- *
- *     quantum source
- *          ->
- *     quantum grammar
- *          ->
  *     domain-neutral AST
- *          ->
- *     semantic quantum representation
- *          ->
- *     quantum::ir
- *
- * Compile does not introduce:
- *
- *     QuantumGate
- *     PhysicalQubit
- *     QuantumCircuitIR
- *
- * as compilation grammar constructs.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 22. HARDWARE / HDL SEPARATION
- * ============================================================================
- *
- * Compile may compose hardware-related compilation intent.
- *
- * It must not turn compilation syntax into a hardware inventory.
- *
- * Therefore source-level compilation may express semantic requirements while
- * downstream systems resolve:
- *
- *     CPU realization
- *     GPU realization
- *     FPGA realization
- *     ASIC realization
- *     accelerator realization
- *     QPU realization
- *     memory realization
- *     interconnect realization
- *     topology
- *     placement
- *     timing
- *     routing
- *     scheduling
- *
- * HDL remains responsible for hardware-description syntax.
- *
- * Hardware remains responsible for target-independent hardware intent and
- * capabilities.
- *
- * Compile remains responsible only for composing their compilation intent.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 23. AST CONTRACT
- * ============================================================================
- *
- * This grammar does not prescribe concrete Rust AST types.
- *
- * Nevertheless, the parser/semantic architecture MUST maintain a traceable
- * relationship:
- *
- *     grammar rule
- *          ->
- *     source span
- *          ->
- *     domain-neutral AST node
- *          ->
- *     semantic compilation model
- *
- * The AST should preserve the category represented by each delegated
- * construct.
- *
- * In particular, semantic analysis must be able to distinguish:
- *
- *     profile
- *     target
- *     target-selection policy
- *     optimization intent
- *     specialization intent
- *     artifact intent
- *     lowering intent
- *     code-generation intent
- *     reproducibility intent
- *     caching intent
- *     deployment intent
- *
- * No parser action in this grammar constructs or mutates the AST.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 24. IR CONTRACT
- * ============================================================================
- *
- * This grammar creates no IR.
- *
- * Compilation intent is transformed by semantic analysis into the repository's
- * canonical semantic representation.
- *
- * Domain-specific lowering then proceeds through the established boundaries.
- *
- * Quantum:
- *
- *     semantic quantum representation
- *          ->
- *     quantum::ir
- *
- * Classical:
- *
- *     semantic classical representation
- *          ->
- *     canonical classical IR
- *
- * HDL/hardware:
- *
- *     semantic hardware representation
- *          ->
- *     appropriate canonical hardware/HDL representation
- *
- * Distributed:
- *
- *     semantic distributed representation
- *          ->
- *     appropriate downstream IR/planning representation
- *
- * There must not be:
- *
- *     CompileIR
- *     CompileQuantumIR
- *     CompileHardwareIR
- *
- * merely because this grammar exists.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 25. TARGET RESOLUTION CONTRACT
- * ============================================================================
- *
- * The grammar preserves target intent.
- *
- * Semantic analysis determines:
- *
- *     whether the target expression is valid;
- *     whether the target is available;
- *     whether capabilities are satisfied;
- *     whether resources are sufficient;
- *     whether portability requirements hold;
- *     whether constraints conflict;
- *     whether an acceptable realization exists.
- *
- * Actual target realization occurs downstream.
- *
- * Compile parsing must never perform target discovery.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 26. RESOURCE / CAPABILITY CONTRACT
- * ============================================================================
- *
- * Resource and capability resolution are semantic operations.
- *
- * Compilation syntax may refer to them through the canonical subsystem
- * contracts.
- *
- * The grammar must never convert a capability into a hard-coded hardware
- * identity.
- *
- * For example:
- *
- *     capability("quantum.measurement")
- *
- * is portable semantic intent.
- *
- * It does not mean:
- *
- *     QPU #0
- *
- * Likewise:
- *
- *     capability("gpu.compute")
- *
- * does not mean:
- *
- *     GPU #0
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 27. DETERMINISM CONTRACT
- * ============================================================================
- *
- * This grammar contains no:
- *
- *     semantic predicates
- *     random decisions
- *     environment queries
- *     filesystem operations
- *     network operations
- *     process execution
- *     device discovery
- *     runtime calls
- *     mutable global state
- *
- * The parser must therefore remain deterministic.
- *
- * If a compilation policy has nondeterministic semantic behavior, that
- * behavior must be represented and controlled downstream through explicit
- * compiler policy, reproducibility, or execution semantics.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 28. ERROR-DOMAIN CONTRACT
- * ============================================================================
- *
- * Syntax failures belong to parsing.
- *
- * Examples:
- *
- *     malformed compile declaration
- *         -> parser diagnostic
- *
- *     malformed target-selection syntax
- *         -> parser diagnostic
- *
- *     malformed optimization syntax
- *         -> parser diagnostic
- *
- * Semantic failures belong downstream.
- *
- * Examples:
- *
- *     unknown capability
- *         -> capability diagnostic
- *
- *     insufficient resources
- *         -> resource diagnostic
- *
- *     incompatible target
- *         -> target diagnostic
- *
- *     unsatisfied compilation requirement
- *         -> semantic/resource diagnostic
- *
- *     conflicting optimization requirements
- *         -> optimization semantic diagnostic
- *
- *     impossible deployment
- *         -> deployment semantic diagnostic
- *
- * The composition grammar must not attempt to solve those questions.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 29. VERSIONING CONTRACT
- * ============================================================================
- *
- * Changes to this composition root are language-version-sensitive.
- *
- * Adding a new delegated grammar component should normally be backward
- * compatible when the new syntax is unambiguous and optional.
- *
- * Removing or changing the meaning of an existing compilation construct
- * requires the repository compatibility process.
- *
- * Canonical compatibility authority:
- *
- *     grammar/compatibility/
- *
- * and:
- *
- *     grammar/spec/compatibility.md
- *
- * Historical/aspirational syntax in:
- *
- *     grammar/Zamani-Grammar.md
- *
- * does not automatically become legal syntax.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 30. GRAMMAR.MD CONTRACT
- * ============================================================================
- *
- * grammar/grammar.md remains the implementation-conformance reference.
- *
- * It should identify which delegated compilation features are:
- *
- *     SPECIFIED
- *     IMPLEMENTED
- *     PARTIALLY IMPLEMENTED
- *     PLANNED
- *     DEPRECATED
- *
- * It must not become a competing compilation grammar.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 31. ZAMANI-GRAMMAR.MD CONTRACT
- * ============================================================================
- *
- * grammar/Zamani-Grammar.md remains a historical/extended design reference.
- *
- * It may describe future compilation capabilities.
- *
- * It cannot independently authorize source syntax.
- *
- * Promotion remains:
- *
- *     design
- *       ->
- *     proposal
- *       ->
- *     semantic contract
- *       ->
- *     AST contract
- *       ->
- *     grammar
- *       ->
- *     implementation
- *       ->
- *     IR contract
- *       ->
- *     tests
- *       ->
- *     stable
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 32. ROOT GRAMMAR INTEGRATION
- * ============================================================================
- *
- * grammar/Zamani.g4 must import or otherwise compose this Compile grammar
- * exactly once.
- *
- * The root language grammar should expose the compilation declaration through
- * the universal declaration/statement dispatch appropriate to the existing
- * Zamani architecture.
- *
- * Conceptually:
- *
- *     Zamani
- *        |
- *        +--> compileDeclaration
- *
- * No other compilation root should be inserted alongside this one.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 33. LEXER INTEGRATION
- * ============================================================================
- *
- * The canonical lexer must define the lexical vocabulary consumed by the
- * imported compilation grammars.
- *
- * This file intentionally does not define tokens.
- *
- * Token duplication must be rejected during validation.
- *
- * In particular, the lexer must remain the sole authority for concepts such
- * as:
- *
- *     COMPILE
- *     PROFILE
- *     REQUIRES
- *     CONSTRAIN
- *     PREFER
- *     HINT
- *     FEATURE
- *     ARTIFACT
- *     STAGE
- *     OPTION
- *
- * where those tokens are part of the current canonical vocabulary.
- *
- * If an existing token is renamed or consolidated, the lexer compatibility
- * process must update the affected grammar modules deliberately.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 34. SAFE-RUST CONTRACT
- * ============================================================================
- *
- * ANTLR generation for the Zamani compiler targets:
- *
- *     Rust 2021
- *     Rust 1.97
- *     Rust 1.97.1
- *
- * This grammar contains no embedded Rust.
- *
- * It therefore introduces no direct `unsafe` implementation requirement.
- *
- * Downstream compiler code must continue to enforce the repository-wide rule:
- *
- *     #![forbid(unsafe_code)]
- *
- * where that crate-level policy is applicable.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 35. SCALABILITY CONTRACT
- * ============================================================================
- *
- * This composition root contains no finite resource enumeration.
- *
- * Repetition is delegated to the relevant grammar components.
- *
- * Therefore there is no grammar-level ceiling on:
- *
- *     profiles
- *     targets
- *     target candidates
- *     requirements
- *     constraints
- *     preferences
- *     hints
- *     capabilities
- *     resources
- *     optimization objectives
- *     stages
- *     artifacts
- *     specialization arguments
- *     generated artifacts
- *     deployment descriptions
- *
- * Practical limits may exist in:
- *
- *     parser memory
- *     compiler memory
- *     operating-system resources
- *     runtime resources
- *     target resources
- *     provider limits
- *
- * Those are not Zamani language limits.
- *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 36. COMPOSITION TEST CONTRACT
- * ============================================================================
- *
- * This file is complete only when composition tests verify every delegated
- * public entry point.
- *
- * Required positive coverage:
- *
- *     compile profile ...
- *     compile-time control
- *     target declaration
- *     target selection
+ *         |
+ *         v
+ *     structural validation
+ *         |
+ *         v
+ *     semantic analysis
+ *         |
+ *         +--> types
+ *         +--> effects
+ *         +--> resources
+ *         +--> capabilities
+ *         +--> contracts
+ *         +--> policies
+ *         +--> provenance
+ *         |
+ *         v
+ *     canonical semantic representation
+ *         |
+ *         +--> classical IR
+ *         +--> quantum::ir
+ *         +--> HDL/hardware representation
+ *         +--> distributed representation
+ *         |
+ *         v
  *     optimization
+ *         |
+ *         v
  *     specialization
- *     artifact request
- *     code generation
+ *         |
+ *         v
  *     lowering
- *     cross compilation
- *     reproducibility
- *     caching
- *     deployment
- *
- * Required cross-domain coverage:
- *
- *     classical compilation
- *     quantum compilation
- *     hybrid compilation
- *     HDL compilation
- *     hardware compilation
- *     AI compilation
- *     tensor/data compilation
- *     distributed compilation
- *     accelerator compilation
- *     embedded compilation
- *     simulator compilation
- *     future/dialect extension
+ *         |
+ *         v
+ *     routing / scheduling
+ *         |
+ *         v
+ *     resilience / QEC / ZQN
+ *         |
+ *         v
+ *     HAL
+ *         |
+ *         v
+ *     target realization
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 37. NEGATIVE TEST CONTRACT
+ * COMPLETION CRITERIA
  * ============================================================================
  *
- * The composition root must reject malformed composition.
+ * This file is DONE when:
  *
- * Examples:
+ * [ ] It is the only canonical `Compile` composition root.
  *
- *     compile;
- *     compile { ... }
- *     malformed delegated syntax
- *     unterminated profile
- *     unterminated target selection
- *     malformed optimization declaration
- *     malformed specialization declaration
- *     malformed artifact declaration
- *     malformed lowering declaration
+ * [ ] `parser grammar Compile;` is preserved.
  *
- * Exact diagnostics are owned by the parser/diagnostic subsystem.
+ * [ ] `tokenVocab = ZamaniLexer` is preserved.
  *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 38. HARD-CODING TEST CONTRACT
- * ============================================================================
+ * [ ] Every imported grammar is an actual existing parser grammar.
  *
- * Automated validation must inspect this file and its imported compilation
- * grammars for prohibited universal hardware ceilings and finite inventories.
+ * [ ] Every referenced public rule exists.
  *
- * The validation layer must detect both direct and disguised forms.
+ * [ ] No nonexistent `compileProfileDeclaration` reference remains.
  *
- * Examples of prohibited universal language assumptions:
+ * [ ] No nonexistent `artifactDeclaration` reference remains.
  *
- *     exactly 32 cores
- *     exactly 64 GPUs
- *     maximum 128 qubits
- *     only 24 GB memory
- *     register width fixed to 32
- *     maximum tensor rank fixed by grammar
+ * [ ] Provenance is composed.
  *
- * Program-level constants remain legal when they are actual program data.
+ * [ ] Deterministic-build intent is composed.
  *
- * The prohibition applies to artificial language/compiler grammar limits.
+ * [ ] Conditional compilation is composed.
  *
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 39. PORTABILITY TEST CONTRACT
- * ============================================================================
+ * [ ] Feature selection is composed through one canonical feature authority.
  *
- * The same source-level compilation intent must remain syntactically valid
- * when semantic realization changes.
+ * [ ] No lexer rules are defined here.
  *
- * Test realization classes include:
+ * [ ] No duplicate expression grammar exists here.
  *
- *     embedded
- *     CPU
- *     multicore CPU
- *     GPU
- *     FPGA
- *     ASIC
- *     accelerator
- *     QPU
- *     simulator
- *     emulator
- *     cluster
- *     HPC
- *     distributed
- *     cloud
- *     future architecture
+ * [ ] No duplicate type grammar exists here.
  *
- * The parser does not decide whether a realization is feasible.
+ * [ ] No duplicate identifier grammar exists here.
+ *
+ * [ ] No duplicate resource/capability grammar exists here.
+ *
+ * [ ] No AST is defined here.
+ *
+ * [ ] No IR is defined here.
+ *
+ * [ ] `quantum::ir` remains the canonical quantum IR boundary.
+ *
+ * [ ] No hardware discovery occurs during parsing.
+ *
+ * [ ] No resource allocation occurs during parsing.
+ *
+ * [ ] No target probing occurs during parsing.
+ *
+ * [ ] No routing occurs during parsing.
+ *
+ * [ ] No scheduling occurs during parsing.
+ *
+ * [ ] No QEC occurs during parsing.
+ *
+ * [ ] No HAL implementation occurs here.
+ *
+ * [ ] No finite machine/resource ceiling is introduced.
+ *
+ * [ ] Cross-domain tests exist.
+ *
+ * [ ] Negative tests exist.
+ *
+ * [ ] Scalability tests exist.
+ *
+ * [ ] Determinism tests exist.
+ *
+ * [ ] POCO-REAF tests exist.
  *
  * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * 40. COMPLETION CRITERIA
+ * FINAL INVARIANT
  * ============================================================================
  *
- * This file is COMPLETE when:
+ * `Compile` is the orchestration boundary, not the implementation of the
+ * compiler.
  *
- * [x] There is exactly one `parser grammar Compile`.
- *
- * [x] The canonical lexer is ZamaniLexer.
- *
- * [x] No lexer rules are duplicated.
- *
- * [x] No expression grammar is duplicated.
- *
- * [x] No type grammar is duplicated.
- *
- * [x] No profile internals are duplicated.
- *
- * [x] No target internals are duplicated.
- *
- * [x] No optimization internals are duplicated.
- *
- * [x] No specialization internals are duplicated.
- *
- * [x] No artifact internals are duplicated.
- *
- * [x] No code-generation internals are duplicated.
- *
- * [x] No lowering internals are duplicated.
- *
- * [x] No deployment internals are duplicated.
- *
- * [x] Compilation composition has one authoritative dispatch boundary.
- *
- * [x] The grammar contains no hardware capacity constants.
- *
- * [x] The grammar contains no provider enumeration.
- *
- * [x] The grammar contains no physical device enumeration.
- *
- * [x] The grammar contains no physical qubit enumeration.
- *
- * [x] The grammar contains no fixed topology.
- *
- * [x] The grammar contains no artificial memory ceiling.
- *
- * [x] The grammar contains no artificial processor ceiling.
- *
- * [x] The grammar contains no artificial tensor ceiling.
- *
- * [x] The grammar contains no artificial network ceiling.
- *
- * [x] The grammar contains no semantic actions.
- *
- * [x] The grammar contains no filesystem access.
- *
- * [x] The grammar contains no network access.
- *
- * [x] The grammar contains no device discovery.
- *
- * [x] The grammar contains no runtime execution.
- *
- * [x] The grammar creates no IR.
- *
- * [x] Quantum lowering remains connected to canonical `quantum::ir`.
- *
- * [x] Compilation intent remains target-independent.
- *
- * [x] Rust integration requires Rust 1.97 / 1.97.1.
- *
- * [x] Rust integration requires safe Rust.
- *
- * [x] Positive composition tests exist.
- *
- * [x] Negative composition tests exist.
- *
- * [x] Cross-domain tests exist.
- *
- * [x] Scalability tests exist.
- *
- * [x] Portability tests exist.
- *
- * [x] Determinism tests exist.
- *
- * [x] Compatibility tests exist.
- *
- * ============================================================================
- * FINAL ARCHITECTURAL INVARIANT
- * ============================================================================
- *
- * This file answers exactly one question:
- *
- *     "How are the independently owned compilation-language components
- *      composed into one canonical Compile grammar?"
- *
- * It does NOT answer:
- *
- *     "Which machine will execute the program?"
- *
- *     "Which CPU/GPU/FPGA/QPU will be selected?"
- *
- *     "Which physical qubit will be used?"
- *
- *     "How will resources be allocated?"
- *
- *     "How will routing occur?"
- *
- *     "How will scheduling occur?"
- *
- *     "How will optimization be implemented?"
- *
- *     "How will QEC occur?"
- *
- *     "How will ZQN operate?"
- *
- *     "How will HAL communicate with hardware?"
- *
- * Those remain downstream responsibilities.
+ * It composes source-level compilation intent into one stable parser boundary
+ * while leaving semantic resolution and physical realization completely
+ * open-ended.
  *
  * The resulting architecture is:
  *
- *     Zamani Source
+ *     ONE LANGUAGE
  *          |
  *          v
- *     Zamani.g4
+ *     ONE LEXER
  *          |
  *          v
- *     Compile
+ *     ONE PARSER COMPOSITION
  *          |
  *          v
- *     Domain-neutral AST
+ *     ONE DOMAIN-NEUTRAL AST
  *          |
  *          v
- *     Semantic analysis
+ *     ONE SEMANTIC MODEL
  *          |
- *          v
- *     Canonical semantic representation
- *          |
- *          +--> classical
- *          +--> quantum::ir
- *          +--> HDL/hardware
- *          +--> distributed
- *          |
- *          v
- *     optimization
- *          |
- *          v
- *     routing / scheduling / resilience / QEC / ZQN
- *          |
- *          v
- *     HAL
- *          |
- *          v
- *     target realization
+ *          +-------------------+--------------------+
+ *          |                   |                    |
+ *          v                   v                    v
+ *      classical          quantum::ir         HDL/hardware
+ *          |                   |                    |
+ *          +-------------------+--------------------+
+ *                              |
+ *                              v
+ *                         compilation
+ *                         optimization
+ *                         lowering
+ *                         realization
  *
- * with no artificial language-level hardware ceiling.
+ * Source meaning remains independent of the size, architecture, vendor,
+ * topology, or physical realization available at execution time.
  *
+ * ============================================================================
+ * END OF FILE
  * ============================================================================
  */
