@@ -3,189 +3,336 @@
  * Zamani Universal Programming Language
  * ============================================================================
  *
- * File:
- *     grammar/hdl/simulation.g4
+ * FILE
+ * ----
+ * grammar/hdl/simulation.g4
  *
- * Status:
- *     CANONICAL PRODUCTION HDL SIMULATION-INTENT PARSER DELEGATE
+ * GRAMMAR
+ * -------
+ * HdlSimulation
  *
- * Language:
- *     Zamani
+ * STATUS
+ * ------
+ * CANONICAL HDL SIMULATION-INTENT PARSER DELEGATE
  *
- * Grammar technology:
- *     ANTLR4 parser grammar
+ * LANGUAGE
+ * --------
+ * Zamani
  *
- * Rust implementation baseline:
- *     Rust 1.97 / Rust 1.97.1
- *     Rust edition 2021
+ * GRAMMAR TECHNOLOGY
+ * ------------------
+ * ANTLR4 parser grammar
  *
- * Safety:
- *     This grammar contains no embedded Rust actions or semantic predicates.
- *     Zamani-owned Rust implementation MUST use safe Rust only.
- *     No unsafe Rust is permitted.
+ * IMPLEMENTATION BASELINE
+ * -----------------------
+ * Rust 1.97+
+ * Rust 2021 edition
+ * Safe Rust only
+ *
+ * No unsafe Rust is required or permitted by the implementation contract.
+ *
+ * ============================================================================
+ * ARCHITECTURAL POSITION
+ * ============================================================================
+ *
+ *     Zamani source
+ *          |
+ *          v
+ *     canonical lexer
+ *          |
+ *          v
+ *     canonical parser
+ *          |
+ *          v
+ *     HDL composition
+ *          |
+ *          v
+ *     hdlSimulationConstruct
+ *          |
+ *          v
+ *     domain-neutral AST
+ *          |
+ *          v
+ *     structural validation
+ *          |
+ *          +-------------------------------+
+ *          |                               |
+ *          v                               v
+ *     semantic simulation model       HDL semantics
+ *          |                               |
+ *          +---------------+---------------+
+ *                          |
+ *                          v
+ *                 execution planning
+ *                          |
+ *              +-----------+-----------+
+ *              |                       |
+ *              v                       v
+ *          simulation              verification
+ *              |                       |
+ *              +-----------+-----------+
+ *                          |
+ *                          v
+ *                    synthesis / co-design
+ *                          |
+ *                          v
+ *                   hardware realization
+ *
+ * This file owns SOURCE-LEVEL HDL SIMULATION INTENT ONLY.
  *
  * ============================================================================
  * AUTHORITY
  * ============================================================================
  *
- * Normative authority:
+ * Normative architectural authority:
  *
  *     grammar/DESIGN.md
- *           |
- *           v
+ *
+ * HDL specification:
+ *
  *     grammar/spec/hdl.md
- *           |
- *           v
- *     grammar/hdl/simulation.g4
- *           |
- *           v
+ *
+ * HDL composition:
+ *
  *     grammar/hdl/hdl.g4
- *           |
- *           v
- *     grammar/Zamani.g4
  *
- * This file owns SOURCE-LEVEL HDL SIMULATION INTENT.
+ * Universal simulation execution semantics:
  *
- * It does NOT own simulation algorithms, numerical solvers, waveform engines,
- * event kernels, random-number generation, hardware models, target discovery,
- * physical devices, synthesis, verification algorithms, or runtime execution.
+ *     grammar/execution/simulation.g4
  *
- * ============================================================================
- * PURPOSE
- * ============================================================================
+ * Universal simulation statement syntax:
  *
- * This grammar provides a portable syntax boundary for describing:
+ *     grammar/statements/simulate.g4
  *
- *     - simulation intent;
- *     - simulation targets;
- *     - simulation scenarios;
- *     - simulation configuration;
- *     - stimuli;
- *     - observations;
- *     - measurements;
- *     - expectations;
- *     - simulation timing;
- *     - checkpoints;
- *     - sampling;
- *     - initial conditions;
- *     - termination conditions;
- *     - simulation policies;
- *     - simulation metadata;
- *     - simulation-specific resource/capability intent.
+ * Universal simulation expression syntax:
  *
- * Simulation is treated as an ANALYSIS / EXECUTION INTENT.
+ *     grammar/expressions/simulation.g4
  *
- * The grammar does not execute anything.
+ * Simulation policy composition:
+ *
+ *     grammar/policies/simulation.g4
+ *
+ * Simulation effect composition:
+ *
+ *     grammar/effects/simulation.g4
  *
  * ============================================================================
- * CORE DESIGN PRINCIPLE
+ * OWNERSHIP
  * ============================================================================
  *
- * The language describes:
+ * THIS FILE OWNS
+ * --------------
  *
- *     WHAT should be simulated
- *     WHAT observations matter
- *     WHAT constraints apply
- *     WHAT resources/capabilities are required
+ *     hdlSimulationConstruct
+ *     hdlSimulationDeclaration
+ *     hdlSimulationTarget
+ *     hdlSimulationBody
+ *     hdlSimulationItem
+ *     hdlSimulationNamedClause
+ *     hdlSimulationResourceClause
+ *     hdlSimulationPolicyClause
+ *     hdlSimulationNestedConstruct
+ *     hdlSimulationExpressionStatement
  *
- * It does NOT prescribe:
+ * It owns only the HDL-specific structural boundary required to express
+ * simulation intent in an HDL context.
  *
- *     WHICH simulator
- *     WHICH event kernel
- *     WHICH numerical solver
- *     WHICH CPU
- *     WHICH GPU
- *     WHICH FPGA
- *     WHICH QPU
- *     WHICH simulator vendor
- *     WHICH waveform format
- *     WHICH random-number implementation
- *     WHICH physical machine
  *
- * Those decisions belong downstream.
+ * THIS FILE DOES NOT OWN
+ * ----------------------
  *
- * ============================================================================
- * POCO-REAF
- * ============================================================================
+ * This file does NOT own:
  *
- * A simulation description MUST remain portable.
- *
- * The same source may be interpreted as:
- *
- *     - cycle-accurate simulation;
- *     - event-driven simulation;
- *     - transaction-level simulation;
- *     - behavioral simulation;
- *     - hardware/software co-simulation;
- *     - distributed simulation;
- *     - accelerated simulation;
- *     - FPGA-assisted simulation;
- *     - GPU-accelerated simulation;
- *     - quantum/hybrid simulation;
- *     - formal/simulation-assisted analysis;
- *     - future simulation technology.
- *
- * The grammar MUST NOT require source changes merely because the simulation
- * backend changes.
- *
- * ============================================================================
- * OPEN-WORLD MODEL
- * ============================================================================
- *
- * This file deliberately does NOT enumerate:
- *
- *     - simulator vendors;
+ *     - lexer rules;
+ *     - token spelling;
+ *     - identifiers;
+ *     - names;
+ *     - general expressions;
+ *     - general statements;
+ *     - generic simulation expressions;
+ *     - generic simulation statements;
+ *     - simulation algorithms;
+ *     - event kernels;
  *     - numerical solvers;
- *     - waveform formats;
- *     - random generators;
+ *     - waveform engines;
+ *     - random-number generators;
  *     - hardware models;
- *     - CPU models;
- *     - GPU models;
- *     - FPGA families;
- *     - ASIC technologies;
- *     - QPU families;
- *     - verification engines.
- *
- * These are semantic data, library operations, dialects, capabilities,
- * compiler intrinsics, or downstream implementation choices.
+ *     - target discovery;
+ *     - target selection;
+ *     - simulator selection;
+ *     - vendor selection;
+ *     - CPU selection;
+ *     - GPU selection;
+ *     - FPGA selection;
+ *     - ASIC selection;
+ *     - accelerator selection;
+ *     - QPU selection;
+ *     - physical device selection;
+ *     - physical placement;
+ *     - routing;
+ *     - scheduling;
+ *     - resource allocation;
+ *     - verification algorithms;
+ *     - formal verification;
+ *     - synthesis;
+ *     - timing closure;
+ *     - QEC;
+ *     - ZQN;
+ *     - HAL;
+ *     - runtime execution.
  *
  * ============================================================================
- * NO NEW KEYWORDS
+ * SINGLE-AUTHORITY RULE
  * ============================================================================
  *
- * The canonical lexer already provides:
+ * There are several simulation-related grammar files in Zamani, but they have
+ * deliberately different ownership:
+ *
+ *     grammar/expressions/simulation.g4
+ *         universal simulation expression syntax
+ *
+ *     grammar/statements/simulate.g4
+ *         universal simulation statement syntax
+ *
+ *     grammar/execution/simulation.g4
+ *         execution-level simulation expression semantics
+ *
+ *     grammar/hdl/simulation.g4
+ *         HDL-specific simulation-intent composition
+ *
+ *     grammar/policies/simulation.g4
+ *         simulation-policy composition
+ *
+ *     grammar/effects/simulation.g4
+ *         simulation-effect composition
+ *
+ * This file MUST NOT become another universal simulation language.
+ *
+ * ============================================================================
+ * OPEN-WORLD / POCO-REAF CONTRACT
+ * ============================================================================
+ *
+ * Simulation targets are expressions.
+ *
+ * Therefore this grammar does NOT enumerate:
+ *
+ *     simulators
+ *     engines
+ *     solvers
+ *     waveform formats
+ *     hardware models
+ *     CPU models
+ *     GPU models
+ *     FPGA families
+ *     ASIC families
+ *     accelerator families
+ *     QPU families
+ *     vendors
+ *     device types
+ *     node counts
+ *     memory sizes
+ *     qubit counts
+ *     thread counts
+ *     tensor ranks
+ *     network sizes
+ *
+ * No universal physical capacity is encoded here.
+ *
+ * The same source-level HDL simulation intent can therefore be considered
+ * for implementations ranging from a very small environment to the largest
+ * implementation supported by the available resources and toolchain.
+ *
+ * Source portability does not imply physical feasibility.
+ *
+ * If a target cannot satisfy the semantic requirements, that is a semantic,
+ * capability, resource, policy, or target-feasibility diagnostic — NOT a
+ * grammar failure.
+ *
+ * ============================================================================
+ * LEXICAL CONTRACT
+ * ============================================================================
+ *
+ * Canonical lexer:
+ *
+ *     grammar/antlr/ZamaniLexer.g4
+ *
+ * Canonical vocabulary:
+ *
+ *     ZamaniLexer
+ *
+ * This file introduces NO lexer rules and NO token aliases.
+ *
+ * Canonical tokens consumed here include:
  *
  *     SIMULATE
+ *     FROM
+ *     WITH
+ *     REQUIRES
+ *     CONSTRAINT
+ *     PREFER
+ *     HINT
+ *     POLICY
  *
- * Therefore this grammar MUST NOT introduce:
+ * These tokens are owned by the canonical lexical layer.
  *
- *     K_SIMULATION
- *     K_SIMULATE
- *     SIMULATION
- *
- * or another HDL-specific lexer.
- *
- * Simulation sub-concepts such as:
+ * Simulation concepts such as:
  *
  *     stimulus
  *     observation
- *     waveform
- *     scenario
+ *     expectation
+ *     initialization
  *     checkpoint
- *     sample
- *     seed
- *     duration
+ *     sampling
+ *     waveform
+ *     trace
  *     timeout
  *     tolerance
+ *     seed
+ *     duration
+ *     scenario
  *     model
  *
- * remain ordinary identifiers unless the language specification later
- * establishes a genuine lexical requirement.
+ * are intentionally NOT reserved here.
  *
- * This keeps the simulation grammar extensible.
+ * They remain identifiers or ordinary expressions unless another authoritative
+ * language layer gives them a distinct lexical meaning.
  *
  * ============================================================================
- * LEXER
+ * GRAMMAR DEPENDENCY CONTRACT
+ * ============================================================================
+ *
+ * DIRECT IMPORT
+ * -------------
+ *
+ *     Expressions
+ *
+ * This provides the canonical:
+ *
+ *     expression
+ *
+ * rule.
+ *
+ * No simulation-specific expression grammar is recreated here.
+ *
+ * No import of the HDL composition root is permitted because that would create
+ * a composition cycle:
+ *
+ *     HDL -> HdlSimulation -> HDL
+ *
+ * Instead, HDL composition imports this grammar.
+ *
+ * ============================================================================
+ * PUBLIC API
+ * ============================================================================
+ *
+ * The single stable public entry point is:
+ *
+ *     hdlSimulationConstruct
+ *
+ * HDL composition MUST consume that entry point.
+ *
+ * Consumers MUST NOT reproduce the rules in this file.
+ *
  * ============================================================================
  */
 
@@ -195,32 +342,23 @@ options {
     tokenVocab = ZamaniLexer;
 }
 
-/*
- * ============================================================================
- * IMPORTS
- * ============================================================================
- *
- * General expressions are owned by the canonical expression grammar.
- *
- * The simulation grammar therefore reuses `expression` instead of inventing
- * a simulation-specific expression language.
- *
- * When composed into the canonical HDL grammar, the HDL composition root MUST
- * make the canonical expression rule available exactly once.
- *
- * ============================================================================
- */
-
 import Expressions;
+
 
 /*
  * ============================================================================
  * PUBLIC ENTRY POINT
  * ============================================================================
  *
- * This is the stable HDL simulation-intent boundary.
+ * Example:
  *
- * hdl.g4 MUST expose this rule through its HDL member composition.
+ *     simulate design;
+ *
+ *     simulate design {
+ *         stimulus: input;
+ *         observe: output;
+ *         expect: output == expected;
+ *     }
  *
  * ============================================================================
  */
@@ -229,31 +367,26 @@ hdlSimulationConstruct
     : hdlSimulationDeclaration
     ;
 
+
 /*
  * ============================================================================
  * SIMULATION DECLARATION
  * ============================================================================
  *
- * Canonical forms:
+ * Canonical HDL simulation forms:
  *
- *     simulate circuit;
+ *     simulate target;
  *
- *     simulate circuit {
+ *     simulate target {
  *         ...
  *     }
  *
- * The target is an ordinary Zamani expression.
+ * The terminating semicolon is optional when a braced body is present.
  *
- * Therefore all of the following can remain open-world:
+ * A semicolon remains accepted for consistency with source-level statement
+ * syntax:
  *
- *     simulate design;
- *     simulate top;
- *     simulate system(model);
- *     simulate accelerator;
- *     simulate quantum_control;
- *     simulate custom::model;
- *
- * Semantic analysis determines whether the target is actually simulatable.
+ *     simulate target {};
  *
  * ============================================================================
  */
@@ -265,14 +398,28 @@ hdlSimulationDeclaration
       SEMICOLON?
     ;
 
+
 /*
  * ============================================================================
  * TARGET
  * ============================================================================
  *
- * Simulation target identity is semantic.
+ * The target is an ordinary Zamani expression.
  *
- * It MUST NOT encode a physical device.
+ * This deliberately permits open-world semantic targets such as:
+ *
+ *     design
+ *     top
+ *     model
+ *     subsystem
+ *     system(model)
+ *     accelerator
+ *     custom::model
+ *
+ * The parser does not decide whether the expression denotes a valid HDL
+ * simulation target.
+ *
+ * Semantic analysis performs that validation.
  *
  * ============================================================================
  */
@@ -281,24 +428,26 @@ hdlSimulationTarget
     : expression
     ;
 
+
 /*
  * ============================================================================
  * SIMULATION BODY
  * ============================================================================
  *
- * A simulation body contains zero or more simulation-intent items.
+ * The body has no fixed cardinality.
  *
- * There is no fixed number of:
+ * There is no language-level maximum for:
  *
  *     stimuli
  *     observations
  *     expectations
  *     checkpoints
- *     parameters
- *     constraints
- *     scenarios
- *     samples
- *     policies
+ *     clauses
+ *     nested simulations
+ *     expressions
+ *
+ * Actual implementation limits are controlled by available resources and
+ * implementation policy rather than grammar constants.
  *
  * ============================================================================
  */
@@ -309,48 +458,71 @@ hdlSimulationBody
       RBRACE
     ;
 
+
 /*
  * ============================================================================
  * SIMULATION ITEM
  * ============================================================================
  *
- * The grammar deliberately uses structural forms instead of reserving a large
- * vocabulary of simulation concepts.
+ * Item ownership is deliberately divided:
  *
- * This permits future simulation concepts without grammar changes.
+ *     named clause
+ *         generic HDL simulation metadata/intent
+ *
+ *     resource clause
+ *         contextual resource/capability/constraint intent
+ *
+ *     policy clause
+ *         contextual policy attachment
+ *
+ *     nested construct
+ *         hierarchical/co-simulation composition
+ *
+ *     expression statement
+ *         simulation operation expressed through the normal Zamani expression
+ *         system
+ *
+ * No simulator-specific operation list is embedded here.
+ *
  * ============================================================================
  */
 
 hdlSimulationItem
     : hdlSimulationNamedClause
-    | hdlSimulationBinding
+    | hdlSimulationResourceClause
+    | hdlSimulationPolicyClause
     | hdlSimulationNestedConstruct
     | hdlSimulationExpressionStatement
     ;
 
+
 /*
  * ============================================================================
- * NAMED CLAUSE
+ * GENERIC NAMED CLAUSE
  * ============================================================================
  *
- * Generic semantic form:
+ * Canonical structural form:
  *
- *     stimulus: expression;
- *     observe: expression;
- *     expect: expression;
- *     duration: expression;
- *     sampling: expression;
- *     checkpoint: expression;
- *     waveform: expression;
- *     tolerance: expression;
- *     seed: expression;
- *     initial: expression;
- *     termination: expression;
- *     timeout: expression;
+ *     name: expression;
  *
- * The names are identifiers, not keywords.
+ * Examples:
  *
- * This is intentional.
+ *     stimulus: input;
+ *     observe: output;
+ *     expect: output == expected;
+ *     initial: reset_state;
+ *     duration: run_duration;
+ *     sampling: sample_period;
+ *     checkpoint: state;
+ *     waveform: trace;
+ *     tolerance: tolerance_value;
+ *     seed: seed_value;
+ *     termination: condition;
+ *     timeout: timeout_value;
+ *
+ * The identifier is deliberately open-world.
+ *
+ * This rule does NOT create a closed list of simulation concepts.
  *
  * ============================================================================
  */
@@ -362,40 +534,112 @@ hdlSimulationNamedClause
       SEMICOLON?
     ;
 
+
 /*
  * ============================================================================
- * BINDINGS
+ * RESOURCE / CAPABILITY / CONSTRAINT / PREFERENCE / HINT CLAUSES
  * ============================================================================
  *
- * Generic compile-time / configuration / scenario binding:
+ * These are contextual adapters.
  *
- *     duration = value;
- *     steps = value;
- *     seed = value;
- *     tolerance = value;
- *     sample_period = value;
+ * They do NOT redefine the universal resource system.
  *
- * Semantic analysis determines the meaning of the binding.
+ * They allow HDL simulation intent to participate directly in the repository's
+ * canonical resource/capability model.
+ *
+ * Examples:
+ *
+ *     requires capability("simulation.event");
+ *     requires capability("simulation.acceleration");
+ *     requires memory >= required_memory;
+ *
+ *     constraint topology(requirements);
+ *
+ *     prefer accelerator;
+ *
+ *     hint parallel;
+ *
+ * The semantic layer determines:
+ *
+ *     requirement
+ *     capability
+ *     constraint
+ *     preference
+ *     hint
+ *
+ * and their actual effect on planning.
  *
  * ============================================================================
  */
 
-hdlSimulationBinding
-    : identifier
-      ASSIGN
+hdlSimulationResourceClause
+    : REQUIRES
       expression
-      SEMICOLON
+      SEMICOLON?
+    | CONSTRAINT
+      expression
+      SEMICOLON?
+    | PREFER
+      expression
+      SEMICOLON?
+    | HINT
+      expression
+      SEMICOLON?
     ;
+
+
+/*
+ * ============================================================================
+ * POLICY CLAUSE
+ * ============================================================================
+ *
+ * This is a contextual attachment point only.
+ *
+ * It does NOT define policy semantics.
+ *
+ * Universal policy ownership remains with:
+ *
+ *     grammar/policies/
+ *
+ * Simulation-specific policy composition remains with:
+ *
+ *     grammar/policies/simulation.g4
+ *
+ * Example:
+ *
+ *     policy deterministic_execution;
+ *
+ *     policy simulation_policy;
+ *
+ * The referenced expression/name is resolved semantically.
+ *
+ * ============================================================================
+ */
+
+hdlSimulationPolicyClause
+    : POLICY
+      expression
+      SEMICOLON?
+    ;
+
 
 /*
  * ============================================================================
  * NESTED SIMULATION
  * ============================================================================
  *
- * Nested simulation intent is permitted.
+ * Nested simulation permits hierarchical simulation intent and co-simulation
+ * descriptions without imposing a fixed hierarchy depth.
  *
- * This supports hierarchical simulation and co-simulation descriptions
- * without requiring a fixed hierarchy depth.
+ * Example:
+ *
+ *     simulate top {
+ *         simulate subsystem {
+ *             observe: signal;
+ *         }
+ *     }
+ *
+ * Nesting depth is not a language constant.
  *
  * ============================================================================
  */
@@ -404,9 +648,10 @@ hdlSimulationNestedConstruct
     : hdlSimulationDeclaration
     ;
 
+
 /*
  * ============================================================================
- * EXPRESSION STATEMENTS
+ * EXPRESSION STATEMENT
  * ============================================================================
  *
  * Simulation operations remain ordinary Zamani expressions.
@@ -421,7 +666,18 @@ hdlSimulationNestedConstruct
  *     record(trace);
  *     reset(model);
  *
- * None of these operation names are hard-coded.
+ * None of these operation names are reserved by this grammar.
+ *
+ * They may be:
+ *
+ *     library functions;
+ *     dialect operations;
+ *     semantic intrinsics;
+ *     compiler operations;
+ *     hardware operations;
+ *     future operations.
+ *
+ * Their meaning is determined downstream.
  *
  * ============================================================================
  */
@@ -431,963 +687,678 @@ hdlSimulationExpressionStatement
       SEMICOLON?
     ;
 
-/*
- * ============================================================================
- * SCENARIO BOUNDARY
- * ============================================================================
- *
- * A scenario is represented as a named simulation target/body rather than a
- * new reserved keyword.
- *
- * This keeps scenario vocabulary open-ended.
- *
- * ============================================================================
- */
-
-hdlSimulationScenario
-    : identifier
-      hdlSimulationBody
-    ;
 
 /*
- * ============================================================================
- * STIMULUS
- * ============================================================================
- *
- * Stimulus is represented by the generic named-clause structure.
- *
- * Canonical semantic interpretation:
- *
- *     stimulus: expression;
- *
- * The expression may represent:
- *
- *     - a signal value;
- *     - a transaction;
- *     - a function call;
- *     - a stream;
- *     - a generated sequence;
- *     - a distributed event;
- *     - a hardware interaction intent.
- *
- * ============================================================================
- */
-
-hdlSimulationStimulus
-    : identifier
-      COLON
-      expression
-      SEMICOLON?
-    ;
-
-/*
- * ============================================================================
- * OBSERVATION
- * ============================================================================
- *
- * Observation remains semantic rather than simulator-specific.
- *
- * ============================================================================
- */
-
-hdlSimulationObservation
-    : identifier
-      COLON
-      expression
-      SEMICOLON?
-    ;
-
-/*
- * ============================================================================
- * EXPECTATION
- * ============================================================================
- *
- * Expected behavior is represented as an expression.
- *
- * Verification semantics remain owned by the verification subsystem.
- *
- * This rule does NOT replace grammar/hdl/assertions.g4.
- *
- * ============================================================================
- */
-
-hdlSimulationExpectation
-    : identifier
-      COLON
-      expression
-      SEMICOLON?
-    ;
-
-/*
- * ============================================================================
- * INITIALIZATION
- * ============================================================================
- *
- * Initial conditions are expressed as ordinary simulation clauses.
- *
- * Example:
- *
- *     initial: state == reset_state;
- *
- * No fixed initialization model is imposed.
- *
- * ============================================================================
- */
-
-hdlSimulationInitialization
-    : identifier
-      COLON
-      expression
-      SEMICOLON?
-    ;
-
-/*
- * ============================================================================
- * TIME / SCHEDULING INTENT
- * ============================================================================
- *
- * Simulation may require semantic temporal information:
- *
- *     duration
- *     start
- *     end
- *     step
- *     period
- *     sampling
- *     timeout
- *
- * These remain expressions.
- *
- * This grammar does not implement a clock or timing engine.
- *
- * Clock semantics remain owned by:
- *
- *     grammar/hdl/clocks.g4
- *     grammar/hdl/clocking.g4
- *     grammar/hdl/timing.g4
- *
- * ============================================================================
- */
-
-hdlSimulationTemporalClause
-    : identifier
-      COLON
-      expression
-      SEMICOLON?
-    ;
-
-/*
- * ============================================================================
- * SAMPLING
- * ============================================================================
- *
- * Sampling configuration is represented semantically.
- *
- * There is no universal maximum sampling frequency or sample count.
- *
- * ============================================================================
- */
-
-hdlSimulationSamplingClause
-    : identifier
-      COLON
-      expression
-      SEMICOLON?
-    ;
-
-/*
- * ============================================================================
- * CHECKPOINT
- * ============================================================================
- *
- * Checkpoint intent may be represented as:
- *
- *     checkpoint: expression;
- *
- * or:
- *
- *     checkpoint(state);
- *
- * The expression grammar handles the operation form.
- *
- * ============================================================================
- */
-
-hdlSimulationCheckpointClause
-    : identifier
-      COLON
-      expression
-      SEMICOLON?
-    ;
-
-/*
- * ============================================================================
- * WAVEFORM / TRACE INTENT
- * ============================================================================
- *
- * Waveform and trace formats are NOT hard-coded.
- *
- * Examples:
- *
- *     waveform: trace;
- *     waveform: "format";
- *     trace: signals;
- *
- * Actual serialization is downstream.
- *
- * ============================================================================
- */
-
-hdlSimulationTraceClause
-    : identifier
-      COLON
-      expression
-      SEMICOLON?
-    ;
-
-/*
- * ============================================================================
- * RANDOMNESS / REPRODUCIBILITY
- * ============================================================================
- *
- * Reproducibility metadata may be expressed semantically:
- *
- *     seed: seed_value;
- *     deterministic: true;
- *     reproducibility: policy;
- *
- * This grammar does not implement RNG behavior.
- *
- * The runtime/simulation subsystem owns random-state semantics.
- *
- * ============================================================================
- */
-
-hdlSimulationReproducibilityClause
-    : identifier
-      COLON
-      expression
-      SEMICOLON?
-    ;
-
-/*
- * ============================================================================
- * RESOURCE / CAPABILITY INTEGRATION
- * ============================================================================
- *
- * Simulation MAY require capabilities or resources.
- *
- * Examples:
- *
- *     requires capability("simulation.event");
- *     requires capability("simulation.acceleration");
- *     requires memory >= required_memory;
- *
- * The actual resource/capability grammar remains owned by:
- *
- *     grammar/resources/
- *     grammar/hardware/
- *     grammar/compile/
- *
- * This file MUST NOT duplicate those grammars.
- *
- * ============================================================================
- */
-
-hdlSimulationRequirement
-    : identifier
-      COLON
-      expression
-      SEMICOLON?
-    ;
-
-/*
- * ============================================================================
- * PREFERENCE / HINT INTEGRATION
- * ============================================================================
- *
- * Simulation may express non-binding implementation guidance through ordinary
- * expressions or the repository's resource/hardware intent syntax.
- *
- * Examples:
- *
- *     prefer: accelerator("simulation");
- *     hint: parallel;
- *
- * These remain semantic data.
- *
- * ============================================================================
- */
-
-hdlSimulationPreference
-    : identifier
-      COLON
-      expression
-      SEMICOLON?
-    ;
-
-/*
- * ============================================================================
- * ERROR / TERMINATION CONDITIONS
- * ============================================================================
- *
- * Simulation termination may be expressed through generic clauses:
- *
- *     until: condition;
- *     timeout: duration;
- *     stop: condition;
- *
- * The parser does not evaluate these expressions.
- *
- * ============================================================================
- */
-
-hdlSimulationTermination
-    : identifier
-      COLON
-      expression
-      SEMICOLON?
-    ;
-
-/*
- * ============================================================================
- * SEMANTIC BOUNDARY
- * ============================================================================
- *
- * The grammar intentionally provides structure only.
- *
- * Semantic analysis MUST determine:
- *
- *     - whether the target exists;
- *     - whether the target is simulatable;
- *     - whether all referenced signals exist;
- *     - whether stimulus types are compatible;
- *     - whether observations are valid;
- *     - whether expectations are well-typed;
- *     - whether timing constraints are meaningful;
- *     - whether sampling is valid;
- *     - whether checkpoint state is representable;
- *     - whether resource requirements are satisfiable;
- *     - whether required capabilities exist;
- *     - whether the selected simulation strategy is semantically valid;
- *     - whether deterministic execution is requested;
- *     - whether nondeterminism is explicitly permitted.
- *
- * None of these checks belong in this parser grammar.
- *
  * ============================================================================
  * AST CONTRACT
  * ============================================================================
  *
- * Every simulation construct MUST lower through the existing domain-neutral
- * frontend AST.
+ * This grammar produces parser contexts only.
  *
- * Conceptual mapping:
+ * The domain-neutral frontend AST should represent the construct conceptually
+ * as:
  *
- *     hdlSimulationDeclaration
- *         -> generic domain/simulation declaration
+ *     HdlSimulationIntent {
+ *         target,
+ *         items,
+ *         source_span
+ *     }
  *
- *     hdlSimulationTarget
- *         -> target expression
+ * where items are represented by semantic-neutral structures such as:
  *
- *     hdlSimulationBody
- *         -> ordered child construct collection
+ *     SimulationNamedClause
+ *     SimulationResourceIntent
+ *     SimulationPolicyAttachment
+ *     SimulationNestedIntent
+ *     SimulationExpression
  *
- *     hdlSimulationNamedClause
- *         -> named semantic clause
+ * The AST MUST preserve:
  *
- *     hdlSimulationBinding
- *         -> generic binding
+ *     - source span;
+ *     - source order;
+ *     - target expression;
+ *     - clause names;
+ *     - clause values;
+ *     - nested structure;
+ *     - resource intent;
+ *     - policy references;
+ *     - expression structure.
  *
- *     hdlSimulationExpressionStatement
- *         -> expression statement
+ * The AST MUST NOT contain:
  *
- * No simulator-specific AST hierarchy should be introduced merely because
- * this grammar exists.
- *
- * ============================================================================
- * SOURCE PROVENANCE
- * ============================================================================
- *
- * The AST MUST preserve source spans for:
- *
- *     simulation declaration
- *     simulation target
- *     simulation body
- *     named clause
- *     binding
- *     expression statement
- *
- * This enables diagnostics to identify the exact simulation intent that
- * caused a semantic or resource failure.
- *
- * ============================================================================
- * SEMANTIC MODEL
- * ============================================================================
- *
- * The semantic pipeline is:
- *
- *     source
- *       |
- *       v
- *     lexer
- *       |
- *       v
- *     parser
- *       |
- *       v
- *     domain-neutral AST
- *       |
- *       v
- *     simulation semantic analysis
- *       |
- *       +--> type analysis
- *       +--> timing analysis
- *       +--> resource analysis
- *       +--> capability analysis
- *       +--> determinism analysis
- *       +--> verification integration
- *       |
- *       v
- *     canonical semantic model / IR
- *       |
- *       +--> simulator
- *       +--> hardware co-simulation
- *       +--> distributed simulation
- *       +--> accelerated simulation
- *       +--> formal/simulation integration
- *       +--> target realization
+ *     simulator handles;
+ *     device handles;
+ *     memory addresses;
+ *     physical locations;
+ *     physical qubit mappings;
+ *     vendor SDK objects;
+ *     scheduler state;
+ *     routing state;
+ *     runtime state.
  *
  * ============================================================================
- * QUANTUM INTEGRATION
+ * SEMANTIC CONTRACT
  * ============================================================================
  *
- * Simulation syntax MUST NOT create a quantum simulation IR.
+ * Semantic analysis is responsible for determining:
  *
- * If the simulation target contains quantum computation:
+ *     - whether the target denotes a valid HDL simulation subject;
+ *     - what simulation model is required;
+ *     - which HDL semantics apply;
+ *     - whether clauses are meaningful;
+ *     - whether named clauses conflict;
+ *     - whether expressions have valid types;
+ *     - which effects are produced;
+ *     - which capabilities are required;
+ *     - which resources are required;
+ *     - which constraints apply;
+ *     - which preferences may be honored;
+ *     - which policies govern execution;
+ *     - whether contracts are satisfied;
+ *     - whether provenance is available;
+ *     - whether deterministic/reproducible execution is requested;
+ *     - whether the selected target is feasible.
  *
- *     simulation source
- *          |
- *          v
- *     semantic analysis
- *          |
- *          v
- *     existing quantum::ir
- *          |
- *          v
- *     simulation / optimization / QEC / ZQN / HAL as appropriate
- *
- * The quantum frontend and quantum::ir remain authoritative for quantum
- * semantics.
- *
- * This grammar only expresses the simulation intent.
- *
- * ============================================================================
- * CLASSICAL INTEGRATION
- * ============================================================================
- *
- * Classical models and expressions remain ordinary Zamani constructs.
- *
- * The simulation grammar does not reproduce:
- *
- *     arithmetic
- *     matrices
- *     tensors
- *     numerical algorithms
- *     signal processing
- *
- * Those remain owned by the corresponding classical/expression grammars.
+ * Parsing alone MUST NOT claim any of these properties.
  *
  * ============================================================================
- * HDL INTEGRATION
+ * EFFECT CONTRACT
  * ============================================================================
  *
- * HDL simulation may target:
+ * This grammar introduces no effect.
  *
- *     modules
- *     interfaces
- *     signals
- *     nets
- *     registers
- *     memories
- *     processes
- *     pipelines
- *     state machines
- *     generated structures
+ * Semantic analysis may classify a simulation intent with effects such as:
  *
- * Semantic validation determines whether the target is a valid hardware model.
+ *     simulation
+ *     measurement
+ *     io
+ *     network
+ *     randomness
+ *     distributed
+ *     native
+ *     foreign
+ *
+ * according to the actual semantic operation.
+ *
+ * Effect ownership remains with:
+ *
+ *     grammar/effects/
  *
  * ============================================================================
- * HYBRID INTEGRATION
+ * CAPABILITY CONTRACT
  * ============================================================================
  *
- * Simulation may cross:
+ * This grammar introduces no physical capability.
  *
- *     classical
- *         ->
- *     HDL
- *         ->
- *     quantum
- *         ->
- *     classical
+ * Capabilities are semantic and open-world.
  *
- * without creating separate languages or IRs.
+ * Examples include:
+ *
+ *     simulation::classical
+ *     simulation::hdl
+ *     simulation::event
+ *     simulation::accelerated
+ *     simulation::distributed
+ *
+ * These are examples of semantic identities, not a closed enumeration.
+ *
+ * ============================================================================
+ * RESOURCE CONTRACT
+ * ============================================================================
+ *
+ * Resource requirements are expressions.
+ *
+ * No physical resource ceiling is represented here.
+ *
+ * Examples:
+ *
+ *     requires memory >= required_memory;
+ *     requires compute >= required_compute;
+ *     requires capability("simulation.acceleration");
+ *
+ * The actual feasibility calculation belongs downstream.
+ *
+ * ============================================================================
+ * POLICY CONTRACT
+ * ============================================================================
+ *
+ * Policies can govern:
+ *
+ *     - simulator selection;
+ *     - execution mode;
+ *     - determinism;
+ *     - reproducibility;
+ *     - resource selection;
+ *     - fallback;
+ *     - security;
+ *     - sandboxing;
+ *     - adaptation;
+ *     - provenance;
+ *     - distributed execution.
+ *
+ * This grammar only records a policy attachment.
+ *
+ * It does not evaluate policy.
+ *
+ * ============================================================================
+ * CONTRACT / VERIFICATION INTEGRATION
+ * ============================================================================
+ *
+ * Verification assertions remain owned by:
+ *
+ *     grammar/hdl/assertions.g4
+ *
+ * This file MUST NOT redefine:
+ *
+ *     hdlAssertion
+ *     hdlPropertyDeclaration
+ *     hdlAssumption
+ *     hdlCoverage
+ *
+ * Simulation expectations may be represented as named simulation clauses:
+ *
+ *     expect: condition;
+ *
+ * but their verification meaning is determined by semantic analysis.
+ *
+ * If a source construct requires an actual HDL verification property, the
+ * semantic layer must route it to the HDL verification model rather than
+ * creating a second assertion grammar here.
+ *
+ * ============================================================================
+ * TIMING INTEGRATION
+ * ============================================================================
+ *
+ * Timing, clocks and clocking remain owned by their dedicated HDL grammars.
+ *
+ * This file may carry timing-related simulation intent through generic
+ * expressions:
+ *
+ *     duration: duration_value;
+ *     sampling: period;
+ *     timeout: timeout_value;
+ *
+ * It does NOT define:
+ *
+ *     clock;
+ *     clock tree;
+ *     physical frequency;
+ *     PLL;
+ *     timing closure;
+ *     clock-domain implementation.
+ *
+ * Those concerns remain downstream.
+ *
+ * ============================================================================
+ * QUANTUM / HYBRID INTEGRATION
+ * ============================================================================
+ *
+ * HDL simulation may participate in hybrid computation.
+ *
+ * The grammar does not define quantum syntax.
+ *
+ * If an expression refers to quantum semantics, the normal semantic pipeline
+ * determines the quantum representation and it MUST converge through:
+ *
+ *     quantum::ir
+ *
+ * before target-specific quantum realization.
+ *
+ * HDL simulation does not create a second quantum IR.
  *
  * ============================================================================
  * DISTRIBUTED INTEGRATION
  * ============================================================================
  *
- * A simulation target may represent a distributed system.
+ * Simulation may be realized as:
  *
- * This grammar imposes no fixed:
+ *     local;
+ *     parallel;
+ *     distributed;
+ *     accelerated;
+ *     heterogeneous;
+ *     co-simulation;
+ *     future execution modes.
  *
- *     node count
- *     process count
- *     channel count
- *     partition count
- *     replication count
+ * These are semantic possibilities, not parser-level enumerations.
  *
- * Distributed semantics remain owned by the distributed subsystem.
- *
- * ============================================================================
- * AI / DATA INTEGRATION
- * ============================================================================
- *
- * Simulation may operate over:
- *
- *     tensors
- *     datasets
- *     models
- *     agents
- *     streams
- *     learned systems
- *
- * AI/data semantics remain owned by their domains.
+ * No node-count or device-count limit is encoded.
  *
  * ============================================================================
- * NETWORKING INTEGRATION
+ * REPRODUCIBILITY / DETERMINISM
  * ============================================================================
  *
- * Networked hardware simulation may model:
+ * Simulation metadata may express:
  *
- *     endpoints
- *     packets
- *     streams
- *     protocols
- *     latency
- *     bandwidth
- *     failures
+ *     deterministic: true;
+ *     reproducible: policy;
+ *     seed: seed_value;
  *
- * Networking semantics remain owned by networking/.
+ * through generic named clauses.
  *
- * ============================================================================
- * SECURITY
- * ============================================================================
+ * This grammar does not implement randomness.
  *
- * Parsing this grammar MUST NOT:
+ * The semantic/runtime layers must distinguish:
  *
- *     - execute a simulator;
- *     - execute hardware;
- *     - access devices;
- *     - open network connections;
- *     - read files;
- *     - allocate target resources;
- *     - invoke external commands;
- *     - generate code;
- *     - access secrets.
- *
- * `simulate` is source syntax only.
- *
- * Execution is downstream and capability-controlled.
+ *     source identity;
+ *     semantic identity;
+ *     compiler-input identity;
+ *     artifact reproducibility;
+ *     execution reproducibility;
+ *     deterministic result guarantees.
  *
  * ============================================================================
- * SCALABILITY
+ * PROVENANCE
  * ============================================================================
  *
- * The grammar imposes no semantic maximum on:
+ * Simulation intent participates in the universal provenance model.
  *
- *     simulations
- *     nested simulations
- *     simulation items
- *     stimuli
- *     observations
- *     expectations
- *     checkpoints
- *     bindings
- *     scenarios
- *     expressions
- *     model dimensions
- *     signal counts
- *     hardware size
- *     distributed node counts
- *     quantum resource counts
+ * Provenance may preserve:
  *
- * ANTLR repetition operators represent arbitrary finite source structures.
+ *     source;
+ *     simulation target;
+ *     selected policies;
+ *     resource requirements;
+ *     capability requirements;
+ *     transformations;
+ *     optimization decisions;
+ *     lowering decisions;
+ *     execution realization;
+ *     verification results.
  *
- * "Infinity" means no artificial language-level finite ceiling.
- *
- * Physical execution remains bounded by available resources.
+ * This grammar does not create a second provenance system.
  *
  * ============================================================================
- * HARD-CODING AUDIT
+ * LOWERING CONTRACT
  * ============================================================================
  *
- * This grammar MUST NOT contain:
+ * The semantic lowering path is:
  *
- *     MAX_SIMULATIONS
- *     MAX_STIMULI
- *     MAX_OBSERVATIONS
- *     MAX_SAMPLES
- *     MAX_STEPS
- *     MAX_SIGNALS
- *     MAX_NODES
- *     MAX_CPUS
- *     MAX_GPUS
- *     MAX_FPGAS
- *     MAX_QUBITS
- *     MAX_MEMORY
- *     MAX_THREADS
- *     MAX_DEVICES
+ *     HdlSimulationIntent
+ *          |
+ *          v
+ *     canonical simulation semantic model
+ *          |
+ *          +--------------------+
+ *          |                    |
+ *          v                    v
+ *     HDL simulation       hybrid/quantum intent
+ *          |                    |
+ *          v                    v
+ *     HDL/hardware IR       quantum::ir
+ *          |                    |
+ *          +---------+----------+
+ *                    |
+ *                    v
+ *             execution planning
+ *                    |
+ *                    v
+ *             optimization
+ *                    |
+ *                    v
+ *          lowering/specialization
+ *                    |
+ *                    v
+ *          routing/scheduling
+ *                    |
+ *                    v
+ *          resilience/recovery
+ *                    |
+ *                    v
+ *                 ZQN/HAL
+ *                    |
+ *                    v
+ *             target realization
  *
- * A program MAY contain explicit values such as:
- *
- *     steps = 1000;
- *     samples = 100000;
- *     duration = 1s;
- *
- * Those are program semantics, not language ceilings.
- *
- * ============================================================================
- * DETERMINISM
- * ============================================================================
- *
- * The grammar contains:
- *
- *     no actions;
- *     no semantic predicates;
- *     no runtime calls;
- *     no hardware queries;
- *     no randomness.
- *
- * Therefore parsing is deterministic for a fixed:
- *
- *     source
- *     canonical token vocabulary
- *     grammar version
- *
- * Simulation nondeterminism, if explicitly requested by the source semantics,
- * is a downstream runtime concern.
+ * This file does NOT own any of those downstream transformations.
  *
  * ============================================================================
- * DIAGNOSTICS
+ * DIAGNOSTIC CONTRACT
  * ============================================================================
  *
- * Semantic diagnostics should be able to identify:
+ * Syntax errors belong to the parser.
  *
- *     - missing simulation target;
- *     - invalid target;
- *     - unknown referenced model;
- *     - invalid stimulus;
- *     - invalid observation;
- *     - invalid expectation;
- *     - incompatible timing;
- *     - invalid sampling;
- *     - unavailable capability;
- *     - insufficient resources;
- *     - unsupported simulation semantics;
- *     - unsupported target realization.
+ * The implementation MUST distinguish them from:
  *
- * Resource failure MUST remain distinguishable from syntax failure.
+ *     type errors;
+ *     effect errors;
+ *     capability errors;
+ *     resource errors;
+ *     policy errors;
+ *     contract errors;
+ *     provenance errors;
+ *     target-feasibility errors;
+ *     backend errors;
+ *     runtime errors.
  *
- * ============================================================================
- * PERFORMANCE
- * ============================================================================
+ * In particular:
  *
- * The grammar uses simple repetition and delegation.
+ *     unavailable simulation resource
  *
- * It does not perform:
+ * MUST NOT be reported as:
  *
- *     numerical evaluation;
- *     symbolic solving;
- *     simulation;
- *     hardware discovery;
- *     resource discovery.
- *
- * These expensive operations remain downstream.
- *
- * Implementations MAY impose operational parser/elaboration safeguards for
- * denial-of-service protection or resource exhaustion.
- *
- * Such safeguards MUST NOT become language-level semantic limits.
+ *     invalid HDL syntax.
  *
  * ============================================================================
- * COMPATIBILITY
+ * SCALABILITY CONTRACT
  * ============================================================================
  *
- * This file is additive.
+ * This grammar contains no fixed limits for:
  *
- * It does not rename:
+ *     simulation items;
+ *     nested simulations;
+ *     expression size;
+ *     target complexity;
+ *     resource requirements;
+ *     capability sets;
+ *     policy references;
+ *     HDL model size;
+ *     simulation scenarios.
  *
- *     grammar/hdl/hdl.g4
- *     grammar/hdl/clocks.g4
- *     grammar/hdl/clocking.g4
- *     grammar/hdl/timing.g4
- *     grammar/hdl/assertions.g4
- *     grammar/hdl/processes.g4
- *     grammar/hdl/sequential.g4
- *     grammar/hdl/combinational.g4
- *     grammar/hdl/memories.g4
- *     grammar/hdl/registers.g4
+ * Repetition is expressed using ANTLR repetition operators rather than
+ * language-level constants.
  *
- * It also does not create a second simulation grammar elsewhere.
+ * Practical limits belong to:
  *
- * If an older simulation syntax exists in another domain grammar, that syntax
- * must be classified as:
+ *     parser implementation;
+ *     compiler configuration;
+ *     available memory;
+ *     execution resources;
+ *     target capabilities.
  *
- *     compatible;
- *     migrated;
- *     deprecated;
- *     or historical
+ * Such implementation limits MUST NOT become language semantics.
  *
- * rather than silently becoming another authority.
+ * ============================================================================
+ * DETERMINISM CONTRACT
+ * ============================================================================
+ *
+ * Parsing MUST be deterministic for the same token stream.
+ *
+ * This grammar contains:
+ *
+ *     - no embedded actions;
+ *     - no semantic predicates;
+ *     - no target discovery;
+ *     - no runtime calls;
+ *     - no random behavior;
+ *     - no filesystem access;
+ *     - no network access.
+ *
+ * ============================================================================
+ * COMPATIBILITY CONTRACT
+ * ============================================================================
+ *
+ * Existing canonical source forms remain supported:
+ *
+ *     simulate target;
+ *
+ *     simulate target {
+ *         clause: expression;
+ *     }
+ *
+ * The grammar deliberately does not reserve simulation-specific clause names.
+ *
+ * New clause names can therefore be introduced as identifiers without changing
+ * this grammar, provided their lexical spelling is not already reserved by the
+ * language.
+ *
+ * Changes to:
+ *
+ *     SIMULATE
+ *     FROM
+ *     WITH
+ *     REQUIRES
+ *     CONSTRAINT
+ *     PREFER
+ *     HINT
+ *     POLICY
+ *
+ * are lexical compatibility changes and must be handled by the canonical
+ * lexical compatibility process.
  *
  * ============================================================================
  * INTEGRATION CONTRACT
  * ============================================================================
  *
- * Required HDL composition:
+ * 1. grammar/hdl/hdl.g4
  *
- *     grammar/hdl/hdl.g4
- *          |
- *          +--> import HdlSimulation
- *          |
- *          +--> expose hdlSimulationConstruct
+ *    MUST import:
  *
- * The HDL member dispatcher should include:
+ *        HdlSimulation
  *
- *     | hdlSimulationConstruct
+ *    and MUST expose:
  *
- * where simulation is permitted as an HDL member.
+ *        hdlSimulationConstruct
  *
- * The universal Zamani root MUST reach HDL through the existing HDL
- * composition path and MUST NOT import HdlSimulation directly.
+ *    from its HDL statement/source dispatch.
  *
- * ============================================================================
- * VERIFICATION INTEGRATION
- * ============================================================================
  *
- * Simulation expectations MUST integrate with:
+ * 2. grammar/antlr/ZamaniLexer.g4
  *
- *     grammar/hdl/assertions.g4
+ *    remains the sole lexer consumed by this grammar.
  *
- * where an actual assertion/property construct is required.
  *
- * This file MUST NOT duplicate:
+ * 3. grammar/expressions/expressions.g4
  *
- *     hdlAssertion
- *     hdlAssumption
- *     hdlCoverage
- *     hdlPropertyDeclaration
+ *    remains the sole owner of `expression`.
  *
- * Verification engines remain downstream.
  *
- * ============================================================================
- * CLOCK / TIMING INTEGRATION
- * ============================================================================
+ * 4. grammar/execution/simulation.g4
  *
- * This file consumes simulation timing intent but does not redefine:
+ *    remains the owner of universal execution-level simulation expression
+ *    syntax.
  *
- *     clock declarations;
- *     clock domains;
- *     clock relationships;
- *     timing constraints.
  *
- * Those remain owned by:
+ * 5. grammar/statements/simulate.g4
  *
- *     grammar/hdl/clocks.g4
- *     grammar/hdl/clocking.g4
- *     grammar/hdl/timing.g4
+ *    remains the owner of universal source-level simulation statement syntax.
  *
- * ============================================================================
- * HARDWARE / RESOURCE INTEGRATION
- * ============================================================================
  *
- * Simulation resource requirements belong to:
+ * 6. grammar/effects/simulation.g4
  *
- *     grammar/resources/
- *     grammar/hardware/
+ *    remains the simulation-effect composition boundary.
  *
- * Examples:
  *
- *     requires capability("simulation.accelerated");
- *     requires memory >= required_memory;
+ * 7. grammar/policies/simulation.g4
  *
- * No target-specific capacity is encoded here.
+ *    remains the simulation-policy composition boundary.
  *
- * ============================================================================
- * RUNTIME INTEGRATION
- * ============================================================================
  *
- * The parser/frontend produces intent only.
+ * 8. grammar/hdl/assertions.g4
  *
- * Downstream runtime/simulation components determine:
+ *    remains the HDL verification-property owner.
  *
- *     simulator;
- *     execution strategy;
- *     numerical engine;
- *     parallelism;
- *     distributed execution;
- *     checkpoint storage;
- *     trace storage;
- *     random source;
- *     hardware acceleration;
- *     result materialization.
+ *
+ * 9. Semantic analysis
+ *
+ *    consumes the domain-neutral AST and attaches:
+ *
+ *        types
+ *        effects
+ *        capabilities
+ *        resources
+ *        contracts
+ *        policies
+ *        provenance
+ *
+ *
+ * 10. IR
+ *
+ *     HDL simulation does not create a competing universal IR.
+ *
+ *     Hybrid quantum content converges through:
+ *
+ *         quantum::ir
+ *
  *
  * ============================================================================
  * TEST CONTRACT
  * ============================================================================
  *
- * Positive examples:
+ * Required tests belong under the repository's grammar conformance structure,
+ * with HDL simulation cases grouped under the HDL/simulation ownership.
  *
- *     simulate top;
+ * Minimum categories:
  *
- *     simulate top {
- *         stimulus: reset;
- *         observe: output;
- *     }
+ *     positive
+ *     negative
+ *     boundary
+ *     scalability
+ *     compatibility
+ *     determinism
+ *     cross-domain
+ *     diagnostics
  *
+ * Positive examples MUST cover:
+ *
+ *     simulate design;
+ *     simulate design {};
  *     simulate design {
- *         duration: 1000;
- *         sampling: period;
- *         initial: state == reset_state;
- *         termination: done;
- *     }
+ *         stimulus: input;
+ *     };
+ *     simulate design {
+ *         observe: output;
+ *         expect: output == expected;
+ *     };
+ *     simulate design {
+ *         requires capability("simulation.event");
+ *         constraint topology;
+ *         prefer accelerator;
+ *         hint parallel;
+ *         policy deterministic_execution;
+ *     };
+ *     nested simulations;
+ *     expression-based simulation operations.
  *
- *     simulate system {
- *         seed = seed_value;
- *         tolerance = tolerance_value;
- *         waveform: trace;
- *         checkpoint: state;
- *     }
- *
- *     simulate hybrid_model {
- *         stimulus: input_stream;
- *         observe: quantum_result;
- *         expectation: result == expected;
- *     }
- *
- * Negative examples:
+ * Negative examples MUST cover:
  *
  *     simulate;
+ *     simulate {};
+ *     simulate design with ();
+ *     malformed named clauses;
+ *     malformed resource clauses;
+ *     malformed policy clauses;
+ *     unterminated simulation bodies.
  *
- *     simulate {
- *     }
+ * Boundary tests MUST cover:
  *
- *     simulate top {
- *         stimulus:
- *     }
+ *     empty body;
+ *     deeply nested simulations;
+ *     very large clause lists;
+ *     very large expressions;
+ *     qualified targets;
+ *     target expressions;
+ *     mixed HDL and simulation constructs.
  *
- *     simulate top {
- *         duration =
- *     }
+ * Scalability tests MUST verify that no language-level capacity constant is
+ * required for larger source structures.
  *
- *     simulate top {
- *         checkpoint
- *     }
+ * Cross-domain tests MUST cover, where supported:
  *
- * Boundary examples:
- *
- *     simulate top {}
- *
- *     simulate x;
- *
- *     simulate a { a: b; }
- *
- *     deeply nested simulation constructs;
- *
- *     arbitrarily many named clauses;
- *
- *     arbitrarily large symbolic expressions;
- *
- *     symbolic timing values;
- *
- *     symbolic resource requirements.
- *
- * Scalability:
- *
- *     no fixed number of simulation items;
- *     no fixed number of stimuli;
- *     no fixed number of observations;
- *     no fixed number of checkpoints;
- *     no fixed number of samples;
- *     no fixed number of simulation targets;
- *     no fixed simulation depth.
- *
- * Determinism:
- *
- *     identical source + identical lexer + identical grammar
- *         =>
- *     identical parse structure.
+ *     HDL + classical;
+ *     HDL + quantum;
+ *     HDL + hybrid;
+ *     HDL + distributed;
+ *     HDL + resource requirements;
+ *     HDL + policies;
+ *     HDL + contracts;
+ *     HDL + provenance.
  *
  * ============================================================================
- * DEFINITION OF DONE
+ * COMPLETION CRITERIA
  * ============================================================================
  *
- * This file is complete when:
+ * This file is DONE when:
  *
- *     [x] simulation intent has one canonical grammar owner;
- *     [x] simulation execution is downstream;
- *     [x] general expressions are reused;
- *     [x] no simulation-specific lexer exists;
- *     [x] no simulator vendor is hard-coded;
- *     [x] no solver is hard-coded;
- *     [x] no hardware target is hard-coded;
- *     [x] no resource maximum is hard-coded;
- *     [x] simulation configuration is extensible;
- *     [x] stimuli are representable;
- *     [x] observations are representable;
- *     [x] expectations are representable;
- *     [x] timing intent is representable;
- *     [x] checkpoints are representable;
- *     [x] reproducibility metadata is representable;
- *     [x] resource/capability intent integrates downstream;
- *     [x] verification remains separately owned;
- *     [x] clock/timing remain separately owned;
- *     [x] AST integration is defined;
- *     [x] semantic integration is defined;
- *     [x] IR integration is defined;
- *     [x] runtime integration is defined;
- *     [x] quantum integration is defined;
- *     [x] classical integration is defined;
- *     [x] hybrid integration is defined;
- *     [x] distributed integration is defined;
- *     [x] security boundary is defined;
- *     [x] positive tests are defined;
- *     [x] negative tests are defined;
- *     [x] boundary tests are defined;
- *     [x] scalability tests are defined;
- *     [x] determinism requirements are defined;
- *     [x] safe-Rust requirements are defined.
+ *     [ ] HdlSimulation is the sole parser grammar for HDL simulation intent.
+ *
+ *     [ ] hdlSimulationConstruct is the sole public entry point.
+ *
+ *     [ ] hdl.g4 imports HdlSimulation.
+ *
+ *     [ ] hdl.g4 dispatches hdlSimulationConstruct.
+ *
+ *     [ ] The canonical ZamaniLexer is used.
+ *
+ *     [ ] No lexer rules exist here.
+ *
+ *     [ ] The canonical expression rule is reused.
+ *
+ *     [ ] No second expression language exists here.
+ *
+ *     [ ] Simulation-specific operation names are not hard-coded.
+ *
+ *     [ ] Simulator vendors are not hard-coded.
+ *
+ *     [ ] Hardware vendors are not hard-coded.
+ *
+ *     [ ] Physical devices are not hard-coded.
+ *
+ *     [ ] Resource capacities are not hard-coded.
+ *
+ *     [ ] Node/device/thread/qubit/memory limits are not hard-coded.
+ *
+ *     [ ] Verification syntax is not duplicated.
+ *
+ *     [ ] Universal simulation syntax is not duplicated.
+ *
+ *     [ ] Universal simulation execution semantics remain downstream.
+ *
+ *     [ ] Resource/capability semantics remain downstream.
+ *
+ *     [ ] Policy semantics remain downstream.
+ *
+ *     [ ] Effects remain downstream.
+ *
+ *     [ ] Contracts remain downstream.
+ *
+ *     [ ] Provenance remains downstream.
+ *
+ *     [ ] Quantum semantics converge through quantum::ir where applicable.
+ *
+ *     [ ] No Rust implementation requires unsafe.
+ *
+ *     [ ] Positive tests exist.
+ *
+ *     [ ] Negative tests exist.
+ *
+ *     [ ] Boundary tests exist.
+ *
+ *     [ ] Scalability tests exist.
+ *
+ *     [ ] Determinism tests exist.
+ *
+ *     [ ] Compatibility tests exist.
+ *
+ *     [ ] Cross-domain tests exist.
+ *
+ *     [ ] Diagnostics distinguish syntax from semantic/resource failures.
  *
  * ============================================================================
  * FINAL INVARIANT
  * ============================================================================
  *
- *     SIMULATION SYNTAX
- *          !=
- *     SIMULATION ENGINE
- *          !=
- *     NUMERICAL SOLVER
- *          !=
- *     HARDWARE MODEL
- *          !=
- *     VERIFICATION ENGINE
- *          !=
- *     RESOURCE MANAGER
- *          !=
- *     RUNTIME
+ * This file describes HDL SIMULATION INTENT.
  *
- * The grammar describes portable simulation intent.
+ * It does not describe a simulator.
+ *
+ * It does not allocate resources.
+ *
+ * It does not select hardware.
+ *
+ * It does not select a vendor.
+ *
+ * It does not perform verification.
+ *
+ * It does not perform synthesis.
+ *
+ * It does not execute anything.
+ *
+ * It does not establish physical limits.
+ *
+ * The same source-level intent must therefore remain meaningful across
+ * different simulation implementations and hardware scales, subject to
+ * semantic feasibility and available resources.
  *
  * ============================================================================
  */
