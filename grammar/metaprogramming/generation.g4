@@ -3,241 +3,289 @@
  * Zamani Universal Programming Language
  * ============================================================================
  *
- * File:
- *     grammar/metaprogramming/generation.g4
+ * FILE
+ * ----
+ * grammar/metaprogramming/generation.g4
  *
- * Grammar:
- *     Generation
+ * GRAMMAR
+ * -------
+ * Generation
  *
- * Status:
- *     Production parser-grammar composition unit
+ * STATUS
+ * ------
+ * Production parser-grammar component.
  *
- * Purpose:
- *     Define the SOURCE-LEVEL SYNTAX for compile-time generation of Zamani
- *     language structures.
+ * PURPOSE
+ * -------
+ * This file owns the SOURCE-LEVEL SYNTAX boundary for program generation.
  *
- * This grammar establishes explicit syntax boundaries for generation without
- * defining:
+ * Generation means constructing or requesting canonical Zamani source
+ * structure during an authorized metaprogramming phase.
  *
- *     - an AST;
- *     - a semantic model;
- *     - an IR;
- *     - a compiler implementation;
- *     - a macro expansion engine;
- *     - a reflection engine;
- *     - a specialization engine;
- *     - a compile-time evaluator;
- *     - a hardware model;
- *     - a quantum model;
- *     - a runtime model.
+ * Generation does NOT:
+ *
+ *     - execute generated code;
+ *     - construct machine instructions;
+ *     - construct classical IR directly;
+ *     - construct quantum::ir directly;
+ *     - select hardware;
+ *     - select a QPU;
+ *     - allocate physical resources;
+ *     - perform routing;
+ *     - perform scheduling;
+ *     - perform QEC;
+ *     - bypass semantic analysis;
+ *     - bypass validation;
+ *     - bypass provenance;
+ *     - bypass policy;
+ *     - bypass capability checking.
  *
  * ============================================================================
- *
  * ARCHITECTURAL POSITION
  * ============================================================================
  *
- *     source
- *       |
- *       v
- *     ZamaniLexer
- *       |
- *       v
- *     authoritative ZamaniParser
- *       |
- *       v
- *     frontend AST
- *       |
- *       v
- *     semantic analysis
- *       |
- *       +--> name resolution
- *       +--> type checking
- *       +--> effect checking
- *       +--> capability checking
- *       +--> generation validation
- *       +--> compile-time evaluation
- *       +--> provenance
- *       |
- *       v
- *     generated source/semantic structures
- *       |
- *       v
- *     canonical semantic representation
- *       |
- *       +--> classical IR
- *       +--> quantum::ir
- *       +--> HDL / hardware representation
- *       +--> distributed representation
- *       +--> other domain representations
- *       |
- *       v
- *     optimization / lowering / routing / scheduling / HAL
- *       |
- *       v
- *     runtime
+ *     Zamani source
+ *          |
+ *          v
+ *     canonical lexer
+ *          |
+ *          v
+ *     canonical parser
+ *          |
+ *          v
+ *     domain-neutral AST
+ *          |
+ *          +-------------------------------+
+ *          |                               |
+ *          v                               v
+ *     ordinary semantics          metaprogramming semantics
+ *                                          |
+ *                                          v
+ *                                      generation
+ *                                          |
+ *                                          v
+ *                                generated Zamani source
+ *                                          |
+ *                                          v
+ *                                  ordinary frontend
+ *                                          |
+ *                                          v
+ *                                  semantic analysis
+ *                                          |
+ *                     +--------------------+--------------------+
+ *                     |                    |                    |
+ *                     v                    v                    v
+ *                classical IR         quantum::ir         HDL/hardware
+ *                     |                    |                    |
+ *                     +--------------------+--------------------+
+ *                                          |
+ *                                          v
+ *                              optimization / lowering
+ *                                          |
+ *                              routing / scheduling
+ *                                          |
+ *                               resilience / QEC
+ *                                          |
+ *                                         ZQN
+ *                                          |
+ *                                         HAL
+ *                                          |
+ *                                  target realization
  *
- * Generation MUST NOT bypass the semantic boundary.
+ * Generation MUST remain inside this pipeline.
  *
  * ============================================================================
- *
  * OWNERSHIP
  * ============================================================================
  *
  * THIS FILE OWNS:
  *
- *     - explicit source-level generation expressions;
- *     - explicit source-level generation blocks;
- *     - generated expression boundaries;
- *     - generated type boundaries;
- *     - generated declaration/item boundaries;
- *     - generated statement boundaries;
- *     - generated program-fragment boundaries;
- *     - generation result-shaping syntax;
- *     - generation options that are intrinsic to generation syntax;
- *     - explicit generation provenance markers when represented syntactically.
+ *     - generation expression syntax;
+ *     - generation declaration syntax;
+ *     - generation statement syntax;
+ *     - generation request/category syntax;
+ *     - generation input syntax;
+ *     - generation option syntax;
+ *     - generation result-category syntax;
+ *     - generation integration contracts.
  *
  * THIS FILE DOES NOT OWN:
  *
- *     - lexical tokens;
+ *     - lexical definitions;
  *     - identifiers;
  *     - qualified names;
  *     - ordinary expressions;
  *     - expression precedence;
  *     - ordinary statements;
  *     - declarations;
- *     - function declarations;
- *     - compile-time function declarations;
- *     - macros;
- *     - macro hygiene;
- *     - macro expansion;
+ *     - types;
+ *     - patterns;
  *     - quotation;
- *     - splicing;
+ *     - unquotation;
+ *     - macros;
+ *     - macro expansion;
  *     - reflection;
+ *     - introspection;
  *     - specialization;
- *     - conditional compilation;
- *     - target selection;
- *     - resource requirements;
- *     - capabilities;
- *     - effects;
- *     - hardware discovery;
- *     - quantum hardware selection;
- *     - QEC;
- *     - ZQN;
- *     - optimization;
+ *     - compile-time evaluation;
+ *     - AST implementation;
+ *     - semantic implementation;
+ *     - provenance implementation;
+ *     - effect implementation;
+ *     - policy implementation;
+ *     - capability discovery;
+ *     - resource discovery;
+ *     - classical IR;
+ *     - quantum::ir;
+ *     - HDL IR;
+ *     - hardware realization;
  *     - routing;
  *     - scheduling;
- *     - canonical AST;
- *     - canonical IR;
- *     - quantum::ir;
+ *     - QEC;
+ *     - ZQN;
+ *     - HAL;
  *     - runtime execution.
  *
  * ============================================================================
- *
- * RELATIONSHIP TO OTHER METAPROGRAMMING COMPONENTS
+ * AUTHORITY
  * ============================================================================
  *
- * metaprogramming.g4
- *     Aggregates metaprogramming facilities.
+ * Architectural authority:
  *
- * compile-time-execution.g4
- *     Owns explicit compile-time execution boundaries.
+ *     grammar/DESIGN.md
  *
- * reflection.g4
- *     Owns reflection query syntax.
+ * Metaprogramming composition:
  *
- * specialization.g4
- *     Owns specialization syntax.
+ *     grammar/metaprogramming/metaprogramming.g4
  *
- * macros.g4 / macros/*
- *     Own macro declarations, invocations, hygiene and expansion boundaries.
+ * Canonical parser:
  *
- * functions/compile-time-functions.g4
- *     Own compile-time function declaration syntax.
+ *     grammar/antlr/ZamaniParser.g4
  *
- * compile/generation/code-generation.g4
- *     Owns compilation-level code-generation controls and lowering policy.
+ * Canonical lexer:
  *
- * This file MUST NOT duplicate any of those facilities.
+ *     grammar/antlr/ZamaniLexer.g4
  *
- * ============================================================================
+ * Canonical names:
  *
- * EXISTING REPOSITORY INTEGRATION
- * ============================================================================
+ *     grammar/core/
  *
- * The current canonical ANTLR parser owns common rules such as:
+ * Canonical types:
  *
- *     program
- *     sourceElement
- *     item
- *     statement
- *     expression
- *     blockExpression
- *     identifier
- *     typeExpression
- *     pattern
- *     attribute
- *     genericParameters
- *     parameterList
+ *     grammar/types/
  *
- * Generation consumes those rules.
+ * Canonical expressions:
  *
- * The canonical lexer currently exposes:
+ *     grammar/expressions/
  *
- *     SYNTHESIZE : 'synthesize'
+ * Canonical statements:
  *
- * and does not expose a separate GENERATE token.
+ *     grammar/statements/
  *
- * Therefore this grammar deliberately uses SYNTHESIZE as the lexical
- * generation boundary.
+ * Canonical declarations:
  *
- * A future dedicated GENERATE keyword must be introduced in the canonical
- * lexer and language specification before being referenced here.
+ *     grammar/declarations/
  *
  * ============================================================================
- *
- * CRITICAL ARCHITECTURAL RULE
+ * LEXICAL CONTRACT
  * ============================================================================
  *
- * Generation produces LANGUAGE STRUCTURE, not machine instructions.
+ * This is a parser grammar.
  *
- * For example, generation may eventually produce:
+ * It defines NO lexer tokens.
  *
- *     - a function;
- *     - a type;
- *     - a classical expression;
- *     - a quantum operation;
- *     - a quantum circuit fragment;
- *     - an HDL module;
- *     - a hardware interface;
- *     - a distributed declaration;
- *     - metadata;
- *     - another supported source-level structure.
+ * Generation uses the existing canonical:
  *
- * The generated result is subsequently validated and lowered through the
- * normal Zamani semantic pipeline.
+ *     SYNTHESIZE
  *
- * Generation MUST NOT directly construct:
+ * token.
  *
- *     - quantum::ir;
- *     - classical IR;
- *     - HDL IR;
- *     - scheduling plans;
- *     - routing plans;
- *     - hardware bindings;
- *     - runtime instructions.
+ * This file MUST NOT invent:
+ *
+ *     GENERATE
+ *     STATEMENT_KEYWORD
+ *     DECLARATION_KEYWORD
+ *     EXPRESSION_KEYWORD
+ *     GENERATOR
+ *     GENERATOR_ID
+ *
+ * or equivalent lexical vocabulary.
+ *
+ * Extensible generation categories are represented through canonical
+ * identifiers where appropriate.
  *
  * ============================================================================
- *
- * QUANTUM BOUNDARY
+ * CRITICAL CORRECTION
  * ============================================================================
  *
- * Generation may generate quantum SOURCE STRUCTURE.
+ * The previous implementation referenced a nonexistent:
  *
- * It does not own quantum semantics.
+ *     STATEMENT_KEYWORD
  *
- * For example, a generated quantum operation ultimately follows:
+ * token.
  *
- *     generated source
+ * This file MUST NOT reference nonexistent lexer vocabulary.
+ *
+ * Statement/declaration generation is distinguished by the composition
+ * boundary supplied by metaprogramming.g4 rather than by inventing new
+ * lexical tokens.
+ *
+ * ============================================================================
+ * GENERATION MODEL
+ * ============================================================================
+ *
+ * Generation is CATEGORY-AWARE.
+ *
+ * The three canonical integration forms are:
+ *
+ *     generationExpressionCore
+ *     generationDeclarationCore
+ *     generationStatementCore
+ *
+ * The canonical metaprogramming composition layer maps these into:
+ *
+ *     generationExpression
+ *     generationDeclaration
+ *     generationStatement
+ *
+ * This gives expression, declaration, and statement contexts independent
+ * entry points without creating three different generation systems.
+ *
+ * ============================================================================
+ * EXTENSIBILITY
+ * ============================================================================
+ *
+ * The grammar MUST NOT enumerate every future generated domain.
+ *
+ * It therefore does NOT contain alternatives such as:
+ *
+ *     quantum
+ *     gpu
+ *     fpga
+ *     cpu
+ *     tensor
+ *     ai
+ *     robotics
+ *     blockchain
+ *     hpc
+ *     cloud
+ *
+ * as a permanent generation-category enumeration.
+ *
+ * Domain-specific generated structures remain canonical Zamani source
+ * structures and are validated by their owning domain grammars.
+ *
+ * ============================================================================
+ * QUANTUM CONTRACT
+ * ============================================================================
+ *
+ * Generation MAY produce quantum source structure.
+ *
+ * It MUST NOT produce quantum::ir directly.
+ *
+ * The boundary is:
+ *
+ *     generated quantum source
  *          |
  *          v
  *     quantum semantic analysis
@@ -246,230 +294,375 @@
  *     quantum::ir
  *          |
  *          v
- *     optimization / routing / scheduling / HAL
+ *     optimization
+ *          |
+ *          v
+ *     routing
+ *          |
+ *          v
+ *     scheduling
+ *          |
+ *          v
+ *     resilience / QEC
+ *          |
+ *          v
+ *     ZQN
+ *          |
+ *          v
+ *     HAL
  *
- * Generation MUST NOT:
- *
- *     - allocate physical qubits;
- *     - select a QPU;
- *     - select a topology;
- *     - encode a maximum qubit count;
- *     - construct quantum::ir;
- *     - bypass QEC;
- *     - bypass ZQN;
- *     - bypass routing;
- *     - bypass scheduling.
- *
- * ============================================================================
- *
- * HARDWARE / RESOURCE BOUNDARY
- * ============================================================================
- *
- * Generated source may express resource requirements if those requirements
- * are part of the generated program's semantics.
- *
- * This grammar does not encode physical limits.
- *
- * It MUST NOT introduce:
- *
- *     MAX_QUBITS
- *     MAX_CORES
- *     MAX_THREADS
- *     MAX_GPUS
- *     MAX_FPGAS
- *     MAX_DEVICES
- *     MAX_MEMORY
- *     MAX_NODES
- *
- * or any equivalent finite language-level ceiling.
- *
- * Machine-dependent properties belong to:
- *
- *     resources/
- *     hardware/
- *     compile/
- *     execution/
- *     scheduling/
- *     runtime capability models
+ * This grammar therefore contains no gate catalogue and no physical-qubit
+ * representation.
  *
  * ============================================================================
- *
- * POCO-REAF
+ * HDL / HARDWARE CONTRACT
  * ============================================================================
  *
- * Generation MUST preserve:
+ * Generated HDL or hardware-intent source re-enters the canonical HDL and
+ * hardware semantic systems.
+ *
+ * This file MUST NOT encode:
+ *
+ *     bus widths;
+ *     register widths;
+ *     device counts;
+ *     FPGA capacities;
+ *     ASIC cell counts;
+ *     memory limits;
+ *     topology sizes;
+ *     processor counts;
+ *     accelerator counts.
+ *
+ * ============================================================================
+ * RESOURCE / CAPABILITY CONTRACT
+ * ============================================================================
+ *
+ * Generation itself does not discover resources.
+ *
+ * A generator MAY be semantically associated with:
+ *
+ *     capabilities;
+ *     requirements;
+ *     constraints;
+ *     budgets;
+ *     policies;
+ *     effects;
+ *
+ * but those are semantic properties.
+ *
+ * The parser merely preserves the syntactic generation boundary.
+ *
+ * ============================================================================
+ * EFFECT CONTRACT
+ * ============================================================================
+ *
+ * Generation may be classified downstream with effects such as:
+ *
+ *     code_generation
+ *     reflection
+ *     compile_time
+ *     native
+ *     foreign
+ *     IO
+ *     network
+ *     randomness
+ *     environment
+ *     target_dependency
+ *
+ * The grammar does not automatically grant any of these effects.
+ *
+ * ============================================================================
+ * DETERMINISM CONTRACT
+ * ============================================================================
+ *
+ * The grammar itself is deterministic.
+ *
+ * Generation determinism is a semantic/compiler property.
+ *
+ * Pure generation SHOULD be reproducible for identical:
+ *
+ *     source;
+ *     generator semantics;
+ *     inputs;
+ *     language version;
+ *     relevant dialect configuration.
+ *
+ * External state MUST NOT silently become part of program meaning.
+ *
+ * If generation depends on:
+ *
+ *     time;
+ *     randomness;
+ *     environment;
+ *     filesystem;
+ *     network;
+ *     target capabilities;
+ *     resource availability;
+ *
+ * semantic/effect/capability analysis must record that dependency.
+ *
+ * ============================================================================
+ * PROVENANCE CONTRACT
+ * ============================================================================
+ *
+ * Generated structures must remain traceable to their source generation site.
+ *
+ * Provenance is implemented outside this grammar.
+ *
+ * This grammar may consume canonical attributes that carry provenance
+ * metadata, but it does not define a second provenance system.
+ *
+ * ============================================================================
+ * SECURITY CONTRACT
+ * ============================================================================
+ *
+ * Parsing generation syntax performs no generation.
+ *
+ * This grammar performs:
+ *
+ *     - no filesystem access;
+ *     - no network access;
+ *     - no environment access;
+ *     - no process execution;
+ *     - no hardware discovery;
+ *     - no credential access;
+ *     - no runtime execution.
+ *
+ * Any authorized compile-time execution belongs to the compile-time semantic
+ * subsystem and must be governed by effects, capabilities, resources, and
+ * policies.
+ *
+ * ============================================================================
+ * SCALABILITY CONTRACT
+ * ============================================================================
+ *
+ * There is no language-level finite limit on:
+ *
+ *     - generation inputs;
+ *     - generated declarations;
+ *     - generated statements;
+ *     - generated expressions;
+ *     - generation nesting;
+ *     - generation requests;
+ *     - generated source size.
+ *
+ * Implementation limits MAY exist for:
+ *
+ *     - memory;
+ *     - compilation time;
+ *     - recursion;
+ *     - generated artifact size;
+ *     - evaluation steps;
+ *     - cancellation;
+ *     - diagnostic volume.
+ *
+ * Those are implementation/resource policies and MUST NOT become language
+ * constants.
+ *
+ * ============================================================================
+ * POCO-REAF CONTRACT
+ * ============================================================================
+ *
+ * Generation must preserve:
  *
  *     Program Once
  *          |
  *          v
- *     stable source semantics
+ *     portable source meaning
  *          |
  *          v
- *     deterministic / explicitly classified generation
+ *     generation semantics
  *          |
  *          v
- *     generated language structure
+ *     canonical semantic model
  *          |
  *          v
- *     canonical semantic representation
+ *     target-independent IR
  *          |
  *          v
- *     target-independent compilation
- *          |
- *          v
- *     target realization
+ *     target-specific realization
  *
- * A generator MUST NOT silently turn the compiler host into part of the
- * permanent meaning of the source program.
- *
- * If generation intentionally depends on external state, that dependency must
- * be visible to semantic/effect/capability analysis.
+ * A generator must not silently specialize source meaning to the compiler
+ * host, one processor, one QPU, one GPU, one FPGA, one cluster, or any other
+ * fixed machine.
  *
  * ============================================================================
- *
- * SECURITY
- * ============================================================================
- *
- * Parsing generation syntax performs NO generation.
- *
- * The parser MUST NOT:
- *
- *     - execute generated code;
- *     - execute host code;
- *     - access the filesystem;
- *     - access the network;
- *     - inspect environment variables;
- *     - inspect credentials;
- *     - inspect arbitrary memory;
- *     - inspect hardware;
- *     - contact a QPU;
- *     - contact a GPU;
- *     - contact an FPGA;
- *     - spawn processes;
- *     - download packages;
- *     - mutate compiler configuration.
- *
- * Any such behavior, if the language permits it at all, requires explicit
- * semantic capabilities and belongs outside the grammar.
- *
- * ============================================================================
- *
- * DETERMINISM
- * ============================================================================
- *
- * The syntax is deterministic.
- *
- * Generation determinism is a semantic/compiler property.
- *
- * Pure deterministic generators SHOULD produce equivalent generated semantic
- * structures for equivalent inputs.
- *
- * Generators depending on:
- *
- *     - time;
- *     - randomness;
- *     - external state;
- *     - environment;
- *     - target capabilities;
- *     - resource availability;
- *
- * MUST be classified by semantic/effect/capability analysis.
- *
- * The grammar does not silently authorize those dependencies.
- *
- * ============================================================================
- *
- * PROVENANCE
- * ============================================================================
- *
- * Generated structures must remain traceable to:
- *
- *     - the generating source;
- *     - the generation site;
- *     - the semantic inputs;
- *     - the generator identity/version where applicable.
- *
- * Provenance storage is NOT implemented here.
- *
- * This grammar only permits explicit source-level provenance metadata where
- * the canonical attribute system permits it.
- *
- * ============================================================================
- *
- * SCALABILITY
- * ============================================================================
- *
- * No finite language-level limit is imposed on:
- *
- *     - generated declarations;
- *     - generated expressions;
- *     - generated statements;
- *     - generation blocks;
- *     - nested generation constructs;
- *     - generation inputs;
- *     - generation results.
- *
- * Compiler resource budgets MAY exist for:
- *
- *     - memory;
- *     - CPU time;
- *     - evaluation steps;
- *     - generated source size;
- *     - generated semantic graph size;
- *     - cancellation;
- *     - recursion protection.
- *
- * Such budgets are implementation policy and MUST NOT become grammar
- * semantics.
- *
- * ============================================================================
- *
  * RUST CONTRACT
  * ============================================================================
  *
- * Compiler/frontend implementation target:
+ * Rust implementation baseline:
  *
- *     Rust 1.97
- *     Rust 1.97.1
+ *     Rust 1.97 or later
+ *     Rust 2021 or later where repository policy permits
  *
- * Generated parser integration MUST use safe Rust only.
+ * Grammar integration requires:
  *
- * This grammar contains:
+ *     - safe Rust;
+ *     - no unsafe blocks;
+ *     - no embedded Rust actions;
+ *     - no embedded semantic predicates requiring Rust;
+ *     - no host execution from grammar rules.
  *
- *     - no Rust actions;
- *     - no semantic predicates;
- *     - no unsafe code;
- *     - no filesystem operations;
- *     - no network operations;
- *     - no execution logic.
+ * The existing repository uses ANTLR-compatible Rust generation/runtime
+ * infrastructure; grammar generation must remain target-agnostic.
  *
  * ============================================================================
- *
- * COMPOSITION CONTRACT
+ * PUBLIC RULE CONTRACT
  * ============================================================================
  *
- * This is a parser grammar component.
+ * This file exports exactly these generation contracts:
  *
- * It is expected to be composed into the authoritative Zamani parser.
+ *     generationDeclarationCore
+ *     generationExpressionCore
+ *     generationStatementCore
  *
- * It intentionally consumes canonical parser rules instead of redefining
- * them.
+ * Additional helper rules are private to this grammar.
  *
- * Required canonical rules:
+ * ============================================================================
+ * INTEGRATION WITH METAPROGRAMMING
+ * ============================================================================
  *
- *     expression
- *     blockExpression
- *     statement
- *     item
- *     identifier
- *     typeExpression
- *     pattern
- *     attribute
- *     genericParameters
+ * grammar/metaprogramming/metaprogramming.g4 must import this grammar.
  *
- * The authoritative parser composition layer determines where each generation
- * entry point is legal.
+ * It must expose:
  *
+ *     generationDeclaration
+ *     generationExpression
+ *     generationStatement
+ *
+ * through:
+ *
+ *     generationDeclarationCore
+ *     generationExpressionCore
+ *     generationStatementCore
+ *
+ * This prevents the composition grammar from depending on accidental helper
+ * rules.
+ *
+ * ============================================================================
+ * INTEGRATION WITH EXPRESSIONS
+ * ============================================================================
+ *
+ * `generationExpressionCore` consumes the canonical `expression` rule.
+ *
+ * It does not define an expression grammar.
+ *
+ * ============================================================================
+ * INTEGRATION WITH DECLARATIONS
+ * ============================================================================
+ *
+ * `generationDeclarationCore` consumes the canonical `item` rule.
+ *
+ * It does not define declaration syntax.
+ *
+ * ============================================================================
+ * INTEGRATION WITH STATEMENTS
+ * ============================================================================
+ *
+ * `generationStatementCore` consumes the canonical `statement` rule.
+ *
+ * It does not define statement syntax.
+ *
+ * ============================================================================
+ * INTEGRATION WITH QUOTATION
+ * ============================================================================
+ *
+ * Quotation remains owned by:
+ *
+ *     grammar/metaprogramming/quotation.g4
+ *
+ * Generation may consume quotation-derived semantic values, but quotation
+ * syntax is not duplicated here.
+ *
+ * ============================================================================
+ * INTEGRATION WITH REFLECTION / INTROSPECTION
+ * ============================================================================
+ *
+ * Reflection and introspection remain independent facilities.
+ *
+ * They may provide metadata to a generation semantic operation, but this file
+ * does not implement reflection or introspection.
+ *
+ * ============================================================================
+ * INTEGRATION WITH SPECIALIZATION
+ * ============================================================================
+ *
+ * Specialization may consume generated structures.
+ *
+ * Generation does not choose a target implementation.
+ *
+ * ============================================================================
+ * INTEGRATION WITH COMPILE-TIME EXECUTION
+ * ============================================================================
+ *
+ * Compile-time execution may evaluate a generation-producing computation.
+ *
+ * This file does not evaluate anything.
+ *
+ * ============================================================================
+ * INTEGRATION WITH EFFECTS
+ * ============================================================================
+ *
+ * Generation is semantically associated with the repository's code-generation
+ * effect model.
+ *
+ * This grammar does not create an effect node itself.
+ *
+ * ============================================================================
+ * INTEGRATION WITH RESOURCES / CAPABILITIES
+ * ============================================================================
+ *
+ * Generated source may eventually contain resource requirements and
+ * capabilities, but those are parsed by their owning grammars after the
+ * generated source re-enters the canonical frontend.
+ *
+ * ============================================================================
+ * INTEGRATION WITH VALIDATION / CONTRACTS
+ * ============================================================================
+ *
+ * Generated source must undergo the same:
+ *
+ *     structural validation;
+ *     type checking;
+ *     effect checking;
+ *     capability checking;
+ *     resource analysis;
+ *     contract checking;
+ *     policy checking;
+ *     provenance validation
+ *
+ * as ordinary source.
+ *
+ * ============================================================================
+ * INTEGRATION WITH IR
+ * ============================================================================
+ *
+ * This grammar produces no IR.
+ *
+ * Generated structures eventually enter the normal semantic pipeline:
+ *
+ *     generated source
+ *          |
+ *          v
+ *     domain-neutral AST
+ *          |
+ *          v
+ *     semantic model
+ *          |
+ *          +----------------------+
+ *          |                      |
+ *          v                      v
+ *     canonical IR          quantum::ir
+ *
+ * depending on the generated program structure.
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * ============================================================================
+ * ANTLR COMPONENT
  * ============================================================================
  */
 
@@ -480,420 +673,173 @@ options {
 }
 
 
-/* ============================================================================
- * 1. PRIMARY GENERATION ENTRY POINT
+/*
+ * ============================================================================
+ * 1. GENERATION EXPRESSION
  * ============================================================================
  *
- * The generation keyword is the existing canonical SYNTHESIZE token.
- *
- * Examples of the conceptual language surface:
+ * Canonical source form:
  *
  *     synthesize (expression)
  *
- *     synthesize { ... }
+ * The expression is ordinary Zamani expression syntax.
  *
- *     synthesize type(TypeExpression)
+ * The parser does not execute it.
  *
- *     synthesize item(...)
- *
- *     synthesize statement(...)
- *
- *     synthesize program(...)
- *
- * The parser only establishes the syntactic category.
- * Semantic analysis determines whether the result is actually generatable.
- * ========================================================================== */
+ * Semantic analysis decides whether it is a valid generation input/result.
+ */
 
-generation
-    : SYNTHESIZE generationForm
+generationExpressionCore
+    : SYNTHESIZE
+      LPAREN
+      expression
+      RPAREN
     ;
 
 
-/* ============================================================================
- * 2. GENERATION FORM DISPATCH
+/*
+ * ============================================================================
+ * 2. GENERATION TYPE
  * ============================================================================
  *
- * The forms are deliberately explicit so generated output has a declared
- * syntactic category.
+ * This helper is intentionally private.
  *
- * This avoids a universal "generate anything" production whose result would
- * become ambiguous to tooling and semantic analysis.
- * ========================================================================== */
+ * Type generation is represented as a generation expression whose semantic
+ * result category is a type.
+ *
+ * The canonical type grammar owns typeExpression.
+ */
 
-generationForm
-    : generationExpression
-    | generationType
-    | generationStatement
-    | generationItem
-    | generationBlock
-    | generationProgramFragment
-    ;
-
-
-/* ============================================================================
- * 3. GENERATED EXPRESSION
- * ============================================================================
- *
- * Syntax:
- *
- *     synthesize (expression)
- *
- * The expression is an input to the generation mechanism.
- *
- * The expression itself is NOT executed by the parser.
- *
- * Semantic analysis determines whether the expression is compile-time
- * evaluable and whether its result can be interpreted as a generated
- * expression.
- * ========================================================================== */
-
-generationExpression
-    : LPAREN expression RPAREN
-    ;
-
-
-/* ============================================================================
- * 4. GENERATED TYPE
- * ============================================================================
- *
- * Syntax:
- *
- *     synthesize type (TypeExpression)
- *
- * `type` is the existing canonical TYPE token.
- *
- * The type expression remains owned by the canonical type grammar.
- * ========================================================================== */
-
-generationType
-    : TYPE
+generationTypeCore
+    : SYNTHESIZE
+      TYPE
       LPAREN
       typeExpression
       RPAREN
     ;
 
 
-/* ============================================================================
- * 5. GENERATED STATEMENT
+/*
+ * ============================================================================
+ * 3. GENERATION DECLARATION
  * ============================================================================
  *
- * Syntax:
+ * The declaration context is supplied by the metaprogramming composition
+ * grammar.
  *
- *     synthesize statement ( ... )
+ * Canonical source form:
  *
- * The body is represented using canonical statement syntax.
+ *     synthesize {
+ *         <canonical item(s)>
+ *     }
  *
- * No second statement grammar is created here.
- * ========================================================================== */
+ * `item` remains owned by the canonical declaration composition.
+ *
+ * Zero or more items are allowed so an empty generated declaration fragment
+ * remains syntactically representable; semantic validation may reject it when
+ * a non-empty generated declaration is required.
+ */
 
-generationStatement
-    : STATEMENT_KEYWORD
-      LPAREN
-      statement
-      RPAREN
+generationDeclarationCore
+    : SYNTHESIZE
+      LBRACE
+      item*
+      RBRACE
     ;
 
 
 /*
- * --------------------------------------------------------------------------
- * STATEMENT CATEGORY TOKEN
- * --------------------------------------------------------------------------
+ * ============================================================================
+ * 4. GENERATION STATEMENT
+ * ============================================================================
  *
- * The current canonical lexer does not define a STATEMENT keyword.
+ * Statement generation uses the same canonical source boundary but is exposed
+ * through a distinct parser entry point.
  *
- * Therefore this grammar does NOT reference an invented STATEMENT token.
- *
- * A generated statement is instead represented structurally through a
- * generation block:
+ * Canonical source form:
  *
  *     synthesize {
- *         statement
+ *         <canonical statement(s)>
  *     }
  *
- * The rule below is retained as a named semantic integration boundary only
- * through the block-based form.
+ * The distinction between declaration generation and statement generation is
+ * made by the composition context:
  *
- * It is deliberately not reachable from `generationForm` until a canonical
- * lexical/syntactic category is established.
+ *     declaration -> generationDeclarationCore
+ *     statement   -> generationStatementCore
  *
- * This prevents an accidental dependency on a nonexistent token.
- * --------------------------------------------------------------------------
+ * This avoids inventing a STATEMENT lexer token.
  */
 
-
-/* ============================================================================
- * 6. GENERATED ITEM / DECLARATION
- * ============================================================================
- *
- * Generated declarations are represented by the canonical `item` rule.
- *
- * The source-level wrapper is:
- *
- *     synthesize item
- *
- * where `item` is a syntactic placeholder in this grammar composition model.
- *
- * Because the current canonical parser does not expose an ITEM keyword,
- * this grammar does not invent one.
- *
- * The production therefore uses a dedicated parenthesized canonical item
- * boundary only when the authoritative parser exposes the corresponding
- * category.
- *
- * To remain compilable against the current lexer, generated declarations are
- * expressed through `generationBlock` and canonical item syntax inside it.
- * ========================================================================== */
-
-generationItem
-    : generationItemBody
-    ;
-
-
-generationItemBody
-    : LBRACE
-      item+
+generationStatementCore
+    : SYNTHESIZE
+      LBRACE
+      statement*
       RBRACE
     ;
 
 
-/* ============================================================================
- * 7. GENERATED BLOCK
+/*
+ * ============================================================================
+ * 5. NAMED GENERATION REQUEST
  * ============================================================================
  *
- * Syntax:
+ * This is a private extensibility boundary.
  *
- *     synthesize {
- *         ...
- *     }
+ * It allows future semantic categories without requiring one permanent
+ * lexer keyword per domain.
  *
- * This is the principal scalable generation form.
+ * Conceptual forms:
  *
- * The block is deliberately not duplicated as a second block grammar.
+ *     synthesize category(...)
  *
- * Its contents remain canonical Zamani source structure.
- * ========================================================================== */
-
-generationBlock
-    : blockExpression
-    ;
-
-
-/* ============================================================================
- * 8. GENERATED PROGRAM FRAGMENT
- * ============================================================================
+ *     synthesize category { ... }
  *
- * A program fragment is a sequence of canonical source elements.
+ * The category remains an identifier rather than a hard-coded enumeration.
  *
- * Because `sourceElement` belongs to the authoritative parser, this rule is
- * intended to be integrated at composition time.
+ * The semantic layer decides whether the category is valid.
  *
- * No fixed number of generated elements is imposed.
- * ========================================================================== */
+ * This rule deliberately does not claim that every category is automatically
+ * supported.
+ */
 
-generationProgramFragment
-    : LBRACE
-      generationSourceElement*
-      RBRACE
-    ;
-
-
-generationSourceElement
-    : attribute
-    | item
-    | statement
-    ;
-
-
-/* ============================================================================
- * 9. EXPLICIT GENERATION RESULT
- * ============================================================================
- *
- * Named boundary for semantic tooling.
- *
- * This does not introduce another representation.
- *
- * The result remains a canonical expression-level value.
- * ========================================================================== */
-
-generationResult
-    : expression
-    ;
-
-
-/* ============================================================================
- * 10. GENERATED EXPRESSION RESULT
- * ============================================================================
- *
- * A generated expression must ultimately be represented through the normal
- * expression pipeline.
- * ========================================================================== */
-
-generatedExpression
-    : expression
-    ;
-
-
-/* ============================================================================
- * 11. GENERATED TYPE RESULT
- * ============================================================================
- *
- * A generated type must ultimately be represented through the canonical type
- * system.
- * ========================================================================== */
-
-generatedType
-    : typeExpression
-    ;
-
-
-/* ============================================================================
- * 12. GENERATED STATEMENT RESULT
- * ============================================================================
- *
- * A generated statement must ultimately be represented by the canonical
- * statement grammar.
- * ========================================================================== */
-
-generatedStatement
-    : statement
-    ;
-
-
-/* ============================================================================
- * 13. GENERATED ITEM RESULT
- * ============================================================================
- *
- * A generated item must ultimately be represented by the canonical item
- * grammar.
- * ========================================================================== */
-
-generatedItem
-    : item
-    ;
-
-
-/* ============================================================================
- * 14. GENERATED SOURCE RESULT
- * ============================================================================
- *
- * A generated source fragment consists only of canonical source elements.
- *
- * No finite number of elements is imposed.
- * ========================================================================== */
-
-generatedSource
-    : generatedSourceElement*
-    ;
-
-
-generatedSourceElement
-    : attribute
-    | item
-    | statement
-    ;
-
-
-/* ============================================================================
- * 15. GENERATION INPUT
- * ============================================================================
- *
- * Generation inputs are ordinary expressions.
- *
- * The semantic layer decides whether an expression is:
- *
- *     - compile-time available;
- *     - pure;
- *     - effectful;
- *     - capability-dependent;
- *     - target-dependent;
- *     - resource-dependent;
- *     - otherwise valid.
- *
- * The parser makes none of those decisions.
- * ========================================================================== */
-
-generationInput
-    : expression
-    ;
-
-
-/* ============================================================================
- * 16. GENERATION INPUT LIST
- * ============================================================================
- *
- * No fixed number of generation inputs.
- * ========================================================================== */
-
-generationInputList
-    : generationInput
-      (COMMA generationInput)*
-      COMMA?
-    ;
-
-
-/* ============================================================================
- * 17. NAMED GENERATION INPUT
- * ============================================================================
- *
- * This provides a stable syntactic boundary for generators that consume
- * explicitly named compile-time inputs.
- *
- * Example conceptual form:
- *
- *     name: expression
- *
- * ========================================================================== */
-
-generationNamedInput
+generationCategory
     : identifier
-      COLON
-      expression
     ;
 
 
-/* ============================================================================
- * 18. NAMED GENERATION INPUT LIST
- * ============================================================================
- */
-
-generationNamedInputList
-    : generationNamedInput
-      (COMMA generationNamedInput)*
-      COMMA?
-    ;
-
-
-/* ============================================================================
- * 19. GENERATION ARGUMENTS
- * ============================================================================
- *
- * Arguments are ordinary expressions.
- *
- * This grammar does not duplicate the canonical argumentList because
- * generation-specific tooling may need a distinct semantic boundary.
- *
- * The underlying values remain canonical expressions.
- * ========================================================================== */
-
-generationArguments
-    : LPAREN
-      generationInputList?
+generationCategoryRequest
+    : SYNTHESIZE
+      generationCategory
+      LPAREN
+      generationCategoryValue
       RPAREN
     ;
 
 
-/* ============================================================================
- * 20. GENERATION OPTIONS
+generationCategoryValue
+    : expression
+    | typeExpression
+    | qualifiedName
+    ;
+
+
+/*
+ * ============================================================================
+ * 6. GENERATION OPTIONS
  * ============================================================================
  *
- * Generation options are intentionally represented as ordinary named
- * expressions rather than a fixed keyword enumeration.
+ * Generation options are semantic metadata, not a fixed keyword catalogue.
  *
- * This keeps the grammar extensible without requiring a lexer change for
- * every future generation policy.
+ * Example conceptual form:
  *
- * Semantic validation owns the allowed option vocabulary.
- * ========================================================================== */
+ *     optionName: expression
+ *
+ * The semantic layer owns the valid option vocabulary.
+ *
+ * This prevents every future generation policy from requiring a lexer or
+ * grammar modification.
+ */
 
 generationOptions
     : LBRACE
@@ -910,339 +856,246 @@ generationOption
     ;
 
 
-/* ============================================================================
- * 21. GENERATION REQUEST
+/*
+ * ============================================================================
+ * 7. GENERATION INPUT
  * ============================================================================
  *
- * Named integration boundary for compiler tooling.
+ * Ordinary expressions remain the canonical input representation.
+ */
+
+generationInput
+    : expression
+    ;
+
+
+generationInputList
+    : generationInput
+      (COMMA generationInput)*
+      COMMA?
+    ;
+
+
+/*
+ * ============================================================================
+ * 8. GENERATION NAMED INPUT
+ * ============================================================================
  *
- * A request combines a generation form with optional generation options.
+ * Named inputs allow generators to expose stable semantic parameter names
+ * without hard-coding their complete vocabulary into the lexer.
  *
- * This rule is useful to AST builders and diagnostics without forcing the
- * syntax of every generation facility into one monolithic production.
- * ========================================================================== */
+ * Example:
+ *
+ *     source: expression
+ *
+ *     model: expression
+ *
+ *     policy: expression
+ *
+ * Names are semantically validated downstream.
+ */
+
+generationNamedInput
+    : identifier
+      COLON
+      expression
+    ;
+
+
+generationNamedInputList
+    : generationNamedInput
+      (COMMA generationNamedInput)*
+      COMMA?
+    ;
+
+
+/*
+ * ============================================================================
+ * 9. GENERATION REQUEST
+ * ============================================================================
+ *
+ * A generation request is a semantic grouping of a category and its inputs.
+ *
+ * This is not a second execution system.
+ */
 
 generationRequest
-    : SYNTHESIZE
-      generationRequestBody
+    : generationCategoryRequest
     ;
 
 
-generationRequestBody
-    : generationRequestExpression
-    | generationRequestType
-    | generationRequestBlock
-    ;
-
-
-generationRequestExpression
-    : LPAREN
-      expression
-      RPAREN
-      generationOptions?
-    ;
-
-
-generationRequestType
-    : TYPE
-      LPAREN
-      typeExpression
-      RPAREN
-      generationOptions?
-    ;
-
-
-generationRequestBlock
-    : blockExpression
-      generationOptions?
-    ;
-
-
-/* ============================================================================
- * 22. GENERATION EXPRESSION BRIDGE
+/*
+ * ============================================================================
+ * 10. GENERATION RESULT CATEGORY
  * ============================================================================
  *
- * This is the integration point for expressions/compile-time.g4.
+ * The result category is source-level, not hardware-level.
  *
- * That grammar owns expression-level compile-time semantics.
+ * Examples of semantic categories may include:
  *
- * This grammar only identifies a generated-expression boundary.
- * ========================================================================== */
+ *     expression
+ *     type
+ *     declaration
+ *     statement
+ *     module
+ *     function
+ *     quantum
+ *     hdl
+ *     hardware
+ *     data
+ *     distributed
+ *
+ * No list is encoded here.
+ */
 
-generationExpressionBridge
-    : generationExpression
+generationResultCategory
+    : identifier
     ;
 
 
-/* ============================================================================
- * 23. GENERATION BLOCK BRIDGE
+/*
+ * ============================================================================
+ * 11. GENERATION ATTRIBUTE
  * ============================================================================
  *
- * Compile-time execution belongs to compile-time-execution.g4.
+ * Generation may consume canonical attributes.
  *
- * This rule deliberately consumes a canonical block instead of defining a
- * second execution language.
- * ========================================================================== */
-
-generationBlockBridge
-    : generationBlock
-    ;
-
-
-/* ============================================================================
- * 24. GENERATION ATTRIBUTE BRIDGE
- * ============================================================================
- *
- * Attributes remain owned by the canonical attribute grammar.
- *
- * Generation-specific attributes are therefore ordinary canonical attributes.
- * ========================================================================== */
+ * The attribute grammar remains the sole owner of attribute syntax.
+ */
 
 generationAttribute
     : attribute
     ;
 
 
-/* ============================================================================
- * 25. GENERATION METADATA
+/*
  * ============================================================================
- *
- * Metadata is represented using the existing attribute system.
- *
- * This rule does not create a second metadata representation.
- * ========================================================================== */
-
-generationMetadata
-    : attribute
-    ;
-
-
-/* ============================================================================
- * 26. GENERATION PROVENANCE
- * ============================================================================
- *
- * Provenance annotations are syntactically ordinary attributes.
- *
- * Their semantic interpretation belongs to compiler provenance infrastructure.
- * ========================================================================== */
-
-generationProvenance
-    : attribute
-    ;
-
-
-/* ============================================================================
- * 27. GENERATION TARGET CATEGORY
- * ============================================================================
- *
- * The target category describes WHAT kind of language structure is generated,
- * not WHERE it will execute.
- *
- * This rule is intentionally identifier-based so future domains do not require
- * permanent lexer growth.
- *
- * Examples of semantic categories may include:
- *
- *     expression
- *     type
- *     function
- *     module
- *     quantum
- *     circuit
- *     hardware
- *     hdl
- *     distributed
- *     data
- *     ai
- *
- * These names are semantic vocabulary, not hard-coded grammar limitations.
- * ========================================================================== */
-
-generationTargetCategory
-    : identifier
-    ;
-
-
-/* ============================================================================
- * 28. GENERATION TARGET
- * ============================================================================
- *
- * A generation target identifies a source-level category.
- *
- * It MUST NOT identify a physical machine unless the semantic target model
- * explicitly permits such a dependency.
- * ========================================================================== */
-
-generationTarget
-    : generationTargetCategory
-    ;
-
-
-/* ============================================================================
- * 29. GENERATION TARGETED REQUEST
- * ============================================================================
- *
- * Explicit target category plus a generation body.
- *
- * Example conceptual syntax:
- *
- *     synthesize quantum { ... }
- *
- *     synthesize hdl { ... }
- *
- *     synthesize expression { ... }
- *
- * The semantic layer determines whether the category exists and whether the
- * generated structure is valid for it.
- * ========================================================================== */
-
-generationTargetedRequest
-    : SYNTHESIZE
-      generationTarget
-      generationBlock
-    ;
-
-
-/* ============================================================================
- * 30. GENERATION DECLARATION BODY
- * ============================================================================
- *
- * A declaration-generation body consists of canonical source items.
- * ========================================================================== */
-
-generationDeclarationBody
-    : LBRACE
-      item*
-      RBRACE
-    ;
-
-
-/* ============================================================================
- * 31. GENERATION STATEMENT BODY
- * ============================================================================
- *
- * A statement-generation body consists of canonical statements.
- * ========================================================================== */
-
-generationStatementBody
-    : LBRACE
-      statement*
-      RBRACE
-    ;
-
-
-/* ============================================================================
- * 32. GENERATION EXPRESSION BODY
- * ============================================================================
- *
- * An expression-generation body remains canonical expression syntax.
- * ========================================================================== */
-
-generationExpressionBody
-    : LPAREN
-      expression
-      RPAREN
-    ;
-
-
-/* ============================================================================
- * 33. GENERATION TYPE BODY
+ * 12. GENERATION NAME
  * ============================================================================
  */
-
-generationTypeBody
-    : TYPE
-      LPAREN
-      typeExpression
-      RPAREN
-    ;
-
-
-/* ============================================================================
- * 34. GENERATION PATTERN BODY
- * ============================================================================
- *
- * Pattern syntax belongs to the canonical parser.
- *
- * Generation can consume a pattern as data only when semantic analysis
- * authorizes that use.
- * ========================================================================== */
-
-generationPattern
-    : pattern
-    ;
-
-
-/* ============================================================================
- * 35. GENERATION NAME
- * ============================================================================
- *
- * Canonical identifier ownership is preserved.
- * ========================================================================== */
 
 generationName
     : identifier
     ;
 
 
-/* ============================================================================
- * 36. GENERATION QUALIFIED NAME BRIDGE
+/*
+ * ============================================================================
+ * 13. GENERATION PATH
  * ============================================================================
  *
- * Qualified names remain owned by the core/name grammar.
- *
- * The composed parser may replace this bridge with its canonical qualifiedName
- * rule where available.
- *
- * This local structural form does not introduce a new identifier model.
- * ========================================================================== */
+ * Qualified-name syntax remains owned by the canonical name grammar.
+ */
 
-generationQualifiedName
-    : identifier
-      (DOUBLE_COLON identifier)*
+generationPath
+    : qualifiedName
     ;
 
 
-/* ============================================================================
- * 37. GENERATION GENERIC PARAMETERS BRIDGE
+/*
+ * ============================================================================
+ * 14. GENERATION TYPE
  * ============================================================================
  *
- * Generic syntax remains owned by the canonical generic grammar.
- * ========================================================================== */
+ * Public semantic bridge to the canonical type grammar.
+ */
 
-generationGenericParameters
-    : genericParameters
+generationType
+    : typeExpression
     ;
 
 
-/* ============================================================================
- * 38. GENERATION SOURCE FRAGMENT ELEMENT
+/*
+ * ============================================================================
+ * 15. GENERATION PATTERN
  * ============================================================================
  *
- * A generated source fragment may contain any canonical source element.
- * ========================================================================== */
+ * Pattern syntax remains owned by the canonical pattern grammar.
+ */
 
-generationFragmentElement
-    : attribute
-    | item
+generationPattern
+    : pattern
+    ;
+
+
+/*
+ * ============================================================================
+ * 16. GENERATION ARGUMENTS
+ * ============================================================================
+ *
+ * This is a semantic grouping boundary.
+ *
+ * It does not replace the canonical function argument grammar because
+ * generation inputs may be consumed by a generator rather than an ordinary
+ * function call.
+ */
+
+generationArguments
+    : LPAREN
+      generationInputList?
+      RPAREN
+    ;
+
+
+/*
+ * ============================================================================
+ * 17. GENERATION NAMED ARGUMENTS
+ * ============================================================================
+ */
+
+generationNamedArguments
+    : LPAREN
+      generationNamedInputList?
+      RPAREN
+    ;
+
+
+/*
+ * ============================================================================
+ * 18. GENERATION BODY
+ * ============================================================================
+ *
+ * A body is deliberately expressed through canonical source constructs.
+ *
+ * The two context-specific public entry points remain:
+ *
+ *     generationDeclarationCore
+ *     generationStatementCore
+ *
+ * This helper is not a third competing public generation entry point.
+ */
+
+generationBody
+    : LBRACE
+      generationBodyElement*
+      RBRACE
+    ;
+
+
+generationBodyElement
+    : item
     | statement
     ;
 
 
-/* ============================================================================
- * 39. GENERATION SOURCE FRAGMENT
+/*
+ * ============================================================================
+ * 19. GENERATION SOURCE FRAGMENT
  * ============================================================================
  *
- * No fixed fragment size.
- * ========================================================================== */
+ * A source fragment is a semantic grouping of canonical source constructs.
+ *
+ * It introduces no alternate source language.
+ */
 
-generationFragment
-    : generationFragmentElement*
+generationSourceFragment
+    : generationBody
     ;
 
 
-/* ============================================================================
- * 40. GENERATION DECLARATION FRAGMENT
+/*
+ * ============================================================================
+ * 20. GENERATION DECLARATION FRAGMENT
  * ============================================================================
  */
 
@@ -1251,8 +1104,9 @@ generationDeclarationFragment
     ;
 
 
-/* ============================================================================
- * 41. GENERATION STATEMENT FRAGMENT
+/*
+ * ============================================================================
+ * 21. GENERATION STATEMENT FRAGMENT
  * ============================================================================
  */
 
@@ -1261,534 +1115,160 @@ generationStatementFragment
     ;
 
 
-/* ============================================================================
- * 42. GENERATION EXPRESSION FRAGMENT
+/*
  * ============================================================================
- *
- * An expression fragment is a single canonical expression.
- *
- * Larger expression composition remains owned by the expression grammar.
- * ========================================================================== */
+ * 22. GENERATION EXPRESSION RESULT
+ * ============================================================================
+ */
 
-generationExpressionFragment
+generatedExpression
     : expression
     ;
 
 
-/* ============================================================================
- * 43. GENERATION TYPE FRAGMENT
+/*
+ * ============================================================================
+ * 23. GENERATION TYPE RESULT
  * ============================================================================
  */
 
-generationTypeFragment
+generatedType
     : typeExpression
     ;
 
 
-/* ============================================================================
- * 44. GENERATION RESULT CATEGORY
- * ============================================================================
- *
- * The category is semantic metadata.
- *
- * It is not an implementation-specific enumeration.
- * ========================================================================== */
-
-generationResultCategory
-    : identifier
-    ;
-
-
-/* ============================================================================
- * 45. GENERATION RESULT DECLARATION
- * ============================================================================
- *
- * Syntax:
- *
- *     result: expression
- *
- * This remains ordinary source-level metadata and is interpreted downstream.
- * ========================================================================== */
-
-generationResultDeclaration
-    : identifier
-      COLON
-      expression
-    ;
-
-
-/* ============================================================================
- * 46. GENERATION RESULT DECLARATION LIST
- * ============================================================================
- */
-
-generationResultDeclarationList
-    : generationResultDeclaration
-      (COMMA generationResultDeclaration)*
-      COMMA?
-    ;
-
-
-/* ============================================================================
- * 47. GENERATION CONFIGURATION
- * ============================================================================
- *
- * Configuration is data.
- *
- * It does not select hardware directly.
- * ========================================================================== */
-
-generationConfiguration
-    : LBRACE
-      generationConfigurationEntry*
-      RBRACE
-    ;
-
-
-generationConfigurationEntry
-    : identifier
-      (COLON expression)?
-      SEMI?
-    ;
-
-
-/* ============================================================================
- * 48. GENERATION POLICY
- * ============================================================================
- *
- * Policy names remain open identifiers.
- *
- * Examples that may be recognized semantically:
- *
- *     deterministic
- *     reproducible
- *     portable
- *     cacheable
- *     incremental
- *     isolated
- *
- * The grammar does not enumerate them.
- * ========================================================================== */
-
-generationPolicy
-    : identifier
-    ;
-
-
-/* ============================================================================
- * 49. GENERATION POLICY LIST
- * ============================================================================
- */
-
-generationPolicyList
-    : generationPolicy
-      (COMMA generationPolicy)*
-      COMMA?
-    ;
-
-
-/* ============================================================================
- * 50. GENERATION POLICY CLAUSE
- * ============================================================================
- *
- * Named semantic policy plus optional expression value.
- * ========================================================================== */
-
-generationPolicyClause
-    : identifier
-      (ASSIGN expression)?
-    ;
-
-
-/* ============================================================================
- * 51. GENERATION POLICY CLAUSE LIST
- * ============================================================================
- */
-
-generationPolicyClauseList
-    : generationPolicyClause
-      (COMMA generationPolicyClause)*
-      COMMA?
-    ;
-
-
-/* ============================================================================
- * 52. GENERATION CONTRACT
- * ============================================================================
- *
- * Generation contracts are represented through canonical expressions and
- * attributes. They are validated by semantic analysis.
- * ========================================================================== */
-
-generationContract
-    : attribute
-    | generationPolicyClause
-    ;
-
-
-/* ============================================================================
- * 53. GENERATION CONTRACT LIST
- * ============================================================================
- */
-
-generationContractList
-    : generationContract*
-    ;
-
-
-/* ============================================================================
- * 54. GENERATION SAFETY BOUNDARY
- * ============================================================================
- *
- * This rule is syntactic only.
- *
- * Safety is semantic.
- *
- * A generation construct does not implicitly receive host capabilities.
- * ========================================================================== */
-
-generationSafetyBoundary
-    : generation
-    ;
-
-
-/* ============================================================================
- * 55. GENERATION PORTABILITY BOUNDARY
- * ============================================================================
- *
- * Generation remains source-level and target-independent.
- * ========================================================================== */
-
-generationPortabilityBoundary
-    : generation
-    ;
-
-
-/* ============================================================================
- * 56. GENERATION QUANTUM BOUNDARY
- * ============================================================================
- *
- * Quantum generation remains ordinary source generation.
- *
- * The resulting quantum source is lowered through quantum semantic analysis
- * and ultimately quantum::ir.
- * ========================================================================== */
-
-generationQuantumBoundary
-    : generation
-    ;
-
-
-/* ============================================================================
- * 57. GENERATION HDL BOUNDARY
- * ============================================================================
- *
- * HDL generation remains source-level HDL structure.
- *
- * Physical synthesis and implementation are downstream concerns.
- * ========================================================================== */
-
-generationHdlBoundary
-    : generation
-    ;
-
-
-/* ============================================================================
- * 58. GENERATION HARDWARE BOUNDARY
- * ============================================================================
- *
- * Hardware generation must not imply a particular physical target.
- * ========================================================================== */
-
-generationHardwareBoundary
-    : generation
-    ;
-
-
-/* ============================================================================
- * 59. GENERATION CLASSICAL BOUNDARY
- * ============================================================================
- */
-
-generationClassicalBoundary
-    : generation
-    ;
-
-
-/* ============================================================================
- * 60. GENERATION DISTRIBUTED BOUNDARY
- * ============================================================================
- */
-
-generationDistributedBoundary
-    : generation
-    ;
-
-
-/* ============================================================================
- * 61. GENERATION AI / DATA BOUNDARY
- * ============================================================================
- */
-
-generationAiDataBoundary
-    : generation
-    ;
-
-
-/* ============================================================================
- * 62. GENERATION FINAL INTEGRATION CONTRACT
- * ============================================================================
- *
- * This rule is the principal named integration point exposed to the
- * metaprogramming aggregator.
- *
- * The authoritative parser may dispatch this rule from its metaprogramming
- * expression/item/statement integration points.
- * ========================================================================== */
-
-generationConstruct
-    : generation
-    | generationRequest
-    | generationTargetedRequest
-    ;
-
-
-/* ============================================================================
- * 63. SEMANTIC HANDOFF
- * ============================================================================
- *
- * Everything after this boundary belongs outside the grammar.
- *
- * Required semantic pipeline:
- *
- *     generationConstruct
- *          |
- *          v
- *     frontend AST
- *          |
- *          v
- *     generation semantic validation
- *          |
- *          +--> name resolution
- *          +--> type checking
- *          +--> effect checking
- *          +--> capability checking
- *          +--> provenance
- *          +--> determinism classification
- *          +--> resource-budget admission
- *          |
- *          v
- *     generated source/semantic structure
- *          |
- *          v
- *     normal Zamani semantic pipeline
- *          |
- *          +--> classical semantics
- *          +--> quantum semantics -> quantum::ir
- *          +--> HDL/hardware semantics
- *          +--> distributed semantics
- *          +--> AI/data semantics
- *          |
- *          v
- *     optimization / lowering / routing / scheduling / HAL
- *          |
- *          v
- *     runtime
- *
- * No generation rule in this file may directly bypass that pipeline.
- * ========================================================================== */
-
-generationSemanticHandoff
-    : generationConstruct
-    ;
-
-
-/* ============================================================================
- * 64. EXPLICIT NON-OWNERSHIP MARKERS
- * ============================================================================
- *
- * These bridge rules intentionally delegate to sibling facilities.
- * ========================================================================== */
-
-
 /*
- * Reflection remains owned by reflection.g4.
+ * ============================================================================
+ * 24. GENERATION DECLARATION RESULT
+ * ============================================================================
  */
-generationReflectionBridge
-    : generationInput
+
+generatedDeclaration
+    : item
     ;
 
 
 /*
- * Specialization remains owned by specialization.g4.
+ * ============================================================================
+ * 25. GENERATION STATEMENT RESULT
+ * ============================================================================
  */
-generationSpecializationBridge
-    : generationInput
+
+generatedStatement
+    : statement
     ;
 
 
 /*
- * Compile-time execution remains owned by compile-time-execution.g4.
+ * ============================================================================
+ * 26. GENERATION SOURCE RESULT
+ * ============================================================================
  */
-generationCompileTimeExecutionBridge
-    : generationInput
+
+generatedSource
+    : generationSourceFragment
     ;
 
 
 /*
- * Macro expansion remains owned by macros/.
+ * ============================================================================
+ * 27. GENERATION METADATA
+ * ============================================================================
+ *
+ * Metadata is represented through canonical attributes.
  */
-generationMacroBridge
-    : generationInput
+
+generationMetadata
+    : generationAttribute+
     ;
 
 
-/* ============================================================================
- * 65. HARD-CODING PROHIBITION
+/*
+ * ============================================================================
+ * 28. COMPLETION CONTRACT
  * ============================================================================
  *
- * No production grammar rule in this file may introduce:
+ * This file is DONE when:
  *
- *     - fixed hardware counts;
- *     - fixed quantum counts;
- *     - fixed memory sizes;
- *     - fixed topology;
- *     - fixed device IDs;
- *     - fixed addresses;
- *     - fixed execution widths;
- *     - fixed accelerator counts;
- *     - fixed deployment layouts.
+ * [x] It is a parser grammar.
  *
- * Numeric literals occurring in expressions remain ordinary language values.
+ * [x] It consumes tokenVocab=ZamaniLexer.
  *
- * Their meaning is determined by semantic typing and resource analysis.
+ * [x] It defines no lexer tokens.
  *
- * ============================================================================
+ * [x] It contains no embedded Rust.
  *
- * 66. PARSER ERROR CONTRACT
- * ============================================================================
+ * [x] It contains no semantic predicates.
  *
- * The parser must report malformed generation syntax through the normal ANTLR
- * diagnostic mechanism.
+ * [x] It contains no unsafe code.
  *
- * This grammar MUST NOT:
+ * [x] It does not execute generation.
  *
- *     - silently discard malformed generated structures;
- *     - turn invalid source into comments;
- *     - execute recovery code;
- *     - emit generated code;
- *     - print directly to stdout/stderr.
+ * [x] It does not define an AST implementation.
  *
- * Error representation belongs to the frontend diagnostic subsystem.
+ * [x] It does not define an IR.
  *
- * ============================================================================
+ * [x] It does not define quantum::ir.
  *
- * 67. AST CONTRACT
- * ============================================================================
+ * [x] It does not define hardware limits.
  *
- * The frontend AST should preserve, at minimum:
+ * [x] It does not enumerate quantum operations.
  *
- *     - generation source span;
- *     - generation category;
- *     - generation body;
- *     - generation inputs;
- *     - generation options;
- *     - attributes;
- *     - source ordering;
- *     - nested syntax;
- *     - provenance source location.
+ * [x] It does not enumerate hardware types.
  *
- * The parse tree itself is not the canonical AST.
+ * [x] It does not introduce STATEMENT_KEYWORD.
  *
- * ============================================================================
+ * [x] It exposes generationDeclarationCore.
  *
- * 68. IR CONTRACT
- * ============================================================================
+ * [x] It exposes generationExpressionCore.
  *
- * This grammar produces no IR.
+ * [x] It exposes generationStatementCore.
  *
- * Generated structures are lowered through normal semantic infrastructure.
+ * [x] It reuses canonical expression syntax.
  *
- * In particular:
+ * [x] It reuses canonical declaration syntax.
  *
- *     generated quantum source
- *          ->
- *     quantum semantic analysis
- *          ->
- *     quantum::ir
+ * [x] It reuses canonical statement syntax.
  *
- * never:
+ * [x] It keeps target realization outside the grammar.
  *
- *     generation grammar
- *          ->
- *     quantum::ir
+ * [x] It keeps resource/capability resolution outside the grammar.
  *
- * ============================================================================
+ * [x] It keeps provenance implementation outside the grammar.
  *
- * 69. RUNTIME CONTRACT
- * ============================================================================
+ * [x] It keeps policy evaluation outside the grammar.
  *
- * Generation is a compile-time/source-transformation concern.
+ * [x] It keeps compile-time execution outside the grammar.
  *
- * Runtime MUST NOT depend directly on this grammar.
+ * [x] It permits future domains without a fixed generation-category list.
  *
- * Runtime receives the resulting canonical semantic/compiled representation.
+ * [x] It imposes no language-level machine-size ceiling.
  *
- * ============================================================================
+ * Repository verification still required:
  *
- * 70. TOOLING CONTRACT
- * ============================================================================
+ * [ ] ANTLR generation succeeds for the complete canonical parser.
  *
- * Tooling may use this grammar to:
+ * [ ] All imported grammar rules resolve.
  *
- *     - syntax-highlight generation;
- *     - build parse trees;
- *     - produce diagnostics;
- *     - locate generation boundaries;
- *     - format generation constructs;
- *     - inspect source structure;
- *     - build IDE syntax trees.
+ * [ ] No rule collision exists in the assembled grammar.
  *
- * Tooling must not infer hardware behavior solely from this grammar.
+ * [ ] Metaprogramming imports this component exactly once.
  *
- * ============================================================================
+ * [ ] Expression composition reaches generationExpression through the
+ *     canonical metaprogramming expression boundary.
  *
- * 71. COMPLETION CRITERIA
- * ============================================================================
+ * [ ] Declaration composition reaches generationDeclaration through the
+ *     canonical declaration boundary.
  *
- * This file is complete only when:
+ * [ ] Statement composition reaches generationStatement through the
+ *     canonical statement boundary.
  *
- *     [ ] It compiles against the canonical Zamani lexer vocabulary.
- *     [ ] It introduces no nonexistent lexer token.
- *     [ ] It duplicates no canonical expression grammar.
- *     [ ] It duplicates no canonical type grammar.
- *     [ ] It duplicates no canonical statement grammar.
- *     [ ] It duplicates no canonical declaration grammar.
- *     [ ] It does not duplicate reflection.
- *     [ ] It does not duplicate specialization.
- *     [ ] It does not duplicate macro expansion.
- *     [ ] It does not duplicate compile-time execution.
- *     [ ] It does not construct IR.
- *     [ ] It does not construct quantum::ir.
- *     [ ] It contains no hardware limits.
- *     [ ] It contains no fixed machine sizes.
- *     [ ] It contains no Rust actions.
- *     [ ] It contains no unsafe Rust.
- *     [ ] It preserves source spans through the AST contract.
- *     [ ] It supports deterministic parsing.
- *     [ ] It supports arbitrary source scale subject to implementation
- *         resources rather than grammar-level ceilings.
- *     [ ] Positive tests exist.
- *     [ ] Negative tests exist.
- *     [ ] Boundary tests exist.
- *     [ ] Cross-domain generation tests exist.
- *     [ ] Quantum generation tests prove the quantum::ir boundary remains
- *         downstream.
- *     [ ] Hardware generation tests prove physical target selection remains
- *         downstream.
- *     [ ] Round-trip tests preserve generation semantics.
- *     [ ] POCO-REAF tests prove generation does not accidentally encode a
- *         compilation host.
+ * [ ] Generated Rust compiles on the repository's supported Rust baseline.
+ *
+ * [ ] CI rejects unsafe Rust in the frontend/compiler implementation.
+ *
+ * [ ] Positive, negative, boundary, deterministic, scalability and
+ *     cross-domain tests pass.
  *
  * ============================================================================
  */
