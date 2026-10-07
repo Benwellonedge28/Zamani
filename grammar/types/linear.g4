@@ -1,4 +1,176 @@
 /*
+ * Zamani Programming Language
+ * File: grammar/types/linear-types.g4
+ *
+ * PURPOSE
+ * -------
+ * Canonical grammar component for linear and affine type qualifiers.
+ *
+ * This file deliberately does NOT define typeExpression. The canonical
+ * type-expression composition boundary is owned by grammar/types/types.g4.
+ *
+ * ARCHITECTURAL PRINCIPLE
+ * -----------------------
+ * Linear/affine typing describes semantic usage/ownership constraints on
+ * values. It does not describe physical resources, hardware capacity,
+ * quantum topology, register width, memory capacity, scheduling, routing,
+ * or target realization.
+ *
+ * POCO-REAF
+ * ---------
+ * The grammar introduces no machine-size assumptions or fixed capacity
+ * limits. A program may contain arbitrarily many linear/affine declarations
+ * subject only to parser/compiler/runtime resource availability.
+ *
+ * RUST
+ * ----
+ * This grammar is consumed by the Rust frontend. Rust implementation code
+ * must remain safe Rust; this grammar contains no embedded actions and
+ * therefore introduces no unsafe implementation requirement.
+ *
+ * OWNERSHIP
+ * ---------
+ * OWNS:
+ *   - linearityQualifier
+ *   - linearTypeQualifier (compatibility-facing alias)
+ *   - linear/affine qualifier syntax
+ *
+ * DOES NOT OWN:
+ *   - typeExpression
+ *   - named/qualified types
+ *   - generic arguments
+ *   - generic declarations
+ *   - type bounds
+ *   - general constraints
+ *   - where clauses
+ *   - references/lifetimes
+ *   - ownership checking
+ *   - borrow checking
+ *   - resource allocation
+ *   - capability negotiation
+ *   - effects
+ *   - contracts
+ *   - policies
+ *   - quantum operations
+ *   - HDL constructs
+ *   - hardware topology
+ *   - IR construction
+ *   - target lowering
+ *   - runtime enforcement
+ *
+ * SEMANTIC BOUNDARY
+ * -----------------
+ *
+ *   source
+ *      |
+ *      v
+ *   linearityQualifier
+ *      |
+ *      v
+ *   canonical TypeExpr
+ *      |
+ *      v
+ *   semantic type model
+ *      |
+ *      v
+ *   linear/affine usage analysis
+ *      |
+ *      v
+ *   canonical semantic IR
+ *
+ * The grammar records syntax only. It must not attempt to prove linearity,
+ * affine usage, ownership, borrowing, resource consumption, or lifetime
+ * correctness.
+ *
+ * INTEGRATION CONTRACT
+ * --------------------
+ * DEPENDS_ON:
+ *   lexer tokens LINEAR and AFFINE
+ *
+ * EXPORTS:
+ *   linearityQualifier
+ *   linearTypeQualifier
+ *
+ * CONSUMED_BY:
+ *   grammar/types/types.g4
+ *   generic/type-parameter grammar where supported
+ *   declaration grammar through types.g4
+ *
+ * AST_OWNER:
+ *   canonical frontend TypeExpr representation
+ *
+ * SEMANTIC_OWNER:
+ *   type/ownership/resource semantic analysis
+ *
+ * IR_OWNER:
+ *   canonical semantic IR and downstream domain IRs
+ *
+ * TEST_OWNER:
+ *   grammar/tests/types/linear/
+ *
+ * SPEC_OWNER:
+ *   grammar/specification/ and grammar/spec/type-system documentation
+ *
+ * COMPATIBILITY
+ * -------------
+ * New code should consume linearityQualifier.
+ *
+ * linearTypeQualifier is retained as a compatibility-facing rule name so
+ * older delegate/root grammars can migrate without creating another
+ * implementation of linearity syntax.
+ *
+ * IMPORTANT
+ * ---------
+ * Do not import types.g4 here. Doing so would create the wrong dependency
+ * direction and can introduce grammar composition cycles.
+ *
+ * The owning type grammar imports/delegates to this component instead.
+ */
+
+parser grammar LinearTypes;
+
+options {
+    tokenVocab = ZamaniLexer;
+}
+
+
+/*
+ * --------------------------------------------------------------------------
+ * PUBLIC API
+ * --------------------------------------------------------------------------
+ */
+
+/*
+ * Canonical linearity qualifier.
+ *
+ * A type may be associated with exactly one qualifier at this grammar
+ * boundary. Combining qualifiers is a semantic error, not something this
+ * grammar should silently normalize.
+ *
+ * Examples of accepted qualifier forms:
+ *
+ *   linear
+ *   affine
+ *
+ * The actual token spelling is owned exclusively by ZamaniLexer.
+ */
+linearityQualifier
+    : LINEAR
+    | AFFINE
+    ;
+
+
+/*
+ * Compatibility-facing rule.
+ *
+ * This alias deliberately delegates to the canonical rule instead of
+ * duplicating its alternatives.
+ */
+linearTypeQualifier
+    : linearityQualifier
+    ;
+
+/*
  * ============================================================================
  * Zamani Programming Language
  * ============================================================================
