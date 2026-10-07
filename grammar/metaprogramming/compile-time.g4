@@ -10,169 +10,93 @@
  *     CompileTime
  *
  * Status:
- *     Production parser-composition unit
- *
- * Purpose:
- *     Provide the authoritative compile-time metaprogramming composition
- *     boundary required by grammar/metaprogramming/metaprogramming.g4.
+ *     Production parser-composition boundary
  *
  * ============================================================================
- * ARCHITECTURAL POSITION
+ * PURPOSE
  * ============================================================================
  *
- *                         Zamani source
- *                              |
- *                              v
- *                        canonical lexer
- *                              |
- *                              v
- *                      canonical Zamani parser
- *                              |
- *                              v
- *                         canonical AST
- *                              |
- *                    +---------+---------+
- *                    |                   |
- *                    v                   v
- *             ordinary semantics   metaprogramming
- *                                        |
- *                    +-------------------+-------------------+
- *                    |                   |                   |
- *                    v                   v                   v
- *               compile-time        generation          reflection
- *                    |                   |                   |
- *                    +-------------------+-------------------+
- *                                        |
- *                                        v
- *                                  specialization
- *                                        |
- *                                        v
- *                              canonical semantic model
- *                                        |
- *                 +----------------------+----------------------+
- *                 |                      |                      |
- *                 v                      v                      v
- *             classical             quantum::ir          HDL/hardware
- *                 |                      |                      |
- *                 +----------------------+----------------------+
- *                                        |
- *                                        v
- *                              optimization / lowering
- *                                        |
- *                              routing / scheduling
- *                                        |
- *                                  resilience / QEC
- *                                        |
- *                                       ZQN
- *                                        |
- *                                       HAL
- *                                        |
- *                                 target realization
+ * This file owns the compile-time METAPROGRAMMING composition boundary.
  *
- * This grammar defines syntax/composition only.
+ * It connects the explicit compile-time execution facility with the broader
+ * metaprogramming subsystem without creating a second compile-time language.
+ *
+ * The architecture is:
+ *
+ *     source
+ *       |
+ *       v
+ *     lexer
+ *       |
+ *       v
+ *     parser
+ *       |
+ *       v
+ *     domain-neutral AST
+ *       |
+ *       v
+ *     structural validation
+ *       |
+ *       v
+ *     semantic analysis
+ *       |
+ *       +--> compile-time eligibility
+ *       +--> effect analysis
+ *       +--> capability analysis
+ *       +--> resource analysis
+ *       +--> policy analysis
+ *       +--> provenance
+ *       +--> deterministic/reproducible evaluation
+ *       |
+ *       v
+ *     compile-time evaluation / transformation
+ *       |
+ *       v
+ *     canonical semantic model
+ *       |
+ *       +--> classical
+ *       +--> quantum::ir
+ *       +--> HDL / hardware
+ *       +--> AI / data
+ *       +--> distributed
+ *       +--> networking
+ *       +--> future domains
+ *       |
+ *       v
+ *     optimization
+ *       |
+ *       v
+ *     lowering
+ *       |
+ *       v
+ *     routing / scheduling / resilience
+ *       |
+ *       v
+ *     ZQN / HAL / target realization
+ *
+ * This grammar defines syntax and composition only.
  *
  * It MUST NOT:
  *
- *   - execute compile-time code;
- *   - evaluate expressions;
- *   - construct AST objects;
- *   - construct IR;
- *   - construct quantum::ir;
- *   - perform optimization;
- *   - perform specialization algorithms;
- *   - perform target selection;
- *   - discover hardware;
- *   - inspect the compiler host;
- *   - access the filesystem;
- *   - access the network;
- *   - access credentials;
- *   - invoke processes;
- *   - invoke GPUs;
- *   - invoke FPGAs;
- *   - invoke QPUs;
- *   - perform routing;
- *   - perform scheduling;
- *   - perform QEC;
- *   - implement ZQN;
- *   - implement runtime behavior.
- *
- * ============================================================================
- * WHY THIS FILE EXISTS
- * ============================================================================
- *
- * The repository already contains:
- *
- *     grammar/metaprogramming/compile-time-execution.g4
- *
- * which owns explicit compile-time execution syntax.
- *
- * The repository also contains:
- *
- *     grammar/metaprogramming/metaprogramming.g4
- *
- * which expects the following integration contracts:
- *
- *     compileTimeDeclarationCore
- *     compileTimeExpressionCore
- *     compileTimeStatementCore
- *
- * Those contracts previously had no single authoritative owner.
- *
- * This file closes that gap.
- *
- * It deliberately does NOT duplicate the compile-time execution grammar.
- *
- * Instead:
- *
- *     compile-time.g4
- *          |
- *          +--> compile-time-execution.g4
- *          |
- *          +--> canonical expression boundary
- *          |
- *          +--> canonical declaration/item boundary
- *          |
- *          +--> canonical statement boundary
- *
- * ============================================================================
- * AUTHORITY
- * ============================================================================
- *
- * Lexical authority:
- *
- *     grammar/antlr/ZamaniLexer.g4
- *
- * Parser composition authority:
- *
- *     grammar/antlr/ZamaniParser.g4
- *
- * Metaprogramming composition authority:
- *
- *     grammar/metaprogramming/metaprogramming.g4
- *
- * Compile-time execution syntax:
- *
- *     grammar/metaprogramming/compile-time-execution.g4
- *
- * Generation syntax:
- *
- *     grammar/metaprogramming/generation.g4
- *
- * Reflection syntax:
- *
- *     grammar/metaprogramming/reflection.g4
- *
- * Specialization syntax:
- *
- *     grammar/metaprogramming/specialization.g4
- *
- * Canonical AST:
- *
- *     frontend AST subsystem
- *
- * Canonical quantum semantic boundary:
- *
- *     quantum::ir
+ *     - execute compile-time code;
+ *     - evaluate expressions;
+ *     - inspect the compiler host;
+ *     - inspect hardware;
+ *     - select a device;
+ *     - allocate resources;
+ *     - access the filesystem;
+ *     - access the network;
+ *     - access credentials;
+ *     - execute subprocesses;
+ *     - invoke GPUs;
+ *     - invoke FPGAs;
+ *     - invoke QPUs;
+ *     - perform routing;
+ *     - perform scheduling;
+ *     - perform QEC;
+ *     - construct IR;
+ *     - construct quantum::ir;
+ *     - implement runtime semantics.
  *
  * ============================================================================
  * OWNERSHIP
@@ -180,139 +104,125 @@
  *
  * THIS FILE OWNS:
  *
- *   - the compile-time metaprogramming composition boundary;
- *   - compileTimeDeclarationCore;
- *   - compileTimeExpressionCore;
- *   - compileTimeStatementCore;
- *   - explicit integration of compile-time execution with the broader
- *     metaprogramming subsystem;
- *   - phase-boundary naming for compile-time syntax;
- *   - compile-time source-category dispatch.
+ *     - compile-time metaprogramming composition;
+ *     - compile-time declaration/expression/statement adapters;
+ *     - the stable public boundary consumed by metaprogramming.g4;
+ *     - the distinction between compile-time metaprogramming syntax and
+ *       ordinary runtime syntax;
+ *     - integration of compile-time execution into metaprogramming.
  *
  * THIS FILE DOES NOT OWN:
  *
- *   - lexer definitions;
- *   - keywords;
- *   - identifiers;
- *   - paths;
- *   - ordinary expressions;
- *   - expression precedence;
- *   - ordinary statements;
- *   - declarations;
- *   - types;
- *   - patterns;
- *   - functions;
- *   - macros;
- *   - macro hygiene;
- *   - reflection;
- *   - source generation;
- *   - specialization algorithms;
- *   - compilation algorithms;
- *   - resource allocation;
- *   - hardware discovery;
- *   - target selection;
- *   - AST implementation;
- *   - IR;
- *   - quantum::ir;
- *   - QEC;
- *   - ZQN;
- *   - routing;
- *   - scheduling;
- *   - runtime execution.
+ *     - lexer tokens;
+ *     - keywords;
+ *     - identifiers;
+ *     - qualified names;
+ *     - ordinary expressions;
+ *     - expression precedence;
+ *     - ordinary statements;
+ *     - declarations;
+ *     - types;
+ *     - patterns;
+ *     - functions;
+ *     - macros;
+ *     - macro expansion;
+ *     - quotation;
+ *     - unquotation;
+ *     - reflection;
+ *     - source generation;
+ *     - specialization algorithms;
+ *     - conditional compilation;
+ *     - resource requirements;
+ *     - capabilities;
+ *     - policies;
+ *     - effects;
+ *     - provenance implementation;
+ *     - AST implementation;
+ *     - semantic evaluation;
+ *     - canonical IR;
+ *     - quantum::ir;
+ *     - HDL IR;
+ *     - target selection;
+ *     - hardware realization.
  *
  * ============================================================================
- * CRITICAL TOKEN POLICY
+ * AUTHORITATIVE OWNERS
  * ============================================================================
  *
- * This file intentionally uses NO private lexer vocabulary.
+ * Lexical authority:
  *
- * In particular it does NOT introduce:
+ *     grammar/antlr/ZamaniLexer.g4
  *
- *     COMPTIME
- *     COMPILE_TIME
- *     CTIME
- *     META_COMPTIME
- *     GENERATE
+ * Canonical parser composition:
  *
- * as local tokens.
+ *     grammar/antlr/ZamaniParser.g4
  *
- * The repository's existing compile-time execution contract explicitly uses
- * the canonical CONST vocabulary.
+ * Metaprogramming composition:
  *
- * Generation already uses the canonical SYNTHESIZE token.
+ *     grammar/metaprogramming/metaprogramming.g4
  *
- * Any future keyword must first be introduced through the canonical lexer and
- * language specification. It must never be invented inside this grammar.
+ * Explicit compile-time execution:
  *
- * ============================================================================
- * COMPILE-TIME PHASE MODEL
- * ============================================================================
+ *     grammar/metaprogramming/compile-time-execution.g4
  *
- * Zamani distinguishes:
+ * Expression-level compile-time syntax:
  *
- *     source parsing
- *          |
- *          v
- *     AST construction
- *          |
- *          v
- *     semantic validation
- *          |
- *          v
- *     authorized compile-time computation
- *          |
- *          v
- *     generated/transformed source
- *          |
- *          v
- *     ordinary semantic validation again
- *          |
- *          v
- *     canonical semantic model
+ *     grammar/expressions/compile-time.g4
  *
- * The grammar does not execute anything at any stage.
+ * Compilation-control syntax:
+ *
+ *     grammar/compile/compile-time.g4
+ *
+ * Compile-time function syntax:
+ *
+ *     grammar/functions/compile-time-functions.g4
+ *
+ * Reflection:
+ *
+ *     grammar/metaprogramming/reflection.g4
+ *
+ * Generation:
+ *
+ *     grammar/metaprogramming/generation.g4
+ *
+ * Specialization:
+ *
+ *     grammar/metaprogramming/specialization.g4
+ *
+ * Quotation:
+ *
+ *     grammar/metaprogramming/quotation.g4
  *
  * ============================================================================
- * PHASE SAFETY
+ * IMPORTANT ARCHITECTURAL DISTINCTION
  * ============================================================================
  *
- * A compile-time construct MUST NOT automatically acquire capabilities merely
- * because it is syntactically located in a compile-time context.
+ * There are multiple compile-time concepts in Zamani:
  *
- * In particular:
+ *     1. compile-time METAPROGRAMMING
+ *     2. compile-time EXECUTION
+ *     3. compile-time EXPRESSIONS
+ *     4. compilation CONTROL
+ *     5. compile-time FUNCTIONS
  *
- *     compile-time syntax
+ * They must not become one giant grammar.
  *
- * does NOT automatically grant:
+ * This file owns only #1:
  *
- *     filesystem access
- *     network access
- *     environment access
- *     credential access
- *     process execution
- *     hardware access
- *     device discovery
- *     QPU access
- *     GPU access
- *     FPGA access
- *     random access
- *     wall-clock access
+ *     compile-time metaprogramming composition.
  *
- * Capability and effect authorization remains a semantic/compiler concern.
+ * It delegates #2 to compile-time-execution.g4.
+ *
+ * It does not duplicate #3 or #4.
  *
  * ============================================================================
- * POCO-REAF
+ * POCO-REAF CONTRACT
  * ============================================================================
  *
- * Compile-time computation MUST preserve the distinction between:
+ * Compile-time syntax must describe program intent rather than accidentally
+ * freezing properties of the machine performing compilation.
  *
- *     program meaning
- *
- * and:
- *
- *     properties of the machine compiling the program.
- *
- * Compile-time syntax MUST NOT encode universal assumptions about:
+ * This grammar therefore contains no universal assumptions about:
  *
  *     CPU count
  *     core count
@@ -321,285 +231,169 @@
  *     FPGA count
  *     accelerator count
  *     QPU count
- *     qubit capacity
+ *     qubit count
  *     memory capacity
  *     storage capacity
  *     register width
  *     vector width
  *     tensor rank
  *     tensor dimensions
- *     network size
  *     node count
- *     topology
- *     device identifiers
+ *     network size
+ *     topology size
+ *     device count
+ *     physical addresses
+ *     vendor identifiers
  *
- * A compile-time program may compute values representing such quantities when
- * those quantities are explicit program semantics or explicitly authorized
- * resource/capability information.
+ * Compile-time code MAY semantically inspect explicitly authorized
+ * capabilities/resources.
  *
- * It must not silently convert an available host capability into a permanent
- * source requirement.
+ * That information belongs to the semantic resource/capability systems and
+ * must never become an implicit permanent source-level machine dependency.
  *
  * ============================================================================
- * SCALABILITY
+ * SCALABILITY CONTRACT
  * ============================================================================
  *
- * This grammar imposes no finite language-level limit on:
+ * This grammar imposes no language-level finite limit on:
  *
- *     compile-time expressions
  *     compile-time declarations
+ *     compile-time expressions
  *     compile-time statements
- *     nested compile-time constructs
+ *     nesting
  *     generated structures
- *     compile-time sequence length
+ *     specialization candidates
+ *     metadata
  *     source size
- *     type size
- *     expression size
- *     declaration count
- *     specialization count
- *     generated item count
+ *     semantic object size
  *
- * Repetition is therefore represented with ANTLR repetition operators rather
- * than artificial finite alternatives.
+ * ANTLR repetition and ordinary recursive grammar structure represent
+ * unbounded language structure.
  *
- * Compiler resource budgets remain implementation policy.
- *
- * A compiler may enforce:
+ * Compiler resource controls MAY independently impose:
  *
  *     memory budgets
- *     CPU budgets
+ *     execution budgets
  *     cancellation
- *     evaluation budgets
+ *     timeout policies
  *     recursion protection
  *     generated-output budgets
+ *     evaluation budgets
  *
- * without changing the language grammar.
+ * Such limits are implementation/resource policy.
+ *
+ * They MUST NOT become grammar constants.
  *
  * ============================================================================
- * DETERMINISM
+ * SECURITY CONTRACT
  * ============================================================================
  *
- * Parsing is deterministic.
+ * Parsing a compile-time construct grants NO capability.
  *
- * Compile-time execution determinism is semantic.
+ * In particular, syntax alone must not grant:
  *
- * The compiler must determine whether a compile-time computation is:
+ *     filesystem access
+ *     network access
+ *     environment access
+ *     credential access
+ *     process execution
+ *     native execution
+ *     device discovery
+ *     GPU access
+ *     FPGA access
+ *     QPU access
+ *     cloud access
+ *
+ * Authorization is determined downstream through:
+ *
+ *     effects
+ *       +
+ *     capabilities
+ *       +
+ *     resources
+ *       +
+ *     policies
+ *       +
+ *     security rules
+ *
+ * ============================================================================
+ * EFFECT CONTRACT
+ * ============================================================================
+ *
+ * Compile-time evaluation may have effects.
+ *
+ * The grammar does not classify them.
+ *
+ * Semantic analysis must determine whether a compile-time computation is:
  *
  *     pure
  *     deterministic
  *     reproducible
  *     effectful
- *     externally dependent
- *     capability dependent
+ *     capability-dependent
+ *     resource-dependent
+ *     externally state-dependent
  *
- * The grammar does not make those determinations.
+ * Compile-time context MUST NOT silently erase effects.
  *
  * ============================================================================
- * GENERATED-SOURCE SAFETY
+ * PROVENANCE CONTRACT
  * ============================================================================
  *
- * If compile-time computation produces source structure, that structure MUST
- * return to the ordinary Zamani pipeline.
+ * Compile-time transformations must preserve enough information to explain:
  *
- * Required conceptual path:
+ *     source
+ *     transformation
+ *     generated artifact
+ *     evaluation context
+ *     dependencies
+ *     evidence
+ *     policy
+ *     capability decisions
+ *     resource decisions
  *
- *     compile-time computation
- *              |
- *              v
- *        generated source
- *              |
- *              v
- *            lexer
- *              |
- *              v
- *            parser
- *              |
- *              v
- *          canonical AST
- *              |
- *              v
- *       semantic validation
- *              |
- *              v
- *      canonical semantic model
+ * Generated source MUST re-enter the ordinary validation pipeline.
  *
- * Generated source MUST NOT bypass:
+ * It MUST NOT bypass:
  *
  *     type checking
  *     name resolution
  *     effect checking
  *     capability checking
  *     resource checking
- *     ownership checking
+ *     policy checking
  *     security checking
  *     provenance checking
  *     domain validation
  *
  * ============================================================================
- * QUANTUM INTEGRATION
- * ============================================================================
- *
- * Compile-time metaprogramming may create, transform, or inspect source that
- * eventually represents quantum computation.
- *
- * It MUST NOT create a second quantum IR.
- *
- * The required path remains:
- *
- *     compile-time source transformation
- *              |
- *              v
- *        canonical Zamani AST
- *              |
- *              v
- *       quantum semantic analysis
- *              |
- *              v
- *          quantum::ir
- *              |
- *              v
- *       optimization
- *              |
- *              v
- *           routing
- *              |
- *              v
- *         scheduling
- *              |
- *              v
- *         QEC / resilience
- *              |
- *              v
- *             ZQN
- *              |
- *              v
- *             HAL
- *
- * This grammar MUST NOT enumerate:
- *
- *     H
- *     X
- *     Y
- *     Z
- *     CNOT
- *
- * or any other closed gate universe.
- *
- * Quantum operations remain data-driven and semantically extensible.
- *
- * ============================================================================
- * CLASSICAL INTEGRATION
- * ============================================================================
- *
- * Compile-time constructs may manipulate canonical:
- *
- *     values
- *     expressions
- *     types
- *     functions
- *     declarations
- *     generic structures
- *     arrays
- *     vectors
- *     matrices
- *     tensors
- *
- * They do not create a second classical language or mathematical type system.
- *
- * ============================================================================
- * HDL / HARDWARE INTEGRATION
- * ============================================================================
- *
- * Compile-time computation may parameterize HDL and hardware source.
- *
- * Examples of valid semantic intent include:
- *
- *     generated width
- *     generated pipeline structure
- *     generated module structure
- *     generated interfaces
- *     generated state machines
- *
- * Actual:
- *
- *     FPGA selection
- *     ASIC selection
- *     physical placement
- *     timing closure
- *     routing
- *     device assignment
- *
- * remains downstream.
- *
- * ============================================================================
- * RESOURCE / CAPABILITY INTEGRATION
- * ============================================================================
- *
- * Compile-time code may consume resource/capability information only through
- * the canonical semantic/resource systems.
- *
- * The following concepts remain distinct:
- *
- *     requirement
- *     constraint
- *     capability
- *     preference
- *     hint
- *     implementation decision
- *
- * This grammar does not redefine those categories.
- *
- * ============================================================================
  * AST CONTRACT
  * ============================================================================
  *
- * Each exposed rule must preserve enough parse information for the frontend
- * to construct the canonical AST.
+ * This grammar owns no AST implementation.
  *
- * Required source information includes:
+ * The frontend must map the exported compile-time syntax into the existing
+ * domain-neutral AST.
+ *
+ * The resulting AST must preserve at minimum:
  *
  *     source span
- *     source ordering
+ *     source order
  *     nesting
  *     syntactic category
  *     explicit compile-time intent
- *     embedded expression structure
- *     embedded statement structure
- *     embedded declaration structure
+ *     child expression/declaration/statement structure
+ *     attributes where present
  *
- * The ANTLR parse tree is not the canonical AST.
- *
- * No independent MetaAST is created by this grammar.
- *
- * ============================================================================
- * SEMANTIC CONTRACT
- * ============================================================================
- *
- * Semantic analysis is responsible for:
- *
- *     phase legality
- *     name resolution
- *     type checking
- *     effect checking
- *     capability checking
- *     resource checking
- *     compile-time evaluability
- *     determinism
- *     provenance
- *     security policy
- *     recursion/expansion policy
- *     generated-source validation
- *     compatibility
- *
- * Syntax alone does not establish any of those properties.
+ * No compile-time-specific domain IR is permitted here.
  *
  * ============================================================================
  * IR CONTRACT
  * ============================================================================
  *
- * This grammar creates ZERO IR.
+ * This grammar produces NO IR.
  *
- * It must never directly produce:
+ * It must never construct:
  *
  *     ClassicalInstruction
  *     QuantumGate
@@ -607,119 +401,189 @@
  *     PhysicalQubit
  *     HDLInstruction
  *     HardwareInstruction
- *     ScheduleOperation
  *     RoutingOperation
+ *     SchedulingOperation
  *     QECOperation
- *     ZQNFault
  *
- * Compile-time computation is a source/semantic transformation facility.
+ * If compile-time computation produces quantum source, the result must still
+ * follow:
  *
- * ============================================================================
- * RUST CONTRACT
- * ============================================================================
+ *     source
+ *       -> AST
+ *       -> semantic analysis
+ *       -> quantum::ir
  *
- * Implementation baseline:
- *
- *     Rust 1.97
- *     Rust 1.97.1
- *
- * Required:
- *
- *     Rust 2021
- *     safe Rust
- *     no unsafe
- *
- * This grammar contains:
- *
- *     no Rust actions
- *     no semantic predicates
- *     no embedded executable code
- *     no host-language callbacks
+ * `quantum::ir` remains the canonical quantum semantic boundary.
  *
  * ============================================================================
- * COMPATIBILITY CONTRACT
+ * DOMAIN INTEGRATION
  * ============================================================================
  *
- * This file is additive.
+ * Compile-time metaprogramming is domain-neutral.
  *
- * It does not rename:
+ * It may produce or transform source representing:
  *
- *     compile-time-execution.g4
- *     metaprogramming.g4
- *     generation.g4
- *     reflection.g4
- *     specialization.g4
+ *     classical computation
+ *     quantum computation
+ *     hybrid computation
+ *     HDL
+ *     hardware intent
+ *     AI/data computation
+ *     distributed computation
+ *     networking
+ *     accelerator computation
+ *     future domains
  *
- * Existing compile-time execution syntax remains owned by
+ * This file MUST NOT enumerate domain-specific operations.
+ *
+ * A new quantum operation, hardware capability, accelerator, tensor facility,
+ * AI model, HDL construct, or future execution domain must not require this
+ * grammar to be modified merely because the new domain exists.
+ *
+ * ============================================================================
+ * PUBLIC COMPOSITION CONTRACT
+ * ============================================================================
+ *
+ * The public rules exported by this grammar are:
+ *
+ *     compileTimeDeclarationCore
+ *     compileTimeExpressionCore
+ *     compileTimeStatementCore
+ *
+ * These are the ONLY metaprogramming compile-time adapter rules that
+ * `metaprogramming.g4` should consume from this file.
+ *
+ * Do not add a second set of declaration/statement/expression aliases.
+ *
+ * ============================================================================
+ */
+
+parser grammar CompileTime;
+
+options {
+    tokenVocab = ZamaniLexer;
+}
+
+/*
+ * ============================================================================
+ * PUBLIC COMPILE-TIME DECLARATION CORE
+ * ============================================================================
+ *
+ * Explicit compile-time execution syntax remains owned by
  * compile-time-execution.g4.
  *
- * This file supplies the missing composition contracts required by
- * metaprogramming.g4.
+ * This adapter intentionally does not reproduce that grammar.
+ *
+ * The exact declaration/result legality is determined downstream.
+ * ============================================================================
+ */
+
+compileTimeDeclarationCore
+    : compileTimeExecution
+    ;
+
+/*
+ * ============================================================================
+ * PUBLIC COMPILE-TIME EXPRESSION CORE
+ * ============================================================================
+ *
+ * Expression-level compile-time syntax has its own canonical owner:
+ *
+ *     grammar/expressions/compile-time.g4
+ *
+ * This metaprogramming boundary consumes that facility rather than defining
+ * another `COMPTIME` or `CONST` expression syntax.
  *
  * ============================================================================
- * TEST CONTRACT
+ */
+
+compileTimeExpressionCore
+    : compileTimeExpression
+    ;
+
+/*
+ * ============================================================================
+ * PUBLIC COMPILE-TIME STATEMENT CORE
  * ============================================================================
  *
- * Positive tests must include:
+ * Explicit compile-time execution syntax remains owned by
+ * compile-time-execution.g4.
+ * ============================================================================
+ */
+
+compileTimeStatementCore
+    : compileTimeExecution
+    ;
+
+/*
+ * ============================================================================
+ * TOOLING / SEMANTIC CONTEXT BOUNDARY
+ * ============================================================================
  *
- *     const { ... }
- *     const expression
- *     const name = expression
- *     synthesize { ... }
- *     compile-time declarations
- *     compile-time statements
- *     compile-time expressions
- *     nested compile-time structures
- *     generated classical structures
- *     generated quantum structures
- *     generated HDL structures
+ * These rules intentionally expose the semantic category without defining a
+ * second syntax.
  *
- * Negative tests must include:
+ * They are useful to parser composition and tooling, but they MUST NOT be
+ * consumed as alternative language forms by the root parser.
  *
- *     COMPTIME
- *     COMPILE_TIME
- *     unknown compile-time keyword
- *     malformed compile-time block
- *     malformed compile-time binding
- *     malformed compile-time declaration
- *     malformed compile-time expression
- *     malformed compile-time statement
+ * ============================================================================
+ */
+
+compileTimeMetaprogram
+    : compileTimeExpressionCore
+    | compileTimeStatementCore
+    | compileTimeDeclarationCore
+    ;
+
+/*
+ * ============================================================================
+ * PHASE BOUNDARY
+ * ============================================================================
  *
- * The `COMPTIME` negative case is intentional because the current repository
- * contract explicitly does not define that token.
+ * This grammar does not establish that a construct MUST be evaluated during
+ * compilation.
  *
- * Boundary tests must include:
+ * The semantic/compiler subsystem determines:
  *
- *     minimal compile-time expression
- *     minimal compile-time block
- *     empty/invalid blocks where prohibited
- *     deeply nested compile-time constructs
- *     long compile-time sequences
- *     long generated structures
- *     deeply qualified names
- *     large generic structures
+ *     whether evaluation is permitted;
+ *     whether evaluation is required;
+ *     whether evaluation is deferred;
+ *     whether specialization is performed;
+ *     whether generation occurs;
+ *     whether the result is cached;
+ *     whether evaluation is deterministic;
+ *     which capabilities are required.
  *
- * Scalability tests must verify that no finite grammar maximum exists.
+ * ============================================================================
+ */
+
+compileTimePhaseBoundary
+    : compileTimeMetaprogram
+    ;
+
+/*
+ * ============================================================================
+ * GENERATED-SOURCE BOUNDARY
+ * ============================================================================
  *
- * Determinism tests must verify identical source produces identical parse
- * structure under identical grammar/lexer configuration.
+ * Generated source is not a special AST universe.
  *
- * Compatibility tests must verify this grammar composes with:
+ * It returns to the normal Zamani pipeline.
  *
- *     metaprogramming.g4
- *     compile-time-execution.g4
- *     generation.g4
- *     reflection.g4
- *     specialization.g4
- *     canonical ZamaniParser
- *
+ * No generated-source syntax is duplicated here.
+ * ============================================================================
+ */
+
+compileTimeGeneratedSource
+    : compileTimeMetaprogram
+    ;
+
+/*
  * ============================================================================
  * HARD-CODING AUDIT
  * ============================================================================
  *
- * No language-level resource ceiling may be introduced here.
- *
- * The following are explicitly prohibited as grammar limits:
+ * Explicitly forbidden:
  *
  *     MAX_COMPTIME_OPERATIONS
  *     MAX_COMPTIME_DEPTH
@@ -734,441 +598,146 @@
  *     MAX_NODES
  *     MAX_MEMORY
  *     MAX_THREADS
+ *     MAX_TENSOR_RANK
+ *     MAX_REGISTER_WIDTH
+ *     MAX_NETWORK_SIZE
+ *     MAX_DEVICE_COUNT
  *
- * Numeric literals remain ordinary program data.
+ * This grammar contains none of these limits.
+ *
+ * ============================================================================
+ * SAFE-RUST CONTRACT
+ * ============================================================================
+ *
+ * This grammar contains:
+ *
+ *     no Rust actions;
+ *     no semantic predicates;
+ *     no embedded executable code;
+ *     no host callbacks;
+ *     no filesystem access;
+ *     no network access;
+ *     no unsafe code.
+ *
+ * The consuming implementation must remain compatible with:
+ *
+ *     Rust 1.97+
+ *     Rust 2021
+ *     safe Rust only
+ *
+ * ============================================================================
+ * ERROR-RECOVERY CONTRACT
+ * ============================================================================
+ *
+ * The grammar must preserve normal ANTLR error recovery.
+ *
+ * It must not use semantic predicates or target-language actions to implement
+ * semantic validation.
+ *
+ * Invalid cases such as:
+ *
+ *     malformed compile-time blocks
+ *     malformed compile-time bindings
+ *     malformed compile-time expressions
+ *     invalid nesting
+ *     missing delimiters
+ *
+ * are diagnosed by the parser and/or downstream semantic validation.
+ *
+ * ============================================================================
+ * TEST CONTRACT
+ * ============================================================================
+ *
+ * Positive:
+ *
+ *     compile-time expression
+ *     compile-time execution block
+ *     compile-time value production
+ *     compile-time declaration generation
+ *     compile-time statement execution
+ *
+ * Cross-domain:
+ *
+ *     compile-time classical source
+ *     compile-time quantum source
+ *     compile-time hybrid source
+ *     compile-time HDL source
+ *     compile-time hardware intent
+ *     compile-time AI/data source
+ *     compile-time distributed source
+ *
+ * Negative:
+ *
+ *     malformed compile-time construct
+ *     missing compile-time body
+ *     malformed nested construct
+ *     invalid delimiter
+ *     incomplete construct
+ *
+ * Scalability:
+ *
+ *     increasing nesting
+ *     increasing generated structure
+ *     increasing expression complexity
+ *     increasing declaration count
+ *
+ * Tests MUST NOT define a universal maximum.
+ *
+ * Determinism:
+ *
+ *     identical source + identical grammar configuration
+ *     ->
+ *     equivalent parse structure and source spans
+ *
+ * ============================================================================
+ * INTEGRATION CONTRACT
+ * ============================================================================
+ *
+ * This file is consumed by:
+ *
+ *     grammar/metaprogramming/metaprogramming.g4
+ *
+ * Its three public core rules are:
+ *
+ *     compileTimeDeclarationCore
+ *     compileTimeExpressionCore
+ *     compileTimeStatementCore
+ *
+ * The following files remain separate authorities:
+ *
+ *     grammar/metaprogramming/compile-time-execution.g4
+ *     grammar/expressions/compile-time.g4
+ *     grammar/compile/compile-time.g4
+ *     grammar/functions/compile-time-functions.g4
+ *
+ * The canonical parser remains responsible for determining where
+ * metaprogramming constructs are legal in source structure.
  *
  * ============================================================================
  * COMPLETION CRITERIA
  * ============================================================================
  *
- * This file is complete when:
+ * DONE means:
  *
- *     [x] it has exactly one ownership responsibility;
- *     [x] it does not duplicate compile-time execution syntax;
- *     [x] it uses canonical lexer vocabulary;
- *     [x] it defines compileTimeDeclarationCore;
- *     [x] it defines compileTimeExpressionCore;
- *     [x] it defines compileTimeStatementCore;
- *     [x] it composes with compile-time-execution.g4;
- *     [x] it preserves canonical expression/declaration/statement ownership;
- *     [x] it creates no AST implementation;
- *     [x] it creates no IR;
- *     [x] it creates no quantum IR;
- *     [x] it creates no hardware model;
- *     [x] it creates no resource limits;
- *     [x] it requires no unsafe Rust;
- *     [x] it defines positive/negative/boundary/scalability contracts;
- *     [x] it documents integration with the canonical parser.
- *
- * ============================================================================
- */
-
-parser grammar CompileTime;
-
-options {
-    tokenVocab = ZamaniLexer;
-}
-
-
-/* ============================================================================
- * 1. COMPILE-TIME DECLARATION CORE
- * ============================================================================
- *
- * This is the rule consumed by:
- *
- *     grammar/metaprogramming/metaprogramming.g4
- *
- * It is deliberately a dispatcher.
- *
- * The detailed execution syntax remains owned by:
- *
- *     compile-time-execution.g4
- *
- * No compile-time declaration grammar is duplicated here.
- * ============================================================================
- */
-
-compileTimeDeclarationCore
-    : compileTimeExecution
-    ;
-
-
-/* ============================================================================
- * 2. COMPILE-TIME EXPRESSION CORE
- * ============================================================================
- *
- * The current repository deliberately does not use a private COMPTIME token.
- *
- * The canonical compile-time vocabulary is CONST.
- *
- * This rule therefore establishes the expression-level compile-time boundary
- * as:
- *
- *     const expression
- *
- * The embedded expression remains the canonical Zamani expression.
- *
- * This does NOT execute the expression.
- *
- * Semantic analysis decides whether the expression is legal and evaluable
- * during compilation.
- * ============================================================================
- */
-
-compileTimeExpressionCore
-    : CONST expression
-    ;
-
-
-/* ============================================================================
- * 3. COMPILE-TIME STATEMENT CORE
- * ============================================================================
- *
- * Explicit compile-time execution already owns its execution form in:
- *
- *     compile-time-execution.g4
- *
- * This adapter makes that form available through the composition contract
- * expected by metaprogramming.g4.
- * ============================================================================
- */
-
-compileTimeStatementCore
-    : compileTimeExecution
-    ;
-
-
-/* ============================================================================
- * 4. EXPLICIT COMPILE-TIME VALUE
- * ============================================================================
- *
- * Named integration boundary for tooling.
- *
- * It does not introduce a new value grammar.
- * ============================================================================
- */
-
-compileTimeValue
-    : CONST expression
-    ;
-
-
-/* ============================================================================
- * 5. COMPILE-TIME SOURCE TRANSFORMATION BOUNDARY
- * ============================================================================
- *
- * Source generation remains owned by generation.g4.
- *
- * This rule is intentionally a semantic bridge rather than a duplicate
- * generation grammar.
- *
- * The canonical generation entry point is `generation`.
- * ============================================================================
- */
-
-compileTimeTransformation
-    : generation
-    ;
-
-
-/* ============================================================================
- * 6. COMPILE-TIME EXECUTION BOUNDARY
- * ============================================================================
- *
- * Named integration point for compiler tooling.
- * ============================================================================
- */
-
-compileTimeExecutionBoundary
-    : compileTimeExecution
-    ;
-
-
-/* ============================================================================
- * 7. COMPILE-TIME GENERATED DECLARATION BOUNDARY
- * ============================================================================
- *
- * The detailed generated-declaration syntax is already owned by
- * compile-time-execution.g4.
- * ============================================================================
- */
-
-compileTimeGeneratedDeclarationBoundary
-    : compileTimeGeneratedDeclaration
-    ;
-
-
-/* ============================================================================
- * 8. COMPILE-TIME BLOCK BOUNDARY
- * ============================================================================
- *
- * The block syntax remains canonical.
- *
- * This rule deliberately does not define a second block grammar.
- * ============================================================================
- */
-
-compileTimeBlock
-    : CONST blockExpression
-    ;
-
-
-/* ============================================================================
- * 9. COMPILE-TIME SEQUENCE BOUNDARY
- * ============================================================================
- *
- * Sequence syntax is owned by compile-time-execution.g4.
- *
- * No finite sequence length is encoded.
- * ============================================================================
- */
-
-compileTimeSequence
-    : CONST compileTimeExecutionSequence
-    ;
-
-
-/* ============================================================================
- * 10. COMPILE-TIME NAME BOUNDARY
- * ============================================================================
- *
- * Names remain ordinary Zamani names.
- * ============================================================================
- */
-
-compileTimeName
-    : identifier
-    ;
-
-
-/* ============================================================================
- * 11. COMPILE-TIME TYPE BOUNDARY
- * ============================================================================
- *
- * Types remain canonical.
- * ============================================================================
- */
-
-compileTimeType
-    : typeExpression
-    ;
-
-
-/* ============================================================================
- * 12. COMPILE-TIME PATTERN BOUNDARY
- * ============================================================================
- *
- * Patterns remain canonical.
- * ============================================================================
- */
-
-compileTimePattern
-    : pattern
-    ;
-
-
-/* ============================================================================
- * 13. COMPILE-TIME EXPRESSION BOUNDARY
- * ============================================================================
- *
- * The actual expression language remains owned by expressions/.
- * ============================================================================
- */
-
-compileTimeOperand
-    : expression
-    ;
-
-
-/* ============================================================================
- * 14. COMPILE-TIME ITEM BOUNDARY
- * ============================================================================
- *
- * Generated/inspected declarations use the canonical item grammar.
- * ============================================================================
- */
-
-compileTimeItem
-    : item
-    ;
-
-
-/* ============================================================================
- * 15. COMPILE-TIME STATEMENT BOUNDARY
- * ============================================================================
- *
- * Statements remain canonical Zamani statements.
- * ============================================================================
- */
-
-compileTimeStatement
-    : statement
-    ;
-
-
-/* ============================================================================
- * 16. COMPILE-TIME ATTRIBUTE BOUNDARY
- * ============================================================================
- *
- * Attributes remain owned by the canonical attribute grammar.
- * ============================================================================
- */
-
-compileTimeAttribute
-    : attribute
-    ;
-
-
-/* ============================================================================
- * 17. COMPILE-TIME GENERIC BOUNDARY
- * ============================================================================
- *
- * Generic parameters remain canonical.
- * ============================================================================
- */
-
-compileTimeGenericParameters
-    : genericParameters
-    ;
-
-
-/* ============================================================================
- * 18. COMPILE-TIME PARAMETER BOUNDARY
- * ============================================================================
- *
- * Parameter syntax remains canonical.
- * ============================================================================
- */
-
-compileTimeParameterList
-    : parameterList
-    ;
-
-
-/* ============================================================================
- * 19. COMPILE-TIME ARGUMENT BOUNDARY
- * ============================================================================
- *
- * Argument syntax remains canonical.
- * ============================================================================
- */
-
-compileTimeArgumentList
-    : argumentList
-    ;
-
-
-/* ============================================================================
- * 20. COMPILE-TIME CAPABILITY/RESOURCE BOUNDARY
- * ============================================================================
- *
- * Capability and resource semantics belong to their canonical domains.
- *
- * This grammar intentionally does not define their syntax.
- *
- * Semantic analysis determines whether a compile-time computation may use
- * particular capabilities.
- * ============================================================================
- */
-
-compileTimeResourceBoundary
-    : expression
-    ;
-
-
-/* ============================================================================
- * 21. COMPILE-TIME PROVENANCE BOUNDARY
- * ============================================================================
- *
- * Provenance is represented downstream through source spans, AST metadata,
- * semantic provenance, and compiler artifacts.
- *
- * This grammar does not invent a private provenance syntax.
- * ============================================================================
- */
-
-compileTimeProvenanceBoundary
-    : attribute
-    ;
-
-
-/* ============================================================================
- * 22. COMPILE-TIME DOMAIN-NEUTRALITY
- * ============================================================================
- *
- * Compile-time computation may produce source for any supported Zamani domain.
- *
- * This grammar deliberately does not enumerate:
- *
- *     classical
- *     quantum
- *     HDL
- *     AI
- *     distributed
- *     networking
- *     accelerator
- *
- * because the generated/consumed structure remains ordinary Zamani syntax.
- *
- * Domain ownership stays with the corresponding domain grammar.
- * ============================================================================
- */
-
-
-/* ============================================================================
- * 23. NO HARDWARE REALIZATION
- * ============================================================================
- *
- * There are deliberately no rules such as:
- *
- *     compileOnGpu
- *     compileOnQpu
- *     compileOnFpga
- *     compileOnCpu
- *     useDevice
- *     physicalQubit
- *
- * Hardware realization is downstream.
- * ============================================================================
- */
-
-
-/* ============================================================================
- * 24. NO FIXED CAPACITY
- * ============================================================================
- *
- * The grammar intentionally uses canonical expressions and recursive/
- * unbounded ANTLR structures.
- *
- * It does not encode machine capacities.
- * ============================================================================
- */
-
-
-/* ============================================================================
- * 25. INTEGRATION SUMMARY
- * ============================================================================
- *
- * Required composition:
- *
- *     ZamaniParser
- *          |
- *          v
- *     Metaprogramming
- *          |
- *          v
- *     CompileTime
- *          |
- *          +--> CompileTimeExecution
- *          |
- *          +--> canonical expression
- *          +--> canonical declaration/item
- *          +--> canonical statement
- *          +--> canonical type
- *          +--> canonical pattern
- *
- * The compile-time grammar is therefore a composition boundary rather than
- * a second compile-time language.
+ *     [x] One ownership boundary.
+ *     [x] No duplicate compile-time execution grammar.
+ *     [x] No duplicate expression grammar.
+ *     [x] No local lexer vocabulary.
+ *     [x] No machine/resource limits.
+ *     [x] No hardware assumptions.
+ *     [x] No quantum-gate enumeration.
+ *     [x] No IR creation.
+ *     [x] No semantic execution.
+ *     [x] No host-resource access.
+ *     [x] Safe-Rust compatible.
+ *     [x] Public integration rules are explicit.
+ *     [x] AST ownership is downstream.
+ *     [x] Semantic ownership is downstream.
+ *     [x] Effects/capabilities/resources remain downstream.
+ *     [x] Provenance remains preserved downstream.
+ *     [x] Generated source returns to the canonical pipeline.
+ *     [x] Cross-domain operation remains open-ended.
+ *     [x] POCO-REAF constraints are preserved.
  *
  * ============================================================================
  */
