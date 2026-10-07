@@ -1,348 +1,588 @@
-/**
+/*
  * ============================================================================
  * Zamani Universal Computing Language
  * ============================================================================
  *
- * File:
- *   grammar/hardware/placement.g4
+ * FILE
+ * ----
+ * grammar/hardware/placement.g4
  *
- * Grammar kind:
- *   ANTLR4 parser grammar
+ * GRAMMAR
+ * -------
+ * ZamaniHardwarePlacementParser
  *
- * Target:
- *   Rust 1.97 / Rust 1.97.1
- *   Rust 2021
+ * STATUS
+ * ------
+ * PRODUCTION-TARGET HARDWARE PLACEMENT GRAMMAR
  *
- * Safety:
- *   No embedded target-language actions.
- *   No semantic predicates.
- *   No generated-code customization.
- *   No unsafe Rust.
+ * RUST BASELINE
+ * -------------
+ * Rust 1.97+
+ * Rust 2021
+ * Safe Rust only
  *
  * ============================================================================
+ * FEATURE CONTRACT
+ * ============================================================================
+ *
  * PURPOSE
- * ============================================================================
+ * -------
  *
- * This grammar defines the SOURCE-LEVEL PLACEMENT LANGUAGE.
+ * This grammar owns SOURCE-LEVEL HARDWARE PLACEMENT INTENT.
  *
- * Placement describes where a computation, resource, logical object, hardware
- * object, or execution unit is intended or permitted to reside.
+ * Placement expresses where a computation, logical object, resource class,
+ * execution unit, hardware abstraction, or other semantic object is intended,
+ * permitted, preferred, constrained, or required to reside.
  *
- * Placement is NOT:
+ * Placement is intentionally target-independent.
  *
- *   - hardware discovery;
- *   - hardware enumeration;
- *   - topology discovery;
- *   - routing;
- *   - scheduling;
- *   - optimization;
- *   - calibration;
- *   - device selection by hidden compiler policy;
- *   - runtime dispatch;
- *   - physical resource validation;
- *   - quantum-state movement;
- *   - SWAP insertion;
- *   - QEC;
- *   - ZQN/noise modelling.
- *
- * Placement is an intent/constraint/association layer.
- *
- * ============================================================================
- * OWNERSHIP
- * ============================================================================
  *
  * THIS FILE OWNS
+ * --------------
  *
- *   - placement declarations;
- *   - placement bindings;
- *   - placement scopes;
- *   - placement regions;
- *   - placement groups;
- *   - placement relationships;
- *   - affinity/anti-affinity;
- *   - co-location/separation;
- *   - placement requirements;
- *   - placement constraints;
- *   - placement preferences;
- *   - placement hints;
- *   - placement policies;
- *   - placement replication intent;
- *   - migration intent;
- *   - elasticity intent;
- *   - placement target references;
- *   - placement capability references;
- *   - symbolic placement selectors;
- *   - placement metadata.
+ *   placement declarations
+ *   placement bindings
+ *   placement groups
+ *   placement regions
+ *   placement relationships
+ *   affinity
+ *   anti-affinity
+ *   co-location
+ *   separation
+ *   locality/distance intent
+ *   placement requirements
+ *   placement constraints
+ *   placement preferences
+ *   placement hints
+ *   placement policies
+ *   replication intent
+ *   migration intent
+ *   elasticity intent
+ *   target references
+ *   capability references
+ *   placement scopes
+ *   open-world placement properties
+ *   symbolic placement selectors
+ *   placement annotations
+ *
  *
  * THIS FILE DOES NOT OWN
+ * ----------------------
  *
- *   - lexical definitions;
- *   - identifiers;
- *   - literal recognition;
- *   - general expression semantics;
- *   - type checking;
- *   - hardware discovery;
- *   - hardware capabilities;
- *   - canonical resource identities;
- *   - topology discovery;
- *   - route generation;
- *   - path finding;
- *   - scheduling;
- *   - optimization;
- *   - quantum IR;
- *   - QEC;
- *   - ZQN;
- *   - runtime execution;
- *   - physical validation.
+ *   lexical definitions
+ *   identifiers
+ *   qualified-name syntax
+ *   expression precedence
+ *   types
+ *   resource declarations
+ *   resource discovery
+ *   capability discovery
+ *   target discovery
+ *   physical device enumeration
+ *   physical addresses
+ *   topology discovery
+ *   topology construction
+ *   routing
+ *   scheduling
+ *   optimization
+ *   calibration
+ *   physical allocation
+ *   runtime migration
+ *   QEC
+ *   ZQN
+ *   HAL implementation
+ *   quantum operation syntax
+ *   quantum::ir
+ *   classical IR
+ *
  *
  * ============================================================================
  * ARCHITECTURAL BOUNDARY
  * ============================================================================
  *
- * Source
- *   |
- *   v
- * Lexer
- *   |
- *   v
- * placement.g4
- *   |
- *   v
- * Placement syntax tree
- *   |
- *   v
- * Semantic analysis
- *   |
- *   +-------------------------------+
- *   |                               |
- *   v                               v
- * Placement intent              Resource requirements
- *   |                               |
- *   +---------------+---------------+
- *                   |
- *                   v
- *             canonical IR /
- *             resource model
- *                   |
- *          +--------+---------+
- *          |                  |
- *          v                  v
- *       routing           scheduling
- *          |                  |
- *          +--------+---------+
- *                   |
- *                   v
- *              hardware HAL
- *                   |
- *                   v
- *                runtime
+ * Zamani source
+ *      |
+ *      v
+ * canonical lexer
+ *      |
+ *      v
+ * this grammar
+ *      |
+ *      v
+ * domain-neutral AST
+ *      |
+ *      v
+ * placement semantic model
+ *      |
+ *      +-----------------------------+
+ *      |                             |
+ *      v                             v
+ * resource analysis            capability analysis
+ *      |                             |
+ *      +-------------+---------------+
+ *                    |
+ *                    v
+ *             realization planning
+ *                    |
+ *          +---------+---------+
+ *          |         |         |
+ *          v         v         v
+ *       routing  scheduling  optimization
+ *                    |
+ *                    v
+ *              target realization
+ *                    |
+ *                    v
+ *                  HAL
  *
- * There is deliberately NO:
- *
- *   placement -> routing implementation
- *   placement -> scheduler implementation
- *   placement -> hardware implementation
- *   placement -> runtime implementation
  *
  * ============================================================================
- * POCO-REAF
+ * POCO-REAF CONTRACT
  * ============================================================================
  *
  * Placement must preserve:
  *
- *   Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
+ *     Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
  *
- * Therefore source placement MUST NOT require:
+ * Therefore this grammar MUST NOT encode universal physical limits.
  *
- *   - a fixed number of resources;
- *   - a fixed number of devices;
- *   - a fixed topology;
- *   - a fixed device identifier;
- *   - a fixed hardware address;
- *   - a fixed CPU count;
- *   - a fixed GPU count;
- *   - a fixed FPGA count;
- *   - a fixed QPU count;
- *   - a fixed qubit count;
- *   - a fixed memory size;
- *   - a fixed cluster size;
- *   - a fixed node count.
+ * It MUST NOT define:
  *
- * A placement may describe:
+ *     MAX_QUBITS
+ *     MAX_CPUS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_ASICS
+ *     MAX_NODES
+ *     MAX_MEMORY
+ *     MAX_THREADS
+ *     MAX_DEVICES
+ *     MAX_ACCELERATORS
+ *     MAX_REGIONS
+ *     MAX_PLACEMENTS
+ *     MAX_REPLICAS
  *
- *   - semantic requirements;
- *   - symbolic locations;
- *   - resource classes;
- *   - capabilities;
- *   - topology properties;
- *   - locality;
- *   - affinity;
- *   - anti-affinity;
- *   - constraints;
- *   - preferences;
- *   - policies;
- *   - migration permissions;
- *   - replication requirements.
+ * It also MUST NOT encode:
  *
- * Actual physical realization belongs downstream.
+ *     fixed device IDs
+ *     physical addresses
+ *     vendor IDs
+ *     fixed topology sizes
+ *     fixed machine sizes
+ *     fixed node counts
+ *     fixed hardware dimensions
  *
- * ============================================================================
- * SCALABILITY
- * ============================================================================
- *
- * There are NO MAX_* constants.
- *
- * There are NO fixed:
- *
- *   qubits
- *   nodes
- *   devices
- *   cores
- *   threads
- *   accelerators
- *   regions
- *   placement groups
- *   dimensions
- *   topology sizes
- *
- * Repetition uses ANTLR repetition operators.
- *
- * Quantities use expressions.
+ * All quantities are expressions.
  *
  * A quantity may therefore be:
  *
- *   symbolic;
- *   compile-time;
- *   runtime-derived;
- *   target-derived;
- *   resource-negotiated.
+ *     literal
+ *     symbolic
+ *     compile-time derived
+ *     runtime derived
+ *     workload derived
+ *     resource derived
+ *     target negotiated
  *
- * The grammar does not decide which one it is.
+ * Physical feasibility is downstream.
  *
- * ============================================================================
- * DETERMINISM
- * ============================================================================
- *
- * This grammar contains no unordered grammar construct.
- *
- * Deterministic parse structure is preserved by:
- *
- *   - explicit alternatives;
- *   - deterministic token vocabulary;
- *   - no semantic predicates;
- *   - no embedded actions;
- *   - no target-language code.
  *
  * ============================================================================
- * TOKEN CONTRACT
+ * OPEN-WORLD EXTENSIBILITY
  * ============================================================================
  *
- * This grammar requires the following stable placement vocabulary in:
+ * Placement MUST remain extensible without adding a parser rule for every
+ * future hardware technology.
  *
- *   grammar/lexer/tokens.g4
+ * Standard semantic categories have dedicated syntax where that syntax provides
+ * real language value.
  *
- * Core:
+ * Arbitrary future/vendor/domain properties use:
  *
- *   K_PLACEMENT
- *   K_PLACE
- *   K_BIND
- *   K_TO
- *   K_ON
- *   K_AT
- *   K_IN
+ *     qualifiedName = expression;
  *
- * Relationship:
+ * or:
  *
- *   K_AFFINITY
- *   K_ANTI_AFFINITY
- *   K_COLOCATE
- *   K_SEPARATE
- *   K_NEAR
- *   K_FAR
- *   K_ADJACENT
- *   K_AVOID
+ *     [expression]
  *
- * Grouping:
+ * and are interpreted semantically.
  *
- *   K_GROUP
- *   K_REGION
- *   K_DOMAIN
- *   K_SCOPE
+ * This allows future resources such as:
  *
- * Resource intent:
+ *     optical
+ *     neuromorphic
+ *     molecular
+ *     biological
+ *     photonic
+ *     reconfigurable
+ *     accelerator
+ *     future quantum substrates
  *
- *   K_RESOURCE
- *   K_TARGET
- *   K_CAPABILITY
- *   K_REQUIRE
- *   K_CONSTRAINT
- *   K_PREFERENCE
- *   K_HINT
+ * without changing the universal placement grammar.
  *
- * Policy:
  *
- *   K_POLICY
- *   K_STRATEGY
- *   K_PRIORITY
+ * ============================================================================
+ * REQUIREMENT / CONSTRAINT / PREFERENCE / HINT SEPARATION
+ * ============================================================================
  *
- * Placement policy:
+ * These categories are deliberately distinct.
  *
- *   K_PACK
- *   K_SPREAD
- *   K_BALANCED
- *   K_DENSE
- *   K_SPARSE
+ * REQUIREMENT
+ *     Mandatory semantic condition.
  *
- * Lifetime/mobility:
+ * CONSTRAINT
+ *     Mandatory restriction on valid realization.
  *
- *   K_MIGRATABLE
- *   K_IMMIGRATABLE
- *   K_REPLICATED
- *   K_REPLICA
- *   K_ELASTIC
- *   K_FIXED
+ * PREFERENCE
+ *     Advisory ranking guidance.
  *
- * Scope:
+ * HINT
+ *     Weaker advisory information.
  *
- *   K_LOCAL
- *   K_REMOTE
- *   K_ANY
- *   K_EXCLUSIVE
- *   K_SHARED
+ * A parser context must preserve the distinction so semantic analysis can
+ * never accidentally turn a preference or hint into a requirement.
  *
- * Location/resource properties:
  *
- *   K_NODE
- *   K_DEVICE
- *   K_CPU
- *   K_GPU
- *   K_FPGA
- *   K_ASIC
- *   K_QPU
- *   K_ACCELERATOR
- *   K_MEMORY
- *   K_SOCKET
- *   K_CORE
- *   K_THREAD
- *   K_RACK
- *   K_ZONE
- *   K_CLUSTER
- *   K_NUMA
+ * ============================================================================
+ * RESOURCE / CAPABILITY SEPARATION
+ * ============================================================================
  *
- * Comparison/selection:
+ * Placement may reference resources and capabilities.
  *
- *   K_MATCH
- *   K_WHERE
- *   K_BY
- *   K_BEST
- *   K_FIRST
- *   K_MIN
- *   K_MAX
+ * Placement does NOT define their semantics.
  *
- * The exact spelling of these tokens is part of the language specification.
+ * Resource meaning belongs to:
  *
- * No vendor name, device name, topology name, machine ID, or hardware count
- * belongs in the lexer vocabulary.
+ *     grammar/resources/
+ *
+ * Capability meaning belongs to:
+ *
+ *     grammar/resources/
+ *     grammar/hardware/
+ *
+ * Placement only attaches those semantic conditions to placement intent.
+ *
+ *
+ * ============================================================================
+ * TOPOLOGY SEPARATION
+ * ============================================================================
+ *
+ * Placement may reference topology objects and topology properties.
+ *
+ * It does NOT define topology.
+ *
+ * Topology owns:
+ *
+ *     nodes
+ *     edges
+ *     connectivity
+ *     directionality
+ *     topology relationships
+ *
+ * Placement consumes topology intent only where required.
+ *
+ *
+ * ============================================================================
+ * QUANTUM BOUNDARY
+ * ============================================================================
+ *
+ * Placement may reference logical quantum objects.
+ *
+ * It MUST NOT define:
+ *
+ *     QubitId
+ *     PhysicalQubitId
+ *     quantum gate sets
+ *     SWAP operations
+ *     routing algorithms
+ *     QEC
+ *
+ * Quantum semantic lowering remains:
+ *
+ *     frontend AST
+ *          ->
+ *     quantum semantic model
+ *          ->
+ *     quantum::ir
+ *
+ *
+ * ============================================================================
+ * HDL / HARDWARE BOUNDARY
+ * ============================================================================
+ *
+ * Placement may describe hardware realization intent used by HDL and hardware
+ * compilation.
+ *
+ * It does not define:
+ *
+ *     RTL primitives
+ *     physical floorplanning algorithms
+ *     placement algorithms
+ *     timing closure
+ *     routing algorithms
+ *     manufacturing constraints
+ *
+ * Those belong to downstream HDL/hardware semantic and backend layers.
+ *
+ *
+ * ============================================================================
+ * EFFECT CONTRACT
+ * ============================================================================
+ *
+ * Placement syntax itself produces no runtime effect.
+ *
+ * It is declarative.
+ *
+ * Runtime effects such as:
+ *
+ *     migration
+ *     allocation
+ *     device access
+ *     network access
+ *     synchronization
+ *
+ * are represented and checked by downstream semantic/effect systems.
+ *
+ *
+ * ============================================================================
+ * CAPABILITY CONTRACT
+ * ============================================================================
+ *
+ * Capability references are symbolic.
+ *
+ * Example:
+ *
+ *     capability quantum::measurement;
+ *
+ * or:
+ *
+ *     requires capability::quantum::measurement;
+ *
+ * The grammar does not decide whether the capability exists.
+ *
+ *
+ * ============================================================================
+ * RESOURCE CONTRACT
+ * ============================================================================
+ *
+ * Resource quantities are represented by canonical expressions.
+ *
+ * Example:
+ *
+ *     requires resource::memory >= required_memory;
+ *
+ *     requires resource::qubits >= required_qubits;
+ *
+ * The grammar does not impose a physical upper bound.
+ *
+ *
+ * ============================================================================
+ * POLICY CONTRACT
+ * ============================================================================
+ *
+ * Placement policies may express:
+ *
+ *     allow
+ *     forbid
+ *     prefer
+ *     require
+ *     fallback
+ *
+ * but policy evaluation belongs to the policy semantic layer.
+ *
+ *
+ * ============================================================================
+ * PROVENANCE CONTRACT
+ * ============================================================================
+ *
+ * The parser preserves source structure and source ordering.
+ *
+ * AST lowering must retain source spans for:
+ *
+ *     declaration
+ *     binding
+ *     relationship
+ *     requirement
+ *     constraint
+ *     preference
+ *     hint
+ *     policy
+ *     replication
+ *     migration
+ *     elasticity
+ *     property
+ *
+ * Provenance generation belongs to the frontend/compiler semantic layer.
+ *
+ *
+ * ============================================================================
+ * AST CONTRACT
+ * ============================================================================
+ *
+ * This grammar creates ANTLR parser contexts only.
+ *
+ * The frontend AST should provide semantic nodes corresponding to:
+ *
+ *     PlacementDeclaration
+ *     PlacementBinding
+ *     PlacementGroup
+ *     PlacementRegion
+ *     PlacementRelationship
+ *     PlacementRequirement
+ *     PlacementConstraint
+ *     PlacementPreference
+ *     PlacementHint
+ *     PlacementPolicy
+ *     PlacementReplication
+ *     PlacementMigration
+ *     PlacementElasticity
+ *     PlacementTarget
+ *     PlacementCapability
+ *     PlacementScope
+ *     PlacementProperty
+ *     PlacementSelector
+ *
+ * The exact Rust AST type names belong to the frontend AST implementation.
+ *
+ *
+ * ============================================================================
+ * SEMANTIC CONTRACT
+ * ============================================================================
+ *
+ * Semantic analysis MUST preserve:
+ *
+ *     placement intent != physical allocation
+ *     placement intent != routing
+ *     placement intent != scheduling
+ *     placement intent != discovery
+ *
+ * It must also preserve:
+ *
+ *     requirement != constraint
+ *     constraint != preference
+ *     preference != hint
+ *
+ *
+ * ============================================================================
+ * IR CONTRACT
+ * ============================================================================
+ *
+ * This grammar creates no IR.
+ *
+ * Placement lowers into the canonical semantic resource/hardware placement
+ * model.
+ *
+ * It MUST NOT create:
+ *
+ *     PlacementIR
+ *     QuantumPlacementIR
+ *     DevicePlacementIR
+ *
+ * as a competing universal IR.
+ *
+ * Quantum placement information eventually participates in:
+ *
+ *     quantum::ir
+ *
+ * through the normal semantic lowering pipeline.
+ *
+ *
+ * ============================================================================
+ * DIAGNOSTIC CONTRACT
+ * ============================================================================
+ *
+ * Syntax diagnostics belong to the parser.
+ *
+ * Semantic diagnostics include:
+ *
+ *     duplicate placement declaration
+ *     unresolved placement subject
+ *     unresolved placement location
+ *     unresolved target
+ *     unresolved capability
+ *     invalid resource expression
+ *     contradictory constraints
+ *     contradictory mobility declarations
+ *     invalid replication expression
+ *     invalid selector
+ *
+ * Resource availability errors belong to resource analysis.
+ *
+ * Routing errors belong to routing.
+ *
+ * Scheduling errors belong to scheduling.
+ *
+ * Physical realization errors belong to the target/HAL layer.
+ *
+ *
+ * ============================================================================
+ * DEPENDENCY CONTRACT
+ * ============================================================================
+ *
+ * DEPENDS_ON:
+ *
+ *     grammar/antlr/ZamaniLexer.g4
+ *     grammar/lexer/tokens.g4
+ *     grammar/expressions/expressions.g4
+ *     grammar/core/names.g4
+ *
+ * EXPORTS:
+ *
+ *     placementDeclaration
+ *     placementItem
+ *     placementBinding
+ *     placementGroup
+ *     placementRegion
+ *     placementRelationship
+ *     placementRequirement
+ *     placementConstraint
+ *     placementPreference
+ *     placementHint
+ *     placementPolicy
+ *     placementReplication
+ *     placementMigration
+ *     placementElasticity
+ *     placementTarget
+ *     placementCapability
+ *     placementScope
+ *     placementProperty
+ *     placementSelector
+ *
+ * CONSUMED_BY:
+ *
+ *     grammar/hardware/hardware.g4
+ *     future hardware-domain composition grammars
+ *     frontend parser integration
+ *
+ * AST_OWNER:
+ *
+ *     frontend AST implementation
+ *
+ * SEMANTIC_OWNER:
+ *
+ *     hardware/resource placement semantic analysis
+ *
+ * IR_OWNER:
+ *
+ *     canonical semantic resource/hardware model
+ *     quantum::ir where quantum semantics require it
+ *
+ * TEST_OWNER:
+ *
+ *     grammar/tests/hardware/
+ *     grammar/tests/semantic/
+ *     grammar/tests/scalability/
+ *
+ * SPEC_OWNER:
+ *
+ *     grammar/spec/hardware.md
+ *     grammar/spec/resources.md
+ *     grammar/specification/
+ *
+ * COMPATIBILITY_OWNER:
+ *
+ *     grammar/compatibility/
+ *
  *
  * ============================================================================
  */
@@ -350,125 +590,91 @@
 parser grammar ZamaniHardwarePlacementParser;
 
 options {
-    tokenVocab = ZamaniTokens;
+    tokenVocab = ZamaniLexer;
 }
 
+import
+    Expressions,
+    Names
+;
 
-// ============================================================================
-// 1. PUBLIC PLACEMENT ENTRY POINT
-// ============================================================================
-//
-// This is the rule consumed by hardware.g4:
-//
-//     hardwarePlacementDecl
-//
-// It is deliberately named exactly that way so the existing hardware grammar
-// can delegate placement syntax without duplicating placement rules.
-//
 
-hardwarePlacementDecl
+/* ============================================================================
+ * 1. PUBLIC DECLARATION
+ * ============================================================================
+ *
+ * Canonical hardware.g4 integration rule:
+ *
+ *     placementDeclaration
+ *
+ * Example:
+ *
+ *     placement compute_placement {
+ *         place workload to accelerator;
+ *     }
+ */
+
+placementDeclaration
     : placementAnnotation*
       placementVisibility?
-      K_PLACEMENT
-      IDENTIFIER
-      placementGenericParameters?
-      placementScopeClause?
-      placementRequirementClause?
-      placementCapabilityClause?
+      PLACEMENT
+      qualifiedName
+      placementParameterList?
       LBRACE
       placementItem*
       RBRACE
     ;
 
 
-// ============================================================================
-// 2. VISIBILITY
-// ============================================================================
+/* ============================================================================
+ * 2. DECLARATION SUPPORT
+ * ========================================================================== */
 
 placementVisibility
-    : K_PUBLIC
-    | K_PRIVATE
-    | K_PROTECTED
-    | K_INTERNAL
+    : PUBLIC
+    | PRIVATE
+    | PROTECTED
+    | INTERNAL
     ;
 
 
-// ============================================================================
-// 3. ANNOTATIONS
-// ============================================================================
-//
-// Annotations are metadata.
-// They do not perform placement.
-//
-
 placementAnnotation
-    : AT placementQualifiedName
+    : AT
+      qualifiedName
       (
           LPAREN
-          placementArgumentList?
+          expressionList?
           RPAREN
       )?
     ;
 
-placementArgumentList
-    : placementArgument
-      (COMMA placementArgument)*
-    ;
 
-placementArgument
-    : placementQualifiedName
-    | STRING_LITERAL
-    | INTEGER_LITERAL
-    | FLOAT_LITERAL
-    | placementExpression
+placementParameterList
+    : LESS
+      placementParameter
+      (COMMA placementParameter)*
+      GREATER
     ;
 
 
-// ============================================================================
-// 4. GENERIC PARAMETERS
-// ============================================================================
-//
-// Generic parameters allow placement descriptions to scale.
-//
-// Example:
-//
-//     placement ClusterPlacement<N, Capacity> { ... }
-//
-// N is not a machine limit.
-// It is a semantic parameter.
-//
-
-placementGenericParameters
-    : LESS_THAN
-      placementGenericParameter
-      (COMMA placementGenericParameter)*
-      GREATER_THAN
-    ;
-
-placementGenericParameter
-    : IDENTIFIER
-      placementGenericBound?
+placementParameter
+    : qualifiedName
       (
           ASSIGN
-          placementExpression
+          expression
       )?
     ;
 
-placementGenericBound
-    : COLON
-      placementTypeReference
-    ;
 
-
-// ============================================================================
-// 5. PLACEMENT BODY
-// ============================================================================
+/* ============================================================================
+ * 3. PLACEMENT BODY
+ * ========================================================================== */
 
 placementItem
     : placementBinding
     | placementGroup
     | placementRegion
-    | placementRelation
+    | placementRelationship
     | placementRequirement
     | placementConstraint
     | placementPreference
@@ -484,128 +690,91 @@ placementItem
     ;
 
 
-// ============================================================================
-// 6. DIRECT PLACEMENT BINDING
-// ============================================================================
-//
-// These are semantic associations.
-//
-// They do NOT mean that the compiler must physically move anything.
-//
+/* ============================================================================
+ * 4. DIRECT PLACEMENT BINDING
+ * ============================================================================
+ *
+ * Portable source intent:
+ *
+ *     place computation to accelerator;
+ *     bind qpu_workload to quantum_backend;
+ *
+ * No physical device is selected by this syntax.
+ */
 
 placementBinding
     : placementBindingVerb
-      placementSubject
-      placementBindingOperator
+      qualifiedName
+      TO
       placementLocation
       SEMICOLON
     ;
 
+
 placementBindingVerb
-    : K_PLACE
-    | K_BIND
+    : PLACE
+    | BIND
     ;
 
-placementBindingOperator
-    : K_TO
-    | K_ON
-    | K_AT
-    | K_IN
-    ;
-
-
-// ============================================================================
-// 7. PLACEMENT SUBJECT
-// ============================================================================
-//
-// A subject may identify:
-//
-//   - a computation;
-//   - a module;
-//   - a task;
-//   - a logical qubit;
-//   - a logical register;
-//   - a data object;
-//   - a hardware component;
-//   - a resource class;
-//   - a user-defined semantic object.
-//
-// The grammar does not impose a physical interpretation.
-//
-
-placementSubject
-    : placementQualifiedName
-    | placementSubjectSelector
-    ;
-
-placementSubjectSelector
-    : LBRACKET
-      placementSelectorExpression
-      RBRACKET
-    ;
-
-
-// ============================================================================
-// 8. PLACEMENT LOCATION
-// ============================================================================
-//
-// A location is symbolic.
-//
-// It can refer to:
-//
-//   - a logical region;
-//   - a resource class;
-//   - a target capability;
-//   - a deployment scope;
-//   - a topology region;
-//   - a backend-provided resource;
-//   - a semantic location.
-//
-// Physical resolution is downstream.
-//
 
 placementLocation
-    : placementQualifiedName
-    | placementLocationSelector
-    | placementLocationExpression
-    ;
-
-placementLocationSelector
-    : LBRACKET
-      placementSelectorExpression
-      RBRACKET
-    ;
-
-placementLocationExpression
-    : LPAREN
-      placementExpression
+    : qualifiedName
+      placementSelector?
+    | LPAREN
+      expression
       RPAREN
     ;
 
 
-// ============================================================================
-// 9. GROUPS
-// ============================================================================
-//
-// Groups allow a collection of subjects to share placement semantics.
-//
+/* ============================================================================
+ * 5. SUBJECT SELECTORS
+ * ========================================================================== */
+
+placementSubject
+    : qualifiedName
+      placementSelector?
+    ;
+
+
+placementSelector
+    : LBRACKET
+      expression
+      RBRACKET
+    ;
+
+
+placementSelectorList
+    : placementSelector+
+    ;
+
+
+/* ============================================================================
+ * 6. GROUPS
+ * ============================================================================
+ *
+ * Groups are logical placement sets.
+ *
+ * Group cardinality is unrestricted by the grammar.
+ */
 
 placementGroup
-    : K_GROUP
-      IDENTIFIER
+    : GROUP
+      qualifiedName
       placementGroupMode?
       LBRACE
       placementGroupMember*
       RBRACE
     ;
 
+
 placementGroupMode
-    : K_PACK
-    | K_SPREAD
-    | K_BALANCED
-    | K_DENSE
-    | K_SPARSE
+    : PACK
+    | SPREAD
+    | BALANCED
+    | DENSE
+    | SPARSE
     ;
+
 
 placementGroupMember
     : placementSubject
@@ -613,1032 +782,753 @@ placementGroupMember
     ;
 
 
-// ============================================================================
-// 10. REGIONS
-// ============================================================================
-//
-// A region is a symbolic placement domain.
-//
-// It is NOT a hardware topology definition.
-//
-// Actual region discovery is performed downstream.
-//
+/* ============================================================================
+ * 7. SYMBOLIC REGIONS
+ * ============================================================================
+ *
+ * A region is a logical placement domain.
+ *
+ * It is not a topology definition.
+ */
 
 placementRegion
-    : K_REGION
-      IDENTIFIER
-      placementRegionAttributes?
+    : REGION
+      qualifiedName
       LBRACE
       placementRegionItem*
       RBRACE
     ;
 
-placementRegionAttributes
-    : LPAREN
-      placementPropertyList?
-      RPAREN
-    ;
 
 placementRegionItem
-    : placementLocation
-      SEMICOLON
+    : placementProperty
     | placementRequirement
     | placementConstraint
     | placementPreference
-    | placementProperty
+    | placementHint
     ;
 
 
-// ============================================================================
-// 11. RELATIONSHIPS
-// ============================================================================
-//
-// Relations express semantic relationships without choosing an algorithm.
-//
+/* ============================================================================
+ * 8. PLACEMENT RELATIONSHIPS
+ * ========================================================================== */
 
-placementRelation
+placementRelationship
     : placementAffinity
     | placementAntiAffinity
     | placementCoLocation
     | placementSeparation
-    | placementDistance
+    | placementNear
+    | placementFar
     | placementAdjacency
     | placementAvoidance
     ;
 
+
 placementAffinity
-    : K_AFFINITY
-      placementRelationSubject
-      placementRelationOperator
-      placementRelationSubject
+    : AFFINITY
+      placementSubject
+      WITH
+      placementSubject
       SEMICOLON
     ;
+
 
 placementAntiAffinity
-    : K_ANTI_AFFINITY
-      placementRelationSubject
-      placementRelationOperator
-      placementRelationSubject
+    : ANTI_AFFINITY
+      placementSubject
+      WITH
+      placementSubject
       SEMICOLON
     ;
+
 
 placementCoLocation
-    : K_COLOCATE
-      placementRelationSubject
-      placementRelationOperator
-      placementRelationSubject
+    : COLOCATE
+      placementSubject
+      WITH
+      placementSubject
       SEMICOLON
     ;
+
 
 placementSeparation
-    : K_SEPARATE
-      placementRelationSubject
-      placementRelationOperator
-      placementRelationSubject
+    : SEPARATE
+      placementSubject
+      WITH
+      placementSubject
       SEMICOLON
     ;
 
-placementDistance
-    : placementDistanceKeyword
-      placementRelationSubject
-      placementDistanceOperator
-      placementExpression
+
+placementNear
+    : NEAR
+      placementSubject
+      WITH
+      placementSubject
       SEMICOLON
     ;
 
-placementDistanceKeyword
-    : K_NEAR
-    | K_FAR
+
+placementFar
+    : FAR
+      placementSubject
+      WITH
+      placementSubject
+      SEMICOLON
     ;
 
-placementDistanceOperator
-    : LESS_THAN
-    | LESS_EQUAL
-    | GREATER_THAN
-    | GREATER_EQUAL
-    | ASSIGN
-    ;
 
 placementAdjacency
-    : K_ADJACENT
-      placementRelationSubject
-      placementRelationOperator
-      placementRelationSubject
+    : ADJACENT
+      placementSubject
+      WITH
+      placementSubject
       SEMICOLON
     ;
+
 
 placementAvoidance
-    : K_AVOID
-      placementRelationSubject
-      placementRelationOperator
-      placementRelationSubject
+    : AVOID
+      placementSubject
+      WITH
+      placementSubject
       SEMICOLON
     ;
 
-placementRelationSubject
-    : placementSubject
-    | placementLocation
-    ;
 
-placementRelationOperator
-    : K_TO
-    | K_ON
-    | K_IN
-    | K_WITH
-    ;
-
-
-// ============================================================================
-// 12. REQUIREMENTS
-// ============================================================================
-//
-// Requirements are mandatory semantic conditions.
-//
-// They are NOT automatically interpreted as a particular physical device.
-//
+/* ============================================================================
+ * 9. REQUIREMENTS
+ * ============================================================================
+ *
+ * Requirements consume the canonical expression language.
+ *
+ * Examples:
+ *
+ *     requires resource::memory >= required_memory;
+ *     requires capability::quantum::measurement;
+ *     requires topology::connected;
+ *
+ * No resource implementation is embedded here.
+ */
 
 placementRequirement
-    : K_REQUIRE
-      placementRequirementBody
+    : REQUIRES
+      expression
       SEMICOLON
     ;
 
-placementRequirementBody
-    : placementRequirementExpression
-    | placementResourceRequirement
-    | placementCapabilityRequirement
-    | placementLocationRequirement
-    ;
 
-placementResourceRequirement
-    : K_RESOURCE
-      placementResourceSelector
-    ;
-
-placementCapabilityRequirement
-    : K_CAPABILITY
-      placementCapabilitySelector
-    ;
-
-placementLocationRequirement
-    : placementSubject
-      placementRequirementOperator
-      placementLocation
-    ;
-
-placementRequirementExpression
-    : placementExpression
-    ;
-
-placementRequirementOperator
-    : K_TO
-    | K_ON
-    | K_IN
-    | K_WITH
-    ;
-
-
-// ============================================================================
-// 13. CONSTRAINTS
-// ============================================================================
-//
-// Constraints restrict valid placement solutions.
-//
-// They do not prescribe how a router or scheduler must satisfy them.
-//
+/* ============================================================================
+ * 10. CONSTRAINTS
+ * ========================================================================== */
 
 placementConstraint
-    : K_CONSTRAINT
-      placementConstraintBody
+    : CONSTRAINT
+      expression
       SEMICOLON
     ;
 
-placementConstraintBody
-    : placementExpression
-    | placementRelation
-    | placementResourceConstraint
-    | placementCapacityConstraint
-    | placementLocationConstraint
-    ;
 
-placementResourceConstraint
-    : K_RESOURCE
-      placementResourceSelector
-    ;
-
-placementCapacityConstraint
-    : placementCapacityName
-      placementComparisonOperator
-      placementExpression
-    ;
-
-placementCapacityName
-    : K_MEMORY
-    | K_CPU
-    | K_GPU
-    | K_FPGA
-    | K_QPU
-    | K_ACCELERATOR
-    | K_CORE
-    | K_THREAD
-    | placementQualifiedName
-    ;
-
-placementLocationConstraint
-    : placementSubject
-      placementComparisonOperator
-      placementLocation
-    ;
-
-placementComparisonOperator
-    : ASSIGN
-    | EQUAL_EQUAL
-    | NOT_EQUAL
-    | LESS_THAN
-    | LESS_EQUAL
-    | GREATER_THAN
-    | GREATER_EQUAL
-    ;
-
-
-// ============================================================================
-// 14. PREFERENCES
-// ============================================================================
-//
-// Preferences are advisory.
-//
-// A preference may be rejected by the compilation/runtime environment when
-// satisfying it would violate mandatory requirements or constraints.
-//
+/* ============================================================================
+ * 11. PREFERENCES
+ * ========================================================================== */
 
 placementPreference
-    : K_PREFERENCE
-      placementPreferenceBody
+    : PREFER
+      expression
       SEMICOLON
     ;
 
-placementPreferenceBody
-    : placementExpression
-    | placementPreferenceProperty
-    | placementPreferenceStrategy
-    ;
 
-placementPreferenceProperty
-    : placementPropertyName
-      placementComparisonOperator
-      placementExpression
-    ;
-
-placementPreferenceStrategy
-    : K_STRATEGY
-      placementStrategy
-    ;
-
-placementStrategy
-    : K_PACK
-    | K_SPREAD
-    | K_BALANCED
-    | K_DENSE
-    | K_SPARSE
-    | K_BEST
-    | K_FIRST
-    ;
-
-
-// ============================================================================
-// 15. HINTS
-// ============================================================================
-//
-// Hints are weaker than preferences.
-//
-// They must never silently become mandatory constraints.
-//
+/* ============================================================================
+ * 12. HINTS
+ * ========================================================================== */
 
 placementHint
-    : K_HINT
-      placementHintBody
+    : HINT
+      expression
       SEMICOLON
     ;
 
-placementHintBody
-    : placementExpression
-    | placementProperty
-    | placementLocation
-    ;
 
-
-// ============================================================================
-// 16. POLICIES
-// ============================================================================
-//
-// Policies express permitted placement behavior.
-//
-// Policy interpretation belongs to semantic/compiler layers.
-//
+/* ============================================================================
+ * 13. POLICIES
+ * ============================================================================
+ *
+ * Policy syntax is intentionally declarative.
+ *
+ * Policy evaluation belongs to the canonical policy semantic subsystem.
+ */
 
 placementPolicy
-    : K_POLICY
-      IDENTIFIER?
+    : POLICY
+      qualifiedName?
       LBRACE
       placementPolicyItem*
       RBRACE
     ;
 
+
 placementPolicyItem
-    : placementPolicyProperty
+    : ALLOW
+      expression
       SEMICOLON
-    | placementPolicyRule
+    | FORBID
+      expression
+      SEMICOLON
+    | PREFER
+      expression
+      SEMICOLON
+    | REQUIRES
+      expression
+      SEMICOLON
+    | CONSTRAINT
+      expression
+      SEMICOLON
+    | HINT
+      expression
       SEMICOLON
     ;
 
-placementPolicyProperty
-    : placementPropertyName
-      ASSIGN
-      placementExpression
-    ;
 
-placementPolicyRule
-    : placementExpression
-    | placementRelation
-    ;
-
-
-// ============================================================================
-// 17. REPLICATION
-// ============================================================================
-//
-// Replication is expressed symbolically.
-//
-// There is no fixed replica count.
-//
+/* ============================================================================
+ * 14. REPLICATION
+ * ============================================================================
+ *
+ * Replication cardinality is an expression.
+ *
+ * It may therefore depend on workload size, data size, availability,
+ * policy, or another semantic quantity.
+ */
 
 placementReplication
-    : K_REPLICATED
-      placementReplicationBody
+    : REPLICATED
+      qualifiedName
+      placementReplicationCount?
       SEMICOLON
     ;
 
-placementReplicationBody
-    : placementSubject
-      placementReplicationCount?
-    | placementGroupReference
-      placementReplicationCount?
-    ;
 
 placementReplicationCount
-    : placementExpression
-    ;
-
-placementGroupReference
-    : K_GROUP
-      placementQualifiedName
+    : expression
     ;
 
 
-// ============================================================================
-// 18. MIGRATION
-// ============================================================================
-//
-// Migration specifies whether a placement may change.
-//
-// It does NOT perform migration.
-//
+/* ============================================================================
+ * 15. MOBILITY / MIGRATION
+ * ============================================================================
+ *
+ * This grammar declares mobility intent.
+ *
+ * It does not execute migration.
+ */
 
 placementMigration
-    : placementMigrationMode
-      placementMigrationSubject
+    : MIGRATABLE
+      qualifiedName
+      SEMICOLON
+    | NON_MIGRATABLE
+      qualifiedName
       SEMICOLON
     ;
 
-placementMigrationMode
-    : K_MIGRATABLE
-    | K_IMMIGRATABLE
-    ;
 
-placementMigrationSubject
-    : placementSubject
-    | placementGroupReference
-    ;
-
-
-// ============================================================================
-// 19. ELASTICITY
-// ============================================================================
-//
-// Elastic placement permits resource cardinality to be determined by the
-// compilation/execution environment.
-//
+/* ============================================================================
+ * 16. ELASTICITY
+ * ============================================================================
+ *
+ * Elasticity allows the realization to determine an appropriate placement
+ * cardinality or expansion strategy subject to semantic requirements.
+ */
 
 placementElasticity
-    : K_ELASTIC
-      placementElasticityBody
+    : ELASTIC
+      qualifiedName
+      placementElasticityExpression?
       SEMICOLON
     ;
 
-placementElasticityBody
-    : placementSubject
-    | placementGroupReference
-    | placementExpression
+
+placementElasticityExpression
+    : expression
     ;
 
 
-// ============================================================================
-// 20. TARGET REFERENCES
-// ============================================================================
-//
-// A target is a semantic target description.
-//
-// It is NOT a physical device ID.
-//
+/* ============================================================================
+ * 17. TARGET REFERENCES
+ * ============================================================================
+ *
+ * Target names are semantic target classes, not physical machine IDs.
+ */
 
 placementTarget
-    : K_TARGET
-      placementTargetReference
-      placementTargetQualifier*
+    : TARGET
+      qualifiedName
+      placementQualifierList?
       SEMICOLON
     ;
 
-placementTargetReference
-    : placementQualifiedName
-    | placementTargetSelector
-    ;
 
-placementTargetSelector
-    : LBRACKET
-      placementSelectorExpression
-      RBRACKET
-    ;
-
-placementTargetQualifier
-    : K_REQUIRE
-      placementExpression
-    | K_PREFERENCE
-      placementExpression
-    | K_CONSTRAINT
-      placementExpression
+placementQualifierList
+    : placementQualifier+
     ;
 
 
-// ============================================================================
-// 21. CAPABILITY REFERENCES
-// ============================================================================
-//
-// Capabilities describe what an implementation must provide or prefer.
-//
-// The grammar never turns a capability into a specific vendor/device.
-//
+placementQualifier
+    : REQUIRES
+      expression
+    | CONSTRAINT
+      expression
+    | PREFER
+      expression
+    | HINT
+      expression
+    ;
+
+
+/* ============================================================================
+ * 18. CAPABILITY REFERENCES
+ * ========================================================================== */
 
 placementCapability
-    : K_CAPABILITY
-      placementCapabilitySelector
-      placementCapabilityQualifier*
+    : CAPABILITY
+      qualifiedName
+      placementQualifierList?
       SEMICOLON
     ;
 
-placementCapabilitySelector
-    : placementQualifiedName
-    | LBRACKET
-      placementSelectorExpression
-      RBRACKET
-    ;
 
-placementCapabilityQualifier
-    : K_REQUIRE
-      placementExpression
-    | K_PREFERENCE
-      placementExpression
-    | K_CONSTRAINT
-      placementExpression
-    ;
-
-
-// ============================================================================
-// 22. SCOPES
-// ============================================================================
-//
-// Scope describes the semantic deployment locality.
-//
-// It does not enumerate physical nodes.
-//
+/* ============================================================================
+ * 19. SCOPE
+ * ============================================================================
+ *
+ * Scope values remain expressions so future scope models do not require new
+ * lexical vocabulary.
+ *
+ * Examples:
+ *
+ *     scope local;
+ *     scope cluster;
+ *     scope execution::domain;
+ */
 
 placementScope
-    : K_SCOPE
-      placementScopeValue
+    : SCOPE
+      expression
       SEMICOLON
     ;
 
-placementScopeClause
-    : K_SCOPE
-      placementScopeValue
-    ;
 
-placementScopeValue
-    : K_LOCAL
-    | K_REMOTE
-    | K_ANY
-    | placementQualifiedName
-    ;
-
-
-// ============================================================================
-// 23. PROPERTY DECLARATIONS
-// ============================================================================
-//
-// Properties remain symbolic and target-independent.
-//
+/* ============================================================================
+ * 20. OPEN-WORLD PLACEMENT PROPERTIES
+ * ============================================================================
+ *
+ * Examples:
+ *
+ *     placement::locality = execution_region;
+ *     placement::priority = priority_value;
+ *     vendor::placement::metric = metric_value;
+ *
+ * The parser does not maintain a finite property catalogue.
+ */
 
 placementProperty
-    : placementPropertyName
+    : qualifiedName
       ASSIGN
-      placementExpression
+      expression
       SEMICOLON
     ;
 
-placementPropertyList
-    : placementPropertyAssignment
-      (COMMA placementPropertyAssignment)*
-    ;
 
-placementPropertyAssignment
-    : placementPropertyName
-      ASSIGN
-      placementExpression
-    ;
+/* ============================================================================
+ * 21. OPTIONAL LIST BOUNDARIES
+ * ========================================================================== */
 
-placementPropertyName
-    : K_PRIORITY
-    | K_MEMORY
-    | K_CPU
-    | K_GPU
-    | K_FPGA
-    | K_QPU
-    | K_ACCELERATOR
-    | K_SOCKET
-    | K_CORE
-    | K_THREAD
-    | K_NODE
-    | K_DEVICE
-    | K_RACK
-    | K_ZONE
-    | K_CLUSTER
-    | K_NUMA
-    | K_DOMAIN
-    | placementQualifiedName
+placementItemList
+    : placementItem*
     ;
 
 
-// ============================================================================
-// 24. RESOURCE SELECTORS
-// ============================================================================
-//
-// Resource selectors identify classes of resources.
-//
-// They do not enumerate discovered hardware.
-//
-
-placementResourceSelector
-    : placementResourceClass
-    | placementQualifiedName
-    | LBRACKET
-      placementSelectorExpression
-      RBRACKET
-    ;
-
-placementResourceClass
-    : K_CPU
-    | K_GPU
-    | K_FPGA
-    | K_ASIC
-    | K_QPU
-    | K_ACCELERATOR
-    | K_MEMORY
-    | K_NODE
-    | K_DEVICE
+placementSubjectList
+    : placementSubject
+      (COMMA placementSubject)*
     ;
 
 
-// ============================================================================
-// 25. SELECTOR EXPRESSIONS
-// ============================================================================
-//
-// Selectors are intentionally symbolic.
-//
-// Example semantic forms:
-//
-//     [capability = "quantum"]
-//     [memory >= required_memory]
-//     [region = execution_region]
-//
-// The grammar does not decide whether the selector is evaluated at compile
-// time, deployment time, or runtime.
-//
-
-placementSelectorExpression
-    : placementSelectorTerm
-      (
-          placementSelectorOperator
-          placementSelectorTerm
-      )*
-    ;
-
-placementSelectorTerm
-    : placementQualifiedName
-    | STRING_LITERAL
-    | INTEGER_LITERAL
-    | FLOAT_LITERAL
-    | placementSelectorGroup
-    | LPAREN
-      placementSelectorExpression
-      RPAREN
-    ;
-
-placementSelectorGroup
-    : LBRACE
-      placementSelectorExpression
-      RBRACE
-    ;
-
-placementSelectorOperator
-    : ASSIGN
-    | EQUAL_EQUAL
-    | NOT_EQUAL
-    | LESS_THAN
-    | LESS_EQUAL
-    | GREATER_THAN
-    | GREATER_EQUAL
-    | LOGICAL_AND
-    | LOGICAL_OR
+placementQualifiedNameList
+    : qualifiedName
+      (COMMA qualifiedName)*
     ;
 
 
-// ============================================================================
-// 26. GENERAL PLACEMENT EXPRESSIONS
-// ============================================================================
-//
-// This is deliberately a placement-level expression surface rather than a
-// second type system.
-//
-// The canonical semantic expression system remains authoritative.
-//
-// When this grammar is imported by the root parser, these expressions should
-// be lowered into the canonical expression AST rather than represented as a
-// second expression implementation.
-//
+/* ============================================================================
+ * 22. SEMANTIC INTEGRATION ADAPTERS
+ * ============================================================================
+ *
+ * These aliases provide stable semantic naming boundaries without creating
+ * duplicate expression/name implementations.
+ */
 
-placementExpression
-    : placementExpressionAtom
-      (
-          placementExpressionOperator
-          placementExpressionAtom
-      )*
-    ;
-
-placementExpressionAtom
-    : placementQualifiedName
-    | INTEGER_LITERAL
-    | FLOAT_LITERAL
-    | STRING_LITERAL
-    | LPAREN
-      placementExpression
-      RPAREN
-    ;
-
-placementExpressionOperator
-    : PLUS
-    | MINUS
-    | STAR
-    | SLASH
-    | PERCENT
-    | EQUAL_EQUAL
-    | NOT_EQUAL
-    | LESS_THAN
-    | LESS_EQUAL
-    | GREATER_THAN
-    | GREATER_EQUAL
-    | LOGICAL_AND
-    | LOGICAL_OR
+placementCondition
+    : expression
     ;
 
 
-// ============================================================================
-// 27. TYPE REFERENCES
-// ============================================================================
-//
-// Placement does not define a second type system.
-//
-
-placementTypeReference
-    : placementQualifiedName
+placementValue
+    : expression
     ;
 
 
-// ============================================================================
-// 28. QUALIFIED NAMES
-// ============================================================================
-//
-// Qualified names are used for semantic references.
-//
-// Examples:
-//
-//     logical.q0
-//     resource.gpu
-//     target.quantum
-//     topology.region
-//
-// No physical device identity is implied.
-//
-
-placementQualifiedName
-    : IDENTIFIER
-      (
-          DOUBLE_COLON
-          IDENTIFIER
-      )*
+placementQuantity
+    : expression
     ;
 
 
-// ============================================================================
-// 29. SAFE INTEGRATION ADAPTER
-// ============================================================================
-//
-// Hardware grammar can delegate:
-//
-//     hardwarePlacementDecl
-//
-// directly to this grammar.
-//
-// No rule here references:
-//
-//     routing
-//     scheduling
-//     quantum::ir
-//     QEC
-//     ZQN
-//     hardware HAL
-//
-// Those are downstream semantic consumers.
-//
-// ============================================================================
+placementPredicate
+    : expression
+    ;
 
 
-// ============================================================================
-// 30. HARD-CODING INVARIANTS
-// ============================================================================
-//
-// This grammar MUST NEVER introduce:
-//
-//     MAX_QUBITS
-//     MAX_DEVICES
-//     MAX_NODES
-//     MAX_CORES
-//     MAX_GPUS
-//     MAX_FPGAS
-//     MAX_MEMORY
-//     MAX_REGIONS
-//     MAX_PLACEMENTS
-//     fixed topology dimensions
-//     fixed hardware addresses
-//     fixed vendor identifiers
-//     fixed device identifiers
-//
-// Any such requirement belongs to:
-//
-//     semantic validation
-//     resource policy
-//     target description
-//     hardware capability model
-//     deployment configuration
-//     runtime resource manager
-//
-// ============================================================================
-
-
-// ============================================================================
-// 31. SEMANTIC INTEGRATION CONTRACT
-// ============================================================================
-//
-// The parser output must be lowered into the canonical Zamani AST.
-//
-// Semantic analysis must classify every placement statement as one of:
-//
-//     Binding
-//     Requirement
-//     Constraint
-//     Preference
-//     Hint
-//     Relationship
-//     Policy
-//     Scope
-//     Mobility
-//     Replication
-//     Elasticity
-//
-// Semantic analysis MUST preserve the distinction:
-//
-//     requirement != constraint != preference != hint
-//
-// and:
-//
-//     placement intent != routing decision
-//
-// and:
-//
-//     placement intent != scheduling decision
-//
-// and:
-//
-//     placement intent != hardware discovery
-//
-// ============================================================================
-
-
-// ============================================================================
-// 32. QUANTUM INTEGRATION CONTRACT
-// ============================================================================
-//
-// Quantum placement syntax may reference logical/physical semantic objects.
-//
-// The grammar itself MUST NOT define:
-//
-//     QubitId
-//     PhysicalQubitId
-//
-// The canonical quantum IR remains the owner of those identities.
-//
-// Therefore:
-//
-//     placement.g4
-//         -> syntax
-//         -> semantic placement intent
-//         -> canonical IR/resource mapping
-//
-// and NOT:
-//
-//     placement.g4
-//         -> second quantum mapping model
-//
-// ============================================================================
-
-
-// ============================================================================
-// 33. ROUTING INTEGRATION CONTRACT
-// ============================================================================
-//
-// Routing consumes placement intent and resource/topology information.
-//
-// Routing is responsible for deciding:
-//
-//     - mapping realization;
-//     - path selection;
-//     - movement;
-//     - SWAP insertion;
-//     - connectivity realization;
-//     - remapping.
-//
-// placement.g4 does none of those things.
-//
-// ============================================================================
-
-
-// ============================================================================
-// 34. SCHEDULING INTEGRATION CONTRACT
-// ============================================================================
-//
-// Scheduling consumes placement/resource state.
-//
-// Scheduling decides:
-//
-//     - ordering;
-//     - timing;
-//     - resource occupancy;
-//     - synchronization;
-//     - temporal constraints.
-//
-// placement.g4 does not schedule anything.
-//
-// ============================================================================
-
-
-// ============================================================================
-// 35. HARDWARE HAL INTEGRATION CONTRACT
-// ============================================================================
-//
-// Hardware/HAL resolves:
-//
-//     target
-//     capability
-//     resource
-//     topology
-//     availability
-//     calibration
-//     physical identity
-//
-// Placement syntax merely expresses the program's intent.
-//
-// ============================================================================
-
-
-// ============================================================================
-// 36. RUNTIME INTEGRATION CONTRACT
-// ============================================================================
-//
-// Runtime may consume placement information after compilation.
-//
-// Runtime MUST NOT reinterpret source placement syntax independently.
-//
-// The semantic representation produced by compilation is authoritative.
-//
-// ============================================================================
-
-
-// ============================================================================
-// 37. SECURITY CONTRACT
-// ============================================================================
-//
-// Placement syntax cannot:
-//
-//     - open devices;
-//     - access physical addresses;
-//     - enumerate hardware;
-//     - access files;
-//     - access networks;
-//     - execute commands;
-//     - load drivers;
-//     - bypass capability checks.
-//
-// Placement is declarative syntax only.
-//
-// ============================================================================
-
-
-// ============================================================================
-// 38. ERROR-BOUNDARY CONTRACT
-// ============================================================================
-//
-// Syntax errors belong to parser diagnostics.
-//
-// Semantic placement errors belong to semantic analysis.
-//
-// Resource unavailability belongs to resource resolution.
-//
-// Hardware incompatibility belongs to hardware validation.
-//
-// Routing failure belongs to routing.
-//
-// Scheduling failure belongs to scheduling.
-//
-// Runtime failure belongs to runtime.
-//
-// This grammar must not encode backend/provider error codes.
-//
-// ============================================================================
-
-
-// ============================================================================
-// 39. COMPLETION INVARIANT
-// ============================================================================
-//
-// placement.g4 is complete when:
-//
-//   1. placement declarations parse deterministically;
-//   2. placement binding parses;
-//   3. placement groups parse;
-//   4. placement regions parse;
-//   5. affinity parses;
-//   6. anti-affinity parses;
-//   7. co-location parses;
-//   8. separation parses;
-//   9. locality parses;
-//  10. requirements parse;
-//  11. constraints parse;
-//  12. preferences parse;
-//  13. hints parse;
-//  14. policies parse;
-//  15. replication parses;
-//  16. migration intent parses;
-//  17. elasticity parses;
-//  18. target references parse;
-//  19. capability references parse;
-//  20. symbolic resource selectors parse;
-//  21. symbolic expressions parse;
-//  22. qualified names parse;
-//  23. no hardware count is hard-coded;
-//  24. no topology is hard-coded;
-//  25. no device ID is hard-coded;
-//  26. no vendor is hard-coded;
-//  27. no quantum ID type is redefined;
-//  28. no routing algorithm is embedded;
-//  29. no scheduler policy is embedded;
-//  30. no runtime behavior is embedded;
-//  31. no unsafe Rust is introduced;
-//  32. the grammar integrates with hardware.g4;
-//  33. semantic lowering can distinguish requirements,
-//      constraints, preferences, and hints;
-//  34. downstream routing can consume placement intent;
-//  35. downstream scheduling can consume resolved placement;
-//  36. downstream hardware validation can resolve targets;
-//  37. POCO-REAF remains intact;
-//  38. the same syntax can describe one resource or arbitrarily large
-//      resource sets subject only to actual semantic/resource limits.
-//
-// ============================================================================
+/* ============================================================================
+ * 23. HARDWARE / RESOURCE INTEGRATION
+ * ============================================================================
+ *
+ * Hardware placement consumes semantic resource/capability information.
+ *
+ * The following are intentionally NOT parser-level enumerations:
+ *
+ *     CPU
+ *     GPU
+ *     FPGA
+ *     ASIC
+ *     QPU
+ *     TPU
+ *     NPU
+ *     DSP
+ *     optical
+ *     neuromorphic
+ *     future accelerator
+ *
+ * They remain names/capabilities/resource classes.
+ *
+ * Therefore:
+ *
+ *     target::gpu
+ *     target::qpu
+ *     resource::memory
+ *     capability::tensor::compute
+ *
+ * are represented by qualified names rather than a finite hardware catalogue.
+ *
+ *
+ * ============================================================================
+ * 24. TOPOLOGY INTEGRATION
+ * ============================================================================
+ *
+ * Placement may reference topology semantics:
+ *
+ *     topology::region
+ *     topology::connected
+ *     topology::local
+ *
+ * but does not define:
+ *
+ *     nodes
+ *     edges
+ *     paths
+ *     routing
+ *     connectivity algorithms
+ *
+ * The topology grammar remains authoritative for topology declarations.
+ *
+ *
+ * ============================================================================
+ * 25. QUANTUM INTEGRATION
+ * ============================================================================
+ *
+ * Valid semantic references may include:
+ *
+ *     quantum::logical
+ *     quantum::resource
+ *     quantum::measurement
+ *     quantum::region
+ *
+ * The grammar does not define quantum IDs or physical qubit allocation.
+ *
+ * Quantum realization remains downstream through:
+ *
+ *     semantic quantum model
+ *          ->
+ *     quantum::ir
+ *          ->
+ *     routing
+ *          ->
+ *     scheduling
+ *          ->
+ *     QEC/resilience
+ *          ->
+ *     ZQN
+ *          ->
+ *     HAL
+ *
+ *
+ * ============================================================================
+ * 26. HDL INTEGRATION
+ * ============================================================================
+ *
+ * HDL semantic layers may consume:
+ *
+ *     placement::region
+ *     placement::affinity
+ *     placement::separation
+ *     placement::resource
+ *     placement::target
+ *
+ * Physical synthesis and placement algorithms remain downstream.
+ *
+ *
+ * ============================================================================
+ * 27. DISTRIBUTED INTEGRATION
+ * ============================================================================
+ *
+ * Distributed execution may consume:
+ *
+ *     placement groups
+ *     regions
+ *     affinity
+ *     anti-affinity
+ *     replication
+ *     mobility
+ *     elasticity
+ *     locality
+ *
+ * The grammar does not define a maximum node or process count.
+ *
+ *
+ * ============================================================================
+ * 28. AI / DATA / HYBRID INTEGRATION
+ * ============================================================================
+ *
+ * AI, data, classical, quantum and hybrid workloads can all use the same
+ * placement model.
+ *
+ * Examples of semantic references:
+ *
+ *     model
+ *     dataset
+ *     tensor
+ *     quantum::circuit
+ *     classical::kernel
+ *     accelerator
+ *
+ * These remain ordinary qualified semantic names.
+ *
+ *
+ * ============================================================================
+ * 29. EFFECT INTEGRATION
+ * ============================================================================
+ *
+ * Placement declarations themselves are effect-free.
+ *
+ * However, downstream operations such as:
+ *
+ *     migration
+ *     allocation
+ *     remote execution
+ *     device access
+ *
+ * may introduce effects.
+ *
+ * The semantic layer must attach those effects to the actual operation rather
+ * than treating placement syntax itself as execution.
+ *
+ *
+ * ============================================================================
+ * 30. PROVENANCE INTEGRATION
+ * ============================================================================
+ *
+ * Every placement semantic node should retain:
+ *
+ *     source span
+ *     declaration identity
+ *     property identity
+ *     source ordering
+ *     originating module
+ *     compatibility/version context
+ *
+ * Provenance records are created by the frontend/compiler, not this grammar.
+ *
+ *
+ * ============================================================================
+ * 31. SECURITY BOUNDARY
+ * ============================================================================
+ *
+ * Placement MUST NOT provide:
+ *
+ *     physical address access
+ *     device opening
+ *     driver loading
+ *     DMA programming
+ *     MMIO access
+ *     privileged execution
+ *     hardware enumeration
+ *     filesystem access
+ *     network access
+ *
+ * Security policy and authorization are enforced downstream.
+ *
+ *
+ * ============================================================================
+ * 32. DETERMINISM
+ * ============================================================================
+ *
+ * This grammar contains:
+ *
+ *     no actions
+ *     no semantic predicates
+ *     no target-language code
+ *     no runtime state
+ *     no hardware discovery
+ *     no filesystem access
+ *     no network access
+ *
+ * Parsing therefore depends only on:
+ *
+ *     source
+ *     lexer vocabulary
+ *     grammar
+ *     selected language/compatibility version
+ *
+ *
+ * ============================================================================
+ * 33. SCALABILITY
+ * ============================================================================
+ *
+ * Every collection uses unbounded grammar repetition:
+ *
+ *     *
+ *     +
+ *
+ * No grammar production defines an artificial maximum.
+ *
+ * This applies to:
+ *
+ *     placement declarations
+ *     groups
+ *     group members
+ *     regions
+ *     relationships
+ *     requirements
+ *     constraints
+ *     preferences
+ *     hints
+ *     policies
+ *     properties
+ *     replicas
+ *     selectors
+ *     parameters
+ *
+ * Actual limits are implementation/resource limits, never language semantics.
+ *
+ *
+ * ============================================================================
+ * 34. ERROR BOUNDARIES
+ * ============================================================================
+ *
+ * Parser:
+ *     malformed syntax
+ *
+ * AST validation:
+ *     malformed structural representation
+ *
+ * Semantic analysis:
+ *     unresolved names
+ *     invalid relationships
+ *     contradictory declarations
+ *
+ * Resource analysis:
+ *     unavailable resources
+ *
+ * Capability analysis:
+ *     unavailable capabilities
+ *
+ * Policy analysis:
+ *     prohibited realization
+ *
+ * Routing:
+ *     connectivity/route failure
+ *
+ * Scheduling:
+ *     temporal/resource scheduling failure
+ *
+ * HAL:
+ *     physical realization failure
+ *
+ *
+ * ============================================================================
+ * 35. COMPATIBILITY
+ * ============================================================================
+ *
+ * The canonical public declaration rule is:
+ *
+ *     placementDeclaration
+ *
+ * Existing hardware.g4 already dispatches this rule.
+ *
+ * No compatibility alias is created because there are no repository consumers
+ * of the obsolete `hardwarePlacementDecl` rule.
+ *
+ * This avoids maintaining two public placement authorities.
+ *
+ *
+ * ============================================================================
+ * 36. COMPLETION CRITERIA
+ * ============================================================================
+ *
+ * This file is DONE when:
+ *
+ *   [x] canonical ZamaniLexer vocabulary is used;
+ *   [x] canonical expression grammar is used;
+ *   [x] canonical names grammar is used;
+ *   [x] placementDeclaration matches hardware.g4;
+ *   [x] no K_* token aliases remain;
+ *   [x] no duplicate expression grammar exists;
+ *   [x] no duplicate qualified-name grammar exists;
+ *   [x] no fixed hardware limit exists;
+ *   [x] no physical device IDs are encoded;
+ *   [x] no physical addresses are encoded;
+ *   [x] no vendor catalogue is encoded;
+ *   [x] resource semantics remain downstream;
+ *   [x] capability semantics remain downstream;
+ *   [x] topology semantics remain downstream;
+ *   [x] routing remains downstream;
+ *   [x] scheduling remains downstream;
+ *   [x] quantum::ir remains canonical;
+ *   [x] HDL semantics remain downstream;
+ *   [x] open-world properties are supported;
+ *   [x] symbolic quantities are supported;
+ *   [x] requirements are distinct from constraints;
+ *   [x] constraints are distinct from preferences;
+ *   [x] preferences are distinct from hints;
+ *   [x] mobility is declarative;
+ *   [x] replication is symbolic;
+ *   [x] elasticity is symbolic;
+ *   [x] safe Rust integration is preserved;
+ *   [x] no embedded Rust exists;
+ *   [x] no semantic predicates exist;
+ *   [x] no runtime behavior exists;
+ *   [ ] generated parser compilation passes;
+ *   [ ] repository-wide grammar compilation passes;
+ *   [ ] lexical tests pass;
+ *   [ ] positive placement tests pass;
+ *   [ ] negative placement tests pass;
+ *   [ ] scalability tests pass;
+ *   [ ] cross-domain tests pass;
+ *   [ ] compatibility tests pass.
+ *
+ *
+ * ============================================================================
+ * END OF FILE
+ * ============================================================================
+ */
