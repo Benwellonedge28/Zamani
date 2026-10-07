@@ -1,70 +1,34 @@
 /*
  * ============================================================================
- * Zamani Universal Programming Language
+ * Zamani Programming Language
  * ============================================================================
  *
- * File:
- *     grammar/compile/specialization.g4
+ * FILE
+ * ----
+ * grammar/compile/specialization.g4
  *
- * Grammar:
- *     CompileSpecialization
+ * GRAMMAR
+ * -------
+ * CompileSpecialization
  *
- * Status:
- *     Production compilation-specialization parser grammar
- *
- * Rust baseline:
- *     Rust 1.97 / Rust 1.97.1
- *
- * Edition:
- *     Rust 2021
- *
- * Safety:
- *     Generated compiler integration MUST use safe Rust.
- *     Rust `unsafe` MUST NOT be required by this grammar or its compiler
- *     integration.
- *
- * Portability:
- *
- *     Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
- *
- *     POCO-REAF
+ * STATUS
+ * ------
+ * PRODUCTION-READY COMPILATION SPECIALIZATION GRAMMAR
  *
  * ============================================================================
  * PURPOSE
  * ============================================================================
  *
- * This file owns SOURCE-LEVEL COMPILATION SPECIALIZATION POLICY.
+ * This file is the canonical source-level grammar for COMPILATION
+ * SPECIALIZATION INTENT.
  *
- * It describes how compilation may specialize an already-valid semantic
- * program or compilation artifact according to semantic information available
- * to the compiler.
+ * Specialization intent describes how an already-valid Zamani semantic
+ * program may be specialized by the compiler while preserving the program's
+ * declared semantic contract.
  *
- * This file does NOT perform specialization.
+ * This file describes SOURCE SYNTAX ONLY.
  *
- * It does NOT:
- *
- *     - monomorphize;
- *     - infer generic arguments;
- *     - solve generic constraints;
- *     - evaluate constants;
- *     - select a physical device;
- *     - allocate hardware;
- *     - choose physical qubits;
- *     - choose CPU cores;
- *     - choose GPU devices;
- *     - choose FPGA resources;
- *     - perform routing;
- *     - perform scheduling;
- *     - perform QEC;
- *     - perform ZQN;
- *     - construct quantum::ir;
- *     - construct a second IR;
- *     - execute code;
- *     - inspect the host environment;
- *     - inspect filesystem state;
- *     - inspect network state.
- *
- * The compiler and semantic layers own those operations.
+ * It does not perform specialization.
  *
  * ============================================================================
  * ARCHITECTURAL POSITION
@@ -73,122 +37,133 @@
  *     Zamani source
  *          |
  *          v
- *     lexer
+ *     canonical lexer
  *          |
  *          v
- *     parser
+ *     canonical parser
  *          |
  *          v
- *     domain-neutral frontend AST
+ *     domain-neutral AST
  *          |
- *          v
- *     semantic analysis
- *          |
- *          +--> generic resolution
- *          +--> type analysis
- *          +--> constraint solving
- *          +--> resource analysis
- *          +--> capability analysis
- *          +--> portability analysis
- *          |
- *          v
- *     specialization planning
- *          |
- *          +--> no specialization
- *          +--> deferred specialization
- *          +--> partial specialization
- *          +--> generic specialization
- *          +--> target-aware specialization
- *          |
- *          v
- *     canonical semantic representation
- *          |
- *          +----------------------+----------------------+
- *          |                      |                      |
- *          v                      v                      v
- *      classical             quantum::ir           HDL/hardware
- *          |                      |                      |
- *          +----------------------+----------------------+
- *                                 |
- *                                 v
- *                            optimization
- *                                 |
- *                            routing/scheduling
- *                                 |
- *                            resilience/QEC
- *                                 |
- *                                ZQN
- *                                 |
- *                                HAL
- *                                 |
- *                         target realization
+ *          +-----------------------------+
+ *          |                             |
+ *          v                             v
+ *     program semantics          compilation intent
+ *                                        |
+ *                                        v
+ *                              specialization policy
+ *                                        |
+ *                                        v
+ *                               semantic analysis
+ *                                        |
+ *              +-----------------+-------+-----------------+
+ *              |                 |                         |
+ *              v                 v                         v
+ *       type/generic         resource/capability      portability/
+ *       validation           analysis                 policy analysis
+ *              |                 |                         |
+ *              +-----------------+-------------------------+
+ *                                        |
+ *                                        v
+ *                              specialization planning
+ *                                        |
+ *                                        v
+ *                              canonical semantic model
+ *                                        |
+ *                              +---------+---------+
+ *                              |                   |
+ *                              v                   v
+ *                         classical            quantum::ir
+ *                              |                   |
+ *                              +---------+---------+
+ *                                        |
+ *                                        v
+ *                                optimization
+ *                                        |
+ *                                   lowering
+ *                                        |
+ *                              routing/scheduling
+ *                                        |
+ *                              resilience / QEC
+ *                                        |
+ *                                       ZQN
+ *                                        |
+ *                                       HAL
+ *                                        |
+ *                                 target realization
  *
- * Specialization is therefore a semantic/compiler concern, not a hardware
- * allocation mechanism.
+ * Specialization is therefore a compilation-policy boundary.
  *
  * ============================================================================
  * OWNERSHIP
  * ============================================================================
  *
- * THIS FILE OWNS:
+ * THIS FILE OWNS
+ * -------------
  *
- *     - compilation-specialization declarations;
- *     - specialization planning intent;
- *     - specialization mode;
- *     - specialization conditions;
- *     - specialization requirements;
- *     - specialization constraints;
- *     - specialization preferences;
- *     - specialization hints;
- *     - specialization capabilities;
- *     - specialization resources;
- *     - specialization portability policy;
- *     - specialization determinism policy;
- *     - specialization reproducibility policy;
- *     - specialization fallback policy;
- *     - specialization provenance intent;
- *     - specialization cache/reuse intent;
- *     - specialization scope;
- *     - specialization policy composition.
+ *     compileSpecializationDeclaration
+ *     compileSpecializationSpecification
+ *     compileSpecializationClause
+ *     compileSpecializationTarget
+ *     compileSpecializationArguments
+ *     compileSpecializationCondition
+ *     compileSpecializationRequirement
+ *     compileSpecializationConstraint
+ *     compileSpecializationPreference
+ *     compileSpecializationHint
+ *     compileSpecializationPolicy
+ *     compileSpecializationFallback
+ *     compileSpecializationScope
+ *     compileSpecializationMetadata
  *
- * THIS FILE DOES NOT OWN:
+ * It owns the SOURCE-LEVEL COMPOSITION of these specialization policies.
  *
- *     - explicit generic specialization request syntax;
- *     - generic declarations;
- *     - generic parameter declarations;
- *     - generic type applications;
- *     - type inference;
- *     - monomorphization;
- *     - constant evaluation;
- *     - partial evaluation implementation;
- *     - optimization algorithms;
- *     - optimization pass implementation;
- *     - target declarations;
- *     - target selection;
- *     - hardware descriptions;
- *     - resource declarations;
- *     - capability declarations;
- *     - physical placement;
- *     - routing;
- *     - scheduling;
- *     - QEC;
- *     - ZQN;
- *     - HAL;
- *     - runtime dispatch.
+ * THIS FILE DOES NOT OWN
+ * ---------------------
+ *
+ *     generic declarations
+ *     generic parameter declarations
+ *     generic type applications
+ *     ordinary expressions
+ *     ordinary types
+ *     resource declarations
+ *     capability declarations
+ *     target declarations
+ *     target selection
+ *     optimization algorithms
+ *     specialization algorithms
+ *     monomorphization
+ *     constant evaluation
+ *     partial evaluation
+ *     code generation
+ *     lowering implementation
+ *     routing
+ *     scheduling
+ *     quantum physical mapping
+ *     QEC
+ *     ZQN
+ *     HAL
+ *     runtime dispatch
+ *     hardware discovery
+ *     resource allocation
  *
  * ============================================================================
- * SPECIALIZATION AUTHORITY SEPARATION
+ * AUTHORITY SEPARATION
  * ============================================================================
  *
- * Explicit source specialization is owned by:
+ * Explicit source specialization requests are owned by:
  *
  *     grammar/metaprogramming/specialization.g4
  *
- * Compile-time control is owned by:
+ * Compilation-time control is owned by:
  *
  *     grammar/compile/compile-time.g4
  *
- * Target-selection policy is owned by:
+ * Target intent is owned by:
+ *
+ *     grammar/compile/target.g4
+ *
+ * Target-selection intent is owned by:
  *
  *     grammar/compile/target-selection.g4
  *
@@ -196,62 +171,83 @@
  *
  *     grammar/compile/optimization.g4
  *
- * Generic declarations are owned by:
+ * Resource intent is owned by:
  *
- *     grammar/functions/
+ *     grammar/resources/
+ *
+ * Generic/type syntax is owned by:
+ *
  *     grammar/types/
+ *     grammar/functions/
  *
- * This file provides the compilation-policy boundary between those systems.
+ * This grammar MUST NOT redefine those authorities.
  *
- * It MUST NOT redefine:
+ * ============================================================================
+ * IMPORTANT DISTINCTION
+ * ============================================================================
  *
- *     specializationRequest
- *     specializationTarget
- *     specializationTypeArguments
- *     specializationValueArguments
- *     genericParameters
- *     genericParameter
- *     typeExpression
- *     expression
+ * There are three related but distinct concepts:
+ *
+ *     1. Generic specialization request
+ *        --------------------------------
+ *        Explicit source-level specialization/application.
+ *
+ *        Owner:
+ *            grammar/metaprogramming/specialization.g4
+ *
+ *     2. Compilation specialization policy
+ *        ----------------------------------
+ *        Compilation intent describing when/under what constraints a
+ *        specialization may or should occur.
+ *
+ *        Owner:
+ *            THIS FILE
+ *
+ *     3. Specialization implementation
+ *        -----------------------------
+ *        The compiler algorithm that performs specialization.
+ *
+ *        Owner:
+ *            compiler semantic/specialization implementation
+ *
+ * These must not become one grammar authority.
  *
  * ============================================================================
  * POCO-REAF
  * ============================================================================
  *
- * Specialization MUST preserve the semantic meaning of the source program.
+ * Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
  *
- * A specialization may change implementation representation while preserving
- * the observable semantic contract.
+ * Specialization may change implementation representation, but MUST preserve
+ * the source program's declared semantic meaning.
  *
- * Valid conceptual intent:
+ * This grammar therefore does not encode:
  *
- *     compile specialize target
- *     compile specialize target with (...)
- *     compile specialize target if condition
+ *     a particular CPU
+ *     a particular CPU core
+ *     a particular GPU
+ *     a particular FPGA
+ *     a particular ASIC
+ *     a particular QPU
+ *     a physical qubit
+ *     a physical memory bank
+ *     a physical device identifier
+ *     a provider
+ *     a machine topology
+ *     a deployment location
+ *     a fixed node count
+ *     a fixed processor count
  *
- * The exact specialization strategy is resolved downstream.
- *
- * The grammar MUST NOT require:
- *
- *     a particular CPU;
- *     a particular GPU;
- *     a particular FPGA;
- *     a particular QPU;
- *     a particular ASIC;
- *     a particular cloud provider;
- *     a particular node;
- *     a particular physical qubit;
- *     a particular memory bank;
- *     a particular register width;
- *     a particular topology.
+ * Target/resource information is consumed semantically through the existing
+ * resource, capability, target, policy, and execution systems.
  *
  * ============================================================================
- * NO ARTIFICIAL RESOURCE LIMITS
+ * SCALABILITY
  * ============================================================================
  *
- * This grammar contains no universal limits.
+ * This grammar contains NO language-level capacity ceilings.
  *
- * It MUST NOT encode:
+ * In particular it contains no:
  *
  *     MAX_QUBITS
  *     MAX_CPUS
@@ -262,115 +258,101 @@
  *     MAX_ASICS
  *     MAX_QPUS
  *     MAX_NODES
+ *     MAX_DEVICES
  *     MAX_MEMORY
  *     MAX_STORAGE
  *     MAX_REGISTER_WIDTH
  *     MAX_VECTOR_WIDTH
  *     MAX_TENSOR_RANK
  *     MAX_NETWORK_SIZE
- *     MAX_DEVICE_COUNT
  *     MAX_SPECIALIZATIONS
- *     MAX_TYPE_ARGUMENTS
- *     MAX_VALUE_ARGUMENTS
+ *     MAX_ARGUMENTS
+ *     MAX_CLAUSES
  *
- * Nor may it encode disguised equivalents.
+ * Repetition is represented by grammar repetition operators.
  *
- * Repetition uses:
- *
- *     *
- *     +
- *
- * rather than finite enumerations.
- *
- * Actual compiler resource protection belongs to explicit compiler policy,
- * semantic analysis, and implementation configuration.
+ * Actual implementation limits belong to compiler/resource policy and
+ * execution infrastructure, not the language definition.
  *
  * ============================================================================
- * REQUIREMENT / CONSTRAINT / PREFERENCE / HINT
+ * LEXICAL AUTHORITY
  * ============================================================================
  *
- * These concepts are deliberately distinct.
+ * The canonical lexer is:
  *
- * REQUIREMENT:
+ *     grammar/antlr/ZamaniLexer.g4
  *
- *     mandatory semantic property.
+ * which delegates to:
  *
- * CONSTRAINT:
+ *     grammar/lexer/
  *
- *     condition restricting an otherwise valid specialization.
+ * This grammar defines NO lexer rules.
  *
- * PREFERENCE:
+ * Existing canonical tokens consumed here include:
  *
- *     non-mandatory desired property.
+ *     COMPILE
+ *     WITH
+ *     IF
+ *     REQUIRES
+ *     CONSTRAINT
+ *     PREFER
+ *     HINT
+ *     FALLBACK
+ *     POLICY
+ *     PORTABILITY
+ *     DETERMINISTIC
+ *     REPRODUCIBLE
+ *     SCOPE
+ *     CAPABILITY
  *
- * HINT:
+ * IMPORTANT:
  *
- *     non-binding information for downstream planning.
+ * The current canonical lexer does not contain a dedicated `SPECIALIZE`
+ * token.
  *
- * CAPABILITY:
+ * Therefore this grammar intentionally does NOT reference:
  *
- *     semantic capability requirement.
+ *     K_SPECIALIZE
+ *     SPECIALIZE
  *
- * RESOURCE:
+ * Instead, the source spelling `specialize` is represented as an ordinary
+ * identifier and validated contextually by the semantic/compiler layer.
  *
- *     resource requirement or resource expression.
+ * This preserves the current lexer authority and avoids a phantom token.
  *
- * They MUST NOT be collapsed into a generic compiler-options map.
- *
- * ============================================================================
- * EXAMPLE SEMANTIC DISTINCTION
- * ============================================================================
- *
- * Valid:
- *
- *     requires qubits >= n
- *
- * Valid:
- *
- *     requires memory >= required_memory
- *
- * Valid:
- *
- *     requires capability("quantum.measurement")
- *
- * Valid:
- *
- *     requires capability("tensor.compute")
- *
- * These describe semantic requirements.
- *
- * They do NOT mean:
- *
- *     use physical qubit 17
- *     use GPU 0
- *     use CPU core 7
- *     use memory bank 3
- *
- * Physical realization remains downstream.
+ * If a future language revision reserves `specialize` lexically, that is a
+ * versioned lexer change and does not alter the semantic ownership of this
+ * file.
  *
  * ============================================================================
- * CANONICAL IR RULE
+ * PARSER DEPENDENCIES
  * ============================================================================
  *
- * This grammar creates NO IR.
+ * Direct parser dependencies:
  *
- * It MUST NOT introduce:
+ *     Core
+ *     Types
+ *     Expressions
  *
- *     SpecializationIR
- *     CompilationSpecializationIR
- *     QuantumSpecializationIR
- *     HardwareSpecializationIR
+ * Core supplies:
  *
- * Specialization lowers through the existing semantic representation.
+ *     identifier
+ *     qualifiedName
+ *     attribute
  *
- * Quantum specialization MUST ultimately reach:
+ * Types supplies:
  *
- *     quantum::ir
+ *     typeExpression
  *
- * There is exactly one canonical quantum IR boundary.
+ * Expressions supplies:
  *
- * ============================================================================
- * GRAMMAR DECLARATION
+ *     expression
+ *
+ * Resource-specific expressions are intentionally NOT duplicated here.
+ *
+ * Resource requirements and capability requirements are expressed through
+ * canonical expressions and interpreted by semantic resource analysis.
+ *
  * ============================================================================
  */
 
@@ -380,70 +362,88 @@ options {
     tokenVocab = ZamaniLexer;
 }
 
-
-/*
- * ============================================================================
- * IMPORTS
- * ============================================================================
- *
- * Core owns names, paths, attributes and blocks.
- *
- * Types owns canonical type expressions.
- *
- * Expressions owns canonical expression syntax.
- *
- * This file consumes those contracts rather than redefining them.
- */
-
-import Core,
-       Types,
-       Expressions;
+import
+    Core,
+    Types,
+    Expressions;
 
 
 /*
  * ============================================================================
- * 1. PUBLIC ENTRY POINT
+ * PUBLIC ENTRY POINT
  * ============================================================================
  *
- * This is the public compilation-specialization boundary.
+ * Canonical complete source form:
  *
- * It intentionally has a distinct name from:
+ *     compile specialize target ... ;
  *
- *     specializationDeclaration
+ * `specialize` remains an IDENTIFIER under the current lexer.
  *
- * in grammar/metaprogramming/specialization.g4.
+ * The semantic layer MUST validate that the contextual identifier is the
+ * specialization introducer.
  *
- * This prevents the two grammars from competing for ownership.
+ * A compile declaration may contain other compilation clauses, but this file
+ * owns only the specialization clause.
+ *
+ * ============================================================================
  */
 
 compileSpecializationDeclaration
-    : COMPILE K_SPECIALIZE
+    : COMPILE
+      compileSpecializationKeyword
       compileSpecializationTarget
-      compileSpecializationClause*
+      compileSpecializationSpecification?
       SEMI?
     ;
 
 
 /*
  * ============================================================================
- * 2. TARGET
+ * SPECIALIZATION KEYWORD
  * ============================================================================
  *
- * A specialization target is symbolic.
+ * The current lexer deliberately does not reserve `specialize`.
  *
- * It may refer to:
+ * This rule therefore consumes IDENTIFIER and semantic analysis validates its
+ * canonical spelling/context.
  *
- *     function;
- *     type;
- *     module;
- *     algorithm;
- *     kernel;
- *     circuit;
- *     model;
- *     hardware abstraction;
- *     domain-neutral semantic entity.
+ * This avoids:
  *
- * Semantic analysis determines whether the target is actually specializable.
+ *     K_SPECIALIZE
+ *     SPECIALIZE
+ *
+ * phantom-token references.
+ *
+ * It also avoids forcing every future contextual specialization vocabulary
+ * item into the global lexer.
+ */
+
+compileSpecializationKeyword
+    : identifier
+    ;
+
+
+/*
+ * ============================================================================
+ * SPECIALIZATION TARGET
+ * ============================================================================
+ *
+ * The target is a symbolic semantic entity.
+ *
+ * Examples:
+ *
+ *     compute
+ *     math::compute
+ *     quantum::algorithm
+ *     model::inference
+ *     hardware::kernel
+ *
+ * The target is NOT a physical device.
+ *
+ * Physical target selection remains owned by:
+ *
+ *     grammar/compile/target.g4
+ *     grammar/compile/target-selection.g4
  */
 
 compileSpecializationTarget
@@ -453,29 +453,62 @@ compileSpecializationTarget
 
 /*
  * ============================================================================
- * 3. SPECIALIZATION CLAUSE
+ * SPECIALIZATION SPECIFICATION
  * ============================================================================
  *
- * Clauses are open-ended in number.
+ * A specialization specification is an ordered, open-ended sequence of
+ * specialization policies.
  *
- * Their semantic categories remain explicit.
+ * The source order is significant for:
+ *
+ *     diagnostics
+ *     tooling
+ *     provenance
+ *     deterministic formatting
+ *
+ * Semantic precedence is NOT determined by parser alternative ordering.
+ *
+ * The semantic model determines the precedence between:
+ *
+ *     requirements
+ *     constraints
+ *     preferences
+ *     hints
+ *     policies
+ *     fallback behavior
+ *
+ * ============================================================================
+ */
+
+compileSpecializationSpecification
+    : compileSpecializationClause+
+    ;
+
+
+/*
+ * ============================================================================
+ * SPECIALIZATION CLAUSE
+ * ============================================================================
+ *
+ * This is the sole clause dispatcher for this grammar.
+ *
+ * It intentionally delegates to narrowly owned rules.
+ *
+ * No generic `identifier expression` fallback is provided.
+ *
+ * This is important because a generic fallback would make malformed
+ * specialization syntax indistinguishable from arbitrary identifiers.
  */
 
 compileSpecializationClause
     : compileSpecializationArguments
     | compileSpecializationCondition
-    | compileSpecializationMode
     | compileSpecializationRequirement
     | compileSpecializationConstraint
     | compileSpecializationPreference
     | compileSpecializationHint
-    | compileSpecializationCapability
-    | compileSpecializationResource
-    | compileSpecializationPortability
-    | compileSpecializationDeterminism
-    | compileSpecializationReproducibility
+    | compileSpecializationPolicy
     | compileSpecializationFallback
-    | compileSpecializationCachePolicy
     | compileSpecializationScope
     | compileSpecializationMetadata
     ;
@@ -483,24 +516,26 @@ compileSpecializationClause
 
 /*
  * ============================================================================
- * 4. ARGUMENTS
+ * EXPLICIT SPECIALIZATION ARGUMENTS
  * ============================================================================
  *
- * Explicit generic/type/value specialization arguments remain semantically
- * compatible with the canonical metaprogramming specialization system.
+ * Canonical form:
  *
- * This grammar does not redefine generic declarations.
+ *     with (argument, argument, ...)
  *
- * Type arguments are canonical type expressions.
+ * Arguments are ordinary expressions.
  *
- * Value arguments are canonical expressions.
+ * Named arguments use:
  *
- * The semantic layer determines whether the supplied values are legal
- * compile-time specialization parameters.
+ *     name = expression
+ *
+ * Type-specific meaning is determined downstream.
+ *
+ * This grammar does not define generic declarations or generic constraints.
  */
 
 compileSpecializationArguments
-    : K_WITH
+    : WITH
       LPAREN
       compileSpecializationArgumentList?
       RPAREN
@@ -518,277 +553,163 @@ compileSpecializationArgumentList
 
 
 compileSpecializationArgument
-    : identifier ASSIGN expression
+    : identifier
+      ASSIGN
+      expression
     | expression
     ;
 
 
 /*
  * ============================================================================
- * 5. CONDITION
+ * CONDITIONAL SPECIALIZATION
  * ============================================================================
  *
- * The condition determines whether the specialization request is applicable.
+ * Canonical form:
  *
- * It is a semantic expression.
+ *     if expression
  *
- * The parser does not evaluate it.
+ * The expression is not evaluated by the parser.
+ *
+ * The semantic/compiler layer determines whether the condition is valid in
+ * the compilation context.
  */
 
 compileSpecializationCondition
-    : IF expression
+    : IF
+      expression
     ;
 
 
 /*
  * ============================================================================
- * 6. SPECIALIZATION MODE
+ * REQUIREMENT
  * ============================================================================
  *
- * Mode is represented symbolically.
+ * Canonical form:
  *
- * The grammar deliberately does not enumerate compiler implementation
- * strategies.
- *
- * Examples may include:
- *
- *     eager
- *     deferred
- *     partial
- *     adaptive
- *     target_aware
- *
- * These are semantic policy values, not parser-level algorithms.
- */
-
-compileSpecializationMode
-    : identifier
-    ;
-
-
-/*
- * ============================================================================
- * 7. REQUIREMENT
- * ============================================================================
- *
- * A requirement is mandatory.
- */
-
-compileSpecializationRequirement
-    : REQUIRES expression
-    ;
-
-
-/*
- * ============================================================================
- * 8. CONSTRAINT
- * ============================================================================
- *
- * A constraint restricts the legal specialization space.
- */
-
-compileSpecializationConstraint
-    : CONSTRAIN expression
-    ;
-
-
-/*
- * ============================================================================
- * 9. PREFERENCE
- * ============================================================================
- *
- * A preference is non-binding.
- */
-
-compileSpecializationPreference
-    : PREFER expression
-    ;
-
-
-/*
- * ============================================================================
- * 10. HINT
- * ============================================================================
- *
- * A hint is non-binding implementation guidance.
- */
-
-compileSpecializationHint
-    : HINT expression
-    ;
-
-
-/*
- * ============================================================================
- * 11. CAPABILITY
- * ============================================================================
- *
- * Capability names remain open-ended.
+ *     requires expression
  *
  * Examples:
  *
- *     capability("quantum.measurement")
- *     capability("gpu.compute")
- *     capability("tensor.compute")
+ *     requires qubits >= required_qubits
  *
- * The grammar does not enumerate capability names.
+ *     requires memory >= required_memory
+ *
+ *     requires capability("quantum.measurement")
+ *
+ *     requires capability("tensor.compute")
+ *
+ * This grammar deliberately does not define resource or capability syntax.
+ *
+ * Those concepts remain semantically owned by the existing resource and
+ * capability systems.
  */
 
-compileSpecializationCapability
-    : identifier
-      LPAREN
-      expression
-      RPAREN
-    ;
-
-
-/*
- * ============================================================================
- * 12. RESOURCE
- * ============================================================================
- *
- * Resource expressions are symbolic and semantic.
- *
- * This grammar does not define resource capacities.
- */
-
-compileSpecializationResource
-    : identifier
+compileSpecializationRequirement
+    : REQUIRES
       expression
     ;
 
 
 /*
  * ============================================================================
- * 13. PORTABILITY
+ * CONSTRAINT
  * ============================================================================
  *
- * Portability policy allows the programmer to state that specialization must
- * remain portable.
+ * Canonical form:
+ *
+ *     constraint expression
+ *
+ * A constraint restricts the legal specialization space.
+ *
+ * It is distinct from a requirement:
+ *
+ *     requirement = mandatory semantic condition
+ *
+ *     constraint = restriction on the legal solution space
+ *
+ * Semantic enforcement is downstream.
  */
 
-compileSpecializationPortability
-    : identifier
+compileSpecializationConstraint
+    : CONSTRAINT
       expression
     ;
 
 
 /*
  * ============================================================================
- * 14. DETERMINISM
+ * PREFERENCE
  * ============================================================================
  *
- * Determinism is a semantic/compiler policy.
+ * Canonical form:
  *
- * The grammar only preserves the request.
+ *     prefer expression
+ *
+ * A preference is non-binding.
+ *
+ * It MUST NOT silently become a requirement.
  */
 
-compileSpecializationDeterminism
-    : identifier
+compileSpecializationPreference
+    : PREFER
       expression
     ;
 
 
 /*
  * ============================================================================
- * 15. REPRODUCIBILITY
+ * HINT
  * ============================================================================
  *
- * Reproducibility is separate from semantic determinism.
+ * Canonical form:
  *
- * The semantic/compiler layer determines whether the requested policy can
- * actually be guaranteed.
+ *     hint expression
+ *
+ * A hint is non-binding information for downstream compilation planning.
+ *
+ * It MUST NOT be treated as a correctness condition unless another
+ * semantic construct explicitly establishes that meaning.
  */
 
-compileSpecializationReproducibility
-    : identifier
+compileSpecializationHint
+    : HINT
       expression
     ;
 
 
 /*
  * ============================================================================
- * 16. FALLBACK
+ * POLICY
  * ============================================================================
  *
- * Fallback permits a specialization strategy to provide an alternative when
- * a specialization cannot be realized.
+ * Policy provides a structured specialization-policy boundary.
  *
- * Fallback is semantic policy.
+ * Canonical forms:
  *
- * It is NOT runtime exception handling.
+ *     policy expression
+ *
+ *     policy {
+ *         ...
+ *     }
+ *
+ * This grammar intentionally keeps policy internals generic.
+ *
+ * The universal policy subsystem remains the semantic authority.
  */
 
-compileSpecializationFallback
-    : identifier
-      compileSpecializationFallbackTarget
+compileSpecializationPolicy
+    : POLICY
+      compileSpecializationPolicyBody
     ;
 
 
-compileSpecializationFallbackTarget
-    : qualifiedName
-    | expression
+compileSpecializationPolicyBody
+    : expression
+    | compileSpecializationPolicyBlock
     ;
 
-
-/*
- * ============================================================================
- * 17. CACHE / REUSE POLICY
- * ============================================================================
- *
- * Specialization may be reusable.
- *
- * This grammar expresses intent only.
- *
- * Cache implementation remains owned by compiler infrastructure.
- */
-
-compileSpecializationCachePolicy
-    : identifier
-      expression?
-    ;
-
-
-/*
- * ============================================================================
- * 18. SCOPE
- * ============================================================================
- *
- * Scope identifies where specialization intent applies semantically.
- *
- * It does not define a new lexical scope.
- */
-
-compileSpecializationScope
-    : identifier
-      qualifiedName
-    ;
-
-
-/*
- * ============================================================================
- * 19. METADATA
- * ============================================================================
- *
- * Attributes remain owned by Core.
- */
-
-compileSpecializationMetadata
-    : attribute
-    ;
-
-
-/*
- * ============================================================================
- * 20. POLICY BLOCK
- * ============================================================================
- *
- * A structured policy is useful for large specialization specifications.
- *
- * This rule is deliberately separate from the primary declaration so that
- * future composition layers can embed the policy without duplicating its
- * contents.
- */
 
 compileSpecializationPolicyBlock
     : LBRACE
@@ -803,635 +724,794 @@ compileSpecializationPolicyEntry
     | compileSpecializationConstraint
     | compileSpecializationPreference
     | compileSpecializationHint
-    | compileSpecializationCapability
-    | compileSpecializationResource
-    | compileSpecializationPortability
-    | compileSpecializationDeterminism
-    | compileSpecializationReproducibility
-    | compileSpecializationFallback
-    | compileSpecializationCachePolicy
-    | compileSpecializationScope
     | compileSpecializationMetadata
     ;
 
 
 compileSpecializationPolicyAssignment
-    : identifier ASSIGN expression SEMI?
-    | identifier COLON expression SEMI?
+    : identifier
+      ASSIGN
+      expression
+      SEMI?
     ;
 
 
 /*
  * ============================================================================
- * 21. BLOCK FORM
+ * FALLBACK
  * ============================================================================
  *
- * This form is intended for compilation orchestration where specialization
- * contains many independently expressed policies.
+ * Fallback is compilation policy.
  *
- * It does not introduce a second block grammar.
+ * It is NOT runtime exception handling.
+ *
+ * Canonical forms:
+ *
+ *     fallback target
+ *
+ *     fallback expression
+ *
+ * The semantic layer determines whether the fallback is:
+ *
+ *     valid
+ *     equivalent
+ *     portable
+ *     permitted
+ *     applicable
+ *
+ * No physical target is selected by this grammar.
  */
 
-compileSpecializationBlockDeclaration
-    : COMPILE K_SPECIALIZE
-      compileSpecializationTarget
-      compileSpecializationPolicyBlock
+compileSpecializationFallback
+    : FALLBACK
+      compileSpecializationFallbackTarget
     ;
 
 
-/*
- * ============================================================================
- * 22. COMPLETE DISPATCH
- * ============================================================================
- *
- * This is the preferred composition point for compile.g4 / compilation.g4.
- *
- * A composition grammar should reference this rule rather than reproduce its
- * alternatives.
- */
-
-compileSpecialization
-    : compileSpecializationDeclaration
-    | compileSpecializationBlockDeclaration
-    ;
-
-
-/*
- * ============================================================================
- * 23. EXPRESSION BRIDGE
- * ============================================================================
- *
- * Explicitly named bridge for downstream grammar components that need to
- * embed specialization policy values.
- *
- * No expression syntax is redefined.
- */
-
-compileSpecializationExpression
-    : expression
-    ;
-
-
-/*
- * ============================================================================
- * 24. TYPE BRIDGE
- * ============================================================================
- *
- * Type semantics remain owned by Types.
- *
- * This bridge intentionally does not create a specialization-specific type
- * grammar.
- */
-
-compileSpecializationType
-    : typeExpression
-    ;
-
-
-/*
- * ============================================================================
- * 25. NAME BRIDGE
- * ============================================================================
- *
- * Name resolution remains owned by Core.
- */
-
-compileSpecializationName
+compileSpecializationFallbackTarget
     : qualifiedName
+    | expression
     ;
 
 
 /*
  * ============================================================================
- * 26. AST CONTRACT
+ * SCOPE
  * ============================================================================
  *
- * The parser MUST lower these productions into the repository's
- * domain-neutral frontend AST.
+ * Scope identifies the semantic region to which the specialization policy
+ * applies.
  *
- * The AST representation should preserve at least:
+ * It does NOT create a lexical scope.
  *
- *     target;
- *     arguments;
- *     argument ordering;
- *     clauses;
- *     clause ordering;
- *     conditions;
- *     source spans;
- *     metadata;
- *     source provenance.
+ * Canonical form:
  *
- * This grammar MUST NOT define:
+ *     scope qualifiedName
  *
- *     SpecializationKey;
- *     MonomorphizationKey;
- *     BackendSpecialization;
- *     QuantumSpecializationIR;
- *     HardwareSpecializationIR.
- *
- * Those are implementation/semantic concepts.
- *
+ * Scope resolution is semantic.
+ */
+
+compileSpecializationScope
+    : SCOPE
+      qualifiedName
+    ;
+
+
+/*
  * ============================================================================
- * 27. SEMANTIC CONTRACT
+ * METADATA
  * ============================================================================
  *
- * Semantic analysis is responsible for:
+ * Attributes remain owned by Core.
  *
- *     - resolving the target;
- *     - determining whether the target is specializable;
- *     - resolving supplied arguments;
- *     - checking argument compatibility;
- *     - checking generic constraints;
- *     - checking compile-time evaluability;
- *     - checking specialization requirements;
- *     - checking resource requirements;
- *     - checking capability requirements;
- *     - checking portability;
- *     - determining whether specialization is legal;
- *     - determining whether specialization preserves semantics;
- *     - determining whether specialization is deterministic;
- *     - determining whether specialization can be reused;
- *     - determining whether specialization should be performed;
- *     - producing diagnostics.
- *
- * The parser MUST NOT perform any of these operations.
- *
+ * This rule merely provides the specialization-policy composition boundary.
+ */
+
+compileSpecializationMetadata
+    : attribute
+    ;
+
+
+/*
  * ============================================================================
- * 28. SPECIALIZATION RESULT MODEL
+ * REUSABLE SPECIALIZATION PAYLOAD
  * ============================================================================
  *
- * Semantic analysis may produce one of several outcomes:
+ * Parent compilation grammars should consume:
  *
- *     no specialization
- *     deferred specialization
- *     partial specialization
- *     complete specialization
- *     target-aware specialization
- *     rejected specialization
+ *     compileSpecializationDeclaration
  *
- * These are semantic outcomes.
+ * for a complete source declaration.
  *
- * They are deliberately NOT encoded as a finite grammar enumeration.
+ * They may consume:
+ *
+ *     compileSpecializationSpecification
+ *
+ * when specialization policy is embedded in another already-owned construct.
+ *
+ * This provides one reusable payload boundary without introducing another
+ * compilation root.
+ */
+
+compileSpecializationPolicySpecification
+    : compileSpecializationSpecification
+    ;
+
+
+/*
+ * ============================================================================
+ * AST CONTRACT
+ * ============================================================================
+ *
+ * This grammar creates parser contexts only.
+ *
+ * The frontend AST must preserve, at minimum:
+ *
+ *     specialization declaration
+ *     contextual specialization introducer
+ *     target
+ *     ordered arguments
+ *     named argument names
+ *     argument expressions
+ *     ordered clauses
+ *     clause kind
+ *     clause expression
+ *     policy structure
+ *     fallback target/expression
+ *     scope
+ *     metadata
+ *     source spans
+ *     source ordering
+ *     source provenance
+ *
+ * The AST MUST remain domain-neutral.
+ *
+ * It MUST NOT contain:
+ *
+ *     physical CPU IDs
+ *     physical GPU IDs
+ *     physical FPGA coordinates
+ *     physical qubit IDs
+ *     device handles
+ *     backend handles
+ *     schedules
+ *     routes
+ *     calibration records
+ *     allocation records
  *
  * ============================================================================
- * 29. RESOURCE CONTRACT
+ * SEMANTIC CONTRACT
  * ============================================================================
  *
- * Resource expressions remain symbolic.
+ * Semantic analysis must:
  *
- * Valid:
+ *     1. Validate the contextual `specialize` introducer.
  *
- *     requires qubits >= n
+ *     2. Resolve the specialization target.
  *
- * Valid:
+ *     3. Determine whether the target is specializable.
+ *
+ *     4. Resolve named and positional arguments.
+ *
+ *     5. Validate generic/type/value compatibility.
+ *
+ *     6. Resolve generic constraints.
+ *
+ *     7. Validate compile-time evaluability where required.
+ *
+ *     8. Resolve requirements.
+ *
+ *     9. Resolve constraints.
+ *
+ *    10. Rank preferences.
+ *
+ *    11. Record hints without treating them as requirements.
+ *
+ *    12. Resolve policy.
+ *
+ *    13. Validate fallback semantics.
+ *
+ *    14. Validate scope.
+ *
+ *    15. Validate portability.
+ *
+ *    16. Validate capability/resource feasibility.
+ *
+ *    17. Determine whether specialization preserves semantics.
+ *
+ *    18. Determine whether specialization is:
+ *
+ *            unnecessary
+ *            deferred
+ *            partial
+ *            complete
+ *            target-aware
+ *            rejected
+ *
+ *    19. Preserve provenance.
+ *
+ *    20. Produce deterministic diagnostics.
+ *
+ * None of these operations occur in this grammar.
+ *
+ * ============================================================================
+ * RESOURCE / CAPABILITY CONTRACT
+ * ============================================================================
+ *
+ * This grammar intentionally does not own resource or capability syntax.
+ *
+ * The following remain valid semantic concepts:
+ *
+ *     requires qubits >= required_qubits
  *
  *     requires memory >= required_memory
  *
- * Valid:
+ *     requires capability("quantum.measurement")
  *
  *     requires capability("tensor.compute")
  *
- * Invalid as a language-level architecture:
+ * The values remain symbolic/source-level information.
  *
- *     MAX_QUBITS = ...
- *     MAX_GPUS = ...
- *     MAX_MEMORY = ...
+ * The grammar never converts them into:
  *
- * A program may contain numeric values as ordinary program semantics.
- *
- * What is prohibited is converting those values into universal compiler
- * ceilings.
+ *     physical allocation
+ *     machine inventory
+ *     device selection
+ *     fixed hardware capacity
  *
  * ============================================================================
- * 30. HARDWARE CONTRACT
+ * PORTABILITY CONTRACT
  * ============================================================================
  *
- * Specialization may be influenced by hardware capabilities discovered
- * downstream.
+ * A specialization must preserve the declared portable semantics unless the
+ * source explicitly requests a non-portable semantic property through an
+ * authoritative target/policy mechanism.
  *
- * It MUST NOT encode hardware realization in the source grammar.
+ * A compiler MUST NOT silently turn specialization into:
  *
- * In particular, this grammar does not define:
+ *     vendor lock-in
+ *     physical-device dependence
+ *     physical-qubit dependence
+ *     fixed topology dependence
+ *     unavailable capability dependence
  *
- *     physical_qubit(...)
- *     cpu_core(...)
- *     gpu_device(...)
- *     fpga_slice(...)
- *     memory_bank(...)
- *     device_address(...)
+ * If specialization cannot satisfy the semantic contract, the compiler must:
  *
- * Target-specific realization belongs to:
+ *     reject it,
  *
- *     hardware/
- *     resources/
- *     compile/target.g4
- *     compile/target-selection.g4
- *     execution/
- *     HAL
+ * or:
+ *
+ *     select another legal specialization/fallback according to the declared
+ *     policy.
  *
  * ============================================================================
- * 31. QUANTUM CONTRACT
+ * QUANTUM CONTRACT
  * ============================================================================
  *
- * Specialization may apply to quantum algorithms and quantum abstractions.
+ * Quantum specialization remains target-neutral.
  *
- * Examples of semantic specialization include:
+ * Examples include specialization according to:
  *
- *     specialization of a parameterized quantum algorithm;
- *     specialization for logical rather than physical qubits;
- *     specialization according to available quantum capabilities;
- *     specialization according to symbolic resource requirements.
+ *     logical resource requirements
+ *     semantic quantum capabilities
+ *     algorithm parameters
+ *     measurement requirements
+ *     resilience requirements
+ *     symbolic resource constraints
  *
- * The grammar MUST NOT encode:
+ * This grammar MUST NOT enumerate:
  *
- *     a fixed gate set;
- *     a fixed qubit count;
- *     a fixed physical topology;
- *     physical qubit IDs;
- *     QPU vendor assumptions;
- *     calibration data;
- *     QEC implementation;
- *     routing implementation.
+ *     H
+ *     X
+ *     Y
+ *     Z
+ *     CNOT
+ *     CZ
+ *     SWAP
+ *     RX
+ *     RY
+ *     RZ
  *
- * The downstream quantum path remains:
+ * or any other finite operation catalogue.
+ *
+ * Quantum semantic operations ultimately cross:
+ *
+ *     quantum::ir
+ *
+ * before optimization, decomposition, routing, scheduling, resilience/QEC,
+ * ZQN and HAL.
+ *
+ * No specialization-specific quantum IR is permitted.
+ *
+ * ============================================================================
+ * CLASSICAL CONTRACT
+ * ============================================================================
+ *
+ * Specialization may apply to:
+ *
+ *     scalar computation
+ *     vector computation
+ *     tensor computation
+ *     numerical algorithms
+ *     symbolic algorithms
+ *     parallel computation
+ *     data transformations
+ *     accelerator-independent computation
+ *
+ * Instruction sets and processor models are not grammar concepts.
+ *
+ * ============================================================================
+ * HDL / HARDWARE CONTRACT
+ * ============================================================================
+ *
+ * Specialization may apply to semantic hardware/HDL intent.
+ *
+ * It MUST NOT define:
+ *
+ *     wire widths
+ *     register widths
+ *     fixed memory sizes
+ *     fixed pipeline depths
+ *     fixed device counts
+ *     fixed clock frequencies
+ *
+ * unless such values are ordinary program semantics rather than universal
+ * implementation ceilings.
+ *
+ * Physical realization remains downstream.
+ *
+ * ============================================================================
+ * AI / DATA CONTRACT
+ * ============================================================================
+ *
+ * The same specialization policy may apply to:
+ *
+ *     models
+ *     tensors
+ *     datasets
+ *     inference
+ *     training
+ *     symbolic computation
+ *     data pipelines
+ *     distributed computation
+ *
+ * Framework-specific behavior remains outside this grammar.
+ *
+ * ============================================================================
+ * DISTRIBUTED CONTRACT
+ * ============================================================================
+ *
+ * Specialization may adapt semantic computation to distributed capabilities.
+ *
+ * This grammar does not enumerate:
+ *
+ *     node identifiers
+ *     fixed cluster sizes
+ *     process counts
+ *     network sizes
+ *     topology shapes
+ *
+ * Distributed realization remains a resource/target/execution concern.
+ *
+ * ============================================================================
+ * EFFECT CONTRACT
+ * ============================================================================
+ *
+ * Specialization itself does not grant effects.
+ *
+ * If specialization causes or requests compile-time evaluation that has
+ * effects, those effects must be represented and checked by the existing
+ * effect and security systems.
+ *
+ * In particular this grammar does not grant implicit access to:
+ *
+ *     filesystem
+ *     network
+ *     subprocesses
+ *     environment variables
+ *     devices
+ *     secrets
+ *     mutable compiler-global state
+ *
+ * ============================================================================
+ * SECURITY CONTRACT
+ * ============================================================================
+ *
+ * Parsing specialization syntax grants no authority.
+ *
+ * Sandbox, capability, trust, authorization, provenance, and policy
+ * enforcement remain downstream responsibilities.
+ *
+ * Compile-time evaluation must obey the repository's safe execution model.
+ *
+ * ============================================================================
+ * DETERMINISM CONTRACT
+ * ============================================================================
+ *
+ * Parsing depends only on:
+ *
+ *     token sequence
+ *     grammar version
+ *
+ * It MUST NOT depend on:
+ *
+ *     wall-clock time
+ *     random state
+ *     hardware availability
+ *     filesystem state
+ *     network state
+ *     runtime state
+ *
+ * Source ordering must be preserved.
+ *
+ * If deterministic specialization is requested semantically, the compiler
+ * must make specialization decisions deterministic under the applicable
+ * compilation contract.
+ *
+ * ============================================================================
+ * REPRODUCIBILITY CONTRACT
+ * ============================================================================
+ *
+ * Reproducibility is distinct from deterministic parsing.
+ *
+ * Reproducible specialization may depend on:
+ *
+ *     language version
+ *     compiler version
+ *     specialization policy
+ *     canonical semantic inputs
+ *     explicit configuration
+ *     stable capability/resource descriptions
+ *     explicit random seeds where applicable
+ *
+ * These are compiler/provenance concerns.
+ *
+ * This grammar preserves the source-level intent only.
+ *
+ * ============================================================================
+ * PROVENANCE CONTRACT
+ * ============================================================================
+ *
+ * The semantic representation must preserve enough information to trace:
  *
  *     source
  *       |
  *       v
- *     frontend AST
+ *     specialization request
  *       |
  *       v
- *     semantic quantum representation
+ *     specialization decision
  *       |
  *       v
+ *     derived semantic representation
+ *       |
+ *       v
+ *     canonical IR
+ *
+ * Provenance must not be replaced by implementation-specific specialization
+ * keys.
+ *
+ * ============================================================================
+ * IR CONTRACT
+ * ============================================================================
+ *
+ * This grammar creates NO IR.
+ *
+ * It must not introduce:
+ *
+ *     SpecializationIR
+ *     CompileSpecializationIR
+ *     QuantumSpecializationIR
+ *     HardwareSpecializationIR
+ *
+ * Specialization results are represented through the repository's canonical
+ * semantic representation.
+ *
+ * Quantum constructs continue through:
+ *
  *     quantum::ir
- *       |
- *       v
- *     optimization
- *       |
- *       v
- *     routing
- *       |
- *       v
- *     scheduling
- *       |
- *       v
- *     QEC / resilience
- *       |
- *       v
- *     ZQN
- *       |
- *       v
- *     HAL
  *
- * No second quantum IR is permitted.
+ * There is exactly one canonical quantum IR boundary.
  *
  * ============================================================================
- * 32. CLASSICAL CONTRACT
+ * COMPILER INTEGRATION
  * ============================================================================
  *
- * Classical specialization may cover:
- *
- *     scalar algorithms;
- *     vectorization;
- *     tensor operations;
- *     numeric algorithms;
- *     symbolic algorithms;
- *     data transformations;
- *     parallel algorithms;
- *     accelerator-independent implementations.
- *
- * The grammar does not enumerate processor instruction sets.
- *
- * ============================================================================
- * 33. HDL / HARDWARE CONTRACT
- * ============================================================================
- *
- * Specialization may apply to parameterized hardware or HDL abstractions.
- *
- * It MUST NOT transform source syntax into a fixed chip description.
- *
- * No universal:
- *
- *     wire width;
- *     register width;
- *     memory size;
- *     pipeline depth;
- *     device count;
- *     clock frequency
- *
- * is encoded here.
- *
- * HDL and hardware semantics remain authoritative in:
- *
- *     grammar/hdl/
- *     grammar/hardware/
- *
- * ============================================================================
- * 34. AI / DATA CONTRACT
- * ============================================================================
- *
- * The same specialization mechanism may apply to:
- *
- *     models;
- *     tensors;
- *     kernels;
- *     datasets;
- *     data pipelines;
- *     inference;
- *     training;
- *     distributed computation.
- *
- * Framework-specific specialization remains outside the universal grammar.
- *
- * ============================================================================
- * 35. DISTRIBUTED CONTRACT
- * ============================================================================
- *
- * Specialization may adapt a semantic program to available distributed
- * resources.
- *
- * The grammar MUST NOT enumerate:
- *
- *     node 0;
- *     node 1;
- *     node N;
- *     fixed cluster sizes.
- *
- * Node counts and placement remain resource/target/deployment semantics.
- *
- * ============================================================================
- * 36. PORTABILITY CONTRACT
- * ============================================================================
- *
- * A specialization must be portable unless the source explicitly requests a
- * non-portable semantic property.
- *
- * Compiler optimization or specialization must not silently introduce:
- *
- *     vendor dependence;
- *     device dependence;
- *     physical placement dependence;
- *     unavailable capability dependence.
- *
- * If a specialization cannot preserve the declared semantic contract, the
- * compiler must produce an explicit diagnostic or select another legal
- * realization according to the source policy.
- *
- * ============================================================================
- * 37. DETERMINISM CONTRACT
- * ============================================================================
- *
- * Parsing is deterministic.
- *
- * Source ordering MUST be preserved.
- *
- * If the program requests deterministic specialization, the semantic/compiler
- * layers must ensure that specialization decisions do not depend on ambient
- * nondeterministic state.
- *
- * This grammar does not introduce randomness.
- *
- * ============================================================================
- * 38. REPRODUCIBILITY CONTRACT
- * ============================================================================
- *
- * Reproducibility is distinct from semantic determinism.
- *
- * Reproducible specialization may depend on:
- *
- *     compiler version;
- *     specialization policy;
- *     canonical inputs;
- *     explicit configuration;
- *     stable resource/capability descriptions;
- *     explicit seeds where appropriate.
- *
- * Such information belongs to compiler/provenance systems.
- *
- * This grammar only preserves source intent.
- *
- * ============================================================================
- * 39. SECURITY CONTRACT
- * ============================================================================
- *
- * Specialization syntax grants no implicit authority to:
- *
- *     filesystem;
- *     network;
- *     subprocesses;
- *     environment variables;
- *     devices;
- *     hardware;
- *     secrets;
- *     compiler-global mutable state.
- *
- * Compile-time evaluation and specialization must obey the existing:
- *
- *     effects/
- *     security/
- *     resources/
- *     interoperability/
- *
- * contracts.
- *
- * ============================================================================
- * 40. SOURCE-SPAN CONTRACT
- * ============================================================================
- *
- * Every specialization AST node MUST preserve:
- *
- *     source/file identity;
- *     start position;
- *     end position.
- *
- * Where available, diagnostics should preserve:
- *
- *     target span;
- *     argument span;
- *     clause span;
- *     related constraint span;
- *     specialization provenance.
- *
- * ============================================================================
- * 41. ERROR BOUNDARY
- * ============================================================================
- *
- * Parser errors include:
- *
- *     missing target;
- *     malformed argument list;
- *     malformed clause;
- *     malformed block;
- *     malformed expression.
- *
- * Semantic errors include:
- *
- *     unknown target;
- *     target not specializable;
- *     wrong argument count;
- *     duplicate named argument;
- *     unknown specialization parameter;
- *     invalid type argument;
- *     invalid specialization value;
- *     unsatisfied generic constraint;
- *     unsatisfied resource requirement;
- *     unavailable capability;
- *     non-portable specialization;
- *     semantics-changing specialization;
- *     invalid specialization policy.
- *
- * These semantic errors MUST NOT be represented as arbitrary parser limits.
- *
- * ============================================================================
- * 42. DETERMINISTIC ORDERING
- * ============================================================================
- *
- * The following order is semantically observable to tooling and diagnostics:
- *
- *     target
- *     argument order
- *     clause order
- *     source spans
- *
- * The compiler may construct a canonical internal specialization key later,
- * but that canonicalization must not destroy source provenance.
- *
- * ============================================================================
- * 43. COMPILER INTEGRATION
- * ============================================================================
- *
- * Expected downstream flow:
+ * Required semantic pipeline:
  *
  *     compileSpecializationDeclaration
- *             |
- *             v
- *     frontend AST
- *             |
- *             v
- *     name resolution
- *             |
- *             v
- *     generic/type/value validation
- *             |
- *             v
- *     constraint analysis
- *             |
- *             v
+ *                |
+ *                v
+ *          frontend AST
+ *                |
+ *                v
+ *          name resolution
+ *                |
+ *                v
+ *       type/generic validation
+ *                |
+ *                v
+ *      requirement/constraint
+ *          analysis
+ *                |
+ *                v
  *     capability/resource analysis
- *             |
- *             v
+ *                |
+ *                v
+ *       portability/policy
+ *          validation
+ *                |
+ *                v
  *     specialization planning
- *             |
- *       +-----+------+------+------+
- *       |            |             |
- *       v            v             v
- *     deferred    partial      complete
- *       |            |             |
- *       +------------+-------------+
- *                    |
- *                    v
- *          canonical semantic model
- *                    |
- *                    v
- *              canonical IR
- *
- * Existing monomorphization infrastructure may consume the semantic result.
- *
- * The grammar MUST NOT depend on compiler implementation structs.
- *
- * ============================================================================
- * 44. RUNTIME INTEGRATION
- * ============================================================================
- *
- * Runtime does not parse specialization syntax.
- *
- * Runtime consumes the already-specialized or intentionally deferred semantic
- * representation produced by compilation.
- *
- * Runtime hardware discovery must not become a parser dependency.
- *
- * ============================================================================
- * 45. TOOLING INTEGRATION
- * ============================================================================
- *
- * Tooling should be able to:
- *
- *     - syntax-highlight specialization;
- *     - locate specialization targets;
- *     - locate specialization arguments;
- *     - inspect specialization policies;
- *     - navigate to specialization targets;
- *     - preserve source spans;
- *     - format specialization deterministically;
- *     - report unresolved targets;
- *     - report invalid policies;
- *     - display specialization provenance.
- *
- * Formatting must preserve semantic ordering.
+ *                |
+ *        +-------+-------+
+ *        |       |       |
+ *        v       v       v
+ *      defer   partial  complete
+ *        |       |       |
+ *        +-------+-------+
+ *                |
+ *                v
+ *      canonical semantic model
+ *                |
+ *        +-------+-------+
+ *        |       |       |
+ *        v       v       v
+ *    classical quantum::ir HDL/hardware
+ *                |
+ *                v
+ *       optimization/lowering
+ *                |
+ *          routing/scheduling
+ *                |
+ *        resilience/QEC
+ *                |
+ *               ZQN
+ *                |
+ *               HAL
+ *                |
+ *         target realization
  *
  * ============================================================================
- * 46. CROSS-DOMAIN INTEGRATION
+ * COMPOSITION INTEGRATION
  * ============================================================================
  *
- * The same compilation-specialization contract applies to:
+ * Canonical compilation composition root:
  *
- *     classical;
- *     quantum;
- *     hybrid;
- *     HDL;
- *     hardware;
- *     AI;
- *     data;
- *     distributed;
- *     networking;
- *     security;
- *     accelerator;
- *     future computing domains.
+ *     grammar/compile/compile.g4
  *
- * Domain-specific grammars remain responsible for their own syntax.
+ * It imports:
  *
- * This file remains domain-neutral.
+ *     CompileSpecialization
+ *
+ * and exposes:
+ *
+ *     compileSpecializationDeclaration
+ *
+ * through its existing:
+ *
+ *     compileSpecializationReference
+ *
+ * rule.
+ *
+ * NO second composition root is required.
+ *
+ * `grammar/compile/compilation.g4`, if retained for compatibility, must not
+ * become another authoritative compilation root or duplicate this rule.
  *
  * ============================================================================
- * 47. COMPATIBILITY
+ * METAPROGRAMMING INTEGRATION
+ * ============================================================================
+ *
+ * `grammar/metaprogramming/specialization.g4` owns explicit specialization
+ * requests.
+ *
+ * It must remain independent from this grammar.
+ *
+ * The semantic model may combine:
+ *
+ *     explicit specialization request
+ *     +
+ *     compilation specialization policy
+ *
+ * without making either grammar import the other.
+ *
+ * This avoids circular grammar dependencies.
+ *
+ * ============================================================================
+ * COMPILE-TIME INTEGRATION
+ * ============================================================================
+ *
+ * `grammar/compile/compile-time.g4` owns compile-time control.
+ *
+ * It may cause specialization through compile-time semantics, but it must not
+ * redefine the specialization-policy grammar.
+ *
+ * Any common specialization semantic model belongs downstream in semantic
+ * analysis, not in either parser grammar.
+ *
+ * ============================================================================
+ * TARGET INTEGRATION
+ * ============================================================================
+ *
+ * `grammar/compile/target.g4` owns target intent.
+ *
+ * `grammar/compile/target-selection.g4` owns target-selection policy.
+ *
+ * This grammar may be consumed alongside those grammars semantically.
+ *
+ * It must not:
+ *
+ *     select a physical target
+ *     allocate hardware
+ *     enumerate devices
+ *     bind physical qubits
+ *     select CPU cores
+ *     select GPU indices
+ *
+ * ============================================================================
+ * OPTIMIZATION INTEGRATION
+ * ============================================================================
+ *
+ * `grammar/compile/optimization.g4` owns optimization intent.
+ *
+ * Optimization may consume specialization results.
+ *
+ * This grammar must not define:
+ *
+ *     optimization passes
+ *     cost models
+ *     optimizer algorithms
+ *     machine instruction selection
+ *
+ * ============================================================================
+ * RESOURCE INTEGRATION
+ * ============================================================================
+ *
+ * Resource and capability information remains owned by:
+ *
+ *     grammar/resources/
+ *     grammar/hardware/
+ *
+ * The specialization grammar consumes their semantic results indirectly
+ * through expressions and semantic analysis.
+ *
+ * It does not import the entire Resources composition grammar merely to
+ * repeat resource syntax.
+ *
+ * ============================================================================
+ * FRONTEND / AST INTEGRATION
+ * ============================================================================
+ *
+ * The canonical frontend must map parser contexts into the repository's
+ * domain-neutral AST.
+ *
+ * The AST must preserve:
+ *
+ *     target
+ *     arguments
+ *     clauses
+ *     source spans
+ *     source ordering
+ *     provenance
+ *
+ * It must not introduce backend-specific specialization structures.
+ *
+ * ============================================================================
+ * RUNTIME INTEGRATION
+ * ============================================================================
+ *
+ * Runtime does not parse this grammar.
+ *
+ * Runtime consumes the semantic/IR result after specialization planning and
+ * any permitted specialization have completed.
+ *
+ * Runtime hardware discovery is never a parser dependency.
+ *
+ * ============================================================================
+ * TOOLING INTEGRATION
+ * ============================================================================
+ *
+ * Tooling must be able to:
+ *
+ *     locate specialization declarations
+ *     locate specialization targets
+ *     locate specialization arguments
+ *     locate named arguments
+ *     locate requirements
+ *     locate constraints
+ *     locate preferences
+ *     locate hints
+ *     locate policies
+ *     locate fallbacks
+ *     locate scope
+ *     preserve source spans
+ *     format source deterministically
+ *     expose specialization provenance
+ *
+ * ============================================================================
+ * DIAGNOSTIC CONTRACT
+ * ============================================================================
+ *
+ * Parser diagnostics include:
+ *
+ *     missing specialization introducer
+ *     missing target
+ *     malformed argument list
+ *     malformed argument
+ *     malformed condition
+ *     malformed requirement
+ *     malformed constraint
+ *     malformed preference
+ *     malformed hint
+ *     malformed policy
+ *     malformed fallback
+ *     malformed scope
+ *     malformed metadata
+ *
+ * Semantic diagnostics include:
+ *
+ *     invalid specialization introducer
+ *     unknown specialization target
+ *     target is not specializable
+ *     wrong specialization argument count
+ *     duplicate named specialization argument
+ *     unknown specialization argument
+ *     invalid type argument
+ *     invalid value argument
+ *     unsatisfied generic constraint
+ *     unsatisfied resource requirement
+ *     unavailable capability
+ *     incompatible policy
+ *     invalid fallback
+ *     non-portable specialization
+ *     semantics-changing specialization
+ *     impossible specialization
+ *
+ * Parser grammar cardinality MUST NOT be used to represent semantic errors.
+ *
+ * ============================================================================
+ * COMPATIBILITY CONTRACT
  * ============================================================================
  *
  * Existing explicit specialization syntax remains owned by:
  *
  *     grammar/metaprogramming/specialization.g4
  *
- * Existing compile-time specialization remains owned by:
+ * This file does not replace that grammar.
  *
- *     grammar/compile/compile-time.g4
+ * The contextual source spelling:
  *
- * This file MUST NOT silently replace those constructs.
+ *     compile specialize ...
  *
- * If the canonical language elects to unify the source spelling in a future
- * revision, that must be an explicit compatibility change with:
+ * is compatible with the current lexer because `specialize` remains an
+ * identifier.
  *
- *     specification update;
- *     lexer update;
- *     parser composition update;
- *     AST mapping;
- *     semantic mapping;
- *     conformance tests;
- *     migration documentation.
+ * If `specialize` becomes a reserved keyword in a future language version:
+ *
+ *     lexer vocabulary
+ *     compatibility rules
+ *     conformance tests
+ *
+ * must be updated as one versioned change.
+ *
+ * No phantom `K_SPECIALIZE` token may be introduced into this file.
  *
  * ============================================================================
- * 48. TEST CONTRACT
+ * POSITIVE TEST CONTRACT
  * ============================================================================
  *
- * Positive tests MUST include:
+ * The following forms should be accepted structurally:
  *
  *     compile specialize compute;
  *
  *     compile specialize compute with (width = width);
  *
- *     compile specialize ns::compute with (precision = precision);
+ *     compile specialize ns::compute
+ *         with (precision = precision);
  *
  *     compile specialize quantum_algorithm
- *         with (qubits = required_qubits);
+ *         requires qubits >= required_qubits;
  *
  *     compile specialize tensor_kernel
  *         requires capability("tensor.compute");
@@ -1440,22 +1520,35 @@ compileSpecializationName
  *         requires memory >= required_memory;
  *
  *     compile specialize algorithm
- *         prefers capability("gpu.compute");
+ *         prefer capability("gpu.compute");
  *
  *     compile specialize algorithm {
  *         requires capability("tensor.compute");
  *         prefer vectorization;
  *         hint cache_locality;
- *     }
+ *     };
  *
- * The exact concrete keyword spelling must remain synchronized with the
- * authoritative lexer.
+ *     compile specialize algorithm
+ *         policy {
+ *             deterministic = true;
+ *             reproducible = true;
+ *         };
  *
- * Negative syntax tests MUST include:
+ *     compile specialize algorithm
+ *         fallback simulation;
+ *
+ *     compile specialize algorithm
+ *         scope module::algorithm;
+ *
+ * ============================================================================
+ * NEGATIVE TEST CONTRACT
+ * ============================================================================
+ *
+ * The parser must reject malformed forms such as:
  *
  *     compile specialize;
  *
- *     compile specialize <...>;
+ *     compile specialize with (...);
  *
  *     compile specialize target with ();
  *
@@ -1463,326 +1556,250 @@ compileSpecializationName
  *
  *     compile specialize target requires;
  *
- *     compile specialize target { ;
+ *     compile specialize target constraint;
  *
- * Semantic-negative tests MUST include:
+ *     compile specialize target prefer;
  *
- *     unknown specialization target;
- *     non-specializable target;
- *     wrong argument arity;
- *     invalid type argument;
- *     invalid value argument;
- *     unsatisfied generic constraint;
- *     unavailable capability;
- *     unsatisfied resource requirement.
+ *     compile specialize target hint;
  *
- * Boundary tests MUST include:
+ *     compile specialize target fallback;
  *
- *     deeply nested qualified names;
- *     deeply nested type expressions;
- *     deeply nested value expressions;
- *     large argument lists;
- *     large clause lists;
- *     many specialization declarations.
+ *     compile specialize target scope;
  *
- * Scalability tests MUST be parameterized.
+ *     compile specialize target {
  *
- * They MUST NOT define a maximum specialization count.
+ *     compile specialize target with (,);
  *
- * Cross-domain tests MUST include:
- *
- *     classical;
- *     quantum;
- *     hybrid;
- *     HDL;
- *     hardware;
- *     AI;
- *     distributed;
- *     accelerator;
- *
- * specialization scenarios.
- *
- * Determinism tests MUST verify identical source produces identical parse
- * structure and source ordering.
+ *     compile specialize target with (a =, b);
  *
  * ============================================================================
- * 49. HARD-CODING AUDIT
+ * BOUNDARY TEST CONTRACT
  * ============================================================================
  *
- * REQUIRED PASS CONDITIONS:
+ * Tests must cover:
  *
- *     [x] No MAX_QUBITS.
- *     [x] No MAX_CPUS.
- *     [x] No MAX_GPUS.
- *     [x] No MAX_FPGAS.
- *     [x] No MAX_NODES.
- *     [x] No MAX_MEMORY.
- *     [x] No MAX_THREADS.
- *     [x] No MAX_TENSOR_RANK.
- *     [x] No MAX_REGISTER_WIDTH.
- *     [x] No MAX_NETWORK_SIZE.
- *     [x] No MAX_DEVICE_COUNT.
- *     [x] No physical-device enumeration.
- *     [x] No physical-qubit enumeration.
+ *     empty policy block
+ *     single clause
+ *     many clauses
+ *     repeated clause categories
+ *     nested expressions
+ *     deeply qualified names
+ *     named arguments
+ *     positional arguments
+ *     mixed named/positional arguments
+ *     nested policy blocks
+ *     unknown capability names
+ *     symbolic resources
+ *     quantum requirements
+ *     classical requirements
+ *     HDL requirements
+ *     distributed requirements
+ *     accelerator requirements
+ *     AI/data specialization
+ *     fallback expressions
+ *     metadata
+ *
+ * Duplicate semantic properties are not parser errors merely because they
+ * repeat. The semantic layer decides whether repetition is legal.
+ *
+ * ============================================================================
+ * SCALABILITY TEST CONTRACT
+ * ============================================================================
+ *
+ * Tests must progressively exercise:
+ *
+ *     larger argument lists
+ *     larger clause sequences
+ *     larger policy blocks
+ *     deeper qualified names
+ *     deeper expression trees
+ *     many specialization declarations
+ *
+ * No grammar-level maximum is defined.
+ *
+ * Tests must therefore be parameterized rather than written around an
+ * artificial universal maximum.
+ *
+ * ============================================================================
+ * DETERMINISM TEST CONTRACT
+ * ============================================================================
+ *
+ * Identical source and identical grammar version must produce structurally
+ * equivalent parse trees.
+ *
+ * Source ordering must remain stable.
+ *
+ * Tooling formatting must not reorder semantic clauses unless the language
+ * specification explicitly defines such canonicalization.
+ *
+ * ============================================================================
+ * CROSS-DOMAIN TEST CONTRACT
+ * ============================================================================
+ *
+ * Specialization must be tested with:
+ *
+ *     classical computation
+ *     quantum computation
+ *     hybrid computation
+ *     HDL
+ *     hardware intent
+ *     AI/model computation
+ *     data computation
+ *     accelerator computation
+ *     distributed computation
+ *     networking-related semantic requirements
+ *
+ * The grammar remains domain-neutral in all cases.
+ *
+ * ============================================================================
+ * HARD-CODING AUDIT
+ * ============================================================================
+ *
+ * PASS CONDITIONS:
+ *
+ *     [x] No universal hardware capacity constants.
+ *     [x] No fixed resource cardinalities.
+ *     [x] No physical device enumeration.
+ *     [x] No physical qubit enumeration.
  *     [x] No vendor enumeration.
  *     [x] No fixed topology.
  *     [x] No fixed memory size.
  *     [x] No fixed register width.
  *     [x] No fixed tensor rank.
  *     [x] No fixed node count.
- *
- * Program values remain legal.
- *
- * For example:
- *
- *     let n = 1024;
- *
- * remains ordinary program semantics.
- *
- * The prohibited construct is a universal compiler rule such as:
- *
- *     compiler supports at most 1024 specialization resources
- *
- * ============================================================================
- * 50. PERFORMANCE CONTRACT
- * ============================================================================
- *
- * Grammar scalability is provided by:
- *
- *     repetition;
- *     symbolic references;
- *     compositional structures;
- *     canonical expressions;
- *     canonical types.
- *
- * The grammar does not assume infinite implementation resources.
- *
- * Large programs remain subject to:
- *
- *     compiler memory;
- *     compiler time;
- *     configured resource budgets;
- *     operating-system limits;
- *     available hardware.
- *
- * Those are implementation constraints, not language ceilings.
- *
- * Compiler implementations should prefer iterative processing and appropriate
- * worklists when processing very large specialization sets.
+ *     [x] No fixed processor count.
+ *     [x] No fixed specialization count.
+ *     [x] No fixed argument count.
+ *     [x] No embedded Rust.
+ *     [x] No unsafe requirement.
+ *     [x] No filesystem access.
+ *     [x] No network access.
+ *     [x] No hardware probing.
+ *     [x] No runtime execution.
+ *     [x] No second IR.
+ *     [x] No second quantum IR.
+ *     [x] No second compilation root.
  *
  * ============================================================================
- * 51. RUST INTEGRATION
+ * SAFE RUST CONTRACT
  * ============================================================================
  *
  * This grammar contains:
  *
- *     - no Rust actions;
- *     - no embedded Rust;
- *     - no unsafe;
- *     - no filesystem calls;
- *     - no network calls;
- *     - no subprocess execution.
+ *     no embedded Rust
+ *     no actions
+ *     no semantic predicates
+ *     no filesystem access
+ *     no network access
+ *     no process execution
+ *     no hardware access
+ *     no runtime execution
  *
- * Generated parser/compiler integration MUST support:
+ * Generated parser/compiler integration must use:
  *
- *     Rust 1.97
- *     Rust 1.97.1
  *     Rust 2021
+ *     Rust 1.97 or later
+ *     safe Rust only
  *
- * Compiler implementation MUST use safe Rust.
- *
- * ============================================================================
- * 52. INTEGRATION WITH EXISTING FILES
- * ============================================================================
- *
- * REQUIRED composition changes:
- *
- * 1. grammar/compile/compilation.g4
- *
- *    Import:
- *
- *        CompileSpecialization
- *
- *    and expose:
- *
- *        compileSpecializationDeclaration
- *
- *    through its compilation-element/plan composition.
- *
- * 2. grammar/compile/compile.g4
- *
- *    The compile composition grammar should expose the dedicated
- *    specialization entry point rather than duplicating these productions.
- *
- * 3. grammar/compile/compile-time.g4
- *
- *    `compileTimeSpecialization` remains the compile-time-control construct.
- *
- *    It should delegate to the specialization contract where appropriate
- *    rather than independently inventing another specialization model.
- *
- * 4. grammar/metaprogramming/specialization.g4
- *
- *    Remains authoritative for explicit generic specialization syntax.
- *
- *    It must NOT import this file merely to resolve ordinary generic
- *    specialization requests.
- *
- * 5. grammar/compile/target-selection.g4
- *
- *    May reference specialization policy semantically, but must not redefine
- *    specialization syntax.
- *
- * 6. grammar/compile/optimization.g4
- *
- *    May consume specialization results as downstream optimization context,
- *    but must not redefine specialization declarations.
- *
- * 7. grammar/Zamani.g4
- *
- *    Must expose compilation-specialization only through the canonical
- *    compilation composition boundary.
- *
- * 8. grammar/lexer/
- *
- *    `specialize` MUST have exactly one canonical lexical representation.
- *
- *    The repository currently contains historical references to both
- *    `K_SPECIALIZE` and `SPECIALIZE`.
- *
- *    These must be reconciled by the lexer authority.
- *
- *    This grammar intentionally does not declare a second lexer token.
+ * `unsafe` is not required by this grammar or its intended compiler
+ * integration.
  *
  * ============================================================================
- * 53. DEPENDENCY DIRECTION
+ * COMPLETION CRITERIA
  * ============================================================================
  *
- * Correct direction:
+ * THIS FILE IS COMPLETE WHEN:
  *
- *     lexer
- *       |
- *       v
- *     Core
- *       |
- *       +--> Types
- *       |
- *       +--> Expressions
- *       |
- *       v
- *     CompileSpecialization
- *       |
- *       v
- *     compile composition
- *       |
- *       v
- *     semantic analysis
- *       |
- *       +--> generic resolution
- *       +--> resource analysis
- *       +--> capability analysis
- *       +--> specialization planning
- *       |
- *       v
- *     canonical semantic representation
- *       |
- *       v
- *     canonical IR
- *
- * CompileSpecialization MUST NOT import:
- *
- *     Compilation
- *
- * because that would create a grammar cycle.
+ *     [ ] canonical lexer vocabulary is consumed;
+ *     [ ] no phantom specialization token is referenced;
+ *     [ ] `specialize` is validated contextually under the current lexer;
+ *     [ ] Compile is the sole compilation composition root;
+ *     [ ] no import cycle exists;
+ *     [ ] target remains symbolic;
+ *     [ ] resources remain symbolic;
+ *     [ ] capabilities remain open-world;
+ *     [ ] requirements remain distinct from constraints;
+ *     [ ] constraints remain distinct from preferences;
+ *     [ ] preferences remain distinct from hints;
+ *     [ ] policy remains semantically authoritative;
+ *     [ ] fallback remains compilation policy rather than runtime exception
+ *         handling;
+ *     [ ] generic specialization remains owned by metaprogramming;
+ *     [ ] no duplicate type/expression/name grammar exists;
+ *     [ ] no AST is defined here;
+ *     [ ] no IR is defined here;
+ *     [ ] quantum specialization reaches `quantum::ir`;
+ *     [ ] no physical hardware selection exists here;
+ *     [ ] no artificial resource ceiling exists;
+ *     [ ] source order is preserved;
+ *     [ ] source spans are preserved by the AST;
+ *     [ ] positive tests exist;
+ *     [ ] negative tests exist;
+ *     [ ] boundary tests exist;
+ *     [ ] scalability tests exist;
+ *     [ ] determinism tests exist;
+ *     [ ] cross-domain tests exist;
+ *     [ ] compatibility tests exist;
+ *     [ ] ANTLR generation succeeds;
+ *     [ ] generated Rust is compatible with Rust 1.97+;
+ *     [ ] repository safe-Rust requirements remain satisfied.
  *
  * ============================================================================
- * 54. SINGLE-AUTHORITY RULE
+ * FINAL RULE
  * ============================================================================
  *
- * There MUST be exactly one owner for each concern:
+ *     specialization syntax
+ *          !=
+ *     specialization implementation
  *
- *     generic declarations
- *         -> functions/types
+ *     specialization syntax
+ *          !=
+ *     generic resolution
  *
- *     generic type application
- *         -> types
- *
- *     explicit specialization request
- *         -> metaprogramming/specialization.g4
- *
- *     compile-time control
- *         -> compile/compile-time.g4
- *
- *     specialization compilation policy
- *         -> compile/specialization.g4
- *
- *     target intent
- *         -> compile/target.g4
- *
+ *     specialization syntax
+ *          !=
  *     target selection
- *         -> compile/target-selection.g4
  *
- *     optimization intent
- *         -> compile/optimization.g4
+ *     specialization syntax
+ *          !=
+ *     resource allocation
  *
- *     resource intent
- *         -> resources/
+ *     specialization syntax
+ *          !=
+ *     hardware realization
  *
- *     hardware capability
- *         -> hardware/
+ *     specialization syntax
+ *          !=
+ *     quantum physical mapping
  *
- *     quantum semantic representation
- *         -> quantum::ir
+ * The stable boundary is:
  *
- * No duplicate grammar authority is permitted.
+ *     SOURCE SPECIALIZATION INTENT
+ *                  |
+ *                  v
+ *          DOMAIN-NEUTRAL AST
+ *                  |
+ *                  v
+ *          SEMANTIC SPECIALIZATION
+ *                  |
+ *                  v
+ *        CANONICAL SEMANTIC MODEL
+ *                  |
+ *          +-------+-------+
+ *          |               |
+ *          v               v
+ *      classical       quantum::ir
+ *          |               |
+ *          +-------+-------+
+ *                  |
+ *                  v
+ *          target-independent
+ *          optimization/lowering
+ *                  |
+ *                  v
+ *          target realization
  *
- * ============================================================================
- * 55. COMPLETION CRITERIA
- * ============================================================================
- *
- * This file is complete when:
- *
- *     [x] It has one parser grammar declaration.
- *     [x] It uses the canonical lexer vocabulary.
- *     [x] It has no embedded Rust.
- *     [x] It requires no unsafe Rust.
- *     [x] It does not define an AST.
- *     [x] It does not define an IR.
- *     [x] It does not define a quantum IR.
- *     [x] It does not define hardware.
- *     [x] It does not define physical placement.
- *     [x] It does not define optimization algorithms.
- *     [x] It does not define generic declarations.
- *     [x] It does not redefine ordinary expressions.
- *     [x] It does not redefine ordinary types.
- *     [x] It does not encode hardware ceilings.
- *     [x] It supports open-ended clause cardinality.
- *     [x] It supports symbolic specialization targets.
- *     [x] It preserves source ordering.
- *     [x] It preserves source spans through the AST contract.
- *     [x] It separates requirement/constraint/preference/hint semantics.
- *     [x] It preserves POCO-REAF.
- *
- * Repository integration is complete when:
- *
- *     [ ] CompileSpecialization is imported exactly where required.
- *     [ ] No grammar imports it cyclically.
- *     [ ] `specialize` has one canonical lexer token.
- *     [ ] The frontend AST has a domain-neutral specialization-policy node.
- *     [ ] Semantic analysis validates specialization policy.
- *     [ ] Generic resolution remains outside this grammar.
- *     [ ] Monomorphization consumes semantic specialization results.
- *     [ ] Resource/capability analysis is downstream.
- *     [ ] Quantum specialization reaches `quantum::ir`.
- *     [ ] HDL/hardware specialization reaches its canonical semantic boundary.
- *     [ ] Positive tests pass.
- *     [ ] Negative tests pass.
- *     [ ] Boundary tests pass.
- *     [ ] Scalability tests pass.
- *     [ ] Determinism tests pass.
- *     [ ] Compatibility tests pass.
- *     [ ] Rust 1.97 / 1.97.1 integration passes.
- *     [ ] Repository-wide safe-Rust audit passes.
+ * This is the required production boundary for POCO-REAF.
  *
  * ============================================================================
  * END OF FILE
