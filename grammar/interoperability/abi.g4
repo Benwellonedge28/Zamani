@@ -1,1720 +1,2090 @@
 /*
-
-* ============================================================================
-* Zamani Universal Programming Language
-* ============================================================================
-* 
-* File:
-* grammar/interoperability/abi.g4
-* 
-* Grammar:
-* Abi
-* 
-* Status:
-* CANONICAL ABI SOURCE-CONTRACT GRAMMAR
-* 
-* Compiler baseline:
-* Rust 1.97 / Rust 1.97.1
-* Rust 2021
-* SAFE RUST ONLY
-* 
-* Safety:
-* This grammar contains no embedded Rust actions, predicates, callbacks,
-* filesystem access, network access, process execution, runtime calls,
-* hardware discovery, or unsafe code.
-* 
-* ============================================================================
-* PURPOSE
-* ============================================================================
-* 
-* This file is the single grammar owner for SOURCE-LEVEL ABI CONTRACTS.
-* 
-* ABI means the semantic compatibility boundary between a Zamani declaration
-* and an externally implemented callable/data interface.
-* 
-* This grammar describes:
-* 
-* - ABI identities;
-* - reusable ABI profiles;
-* - calling-convention references;
-* - linkage intent;
-* - symbol identity;
-* - foreign function contracts;
-* - parameter/result contracts;
-* - representation intent;
-* - ownership/lifetime/nullability contracts;
-* - variadic contracts;
-* - callback contracts;
-* - effect references;
-* - capability/resource requirements;
-* - compatibility/version constraints;
-* - adapters;
-* - marshaling contracts;
-* - error contracts;
-* - security requirements;
-* - distributed/remote boundary intent;
-* - quantum/classical boundary intent;
-* - hardware/HDL boundary intent;
-* - extensible ABI metadata.
-* 
-* This grammar describes CONTRACTS.
-* 
-* It does not implement an ABI.
-* 
-* ============================================================================
-* AUTHORITY
-* ============================================================================
-* 
-* Canonical owners:
-* 
-* lexical vocabulary
-*     -> grammar/antlr/ZamaniLexer.g4
-* 
-* names
-*     -> grammar/core/names.g4
-* 
-* attributes
-*     -> grammar/core/attributes.g4
-* 
-* expressions
-*     -> grammar/expressions/expressions.g4
-* 
-* types
-*     -> grammar/types/types.g4
-* 
-* FFI boundary
-*     -> grammar/interoperability/ffi.g4
-* 
-* foreign callable declarations
-*     -> grammar/interoperability/foreign-functions.g4
-* 
-* calling-convention references
-*     -> grammar/interoperability/calling-conventions.g4
-* 
-* ABI contracts
-*     -> THIS FILE
-* 
-* semantic ABI model
-*     -> semantic/compiler layer
-* 
-* target-specific ABI realization
-*     -> target lowering/linker/runtime layers
-* 
-* This file must not create another owner for any of those concepts.
-* 
-* ============================================================================
-* IMPORTANT REPOSITORY CORRECTION
-* ============================================================================
-* 
-* The previous implementation used parser literals such as:
-* 
-* 'abi'
-* 'calling'
-* 'convention'
-* 'linkage'
-* 'symbol'
-* 'parameter'
-* 'return'
-* 'representation'
-* 
-* even though those spellings are not all reserved by the canonical Zamani
-* lexer.
-* 
-* That creates a lexer/parser authority mismatch.
-* 
-* This replacement uses the canonical lexical vocabulary where the repository
-* already reserves a word and uses STRUCTURED ATTRIBUTE / IDENTIFIER forms for
-* extensible ABI metadata.
-* 
-* Do not silently add an ABI-specific second lexer.
-* 
-* If the language specification later decides that a new ABI word is a
-* universally reserved keyword, the required lexical change belongs in:
-* 
-* grammar/lexer/keywords.g4
-* 
-* and is then consumed through:
-* 
-* grammar/antlr/ZamaniLexer.g4
-* 
-* It does NOT belong in this parser grammar.
-* 
-* ============================================================================
-* POCO-REAF
-* ============================================================================
-* 
-* ABI syntax expresses compatibility intent, not machine selection.
-* 
-* It MUST NOT encode universal limits such as:
-* 
-* MAX_CPUS
-* MAX_GPUS
-* MAX_FPGAS
-* MAX_QPUS
-* MAX_NODES
-* MAX_THREADS
-* MAX_MEMORY
-* MAX_REGISTER_WIDTH
-* MAX_REGISTER_COUNT
-* MAX_TENSOR_RANK
-* MAX_NETWORK_SIZE
-* MAX_DEVICE_COUNT
-* MAX_POINTER_WIDTH
-* MAX_WORD_WIDTH
-* 
-* Nor may it enumerate physical resources such as:
-* 
-* cpu0
-* gpu0
-* qpu0
-* register7
-* physical_qubit17
-* memory_bank3
-* 
-* as universal ABI syntax.
-* 
-* A contract may state:
-* 
-* requires capability::foreign_call;
-* requires capability::variadic_call;
-* requires capability::quantum_boundary;
-* requires capability::remote_call;
-* 
-* The compiler/semantic layers determine whether a target can satisfy those
-* requirements.
-* 
-* ============================================================================
-* SAFETY / INERTNESS
-* ============================================================================
-* 
-* Parsing an ABI contract MUST NOT:
-* 
-* - load a library;
-* - resolve a symbol;
-* - open a file;
-* - access a network;
-* - inspect the host operating system;
-* - inspect hardware;
-* - allocate native memory;
-* - invoke a foreign function;
-* - execute generated code;
-* - perform dynamic linking;
-* - select a device.
-* 
-* Parsing produces syntax only.
-* 
-* ============================================================================
-* AST CONTRACT
-* ============================================================================
-* 
-* The parser must produce a domain-neutral frontend representation.
-* 
-* Conceptually:
-* 
-* abiDeclaration
-*     ->
-* ABI declaration AST node
-*     ->
-* validated ABI semantic contract
-*     ->
-* canonical semantic model
-*     ->
-* target-specific ABI lowering
-* 
-* The grammar must NOT introduce:
-* 
-* CpuAbi
-* GpuAbi
-* QpuAbi
-* RegisterAbi
-* PhysicalAbi
-* 
-* or another hardware-specific AST hierarchy.
-* 
-* ============================================================================
-* IR CONTRACT
-* ============================================================================
-* 
-* ABI metadata remains a semantic interoperability contract.
-* 
-* It may be attached to:
-* 
-* classical calls
-* foreign calls
-* callbacks
-* data boundaries
-* distributed calls
-* quantum/classical boundaries
-* HDL/hardware boundaries
-* 
-* It does NOT create another quantum IR.
-* 
-* If a foreign call participates in quantum computation, its semantic
-* consequences are lowered through the existing canonical:
-* 
-* quantum::ir
-* 
-* boundary where appropriate.
-* 
-* ============================================================================
-* ANTLR COMPOSITION
-* ============================================================================
-* 
-* This is a parser grammar.
-* 
-* It consumes:
-* 
-* ZamaniLexer
-* 
-* and reuses:
-* 
-* Names
-* Attributes
-* Expressions
-* Types
-* 
-* ANTLR parser imports compose reusable parser rules into the importing
-* grammar. The root/composition grammar remains responsible for deciding
-* where ABI declarations are legal in a complete Zamani program.
-* 
-* ============================================================================
-  */
+ * ============================================================================
+ * Zamani Programming Language
+ * ============================================================================
+ *
+ * File:
+ *     grammar/interoperability/abi.g4
+ *
+ * Grammar:
+ *     Abi
+ *
+ * Status:
+ *     CANONICAL / PRODUCTION ABI-CONTRACT GRAMMAR
+ *
+ * Compiler baseline:
+ *     Rust 1.97+
+ *     Rust 2021
+ *     SAFE RUST ONLY
+ *     NO UNSAFE
+ *
+ * ============================================================================
+ * FEATURE CONTRACT
+ * ============================================================================
+ *
+ * PURPOSE
+ * -------
+ *
+ * This file is the canonical SOURCE-SYNTAX owner for ABI contracts.
+ *
+ * ABI means the declarative compatibility boundary between a Zamani
+ * declaration and an externally implemented callable/data interface.
+ *
+ * This grammar represents:
+ *
+ *     ABI identity
+ *     ABI profiles
+ *     calling-convention intent
+ *     linkage intent
+ *     external symbol identity
+ *     callable signatures
+ *     parameter/result boundary contracts
+ *     representation intent
+ *     ownership
+ *     lifetime
+ *     nullability
+ *     variadic intent
+ *     effects
+ *     capabilities
+ *     resource requirements
+ *     compatibility/version metadata
+ *     marshaling intent
+ *     adaptation intent
+ *     error-boundary intent
+ *     security requirements
+ *     distributed-boundary requirements
+ *     quantum/classical-boundary requirements
+ *     hardware/HDL-boundary requirements
+ *     foreign-language identity
+ *     negotiation/fallback intent
+ *     extensible ABI metadata
+ *
+ * The grammar describes CONTRACTS.
+ *
+ * It does not implement an ABI.
+ *
+ * ============================================================================
+ * OWNS
+ * ============================================================================
+ *
+ * This file owns:
+ *
+ *     abiDeclaration
+ *     abiContract
+ *     abiContractBody
+ *     ABI-specific callable contract syntax
+ *     ABI-specific type-boundary syntax
+ *     ABI property syntax
+ *     ABI capability/resource/effect references
+ *     ABI compatibility metadata
+ *     ABI adapter/marshalling declarations
+ *     ABI boundary declarations
+ *
+ * ============================================================================
+ * DOES NOT OWN
+ * ============================================================================
+ *
+ * This file does NOT own:
+ *
+ *     lexical vocabulary
+ *     identifiers
+ *     qualified names
+ *     attributes
+ *     general expressions
+ *     general types
+ *     ordinary functions
+ *     ordinary function types
+ *     general FFI call syntax
+ *     foreign-language grammars
+ *     calling-convention attachment syntax for ordinary functions
+ *     linker behavior
+ *     object-file generation
+ *     dynamic loading
+ *     symbol resolution
+ *     target selection
+ *     register allocation
+ *     stack layout
+ *     physical memory layout
+ *     machine instruction selection
+ *     hardware discovery
+ *     quantum routing
+ *     quantum scheduling
+ *     QEC
+ *     ZQN
+ *     HAL
+ *     runtime execution
+ *
+ * ============================================================================
+ * AUTHORITATIVE DEPENDENCIES
+ * ============================================================================
+ *
+ * Lexical authority:
+ *
+ *     grammar/antlr/ZamaniLexer.g4
+ *
+ * Name authority:
+ *
+ *     grammar/core/names.g4
+ *
+ * Attribute authority:
+ *
+ *     grammar/core/attributes.g4
+ *
+ * Expression authority:
+ *
+ *     grammar/expressions/expressions.g4
+ *
+ * Type authority:
+ *
+ *     grammar/types/types.g4
+ *         grammar name: Type
+ *
+ * FFI boundary:
+ *
+ *     grammar/interoperability/ffi.g4
+ *
+ * Foreign callable declarations:
+ *
+ *     grammar/interoperability/foreign-functions.g4
+ *
+ * Foreign types:
+ *
+ *     grammar/interoperability/foreign-types.g4
+ *
+ * Calling-convention attachment:
+ *
+ *     grammar/interoperability/calling-conventions.g4
+ *
+ * Interoperability composition:
+ *
+ *     grammar/interoperability/interoperability.g4
+ *
+ * Semantic ABI model:
+ *
+ *     frontend/semantic/compiler interoperability layer
+ *
+ * Target ABI realization:
+ *
+ *     target lowering / linker / runtime layers
+ *
+ * ============================================================================
+ * CRITICAL REPOSITORY CORRECTIONS
+ * ============================================================================
+ *
+ * The previous version of this file had several structural problems.
+ *
+ * 1. It imported:
+ *
+ *        Types
+ *
+ *    while the canonical type grammar is:
+ *
+ *        Type
+ *
+ *    from:
+ *
+ *        grammar/types/types.g4
+ *
+ * 2. It referenced:
+ *
+ *        abiArgument
+ *
+ *    without defining or importing such a rule.
+ *
+ * 3. It used:
+ *
+ *        ARROW
+ *
+ *    even though the canonical operator vocabulary uses:
+ *
+ *        THIN_ARROW
+ *
+ *    for `->`.
+ *
+ * 4. Multiple rules had identical syntax:
+ *
+ *        identifier ASSIGN abiValue SEMICOLON
+ *
+ *    Examples included representation, ownership, lifetime, nullability,
+ *    implementation and similar metadata.
+ *
+ *    Those constructs are now represented by ONE generic ABI property rule.
+ *
+ * 5. Multiple alternatives began with the same unconstrained identifier
+ *    sequence:
+ *
+ *        identifier (...)
+ *
+ *    which made callable/convention interpretation unnecessarily ambiguous.
+ *
+ * 6. The grammar attempted to make every semantic ABI concept a separate
+ *    parser production even where the repository already has canonical
+ *    metadata, attribute, capability, resource and effect owners.
+ *
+ * The replacement below deliberately separates:
+ *
+ *     keyword-led ABI constructs
+ *
+ * from:
+ *
+ *     open-world ABI properties.
+ *
+ * ============================================================================
+ * POCO-REAF CONTRACT
+ * ============================================================================
+ *
+ * ABI syntax MUST remain target-independent.
+ *
+ * This file MUST NOT establish universal limits for:
+ *
+ *     CPUs
+ *     cores
+ *     threads
+ *     GPUs
+ *     FPGAs
+ *     ASICs
+ *     accelerators
+ *     QPUs
+ *     qubits
+ *     nodes
+ *     processes
+ *     devices
+ *     memory
+ *     storage
+ *     registers
+ *     register width
+ *     pointer width
+ *     word width
+ *     tensor rank
+ *     topology size
+ *     network size
+ *
+ * It MUST NOT enumerate physical resources such as:
+ *
+ *     cpu0
+ *     gpu0
+ *     qpu0
+ *     register7
+ *     physical_qubit17
+ *     memory_bank3
+ *
+ * as universal ABI concepts.
+ *
+ * Source-level ABI requirements may instead be symbolic:
+ *
+ *     requires capability("foreign.call");
+ *     requires capability("remote.call");
+ *     requires capability("quantum.boundary");
+ *     requires memory >= required_memory;
+ *
+ * Target feasibility belongs downstream.
+ *
+ * ============================================================================
+ * SAFETY / INERTNESS
+ * ============================================================================
+ *
+ * Parsing an ABI contract MUST NOT:
+ *
+ *     load a library
+ *     resolve a symbol
+ *     open a file
+ *     access a network
+ *     inspect hardware
+ *     allocate native memory
+ *     execute foreign code
+ *     perform dynamic linking
+ *     select a device
+ *     invoke a callback
+ *
+ * This grammar contains:
+ *
+ *     no Rust actions
+ *     no semantic predicates
+ *     no unsafe code
+ *     no runtime calls
+ *     no filesystem access
+ *     no network access
+ *     no hardware discovery
+ *
+ * ============================================================================
+ * AST CONTRACT
+ * ============================================================================
+ *
+ * The grammar produces parser contexts only.
+ *
+ * Frontend AST construction belongs to the existing domain-neutral AST.
+ *
+ * Conceptual mapping:
+ *
+ *     abiDeclaration
+ *         ->
+ *     AbiContractNode
+ *         ->
+ *     validated semantic ABI contract
+ *         ->
+ *     canonical semantic model
+ *         ->
+ *     target-specific ABI realization
+ *
+ * The AST MUST preserve:
+ *
+ *     source span
+ *     ABI identity
+ *     profile references
+ *     properties
+ *     callable signatures
+ *     parameter boundaries
+ *     result boundaries
+ *     ABI metadata
+ *     requirements
+ *     capabilities
+ *     effects
+ *     compatibility information
+ *     adapter relationships
+ *     provenance
+ *
+ * No hardware-specific ABI AST hierarchy is introduced.
+ *
+ * ============================================================================
+ * SEMANTIC CONTRACT
+ * ============================================================================
+ *
+ * Parsing establishes structure only.
+ *
+ * Semantic analysis determines:
+ *
+ *     whether an ABI identity exists;
+ *     whether a property key is valid;
+ *     whether a calling convention is supported;
+ *     whether linkage is compatible;
+ *     whether symbols are resolvable;
+ *     whether parameter/result types are ABI-compatible;
+ *     whether ownership/lifetime contracts are valid;
+ *     whether effects are permitted;
+ *     whether capabilities are available;
+ *     whether resources are sufficient;
+ *     whether policies permit the boundary;
+ *     whether compatibility constraints are satisfied.
+ *
+ * A target that cannot satisfy an ABI contract is NOT a parser error.
+ *
+ * It is a semantic/compilation/realization result.
+ *
+ * ============================================================================
+ * IR CONTRACT
+ * ============================================================================
+ *
+ * This grammar creates NO IR.
+ *
+ * ABI information is attached to the existing canonical semantic model.
+ *
+ * It MUST NOT create:
+ *
+ *     AbiIR
+ *     CallingConventionIR
+ *     ForeignAbiIR
+ *     QuantumAbiIR
+ *     HardwareAbiIR
+ *
+ * Quantum participation remains:
+ *
+ *     source
+ *         ->
+ *     domain-neutral AST
+ *         ->
+ *     semantic analysis
+ *         ->
+ *     quantum::ir
+ *
+ * where quantum representation is actually required.
+ *
+ * ============================================================================
+ * TARGET LOWERING
+ * ============================================================================
+ *
+ * Only downstream stages may resolve:
+ *
+ *     concrete calling sequences
+ *     parameter passing
+ *     return passing
+ *     object formats
+ *     symbol decoration
+ *     concrete alignment
+ *     concrete layout
+ *     register/stack placement
+ *     dynamic loading
+ *     thunk generation
+ *     marshaling implementation
+ *
+ * These are NOT grammar semantics.
+ *
+ * ============================================================================
+ * INTEGRATION CONTRACT
+ * ============================================================================
+ *
+ * grammar/interoperability/ffi.g4
+ *     may consume:
+ *
+ *         abiContract
+ *         abiProfileReference
+ *         abiCallableContract
+ *         abiBoundary
+ *         abiProperty
+ *
+ * grammar/interoperability/foreign-functions.g4
+ *     may attach ABI identity/contracts without redefining ABI syntax.
+ *
+ * grammar/interoperability/foreign-types.g4
+ *     may reference ABI type-boundary metadata.
+ *
+ * grammar/interoperability/calling-conventions.g4
+ *     remains the reusable source-level calling-convention attachment owner.
+ *
+ * ABI-specific internal convention properties may still be represented here
+ * as ABI properties:
+ *
+ *     calling_convention = "c";
+ *     calling_convention = vendor::convention;
+ *
+ * The general callable attachment remains owned by the calling-convention
+ * grammar.
+ *
+ * grammar/interoperability/c.g4
+ * grammar/interoperability/cpp.g4
+ * grammar/interoperability/rust.g4
+ * grammar/interoperability/zig.g4
+ * grammar/interoperability/python.g4
+ * grammar/interoperability/wasm.g4
+ * grammar/interoperability/qasm.g4
+ * grammar/interoperability/hdl.g4
+ *
+ * may reference ABI identities/contracts.
+ *
+ * They MUST NOT create competing ABI semantic models.
+ *
+ * grammar/antlr/ZamaniParser.g4
+ *     receives ABI through the canonical Interoperability dispatcher.
+ *
+ * grammar/Zamani.g4
+ *     remains unchanged and does not import this leaf directly.
+ *
+ * ============================================================================
+ * DEPENDENCY CONTRACT
+ * ============================================================================
+ *
+ * DEPENDS_ON:
+ *
+ *     ZamaniLexer
+ *     Names
+ *     Attributes
+ *     Expressions
+ *     Type
+ *
+ * EXPORTS:
+ *
+ *     abiDeclaration
+ *     abiContract
+ *     abiIdentity
+ *     abiContractBody
+ *     abiMember
+ *     abiProfileReference
+ *     abiCallableContract
+ *     abiParameter
+ *     abiReturn
+ *     abiBoundary
+ *     abiProperty
+ *     abiCapabilityClause
+ *     abiResourceClause
+ *     abiRequirementClause
+ *     abiEffectClause
+ *     abiCompatibilityClause
+ *     abiAdapter
+ *     abiMarshal
+ *     abiError
+ *     abiDomainBoundary
+ *
+ * CONSUMED_BY:
+ *
+ *     interoperability dispatcher
+ *     FFI grammar
+ *     foreign-function grammar
+ *     interoperability semantic analysis
+ *     AST builder
+ *     validation
+ *     compiler/lowering
+ *
+ * AST_OWNER:
+ *
+ *     existing domain-neutral frontend AST
+ *
+ * SEMANTIC_OWNER:
+ *
+ *     interoperability semantic analysis
+ *
+ * IR_OWNER:
+ *
+ *     canonical semantic model
+ *
+ * TEST_OWNER:
+ *
+ *     grammar/tests/interoperability/
+ *     grammar/tests/negative/
+ *     grammar/tests/boundary/
+ *     grammar/tests/scalability/
+ *
+ * SPEC_OWNER:
+ *
+ *     grammar/spec/interoperability.md
+ *
+ * ============================================================================
+ * OPEN-WORLD DESIGN
+ * ============================================================================
+ *
+ * ABI identities, convention names, linkage names, symbol names, language
+ * identities, vendor identifiers and future ABI properties are symbolic data.
+ *
+ * The grammar does not enumerate:
+ *
+ *     C
+ *     cdecl
+ *     stdcall
+ *     sysv64
+ *     win64
+ *     aapcs
+ *     vectorcall
+ *     vendor ABIs
+ *     future ABIs
+ *
+ * New ABI identities therefore do not require modifying this grammar.
+ *
+ * ============================================================================
+ */
 
 parser grammar Abi;
 
 options {
-tokenVocab = ZamaniLexer;
+    tokenVocab = ZamaniLexer;
 }
 
-import Names, Attributes, Expressions, Types;
+import
+    Names,
+    Attributes,
+    Expressions,
+    Type
+;
+
 
 /*
-
-* ============================================================================
-* TOP-LEVEL ABI CONTRACT
-* ============================================================================
-* 
-* The canonical language already reserves "extern".
-* 
-* Therefore the ABI source boundary is expressed as an external contract:
-* 
-* extern "C" { ... }
-* 
-* or:
-* 
-* extern "vendor.interface" { ... }
-* 
-* or another symbolic ABI identity.
-* 
-* This avoids inventing an unowned "abi" lexer keyword.
-* 
-* A standalone ABI contract may also be composed by interoperability.g4
-* through "abiContract".
-* 
-* ============================================================================
-  */
-
+ * ============================================================================
+ * 1. TOP-LEVEL ABI DECLARATION
+ * ============================================================================
+ *
+ * Canonical form:
+ *
+ *     extern "C" {
+ *         ...
+ *     }
+ *
+ *     extern platform::abi {
+ *         ...
+ *     }
+ *
+ * The explicit EXTERN token makes this declaration unambiguous with ordinary
+ * identifier-led ABI metadata.
+ */
 abiDeclaration
-: attribute*
-EXTERN
-abiIdentity
-abiContractBody
-;
+    : attributeList?
+      EXTERN
+      abiIdentity
+      abiContractBody
+    ;
+
 
 /*
-
-* Reusable ABI contract form.
-* 
-* "abiContract" deliberately does not introduce a keyword that the lexer does
-* not own. It is a parser-level semantic contract component consumed by FFI
-* and foreign-function composition grammars.
-* 
-* The identity is explicit and symbolic.
-  */
-
+ * ============================================================================
+ * 2. REUSABLE ABI CONTRACT
+ * ============================================================================
+ *
+ * This rule is used by interoperability delegates that already established
+ * their own external-boundary context.
+ *
+ * It intentionally does not consume EXTERN.
+ */
 abiContract
-: abiIdentity
-abiContractBody
-;
+    : abiIdentity
+      abiContractBody
+    ;
+
 
 /*
-
-* ABI identity is deliberately open-world.
-* 
-* A string literal is preferred for traditional foreign ABI spellings:
-* 
-* "C"
-* "rust"
-* "vendor.interface"
-* 
-* A qualified name is available for Zamani-defined symbolic ABI contracts:
-* 
-* platform::interface
-* organization::abi::v2
-
-*/
-
+ * ============================================================================
+ * 3. ABI IDENTITY
+ * ============================================================================
+ *
+ * Either a quoted external identity or a Zamani-qualified symbolic identity.
+ *
+ * Examples:
+ *
+ *     "C"
+ *     "system.interface"
+ *     platform::native
+ *     vendor::abi::v2
+ *     future::architecture::abi
+ */
 abiIdentity
-: STRING
-| qualifiedName
-;
+    : STRING
+    | qualifiedName
+    ;
+
 
 /*
-
-* ============================================================================
-* CONTRACT BODY
-* ============================================================================
-  */
+ * ============================================================================
+ * 4. ABI BODY
+ * ============================================================================
+ */
 
 abiContractBody
-: LBRACE
-abiItem*
-RBRACE
-;
+    : LBRACE
+      abiMember*
+      RBRACE
+    ;
 
-abiItem
-: abiProfileReference
-| abiConvention
-| abiLinkage
-| abiSymbol
-| abiCallable
-| abiTypeContract
-| abiParameter
-| abiResult
-| abiRepresentation
-| abiOwnership
-| abiLifetime
-| abiNullability
-| abiVariadic
-| abiCallback
-| abiEffect
-| abiCapability
-| abiResource
-| abiRequirement
-| abiCompatibility
-| abiVersion
-| abiAdapter
-| abiMarshal
-| abiError
-| abiSecurity
-| abiDistributed
-| abiQuantum
-| abiHardware
-| abiLanguage
-| abiImplementation
-| abiNegotiation
-| abiFallback
-| abiFailure
-| abiMetadata
-| abiAttribute
-;
 
 /*
+ * ============================================================================
+ * 5. ABI MEMBER DISPATCH
+ * ============================================================================
+ *
+ * IMPORTANT:
+ *
+ * Alternatives are deliberately distinguished by their first significant
+ * token wherever possible.
+ *
+ * This avoids the previous structure in which many alternatives began with
+ * `identifier` and then became indistinguishable.
+ *
+ * The final `abiProperty` is the single generic open-world identifier-led
+ * metadata production.
+ */
+abiMember
+    : abiProfileReference
+    | abiCallableContract
+    | abiTypeContract
+    | abiCapabilityClause
+    | abiResourceClause
+    | abiRequirementClause
+    | abiEffectClause
+    | abiCompatibilityClause
+    | abiAdapter
+    | abiMarshal
+    | abiError
+    | abiDomainBoundary
+    | abiProperty
+    | attribute
+    ;
 
-* ============================================================================
-* REUSABLE ABI PROFILE
-* ============================================================================
-* 
-* PROFILE is already a canonical Zamani keyword.
-* 
-* Profiles are semantic templates. They do not select hardware.
-  */
 
+/*
+ * ============================================================================
+ * 6. ABI PROFILE
+ * ============================================================================
+ *
+ * PROFILE is a canonical language keyword.
+ *
+ * A profile is a reusable semantic ABI template.
+ *
+ * It does not select hardware.
+ */
 abiProfileReference
-: PROFILE
-identifier
-abiProfileBody?
-;
+    : PROFILE
+      identifier
+      abiProfileBody?
+    ;
 
 abiProfileBody
-: LBRACE
-abiProfileItem*
-RBRACE
-;
+    : LBRACE
+      abiProfileMember*
+      RBRACE
+    ;
 
-abiProfileItem
-: abiConvention
-| abiLinkage
-| abiRepresentation
-| abiOwnership
-| abiLifetime
-| abiNullability
-| abiVariadic
-| abiEffect
-| abiCapability
-| abiResource
-| abiRequirement
-| abiCompatibility
-| abiVersion
-| abiSecurity
-| abiMetadata
-| abiAttribute
-;
+abiProfileMember
+    : abiCapabilityClause
+    | abiResourceClause
+    | abiRequirementClause
+    | abiEffectClause
+    | abiCompatibilityClause
+    | abiProperty
+    | attribute
+    ;
+
 
 /*
+ * ============================================================================
+ * 7. CALLABLE CONTRACT
+ * ============================================================================
+ *
+ * FN gives this construct an unambiguous syntactic owner.
+ *
+ * Example:
+ *
+ *     fn external_compute(
+ *         value: Tensor<T>
+ *     ) -> Result<T> {
+ *         calling_convention = "c";
+ *         linkage = "external";
+ *         symbol = "compute";
+ *     }
+ *
+ * The callable contract is declarative.
+ *
+ * It does not define an executable function body.
+ *
+ * If a body is ever introduced by another interoperability feature, that
+ * feature must remain separately owned.
+ */
+abiCallableContract
+    : FN
+      identifier
+      abiCallableGenericParameters?
+      LPAREN
+      abiParameterList?
+      RPAREN
+      abiReturn?
+      abiCallableBody?
+      SEMICOLON?
+    ;
 
-* ============================================================================
-* CALLING CONVENTION
-* ============================================================================
-* 
-* The actual convention is symbolic.
-* 
-* The grammar deliberately does not enumerate:
-* 
-* C
-* cdecl
-* stdcall
-* fastcall
-* thiscall
-* vectorcall
-* SysV
-* Win64
-* AAPCS
-* GPU-specific conventions
-* future conventions
-* 
-* Such names are semantic values.
-* 
-* The existing interoperability/calling-conventions.g4 grammar owns reusable
-* calling-convention attachment syntax. This file owns the ABI contract's
-* embedded convention requirement.
-* 
-* ============================================================================
-  */
-
-abiConvention
-: identifier
-LPAREN
-abiConventionArguments?
-RPAREN
-SEMICOLON
-;
-
-abiConventionArguments
-: abiArgument
-(
-COMMA
-abiArgument
-)*
-;
 
 /*
+ * ============================================================================
+ * 8. ABI GENERIC PARAMETERS
+ * ============================================================================
+ *
+ * ABI contracts may preserve generic source structure.
+ *
+ * Semantic generic resolution remains owned by the type/semantic systems.
+ *
+ * This syntax deliberately stays open-ended.
+ */
+abiCallableGenericParameters
+    : DOUBLE_COLON
+      LESS
+      abiGenericParameter
+      (
+          COMMA
+          abiGenericParameter
+      )*
+      GREATER
+    ;
 
-* ============================================================================
-* LINKAGE
-* ============================================================================
-* 
-* Linkage names are open-world identifiers.
-* 
-* Linker implementation remains downstream.
-  */
+abiGenericParameter
+    : identifier
+    ;
 
-abiLinkage
-: identifier
-COLON
-identifier
-SEMICOLON
-;
-
-/*
-
-* ============================================================================
-* SYMBOL
-* ============================================================================
-* 
-* A source symbol name and an externally visible symbol name are distinct.
-* 
-* Example semantic form:
-* 
-* symbol foo {
-*     external = "foreign_foo";
-* }
-* 
-* The words "symbol" and "external" are contextual identifiers here.
-* 
-* ============================================================================
-  */
-
-abiSymbol
-: identifier
-identifier
-abiSymbolBody
-;
-
-abiSymbolBody
-: LBRACE
-abiSymbolItem*
-RBRACE
-;
-
-abiSymbolItem
-: identifier
-ASSIGN
-abiValue
-SEMICOLON
-| attribute
-;
 
 /*
-
-* ============================================================================
-* CALLABLE CONTRACT
-* ============================================================================
-* 
-* This is the ABI-level callable boundary.
-* 
-* It intentionally does not duplicate ordinary Zamani function syntax.
-* 
-* The first identifier is the symbolic callable contract name.
-  */
-
-abiCallable
-: identifier
-LPAREN
-abiParameterList?
-RPAREN
-abiReturnClause?
-abiCallableBody?
-;
-
-abiCallableBody
-: LBRACE
-abiCallableItem*
-RBRACE
-;
-
-abiCallableItem
-: abiConvention
-| abiLinkage
-| abiSymbol
-| abiParameter
-| abiResult
-| abiVariadic
-| abiCallback
-| abiEffect
-| abiCapability
-| abiResource
-| abiRequirement
-| abiCompatibility
-| abiVersion
-| abiSecurity
-| abiMetadata
-| attribute
-;
-
+ * ============================================================================
+ * 9. ABI PARAMETERS
+ * ============================================================================
+ *
+ * Parameters reuse canonical Zamani types.
+ *
+ * Parameter-specific ABI metadata is represented through an optional
+ * structured boundary body.
+ */
 abiParameterList
-: abiParameter
-(
-COMMA
-abiParameter
-)*
-;
+    : abiParameter
+      (
+          COMMA
+          abiParameter
+      )*
+    ;
 
-abiReturnClause
-: ARROW
-typeExpression
-;
+abiParameter
+    : attributeList?
+      identifier
+      COLON
+      typeExpression
+      abiBoundary?
+    ;
+
 
 /*
+ * ============================================================================
+ * 10. ABI RETURN CONTRACT
+ * ============================================================================
+ *
+ * The canonical function arrow is THIN_ARROW.
+ *
+ * Example:
+ *
+ *     -> Result<T>
+ *
+ * Boundary metadata can follow the return type.
+ */
+abiReturn
+    : THIN_ARROW
+      typeExpression
+      abiBoundary?
+    ;
 
-* ============================================================================
-* TYPE CONTRACT
-* ============================================================================
-* 
-* The source type is owned by the canonical type grammar.
-* 
-* ABI representation remains semantic metadata.
-  */
 
+/*
+ * ============================================================================
+ * 11. ABI BOUNDARY
+ * ============================================================================
+ *
+ * This is a structured metadata container.
+ *
+ * Example:
+ *
+ *     value: T {
+ *         representation = opaque;
+ *         ownership = borrowed;
+ *         lifetime = caller;
+ *         nullable = false;
+ *     }
+ *
+ * All property names remain open-world identifiers.
+ *
+ * Semantic validation determines which properties are legal in a given
+ * boundary context.
+ */
+abiBoundary
+    : LBRACE
+      abiBoundaryMember*
+      RBRACE
+    ;
+
+abiBoundaryMember
+    : abiCapabilityClause
+    | abiResourceClause
+    | abiRequirementClause
+    | abiEffectClause
+    | abiCompatibilityClause
+    | abiProperty
+    | attribute
+    ;
+
+
+/*
+ * ============================================================================
+ * 12. ABI TYPE CONTRACT
+ * ============================================================================
+ *
+ * TYPE is a canonical Zamani keyword.
+ *
+ * The type itself is always represented through the canonical Type grammar.
+ *
+ * Example:
+ *
+ *     type external_buffer: Buffer<T> {
+ *         representation = opaque;
+ *         ownership = transferred;
+ *     };
+ */
 abiTypeContract
-: TYPE
-identifier
-COLON
-typeExpression
-abiTypeBody?
-SEMICOLON
-;
+    : TYPE
+      identifier
+      COLON
+      typeExpression
+      abiBoundary?
+      SEMICOLON
+    ;
 
-abiTypeBody
-: LBRACE
-abiTypeItem*
-RBRACE
-;
-
-abiTypeItem
-: abiRepresentation
-| abiOwnership
-| abiLifetime
-| abiNullability
-| abiCompatibility
-| abiRequirement
-| abiCapability
-| abiResource
-| abiMetadata
-| attribute
-;
 
 /*
+ * ============================================================================
+ * 13. GENERIC ABI PROPERTY
+ * ============================================================================
+ *
+ * This is the key extensibility mechanism.
+ *
+ * It replaces multiple structurally identical productions such as:
+ *
+ *     representation
+ *     ownership
+ *     lifetime
+ *     nullability
+ *     implementation
+ *     linkage
+ *     symbol
+ *     version
+ *
+ * with one syntactic owner.
+ *
+ * Examples:
+ *
+ *     calling_convention = "c";
+ *     linkage = "external";
+ *     symbol = "foreign_name";
+ *     representation = opaque;
+ *     ownership = borrowed;
+ *     lifetime = caller;
+ *     nullable = false;
+ *     variadic = true;
+ *     implementation = vendor::implementation;
+ *     version = "2";
+ *
+ * The semantic ABI validator owns the allowed property-key vocabulary.
+ *
+ * This means future ABI metadata can be added without changing the grammar.
+ */
+abiProperty
+    : identifier
+      ASSIGN
+      expression
+      SEMICOLON
+    ;
 
-* ============================================================================
-* PARAMETER / RESULT CONTRACTS
-* ============================================================================
-  */
-
-abiParameter
-: identifier
-COLON
-typeExpression
-abiBoundaryBody?
-;
-
-abiResult
-: identifier
-COLON
-typeExpression
-abiBoundaryBody?
-SEMICOLON
-;
-
-abiBoundaryBody
-: LBRACE
-abiBoundaryItem*
-RBRACE
-;
-
-abiBoundaryItem
-: abiRepresentation
-| abiOwnership
-| abiLifetime
-| abiNullability
-| abiConvention
-| abiCapability
-| abiResource
-| abiRequirement
-| abiEffect
-| abiCompatibility
-| abiMetadata
-| attribute
-;
-
-/*
-
-* ============================================================================
-* REPRESENTATION
-* ============================================================================
-* 
-* Representation is symbolic.
-* 
-* No physical width, register count, alignment size, address size, or
-* machine-dependent layout is encoded by the grammar.
-* 
-* Target-specific layout belongs to semantic ABI lowering.
-  */
-
-abiRepresentation
-: identifier
-ASSIGN
-abiValue
-SEMICOLON
-;
 
 /*
+ * ============================================================================
+ * 14. CAPABILITY
+ * ============================================================================
+ *
+ * Examples:
+ *
+ *     capability("foreign.call");
+ *     capability("remote.call");
+ *     capability(quantum::boundary);
+ */
+abiCapabilityClause
+    : CAPABILITY
+      LPAREN
+      expressionList?
+      RPAREN
+      SEMICOLON
+    | CAPABILITY
+      qualifiedName
+      SEMICOLON
+    ;
 
-* ============================================================================
-* OWNERSHIP
-* ============================================================================
-* 
-* ABI ownership is a boundary contract.
-* 
-* It is not a replacement for Zamani's canonical ownership/effects analysis.
-  */
-
-abiOwnership
-: identifier
-ASSIGN
-abiValue
-SEMICOLON
-;
-
-abiLifetime
-: identifier
-ASSIGN
-abiValue
-SEMICOLON
-;
-
-abiNullability
-: identifier
-ASSIGN
-abiValue
-SEMICOLON
-;
 
 /*
+ * ============================================================================
+ * 15. RESOURCE
+ * ============================================================================
+ *
+ * Resource expressions remain symbolic and are evaluated downstream.
+ *
+ * Examples:
+ *
+ *     resource memory >= required_memory;
+ *     resource bandwidth >= required_bandwidth;
+ */
+abiResourceClause
+    : RESOURCE
+      expression
+      SEMICOLON
+    ;
 
-* ============================================================================
-* VARIADIC CONTRACT
-* ============================================================================
-* 
-* A variadic declaration expresses an ABI property.
-* 
-* It does not prescribe stack/register implementation.
-  */
-
-abiVariadic
-: identifier
-abiVariadicValue?
-SEMICOLON
-;
-
-abiVariadicValue
-: ASSIGN
-abiValue
-;
 
 /*
+ * ============================================================================
+ * 16. REQUIREMENT
+ * ============================================================================
+ *
+ * Examples:
+ *
+ *     requires capability("foreign.call");
+ *     requires memory >= required_memory;
+ *     requires topology_requirement;
+ */
+abiRequirementClause
+    : REQUIRES
+      expression
+      SEMICOLON
+    ;
 
-* ============================================================================
-* CALLBACK CONTRACT
-* ============================================================================
-* 
-* Callback ABI compatibility is semantic.
-* 
-* The callback may itself reference an ABI profile/convention/capability.
-  */
-
-abiCallback
-: identifier
-identifier
-abiCallableSignature
-abiCallbackBody?
-SEMICOLON
-;
-
-abiCallableSignature
-: LPAREN
-abiParameterList?
-RPAREN
-abiReturnClause?
-;
-
-abiCallbackBody
-: LBRACE
-abiCallableItem*
-RBRACE
-;
 
 /*
+ * ============================================================================
+ * 17. EFFECTS
+ * ============================================================================
+ *
+ * ABI syntax references the canonical effect model.
+ *
+ * Examples:
+ *
+ *     effects foreign, io;
+ *     effects foreign, network, quantum::measurement;
+ *
+ * Effect names remain open-world qualified names.
+ */
+abiEffectClause
+    : EFFECTS
+      qualifiedName
+      (
+          COMMA
+          qualifiedName
+      )*
+      SEMICOLON
+    ;
 
-* ============================================================================
-* EFFECT REFERENCES
-* ============================================================================
-* 
-* Effects belong to the canonical effect subsystem.
-* 
-* ABI only references them.
-  */
-
-abiEffect
-: EFFECTS
-qualifiedName
-(
-COMMA
-qualifiedName
-)*
-SEMICOLON
-;
-
-/*
-
-* ============================================================================
-* CAPABILITY
-* ============================================================================
-* 
-* CAPABILITY is a canonical resource/intent keyword.
-* 
-* The value is symbolic.
-  */
-
-abiCapability
-: CAPABILITY
-qualifiedName
-SEMICOLON
-;
 
 /*
+ * ============================================================================
+ * 18. COMPATIBILITY
+ * ============================================================================
+ *
+ * Compatibility remains symbolic.
+ *
+ * No fixed version scheme is imposed by the grammar.
+ *
+ * Examples:
+ *
+ *     version = "2";
+ *     compatibility = vendor::abi::v2;
+ *     feature = future::feature;
+ *
+ * For richer compatibility information, use the structured body.
+ */
+abiCompatibilityClause
+    : identifier
+      LBRACE
+      abiCompatibilityMember*
+      RBRACE
+    ;
 
-* ============================================================================
-* RESOURCE
-* ============================================================================
-* 
-* RESOURCE is a canonical Zamani keyword.
-* 
-* The expression describes an abstract requirement.
-* 
-* It does not establish a universal capacity limit.
-  */
+abiCompatibilityMember
+    : abiRequirementClause
+    | abiCapabilityClause
+    | abiProperty
+    | attribute
+    ;
 
-abiResource
-: RESOURCE
-expression
-SEMICOLON
-;
-
-/*
-
-* ============================================================================
-* GENERAL REQUIREMENT
-* ============================================================================
-* 
-* REQUIRES is canonical.
-* 
-* Requirements describe semantic conditions/capabilities rather than
-* implementation choices.
-  */
-
-abiRequirement
-: REQUIRES
-expression
-SEMICOLON
-;
 
 /*
-
-* ============================================================================
-* COMPATIBILITY
-* ============================================================================
-* 
-* Compatibility target is open-world.
-  */
-
-abiCompatibility
-: identifier
-qualifiedName
-abiCompatibilityBody?
-SEMICOLON
-;
-
-abiCompatibilityBody
-: LBRACE
-abiCompatibilityItem*
-RBRACE
-;
-
-abiCompatibilityItem
-: abiVersion
-| abiRequirement
-| abiCapability
-| abiFeature
-| abiMetadata
-| attribute
-;
-
-abiFeature
-: identifier
-(ASSIGN abiValue)?
-SEMICOLON
-;
-
-/*
-
-* ============================================================================
-* VERSION
-* ============================================================================
-* 
-* Version semantics remain open-ended.
-* 
-* The grammar does not force a three-component numeric version scheme.
-  */
-
-abiVersion
-: identifier
-ASSIGN
-abiValue
-SEMICOLON
-;
-
-/*
-
-* ============================================================================
-* ADAPTER
-* ============================================================================
-* 
-* An adapter is a declarative semantic conversion boundary.
-* 
-* Actual thunk generation, marshaling, register movement, serialization, or
-* remote invocation belongs downstream.
-  */
-
+ * ============================================================================
+ * 19. ADAPTER
+ * ============================================================================
+ *
+ * An adapter declares a semantic conversion relationship.
+ *
+ * It does not generate a thunk, execute code, allocate buffers or perform
+ * marshaling.
+ *
+ * Canonical structure:
+ *
+ *     adapter source_target {
+ *         ...
+ *     }
+ *
+ * The adapter identity remains symbolic.
+ */
 abiAdapter
-: identifier
-identifier
-identifier
-qualifiedName
-identifier
-qualifiedName
-abiAdapterBody
-;
+    : ADAPT
+      identifier
+      abiAdapterTarget?
+      abiAdapterBody
+    ;
+
+abiAdapterTarget
+    : THIN_ARROW
+      qualifiedName
+    ;
 
 abiAdapterBody
-: LBRACE
-abiAdapterItem*
-RBRACE
-;
+    : LBRACE
+      abiAdapterMember*
+      RBRACE
+    ;
 
-abiAdapterItem
-: abiTypeContract
-| abiParameter
-| abiResult
-| abiRepresentation
-| abiRequirement
-| abiCapability
-| abiResource
-| abiEffect
-| abiMetadata
-| attribute
-;
+abiAdapterMember
+    : abiRequirementClause
+    | abiCapabilityClause
+    | abiResourceClause
+    | abiEffectClause
+    | abiProperty
+    | attribute
+    ;
+
 
 /*
-
-* ============================================================================
-* MARSHAL CONTRACT
-* ============================================================================
-* 
-* Marshaling is represented as semantic intent.
-* 
-* The grammar does not choose:
-* 
-* serialization format
-* byte order
-* pointer width
-* physical buffer
-* machine representation
-
-*/
-
+ * ============================================================================
+ * 20. MARSHAL CONTRACT
+ * ============================================================================
+ *
+ * Marshaling is declarative.
+ *
+ * It does not specify a machine buffer, pointer width, byte layout or
+ * implementation algorithm.
+ *
+ * Canonical form:
+ *
+ *     marshal SourceType -> TargetType {
+ *         format = ...;
+ *     }
+ *
+ * The word `marshal` is deliberately represented as an open property key
+ * through an ABI property when no globally reserved token exists.
+ *
+ * Therefore this rule is intentionally attribute/property based rather than
+ * introducing a new global lexer keyword.
+ *
+ * This named rule is retained as a structured ABI extension point.
+ */
 abiMarshal
-: identifier
-typeExpression
-identifier
-typeExpression
-abiMarshalBody?
-SEMICOLON
-;
+    : identifier
+      THIN_ARROW
+      typeExpression
+      abiMarshalBody
+    ;
 
 abiMarshalBody
-: LBRACE
-abiMarshalItem*
-RBRACE
-;
+    : LBRACE
+      abiMarshalMember*
+      RBRACE
+    ;
 
-abiMarshalItem
-: abiRepresentation
-| abiRequirement
-| abiCapability
-| abiResource
-| abiMetadata
-| attribute
-;
+abiMarshalMember
+    : abiRequirementClause
+    | abiCapabilityClause
+    | abiResourceClause
+    | abiProperty
+    | attribute
+    ;
+
 
 /*
-
-* ============================================================================
-* ERROR CONTRACT
-* ============================================================================
-  */
-
+ * ============================================================================
+ * 21. ERROR BOUNDARY
+ * ============================================================================
+ *
+ * The error type uses the canonical type grammar.
+ *
+ * Example:
+ *
+ *     error Failure: ErrorType {
+ *         representation = opaque;
+ *     };
+ */
 abiError
-: identifier
-COLON
-typeExpression
-abiErrorBody?
-SEMICOLON
-;
+    : identifier
+      COLON
+      typeExpression
+      abiBoundary?
+      SEMICOLON
+    ;
 
-abiErrorBody
-: LBRACE
-abiErrorItem*
-RBRACE
-;
-
-abiErrorItem
-: abiRepresentation
-| abiCompatibility
-| abiRequirement
-| abiCapability
-| abiMetadata
-| attribute
-;
 
 /*
+ * ============================================================================
+ * 22. DOMAIN BOUNDARIES
+ * ============================================================================
+ *
+ * These use canonical language keywords so ABI/domain boundaries are explicit
+ * without creating hardware-specific ABI grammars.
+ *
+ * Quantum:
+ *
+ *     quantum vendor::boundary {
+ *         requires capability("quantum.measurement");
+ *     };
+ *
+ * Hardware:
+ *
+ *     hardware vendor::boundary {
+ *         requires capability("hardware.interface");
+ *     };
+ *
+ * Distributed:
+ *
+ *     distributed vendor::boundary {
+ *         requires capability("networking.communication");
+ *     };
+ *
+ * Security:
+ *
+ *     security vendor::boundary {
+ *         requires capability("trusted.foreign_call");
+ *     };
+ *
+ * Language:
+ *
+ *     language "C";
+ */
+abiDomainBoundary
+    : QUANTUM
+      qualifiedName
+      abiDomainBody?
+      SEMICOLON
+    | HARDWARE
+      qualifiedName
+      abiDomainBody?
+      SEMICOLON
+    | DISTRIBUTED
+      qualifiedName
+      abiDomainBody?
+      SEMICOLON
+    | SECURITY
+      qualifiedName
+      abiDomainBody?
+      SEMICOLON
+    | LANGUAGE
+      abiIdentity
+      SEMICOLON
+    ;
 
-* ============================================================================
-* SECURITY CONTRACT
-* ============================================================================
-* 
-* Security names are symbolic references into the canonical security model.
-* 
-* This grammar does not implement cryptography or authorization.
-  */
+abiDomainBody
+    : LBRACE
+      abiDomainMember*
+      RBRACE
+    ;
 
-abiSecurity
-: identifier
-qualifiedName
-SEMICOLON
-;
+abiDomainMember
+    : abiRequirementClause
+    | abiCapabilityClause
+    | abiResourceClause
+    | abiEffectClause
+    | abiCompatibilityClause
+    | abiProperty
+    | attribute
+    ;
 
-/*
-
-* ============================================================================
-* DISTRIBUTED / REMOTE CONTRACT
-* ============================================================================
-* 
-* ABI can cross process or network boundaries without making network topology
-* part of the language.
-  */
-
-abiDistributed
-: identifier
-qualifiedName
-abiDistributedBody?
-SEMICOLON
-;
-
-abiDistributedBody
-: LBRACE
-abiDistributedItem*
-RBRACE
-;
-
-abiDistributedItem
-: abiRequirement
-| abiCapability
-| abiResource
-| abiCompatibility
-| abiSecurity
-| abiMetadata
-| attribute
-;
-
-/*
-
-* ============================================================================
-* QUANTUM BOUNDARY
-* ============================================================================
-* 
-* This describes a classical/quantum interoperability requirement.
-* 
-* It does NOT define:
-* 
-* qubit count
-* physical qubit IDs
-* gate set
-* topology
-* calibration
-* QEC
-* ZQN
-* backend identity
-* 
-* Quantum semantics remain owned by the canonical quantum subsystem and
-* canonical "quantum::ir".
-  */
-
-abiQuantum
-: QUANTUM
-qualifiedName
-abiQuantumBody?
-SEMICOLON
-;
-
-abiQuantumBody
-: LBRACE
-abiQuantumItem*
-RBRACE
-;
-
-abiQuantumItem
-: abiRequirement
-| abiCapability
-| abiResource
-| abiCompatibility
-| abiRepresentation
-| abiMetadata
-| attribute
-;
 
 /*
-
-* ============================================================================
-* HARDWARE / HDL BOUNDARY
-* ============================================================================
-* 
-* Hardware references remain abstract.
-* 
-* No device identifier or fixed capacity is encoded.
-  */
-
-abiHardware
-: identifier
-qualifiedName
-abiHardwareBody?
-SEMICOLON
-;
-
-abiHardwareBody
-: LBRACE
-abiHardwareItem*
-RBRACE
-;
-
-abiHardwareItem
-: abiRequirement
-| abiCapability
-| abiResource
-| abiCompatibility
-| abiRepresentation
-| abiMetadata
-| attribute
-;
-
-/*
-
-* ============================================================================
-* FOREIGN LANGUAGE REFERENCE
-* ============================================================================
-* 
-* LANGUAGE is canonical lexical vocabulary.
-* 
-* The language name remains an open-world symbolic value.
-  */
-
-abiLanguage
-: LANGUAGE
-abiIdentity
-SEMICOLON
-;
-
-/*
-
-* ============================================================================
-* IMPLEMENTATION REFERENCE
-* ============================================================================
-* 
-* This is metadata only.
-* 
-* It does not cause loading or resolution.
-  */
-
-abiImplementation
-: identifier
-ASSIGN
-abiValue
-SEMICOLON
-;
-
-/*
-
-* ============================================================================
-* NEGOTIATION
-* ============================================================================
-* 
-* Negotiation describes semantic capability selection.
-* 
-* It does not perform negotiation during parsing.
-  */
-
-abiNegotiation
-: identifier
-qualifiedName
-abiNegotiationBody?
-SEMICOLON
-;
-
-abiNegotiationBody
-: LBRACE
-abiNegotiationItem*
-RBRACE
-;
-
-abiNegotiationItem
-: abiRequirement
-| abiCapability
-| abiCompatibility
-| abiFeature
-| abiFallback
-| abiMetadata
-| attribute
-;
-
-/*
-
-* ============================================================================
-* FALLBACK
-* ============================================================================
-* 
-* Fallback is a semantic alternative.
-* 
-* It does not select a particular physical device.
-  */
-
-abiFallback
-: identifier
-qualifiedName
-abiFallbackBody?
-SEMICOLON
-;
-
-abiFallbackBody
-: LBRACE
-abiFallbackItem*
-RBRACE
-;
-
-abiFallbackItem
-: abiRequirement
-| abiCapability
-| abiCompatibility
-| abiFeature
-| abiMetadata
-| attribute
-;
-
-/*
-
-* ============================================================================
-* FAILURE CONTRACT
-* ============================================================================
-* 
-* Recovery is owned by the resilience/execution subsystem.
-* 
-* This grammar records only the boundary contract.
-  */
-
-abiFailure
-: identifier
-qualifiedName
-abiFailureBody?
-SEMICOLON
-;
-
-abiFailureBody
-: LBRACE
-abiFailureItem*
-RBRACE
-;
-
-abiFailureItem
-: abiRequirement
-| abiCapability
-| abiFeature
-| abiFallback
-| abiMetadata
-| attribute
-;
-
-/*
-
-* ============================================================================
-* METADATA
-* ============================================================================
-* 
-* Metadata remains generic and extensible.
-* 
-* Metadata is inert at parse time.
-  */
-
-abiMetadata
-: identifier
-LBRACE
-abiMetadataItem*
-RBRACE
-;
-
-abiMetadataItem
-: identifier
-(
-ASSIGN
-abiValue
-)?
-SEMICOLON
-;
-
-/*
-
-* ============================================================================
-* ATTRIBUTES
-* ============================================================================
-* 
-* Attribute syntax belongs to grammar/core/attributes.g4.
-* 
-* This grammar only reuses it.
-  */
-
-abiAttribute
-: attribute
-;
-
-/*
-
-* ============================================================================
-* GENERIC ABI VALUES
-* ============================================================================
-* 
-* Values may be:
-* 
-* expressions
-* strings
-* identifiers
-* qualified names
-* 
-* No target-specific representation is implied.
-  */
-
-abiValue
-: expression
-| STRING
-| qualifiedName
-| identifier
-;
-
-/*
-
-* ============================================================================
-* ABI DECLARATION SETS
-* ============================================================================
-* 
-* These helpers allow interoperability composition grammars to consume ABI
-* constructs without copying the grammar.
-  */
-
+ * ============================================================================
+ * 23. ABI SET HELPERS
+ * ============================================================================
+ *
+ * These are composition helpers only.
+ *
+ * They do not establish new semantic models.
+ */
 abiDeclarationSet
-: abiDeclaration+
-;
+    : abiDeclaration+
+    ;
 
 abiContractSet
-: abiContract+
-;
+    : abiContract+
+    ;
 
-abiItemSet
-: abiItem*
-;
+abiMemberSet
+    : abiMember*
+    ;
 
 abiProfileSet
-: abiProfileReference+
-;
+    : abiProfileReference+
+    ;
 
-abiAdapterSet
-: abiAdapter+
-;
+abiCallableSet
+    : abiCallableContract+
+    ;
 
-abiMarshalSet
-: abiMarshal+
-;
-
-abiErrorSet
-: abiError+
-;
 
 /*
-
-* ============================================================================
-* SEMANTIC BOUNDARY RULES
-* ============================================================================
-* 
-* These rules are intentionally aliases/composition points rather than
-* independent semantic models.
-  */
-
+ * ============================================================================
+ * 24. ABI REQUIREMENT ALIASES
+ * ============================================================================
+ *
+ * These aliases are intentionally semantic composition points.
+ *
+ * They do not duplicate resource/capability grammar.
+ */
 abiResourceRequirement
-: abiResource
-;
+    : abiResourceClause
+    ;
 
 abiCapabilityRequirement
-: abiCapability
-;
+    : abiCapabilityClause
+    ;
 
-abiSecurityRequirement
-: abiSecurity
-;
+abiEffectRequirement
+    : abiEffectClause
+    ;
 
-abiDomainRequirement
-: abiQuantum
-| abiHardware
-| abiDistributed
-| abiCapability
-| abiResource
-| abiSecurity
-;
 
 /*
+ * ============================================================================
+ * 25. DOMAIN REQUIREMENT
+ * ============================================================================
+ */
+abiDomainRequirement
+    : abiDomainBoundary
+    | abiCapabilityClause
+    | abiResourceClause
+    | abiRequirementClause
+    ;
 
-* ============================================================================
-* COMPLETION / INTEGRATION CONTRACT
-* ============================================================================
-* 
-* THIS FILE IS COMPLETE WHEN:
-* 
-* [x] ABI syntax has one grammar owner.
-* 
-* [x] The filename remains grammar/interoperability/abi.g4.
-* 
-* [x] Grammar identity remains Abi.
-* 
-* [x] Canonical ZamaniLexer is the only lexical dependency.
-* 
-* [x] Names are imported from Names rather than redefined.
-* 
-* [x] Attributes are imported from Attributes rather than redefined.
-* 
-* [x] Expressions are imported from Expressions rather than redefined.
-* 
-* [x] Types are imported from Types rather than redefined.
-* 
-* [x] No second lexer exists here.
-* 
-* [x] No embedded Rust exists here.
-* 
-* [x] No unsafe code exists here.
-* 
-* [x] No semantic predicates exist here.
-* 
-* [x] No runtime behavior exists here.
-* 
-* [x] No linker behavior exists here.
-* 
-* [x] No filesystem/network/hardware access exists here.
-* 
-* [x] No fixed ABI vocabulary is enumerated.
-* 
-* [x] Calling conventions are open-world symbolic contracts.
-* 
-* [x] Linkage is open-world symbolic metadata.
-* 
-* [x] Foreign symbol names are data, not lexer keywords.
-* 
-* [x] ABI types reuse the canonical type grammar.
-* 
-* [x] Parameter/result contracts reuse canonical types.
-* 
-* [x] Ownership remains distinct from ABI representation.
-* 
-* [x] Lifetime remains distinct from ownership.
-* 
-* [x] Nullability remains a boundary contract.
-* 
-* [x] Effects are references to the canonical effect system.
-* 
-* [x] Capabilities are references to the canonical capability/resource model.
-* 
-* [x] Resources are abstract expressions.
-* 
-* [x] Quantum boundaries do not create another quantum IR.
-* 
-* [x] Hardware boundaries do not select hardware.
-* 
-* [x] Distributed boundaries do not encode topology.
-* 
-* [x] Adapters remain semantic declarations.
-* 
-* [x] Marshaling remains semantic declarations.
-* 
-* [x] Failure/fallback remain semantic contracts.
-* 
-* [x] Negotiation is declarative.
-* 
-* [x] Metadata is extensible.
-* 
-* [x] Repetition has no language-level finite capacity.
-* 
-* [x] POCO-REAF is preserved.
-* 
-* ============================================================================
-* DOWNSTREAM INTEGRATION
-* ============================================================================
-* 
-* grammar/interoperability/ffi.g4
-* may consume:
-* 
-*     abiContract
-*     abiProfileReference
-*     abiAdapter
-*     abiMarshal
-* 
-* grammar/interoperability/foreign-functions.g4
-* may reference ABI contracts rather than reimplementing ABI syntax.
-* 
-* grammar/interoperability/c.g4
-* grammar/interoperability/cpp.g4
-* grammar/interoperability/python.g4
-* grammar/interoperability/rust.g4
-* grammar/interoperability/wasm.g4
-* grammar/interoperability/qasm.g4
-* grammar/interoperability/hdl.g4
-* 
-* may reference symbolic ABI identities and contracts.
-* 
-* They MUST NOT create competing ABI models.
-* 
-* grammar/interoperability/calling-conventions.g4
-* remains the reusable source-level calling-convention attachment
-* boundary.
-* 
-* grammar/interoperability/foreign-types.g4
-* remains the source-level foreign-type boundary.
-* 
-* grammar/interoperability/interoperability.g4
-* is the composition point that makes ABI constructs available to the
-* complete Zamani grammar.
-* 
-* grammar/Zamani.g4
-* remains the root composition grammar and does not duplicate any ABI
-* production.
-* 
-* ============================================================================
-* AST / SEMANTIC INTEGRATION
-* ============================================================================
-* 
-* The ABI AST/semantic representation must retain:
-* 
-* source span
-* ABI identity
-* profile references
-* convention references
-* linkage intent
-* symbol identity
-* callable signature
-* parameter/result contracts
-* type references
-* representation intent
-* ownership/lifetime/nullability
-* effects
-* capabilities
-* resource requirements
-* compatibility/version constraints
-* adapter relationships
-* marshal relationships
-* error contracts
-* security requirements
-* distributed requirements
-* quantum requirements
-* hardware requirements
-* metadata
-* 
-* Semantic validation must occur after parsing.
-* 
-* Examples of semantic errors:
-* 
-* incompatible type boundary
-* incompatible ownership contract
-* impossible lifetime contract
-* unsupported calling convention
-* incompatible ABI version
-* unsatisfied capability
-* unsatisfied resource requirement
-* unsupported foreign representation
-* 
-* These are NOT parser errors merely because the implementation target cannot
-* satisfy them.
-* 
-* ============================================================================
-* TARGET LOWERING
-* ============================================================================
-* 
-* Only after semantic validation may downstream stages resolve:
-* 
-* calling sequence
-* concrete layout
-* object format
-* symbol mangling
-* linker behavior
-* dynamic loading
-* marshaling implementation
-* target-specific representation
-* 
-* Target lowering may specialize an ABI contract.
-* 
-* It must not mutate the source-language contract into a target-specific
-* language requirement.
-* 
-* ============================================================================
-* SCALABILITY CONTRACT
-* ============================================================================
-* 
-* The grammar uses recursive/repetitive structures rather than fixed counts.
-* 
-* There is no source-language maximum for:
-* 
-* ABI contracts
-* profiles
-* parameters
-* results
-* callbacks
-* metadata
-* requirements
-* capabilities
-* resources
-* adapters
-* marshaling contracts
-* interfaces
-* foreign functions
-* targets
-* 
-* Practical limits may exist in:
-* 
-* parser configuration
-* compiler memory
-* build resources
-* operating-system resources
-* target resources
-* 
-* Those are implementation/resource constraints and are not ABI grammar
-* semantics.
-* 
-* ============================================================================
-* DETERMINISM CONTRACT
-* ============================================================================
-* 
-* For identical source text and identical language/grammar version, parsing
-* must produce the same parse structure.
-* 
-* Parsing must not depend on:
-* 
-* hardware
-* OS state
-* environment variables
-* filesystem state
-* network state
-* linker state
-* runtime state
-* device discovery
-* 
-* ============================================================================
-* SECURITY CONTRACT
-* ============================================================================
-* 
-* ABI syntax is not authorization.
-* 
-* A declaration such as:
-* 
-* requires capability::foreign_call;
-* 
-* does not grant that capability.
-* 
-* Capability authorization remains owned by the security/resource/compiler
-* systems.
-* 
-* ============================================================================
-* RUST CONTRACT
-* ============================================================================
-* 
-* This grammar contains no Rust implementation code.
-* 
-* Generated/compiler integration MUST remain:
-* 
-* Rust 1.97 / Rust 1.97.1
-* Rust 2021
-* safe Rust
-* no unsafe
-* 
-* ============================================================================
-  */
+
+/*
+ * ============================================================================
+ * 26. ABI PROPERTY VALUES
+ * ============================================================================
+ *
+ * ABI properties consume canonical expressions.
+ *
+ * This is intentional:
+ *
+ *     strings
+ *     numbers
+ *     booleans
+ *     symbolic names
+ *     qualified names
+ *     computed values
+ *     future expression forms
+ *
+ * can all remain representable through the existing expression system.
+ *
+ * No ABI-specific value universe is created.
+ */
+
+
+/*
+ * ============================================================================
+ * 27. SEMANTIC PROPERTY KEY CONTRACT
+ * ============================================================================
+ *
+ * The grammar accepts open-world identifier keys.
+ *
+ * Semantic analysis should recognize established ABI keys including:
+ *
+ *     abi
+ *     calling_convention
+ *     linkage
+ *     symbol
+ *     representation
+ *     ownership
+ *     lifetime
+ *     nullable
+ *     variadic
+ *     implementation
+ *     version
+ *     compatibility
+ *     language
+ *     source_format
+ *     mangling
+ *     visibility
+ *     unwind
+ *     exception_model
+ *     pass_mode
+ *     return_mode
+ *     marshal
+ *     serialization
+ *     adaptation
+ *     security
+ *     provenance
+ *
+ * This is deliberately NOT a closed parser enumeration.
+ *
+ * A future ABI extension can introduce:
+ *
+ *     future_property = value;
+ *
+ * without changing this grammar.
+ *
+ * Semantic validation determines whether the property is recognized,
+ * experimental, deprecated, vendor-specific or invalid.
+ */
+
+
+/*
+ * ============================================================================
+ * 28. REPRESENTATION CONTRACT
+ * ============================================================================
+ *
+ * ABI representation values remain symbolic.
+ *
+ * Valid examples include:
+ *
+ *     representation = opaque;
+ *     representation = transparent;
+ *     representation = vendor::representation;
+ *
+ * Physical layout is NOT specified here.
+ *
+ * Semantic/lowering layers may later resolve:
+ *
+ *     size
+ *     alignment
+ *     calling sequence
+ *     storage class
+ *     object representation
+ *
+ * without changing the source grammar.
+ */
+
+
+/*
+ * ============================================================================
+ * 29. OWNERSHIP / LIFETIME / NULLABILITY
+ * ============================================================================
+ *
+ * These are ordinary ABI property keys.
+ *
+ * Example:
+ *
+ *     ownership = borrowed;
+ *     lifetime = caller;
+ *     nullable = false;
+ *
+ * They remain separate semantic concepts.
+ *
+ * The grammar intentionally does not merge them into one ABI property.
+ */
+
+
+/*
+ * ============================================================================
+ * 30. VARIADIC CONTRACT
+ * ============================================================================
+ *
+ * Variadic intent is represented through:
+ *
+ *     variadic = true;
+ *
+ * rather than a dedicated closed grammar branch.
+ *
+ * This keeps ABI metadata extensible and avoids another reserved keyword.
+ */
+
+
+/*
+ * ============================================================================
+ * 31. LINKAGE / SYMBOL CONTRACT
+ * ============================================================================
+ *
+ * Examples:
+ *
+ *     linkage = "external";
+ *     symbol = "foreign_name";
+ *
+ * The grammar does not resolve the symbol.
+ *
+ * Symbol resolution belongs to semantic/linker infrastructure.
+ */
+
+
+/*
+ * ============================================================================
+ * 32. CALLING CONVENTION CONTRACT
+ * ============================================================================
+ *
+ * Examples:
+ *
+ *     calling_convention = "c";
+ *     calling_convention = "cdecl";
+ *     calling_convention = platform::native;
+ *     calling_convention = vendor::future::convention;
+ *
+ * No convention is enumerated by this grammar.
+ *
+ * The reusable callable-level attachment syntax remains owned by:
+ *
+ *     grammar/interoperability/calling-conventions.g4
+ *
+ * This ABI grammar only records ABI-internal convention metadata.
+ */
+
+
+/*
+ * ============================================================================
+ * 33. RESOURCE / CAPABILITY CONTRACT
+ * ============================================================================
+ *
+ * ABI requirements are declarative.
+ *
+ * They do not reserve or allocate resources.
+ *
+ * They do not select:
+ *
+ *     CPU
+ *     GPU
+ *     FPGA
+ *     ASIC
+ *     QPU
+ *     node
+ *     device
+ *
+ * Resolution belongs downstream.
+ */
+
+
+/*
+ * ============================================================================
+ * 34. QUANTUM CONTRACT
+ * ============================================================================
+ *
+ * ABI quantum boundaries may express:
+ *
+ *     capability requirements
+ *     resource requirements
+ *     effect requirements
+ *     compatibility metadata
+ *     symbolic representation metadata
+ *
+ * They MUST NOT define:
+ *
+ *     gate catalogues
+ *     physical qubit IDs
+ *     topology
+ *     routing
+ *     scheduling
+ *     calibration
+ *     QEC
+ *     ZQN
+ *
+ * Quantum semantics continue through:
+ *
+ *     quantum::ir
+ */
+
+
+/*
+ * ============================================================================
+ * 35. HDL / HARDWARE CONTRACT
+ * ============================================================================
+ *
+ * Hardware ABI boundaries may express:
+ *
+ *     symbolic interface identity
+ *     requirements
+ *     capabilities
+ *     resource constraints
+ *     representation intent
+ *     timing/compatibility metadata
+ *
+ * They do NOT define:
+ *
+ *     physical pins
+ *     register addresses
+ *     universal bus widths
+ *     fixed device counts
+ *     fixed memory capacity
+ *     fixed clock counts
+ *
+ * Those belong to HDL/hardware semantic and target layers.
+ */
+
+
+/*
+ * ============================================================================
+ * 36. DISTRIBUTED CONTRACT
+ * ============================================================================
+ *
+ * Distributed ABI boundaries may express:
+ *
+ *     capability("networking.communication")
+ *     capability("distributed.execution")
+ *     latency requirements
+ *     bandwidth requirements
+ *     reliability requirements
+ *     policy requirements
+ *
+ * They do not encode a maximum node count.
+ */
+
+
+/*
+ * ============================================================================
+ * 37. SECURITY CONTRACT
+ * ============================================================================
+ *
+ * ABI syntax does not grant authority.
+ *
+ * For example:
+ *
+ *     capability("native.execution");
+ *
+ * expresses a requirement.
+ *
+ * It does not authorize execution.
+ *
+ * Security and capability systems remain responsible for authorization.
+ */
+
+
+/*
+ * ============================================================================
+ * 38. ADAPTER CONTRACT
+ * ============================================================================
+ *
+ * An adapter represents a semantic conversion relationship.
+ *
+ * It does not perform:
+ *
+ *     code generation
+ *     memory allocation
+ *     serialization
+ *     dynamic loading
+ *     execution
+ *
+ * Those are downstream compiler/runtime responsibilities.
+ */
+
+
+/*
+ * ============================================================================
+ * 39. PROVENANCE CONTRACT
+ * ============================================================================
+ *
+ * The AST/semantic pipeline should preserve provenance for:
+ *
+ *     ABI identity
+ *     ABI property
+ *     external symbol
+ *     calling convention
+ *     representation requirement
+ *     capability requirement
+ *     resource requirement
+ *     compatibility decision
+ *     adaptation
+ *
+ * Provenance semantics remain owned by the repository's provenance system.
+ */
+
+
+/*
+ * ============================================================================
+ * 40. ERROR MODEL
+ * ============================================================================
+ *
+ * Parser errors:
+ *
+ *     missing ABI identity
+ *     missing contract body
+ *     malformed callable signature
+ *     malformed type expression
+ *     missing property value
+ *     missing semicolon
+ *     malformed capability call
+ *     malformed requirement
+ *     malformed effect list
+ *
+ * Semantic errors:
+ *
+ *     unknown ABI
+ *     unsupported calling convention
+ *     conflicting ABI properties
+ *     incompatible types
+ *     invalid ownership/lifetime relationship
+ *     unavailable capability
+ *     unsatisfied resource requirement
+ *     incompatible version
+ *     forbidden policy
+ *     unresolved symbol
+ *
+ * A semantic target failure MUST NOT be converted into a parser failure.
+ */
+
+
+/*
+ * ============================================================================
+ * 41. SCALABILITY CONTRACT
+ * ============================================================================
+ *
+ * Repetition is structural:
+ *
+ *     abiMember*
+ *     abiParameter*
+ *     abiProfileSet
+ *     abiCallableSet
+ *     metadata
+ *     requirements
+ *     capabilities
+ *     effects
+ *
+ * No source-language maximum is established for:
+ *
+ *     ABI contracts
+ *     profiles
+ *     callables
+ *     parameters
+ *     properties
+ *     capabilities
+ *     requirements
+ *     effects
+ *     adapters
+ *     boundaries
+ *
+ * Practical limits may arise from:
+ *
+ *     parser memory
+ *     compiler memory
+ *     operating-system resources
+ *     build configuration
+ *     target resources
+ *
+ * Those are not language ceilings.
+ */
+
+
+/*
+ * ============================================================================
+ * 42. DETERMINISM CONTRACT
+ * ============================================================================
+ *
+ * Parsing depends only on:
+ *
+ *     source text
+ *     lexical configuration
+ *     grammar version
+ *     parser configuration
+ *
+ * It MUST NOT depend on:
+ *
+ *     hardware
+ *     filesystem state
+ *     network state
+ *     installed libraries
+ *     linker state
+ *     runtime state
+ *     target availability
+ *     scheduler state
+ *     wall-clock time
+ *     randomness
+ */
+
+
+/*
+ * ============================================================================
+ * 43. COMPATIBILITY CONTRACT
+ * ============================================================================
+ *
+ * Existing public rule:
+ *
+ *     abiDeclaration
+ *
+ * remains the ABI source declaration entry point.
+ *
+ * The following rules are intended as stable composition API:
+ *
+ *     abiContract
+ *     abiIdentity
+ *     abiContractBody
+ *     abiMember
+ *     abiProfileReference
+ *     abiCallableContract
+ *     abiParameter
+ *     abiReturn
+ *     abiBoundary
+ *     abiProperty
+ *     abiCapabilityClause
+ *     abiResourceClause
+ *     abiRequirementClause
+ *     abiEffectClause
+ *     abiCompatibilityClause
+ *     abiAdapter
+ *     abiMarshal
+ *     abiError
+ *     abiDomainBoundary
+ *
+ * New semantic ABI concepts should preferably be represented through:
+ *
+ *     abiProperty
+ *
+ * or through a clearly distinct keyword-led construct when there is a genuine
+ * language-level need.
+ *
+ * This prevents the grammar from becoming a closed ABI vocabulary.
+ */
+
+
+/*
+ * ============================================================================
+ * 44. TEST CONTRACT
+ * ============================================================================
+ *
+ * POSITIVE
+ * --------
+ *
+ * The conformance suite must accept at least:
+ *
+ *     extern "C" {
+ *         calling_convention = "c";
+ *         linkage = "external";
+ *         symbol = "compute";
+ *     }
+ *
+ *     extern platform::native {
+ *         calling_convention = platform::native;
+ *         requires capability("foreign.call");
+ *     }
+ *
+ *     extern "vendor.interface" {
+ *         fn compute(value: Tensor<T>) -> Result<T>;
+ *     }
+ *
+ *     extern "remote.interface" {
+ *         fn remote_compute(value: Data<T>) -> Result<T> {
+ *             requires capability("remote.call");
+ *             requires bandwidth >= required_bandwidth;
+ *             effects foreign, network;
+ *         }
+ *     }
+ *
+ *     extern "quantum.interface" {
+ *         fn measure(state: QuantumState<T>) -> Result<T> {
+ *             requires capability("quantum.measurement");
+ *             effects foreign, measurement;
+ *         }
+ *     }
+ *
+ *     extern "hardware.interface" {
+ *         fn transfer(value: Buffer<T>) -> Result<T> {
+ *             requires capability("hardware.interface");
+ *             resource bandwidth >= required_bandwidth;
+ *         }
+ *     }
+ *
+ * NEGATIVE
+ * --------
+ *
+ * The suite must reject malformed structures such as:
+ *
+ *     extern {
+ *         ...
+ *     }
+ *
+ *     extern "C"
+ *
+ *     extern "C" {
+ *         fn broken(value: ) -> T;
+ *     }
+ *
+ *     extern "C" {
+ *         calling_convention = ;
+ *     }
+ *
+ *     extern "C" {
+ *         capability(;
+ *     }
+ *
+ *     extern "C" {
+ *         requires ;
+ *     }
+ *
+ * BOUNDARY
+ * --------
+ *
+ * Test:
+ *
+ *     very deeply qualified ABI identities
+ *     very deeply qualified symbol identities
+ *     long symbolic property names
+ *     large callable signatures
+ *     many parameters
+ *     many properties
+ *     many requirements
+ *     many capabilities
+ *     nested ABI boundaries
+ *     classical/quantum boundaries
+ *     classical/HDL boundaries
+ *     distributed boundaries
+ *     hardware/software boundaries
+ *
+ * SCALABILITY
+ * ----------
+ *
+ * Increase test dimensions progressively without turning the test values into
+ * language constants.
+ *
+ * No test may define:
+ *
+ *     MAX_ABIS
+ *     MAX_PARAMETERS
+ *     MAX_PROPERTIES
+ *     MAX_CAPABILITIES
+ *     MAX_TARGETS
+ *
+ * DETERMINISM
+ * -----------
+ *
+ * Identical source + identical grammar configuration must produce equivalent
+ * parse structures independent of target hardware or runtime availability.
+ */
+
+
+/*
+ * ============================================================================
+ * 45. HARD-CODING AUDIT
+ * ============================================================================
+ *
+ * This file contains no:
+ *
+ *     MAX_QUBITS
+ *     MAX_CPUS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_NODES
+ *     MAX_MEMORY
+ *     MAX_THREADS
+ *     MAX_TENSOR_RANK
+ *     MAX_REGISTER_WIDTH
+ *     MAX_NETWORK_SIZE
+ *     MAX_DEVICE_COUNT
+ *
+ * It contains no:
+ *
+ *     CPU IDs
+ *     GPU IDs
+ *     QPU IDs
+ *     physical qubit IDs
+ *     register IDs
+ *     memory-bank IDs
+ *     physical addresses
+ *
+ * Numeric expressions, when accepted through the canonical expression grammar,
+ * remain source values rather than grammar-level capacities.
+ */
+
+
+/*
+ * ============================================================================
+ * 46. RUST CONTRACT
+ * ============================================================================
+ *
+ * This file contains no embedded Rust.
+ *
+ * Generated frontend integration must remain compatible with:
+ *
+ *     Rust 1.97+
+ *     Rust 2021
+ *     safe Rust
+ *     no unsafe
+ *
+ * The grammar itself imposes no dependency on target-language implementation
+ * details.
+ */
+
+
+/*
+ * ============================================================================
+ * 47. COMPLETION CRITERIA
+ * ============================================================================
+ *
+ * abi.g4 is DONE when:
+ *
+ * [x] It has one ABI grammar owner.
+ *
+ * [x] It uses the canonical ZamaniLexer vocabulary.
+ *
+ * [x] It imports Names.
+ *
+ * [x] It imports Attributes.
+ *
+ * [x] It imports Expressions.
+ *
+ * [x] It imports the canonical Type grammar.
+ *
+ * [x] It does not import a nonexistent `Types` grammar.
+ *
+ * [x] It contains no undefined abiArgument rule.
+ *
+ * [x] It uses THIN_ARROW for `->`.
+ *
+ * [x] It avoids duplicate identifier-led ABI productions.
+ *
+ * [x] It provides one generic extensible ABI property rule.
+ *
+ * [x] It keeps ABI identities open-world.
+ *
+ * [x] It keeps calling conventions open-world.
+ *
+ * [x] It keeps linkage open-world.
+ *
+ * [x] It keeps symbols open-world.
+ *
+ * [x] It reuses canonical expressions.
+ *
+ * [x] It reuses canonical types.
+ *
+ * [x] It does not create another FFI grammar.
+ *
+ * [x] It does not create another calling-convention grammar.
+ *
+ * [x] It does not create another quantum IR.
+ *
+ * [x] It does not perform target selection.
+ *
+ * [x] It does not perform runtime execution.
+ *
+ * [x] It contains no unsafe Rust.
+ *
+ * [x] It contains no machine-capacity ceiling.
+ *
+ * [x] It remains extensible without adding a parser alternative for every
+ *     future ABI property.
+ *
+ * Repository-level verification still required:
+ *
+ * [ ] ANTLR generation succeeds with the repository's configured build.
+ *
+ * [ ] The Interoperability dispatcher imports `Abi`.
+ *
+ * [ ] The dispatcher exposes `abiDeclaration` at the correct declaration
+ *     boundary.
+ *
+ * [ ] FFI consumers use ABI rules rather than copying them.
+ *
+ * [ ] Foreign-function consumers use ABI rules rather than copying them.
+ *
+ * [ ] ABI AST construction maps every exported rule into the existing
+ *     domain-neutral AST.
+ *
+ * [ ] Semantic ABI validation consumes the resulting AST.
+ *
+ * [ ] Positive, negative, boundary, scalability and determinism tests pass.
+ *
+ * [ ] Rust 1.97+ frontend generation/build succeeds.
+ *
+ * [ ] The generated Rust integration remains safe and contains no unsafe
+ *     requirement.
+ *
+ * ============================================================================
+ * FINAL ARCHITECTURAL RULE
+ * ============================================================================
+ *
+ * The ABI grammar describes:
+ *
+ *     WHAT an external boundary requires.
+ *
+ * It does not describe:
+ *
+ *     HOW a particular machine implements it.
+ *
+ * Therefore:
+ *
+ *     SOURCE
+ *        |
+ *        v
+ *     ABI CONTRACT
+ *        |
+ *        v
+ *     DOMAIN-NEUTRAL AST
+ *        |
+ *        v
+ *     SEMANTIC VALIDATION
+ *        |
+ *        +--> types
+ *        +--> effects
+ *        +--> capabilities
+ *        +--> resources
+ *        +--> policies
+ *        +--> provenance
+ *        |
+ *        v
+ *     CANONICAL SEMANTIC MODEL
+ *        |
+ *        +--> classical representation
+ *        +--> quantum::ir
+ *        +--> HDL/hardware representation
+ *        +--> distributed representation
+ *        |
+ *        v
+ *     TARGET-INDEPENDENT LOWERING
+ *        |
+ *        v
+ *     TARGET ABI REALIZATION
+ *        |
+ *        v
+ *     RUNTIME / HARDWARE
+ *
+ * This preserves the required Program Once / Compile Once / Run Everywhere /
+ * Anywhere / Forever architecture while keeping ABI extensible and free of
+ * artificial hardware ceilings.
+ *
+ * ============================================================================
+ */
