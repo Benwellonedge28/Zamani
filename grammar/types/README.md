@@ -1,2937 +1,1616 @@
-Zamani Type System Grammar
+Zamani Type System
 
 Path: "grammar/types/README.md"
 Repository: "Benwellonedge28/Zamani"
 Language: Zamani
 Grammar technology: ANTLR4
-Rust baseline: Rust 1.97 / Rust 1.97.1
+Rust baseline: Rust 1.97 or later
 Rust edition: 2021
-Safety: safe Rust only; "unsafe" is prohibited
-Primary architectural objective: Program Once, Compile Once, Run Everywhere, Anywhere, Forever (POCO-REAF)
+Implementation safety: safe Rust only
+Architecture: Program Once, Compile Once, Run Everywhere, Anywhere, Forever (POCO-REAF)
 
 ---
 
 1. Purpose
 
-"grammar/types/" is the source-language type-syntax subsystem of Zamani.
+"grammar/types/" is the complete source-level type-system subsystem of Zamani.
 
-It defines how source programs express type information while remaining independent of:
+This README is the orchestrator, ownership map, dependency contract, integration contract, and completion specification for every file in this directory.
 
-- physical machine size;
-- target architecture;
-- vendor;
-- device identity;
-- runtime allocation;
-- scheduling;
-- routing;
-- placement;
-- calibration;
-- physical quantum resources;
-- backend representation;
-- ABI layout;
-- compiler implementation strategy.
+It does not replace the grammar.
 
-The type subsystem must be capable of expressing the type-level abstractions required by:
-
-- classical computation;
-- systems programming;
-- embedded systems;
-- scientific computing;
-- numerical computing;
-- symbolic computation;
-- AI and machine learning;
-- neural-symbolic computation;
-- probabilistic and uncertain computation;
-- tensor computation;
-- data processing;
-- quantum computation;
-- quantum-classical hybrid computation;
-- HDL;
-- hardware/software co-design;
-- accelerators;
-- parallel computation;
-- concurrent computation;
-- distributed computation;
-- HPC;
-- networking;
-- cryptography;
-- temporal computation;
-- resource-aware computation;
-- metaprogramming;
-- interoperability;
-- future computational domains.
-
-The central question owned by this directory is:
-
-«What type structure did the programmer express?»
-
-The following questions are outside this directory:
-
-«Can a particular target execute the type?»
-
-«Which physical resource should be used?»
-
-«Which QPU should execute it?»
-
-«Which physical qubits should be allocated?»
-
-«Which CPU, GPU, FPGA or accelerator should be selected?»
-
-«How should resources be scheduled?»
-
-«How should quantum operations be routed?»
-
-«What physical representation should be generated?»
-
-Those decisions belong to semantic analysis, resource/capability analysis, compilation, execution and backend layers.
-
----
-
-2. Architectural position
-
-The type subsystem participates in the repository pipeline:
-
-Zamani source
-     │
-     ▼
-canonical lexical system
-     │
-     ▼
-canonical parser
-     │
-     ▼
-typeExpression
-     │
-     ▼
-frontend TypeExpr
-     │
-     ▼
-structural AST validation
-     │
-     ▼
-name resolution
-     │
-     ▼
-generic/type-parameter resolution
-     │
-     ▼
-type inference / unification / checking
-     │
-     ▼
-semantic type model
-     │
-     ├───────────────┬────────────────┬─────────────────┐
-     ▼               ▼                ▼                 ▼
- classical       quantum          HDL/hardware       AI/data
- semantics       semantics        semantics          semantics
-     │               │                │                 │
-     └───────────────┴────────────────┴─────────────────┘
-                         │
-                         ▼
-                 canonical semantic model
-                         │
-              ┌──────────┴──────────┐
-              ▼                     ▼
-        classical IR           quantum::ir
-              │                     │
-              └──────────┬──────────┘
-                         ▼
-                 optimization
-                         │
-                         ▼
-                  domain lowering
-                         │
-                         ▼
-                resource negotiation
-                         │
-                         ▼
-                     routing
-                         │
-                         ▼
-                   scheduling
-                         │
-                         ▼
-              resilience / recovery
-                         │
-                         ▼
-                        ZQN
-                         │
-                         ▼
-                        HAL
-                         │
-                         ▼
-                 target realization
-
-This document describes the type-language boundary, not an assertion that every downstream stage is already implemented.
-
-Implementation status must be obtained from the repository's conformance documentation and tests.
-
----
-
-3. Authority model
-
-There must be exactly one owner for every language responsibility.
-
-For the type subsystem:
-
-Responsibility| Authority
-Type syntax composition| "grammar/types/types.g4"
-Canonical lexical vocabulary| "grammar/antlr/ZamaniLexer.g4" and canonical lexer/token specifications
-Parser integration| "grammar/antlr/ZamaniParser.g4" and root grammar composition
-Source-level type AST| "src/frontend/ast/node/types/type_expr.rs"
-Type AST module organization| "src/frontend/ast/node/types/mod.rs"
-Type specification| "grammar/specification/types.md"
-Type conformance status| "grammar/grammar.md"
-Type architecture navigation| this file
-Type semantic resolution| semantic/type-analysis subsystem
-Resource/capability feasibility| "grammar/resources/" plus semantic/runtime systems
-Effects| "grammar/effects/" plus semantic effect analysis
-Policies| policy subsystem
-Quantum semantic representation| quantum semantic layer and "quantum::ir"
-Hardware realization| hardware/compiler/backend subsystems
-
-No type grammar file may silently become a second authority for another responsibility.
-
----
-
-4. Canonical type-expression owner
-
-4.1 "grammar/types/types.g4"
-
-"grammar/types/types.g4" is the canonical type-composition boundary.
-
-It owns the public source-level type-expression composition rule:
-
-typeExpression
-
-It may compose specialized type grammar components.
-
-It must not be duplicated by another type grammar.
-
-The canonical architecture is:
-
-types.g4
-    │
-    ├── primitive
-    ├── named
-    ├── generic
-    ├── tuple
-    ├── array
-    ├── slice
-    ├── function
-    ├── reference
-    ├── pointer
-    ├── option
-    ├── result
-    ├── algebraic
-    ├── associated
-    ├── dependent
-    ├── linear
-    ├── affine
-    ├── temporal
-    ├── quantum
-    ├── classical
-    ├── hardware
-    ├── resource
-    ├── capability
-    └── extensibility
-
-Specialized grammars provide reusable productions.
-
-They do not create alternative public type-expression roots.
-
----
-
-5. "grammar/types/type.g4" compatibility rule
-
-The repository currently contains both:
+The executable grammar authority is:
 
 grammar/types/types.g4
-grammar/types/type.g4
 
-This must not become two competing type authorities.
+The README answers:
 
-The production rule is:
+- which type feature belongs to which file;
+- which file owns each grammar rule;
+- which files may depend on which other files;
+- which files must never depend on each other;
+- how every type reaches the AST;
+- how every type reaches semantic analysis;
+- how types interact with effects, resources, capabilities, contracts and policies;
+- how classical types reach Classical IR;
+- how quantum types reach "quantum::ir";
+- how HDL/hardware types reach hardware semantics;
+- how type information remains target-independent;
+- how extensions are added without continually modifying the universal type grammar;
+- how each file becomes independently complete;
+- how production readiness is verified.
 
-types.g4
-    │
-    ▼
-canonical typeExpression
+The central principle is:
 
-"type.g4" must either:
-
-1. become a compatibility/delegation grammar; or
-2. remain transitional until its functionality is folded into the canonical composition architecture.
-
-It must not introduce an independently authoritative "typeExpression".
-
-No new type grammar may import the two composition grammars in a circular manner.
-
-Forbidden architecture:
-
-types.g4
-    ↓
-type.g4
-    ↓
-types.g4
-
-Also forbidden:
-
-types.g4 → typeExpression
-type.g4  → typeExpression
-
-where both rules have independent implementations.
+«A type expresses program meaning. It does not select the machine that realizes that meaning.»
 
 ---
 
-6. Existing specialized grammar naming
+2. Production Objective
 
-The repository currently contains type grammar components including, among others:
+The type subsystem must support Zamani programs spanning:
 
-grammar/types/
-├── README.md
-├── types.g4
-├── type.g4
-├── primitive.g4
-├── named.g4
-├── generic.g4
-├── tuple.g4
-├── array.g4
-├── slice.g4
-├── map.g4
-├── map-types.g4
-├── option.g4
-├── optional.g4
-├── result.g4
-├── pointer.g4
-├── reference.g4
-├── never.g4
-├── sum.g4
-├── union.g4
-├── algebraic-types.g4
-├── dependent.g4
-├── associated.g4
-├── type-class.g4
-├── constraints.g4
-├── type-constraints.g4
-├── linear.g4
-├── affine.g4
-├── temporal.g4
-├── resource.g4
-├── ...
+- tiny embedded systems;
+- ordinary classical systems;
+- multicore systems;
+- vector and tensor computation;
+- GPUs;
+- FPGAs;
+- ASIC-oriented computation;
+- accelerators;
+- quantum simulators;
+- QPUs;
+- quantum-classical systems;
+- HDL;
+- hardware/software co-design;
+- distributed systems;
+- HPC;
+- clusters;
+- cloud systems;
+- heterogeneous systems;
+- future computational substrates.
 
-The existence of multiple similarly named files is an architectural risk.
+The type system must therefore be resource-independent and target-neutral.
 
-Before creating or promoting any file:
+It must not encode an assumed maximum machine size.
 
-1. Search for an existing implementation.
-2. Determine whether it defines syntax already owned elsewhere.
-3. Determine its consumers.
-4. Determine its AST mapping.
-5. Determine its specification owner.
-6. Determine its conformance status.
-7. Either integrate it, convert it to a delegate, or explicitly mark it compatibility/historical/deprecated.
+The type system must remain capable of describing a program whose eventual realization is constrained only by:
 
-Do not create a second implementation merely because a better filename seems desirable.
-
-Existing filenames should not be renamed merely for cosmetic consistency.
+1. the program's semantic requirements;
+2. the selected language version;
+3. the compiler's explicitly configured resource policy;
+4. the capabilities actually available;
+5. the resources actually available;
+6. the target's semantic compatibility.
 
 ---
 
-7. Canonical frontend AST
+3. The Core Separation
 
-The canonical source-level type representation is:
+The type subsystem owns:
 
-src/frontend/ast/node/types/type_expr.rs
+"What type structure did the programmer express?"
 
-This file is the definitive source-level AST boundary.
+It does not own:
 
-The grammar must map source syntax into "TypeExpr".
+"Can this particular machine execute it?"
 
-It must not introduce:
+It does not own:
 
-GrammarType
-UniversalType
-QuantumTypeExpr
-HardwareTypeExpr
-AiTypeExpr
-TypeGrammarNode
-QuantumTypeIR
-HardwareTypeIR
+"Which physical resource should execute it?"
 
-as competing source representations.
+It does not own:
+
+"Which QPU should execute it?"
+
+It does not own:
+
+"Which physical qubits should be allocated?"
+
+It does not own:
+
+"Which GPU/FPGA/ASIC should be selected?"
+
+It does not own:
+
+"How should operations be routed?"
+
+It does not own:
+
+"How should execution be scheduled?"
+
+It does not own:
+
+"What ABI/layout should the backend emit?"
+
+Those responsibilities belong downstream.
 
 ---
 
-8. Current "TypeExpr" vocabulary
+4. Repository Architecture
 
-The current frontend type representation contains source-level forms including:
+The complete language path is:
 
-Identifier
-Generic
-Tuple
-Array
-Slice
-Function
-Reference
-Pointer
-Optional
-Result
-Never
-Unit
-SelfType
-Infer
-GenericParameter
-Union
-Intersection
-Associated
-TypeApplication
-Quantum
-Linear
-Affine
-Temporal
-Pi
-Sigma
-Identity
-Hkt
-Extension
-
-This existing vocabulary must be treated as the starting architectural contract.
-
-A grammar feature is not complete merely because its corresponding conceptual name appears in this README.
-
-It is complete only when:
-
-specification
-    ↓
-lexer
-    ↓
-grammar
-    ↓
-AST
-    ↓
+Zamani source
+      │
+      ▼
+canonical lexer
+      │
+      ▼
+canonical parser
+      │
+      ▼
+grammar/types/types.g4
+      │
+      ▼
+typeExpression
+      │
+      ▼
+domain-neutral TypeExpr AST
+      │
+      ▼
 structural validation
-    ↓
-semantic analysis
-    ↓
-IR
-    ↓
-required tests
+      │
+      ├── name resolution
+      ├── generic resolution
+      ├── inference
+      ├── unification
+      ├── constraints
+      ├── bounds
+      ├── ownership
+      ├── lifetimes
+      ├── effects
+      ├── capabilities
+      ├── resources
+      ├── contracts
+      ├── policies
+      └── provenance
+      │
+      ▼
+canonical semantic type model
+      │
+      ├───────────────┬──────────────────┬─────────────────┐
+      ▼               ▼                  ▼                 ▼
+ Classical        Quantum              HDL              AI/Data
+ semantics        semantics            semantics         semantics
+      │               │                  │                 │
+      └───────────────┴──────────────────┴─────────────────┘
+                              │
+                              ▼
+                    canonical semantic IR
+                              │
+                    ┌─────────┴─────────┐
+                    ▼                   ▼
+              Classical IR         quantum::ir
+                    │                   │
+                    └─────────┬─────────┘
+                              ▼
+                        optimization
+                              │
+                              ▼
+                           lowering
+                              │
+                              ▼
+                           routing
+                              │
+                              ▼
+                         scheduling
+                              │
+                              ▼
+                    resilience / recovery
+                              │
+                              ▼
+                             ZQN
+                              │
+                              ▼
+                             HAL
+                              │
+                              ▼
+                    target realization
 
-is implemented as required by the feature.
-
----
-
-9. TypeExpr responsibility
-
-"TypeExpr" represents source-level structure.
-
-It must not resolve:
-
-- symbols;
-- aliases;
-- generic substitutions;
-- trait/type-class satisfaction;
-- overloads;
-- capabilities;
-- resources;
-- physical hardware;
-- physical quantum allocation;
-- runtime representation;
-- ABI layout;
-- target selection.
-
-The distinction is:
-
-TypeExpr
-    =
-source-level type structure
-
-SemanticType
-    =
-resolved type meaning
-
-Canonical IR
-    =
-target-independent computational representation
-
-Domain IR
-    =
-domain-specific implementation representation
-
-Target representation
-    =
-backend-specific realization
-
-These layers must remain distinct.
-
----
-
-10. Primitive types
-
-Primitive syntax belongs to the primitive type grammar component:
-
-grammar/types/primitive.g4
-
-not a newly invented "primitives.g4" authority unless the repository deliberately introduces such a file and migrates ownership.
-
-Primitive syntax may cover language-defined scalar concepts such as:
-
-int
-float
-bool
-char
-string
-str
-void
-never
-
-The exact stable set is determined by the language specification and implementation.
+"grammar/types/" participates only in the source-language type portion of this pipeline.
 
 ---
 
-11. Semantic integer versus representation width
+5. Authority Model
 
-A semantic type:
+There must be exactly one authority for each responsibility.
 
-int
+Responsibility| Authority
+Language-wide grammar composition| "grammar/Zamani.g4"
+Canonical parser composition| "grammar/antlr/ZamaniParser.g4"
+Canonical lexical vocabulary| "grammar/antlr/ZamaniLexer.g4" / "grammar/lexer/"
+Type grammar composition| "grammar/types/types.g4"
+Type architecture/orchestration| "grammar/types/README.md"
+Type specification| "grammar/specification/"
+Type machine contracts| "grammar/spec/"
+Type conformance| "grammar/grammar.md"
+Source type AST| existing frontend AST
+Type semantic model| semantic type subsystem
+Classical representation| Classical IR
+Quantum representation| "quantum::ir"
+Hardware realization| hardware/backend/HAL
+Resource feasibility| "grammar/resources/" + semantic/resource subsystem
+Effects| "grammar/effects/" + semantic effect subsystem
+Policies| policy subsystem
+Provenance| compiler/frontend provenance subsystem
+Type tests| "grammar/tests/" / type-specific tests
 
-must not automatically mean:
-
-i32
-
-or:
-
-i64
-
-unless the normative language specification explicitly says so.
-
-A representation-specific type such as:
-
-i64
-
-has a different semantic purpose from an abstract:
-
-int
-
-The type grammar must preserve this distinction.
-
-No backend implementation choice may silently redefine source semantics.
+No file under "grammar/types/" may silently become the authority for a responsibility belonging elsewhere.
 
 ---
 
-12. Fixed-width numeric types
+6. The Orchestrator Rule
 
-If fixed-width numeric types are standardized, their meaning must be explicitly specified.
+"grammar/types/README.md" is the directory-level orchestrator.
 
-Possible examples include:
+"grammar/types/types.g4" is the grammar-level orchestrator.
 
-i8
-i16
-i32
-i64
-i128
+They have different responsibilities.
 
-u8
-u16
-u32
-u64
-u128
+README.md
+    │
+    ├── ownership
+    ├── dependency graph
+    ├── integration contracts
+    ├── implementation status
+    ├── file completion criteria
+    ├── scalability policy
+    ├── cross-repository contracts
+    └── test matrix
+             │
+             ▼
+        types.g4
+             │
+             ├── primitive
+             ├── named
+             ├── generic
+             ├── composite
+             ├── function
+             ├── reference
+             ├── pointer
+             ├── algebraic
+             ├── constrained
+             ├── advanced
+             ├── domain
+             └── extensions
 
-f16
-f32
-f64
+The README must never duplicate ANTLR productions.
 
-These are examples of possible language-level representation types, not a statement that every spelling is currently implemented.
-
-They must not be introduced solely because one target backend uses a particular width.
-
----
-
-13. Named types
-
-Named types are source-level names.
-
-They must support qualified names through the canonical name/path architecture.
-
-Conceptually:
-
-Type
-Module::Type
-domain::Type
-project::module::Type
-
-The type grammar recognizes structure.
-
-Name resolution belongs downstream.
-
-The grammar must not resolve a source name to a compiler symbol ID.
+The grammar must never contain directory-level project management prose as a substitute for actual ownership.
 
 ---
 
-14. Generic type applications
+7. The One Universal Type Entry Point
 
-Generic applications are owned by:
+The entire type subsystem has one public source-level entry point:
 
-grammar/types/generic.g4
+typeExpression
 
-under the canonical type composition grammar.
+It is owned by:
 
-Examples:
+grammar/types/types.g4
 
-Vec<Int>
-Map<String, Int>
-Result<Value, Error>
-Option<T>
-Tensor<Value>
-Quantum<State>
-Register<Qubit>
-
-Generic application is domain-neutral.
-
-The same syntax may be used by:
-
-- classical libraries;
-- AI models;
-- tensor systems;
-- data structures;
-- quantum abstractions;
-- HDL abstractions;
-- hardware abstractions;
-- distributed abstractions;
-- future domains.
-
-The generic grammar must not know what an individual generic constructor means.
-
----
-
-15. Important generic-argument constraint
-
-The current frontend "TypeExpr::Generic" representation is:
-
-Generic {
-    base: Box<TypeExpr>,
-    arguments: Vec<TypeExpr>
-}
-
-Therefore the current source AST represents generic arguments as "TypeExpr".
-
-The grammar documentation must not claim that the implementation already has separate AST categories for:
-
-type argument
-value argument
-resource argument
-capability argument
-
-That distinction may be required in the future, but it requires an explicit AST/semantic design.
-
-Until that work exists, the correct boundary is:
-
-generic syntax
-    ↓
-TypeExpr arguments
-    ↓
-semantic interpretation
-
-If future Zamani syntax requires generic arguments that cannot be represented faithfully as "TypeExpr", the AST contract must be deliberately extended before claiming the feature is implemented.
-
-The extension must preserve compatibility and source meaning.
-
----
-
-16. Generic arity
-
-Generic lists must use repetition rather than finite grammar alternatives.
-
-Correct architectural form:
-
-genericArgumentList
-    : typeExpression (COMMA typeExpression)* COMMA?
-    ;
-
-The language must not define an arbitrary universal generic arity.
+No specialized file may create another universal type-expression root.
 
 Forbidden:
 
-Generic<T>
-Generic<T, U>
-Generic<T, U, V>
-...
+primitiveTypeExpression
+quantumTypeExpression
+hardwareTypeExpression
+aiTypeExpression
+universalTypeExpression
+advancedTypeExpression
 
-with a finite endpoint.
+as competing universal roots.
 
-Actual compiler resource consumption may be controlled by an explicit compiler policy, but that is not a language semantic ceiling.
+Specialized grammars expose specialized constructors.
 
----
-
-17. Generic nesting
-
-Nested generic applications must be supported structurally:
-
-Vec<Option<T>>
-Map<K, Vec<Result<V, E>>>
-Tensor<Matrix<Value>>
-
-No universal maximum generic nesting depth belongs in the language grammar.
-
-Compiler-side protection against malicious or pathological input may exist as an explicit configurable validation policy.
-
-Such protection must not alter the language's conceptual type system.
+"types.g4" composes them.
 
 ---
 
-18. Generic parameters
+8. Canonical Dependency Direction
 
-Generic declarations belong to the declaration/function/type-parameter subsystem.
+The dependency direction is:
 
-The type grammar consumes generic parameter references.
+primitive
+named
+value-level type parameters
+generic
+composite
+function
+reference/pointer
+algebraic
+constraints/bounds
+advanced type system
+domain types
+       │
+       ▼
+    types.g4
+       │
+       ▼
+TypeExpr
+       │
+       ▼
+semantic analysis
+
+Never:
+
+types.g4
+   ▲
+   │
+specialized.g4
+
+A specialized delegate must not import the orchestrator merely to obtain the type system it is supposed to contribute to.
+
+---
+
+9. No Circular Type-Grammar Dependencies
+
+The following architecture is forbidden:
+
+Types → Generic → Types
+Types → Map → Types
+Types → Reference → Types
+Types → Effectful → Types
+Types → Quantum → Types
+
+A specialized grammar may consume rules exposed by the composition architecture where the ANTLR composition mechanism supports that structure, but it must not create a circular grammar-import graph.
+
+The dependency graph must be acyclic.
+
+---
+
+10. Current "grammar/types/" Inventory
+
+The current repository contains the following relevant entries.
+
+Orchestrator
+
+README.md
+types.g4
+
+Fundamental type families
+
+primitive.g4
+named.g4
+generic.g4
+function.g4
+tuple.g4
+array.g4
+slice.g4
+map.g4
+reference.g4
+pointer.g4
+option.g4
+optional.g4
+result.g4
+never.g4
+record.g4
+sum.g4
+union.g4
+algebraic-types.g4
+composite-types.g4
+
+Generic/constraint system
+
+bounds.g4
+constraints.g4
+type-constraints.g4
+associated.g4
+associated types.g4
+type-class.g4
+variance.g4
+functional dependencies.g4
+
+Advanced type system
+
+dependent.g4
+existential-types.g4
+higher-kinded-types.g4
+path-dependent-types.g4
+type-families.g4
+type-providers.g4
+advanced-type-level-computation.g4
+
+Ownership/effect/resource/capability types
+
+linear.g4
+affine.g4
+effectful.g4
+resource.g4
+capability.g4
+temporal.g4
+
+Domain types
+
+classical.g4
+quantum.g4
+hardware.g4
+
+Compatibility/overlap entries
+
+array-types.g4...
+map-types.g4
+option-types.g4
+optional.g4
+associated types.g4
+composite-types.g4
+
+The repository also currently contains a malformed directory entry beginning with:
+
+array-types.g4
+
+whose path contains embedded comment text and whose size is zero.
+
+That entry must be treated as a repository hygiene defect, not as a valid production grammar module.
+
+---
+
+11. Duplicate-File Policy
+
+Several names represent overlapping concepts.
 
 Examples:
 
-T
-U
-Element
-State
-Shape
+map.g4
+map-types.g4
 
-Constraints and bounds may be represented through the existing constraint/type-class architecture.
+option.g4
+option-types.g4
+optional.g4
 
-The type grammar does not decide whether:
+associated.g4
+associated types.g4
 
-T: Numeric
-T: QuantumState
-T: Sendable
+array.g4
+array-types.g4...
 
-is semantically satisfied.
+constraints.g4
+type-constraints.g4
+
+These are not allowed to become multiple authorities.
+
+Each overlapping file must ultimately be classified as exactly one of:
+
+CANONICAL
+DELEGATE
+COMPATIBILITY
+DEPRECATED
+EXPERIMENTAL
+HISTORICAL
+
+Only one canonical implementation may own a particular grammar rule.
 
 ---
 
-19. Tuple types
+12. Existing Filename Preservation
 
-Tuple syntax must support:
+Existing filenames should not be renamed merely for aesthetic consistency.
+
+This is important because:
+
+- downstream imports may reference them;
+- tooling may discover them;
+- documentation may reference them;
+- historical compatibility may depend on them;
+- external consumers may rely on stable paths.
+
+If consolidation is required, retain the old file as a compatibility/deprecation surface until the migration contract is complete.
+
+---
+
+13. Fundamental File Contract
+
+Every ".g4" file under this directory must have an explicit header containing:
+
+PURPOSE
+STATUS
+OWNS
+DOES NOT OWN
+DEPENDS_ON
+EXPORTS
+CONSUMED_BY
+LEXER_DEPENDENCIES
+GRAMMAR_DEPENDENCIES
+AST_OWNER
+SEMANTIC_OWNER
+IR_OWNER
+SPEC_OWNER
+TEST_OWNER
+COMPATIBILITY_OWNER
+SCALABILITY_CONTRACT
+DIAGNOSTICS_CONTRACT
+COMPLETION_CRITERIA
+
+This makes a file independently completable.
+
+A completed file must not need to be reopened simply because another type file is later implemented.
+
+---
+
+14. File Completion Principle
+
+A type grammar file is DONE only when all of the following are already known:
+
+syntax
+ownership
+dependencies
+AST mapping
+semantic meaning
+type interactions
+effect interactions
+capability interactions
+resource interactions
+contract interactions
+policy interactions
+provenance interactions
+IR destination
+diagnostics
+tests
+compatibility
+scalability
+integration
+
+The implementation of a downstream file may still occur later.
+
+That does not mean the upstream file was incomplete.
+
+Its contract must already specify how the integration occurs.
+
+---
+
+15. "types.g4" — Canonical Type Orchestrator
+
+Owns
+
+typeExpression
+typeCore
+typePrefix
+typePostfix
+typeValueExpression
+type extension composition
+
+Does not own
+
+- primitive semantics;
+- generic semantics;
+- array semantics;
+- quantum semantics;
+- hardware realization;
+- resource discovery;
+- capability negotiation;
+- effect checking;
+- type inference;
+- unification;
+- substitution;
+- ABI layout;
+- runtime layout.
+
+Integrates
+
+All canonical type delegates.
+
+Must export
+
+typeExpression
+
+as the only universal public type entry point.
+
+Production requirements
+
+"types.g4" must:
+
+1. remain parser-only;
+2. use canonical lexer tokens;
+3. avoid lexer definitions;
+4. avoid embedded Rust;
+5. avoid target actions;
+6. avoid semantic execution;
+7. avoid physical resource selection;
+8. avoid domain-specific implementation logic;
+9. avoid finite type-family enumeration where open-world extension is intended;
+10. avoid hard-coded physical limits.
+
+Completion
+
+"types.g4" is complete when its import graph is acyclic and every imported rule has exactly one owner.
+
+---
+
+16. "primitive.g4"
+
+Owns
+
+Language-defined primitive/scalar type syntax.
+
+Potential categories include:
+
+boolean
+integer
+floating
+character
+string
+unit
+never
+
+Exact spellings are controlled by the language specification and lexer.
+
+Does not own
+
+- machine selection;
+- numeric representation lowering;
+- ABI width selection;
+- register allocation;
+- runtime layout.
+
+Integration
+
+primitive.g4
+    ↓
+types.g4
+    ↓
+TypeExpr
+    ↓
+semantic scalar type
+
+Scalability
+
+Primitive syntax must not silently impose machine capacity.
+
+A semantic integer must not become a machine-specific width merely because one backend uses that width.
+
+---
+
+17. "named.g4"
+
+Owns
+
+Named and qualified source-level types.
+
+Examples:
+
+User
+module::User
+project::module::Type
+
+Does not own
+
+- symbol resolution;
+- module loading;
+- declaration lookup;
+- generic substitution.
+
+Integration
+
+named.g4
+    ↓
+TypeExpr
+    ↓
+name resolution
+
+Names remain symbolic until semantic analysis.
+
+---
+
+18. "generic.g4"
+
+Owns
+
+Generic type application syntax.
+
+Examples:
+
+Vec<T>
+Map<K, V>
+Result<T, E>
+Tensor<T>
+Model<T>
+
+Must be open-ended
+
+Generic argument lists use repetition/recursion.
+
+No finite universal generic arity.
+
+Does not own
+
+- type inference;
+- bound satisfaction;
+- type-class resolution;
+- generic specialization;
+- monomorphization.
+
+Integration
+
+generic.g4
+    ↓
+TypeExpr
+    ↓
+generic resolution
+    ↓
+constraint solving
+    ↓
+specialization
+
+---
+
+19. Generic Scalability
+
+The grammar must support structurally arbitrary generic nesting:
+
+Vec<Option<T>>
+Map<K, Vec<Result<V, E>>>
+Tensor<Vec<Result<T, E>>>
+
+There must be no language-level constants such as:
+
+MAX_GENERIC_DEPTH
+MAX_GENERIC_ARGUMENTS
+MAX_TYPE_PARAMETERS
+
+Compiler resource protection may exist outside the language semantics.
+
+---
+
+20. "function.g4"
+
+Owns
+
+Function type syntax.
+
+Conceptually:
+
+fn() -> T
+fn(T) -> U
+fn(T, U) -> V
+
+Does not own
+
+- function declarations;
+- function bodies;
+- calling conventions;
+- ABI;
+- register allocation;
+- execution scheduling.
+
+Integration
+
+function.g4
+    ↓
+TypeExpr::Function
+    ↓
+semantic function type
+    ↓
+effects/capabilities/resources
+    ↓
+IR/backend
+
+---
+
+21. Function Type + Effects
+
+Effects are not duplicated inside "types/".
+
+If a function type can carry effect information, the type grammar consumes the effect representation owned by:
+
+grammar/effects/
+
+The architecture is:
+
+function type
+     +
+effect information
+     +
+capability requirements
+     +
+resource requirements
+
+The type grammar does not define the effect universe.
+
+---
+
+22. "tuple.g4"
+
+Owns
+
+Tuple type syntax.
+
+Must support structurally:
 
 ()
 (T,)
 (T, U)
 (T, U, V)
 
-and arbitrary source cardinality subject only to implementation resource availability.
+and arbitrary tuple length subject to implementation resources.
 
-The grammar must not define a finite tuple-size ceiling.
+Does not own
 
-The empty tuple is the unit type where the language specification establishes that relationship.
+- tuple layout;
+- ABI layout;
+- register allocation;
+- machine representation.
 
-The frontend representation is:
+AST
 
-TypeExpr::Unit
-TypeExpr::Tuple(...)
-
-as appropriate.
+Maps to the existing tuple "TypeExpr" representation.
 
 ---
 
-20. Arrays
+23. "array.g4"
 
-The current frontend AST explicitly supports:
+Owns
 
-TypeExpr::Array {
-    element,
-    length
-}
+Array type syntax.
 
-The length is represented as:
+The source-level model must preserve:
 
-Option<TypeValueExpr>
+element type
+array length/value parameter
 
-This is important for POCO-REAF.
+when a length is part of the type.
 
-A source program may express symbolic cardinality without forcing the parser to convert it into a host-machine integer.
+Symbolic sizes
+
+The grammar must support symbolic values where the language specifies them.
 
 Conceptually:
 
 [T; N]
 
-may preserve:
+must preserve "N" as source-level information.
 
-N
+Must not
 
-as source-level type information.
+Convert a symbolic size into an assumed host-machine integer during parsing.
 
 ---
 
-21. TypeValueExpr
+24. Array Size Architecture
 
-The current frontend provides a dedicated source-level:
+Array size belongs to the type-level value system.
 
+The architecture is:
+
+array.g4
+    ↓
+TypeExpr::Array
+    ↓
 TypeValueExpr
+    ↓
+semantic evaluation / constraint checking
 
-with forms including:
+The parser must not decide whether a value is physically realizable.
 
-Identifier(TypePath)
-Integer(...)
-Generic(TypeParameterName)
-Extension(...)
+---
 
-This representation is specifically useful for symbolic values such as array cardinalities.
+25. "slice.g4"
 
-It must remain target-neutral.
+Owns
 
-The parser must not silently convert symbolic values into:
+Slice type syntax.
+
+Does not own
+
+- pointer width;
+- address width;
+- allocation strategy;
+- ownership semantics;
+- runtime memory layout.
+
+Integration
+
+slice.g4
+    ↓
+TypeExpr::Slice
+    ↓
+reference/ownership semantics
+    ↓
+semantic model
+
+---
+
+26. "reference.g4"
+
+Owns
+
+Reference syntax.
+
+Conceptually:
+
+&T
+&mut T
+
+and lifetime syntax where standardized.
+
+Does not own
+
+- borrow checking;
+- lifetime solving;
+- alias analysis;
+- memory allocation.
+
+Integration
+
+reference.g4
+    ↓
+TypeExpr::Reference
+    ↓
+lifetime/ownership analysis
+
+---
+
+27. "pointer.g4"
+
+Owns
+
+Pointer type syntax where Zamani exposes pointer types.
+
+Important distinction
+
+A pointer type is a source-level semantic abstraction.
+
+It must not assume:
+
+32-bit address
+64-bit address
+fixed register width
+fixed virtual-address width
+
+unless such a representation is explicitly part of the type's language semantics.
+
+Integration
+
+pointer.g4
+    ↓
+TypeExpr::Pointer
+    ↓
+semantic pointer model
+    ↓
+target-specific lowering
+
+---
+
+28. "map.g4" and "map-types.g4"
+
+Only one file may own canonical map syntax.
+
+Recommended production ownership:
+
+map.g4 → canonical
+map-types.g4 → compatibility/deprecated
+
+unless repository-wide dependency analysis establishes the reverse.
+
+Canonical map form
+
+Conceptually:
+
+Map<K, V>
+
+Does not own
+
+- hashing;
+- ordering;
+- storage;
+- allocation;
+- runtime implementation.
+
+---
+
+29. "option.g4", "optional.g4", "option-types.g4"
+
+These files represent overlapping concepts.
+
+They must be consolidated into one canonical owner.
+
+Recommended architecture:
+
+option.g4
+    ↓
+canonical option constructor
+
+with:
+
+optional.g4
+option-types.g4
+
+classified as compatibility/deprecated surfaces unless repository consumers require another arrangement.
+
+Semantic distinction
+
+Option-like types represent absence/presence.
+
+They must not become aliases for arbitrary nullable machine pointers unless the language specification explicitly defines such equivalence.
+
+---
+
+30. "result.g4"
+
+Owns
+
+Result type syntax.
+
+Conceptually:
+
+Result<T, E>
+
+Does not own
+
+- exception handling;
+- runtime error transport;
+- diagnostics implementation.
+
+Integration
+
+Result<T, E>
+    ↓
+TypeExpr
+    ↓
+semantic error/value type
+
+---
+
+31. "never.g4"
+
+Owns
+
+Never/uninhabited type syntax.
+
+It must integrate with:
+
+- control-flow analysis;
+- function return analysis;
+- pattern exhaustiveness;
+- type compatibility.
+
+It must not define its own control-flow subsystem.
+
+---
+
+32. "record.g4"
+
+Owns
+
+Record/structural product type syntax where applicable.
+
+It must support source-level composition without imposing:
+
+- field-count limits;
+- fixed alignment;
+- fixed layout;
+- ABI rules.
+
+Integration
+
+record.g4
+    ↓
+domain-neutral record AST
+    ↓
+semantic record type
+    ↓
+layout lowering
+
+---
+
+33. "sum.g4"
+
+Owns
+
+Sum/algebraic variant type syntax.
+
+Does not own
+
+- pattern matching;
+- exhaustiveness checking;
+- runtime tag representation.
+
+Those are integrated downstream.
+
+---
+
+34. "union.g4"
+
+Owns
+
+Union type syntax where union semantics are distinct from sum types.
+
+The specification must clearly distinguish:
+
+sum
+
+from:
+
+union
+
+The two grammars must not accidentally create two spellings for the same semantic type without an explicit specification.
+
+---
+
+35. "algebraic-types.g4"
+
+This is a grouping/delegation surface for algebraic types.
+
+It must not create a second algebraic type system.
+
+Its canonical role is to compose:
+
+sum
+union
+product/record
+option
+result
+
+where appropriate.
+
+---
+
+36. "composite-types.g4"
+
+This file must be classified carefully.
+
+It may serve as:
+
+compatibility façade
+
+or:
+
+composition delegate
+
+but must not independently redefine:
+
+arrayType
+tupleType
+mapType
+recordType
+optionType
+resultType
+
+If it currently does so, those duplicate rules must be normalized.
+
+---
+
+37. "linear.g4"
+
+Owns
+
+Linear type qualification syntax.
+
+Semantic purpose
+
+Linear types constrain use/consumption of values.
+
+This is especially important for:
+
+- quantum resources;
+- handles;
+- ownership-sensitive resources;
+- session-like resources;
+- unique hardware resources.
+
+Does not own
+
+The complete ownership checker.
+
+That belongs in semantic analysis.
+
+---
+
+38. "affine.g4"
+
+Owns
+
+Affine type qualification syntax.
+
+Affine values may be used zero or one time according to the semantic specification.
+
+Integration
+
+affine.g4
+    ↓
+TypeExpr
+    ↓
+ownership/usage analysis
+
+---
+
+39. Linear/Affine + Quantum
+
+Quantum types may require linear or affine semantics.
+
+The architecture is:
+
+quantum.g4
+      +
+linear.g4 / affine.g4
+      ↓
+TypeExpr
+      ↓
+quantum semantic validation
+      ↓
+quantum::ir
+
+"quantum.g4" must not independently implement a second ownership system.
+
+---
+
+40. "dependent.g4"
+
+Owns
+
+Dependent-type syntax.
+
+It may express relationships between types and source-level values.
+
+Examples conceptually:
+
+Vector<T, N>
+Matrix<T, Rows, Columns>
+Tensor<T, Shape>
+
+Does not own
+
+- arbitrary compile-time execution;
+- machine resource discovery;
+- runtime evaluation;
+- target selection.
+
+Integration
+
+dependent.g4
+    ↓
+TypeExpr + TypeValueExpr
+    ↓
+constraint/evaluation subsystem
+
+---
+
+41. "typeValueExpression"
+
+The type system requires a dedicated source-level representation for values used by types.
+
+It must remain target-independent.
+
+Examples:
+
+N
+Rows
+Columns
+Shape
+Batch
+RequiredMemory
+
+The parser must preserve symbolic identity.
+
+It must not silently convert symbolic values to:
 
 usize
 u32
 u64
 
-or any target-dependent representation merely because the compiler implementation happens to run on such a machine.
+because the compiler itself happens to execute on a particular host.
 
 ---
 
-22. Type-level arithmetic status
+42. Type-Level Arithmetic
 
-The repository's current "TypeValueExpr" does not establish a complete arbitrary arithmetic expression language.
+The current architecture must distinguish:
 
-Therefore this README must not claim that arbitrary expressions such as:
+symbolic type values
 
-N + 1
-Rows * Columns
-2 * N
-Size / Block
-N << 1
+from:
 
-are already implemented in type syntax.
+arbitrary type-level computation
 
-If type-level arithmetic becomes a stable language feature, it must receive a complete design covering:
+The presence of "advanced-type-level-computation.g4" does not by itself establish that every arithmetic expression is supported.
 
-syntax
-AST
-evaluation
-symbolic representation
-overflow semantics
-normalization
-dependency tracking
-diagnostics
-determinism
-semantic checking
-serialization
-IR integration
-tests
+If arbitrary type-level computation is standardized, it requires:
 
-Until then, symbolic type values should remain within the actually implemented "TypeValueExpr" vocabulary.
-
----
-
-23. Slice types
-
-Slice syntax is represented by:
-
-TypeExpr::Slice(...)
-
-A slice must not imply:
-
-- fixed pointer width;
-- fixed address width;
-- fixed allocation size;
-- fixed memory size;
-- fixed hardware architecture.
-
-Those are implementation concerns.
-
----
-
-24. Function types
-
-Function type syntax is represented by:
-
-TypeExpr::Function {
-    parameters,
-    return_type
-}
-
-Function parameter collections are ordered and must not have an artificial language-level maximum.
-
-Examples:
-
-fn() -> T
-fn(T) -> U
-fn(T, U) -> V
-
-Calling convention, ABI, register assignment and machine representation remain downstream.
-
----
-
-25. Async and effectful functions
-
-Function type syntax must not duplicate the effect subsystem.
-
-Where Zamani supports effect-qualified or asynchronous function semantics, the architecture is:
-
-function type
-    +
-effect information
-    +
-capability requirements
-    +
-resource requirements
-
-Effects remain owned by:
-
-grammar/effects/
-
-The type grammar consumes the appropriate representation but does not redefine the effect system.
-
----
-
-26. Reference types
-
-The current AST provides:
-
-TypeExpr::Reference {
-    mutable,
-    lifetime,
-    inner
-}
-
-The grammar must support the source syntax standardized by the language, including lifetime and mutability information where implemented.
-
-Examples conceptually include:
-
-&T
-&mut T
-&'a T
-&'a mut T
-
-Lifetime checking is semantic.
-
-Reference syntax must not perform borrow checking.
-
----
-
-27. Pointer types
-
-The current AST provides:
-
-TypeExpr::Pointer {
-    mutable,
-    inner
-}
-
-Pointer syntax is source-level.
-
-The grammar must not encode:
-
-- pointer width;
-- address-space width;
-- physical address range;
-- memory map;
-- ABI layout.
-
-Those belong downstream.
-
----
-
-28. Optional types
-
-The frontend provides:
-
-TypeExpr::Optional(...)
-
-If both postfix optional syntax and explicit generic syntax are standardized, they must have a single semantic optional meaning.
-
-The grammar must not accidentally create two different optional type systems.
-
-For example, if both are eventually accepted:
-
-T?
-Option<T>
-
-they must converge semantically according to the specification.
-
----
-
-29. Result types
-
-The frontend provides:
-
-TypeExpr::Result {
-    ok,
-    error
-}
-
-The grammar may represent:
-
-Result<T, E>
-
-where supported.
-
-The type grammar does not own:
-
-- error propagation;
-- recovery;
-- exception handling;
-- runtime representation;
-- ABI;
-- backend error handling.
-
-Those are downstream concerns.
-
----
-
-30. Never and unit
-
-The canonical source-level concepts are:
-
-TypeExpr::Never
-TypeExpr::Unit
-
-The grammar must map their standardized source syntax to those concepts.
-
-"Never" represents a type with no normal value.
-
-"Unit" represents the language's unit value/type where specified.
-
----
-
-31. "Self" type
-
-The frontend supports:
-
-TypeExpr::SelfType
-
-The grammar may recognize the language's canonical "Self" syntax.
-
-Whether "Self" is legal in a particular location is a semantic/contextual question.
-
-The grammar must not attempt to implement trait/type-class context checking.
-
----
-
-32. Inference placeholder
-
-The frontend supports:
-
-TypeExpr::Infer
-
-This represents source-level inference syntax such as:
-
-_
-
-where supported.
-
-The grammar recognizes structure.
-
-Semantic analysis determines whether inference is permitted and whether the placeholder can be resolved.
-
-An unresolved inference placeholder must produce a semantic diagnostic where required.
-
----
-
-33. Generic parameter references
-
-The frontend supports:
-
-TypeExpr::GenericParameter(...)
-
-A generic parameter reference must remain source-level until declaration and scope resolution.
-
-The grammar does not decide whether the parameter exists.
-
-Semantic analysis owns:
-
-- scope;
-- binding;
-- shadowing;
-- duplicate parameter detection;
-- bounds;
-- substitution.
-
----
-
-34. Union types
-
-The frontend supports:
-
-TypeExpr::Union(...)
-
-Union syntax is source-level.
-
-Semantic analysis owns:
-
-- canonicalization;
-- duplicate elimination where specified;
-- subtype relationships;
-- exhaustiveness interactions;
-- normalization.
-
-The grammar must not hard-code a closed universe of union members.
-
----
-
-35. Intersection types
-
-The frontend supports:
-
-TypeExpr::Intersection(...)
-
-Intersection semantics remain downstream.
-
-The grammar must preserve source structure without deciding:
-
-- trait satisfaction;
-- subtype relationships;
+- syntax;
+- AST;
+- evaluation model;
 - normalization;
-- implementation compatibility.
+- termination/resource policy;
+- diagnostics;
+- determinism;
+- provenance;
+- compatibility;
+- semantic checking;
+- serialization;
+- tests.
+
+No README claim should imply completion before all of those exist.
 
 ---
 
-36. Associated types
+43. "associated.g4"
 
-The frontend supports:
+Owns
 
-TypeExpr::Associated {
-    base,
-    member
-}
+Associated-type references/projections.
 
 Conceptually:
 
-Iterator::Item
+T::Item
+T::Output
 
-The grammar recognizes the source structure.
+Does not own
 
-Resolution belongs to the type semantic subsystem.
-
-The grammar must not resolve an associated type to a concrete declaration.
-
----
-
-37. Type application
-
-The frontend provides:
-
-TypeExpr::TypeApplication
-
-This is distinct from ordinary generic application.
-
-It provides a foundation for higher-order type-level abstractions where standardized.
-
-The grammar must not introduce a second type-level language.
-
-Type-level application must eventually converge on the same semantic type-resolution infrastructure.
+- trait/type-class resolution;
+- instance selection;
+- coherence;
+- specialization.
 
 ---
 
-38. Higher-kinded compatibility
+44. "associated types.g4"
 
-The frontend also contains:
+This overlapping filename must not create another associated-type authority.
 
-TypeExpr::Hkt
+It must be classified as:
 
-This existing representation must be treated as compatibility/source vocabulary, not as permission to create an unrelated higher-kinded type subsystem.
+CANONICAL
+COMPATIBILITY
+DEPRECATED
+HISTORICAL
 
-If higher-kinded types become fully normative, the repository must define:
+after dependency inspection.
 
-kind syntax
-kind checking
-constructor application
-higher-kinded parameters
-constraints
-substitution
-inference
-serialization
-diagnostics
-IR interaction
-
-before declaring the feature complete.
+The canonical rule owner must remain singular.
 
 ---
 
-39. Dependent types
+45. "type-class.g4"
 
-The frontend provides:
+Owns
 
-TypeExpr::Pi
-TypeExpr::Sigma
+Type-class/trait-like type syntax where standardized.
 
-These are source-level dependent type structures.
+It may express:
 
-They must not be confused with runtime allocation.
+T: Numeric
+T: Ordered
+T: Serializable
 
-The grammar may represent dependent type syntax.
+or the canonical Zamani equivalent.
 
-Semantic analysis owns:
+Does not own
 
-- dependent binding;
-- substitution;
-- normalization;
-- definitional equality;
-- type checking;
-- decidability policy;
-- diagnostics.
+- instance selection;
+- trait resolution;
+- coherence;
+- specialization;
+- method dispatch.
 
-No hardware capacity should be embedded in dependent types.
-
----
-
-40. Identity types
-
-The frontend provides:
-
-TypeExpr::Identity
-
-Identity/equality propositions remain semantic constructs.
-
-The grammar represents the source relationship.
-
-The type checker determines whether the proposition is valid under Zamani's type rules.
-
-The grammar must not attempt theorem proving.
+Those belong to semantic analysis.
 
 ---
 
-41. Algebraic types
+46. "bounds.g4"
 
-Existing grammar components include algebraic, sum and union-related files.
+Owns
 
-Their responsibilities must remain separated:
+Generic/type parameter bounds.
 
-declaration grammar
-    ↓
-declaration structure
+Examples:
 
-type-expression grammar
-    ↓
-type reference/application
+T: Numeric
+T: QuantumState
+T: Sendable
 
-semantic type system
-    ↓
-algebraic meaning
+The grammar records structure.
 
-Do not duplicate "struct", "enum", record or variant declaration syntax inside the type-expression grammar.
+Semantic analysis determines whether a bound is satisfied.
 
 ---
 
-42. Type constraints and bounds
+47. "constraints.g4"
 
-Existing components include:
+Owns
 
-grammar/types/constraints.g4
-grammar/types/type-constraints.g4
-
-These files must not become competing constraint authorities.
-
-The canonical constraint architecture must establish one owner for:
-
-- type bounds;
-- generic bounds;
-- type relationships;
-- equality constraints;
-- capability constraints where type-level;
-- refinement relationships.
-
-Constraints must integrate with:
-
-grammar/validation/
-grammar/resources/
-grammar/effects/
-grammar/policies/
-
-where appropriate.
-
----
-
-43. Type classes and interfaces
-
-The repository contains:
-
-grammar/types/type-class.g4
-
-This syntax must remain distinct from semantic type-class/trait resolution.
-
-The grammar recognizes source structure.
-
-Semantic analysis determines:
-
-- whether a type satisfies a type class;
-- implementation selection;
-- associated types;
-- associated constants;
-- method availability;
-- coherence rules;
-- ambiguity.
-
-The type grammar must not contain a closed list of all future type classes.
-
----
-
-44. Linear types
-
-The frontend supports:
-
-TypeExpr::Linear(...)
-
-Linear type syntax represents source-level resource/usage semantics.
+General type constraints where they are distinct from parameter bounds.
 
 It must integrate with:
 
-grammar/resources/
-grammar/memory/
-grammar/effects/
+type-constraints.g4
+bounds.g4
+dependent.g4
+type-class.g4
 
-Semantic analysis owns actual linearity checking.
-
-The grammar does not allocate or track physical resources.
-
----
-
-45. Affine types
-
-The frontend supports:
-
-TypeExpr::Affine(...)
-
-Affine semantics must remain separate from linear semantics while using the common type architecture.
-
-The grammar must not duplicate the ownership checker.
+without becoming another constraint universe.
 
 ---
 
-46. Temporal types
+48. "type-constraints.g4"
 
-The frontend supports:
+This should be the canonical owner for type-specific constraint composition if repository-wide inspection confirms that role.
 
-TypeExpr::Temporal(...)
-
-Temporal type syntax must remain source-level.
-
-It must not embed:
-
-- wall-clock assumptions;
-- processor frequency;
-- physical clock count;
-- device timing;
-- scheduler policy.
-
-Those belong to temporal semantics and execution.
-
----
-
-47. Quantum types
-
-The quantum type system must remain open and extensible.
-
-The frontend currently provides:
-
-TypeExpr::Quantum(...)
-
-This is a source-level quantum abstraction.
-
-It does not mean:
-
-- a physical qubit;
-- a particular QPU;
-- a vendor-specific qubit;
-- a fixed number of qubits;
-- a physical topology;
-- a calibrated device;
-- a pulse;
-- a routing assignment.
-
-The correct architecture is:
-
-quantum source type
-       │
-       ▼
-TypeExpr
-       │
-       ▼
-semantic quantum type
-       │
-       ▼
-quantum::ir
-       │
-       ▼
-optimization
-       │
-       ▼
-decomposition
-       │
-       ▼
-routing
-       │
-       ▼
-scheduling
-       │
-       ▼
-resilience / QEC
-       │
-       ▼
-ZQN
-       │
-       ▼
-HAL
-
-"quantum::ir" remains the canonical quantum IR boundary.
-
----
-
-48. Quantum cardinality
-
-No universal finite quantum cardinality may be encoded in the type grammar.
-
-Do not create language-level ceilings such as:
-
-Qubit32
-Qubit64
-Qubit128
-
-as substitutes for scalable type semantics.
-
-A symbolic form such as:
-
-QRegister<N>
-
-must remain source-level information when supported by the generic/type architecture.
-
-The grammar must not define:
-
-N <= 32
-
-or any other universal hardware limit.
-
----
-
-49. Logical and physical quantum abstractions
-
-If Zamani distinguishes:
-
-LogicalQubit
-PhysicalQubit
-
-they must remain semantically distinct.
-
-The type grammar must not attach physical identifiers such as:
-
-QPU0
-QPU1
-qubit0
-qubit1
-
-to the universal type system.
-
-Physical mapping belongs to later compilation and execution.
-
----
-
-50. Quantum learning and intelligent computation
-
-The type system must not create a separate type system for machine learning.
-
-Conceptual source types may include library or domain-defined forms such as:
-
-Model<Input, Output>
-Dataset<T>
-Distribution<T>
-Evidence<T>
-Knowledge<T>
-QuantumState<T>
-
-provided their declarations exist.
-
-The type grammar only represents the type structure.
-
-Learning, reasoning, uncertainty, knowledge and adaptation are semantic/operation-level concerns.
-
-They must reuse the common type system.
-
----
-
-51. Uncertainty
-
-Uncertainty may be expressed through normal generic or named types.
-
-Conceptual examples:
-
-Uncertain<T>
-Probability<T>
-Distribution<T>
-Confidence<T>
-Belief<T>
-
-These names must not become a closed primitive keyword inventory unless explicitly standardized.
-
-The type grammar should allow extensible domain types rather than enumerating every future probabilistic abstraction.
-
-Probabilistic semantics belong downstream.
-
----
-
-52. Evidence and provenance
-
-Evidence and provenance should use normal source types where appropriate.
-
-Examples:
-
-Evidence<T>
-Claim<T>
-Provenance<T>
-Decision<T>
-
-These are not inherently special type syntax.
-
-The type subsystem must remain usable by:
-
-- AI;
-- scientific computing;
-- compiler transformations;
-- security;
-- quantum compilation;
-- resource negotiation;
-- hardware placement;
-- data systems.
-
----
-
-53. Resource types
-
-The frontend supports source-level extensibility and existing resource-oriented type grammar components.
-
-A resource type can express an abstract resource relationship.
-
-Examples conceptually include:
-
-Resource<T>
-Resource<Qubit>
-Resource<Memory>
-Resource<Compute>
-
-The type grammar must not allocate resources.
-
-Resource feasibility belongs to:
+It must not duplicate:
 
 grammar/resources/
+grammar/policies/
+grammar/validation/
 
-and downstream semantic/resource systems.
+A type constraint is not automatically:
 
----
+- a hardware requirement;
+- a security policy;
+- a runtime assertion.
 
-54. Capability types
-
-Capability-oriented type abstractions may be represented through ordinary named or generic types.
-
-Examples:
-
-Capability<T>
-Capability<QuantumMeasurement>
-Capability<TensorCompute>
-
-The type grammar does not determine whether a target actually possesses a capability.
-
-That belongs to capability resolution.
+The semantic layer determines how those systems interact.
 
 ---
 
-55. Hardware types
+49. "variance.g4"
 
-Hardware-related source types must describe abstractions, not physical machines.
+Owns
 
-Conceptual examples:
-
-Accelerator<T>
-Compute<T>
-Memory<T>
-Interconnect<T>
-Signal<T>
-
-Names such as:
-
-CPU
-GPU
-FPGA
-ASIC
-QPU
-
-should only be reserved type vocabulary when the language specification genuinely requires them.
-
-The type grammar must not encode:
-
-GPU0
-GPU1
-QPU0
-CPU0
-node0
-
-as special universal type forms.
-
----
-
-56. HDL integration
-
-HDL types must use the same type foundation.
-
-The HDL subsystem may express abstractions involving:
-
-- signals;
-- values;
-- interfaces;
-- modules;
-- timing;
-- storage;
-- hardware intent;
-- resource relationships.
-
-The type grammar must not hard-code a universal hardware width.
-
-Forbidden universal type assumptions include:
-
-wire [31:0]
-register = 32-bit
-MAX_REGISTER_WIDTH
-
-unless such syntax is explicitly part of an HDL dialect and its width is explicitly supplied by the program.
-
-The distinction is:
-
-source-declared width
-    ≠
-universal language maximum
-
----
-
-57. Tensor types
-
-Tensor abstractions should be represented through normal type construction.
-
-Conceptual forms include:
-
-Tensor<T>
-Tensor<T, Shape>
-Tensor<T, N>
-
-where the corresponding constructors and semantic forms exist.
-
-The grammar must not impose:
-
-MAX_TENSOR_RANK
-MAX_TENSOR_DIMENSION
-
-or equivalent finite ceilings.
-
-Tensor rank and dimensions are source/semantic information.
-
-Backend layout belongs downstream.
-
----
-
-58. Data structures
-
-The common type system must support reusable data abstractions such as:
-
-Array
-Slice
-Map
-Tuple
-Record
-Option
-Result
-Graph
-Dataset
-Stream
-
-where standardized by the language/library architecture.
-
-Application-specific data models must remain library-defined rather than becoming universal keywords.
-
----
-
-59. Pattern matching
-
-Pattern matching is primarily owned by:
-
-grammar/expressions/
-grammar/statements/
-
-The type subsystem supplies type information to pattern checking.
-
-It does not create a second pattern language.
-
-Type semantics must support:
-
-- pattern compatibility;
-- exhaustiveness analysis;
-- binding types;
-- generic patterns;
-- algebraic data;
-- guards where supported.
-
----
-
-60. Contract integration
-
-Types interact with:
-
-requires
-ensures
-invariant
-assume
-guarantee
-property
-
-but the type grammar does not own those constructs.
-
-The relationship is:
-
-type syntax
-    ↓
-TypeExpr
-    ↓
-semantic type
-    ↓
-contract checking
-
-Type checking may be required to validate contract expressions.
-
-Contract syntax and semantics remain owned by the validation subsystem.
-
----
-
-61. Policy integration
-
-Types can occur in policy-governed constructs.
-
-Examples include policies controlling:
-
-- resource usage;
-- execution;
-- security;
-- adaptation;
-- deployment;
-- interoperability;
-- simulation.
-
-The type grammar does not authorize or deny anything.
-
-Policy evaluation remains downstream.
-
----
-
-62. Effect integration
-
-Type syntax itself must not fabricate runtime effects.
-
-For example:
-
-Network<Packet>
-
-does not perform network I/O.
-
-Likewise:
-
-Qubit
-
-does not perform measurement.
-
-Effects arise from executable operations and constructs.
-
-The effect system owns effect semantics.
-
----
-
-63. Capability integration
-
-Type information may participate in capability analysis.
-
-The direction is:
-
-source type
-    ↓
-TypeExpr
-    ↓
-semantic type
-    ↓
-capability requirements
-    ↓
-capability resolution
-
-The type grammar does not inspect the machine to decide whether a capability exists.
-
----
-
-64. Resource integration
-
-Type-level resource relationships may be consumed by the resource subsystem.
-
-The direction is:
-
-type
-    ↓
-semantic type
-    ↓
-resource requirements
-    ↓
-resource negotiation
-    ↓
-execution plan
-
-A type must never directly allocate a CPU, GPU, FPGA, QPU, node, memory region or device.
-
----
-
-65. POCO-REAF contract
-
-A Zamani type must retain its source meaning across target environments.
-
-For example, a source abstraction such as:
-
-Tensor<T, Shape>
-
-must remain the same source-level type when considered for:
-
-embedded CPU
-multicore CPU
-GPU
-FPGA
-ASIC
-accelerator
-HPC system
-cluster
-distributed system
-cloud
-QPU
-simulator
-future target
-
-The compiler may choose different representations.
-
-The type itself does not change merely because the target changes.
-
----
-
-66. No machine-size ceilings
-
-The type grammar must not contain universal limits for:
-
-qubits
-CPUs
-cores
-threads
-GPUs
-FPGAs
-QPUs
-nodes
-memory
-storage
-registers
-tensor rank
-tensor dimensions
-tuple arity
-generic arity
-function parameters
-devices
-agents
-network size
-
-The following names and equivalent hidden restrictions are prohibited:
-
-MAX_QUBITS
-MAX_CPUS
-MAX_GPUS
-MAX_FPGAS
-MAX_NODES
-MAX_MEMORY
-MAX_THREADS
-MAX_TENSOR_RANK
-MAX_REGISTER_WIDTH
-MAX_NETWORK_SIZE
-MAX_DEVICE_COUNT
-
-The prohibition applies equally to disguised grammar forms.
-
----
-
-67. Repetition instead of enumeration
-
-For arbitrary collections, use parser repetition.
-
-Preferred:
-
-items
-    : item (COMMA item)* COMMA?
-    ;
-
-Forbidden:
-
-items
-    : item
-    | item COMMA item
-    | item COMMA item COMMA item
-    ;
-
-The first form preserves scalability.
-
----
-
-68. What "infinite scalability" means
-
-POCO-REAF does not claim that physical machines have infinite resources.
-
-It means that the language does not establish an arbitrary finite machine-capacity ceiling.
-
-A program remains expressible subject to:
-
-- available resources;
-- compiler resources;
-- runtime resources;
-- operating-system constraints;
-- target capabilities;
-- provider limits;
-- explicit user policy;
-- security policy;
-- physical feasibility.
-
-These constraints are environmental or implementation-level.
-
-They must not silently become language semantics.
-
----
-
-69. Compiler validation limits
-
-The repository's frontend "TypeValidationPolicy" may provide configurable safety limits.
-
-These are legitimate because they are:
-
-- explicit;
-- configurable;
-- implementation-level;
-- diagnosable;
-- separate from source-language meaning.
-
-Examples include configurable limits on:
-
-identifier size
-collection size
-extension namespace size
-extension name size
-attribute value size
-
-These are not equivalent to:
-
-MAX_TYPE_DEPTH
-MAX_GENERIC_ARITY
-MAX_QUBITS
-
-as universal language rules.
-
-A compiler may reject pathological input because of an explicit validation policy while the language itself remains conceptually unbounded.
-
----
-
-70. Type validation policy
-
-The existing frontend contains:
-
-TypeValidationPolicy
-
-and related structural validation errors.
-
-The policy belongs to compiler safety and input validation.
-
-It must not be encoded into grammar productions.
-
-The default policy currently permits no additional collection/identifier limits unless configured.
-
-Any future policy must preserve the distinction:
-
-language semantics
-        ≠
-implementation safety policy
-
----
-
-71. Determinism
-
-Type parsing must be deterministic.
-
-Given identical:
-
-source
-language version
-lexical configuration
-grammar configuration
-
-the parser must produce the same structural type representation.
-
-Type grammar behavior must not depend on:
-
-- current time;
-- randomness;
-- network state;
-- filesystem state;
-- hardware availability;
-- target device;
-- runtime state.
-
-Deterministic ordering must be preserved.
-
-The frontend currently uses ordered collections such as "Vec" for source-order-sensitive structures.
-
----
-
-72. Source spans
-
-Every production that participates in user-visible diagnostics should preserve source locations through the parser/AST integration.
-
-Source spans are required for:
-
-- compiler diagnostics;
-- IDE/LSP navigation;
-- formatting;
-- refactoring;
-- error recovery;
-- provenance;
-- source mapping;
-- compatibility tooling.
-
-A type grammar feature is incomplete if it parses correctly but destroys the location information required to diagnose it.
-
----
-
-73. Diagnostics
-
-The type grammar must distinguish syntax errors from semantic errors.
-
-Syntax errors
-
-Examples:
-
-Vec<
-Map<T,, U>
-Result<T
-(T, U
-
-These belong to parsing.
-
-Semantic errors
-
-Examples:
-
-unknown type
-unknown generic parameter
-wrong generic arity
-unsatisfied type bound
-invalid associated type
-invalid dependent type
-invalid capability relationship
-invalid resource relationship
-
-These belong downstream.
-
-The parser must not attempt to resolve symbols merely to decide whether a syntactically valid type exists.
-
----
-
-74. Error recovery
-
-ANTLR parser integration must preserve useful error recovery without inventing semantic types for invalid source.
-
-Error recovery must not:
-
-- allocate physical resources;
-- query hardware;
-- resolve QPU topology;
-- invoke runtime code;
-- perform backend selection.
-
-Recovered parser structures must remain subject to structural validation before semantic use.
-
----
-
-75. Security
-
-The type grammar performs no:
-
-- file I/O;
-- network access;
-- code execution;
-- hardware access;
-- runtime allocation;
-- native calls.
-
-Rust implementation requirements:
-
-#![forbid(unsafe_code)]
-#![deny(unsafe_op_in_unsafe_fn)]
-
-remain required wherever Rust implementation code is added.
-
-No type-system implementation may require Rust "unsafe".
-
----
-
-76. Rust baseline
-
-All compiler/frontend code integrated with this grammar must support:
-
-Rust 1.97
-Rust 1.97.1
-Rust 2021
-stable Rust
-safe Rust
-
-No nightly-only language feature may become a production dependency.
-
-No:
-
-unsafe
-
-code is permitted.
-
----
-
-77. Serialization
-
-The frontend "TypeExpr" representation uses the repository's serialization architecture.
-
-Type syntax and serialized AST representation must remain version-aware.
-
-The existing:
-
-TYPE_EXPR_SCHEMA_VERSION
-
-must remain distinct from:
-
-language version
-compiler version
-grammar version
-IR version
-backend version
-
-Changing serialized type representation requires compatibility review.
-
----
-
-78. Compatibility
-
-Type grammar evolution must preserve source compatibility where possible.
-
-Changes must distinguish:
-
-addition
-clarification
-extension
-deprecation
-breaking change
-historical syntax
-experimental syntax
-
-A source construct must not silently change meaning merely because a new backend or domain has been introduced.
-
-Compatibility behavior belongs to:
-
-grammar/compatibility/
-
-and the language-version architecture.
-
----
-
-79. Extension architecture
-
-The current frontend provides:
-
-TypeExpr::Extension
-TypeExtension
-TypeValueExtension
-
-This is an important extensibility mechanism.
-
-Future domains should prefer namespaced extensions over adding endless universal type keywords.
+Variance annotations and variance-related syntax.
 
 Conceptually:
 
-extension namespace
-    +
-extension name
-    +
-arguments
-    +
-attributes
+covariant
+contravariant
+invariant
 
-This permits new computational domains without requiring the universal type grammar to enumerate every future abstraction.
+or the canonical Zamani notation.
 
-Extensions must still be:
+Does not own
 
-- specified;
-- validated;
-- versioned;
-- capability-aware where required;
-- semantically resolved;
-- tested;
-- compatibility-controlled.
-
-Extensibility does not mean unrestricted arbitrary semantics.
+Variance inference unless that is explicitly defined as semantic analysis.
 
 ---
 
-80. Domain neutrality
+50. "functional dependencies.g4"
 
-The type grammar must not become an AI grammar, quantum grammar, HDL grammar or hardware grammar.
+Owns
 
-Instead:
+Functional-dependency syntax if this feature is standardized.
 
-universal type foundation
-        │
-        ├── classical
-        ├── quantum
-        ├── hybrid
-        ├── HDL
-        ├── hardware
-        ├── AI
-        ├── data
-        ├── distributed
-        ├── networking
-        └── future domains
+It must remain integrated with the same type-class/constraint model.
 
-All domains consume the same source-level type foundation.
+It must not introduce an independent generic-resolution system.
 
 ---
 
-81. Reasoning and knowledge integration
+51. "existential-types.g4"
 
-Reasoning constructs such as:
+Owns
 
-infer
-deduce
-reason
+Existential type syntax.
 
-belong to the reasoning/semantic subsystem.
+Conceptually:
 
-Knowledge constructs such as:
+exists T. ...
 
-assert
-retract
-query
+or the language's standardized equivalent.
 
-belong to knowledge/data/reasoning subsystems.
+Does not own
 
-Their values, models, evidence and results use ordinary Zamani types.
-
-The type grammar must not create an AI-only type hierarchy.
+Runtime existential representation.
 
 ---
 
-82. Learning and adaptation integration
+52. "higher-kinded-types.g4"
 
-Learning and adaptation may consume types such as:
+Owns
 
-Model<T>
-Dataset<T>
-State<T>
-Policy<T>
-Evidence<T>
+Higher-kinded type syntax.
 
-where those are ordinary source-level types.
+The feature must be expressed as an extension of the same generic/type-parameter model.
 
-The type grammar does not own:
-
-learn
-adapt
-
-semantics.
-
-Those operations must integrate with:
-
-effects
-capabilities
-resources
-policies
-contracts
-provenance
-execution
-
-without changing the type authority.
+It must not create a separate type universe.
 
 ---
 
-83. Agents
+53. "type-families.g4"
 
-Agent types must reuse normal type syntax.
+Owns
 
-The architecture is:
+Type-family syntax where standardized.
 
-Agent<State>
-    ↓
-normal Zamani type
-    ↓
-agent semantics
-    ↓
-actor/concurrency model
+Type-family evaluation is semantic.
 
-The type subsystem must not create a second actor type system.
+It must be deterministic and must not depend on:
 
----
-
-84. Neural-symbolic computation
-
-Neural-symbolic systems should combine:
-
-learned model types
-+
-symbolic types
-+
-knowledge types
-+
-reasoning results
-
-through the common type architecture.
-
-No separate compiler type system should be created for neural-symbolic computation.
+- hardware;
+- time;
+- randomness;
+- network state;
+- filesystem state.
 
 ---
 
-85. Data and query integration
+54. "path-dependent-types.g4"
 
-Data/query systems may introduce domain-specific type constructors through normal named and generic types.
+Owns
 
-Examples:
+Path-dependent type syntax.
 
-Dataset<Row>
-Table<Row>
-Query<Result>
-Graph<Node, Edge>
+It must integrate with the existing:
 
-The type grammar does not contain SQL, JSON or XML grammar.
+named.g4
+associated.g4
+generic.g4
 
-Those belong to their respective dialect/interoperability systems.
+architecture.
 
-Their semantic results must lower into the common Zamani type architecture.
-
----
-
-86. FFI and ABI integration
-
-Foreign interfaces consume type information.
-
-The architecture is:
-
-Zamani type
-     ↓
-semantic type
-     ↓
-FFI compatibility analysis
-     ↓
-ABI representation
-     ↓
-foreign target
-
-The type grammar must not encode a specific ABI.
-
-ABI representation belongs to:
-
-grammar/interoperability/
-
-and compiler/backend systems.
+It must not create another name-resolution mechanism.
 
 ---
 
-87. Reflection and metaprogramming
+55. "type-providers.g4"
 
-Reflection and type-level metaprogramming may inspect or construct type syntax.
+Type providers are an advanced extension.
 
-They must operate through the canonical:
+They must not become a hidden source of nondeterministic compilation.
 
-TypeExpr
+If type information is obtained from external sources, the semantic/compiler architecture must explicitly define:
 
-representation.
-
-They must not introduce:
-
-ReflectionType
-MetaType
-QuantumMetaType
-HardwareMetaType
-
-as competing universal type representations.
-
-Reflection must respect:
-
-- capability policy;
-- security policy;
-- compilation phase;
-- determinism;
+- source identity;
+- version;
 - provenance;
+- reproducibility;
+- failure behavior;
+- security policy;
+- caching;
 - compatibility.
 
----
-
-88. Type-level metaprogramming
-
-Type-level computation must remain explicitly separated into:
-
-source syntax
-type-level representation
-evaluation/checking
-semantic type
-
-The grammar only recognizes source syntax.
-
-If compile-time evaluation is introduced, its resource policy must be explicit and separate from language semantics.
-
-Compile-time computation must not be allowed to create hidden hardware assumptions.
+The grammar itself does not access external data.
 
 ---
 
-89. Resource-aware types
+56. "advanced-type-level-computation.g4"
 
-Resource-aware type semantics may express relationships involving:
+Owns
 
-memory
-compute
-qubits
-accelerators
-communication
-storage
+Advanced compile-time type-level constructs.
 
-but type syntax must not determine actual availability.
+Does not own
 
-The correct direction is:
+A general-purpose runtime execution engine.
 
-source type
-    ↓
-semantic type
-    ↓
-resource requirement
-    ↓
-resource negotiation
-    ↓
-target realization
+Type-level computation must remain:
 
-This supports POCO-REAF.
+- deterministic;
+- inspectable;
+- resource-policy controlled;
+- provenance-preserving;
+- compatible with reproducible builds.
 
 ---
 
-90. Capability-aware types
+57. "temporal.g4"
 
-Capability information may participate in semantic type checking.
+Owns
 
-For example:
+Temporal type syntax.
 
-Capability<QuantumMeasurement>
-Capability<TensorCompute>
+It must remain separate from runtime temporal storage/execution.
 
-may represent source-level capability abstractions.
+Temporal semantics may integrate with:
 
-But the grammar must not query a machine to determine whether those capabilities exist.
+- distributed systems;
+- event systems;
+- historical data;
+- temporal memory;
+- deterministic execution.
 
-The compiler/runtime performs capability negotiation.
-
----
-
-91. Hardware independence
-
-No type production may depend on:
-
-CPU vendor
-GPU vendor
-FPGA vendor
-QPU vendor
-ASIC family
-instruction set
-physical device identifier
-physical topology
-register file size
-cache size
-memory bus width
-
-unless such information is explicitly represented by a target-specific dialect or interoperability boundary.
-
-Universal source syntax must remain portable.
+The type grammar only represents type structure.
 
 ---
 
-92. Target-specific dialects
+58. "effectful.g4"
 
-Target-specific types may exist through:
+Owns
 
-grammar/dialects/
+Effect-qualified type syntax.
 
-or the repository's established interoperability architecture.
+It must consume the canonical effect representation.
 
-A target-specific type must not silently become a universal Zamani type.
-
-The dialect must declare:
-
-- ownership;
-- version;
-- syntax;
-- semantic meaning;
-- target constraints;
-- capability requirements;
-- compatibility;
-- lowering;
-- diagnostics.
-
----
-
-93. Classical integration
-
-Classical types use the same type foundation.
-
-The classical subsystem must consume:
-
-TypeExpr
-
-rather than creating another type AST.
-
-Classical numerical, symbolic and data computation must remain compatible with:
-
-- generics;
-- functions;
-- arrays;
-- tensors;
-- contracts;
-- effects;
-- resources;
-- capabilities;
-- policies.
-
----
-
-94. Quantum integration
-
-Quantum types must use:
-
-TypeExpr
-
-at the source boundary and then enter the quantum semantic system.
-
-No quantum grammar may create a parallel universal type system.
-
-The canonical downstream boundary is:
-
-quantum::ir
-
----
-
-95. Hybrid integration
-
-Hybrid types may combine ordinary and quantum types:
-
-Model<State>
-Tensor<Value>
-QuantumState<T>
-Hybrid<State, Classical>
-
-where the corresponding declarations/constructors exist.
-
-The type grammar must not create a separate hybrid type universe.
-
----
-
-96. HDL and hardware/software co-design
-
-Hardware/software co-design must use common type syntax.
-
-A source abstraction such as:
-
-Signal<T>
-Buffer<T>
-Accelerator<T>
-
-must remain source-level.
-
-Synthesis, placement, timing closure, physical resource selection and device realization remain downstream.
-
----
-
-97. Distributed computation
-
-Distributed types may express source abstractions such as:
-
-Node<T>
-Message<T>
-Channel<T>
-Distributed<T>
-Replica<T>
-
-where defined by the language/library.
-
-The grammar must not encode a fixed number of nodes.
-
-Distributed placement belongs downstream.
-
----
-
-98. Networking
-
-Network-oriented types must use normal type construction.
-
-Examples:
-
-Packet<T>
-Stream<T>
-Endpoint<T>
-Message<T>
-
-Network access is an effect/capability concern.
-
-A network-related type does not itself perform network I/O.
-
----
-
-99. Cryptography
-
-Cryptographic abstractions should generally be represented as named/generic types and operations.
-
-Examples conceptually:
-
-Key<T>
-Ciphertext<T>
-Signature<T>
-Hash<T>
-
-The type grammar must not enumerate every cryptographic algorithm.
-
-Algorithms belong in libraries, dialects and semantic capabilities.
-
----
-
-100. Simulation
-
-Simulation types may be represented through normal source types.
-
-Simulation itself is an execution strategy.
-
-The type grammar must not create a second simulation language.
-
-The architecture remains:
-
-type
-    ↓
-semantic program
-    ↓
-simulation execution strategy
-
----
-
-101. Adaptive execution
-
-Adaptive execution may consume types representing:
-
-State<T>
-Policy<T>
-Capability<T>
-Resource<T>
-Decision<T>
-
-The type grammar only represents their source structure.
-
-Adaptive execution semantics belong to:
-
-grammar/execution/
-grammar/resources/
-grammar/policies/
-
-and downstream compiler/runtime systems.
-
----
-
-102. Reproducibility
-
-Types must have deterministic structural representation.
-
-Where type serialization or compiler artifacts are persisted, the representation must include sufficient version information to distinguish incompatible schema versions.
-
-Type syntax must not depend on runtime randomness.
-
----
-
-103. Provenance
-
-The type subsystem must preserve enough source structure and spans for downstream provenance.
-
-Provenance may record:
-
-source type
-source location
-type resolution
-generic substitution
-specialization
-transformation
-derived representation
-verification
-
-The grammar itself does not create provenance records.
-
----
-
-104. Diagnostics and explainability
-
-Type-related compiler diagnostics should be capable of explaining:
-
-- which source type failed;
-- where it occurred;
-- which type was expected;
-- which type was found;
-- which constraint failed;
-- which generic argument caused the failure;
-- which capability/resource requirement was unsatisfied;
-- which semantic rule was violated.
-
-The type grammar supplies structure and source locations.
-
-Semantic analysis supplies the meaning of the diagnostic.
-
----
-
-105. No application-specific keyword explosion
-
-The universal type grammar must not add special types solely because an application domain has become popular.
-
-Do not add universal type keywords for concepts such as:
-
-sentiment
-vision
-robotics
-blockchain
-VR
-AR
-payments
-administration
-legal actions
-
-Those concepts belong to:
-
-libraries
-dialects
-services
-domain models
-policies
-applications
-
-unless a concept genuinely requires universal language semantics.
-
----
-
-106. No domain keyword explosion
-
-Likewise, the type grammar must not enumerate every:
-
-- quantum gate;
-- machine-learning algorithm;
-- tensor operator;
-- CPU architecture;
-- GPU model;
-- FPGA family;
-- ASIC;
-- network protocol;
-- cryptographic algorithm;
-- scientific model.
-
-Use:
-
-named types
-generic types
-extensions
-dialects
-registered capabilities
-semantic operations
-libraries
-
-where appropriate.
-
----
-
-107. Type extension principle
-
-A new domain should ideally be able to introduce a new type abstraction without modifying the universal type grammar.
-
-Preferred:
-
-DomainType<T>
-Domain::Type<T>
-extension(domain, type, ...)
-
-rather than adding:
-
-DOMAIN_TYPE_1
-DOMAIN_TYPE_2
-DOMAIN_TYPE_3
-...
-
-to the universal grammar.
-
-The extension must still have a defined semantic contract.
-
----
-
-108. Integration with declarations
-
-Declarations own declaration syntax.
-
-For example:
-
-type Foo = ...
-struct Foo ...
-enum Foo ...
-
-The declaration subsystem invokes the canonical:
-
-typeExpression
-
-for type positions.
-
-The type grammar must not duplicate declaration grammar.
-
----
-
-109. Integration with functions
-
-Function parameters and return types consume the canonical type grammar.
-
-Relevant repository consumers include:
-
-grammar/functions/
-grammar/declarations/
-
-and frontend AST nodes.
-
-The integration is:
-
-function declaration
-    ↓
-parameter type
-    ↓
-typeExpression
-    ↓
-TypeExpr
-
-Function semantics remain outside the type grammar.
-
----
-
-110. Integration with modules
-
-Modules provide namespaces.
-
-The type grammar consumes qualified names.
-
-Module resolution determines whether:
-
-module::Type
-
-exists.
-
-The type grammar does not resolve modules.
-
----
-
-111. Integration with expressions
-
-Expressions may contain:
-
-- type ascriptions;
-- casts;
-- generic applications;
-- constructors;
-- type tests;
-- type-level forms.
-
-The expression subsystem consumes the canonical type grammar rather than redefining it.
-
----
-
-112. Integration with patterns
-
-Pattern matching depends on type information.
-
-The architecture is:
-
-pattern syntax
-    ↓
-expression/statement grammar
-    ↓
-TypeExpr
-    ↓
-semantic pattern checking
-
-No second type grammar should exist inside pattern grammar.
-
----
-
-113. Integration with macros
-
-Macros may consume or produce type syntax.
-
-They must use the canonical type grammar/AST.
-
-Macro expansion must preserve:
-
-- source spans;
-- type structure;
-- hygiene;
-- diagnostics;
-- provenance.
-
-Macros must not create a second semantic type representation.
-
----
-
-114. Integration with compile-time computation
-
-Compile-time computation may construct types or type-level values.
-
-It must use the canonical source-level representations.
-
-The compiler must distinguish:
-
-source type syntax
-compile-time evaluation
-semantic type
-
-Compile-time evaluation must not silently query hardware and rewrite source meaning.
-
----
-
-115. Integration with resources
-
-"grammar/resources/" owns:
-
-requirements
-capabilities
-constraints
-budgets
-preferences
-hints
-negotiation
-scalability
-
-The type subsystem supplies type information.
-
-The resource subsystem determines feasibility.
-
-Example intended architecture:
-
-TypeExpr
-   ↓
-semantic type
-   ↓
-resource requirement
-   ↓
-requires capability(...)
-   ↓
-capability negotiation
-   ↓
-execution plan
-
----
-
-116. Integration with effects
-
-"grammar/effects/" owns effects.
-
-Types may be used by effect declarations but must not redefine effects.
-
-Examples of semantic effects may include:
+It must not redefine:
 
 io
 network
@@ -2941,27 +1620,421 @@ native
 foreign
 distributed
 measurement
+quantum
 learning
 adaptation
 reflection
-code generation
+code_generation
 simulation
 
-The exact stable effect vocabulary belongs to the effect specification.
+Those effect categories belong to the effect subsystem.
 
 ---
 
-117. Integration with validation
+59. "resource.g4"
 
-"grammar/validation/" owns contracts and validation syntax.
+Owns
 
-The type system supplies:
+Source-level resource type abstractions.
 
+Examples conceptually:
+
+Resource<T>
+
+Does not own
+
+Actual resource discovery.
+
+Resource requirements remain in:
+
+grammar/resources/
+
+and semantic/resource analysis.
+
+---
+
+60. "capability.g4"
+
+Owns
+
+Source-level capability type abstractions.
+
+Examples:
+
+Capability<"quantum.measurement">
+Capability<"gpu.compute">
+Capability<"tensor.compute">
+
+Does not own
+
+Whether the target actually provides that capability.
+
+The architecture is:
+
+Capability<T>
+      ↓
+semantic capability identity
+      ↓
+capability negotiation
+      ↓
+target discovery
+
+---
+
+61. Resource and Capability Separation
+
+Types may describe:
+
+Resource<T>
+Capability<T>
+
+but requirements such as:
+
+requires capability("quantum.measurement");
+requires capability("gpu.compute");
+requires capability("tensor.compute");
+requires qubits >= N;
+requires memory >= RequiredMemory;
+requires topology(...);
+
+belong to the resource/capability requirement system.
+
+The type system may reference the resulting semantic concepts.
+
+It must not perform negotiation.
+
+---
+
+62. "classical.g4"
+
+Owns
+
+Classical-domain type constructors that are genuinely part of the language type model.
+
+Possible semantic families include:
+
+scalar
+numeric
+complex
+rational
+vector
+matrix
+tensor
+
+where specified.
+
+Critical rule
+
+Classical types must use the same universal type system.
+
+They must not create:
+
+ClassicalTypeExpr
+
+as a competing AST hierarchy.
+
+---
+
+63. Tensor Scalability
+
+Tensor types must not impose:
+
+MAX_TENSOR_RANK
+
+or a fixed universal dimension count.
+
+Symbolic representations must remain symbolic.
+
+Examples:
+
+Tensor<T, Shape>
+Tensor<T, N>
+Tensor<T, Rows, Columns>
+
+must not require the grammar to know how large the eventual tensor is.
+
+---
+
+64. "quantum.g4"
+
+Owns
+
+Source-level quantum type constructors.
+
+Examples may include:
+
+Qubit
+LogicalQubit
+QuantumState<T>
+QRegister<N>
+QuantumChannel<T>
+
+where standardized.
+
+Does not own
+
+- physical qubit allocation;
+- QPU selection;
+- coupling maps;
+- calibration;
+- routing;
+- pulse scheduling;
+- QEC implementation;
+- ZQN generation.
+
+---
+
+65. Quantum Type Boundary
+
+The canonical path is:
+
+quantum.g4
+     ↓
 TypeExpr
+     ↓
+quantum semantic type
+     ↓
+quantum::ir
+     ↓
+optimization
+     ↓
+routing
+     ↓
+scheduling
+     ↓
+QEC/resilience
+     ↓
+ZQN
+     ↓
+HAL
 
-for type-related conditions.
+There must be one canonical quantum IR.
 
-The validation system may use type information to verify:
+No type grammar may create a competing quantum IR.
+
+---
+
+66. Quantum Type Scalability
+
+The type grammar must never introduce:
+
+MAX_QUBITS
+MAX_LOGICAL_QUBITS
+MAX_PHYSICAL_QUBITS
+MAX_QREG_SIZE
+
+A symbolic:
+
+QRegister<N>
+
+remains symbolic until semantic/resource analysis.
+
+Physical feasibility is determined downstream.
+
+---
+
+67. "hardware.g4"
+
+Owns
+
+Source-level hardware abstractions.
+
+Examples conceptually:
+
+Hardware<T>
+Accelerator<T>
+Signal<T>
+Memory<T>
+Interconnect<T>
+Device<T>
+
+Does not own
+
+- physical device discovery;
+- vendor IDs;
+- fixed bus widths;
+- fixed register counts;
+- physical topology;
+- timing calibration;
+- power management;
+- placement.
+
+---
+
+68. Hardware Type Principle
+
+A hardware type describes intent or semantic capability, not a physical machine.
+
+Therefore:
+
+Hardware<Compute>
+
+does not mean:
+
+specific CPU
+
+and:
+
+Accelerator<T>
+
+does not mean:
+
+specific accelerator model
+
+unless an explicit target constraint is supplied elsewhere.
+
+---
+
+69. Type Extensions
+
+New domains must not require continual growth of the universal type keyword inventory.
+
+The preferred mechanisms are:
+
+named types
+qualified types
+generic applications
+associated types
+type classes
+value parameters
+dialects
+registered extensions
+capabilities
+
+Therefore future types such as:
+
+Tensor<T>
+Model<T>
+Dataset<T>
+Distribution<T>
+Evidence<T>
+QuantumState<T>
+Signal<T>
+Accelerator<T>
+DistributedState<T>
+
+remain expressible without adding one grammar branch per application.
+
+---
+
+70. Application-Specific Types
+
+Application concepts such as:
+
+vision
+robotics
+sentiment
+blockchain
+payments
+VR
+AR
+legal
+administration
+
+must not become universal primitive types merely because applications use them.
+
+They should normally be represented through:
+
+libraries
+named types
+generic types
+dialects
+capabilities
+policies
+domain modules
+
+The core type system remains universal.
+
+---
+
+71. AI and Knowledge-Oriented Types
+
+The type system must be capable of representing semantic types needed by reasoning and learning systems without embedding an application-specific type inventory.
+
+Examples:
+
+Model<T>
+Dataset<T>
+Distribution<T>
+Probability<T>
+Confidence<T>
+Evidence<T>
+Decision<T>
+Knowledge<T>
+Agent<T>
+
+These are library/domain types unless explicitly standardized by Zamani.
+
+The universal grammar does not need a keyword for every concept.
+
+---
+
+72. Uncertainty Types
+
+Uncertainty may be represented through types such as:
+
+Probability<T>
+Distribution<T>
+Confidence<T>
+Uncertain<T>
+
+when supplied by the language/library semantic model.
+
+The type grammar does not hard-code a particular probability implementation.
+
+---
+
+73. Provenance Types
+
+Provenance-related types may represent:
+
+Evidence<T>
+Derived<T>
+Observed<T>
+Verified<T>
+Decision<T>
+
+where standardized.
+
+Actual provenance records remain owned by the provenance subsystem.
+
+---
+
+74. Pattern Types
+
+"pattern.g4" must integrate with the same type model used by:
+
+expressions
+statements
+match
+guards
+
+Pattern typing belongs to semantic analysis.
+
+The type grammar must not create a separate pattern type universe.
+
+---
+
+75. Type Extensions and Metadata
+
+Future domain extensions should preferably be expressible through explicit extension mechanisms rather than universal keyword expansion.
+
+The extension boundary must define:
+
+extension identity
+arguments
+version
+provenance
+compatibility
+semantic owner
+
+The extension mechanism must remain deterministic.
+
+---
+
+76. Type-System Interaction with Contracts
+
+Types participate in:
 
 requires
 ensures
@@ -2970,296 +2043,601 @@ assume
 guarantee
 property
 
+but do not own contract semantics.
+
+Architecture:
+
+TypeExpr
+   ↓
+semantic type
+   ↓
+contract validation
+
+A contract may constrain a type.
+
+A type does not become a contract merely because it has constraints.
+
 ---
 
-118. Integration with policies
-
-Policy syntax belongs outside the type grammar.
+77. Type-System Interaction with Policies
 
 Policies may constrain:
 
-- types;
-- resources;
-- capabilities;
-- effects;
-- execution;
-- adaptation;
-- deployment;
-- security.
+- permitted types;
+- permitted effects;
+- permitted capabilities;
+- permitted resources;
+- permitted adaptations;
+- permitted foreign interfaces.
 
-The type grammar must remain policy-neutral.
+The policy subsystem owns policy semantics.
+
+"types/" only supplies the type structure being evaluated.
 
 ---
 
-119. Integration with security
+78. Type-System Interaction with Effects
 
-Security policy may restrict types or type-related operations.
+A type can carry effect information where the language defines effectful types.
 
-For example, a security subsystem may forbid certain foreign or native representations.
+The effect system remains authoritative.
 
-That does not change the source type grammar.
+No type grammar may redefine the effect vocabulary.
+
+---
+
+79. Type-System Interaction with Capabilities
+
+A type may require or expose semantic capability information.
+
+For example:
+
+QuantumState<T>
+
+may ultimately require quantum capabilities.
+
+The grammar only expresses the type.
+
+Semantic analysis determines the implications.
+
+---
+
+80. Type-System Interaction with Resources
+
+A type may imply resource requirements.
+
+For example, a type involving:
+
+QRegister<N>
+
+may lead to a semantic resource requirement involving "N".
+
+The grammar does not allocate the resource.
+
+---
+
+81. Type-System Interaction with Provenance
+
+The parser must preserve source locations.
+
+The type grammar must not generate:
+
+- timestamps;
+- machine IDs;
+- hashes;
+- random IDs;
+- environment data.
+
+Provenance is attached downstream.
+
+---
+
+82. Type-System Interaction with Determinism
+
+Parsing must depend only on:
+
+source text
+grammar version
+lexer version
+explicit dialect configuration
+
+It must not depend on:
+
+CPU availability
+GPU availability
+QPU availability
+memory availability
+filesystem state
+network state
+wall-clock time
+randomness
+environment variables
+scheduler state
+
+---
+
+83. POCO-REAF Type Invariant
+
+For a given Zamani source program:
+
+source type meaning
+
+must remain stable across target realizations.
+
+A backend may change:
+
+representation
+layout
+specialization
+placement
+routing
+scheduling
+execution strategy
+
+but must not silently change:
+
+type meaning
+type safety
+declared constraints
+declared effects
+declared capabilities
+declared resource requirements
+
+If a target cannot satisfy the requirements, the compiler/runtime must report or negotiate that condition.
+
+It must not silently weaken the type.
+
+---
+
+84. No Hard-Coded Physical Limits
+
+The entire directory is prohibited from defining universal constants such as:
+
+MAX_QUBITS
+MAX_CPUS
+MAX_GPUS
+MAX_FPGAS
+MAX_NODES
+MAX_MEMORY
+MAX_THREADS
+MAX_REGISTER_WIDTH
+MAX_TENSOR_RANK
+MAX_NETWORK_SIZE
+MAX_DEVICE_COUNT
+
+Also prohibited as language-level assumptions:
+
+64 GB RAM
+24 GB VRAM
+32-bit registers
+8 threads
+16 lanes
+1024 qubits
+
+unless such values are literal program data or an explicitly selected target constraint.
+
+---
+
+85. Symbolic Scaling
+
+The preferred representation is:
+
+N
+M
+Rows
+Columns
+Shape
+Batch
+RequiredMemory
+RequiredWidth
+Qubits
+Devices
+Nodes
+
+rather than hard-coded physical capacities.
+
+The compiler may specialize these values for a particular realization.
+
+The source type system must remain general.
+
+---
+
+86. "Infinity" and Resource Availability
+
+POCO-REAF does not mean that every finite physical machine can execute every program.
+
+It means:
+
+«the language does not make an arbitrary finite target capacity part of the source type system.»
+
+Therefore the correct model is:
+
+program requirement
+       ↓
+target capability
+       ↓
+resource availability
+       ↓
+negotiation
+       ↓
+specialization
+       ↓
+realization
+
+not:
+
+program
+       ↓
+hard-coded machine size
+
+---
+
+87. Compiler Resource Limits
+
+A compiler may require protection against pathological input.
+
+Examples include implementation-level controls for:
+
+- memory exhaustion;
+- excessive recursion;
+- compilation time;
+- parser work;
+- type solver work.
+
+These are compiler resource policies, not language semantics.
+
+They must be:
+
+- explicit;
+- configurable where appropriate;
+- documented;
+- diagnosable;
+- deterministic;
+- separate from type meaning.
+
+They must never be encoded as universal language capacities.
+
+---
+
+88. Rust Requirements
+
+All Rust implementation associated with this subsystem must target:
+
+Rust 1.97+
+Rust 2021
+
+and use safe Rust only.
+
+The type grammar itself contains no Rust implementation code.
+
+The frontend, parser integration, semantic type system, tests, and compiler components must not require unsafe Rust.
+
+---
+
+89. AST Boundary
+
+Every canonical type construct must map into the repository's existing domain-neutral type AST.
 
 The architecture is:
 
-type
- ↓
-semantic type
- ↓
-security policy analysis
-
----
-
-120. Integration with interoperability
-
-Interoperability systems consume semantic type information for:
-
-FFI
-ABI
-foreign functions
-foreign types
-data exchange
-serialization
-external formats
-
-The type grammar remains target-neutral.
-
----
-
-121. Integration with canonical IR
-
-Type syntax must eventually become semantic type information consumed by the canonical IR architecture.
-
-The type grammar must not directly emit:
-
-LLVM
-QIR
-MLIR
-vendor IR
-physical quantum IR
-hardware-specific IR
-
-The direction is:
-
-source type
+grammar
     ↓
 TypeExpr
+
+not:
+
+grammar
     ↓
+QuantumTypeExpr
+HardwareTypeExpr
+AITypeExpr
+TensorTypeIR
+
+Domain-specific semantic information is resolved after the common AST boundary.
+
+---
+
+90. AST Compatibility Rule
+
+Before declaring a new type grammar feature complete, verify:
+
+grammar rule
+    ↓
+parser
+    ↓
+AST constructor
+    ↓
+AST serialization/equality/debugging
+    ↓
+semantic resolver
+    ↓
+tests
+
+A grammar feature without an AST representation is not production-ready.
+
+An AST variant without grammar support is not production-ready.
+
+A grammar and AST feature without semantic handling is not production-ready.
+
+---
+
+91. Semantic Type Boundary
+
+After AST construction:
+
+TypeExpr
+   ↓
+name resolution
+   ↓
+generic resolution
+   ↓
+inference
+   ↓
+unification
+   ↓
+bounds
+   ↓
+constraints
+   ↓
+ownership
+   ↓
+lifetimes
+   ↓
+effects
+   ↓
+capabilities
+   ↓
+resources
+   ↓
+contracts
+   ↓
+policies
+   ↓
+provenance
+   ↓
+canonical semantic type
+
+The semantic type model must be the authoritative resolved representation.
+
+---
+
+92. Canonical IR Boundary
+
+Types do not directly emit machine-specific IR.
+
+The architecture is:
+
+TypeExpr
+   ↓
 semantic type
-    ↓
+   ↓
 canonical semantic model
-    ↓
-IR
+   ↓
+Classical IR / quantum::ir / other canonical semantic representations
 
-For quantum semantics:
+Quantum semantics must use the existing canonical:
 
-source quantum type
-    ↓
-TypeExpr
-    ↓
-semantic quantum type
-    ↓
 quantum::ir
 
----
+boundary.
 
-122. Integration with ZUIR
-
-The repository's canonical universal IR architecture must remain downstream from the source AST/semantic model.
-
-"TypeExpr" is not ZUIR.
-
-Type syntax must not embed:
-
-- register allocation;
-- physical topology;
-- QEC routing;
-- calibration;
-- machine instruction selection.
+No type grammar may create a second quantum IR.
 
 ---
 
-123. Integration with QEC and resilience
+93. Classical Integration
 
-Type syntax may carry semantic information consumed by quantum resilience analysis.
+Classical types may eventually influence:
 
-It must not implement:
+Classical IR
 
-- syndrome generation;
-- decoder selection;
-- physical-qubit allocation;
-- QEC scheduling;
-- stabilizer execution;
-- calibration.
+through semantic lowering.
 
-Those belong downstream of "quantum::ir".
+Examples:
 
----
+numeric types
+vector types
+matrix types
+tensor types
+record types
+function types
 
-124. Integration with ZQN
-
-ZQN is downstream from source-level type syntax.
-
-The type subsystem may supply semantic information consumed by resilience analysis.
-
-It must not encode noise models as universal type grammar rules.
+The type grammar itself remains representation-independent.
 
 ---
 
-125. Integration with HAL
+94. Quantum Integration
 
-HAL is a target-realization boundary.
+Quantum types may influence:
 
-The type grammar must never directly select HAL implementations.
+quantum::ir
 
-The direction remains:
+after semantic validation.
 
-TypeExpr
-   ↓
-semantic type
-   ↓
-IR
-   ↓
+The type grammar does not:
+
+- route qubits;
+- select gates;
+- choose QPU topology;
+- perform QEC;
+- choose pulse implementations.
+
+---
+
+95. HDL Integration
+
+HDL-oriented types integrate through:
+
+type grammar
+    ↓
+HDL semantic analysis
+    ↓
+HDL representation
+    ↓
+synthesis/lowering
+
+The type grammar must not hard-code:
+
+bus width
+register count
+pipeline depth
+clock count
+device count
+
+as universal limits.
+
+---
+
+96. Hardware Integration
+
+Hardware types represent source-level hardware abstractions.
+
+Hardware realization occurs later through:
+
+hardware semantic analysis
+    ↓
+resource/capability analysis
+    ↓
+placement
+    ↓
 lowering
-   ↓
-target plan
-   ↓
-HAL
+    ↓
+backend/HAL
 
 ---
 
-126. Source compatibility
+97. Distributed Integration
 
-A type syntax change must be evaluated against:
+Distributed types may express abstractions such as:
 
-lexer
-parser
-AST
-semantic resolver
-type checker
-generic checker
-declaration parser
-function parser
-expression parser
-macro system
-serialization
-IR generation
-IR verification
-LSP
-formatter
+Node<T>
+Channel<T>
+Service<T>
+Message<T>
+DistributedState<T>
+
+but the type system must not define:
+
+MAX_NODES
+MAX_CHANNELS
+MAX_DEVICES
+
+Topology and capacity are downstream concerns.
+
+---
+
+98. Networking Integration
+
+Network-related types may express:
+
+Endpoint<T>
+Stream<T>
+Message<T>
+Protocol<T>
+
+but network availability and topology are external semantic/resource concerns.
+
+---
+
+99. Interoperability Integration
+
+FFI/ABI types must remain connected to:
+
+grammar/interoperability/
+
+The type system may describe:
+
+foreign type
+extern type
+ABI-compatible type
+
+where standardized.
+
+It does not select a calling convention unless the language specification explicitly makes it source semantics.
+
+---
+
+100. Metaprogramming Integration
+
+Type reflection and compile-time type computation must integrate with:
+
+grammar/metaprogramming/
+
+rather than creating a second reflection language inside "types/".
+
+The type grammar represents type-level syntax.
+
+Compile-time execution remains downstream and controlled.
+
+---
+
+101. Dialect Integration
+
+A dialect may introduce new types without modifying the universal type grammar when those types can be expressed through:
+
+named types
+qualified types
+generic types
+extensions
+capabilities
+
+A dialect requiring new core syntax must provide:
+
+dialect identity
+version
+lexer contract
+parser contract
+AST contract
+semantic contract
+compatibility contract
 tests
 
-A change is not complete when only ANTLR accepts it.
+---
+
+102. Canonical Lexer Contract
+
+All tokens consumed by "grammar/types/" originate from the canonical lexical system.
+
+No type grammar may define:
+
+IDENTIFIER
+INTEGER_LITERAL
+STRING_LITERAL
+LESS_THAN
+GREATER_THAN
+COMMA
+
+or equivalent tokens locally.
+
+The lexical authority remains:
+
+grammar/antlr/ZamaniLexer.g4
+grammar/lexer/
 
 ---
 
-127. Conformance status
+103. Token Naming Rule
 
-Every type feature must have an explicit implementation status.
+Type grammars must use canonical token names.
 
-Use the repository's conformance vocabulary:
+Do not introduce duplicate lexical concepts such as:
 
-SPECIFIED
-LEXER_IMPLEMENTED
-PARSER_IMPLEMENTED
-AST_IMPLEMENTED
-SEMANTIC_IMPLEMENTED
-IR_IMPLEMENTED
-BACKEND_IMPLEMENTED
-TESTED
-STABLE
-EXPERIMENTAL
-PARTIALLY_IMPLEMENTED
-PLANNED
-DEPRECATED
+Question
+QuestionMark
+BitAnd
+Ampersand
 
-Do not infer "STABLE" from parser acceptance.
+unless they represent genuinely different lexical/semantic constructs.
 
 ---
 
-128. Production feature definition
+104. Dependency Manifest
 
-A type feature is production-ready only when all required stages are complete:
-
-specification
-     ↓
-lexical support
-     ↓
-grammar support
-     ↓
-AST representation
-     ↓
-structural validation
-     ↓
-semantic checking
-     ↓
-diagnostics
-     ↓
-serialization compatibility
-     ↓
-canonical IR integration
-     ↓
-cross-domain integration
-     ↓
-tests
-     ↓
-compatibility review
-
-Not every type construct requires a backend-specific implementation.
-
-However, every stable construct requires a defined semantic destination.
-
----
-
-129. Required file contract
-
-Every type grammar file must document:
-
-PURPOSE
-OWNS
-DOES NOT OWN
-INPUTS
-OUTPUTS
-LEXER DEPENDENCIES
-GRAMMAR DEPENDENCIES
-PUBLIC RULES
-PRIVATE RULES
-AST CONTRACT
-SEMANTIC CONTRACT
-TYPE CONTRACT
-EFFECT CONTRACT
-CAPABILITY CONTRACT
-RESOURCE CONTRACT
-CONTRACT/VALIDATION CONTRACT
-POLICY CONTRACT
-PROVENANCE CONTRACT
-IR CONTRACT
-QUANTUM BOUNDARY
-HDL BOUNDARY
-INTEROPERABILITY BOUNDARY
-DIAGNOSTICS
-COMPATIBILITY
-SCALABILITY
-DETERMINISM
-SECURITY
-POSITIVE TESTS
-NEGATIVE TESTS
-BOUNDARY TESTS
-CROSS-DOMAIN TESTS
-SCALABILITY TESTS
-COMPLETION CRITERIA
-
-This is mandatory for production grammar components.
-
----
-
-130. Dependency declaration
-
-Each production type grammar component must explicitly identify:
+Every type file must conceptually declare:
 
 DEPENDS_ON:
 EXPORTS:
 CONSUMED_BY:
-LEXER_OWNER:
 AST_OWNER:
 SEMANTIC_OWNER:
 IR_OWNER:
@@ -3269,1447 +2647,689 @@ COMPATIBILITY_OWNER:
 
 Example:
 
+grammar/types/quantum.g4
+
 DEPENDS_ON:
-    canonical Zamani lexer
-    canonical typeExpression
+    canonical lexer
+    generic type syntax
+    named type syntax
+    type-value syntax
 
 EXPORTS:
-    arrayType
+    quantumType
 
 CONSUMED_BY:
-    grammar/types/types.g4
-    declarations
-    functions
-    expressions
+    types.g4
 
 AST_OWNER:
-    src/frontend/ast/node/types/type_expr.rs
+    frontend TypeExpr
 
 SEMANTIC_OWNER:
-    semantic type subsystem
+    quantum semantic type system
 
 IR_OWNER:
-    canonical semantic IR
+    quantum::ir
 
 SPEC_OWNER:
-    grammar/specification/types.md
+    grammar/specification/quantum.md
 
 TEST_OWNER:
-    grammar/tests/
+    grammar/tests/types/quantum/
 
-The purpose is to make file completion independently verifiable.
-
----
-
-131. Independent-file-first implementation rule
-
-Type grammar development must proceed from foundational files outward.
-
-Recommended order:
-
-1. README.md
-2. canonical type specification
-3. lexical/token dependencies
-4. canonical types.g4
-5. primitive.g4
-6. named.g4
-7. generic.g4
-8. tuple.g4
-9. array.g4
-10. slice.g4
-11. function type integration
-12. reference.g4
-13. pointer.g4
-14. option/optional convergence
-15. result.g4
-16. algebraic/sum/union
-17. associated.g4
-18. constraints/type-constraints convergence
-19. type-class.g4
-20. dependent.g4
-21. linear.g4
-22. affine.g4
-23. temporal.g4
-24. resource.g4
-25. quantum integration
-26. classical integration
-27. hardware integration
-28. extension architecture
-29. cross-domain conformance
-
-A component must define its downstream integration contract before being marked complete.
+COMPATIBILITY_OWNER:
+    grammar/compatibility/
 
 ---
 
-132. Existing-file integration before new-file creation
+105. Integration Contract for Every File
 
-Do not create a new file merely because a conceptual feature is missing.
+Every file must answer these questions before completion:
 
-First inspect:
+Purpose
 
-grammar/types/
-grammar/core/
-grammar/declarations/
-grammar/functions/
-grammar/expressions/
-grammar/resources/
-grammar/effects/
-grammar/validation/
-grammar/metaprogramming/
-grammar/interoperability/
-grammar/quantum/
-grammar/hardware/
-grammar/hdl/
+What does this file exist to express?
 
-Then inspect the corresponding frontend AST and semantic implementation.
+Owns
 
-Only create a new grammar file if the responsibility is genuinely independent.
+Which exact grammar rules belong here?
+
+Does Not Own
+
+Which rules explicitly belong elsewhere?
+
+Dependencies
+
+Which grammar/token files must exist?
+
+Exports
+
+Which rules are consumed by other files?
+
+AST
+
+Which AST representation is required?
+
+Semantic
+
+What does the construct mean?
+
+Type interactions
+
+How does it compose with other types?
+
+Effects
+
+Can the construct carry or imply effects?
+
+Capabilities
+
+Can semantic analysis derive capability requirements?
+
+Resources
+
+Can semantic analysis derive resource requirements?
+
+Contracts
+
+Can contracts constrain it?
+
+Policies
+
+Can policies constrain it?
+
+Provenance
+
+What source information must remain traceable?
+
+IR
+
+Where does the semantic meaning eventually go?
+
+Diagnostics
+
+What errors are required?
+
+Tests
+
+What positive, negative, boundary and scalability tests are required?
+
+Compatibility
+
+How does versioning/deprecation work?
+
+Completion
+
+What proves the file is finished?
 
 ---
 
-133. Duplicate-file policy
+106. Dependency-First Completion Order
 
-The following kinds of duplication require explicit reconciliation:
+The type directory must be implemented in dependency order rather than alphabetical order.
 
+Stage 1 — orchestration
+
+README.md
 types.g4
-type.g4
+
+Stage 2 — lexical contract
+
+canonical lexer/token definitions
+
+Stage 3 — fundamental types
 
 primitive.g4
-primitives.g4
+named.g4
 
-optional.g4
-option.g4
+Stage 4 — type parameters
 
-map.g4
-map-types.g4
-
+generic.g4
+bounds.g4
 constraints.g4
 type-constraints.g4
 
+Stage 5 — structural types
+
+tuple.g4
+array.g4
+slice.g4
+map.g4
+record.g4
+
+Stage 6 — algebraic/result types
+
+option.g4
+result.g4
+never.g4
 sum.g4
-algebraic-types.g4
 union.g4
+algebraic-types.g4
 
-Similarity alone does not determine which file is canonical.
+Stage 7 — callable/reference types
 
-Ownership must be established by:
+function.g4
+reference.g4
+pointer.g4
 
-grammar composition
-AST integration
-specification
-consumers
-tests
-compatibility
+Stage 8 — ownership/type semantics
 
-The canonical owner must be documented.
+linear.g4
+affine.g4
+associated.g4
+type-class.g4
+variance.g4
+functional dependencies.g4
+
+Stage 9 — advanced types
+
+dependent.g4
+existential-types.g4
+higher-kinded-types.g4
+path-dependent-types.g4
+type-families.g4
+type-providers.g4
+advanced-type-level-computation.g4
+
+Stage 10 — semantic modifiers
+
+temporal.g4
+effectful.g4
+resource.g4
+capability.g4
+
+Stage 11 — domain types
+
+classical.g4
+quantum.g4
+hardware.g4
+
+Stage 12 — normalization
+
+Resolve overlapping/legacy files.
+
+Stage 13 — cross-repository integration
+
+Integrate:
+
+AST
+semantic analysis
+effects
+resources
+policies
+contracts
+provenance
+IR
+quantum::ir
+HDL
+hardware
+
+Stage 14 — conformance
+
+Run the complete type test matrix.
 
 ---
 
-134. No silent compatibility break
+107. Current Duplicate/Legacy Normalization Matrix
 
-Existing source syntax must not be removed merely because a cleaner grammar is designed.
+The following files require explicit ownership classification before final production generation.
 
-If a legacy syntax must be removed:
+File| Required role
+"types.g4"| canonical orchestrator
+"primitive.g4"| canonical primitive delegate
+"named.g4"| canonical named-type delegate
+"generic.g4"| canonical generic delegate
+"function.g4"| canonical function-type delegate
+"tuple.g4"| canonical tuple delegate
+"array.g4"| canonical array delegate
+malformed "array-types..." entry| repository hygiene defect; remove/fix
+"slice.g4"| canonical slice delegate
+"map.g4"| canonical map delegate
+"map-types.g4"| compatibility/deprecated unless proven otherwise
+"option.g4"| canonical option delegate
+"optional.g4"| compatibility/deprecated unless proven otherwise
+"option-types.g4"| compatibility/deprecated unless proven otherwise
+"result.g4"| canonical result delegate
+"record.g4"| canonical record delegate
+"sum.g4"| canonical sum delegate
+"union.g4"| canonical union delegate
+"algebraic-types.g4"| algebraic composition/delegation
+"composite-types.g4"| composition/compatibility; no duplicate constructors
+"reference.g4"| canonical reference delegate
+"pointer.g4"| canonical pointer delegate
+"linear.g4"| canonical linear qualifier
+"affine.g4"| canonical affine qualifier
+"dependent.g4"| canonical dependent-type delegate
+"associated.g4"| canonical associated-type delegate
+"associated types.g4"| compatibility/deprecated unless proven otherwise
+"type-class.g4"| canonical type-class delegate
+"existential-types.g4"| canonical existential delegate
+"bounds.g4"| canonical bounds delegate
+"constraints.g4"| constraint composition/compatibility
+"type-constraints.g4"| canonical type-constraint delegate
+"variance.g4"| canonical variance delegate
+"functional dependencies.g4"| canonical functional-dependency delegate
+"higher-kinded-types.g4"| canonical advanced generic delegate
+"path-dependent-types.g4"| canonical path-dependent delegate
+"type-families.g4"| canonical type-family delegate
+"type-providers.g4"| controlled advanced extension
+"advanced-type-level-computation.g4"| canonical advanced type-level computation
+"temporal.g4"| canonical temporal delegate
+"effectful.g4"| canonical effectful-type delegate
+"resource.g4"| canonical resource-type delegate
+"capability.g4"| canonical capability-type delegate
+"classical.g4"| canonical classical-domain delegate
+"quantum.g4"| canonical quantum-domain delegate
+"hardware.g4"| canonical hardware-domain delegate
 
-legacy syntax
-    ↓
-deprecated status
-    ↓
-compatibility diagnostic
-    ↓
+The exact classification must be verified against imports and consumers before modifying any grammar.
+
+---
+
+108. No Silent Duplicate Rule Ownership
+
+If two files currently define the same rule:
+
+ruleName
+
+that is a defect.
+
+The production resolution must be:
+
+one canonical owner
++
+zero or more compatibility façades
+
+not:
+
+two canonical owners
+
+---
+
+109. Compatibility Façade Rule
+
+A compatibility grammar may expose an old entry point, but it must delegate to the canonical implementation.
+
+It must not copy the complete implementation.
+
+This prevents future divergence.
+
+---
+
+110. Deprecated File Rule
+
+A deprecated grammar file must document:
+
+DEPRECATED
+replacement
+reason
 migration path
-    ↓
-removal according to language version
+compatibility period/version
+test coverage
 
-Compatibility belongs to the compatibility subsystem.
-
----
-
-135. Scalability tests
-
-Type grammar tests must include generated structures that exercise increasing:
-
-- generic arity;
-- tuple cardinality;
-- nesting;
-- path length;
-- symbolic cardinality;
-- type composition;
-- domain composition.
-
-Tests must verify that the grammar does not contain artificial finite ceilings.
-
-Compiler safety policies may intentionally reject extreme input, but such rejection must identify the implementation policy rather than claiming the source language has a smaller type universe.
+It must not continue introducing new syntax.
 
 ---
 
-136. Negative tests
+111. Historical File Rule
 
-Every type component requires invalid-input tests.
+Historical grammar files may preserve prior designs for reference.
 
-Examples:
+They must not be imported into the production grammar.
+
+---
+
+112. Experimental File Rule
+
+Experimental type features must be explicitly marked.
+
+They must not accidentally become reachable through the stable universal type grammar.
+
+---
+
+113. No Application Keyword Explosion
+
+The type system must not grow a keyword for every domain/application.
+
+Do not add universal type keywords merely for:
+
+vision
+sentiment
+robotics
+blockchain
+payments
+VR
+AR
+administration
+legal
+
+Use:
+
+libraries
+named types
+generic types
+dialects
+capabilities
+policies
+
+instead.
+
+---
+
+114. Reasoning and Learning Integration
+
+The type system must be capable of supporting semantic types used by:
+
+reasoning
+inference
+deduction
+learning
+adaptation
+knowledge
+evidence
+uncertainty
+decisions
+agents
+
+without making these concepts universal primitive type constructors.
+
+For example:
+
+Evidence<T>
+Model<T>
+Distribution<T>
+Decision<T>
+Agent<T>
+
+can be ordinary library/domain types.
+
+---
+
+115. Adaptive Computation
+
+An adaptive program may have types whose semantic requirements differ depending on a selected execution strategy.
+
+The type system must preserve the invariant:
+
+same source meaning
+
+while downstream execution may select:
+
+CPU
+GPU
+FPGA
+ASIC
+accelerator
+QPU
+simulator
+distributed
+
+based on declared requirements and available capabilities.
+
+---
+
+116. Deterministic Type Checking
+
+Type checking must not depend on:
+
+- current hardware;
+- random choices;
+- current time;
+- external network responses;
+- nondeterministic iteration;
+- undeclared environment state.
+
+Where external information is genuinely part of a type-provider or dialect mechanism, the compiler must make the dependency explicit and preserve provenance/versioning.
+
+---
+
+117. Reproducibility
+
+The same:
+
+source
+language version
+grammar version
+dialect versions
+dependency versions
+type-provider inputs
+compiler configuration
+
+must produce semantically equivalent type analysis.
+
+Type resolution must not silently change because a machine happens to have different resources.
+
+---
+
+118. Diagnostics Contract
+
+Every type grammar must support diagnostics for:
+
+- malformed syntax;
+- missing arguments;
+- malformed generic application;
+- malformed tuple;
+- malformed array;
+- malformed function type;
+- malformed reference;
+- malformed pointer;
+- malformed type projection;
+- invalid type extension syntax.
+
+Semantic diagnostics must separately handle:
+
+- unknown type;
+- unsatisfied bound;
+- invalid generic argument;
+- wrong arity;
+- incompatible types;
+- invalid associated type;
+- invalid constraint;
+- invalid dependent relation;
+- unavailable capability;
+- unavailable resource;
+- policy violation.
+
+The parser must not attempt to solve semantic errors.
+
+---
+
+119. Error Ownership
+
+Syntax error
+    → parser/grammar
+
+Unknown identifier
+    → name resolution
+
+Wrong type
+    → semantic type checker
+
+Unsatisfied bound
+    → constraint/type-class subsystem
+
+Unavailable capability
+    → capability subsystem
+
+Insufficient resource
+    → resource subsystem
+
+Policy violation
+    → policy subsystem
+
+Invalid effect
+    → effect subsystem
+
+Invalid quantum realization
+    → quantum semantic/resource/backend subsystem
+
+This separation prevents diagnostic duplication.
+
+---
+
+120. Type Test Architecture
+
+The type subsystem requires tests at multiple levels.
+
+grammar/tests/types/
+├── lexical/
+├── parser/
+├── ast/
+├── semantic/
+├── generics/
+├── composites/
+├── algebraic/
+├── references/
+├── ownership/
+├── dependent/
+├── advanced/
+├── classical/
+├── quantum/
+├── hardware/
+├── resources/
+├── capabilities/
+├── effects/
+├── contracts/
+├── policies/
+├── provenance/
+├── compatibility/
+├── diagnostics/
+├── scalability/
+├── determinism/
+└── cross-domain/
+
+---
+
+121. Required Positive Tests
+
+At minimum:
+
+int
+bool
+string
+User
+module::User
+
+Vec<T>
+Map<K, V>
+Option<T>
+Result<T, E>
+
+()
+(T,)
+(T, U)
+(T, U, V)
+
+[T]
+[T; N]
+
+fn() -> T
+fn(T) -> U
+fn(T, U) -> V
+
+&T
+&mut T
+
+Pointer<T>
+
+linear T
+affine T
+
+Tensor<T>
+Matrix<T, Rows, Columns>
+
+Qubit
+QRegister<N>
+QuantumState<T>
+
+Hardware<T>
+Resource<T>
+Capability<T>
+
+Exact syntax must follow the canonical grammar and specification.
+
+---
+
+122. Required Nested Tests
+
+Test compositions such as:
+
+Vec<Option<T>>
+Map<K, Vec<Result<T, E>>>
+Tensor<Vec<T>>
+Result<QuantumState<T>, E>
+Vec<Hardware<T>>
+Model<Tensor<T>>
+QRegister<N>
+
+and every other semantically legal cross-family composition.
+
+---
+
+123. Required Negative Tests
+
+At minimum:
 
 <>
-Vec<>
-Map<,>
-Map<T,, U>
-Map<T U>
-Result<T
-(T, U
+<T,
+<T>>
 [T;
+[T;]
+fn(
+fn(T
 &T
 &mut
+Map<K,
+Map<,V>
+Result<T,>
 
-The exact expected diagnostic belongs to the implemented syntax.
-
-Negative tests must distinguish:
-
-syntax error
-
-from:
-
-semantic error
+plus all malformed constructs discovered during grammar generation.
 
 ---
 
-137. Semantic-error tests
-
-Valid syntax with invalid meaning must parse before semantic rejection.
-
-Examples include:
-
-UnknownType
-Unknown<T>
-Result<T>
-MissingAssociatedType::Item
-InvalidBound<T>
-
-The semantic test suite must verify that the parser does not incorrectly reject these merely because the semantic environment does not contain the referenced declaration.
-
----
-
-138. Cross-domain tests
-
-The type suite must contain cross-domain combinations such as:
-
-Register<Qubit>
-Tensor<Value>
-Signal<Value>
-Accelerator<Model>
-Buffer<Packet>
-Dataset<Record>
-Resource<Qubit>
-Capability<QuantumMeasurement>
-Model<QuantumState>
-
-provided the referenced names/types are actually declared in the relevant test environment.
-
-These tests demonstrate that one type architecture serves multiple domains.
-
----
-
-139. Quantum cross-domain tests
-
-Required conceptual coverage includes:
-
-QuantumState<T>
-QRegister<N>
-Register<Qubit>
-Tensor<QuantumState<T>>
-Model<QuantumState<T>>
-
-where supported by the actual language vocabulary.
-
-The tests must verify that quantum source types remain target-independent.
-
----
-
-140. HDL cross-domain tests
+124. Required Semantic Negative Tests
 
 Examples:
 
-Signal<T>
-Register<T>
-Buffer<T>
-Module<T>
-Accelerator<T>
-
-should be tested where the corresponding types are defined.
-
-No test may rely on a universal fixed bus/register width unless that width is explicitly source-defined.
-
----
-
-141. AI/data cross-domain tests
-
-Examples:
-
-Model<Input, Output>
-Dataset<Row>
-Distribution<Value>
-Evidence<Claim>
-Knowledge<Fact>
-
-should use ordinary type construction.
-
-The type grammar must not require a special parser path merely because a type participates in reasoning or learning.
+unknown type
+wrong generic arity
+invalid type argument
+unsatisfied bound
+invalid associated type
+invalid projection
+invalid variance
+invalid dependent constraint
+invalid ownership qualifier
+invalid capability type
+invalid resource type
 
 ---
 
-142. Generic semantic tests
+125. Required Cross-Domain Tests
 
-Generic tests must separately verify:
+At minimum:
 
-syntax
-argument preservation
-argument ordering
-nested arguments
-trailing commas
-arity checking
-generic parameter resolution
-bound checking
-substitution
-specialization
-serialization
-diagnostics
-
-The grammar owns only the syntactic portion.
-
----
-
-143. Determinism tests
-
-For identical input, verify identical:
-
-parse structure
-TypeExpr
-argument order
-path order
-source spans
-serialization
-
-No type parser behavior may depend on:
-
-hardware
-time
-randomness
-network
-filesystem
-environment
+classical + quantum
+classical + HDL
+classical + AI
+quantum + AI
+quantum + hardware
+tensor + quantum
+distributed + resource
+networking + capability
+hardware + resource
+effect + type
+policy + capability
+contract + type
+provenance + type
 
 ---
 
-144. Property-based and generated testing
+126. Required POCO-REAF Test
 
-Where repository infrastructure permits, generated tests should exercise:
+A mandatory integration test must demonstrate a single source program whose type structure can be analyzed without changing the source for different target classes:
 
-type nesting
-generic structures
-qualified names
-symbolic values
-recursive type composition
-extension payloads
-
-Generated tests must remain resource-aware.
-
-A test generator must not accidentally create an artificial language limit.
-
----
-
-145. Fuzzing
-
-Type parsing should be fuzz-tested for:
-
-- malformed delimiters;
-- deep nesting;
-- long names;
-- repeated generic arguments;
-- invalid separators;
-- Unicode identifiers where supported;
-- malformed extension syntax;
-- malformed symbolic values.
-
-The parser must not panic on malformed untrusted source.
-
----
-
-146. Compiler safety
-
-Compiler implementation must use safe Rust.
-
-Fuzzing and validation must not rely on "unsafe" code.
-
-The type subsystem must be robust against:
-
-- malformed source;
-- adversarial nesting;
-- excessive collections;
-- malformed serialized AST;
-- invalid extensions.
-
-Explicit validation policies may protect compiler resources.
-
----
-
-147. Resource limits versus language limits
-
-This distinction is mandatory.
-
-A compiler may have:
-
-TypeValidationPolicy
-
-that says:
-
-max_collection_items = Some(...)
-
-for a particular invocation.
-
-That is an implementation policy.
-
-It is fundamentally different from defining:
-
-MAX_GENERIC_ARITY
-
-as a universal Zamani language restriction.
-
-The first protects an implementation.
-
-The second changes the language.
-
-Only the former is permitted as an implementation safety mechanism.
-
----
-
-148. Memory scalability
-
-The type grammar must use structural repetition and recursive composition rather than fixed enumerations.
-
-The compiler implementation may use:
-
-Vec
-Box
-Arc
-
-and other safe Rust structures.
-
-The current "TypeExpr" architecture already uses recursive boxed structures and ordered vectors.
-
-The implementation must avoid introducing unnecessary machine-sized semantic assumptions into source representation.
-
----
-
-149. Identifier scalability
-
-Identifiers must remain source-level names.
-
-The AST currently represents type names using an immutable string representation.
-
-The grammar must not impose arbitrary language-level identifier lengths.
-
-Compiler safety policies may impose configurable limits when required to protect resources.
-
----
-
-150. Path scalability
-
-Qualified paths use ordered path segments.
-
-The grammar must not define a maximum number of path segments.
-
-Semantic resolution may fail if a path is invalid.
-
-That is not a grammar capacity restriction.
-
----
-
-151. Generic scalability
-
-Generic applications must preserve arbitrary source structure subject to implementation resources.
-
-The grammar must not define:
-
-MAX_GENERIC_ARITY
-MAX_GENERIC_DEPTH
-
-or equivalent hidden limits.
-
----
-
-152. Tuple scalability
-
-Tuple syntax must not contain a finite enumeration of tuple sizes.
-
-Use repeated grammar constructs and the existing vector-based AST representation.
-
----
-
-153. Array scalability
-
-Array cardinality must remain symbolic where source syntax provides a symbolic value.
-
-The parser must not require a host integer representation.
-
----
-
-154. Quantum scalability
-
-The type grammar must never assume a maximum number of:
-
-qubits
-quantum registers
-quantum states
-quantum resources
-quantum devices
-
-A target may report insufficient resources later.
-
-That is target feasibility, not source-language failure.
-
----
-
-155. Hardware scalability
-
-The grammar must never enumerate a finite universal inventory of:
-
-CPUs
-GPUs
-FPGAs
-ASICs
-QPUs
-accelerators
-nodes
-devices
-
-Hardware discovery and selection remain outside the type grammar.
-
----
-
-156. Domain scalability
-
-Adding a new computational domain should preferably require:
-
-new semantic/domain module
-+
-possibly a dialect
-+
-type declarations/extensions
-+
-tests
-
-rather than rewriting the universal type system.
-
-A new domain must reuse:
-
-TypeExpr
-generic system
-constraints
-resources
-capabilities
-effects
-policies
-provenance
-
-where applicable.
-
----
-
-157. Compiler specialization
-
-Generic types may eventually be specialized or monomorphized.
-
-The type grammar does not perform specialization.
-
-The direction is:
-
-generic source type
-      ↓
-TypeExpr
-      ↓
-semantic generic type
-      ↓
-specialization decision
-      ↓
-specialized semantic representation
-      ↓
-IR
-
-Specialization must not alter the source program's declared meaning.
-
----
-
-158. Target lowering
-
-Target lowering may choose:
-
-memory representation
-register representation
-vector representation
-device representation
-quantum representation
-HDL representation
-
-The type grammar must not make those choices.
-
----
-
-159. Reproducible compilation
-
-Type structures must be reproducible from identical source and compiler configuration.
-
-Generic argument order, path order and type structure must not depend on unordered map iteration.
-
-Serialized forms must be versioned.
-
----
-
-160. Type equality
-
-Source-level structural equality and semantic type equality are different concepts.
-
-For example:
-
-A
-
-and:
-
-module::A
-
-may require semantic name resolution before equality can be established.
-
-The grammar preserves source structure.
-
-The semantic type system determines meaning.
-
----
-
-161. Type aliases
-
-Type aliases belong to the declaration subsystem.
-
-Their right-hand side consumes:
-
-typeExpression
-
-Alias expansion/resolution belongs to semantic analysis.
-
-The type grammar must not duplicate alias declaration syntax.
-
----
-
-162. Recursive types
-
-Recursive type structure must be representable where the language semantics permit it.
-
-The grammar must not impose arbitrary recursive type depth.
-
-Semantic checking determines whether recursion is legal.
-
-Compiler validation may protect against pathological input.
-
----
-
-163. Type extensions
-
-"TypeExpr::Extension" allows future source-level constructs to remain extensible.
-
-Extensions must include sufficient namespace/name/argument information to prevent collisions.
-
-An extension must have:
-
-owner
-namespace
-version
-syntax
-semantic definition
-AST representation
-validation
-diagnostics
-compatibility
-tests
-
-An extension is not automatically stable merely because the parser accepts it.
-
----
-
-164. Extension security
-
-Extensions must not automatically gain:
-
-- native execution;
-- filesystem access;
-- network access;
-- hardware access;
-- reflection privileges;
-- code-generation privileges.
-
-Those capabilities must be explicitly authorized through the repository's capability/security architecture.
-
----
-
-165. Type attributes
-
-The frontend supports type-level attributes through "TypeAttribute" and extension attributes.
-
-Attributes must remain:
-
-namespaced
-structured
-source-preserving
-semantically defined
-
-Unknown attributes may be accepted only where the language specification permits them.
-
-The grammar must not invent semantics for an unknown attribute.
-
----
-
-166. Type attributes and provenance
-
-Attribute source information should remain available to downstream tooling.
-
-Attributes may participate in:
-
-- semantic analysis;
-- optimization;
-- code generation;
-- documentation;
-- provenance;
-- tooling.
-
-They must not silently override core type semantics.
-
----
-
-167. Type system and contracts
-
-Contracts may constrain types.
-
-For example, semantic analysis may verify that a value satisfying:
-
-requires ...
-
-has an appropriate type.
-
-The contract system owns the condition.
-
-The type system owns the type.
-
-This separation prevents circular grammar ownership.
-
----
-
-168. Type system and reasoning
-
-Reasoning systems may reason about type relationships.
-
-The type grammar still only provides source structure.
-
-A reasoning engine must consume semantic type information rather than parsing types independently.
-
----
-
-169. Type system and learning
-
-Learning systems may use types to express:
-
-input
-output
-model
-dataset
-state
-parameter
-distribution
-
-The learning subsystem owns learning semantics.
-
-The type system supplies reusable type structure.
-
----
-
-170. Type system and adaptation
-
-Adaptation may change model or strategy state, but it must not mutate the language's type meaning.
-
-Any adaptation affecting program representation must pass through explicit:
-
-policy
-capability
-effect
-provenance
-validation
-
-mechanisms.
-
----
-
-171. Type system and explainability
-
-Type-related transformations should be explainable through compiler diagnostics/provenance.
-
-For example:
-
-source type
-    ↓
-alias resolution
-    ↓
-generic substitution
-    ↓
-semantic type
-
-can be represented in diagnostic/provenance tooling.
-
-The type grammar itself does not implement explanation.
-
----
-
-172. Type system and agents
-
-Agent state types must use ordinary Zamani types.
-
-The concurrency subsystem owns:
-
-actor
-message
-channel
-task
-scheduler
-
-AI semantics may define agent behavior.
-
-The type system remains shared.
-
----
-
-173. Type system and sandboxing
-
-A sandbox may constrain which types or operations are allowed in a context.
-
-The type grammar does not implement the sandbox.
-
-The architecture is:
-
-type
- ↓
-semantic type
- ↓
-security/policy analysis
- ↓
-sandbox decision
-
----
-
-174. Type system and simulation
-
-Simulation-specific types must remain ordinary types or dialect types.
-
-Simulation execution does not require a second type system.
-
----
-
-175. Type system and interoperability formats
-
-JSON, XML, SQL and other external representations are not universal type grammar constructs.
-
-They belong to:
-
-grammar/dialects/
-grammar/interoperability/
-
-and their semantic adapters.
-
-They must eventually map into Zamani's common type/data architecture.
-
----
-
-176. No hidden backend semantics
-
-The type grammar must never contain code or grammar branches that mean:
-
-if GPU then ...
-if QPU then ...
-if FPGA then ...
-if vendor == ...
-
-Target-dependent behavior belongs downstream.
-
-Source type meaning must remain target-independent.
-
----
-
-177. No hidden physical topology
-
-The type grammar must not encode:
-
-grid size
-mesh size
-qubit adjacency
-network topology
-device coordinates
-physical qubit IDs
-
-Topology requirements belong to resource/target semantics.
-
----
-
-178. No hidden register assumptions
-
-The type grammar must not assume:
-
-32-bit registers
-64-bit registers
-fixed register counts
-fixed vector widths
-
-unless explicitly represented as source-level target/dialect information.
-
----
-
-179. No hidden memory assumptions
-
-The type grammar must not assume:
-
-64 GB
-24 GB
-fixed stack size
-fixed heap size
-fixed address space
-
-as universal language properties.
-
-Memory requirements belong to resources and target realization.
-
----
-
-180. Type system and POCO-REAF failure
-
-If a target cannot satisfy a type-associated requirement, the compiler/runtime must not silently rewrite the program's meaning.
-
-The correct outcomes are things such as:
-
-target compatible
-target incompatible
-requirement unsatisfied
-capability unavailable
-fallback selected
-simulation selected
-explicit alternative selected
-
-according to the program's policies.
-
-Source semantics must remain stable.
-
----
-
-181. Completion criteria for "grammar/types/"
-
-The type subsystem may be considered production-ready only when:
-
-Authority
-
-- [ ] One canonical "typeExpression" authority exists.
-- [ ] "types.g4" is the canonical composition boundary.
-- [ ] "type.g4" cannot become a competing type authority.
-- [ ] Duplicate type grammar responsibilities have explicit owners.
-- [ ] Legacy components have compatibility/deprecation status.
-
-Lexer
-
-- [ ] All consumed tokens originate from the canonical lexer.
-- [ ] No type grammar defines lexer rules.
-- [ ] Punctuation is not duplicated under incompatible token names.
-
-AST
-
-- [ ] Every stable type construct maps to "TypeExpr".
-- [ ] No competing universal type AST exists.
-- [ ] Source spans are preserved.
-- [ ] Serialization is versioned.
-- [ ] "TypeValueExpr" is used only within its actual implemented vocabulary.
-
-Semantics
-
-- [ ] Name resolution is downstream.
-- [ ] Generic substitution is downstream.
-- [ ] Type inference is downstream.
-- [ ] Type equality is semantically defined.
-- [ ] Bounds are semantically checked.
-- [ ] Dependent types have defined semantic rules.
-- [ ] Linear/affine semantics have defined checking.
-- [ ] Resource/capability semantics remain downstream.
-
-Quantum
-
-- [ ] Quantum types use the common "TypeExpr".
-- [ ] No physical qubit allocation occurs in the grammar.
-- [ ] No universal quantum cardinality exists.
-- [ ] "quantum::ir" remains the canonical quantum IR boundary.
-- [ ] QEC/routing/scheduling remain downstream.
-
-Classical
-
-- [ ] Classical types use the common type system.
-- [ ] Numerical abstractions remain target-neutral.
-- [ ] Fixed representation widths are explicit rather than assumed.
-
-HDL/hardware
-
-- [ ] HDL types use the common type system.
-- [ ] No universal hardware widths are imposed.
-- [ ] Physical placement remains downstream.
-- [ ] Hardware target selection remains downstream.
-
-AI/data/reasoning
-
-- [ ] AI concepts use normal type abstractions.
-- [ ] Knowledge types use normal type abstractions.
-- [ ] Learning types use normal type abstractions.
-- [ ] Uncertainty uses normal type abstractions.
-- [ ] Evidence/provenance types use normal type abstractions.
-- [ ] Agents reuse the common concurrency/type architecture.
-- [ ] No application-specific keyword explosion has entered the type grammar.
-
-POCO-REAF
-
-- [ ] No universal machine-capacity ceilings exist.
-- [ ] No physical device identifiers are embedded in universal types.
-- [ ] Symbolic resource/cardinality information can remain symbolic where supported.
-- [ ] Target feasibility remains downstream.
-- [ ] Source type meaning remains target-independent.
-
-Safety
-
-- [ ] Rust implementation uses no "unsafe".
-- [ ] Rust 1.97 compatibility is tested.
-- [ ] Rust 1.97.1 compatibility is tested.
-- [ ] Malformed input cannot cause parser/compiler panics.
-- [ ] Explicit validation policies are separated from language semantics.
-
-Testing
-
-- [ ] Positive tests exist.
-- [ ] Negative tests exist.
-- [ ] Semantic-error tests exist.
-- [ ] Boundary tests exist.
-- [ ] Cross-domain tests exist.
-- [ ] Quantum tests exist.
-- [ ] HDL tests exist.
-- [ ] AI/data tests exist.
-- [ ] Generic tests exist.
-- [ ] Dependent-type tests exist where implemented.
-- [ ] Determinism tests exist.
-- [ ] Serialization tests exist.
-- [ ] Compatibility tests exist.
-- [ ] Fuzz/property tests exist where repository infrastructure supports them.
-- [ ] Scalability tests exist.
-
----
-
-182. Required integration matrix
-
-Every stable type feature must be traceable through:
-
-SPECIFICATION
-    ↓
-LEXER
-    ↓
-GRAMMAR
-    ↓
-AST
-    ↓
-STRUCTURAL VALIDATION
-    ↓
-NAME RESOLUTION
-    ↓
-TYPE SEMANTICS
-    ↓
-CONSTRAINT CHECKING
-    ↓
-EFFECT ANALYSIS
-    ↓
-CAPABILITY ANALYSIS
-    ↓
-RESOURCE ANALYSIS
-    ↓
-CONTRACT ANALYSIS
-    ↓
-POLICY ANALYSIS
-    ↓
-PROVENANCE
-    ↓
-CANONICAL SEMANTIC MODEL
-    ↓
-IR
-    ↓
-OPTIMIZATION
-    ↓
-LOWERING
-    ↓
-TARGET REALIZATION
-
-For quantum types, the relevant branch includes:
-
-semantic quantum type
-    ↓
-quantum::ir
-    ↓
-optimization
-    ↓
-decomposition
-    ↓
-routing
-    ↓
-scheduling
-    ↓
-resilience/QEC
-    ↓
-ZQN
-    ↓
-HAL
-
----
-
-183. Required integration with repository files
-
-The type subsystem must remain compatible with the repository's existing major components.
-
-At minimum, integration must be maintained with:
-
-grammar/README.md
-grammar/DESIGN.md
-grammar/grammar.md
-grammar/Zamani-Grammar.md
-
-grammar/antlr/ZamaniLexer.g4
-grammar/antlr/ZamaniParser.g4
-grammar/Zamani.g4
-
-grammar/core/
-grammar/declarations/
-grammar/functions/
-grammar/expressions/
-grammar/statements/
-grammar/resources/
-grammar/effects/
-grammar/validation/
-grammar/policies/
-grammar/compatibility/
-grammar/compile/
-grammar/execution/
-grammar/interoperability/
-grammar/metaprogramming/
-grammar/classical/
-grammar/quantum/
-grammar/hybrid/
-grammar/hdl/
-grammar/hardware/
-grammar/ai/
-grammar/data/
-grammar/distributed/
-grammar/networking/
-
-grammar/specification/types.md
-
-src/frontend/ast/node/types/
-src/parser.rs
-src/lexer.rs
-
-The exact semantic and IR files must follow the current repository architecture rather than being invented by this README.
-
----
-
-184. AST integration contract
-
-The canonical AST owner is:
-
-src/frontend/ast/node/types/type_expr.rs
-
-The type grammar must not modify the AST merely because another domain grammar has been added.
-
-If a genuinely new stable type concept cannot be represented by the current AST:
-
-1. document the semantic requirement;
-2. update the type specification;
-3. design the AST extension;
-4. define serialization compatibility;
-5. implement the AST;
-6. update semantic consumers;
-7. update tests;
-8. only then promote grammar syntax.
-
-This prevents repeated reopening of completed grammar files.
-
----
-
-185. Semantic integration contract
-
-The type grammar produces source structure.
-
-The semantic subsystem must determine:
-
-what the type means
-whether it is valid
-which declaration it refers to
-whether generic arguments are valid
-whether constraints are satisfied
-whether dependent values are legal
-whether ownership rules are satisfied
-whether resource/capability requirements are satisfied
-
-No semantic decision should be hidden inside parser alternatives.
-
----
-
-186. IR integration contract
-
-The type grammar must not directly know the final machine representation.
-
-Its IR contract is:
-
-TypeExpr
-    ↓
-semantic type
-    ↓
-canonical semantic model
-    ↓
-appropriate IR type information
-
-The exact IR representation is owned by the IR subsystem.
-
----
-
-187. Quantum IR integration contract
-
-Quantum type semantics must converge on:
-
-quantum::ir
-
-There must not be another independent quantum IR hidden inside:
-
-grammar/types/
-
-or:
-
-src/frontend/ast/node/types/
-
-Source-level quantum types remain source-level.
-
----
-
-188. HDL integration contract
-
-HDL source types must eventually feed HDL semantic representation and downstream HDL/domain IR.
-
-The type grammar does not perform:
-
-synthesis
-placement
-routing
-timing closure
-physical mapping
-
----
-
-189. Resource integration contract
-
-A type may contribute information to resource analysis.
-
-The type grammar itself does not perform:
-
-resource discovery
-resource allocation
-resource scheduling
-device selection
-
-This distinction is mandatory for POCO-REAF.
-
----
-
-190. Capability integration contract
-
-Capability relationships are resolved downstream.
-
-The type grammar may parse a capability-oriented type expression.
-
-It must not determine whether a machine provides that capability.
-
----
-
-191. Policy integration contract
-
-Policies may constrain types.
-
-The type grammar remains policy-neutral.
-
-Policy evaluation occurs after source parsing and semantic construction.
-
----
-
-192. Provenance integration contract
-
-The type subsystem must provide enough source information for provenance systems to answer:
-
-Where did this type originate?
-
-Which generic arguments were supplied?
-
-Which aliases were resolved?
-
-Which transformations changed the representation?
-
-Which compiler decision depended on the type?
-
-The grammar itself does not own the provenance database.
-
----
-
-193. Compatibility integration contract
-
-Any grammar migration must update:
-
-grammar/grammar.md
-grammar/Zamani-Grammar.md
-grammar/specification/types.md
-grammar/compatibility/
-tests
-
-where relevant.
-
-No feature may be called stable merely because the new grammar accepts it.
-
----
-
-194. Documentation authority
-
-This README is the navigation/integration contract for "grammar/types/".
-
-It does not replace:
-
-grammar/specification/types.md
-
-for detailed normative language semantics.
-
-It does not replace:
-
-grammar/grammar.md
-
-for implementation status.
-
-It does not replace:
-
-src/frontend/ast/node/types/type_expr.rs
-
-for exact Rust enum/field names.
-
-It does not replace semantic implementation files for semantic behavior.
-
----
-
-195. Source of truth for exact AST names
-
-When this README and the frontend AST disagree about an exact enum/field name:
-
-src/frontend/ast/node/types/type_expr.rs
-
-is the implementation authority until the architecture is deliberately changed.
-
-The grammar documentation must then be corrected to match the canonical AST.
-
----
-
-196. Source of truth for implemented syntax
-
-When:
-
-Zamani-Grammar.md
-
-claims syntax that the current parser does not implement, the construct must not be presented as implemented merely because it appears in the historical/extended document.
-
-Implementation status must be recorded in:
-
-grammar/grammar.md
-
-and verified by tests.
-
----
-
-197. Source of truth for intended semantics
-
-Normative type meaning belongs to:
-
-grammar/specification/types.md
-
-If a type feature is ambiguous, its semantics must be settled there before being declared stable.
-
----
-
-198. Source of truth for compiler safety
-
-Compiler-side validation policies belong to implementation code and its documented contracts.
-
-They must not be converted into universal grammar restrictions.
-
----
-
-199. Final architecture invariant
-
-The entire type subsystem must preserve:
-
-                    SOURCE TYPE
-                         │
-                         ▼
-                   typeExpression
-                         │
-                         ▼
-                      TypeExpr
-                         │
-                         ▼
-                structural validation
-                         │
-                         ▼
-                 semantic type system
-                         │
-          ┌──────────────┼──────────────┐
-          ▼              ▼              ▼
-      classical       quantum       domain types
-                         │
-                         ▼
-                     quantum::ir
-                         │
-                         ▼
-                  canonical IR
-                         │
-                         ▼
-                    optimization
-                         │
-                         ▼
-                     lowering
-                         │
-                         ▼
-                resource negotiation
-                         │
-                         ▼
-                     scheduling
-                         │
-                         ▼
-                 target realization
-
-The type grammar describes meaningful source-level type structure.
-
-It does not describe the physical machine.
-
----
-
-200. Final POCO-REAF invariant
-
-A Zamani type must be written once at the source level.
-
-The same type semantics must remain valid when the program is considered for different target scales.
-
-The realization may vary:
-
-tiny system
-embedded system
+tiny
+embedded
 CPU
 multicore
 GPU
@@ -4720,131 +3340,1223 @@ QPU
 simulator
 HPC
 cluster
-distributed system
-cloud
-future architecture
+distributed
+future target
 
-but the source-level type meaning must not be rewritten merely because the target changes.
+The test must prove that the type meaning remains invariant.
+
+Target-specific realization is permitted to differ.
 
 ---
 
-201. Final scalability invariant
+127. Resource-Scaling Tests
 
-The language must scale according to available resources.
+Tests must use symbolic requirements rather than repository constants.
+
+For example:
+
+T
+N
+Rows
+Columns
+Shape
+RequiredMemory
+RequiredWidth
+Qubits
+Nodes
+
+The test infrastructure must verify that larger values do not require grammar modification.
+
+---
+
+128. Generated Scalability Tests
+
+The test suite should generate type structures programmatically.
+
+Examples:
+
+nested generics
+nested tuples
+nested records
+large qualified names
+large generic argument lists
+symbolic dimensions
+large type compositions
+
+The tests may use implementation-controlled workloads.
+
+They must not redefine those workloads as language limits.
+
+---
+
+129. Determinism Tests
+
+Repeated parsing/type-checking of identical source with identical configuration must produce equivalent:
+
+AST
+diagnostics
+semantic type results
+constraint results
+provenance structure
+
+without dependence on host resource ordering.
+
+---
+
+130. Compatibility Tests
+
+Every stable type feature must be tested against:
+
+current grammar version
+supported previous versions
+deprecation rules
+dialect versions
+AST compatibility
+semantic compatibility
+IR compatibility
+
+where those compatibility guarantees exist.
+
+---
+
+131. Rust Integration Tests
+
+Rust-side tests must run on:
+
+Rust 1.97+
+Rust 2021
+
+and must use safe Rust only.
+
+The type subsystem must not require compiler-version-specific unsafe workarounds.
+
+---
+
+132. ANTLR Generation Tests
+
+CI must verify:
+
+grammar/types/types.g4
+
+can be composed with the canonical parser without:
+
+- import cycles;
+- undefined rules;
+- duplicate rule ownership;
+- undefined tokens;
+- token conflicts;
+- ambiguous composition introduced by a delegate;
+- invalid grammar imports.
+
+---
+
+133. Grammar Import Audit
+
+CI should inspect the type directory and reject:
+
+delegate → Types
+
+where that would create a circular import.
+
+CI should also detect multiple definitions of the same canonical public rule.
+
+---
+
+134. Hard-Coding Audit
+
+CI must scan the type subsystem for forbidden capacity patterns.
+
+At minimum:
+
+MAX_QUBITS
+MAX_CPUS
+MAX_GPUS
+MAX_FPGAS
+MAX_NODES
+MAX_MEMORY
+MAX_THREADS
+MAX_REGISTER_WIDTH
+MAX_TENSOR_RANK
+MAX_NETWORK_SIZE
+MAX_DEVICE_COUNT
+
+It should also flag suspicious target-specific constants for human review.
+
+---
+
+135. Domain-Neutrality Audit
+
+No type grammar should contain hard-coded:
+
+CPU model
+GPU model
+FPGA model
+ASIC model
+QPU model
+vendor
+physical qubit identifier
+coupling map
+calibration
+machine topology
+
+unless the information is explicitly part of a user-declared target/dialect abstraction rather than universal type semantics.
+
+---
+
+136. Quantum Audit
+
+The type directory must never:
+
+- enumerate every quantum gate;
+- select physical qubits;
+- construct schedules;
+- perform routing;
+- select QEC codes;
+- generate ZQN;
+- select a QPU;
+- create a second quantum IR.
+
+Quantum type semantics terminate at the semantic/"quantum::ir" boundary.
+
+---
+
+137. HDL Audit
+
+The type directory must not impose universal:
+
+bus width
+register count
+pipeline depth
+memory capacity
+clock count
+device count
+
+unless explicitly represented as source-level program semantics.
+
+---
+
+138. Resource Audit
+
+A type may imply a resource requirement.
+
+A type must not itself discover or reserve resources.
+
+Correct:
+
+type
+ ↓
+semantic requirement
+ ↓
+resource analysis
+
+Incorrect:
+
+type
+ ↓
+allocate GPU
+
+---
+
+139. Capability Audit
+
+A type may participate in capability reasoning.
+
+It must not directly query hardware.
+
+Correct:
+
+type
+ ↓
+capability implication
+ ↓
+capability analysis
+
+Incorrect:
+
+type
+ ↓
+query physical device
+
+---
+
+140. Effect Audit
+
+A type may carry effect information where standardized.
+
+It must not execute effects.
+
+---
+
+141. Policy Audit
+
+A type may be subject to policies.
+
+It must not evaluate authorization itself.
+
+---
+
+142. Provenance Audit
+
+Type syntax must preserve source location through the frontend.
+
+Semantic provenance must be attached by the compiler pipeline.
+
+No grammar file should invent machine/time/environment provenance.
+
+---
+
+143. Integration with "grammar/expressions/"
+
+Expressions consume:
+
+typeExpression
+
+from the canonical type grammar.
+
+They must not redefine types.
+
+Expression typing occurs during semantic analysis.
+
+---
+
+144. Integration with "grammar/statements/"
+
+Statements consume type syntax where declarations/annotations require it.
+
+They must import the canonical type hierarchy.
+
+They must not create alternate type rules.
+
+---
+
+145. Integration with "grammar/declarations/"
+
+Declarations consume:
+
+typeExpression
+
+for:
+
+- variables;
+- fields;
+- parameters;
+- aliases;
+- associated types;
+- generic declarations.
+
+---
+
+146. Integration with "grammar/functions/"
+
+Function declarations consume:
+
+functionType
+
+or its canonical constituent rules.
+
+Function declarations do not redefine function-type syntax.
+
+---
+
+147. Integration with "grammar/modules/"
+
+Qualified names used in types must use the same name/path architecture as modules.
+
+There must not be separate module-name and type-name path grammars unless their semantic distinction is explicitly required.
+
+---
+
+148. Integration with "grammar/memory/"
+
+Reference/pointer/ownership types interact with memory semantics.
+
+Memory grammar owns memory operations.
+
+Type grammar owns type structure.
+
+---
+
+149. Integration with "grammar/concurrency/"
+
+Concurrency constructs may use types such as:
+
+Message<T>
+Channel<T>
+Task<T>
+Future<T>
+Actor<T>
+
+These should normally be library/domain types rather than special universal primitive types.
+
+---
+
+150. Integration with "grammar/ai/"
+
+AI constructs consume the universal type system.
+
+Examples:
+
+Model<T>
+Dataset<T>
+Distribution<T>
+Evidence<T>
+Decision<T>
+Agent<T>
+
+should use generic/named/extension mechanisms where possible.
+
+---
+
+151. Integration with "grammar/data/"
+
+Data types must use:
+
+records
+tuples
+maps
+arrays
+generics
+named types
+schemas
+
+rather than creating a second type system.
+
+---
+
+152. Integration with "grammar/distributed/"
+
+Distributed constructs consume the same types.
+
+A distributed semantic model may add:
+
+location
+consistency
+replication
+ownership
+availability
+
+but these are semantic properties, not reasons to create another type AST.
+
+---
+
+153. Integration with "grammar/networking/"
+
+Networking constructs consume:
+
+Message<T>
+Stream<T>
+Endpoint<T>
+Protocol<T>
+
+through ordinary type composition.
+
+Network realization remains downstream.
+
+---
+
+154. Integration with "grammar/security/"
+
+Security may constrain types through:
+
+- capability labels;
+- confidentiality/integrity properties;
+- policy types;
+- authorization markers.
+
+Security semantics remain owned by security/policy systems.
+
+---
+
+155. Integration with "grammar/resources/"
+
+This is the primary downstream consumer for resource-related type implications.
+
+Example conceptual path:
+
+QRegister<N>
+     ↓
+semantic quantum type
+     ↓
+resource implication
+     ↓
+requires qubits >= N
+
+The type grammar does not implement the requirement solver.
+
+---
+
+156. Integration with "grammar/effects/"
+
+Example:
+
+effectful type
+     ↓
+effect semantic model
+     ↓
+effect checking
+
+No duplicate effect vocabulary.
+
+---
+
+157. Integration with "grammar/validation/"
+
+Validation consumes type information for:
+
+assertions
+contracts
+properties
+requires
+ensures
+invariants
+assumptions
+guarantees
+
+The type grammar only supplies the type expression.
+
+---
+
+158. Integration with "grammar/policies/"
+
+Policies may constrain:
+
+type
+effect
+capability
+resource
+execution
+
+The policy engine consumes semantic types.
+
+---
+
+159. Integration with "grammar/compile/"
+
+Compilation consumes resolved type information for:
+
+specialization
+optimization
+lowering
+target selection
+reproducibility
+
+The type grammar itself does not choose a target.
+
+---
+
+160. Integration with "grammar/execution/"
+
+Execution consumes resolved type and resource semantics.
+
+The type grammar does not select:
+
+runtime
+scheduler
+device
+QPU
+cluster
+
+---
+
+161. Integration with "grammar/interoperability/"
+
+Interoperability may introduce:
+
+foreign types
+ABI types
+external types
+
+but must use the canonical type model.
+
+---
+
+162. Integration with "grammar/metaprogramming/"
+
+Reflection and compile-time type computation must consume the canonical type AST/semantic model.
+
+They must not create a second type representation.
+
+---
+
+163. Integration with "grammar/dialects/"
+
+Dialects may extend types through registered constructs.
+
+A dialect must identify:
+
+dialect
+version
+type constructor
+AST mapping
+semantic owner
+compatibility
+
+---
+
+164. Integration with AST
+
+Every stable type construct requires:
+
+grammar
+AST
+semantic
+tests
+
+A type feature is incomplete if only the ".g4" file exists.
+
+---
+
+165. Integration with Semantic Analysis
+
+Semantic analysis must consume the domain-neutral "TypeExpr".
+
+It is responsible for:
+
+resolution
+substitution
+inference
+unification
+bounds
+constraints
+ownership
+lifetimes
+effect compatibility
+capability implications
+resource implications
+policy compatibility
+contract compatibility
+
+---
+
+166. Integration with Classical IR
+
+Types required by classical computation must lower through the canonical semantic model to Classical IR.
+
+The type grammar does not emit Classical IR directly.
+
+---
+
+167. Integration with "quantum::ir"
+
+Quantum types must lower through semantic quantum analysis to:
+
+quantum::ir
+
+There is no type-specific quantum IR.
+
+---
+
+168. Integration with HDL
+
+HDL semantic types eventually participate in:
+
+HDL semantic representation
+↓
+synthesis/lowering
+↓
+hardware realization
+
+The source type remains target-neutral.
+
+---
+
+169. Integration with Hardware Abstraction
+
+Hardware type semantics eventually participate in:
+
+resource discovery
+capability negotiation
+placement
+routing
+scheduling
+HAL
+
+No hardware allocation happens in the grammar.
+
+---
+
+170. Integration with QEC and Resilience
+
+Quantum type semantics may influence resource/resilience planning.
+
+The path remains:
+
+quantum type
+ ↓
+semantic quantum model
+ ↓
+quantum::ir
+ ↓
+resilience/QEC
+
+The type grammar must not define QEC implementation details.
+
+---
+
+171. Integration with ZQN
+
+Types do not generate ZQN.
+
+Resolved semantic operations and resources eventually reach:
+
+ZQN
+
+through the compiler pipeline.
+
+---
+
+172. Integration with HAL
+
+The HAL realizes target-specific representations.
+
+The type grammar must remain completely unaware of:
+
+CPU model
+GPU model
+FPGA family
+ASIC process
+QPU vendor
+simulator implementation
+cluster provider
+
+---
+
+173. Independent File Completion Template
+
+Every type file should use this template in its own header/documentation:
+
+FEATURE CONTRACT
+
+Purpose:
+    ...
+
+Owns:
+    ...
+
+Does Not Own:
+    ...
+
+Depends On:
+    ...
+
+Exports:
+    ...
+
+Consumed By:
+    ...
+
+Lexer Dependencies:
+    ...
+
+Grammar Dependencies:
+    ...
+
+AST Contract:
+    ...
+
+Semantic Contract:
+    ...
+
+Type Interaction Contract:
+    ...
+
+Effect Contract:
+    ...
+
+Capability Contract:
+    ...
+
+Resource Contract:
+    ...
+
+Contract/Validation Contract:
+    ...
+
+Policy Contract:
+    ...
+
+Provenance Contract:
+    ...
+
+IR Contract:
+    ...
+
+Quantum Boundary:
+    ...
+
+HDL Boundary:
+    ...
+
+Backend Boundary:
+    ...
+
+Diagnostics:
+    ...
+
+Positive Tests:
+    ...
+
+Negative Tests:
+    ...
+
+Boundary Tests:
+    ...
+
+Scalability Tests:
+    ...
+
+Determinism Tests:
+    ...
+
+Compatibility:
+    ...
+
+Hard-Coding Audit:
+    ...
+
+Completion Criteria:
+    ...
+
+---
+
+174. File Completion Rule
+
+A file can be declared complete even if downstream implementation is scheduled later, provided its integration contract is already explicit.
+
+For example:
+
+quantum.g4
+
+can be complete once it specifies exactly how its syntax maps to:
+
+TypeExpr
+→ semantic quantum type
+→ quantum::ir
+
+even if a later compiler phase still needs implementation work.
+
+This prevents repeated redesign.
+
+---
+
+175. No Cross-File Surprise Rule
+
+After a file is declared complete:
+
+A later file may:
+
+- implement its documented extension point;
+- consume its documented exports;
+- implement its downstream semantic owner;
+- add tests prescribed by its contract.
+
+A later file must not require changing the completed file merely because the architecture was not specified.
+
+If such a change is necessary, that indicates a missing contract and requires an explicit architecture review.
+
+---
+
+176. Production Readiness Matrix
+
+The type subsystem is production-ready only when every canonical feature has:
+
+Layer| Required
+Specification| Yes
+Lexer| Yes, where tokens are needed
+Grammar| Yes
+AST| Yes
+AST validation| Yes
+Semantic analysis| Yes
+Type checking| Yes
+Constraint checking| Yes
+Effect integration| Yes, where applicable
+Capability integration| Yes, where applicable
+Resource integration| Yes, where applicable
+Contract integration| Yes, where applicable
+Policy integration| Yes, where applicable
+Provenance| Yes
+Canonical IR integration| Yes
+Tests| Yes
+Diagnostics| Yes
+Compatibility| Yes
+Scalability| Yes
+Determinism| Yes
+Hard-coding audit| Yes
+
+---
+
+177. Production Definition of Done
+
+"grammar/types/" is production-ready only when:
+
+1. "types.g4" is the sole universal type composition root.
+2. "typeExpression" has one owner.
+3. Every specialized constructor has one canonical owner.
+4. No circular grammar imports exist.
+5. Duplicate files are explicitly classified.
+6. Compatibility façades do not duplicate canonical implementations.
+7. Every stable type maps to the canonical AST.
+8. Every stable type has semantic handling.
+9. Every relevant type has IR integration.
+10. Quantum types use "quantum::ir".
+11. No second quantum IR exists.
+12. Resource semantics remain outside grammar.
+13. Capability semantics remain outside grammar.
+14. Effect semantics remain outside grammar.
+15. Policy semantics remain outside grammar.
+16. Contract semantics remain outside grammar.
+17. Provenance remains outside grammar.
+18. Hardware realization remains outside grammar.
+19. No universal physical capacity constants exist.
+20. Symbolic quantities remain symbolic.
+21. Generic arity is open-ended.
+22. Composite structures are recursively composable.
+23. Domain extensions do not require unnecessary core keyword additions.
+24. Parser behavior is deterministic.
+25. Semantic analysis is deterministic under identical inputs/configuration.
+26. Rust implementation remains compatible with Rust 1.97+.
+27. Rust implementation remains safe Rust only.
+28. Positive tests pass.
+29. Negative tests pass.
+30. Boundary tests pass.
+31. Cross-domain tests pass.
+32. Scalability tests pass.
+33. Compatibility tests pass.
+34. ANTLR generation succeeds.
+35. Repository-wide grammar integration succeeds.
+36. AST integration succeeds.
+37. semantic type integration succeeds.
+38. Classical IR integration succeeds where applicable.
+39. "quantum::ir" integration succeeds where applicable.
+40. HDL/hardware integration succeeds where applicable.
+41. resource/capability integration succeeds where applicable.
+42. effects integration succeeds where applicable.
+43. policy/contract integration succeeds where applicable.
+44. provenance integration succeeds.
+45. hard-coding audit passes.
+46. duplicate-rule audit passes.
+47. import-cycle audit passes.
+48. generated parser conformance passes.
+49. repository type examples pass.
+50. the POCO-REAF integration test passes.
+
+---
+
+178. Final Ownership Model
+
+The entire "grammar/types/" directory must converge on this model:
+
+                         grammar/types/README.md
+                                  │
+                    DIRECTORY ORCHESTRATION CONTRACT
+                                  │
+                                  ▼
+                         grammar/types/types.g4
+                                  │
+                       CANONICAL TYPE COMPOSITION
+                                  │
+          ┌───────────────────────┼────────────────────────┐
+          │                       │                        │
+          ▼                       ▼                        ▼
+     Fundamental             Composite              Advanced
+       Types                  Types                   Types
+          │                       │                        │
+          │                       │                        │
+ primitive                 tuple/array/map          dependent
+ named                     option/result            existential
+ generic                   record/sum               HKT
+ function                  union                    associated
+ reference                 algebraic                type families
+ pointer                   etc.                     type-level
+          │                       │                        │
+          └───────────────────────┼────────────────────────┘
+                                  │
+                                  ▼
+                           Domain Types
+                                  │
+                   ┌──────────────┼───────────────┐
+                   ▼              ▼               ▼
+               Classical       Quantum         Hardware
+                   │              │               │
+                   └──────────────┼───────────────┘
+                                  │
+                                  ▼
+                              TypeExpr
+                                  │
+                                  ▼
+                         Semantic Type Model
+                                  │
+          ┌───────────────┬───────┼────────┬────────────────┐
+          ▼               ▼       ▼        ▼                ▼
+       Effects        Resources Capabilities Contracts    Policies
+          │               │       │        │                │
+          └───────────────┴───────┼────────┴────────────────┘
+                                  ▼
+                             Provenance
+                                  │
+                                  ▼
+                       Canonical Semantic Model
+                                  │
+                     ┌────────────┴────────────┐
+                     ▼                         ▼
+                Classical IR              quantum::ir
+                     │                         │
+                     └────────────┬────────────┘
+                                  ▼
+                           Optimization
+                                  ▼
+                              Lowering
+                                  ▼
+                              Routing
+                                  ▼
+                            Scheduling
+                                  ▼
+                         Resilience / QEC
+                                  ▼
+                                 ZQN
+                                  ▼
+                                 HAL
+                                  ▼
+                          Target Realization
+
+---
+
+179. The Most Important Architectural Rule
+
+The entire type subsystem must preserve this distinction:
+
+TYPE
+≠
+RESOURCE
+
+TYPE
+≠
+CAPABILITY
+
+TYPE
+≠
+EFFECT
+
+TYPE
+≠
+POLICY
+
+TYPE
+≠
+CONTRACT
+
+TYPE
+≠
+HARDWARE
+
+TYPE
+≠
+IR
+
+TYPE
+≠
+RUNTIME REPRESENTATION
+
+Instead:
+
+TYPE
+ │
+ ├── participates in
+ │
+ ├── effects
+ ├── capabilities
+ ├── resources
+ ├── contracts
+ ├── policies
+ └── provenance
+ │
+ ▼
+SEMANTIC TYPE
+ │
+ ▼
+CANONICAL SEMANTIC MODEL
+ │
+ ├── Classical IR
+ └── quantum::ir
+ │
+ ▼
+TARGET-INDEPENDENT COMPILATION
+ │
+ ▼
+TARGET REALIZATION
+
+This is what permits Zamani to remain one language instead of becoming a collection of unrelated domain languages.
+
+---
+
+180. Final Scalability Principle
+
+The type system must scale by composition and symbolic description, not by enumerating hardware.
+
+Correct:
+
+Tensor<T, Shape>
+QRegister<N>
+Matrix<T, Rows, Columns>
+Vec<T>
+Map<K, V>
+Resource<T>
+Capability<T>
+Hardware<T>
+
+Incorrect:
+
+TensorRank32
+QRegister1024
+GPU24GB
+CPU8Core
+FPGA100kLUT
+
+The former describes program meaning.
+
+The latter embeds a particular realization.
+
+---
+
+181. Final POCO-REAF Principle
+
+The goal is not:
+
+«one source program that magically executes on every physically possible machine without checking feasibility.»
+
+The goal is:
+
+«one source program whose semantic type system does not need to be rewritten merely because the available computational substrate changes.»
 
 Therefore:
 
-language abstraction
-        ≠
-physical capacity
+same source
+    ↓
+same type meaning
+    ↓
+same semantic requirements
+    ↓
+different target realization
 
-and:
+is valid.
 
-source cardinality
-        ≠
-machine capacity
+While:
 
-and:
+same source
+    ↓
+different type meaning because hardware changed
 
-compiler safety policy
-        ≠
-language ceiling
-
-and:
-
-target capability
-        ≠
-type syntax
-
-These distinctions are mandatory.
+is invalid.
 
 ---
 
-202. Final ownership invariant
+182. Final Repository Contract
 
-There must be:
+"grammar/types/" is complete only when it can be treated as a stable contract between:
 
-ONE
-canonical
-typeExpression
+source language
+        │
+        ▼
+parser
+        │
+        ▼
+AST
+        │
+        ▼
+semantic type system
+        │
+        ├── effects
+        ├── capabilities
+        ├── resources
+        ├── contracts
+        ├── policies
+        └── provenance
+        │
+        ▼
+canonical semantic model
+        │
+        ├── Classical IR
+        └── quantum::ir
+        │
+        ▼
+compiler
+        │
+        ▼
+runtime / execution
+        │
+        ▼
+hardware abstraction
+        │
+        ▼
+target
 
-and:
+No file under "grammar/types/" should need to know the implementation details of a future CPU, GPU, FPGA, ASIC, accelerator, QPU, simulator, cluster, or other computational substrate.
 
-ONE
-canonical
-source-level
-TypeExpr
+No future computational domain should require the type system to be redesigned merely because it introduces a new named type.
 
-and:
+No type feature should be considered complete merely because its ANTLR rule parses.
 
-ONE
-canonical
-semantic
-type system
+Every feature must have a complete path:
 
-and:
+SPECIFICATION
+    ↓
+LEXER
+    ↓
+GRAMMAR
+    ↓
+AST
+    ↓
+VALIDATION
+    ↓
+SEMANTICS
+    ↓
+TYPE CHECKING
+    ↓
+CONSTRAINTS
+    ↓
+EFFECTS / CAPABILITIES / RESOURCES
+    ↓
+CONTRACTS / POLICIES
+    ↓
+PROVENANCE
+    ↓
+CANONICAL IR
+    ↓
+LOWERING
+    ↓
+TARGET REALIZATION
 
-ONE
-canonical
-quantum
-IR boundary
-
-Specialized grammar files are delegates/components, not competing languages.
+That is the production contract for the Zamani type system.
 
 ---
 
-203. Final extensibility invariant
+183. Completion Statement
 
-Adding a future computational domain must not require the universal type grammar to enumerate every new type.
+When all requirements in this document are satisfied, "grammar/types/" provides:
 
-Prefer:
+one type language
+one universal type composition root
+one domain-neutral AST boundary
+one semantic type model
+one canonical integration architecture
+open-ended composition
+symbolic resource quantities
+target-independent quantum types
+target-independent hardware types
+classical/quantum/HDL interoperability
+resource/capability integration
+effect integration
+contract integration
+policy integration
+provenance integration
+deterministic parsing
+reproducible semantic analysis
+safe Rust implementation
+Rust 1.97+ compatibility
+no universal physical capacity assumptions
+no duplicate type authorities
+no competing quantum IR
+no application-specific keyword explosion
+POCO-REAF compatibility
 
-named types
-qualified names
-generic types
-symbolic type values
-extensions
-dialects
-semantic registration
-capabilities
-resources
-
-over a permanently growing closed keyword inventory.
-
----
-
-204. Definition of DONE for this README
-
-This README itself is complete when:
-
-- [x] It identifies the canonical type grammar authority.
-- [x] It identifies the canonical frontend AST authority.
-- [x] It distinguishes grammar from semantics.
-- [x] It distinguishes source semantics from physical realization.
-- [x] It incorporates the existing frontend "TypeExpr" vocabulary.
-- [x] It does not falsely claim unsupported generic argument AST categories.
-- [x] It does not falsely claim arbitrary type-level arithmetic is already implemented.
-- [x] It accounts for the actual "primitive.g4" naming.
-- [x] It addresses the "types.g4" / "type.g4" authority conflict.
-- [x] It defines integration with declarations and functions.
-- [x] It defines integration with expressions and patterns.
-- [x] It defines integration with resources and capabilities.
-- [x] It defines integration with effects, validation and policies.
-- [x] It defines classical integration.
-- [x] It defines quantum integration.
-- [x] It preserves "quantum::ir" as the quantum IR boundary.
-- [x] It defines HDL/hardware integration.
-- [x] It defines AI/data/reasoning integration without creating another type system.
-- [x] It defines FFI/interoperability boundaries.
-- [x] It defines metaprogramming boundaries.
-- [x] It defines provenance and compatibility requirements.
-- [x] It prohibits artificial machine-capacity ceilings.
-- [x] It distinguishes compiler validation policies from language limits.
-- [x] It requires safe Rust.
-- [x] It requires Rust 1.97/1.97.1 compatibility.
-- [x] It requires deterministic behavior.
-- [x] It defines positive, negative, semantic, boundary, cross-domain and scalability testing.
-- [x] It provides per-file ownership and integration requirements.
-- [x] It supports the POCO-REAF architecture.
-
-The grammar files themselves are not automatically complete merely because this README is complete. Their implementation status must be verified through the repository's grammar, AST, semantic and test layers.
+The result is a type system capable of serving computation from the smallest supported realization to arbitrarily larger realizations as resources and capabilities permit, without making physical scale part of the universal language grammar.
